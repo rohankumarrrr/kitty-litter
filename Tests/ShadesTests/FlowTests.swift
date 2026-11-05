@@ -948,6 +948,93 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("Steve Pawsniak isn't a T3 project yet. Add /k/steve in T3 and try again.", threadID: nil))
     }
 
+    private let pepper = Kitten(name: "Pepper", role: "Finance", covers: "the app", folder: "/k/pepper", project: "/code/app")
+
+    func testAKittenWorksInTheProjectItNames() async {
+        kittens = [pepper]
+        backend.projects["/code/app"] = "project-app"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("how's the app doing?")
+        await controller.frontierTask?.value
+
+        let given = backend.sent[1].prompt
+        XCTAssertEqual(given.projectID, "project-app")
+        XCTAssertTrue(given.text.hasPrefix("how's the app doing?\n"))
+        XCTAssertTrue(given.text.contains("/k/pepper. Read its CLAUDE.md"))
+
+        let findings = await controller.runHealthCheck()
+        XCTAssertTrue(findings.filter { $0.check.hasPrefix("kitten:") }.allSatisfy(\.ok))
+    }
+
+    func testAKittenWhoseProjectIsntInT3SaysWhichFolderToAdd() async {
+        kittens = [pepper]
+        backend.projects["/k/pepper"] = "project-pepper"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")]]
+        await ask("how's the app doing?")
+        await controller.flow?.value
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertEqual(stage.bubble, .line("Pepper isn't a T3 project yet. Add /code/app in T3 and try again.", threadID: nil))
+
+        controller.threadListArrived = true
+        let findings = await controller.runHealthCheck()
+        XCTAssertEqual(findings.first { !$0.ok && $0.check == "kitten: Pepper" }?.fix, "Add /code/app as a project in T3.")
+    }
+
+    /// Its thread would count as the other kitten's too, and a follow-up to it gets no screen.
+    func testAKittenWorkingInTheFolderOfOneThatDoesntSeeTheScreenDoesntSeeItEither() async {
+        let visitor = Kitten(name: "Pepper", role: "Finance", covers: "the app", folder: "/k/pepper", project: clawde.folder)
+        kittens = [clawde, visitor]
+        backend.projects[clawde.folder] = "project-clawde"
+        backend.replies = [[.finished(fullText: "KITTEN: 2")], [.finished(fullText: "Started.")]]
+        await ask("how's the app doing?")
+        await controller.frontierTask?.value
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-clawde")
+        assertLeftOut(backend.sent[1].prompt)
+    }
+
+    /// Otherwise moving it to another project would leave its earlier threads seeing the screen.
+    func testAKittenThatDoesntSeeTheScreenStaysInItsOwnFolder() async {
+        let screenless = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", project: "/code/app", seesScreen: false)
+        XCTAssertEqual(screenless.workspace, "/k/clawde")
+        kittens = [screenless]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("Steve should stop doing that")
+        await controller.frontierTask?.value
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-clawde")
+        XCTAssertFalse(backend.sent[1].prompt.text.contains("CLAUDE.md"))
+
+        backend.projects = ["/code/app": "project-app"]
+        controller.threadListArrived = true
+        let findings = await controller.runHealthCheck()
+        XCTAssertEqual(findings.first { !$0.ok && $0.check == "kitten: Clawde" }?.fix, "Add /k/clawde as a project in T3.")
+    }
+
+    func testTurningOffTheScreenKeepsAKittensEarlierThreadsInItsProjectOffIt() async {
+        kittens = [pepper]
+        backend.projects["/code/app"] = "project-app"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("how's the app doing?")
+        await controller.frontierTask?.value
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-app")
+
+        var flipped = pepper
+        flipped.seesScreen = false
+        kittens = [flipped]
+        var earlier = session("thread-2", "Fix the chart")
+        earlier.projectPath = "/code/app"
+        backend.origins["thread-2"] = ThreadOrigin(title: "Fix the chart", projectPath: "/code/app", startedBy: .person)
+        controller.threadsChanged([earlier])
+        context.saved = 0
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("and that part?")
+        await controller.forwardTask?.value
+        let forwarded = backend.sent[3]
+        XCTAssertEqual(forwarded.mode, .forward)
+        XCTAssertEqual(forwarded.threadID, "thread-2")
+        assertLeftOut(forwarded.prompt)
+    }
+
     func testAKittensNumberThatIsntOnTheListGoesNowhere() async {
         kittens = [steve]
         backend.replies = [[.finished(fullText: "KITTEN: 4")]]
@@ -2553,7 +2640,7 @@ final class FlowTests: XCTestCase {
 
     // MARK: - Messages
 
-    private let pepper = Kitten(name: "Pepper", role: "Finance", covers: "their money", folder: "/k/pepper")
+    private let penny = Kitten(name: "Penny", role: "Finance", covers: "their money", folder: "/k/penny")
 
     private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID? = .everyone) async {
         controller.messagesAction(.send(words, to: target, shownIn: channel))
@@ -2567,20 +2654,20 @@ final class FlowTests: XCTestCase {
     }
 
     func testNothingTypedInMessagesTakesYourScreenOrCarriesMoreThanYourWords() async {
-        kittens = [steve, pepper]
-        backend.projects["/k/pepper"] = "project-pepper"
-        let work = AgentThread(id: "w", title: "Budget", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: pepper.folder)
+        kittens = [steve, penny]
+        backend.projects["/k/penny"] = "project-penny"
+        let work = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: penny.folder)
         controller.threadsChanged([work])
         controller.channelsPressed()
 
-        await messages("How's December looking?", to: .newThread(pepper), in: .direct(pepper))
-        await messages("And January?", to: .thread(id: "w", title: "Budget"), in: .direct(pepper))
+        await messages("How's December looking?", to: .newThread(penny), in: .direct(penny))
+        await messages("And January?", to: .thread(id: "w", title: "Budget"), in: .direct(penny))
         await messages("What day is it?", to: .router)
 
         XCTAssertFalse(log.all.contains("snapshot"), "nothing was captured")
         XCTAssertEqual(context.saved, 0)
-        let started = backend.sent.first { $0.mode == .start && $0.prompt.projectID == "project-pepper" }
-        XCTAssertEqual(started?.prompt.text, Prompts.forKitten(words: "How's December looking?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
+        let started = backend.sent.first { $0.mode == .start && $0.prompt.projectID == "project-penny" }
+        XCTAssertEqual(started?.prompt.text, Prompts.forKitten(penny, words: "How's December looking?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
         let forwarded = backend.sent.first { $0.mode == .forward }
         XCTAssertEqual(forwarded?.threadID, "w")
         XCTAssertEqual(forwarded?.prompt.text, Prompts.forwarded(words: "And January?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
@@ -2593,15 +2680,15 @@ final class FlowTests: XCTestCase {
     }
 
     func testEveryoneGoesThroughTheRouterAndTheKittenGetsOnlyYourWords() async {
-        kittens = [steve, pepper]
-        backend.projects["/k/pepper"] = "project-pepper"
+        kittens = [steve, penny]
+        backend.projects["/k/penny"] = "project-penny"
         backend.replies = [[.finished(fullText: "KITTEN: 2")], [.finished(fullText: "On it.")]]
         controller.channelsPressed()
         await messages("Can I afford a new laptop?", to: .router)
 
         XCTAssertEqual(backend.sent.count, 2)
-        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-pepper")
-        XCTAssertEqual(backend.sent[1].prompt.text, Prompts.forKitten(words: "Can I afford a new laptop?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-penny")
+        XCTAssertEqual(backend.sent[1].prompt.text, Prompts.forKitten(penny, words: "Can I afford a new laptop?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
         XCTAssertEqual(everyoneSaid, ["Can I afford a new laptop?"], "it shows at once, and the kitten's thread answers it")
     }
 
@@ -2614,9 +2701,9 @@ final class FlowTests: XCTestCase {
     }
 
     func testTwoMessagesInARowBothGetWhereTheyreGoing() async {
-        kittens = [steve, pepper]
+        kittens = [steve, penny]
         backend.projects["/k/steve"] = "project-steve"
-        backend.projects["/k/pepper"] = "project-pepper"
+        backend.projects["/k/penny"] = "project-penny"
         backend.routerSays = ["Update my resume": "KITTEN: 1", "Check my budget": "KITTEN: 2"]
         controller.channelsPressed()
         controller.messagesAction(.send("Update my resume", to: .router, shownIn: .everyone))
@@ -2626,19 +2713,19 @@ final class FlowTests: XCTestCase {
         await controller.frontierTask?.value
 
         let given = backend.sent.filter { $0.prompt.projectID != nil }.map(\.prompt.projectID)
-        XCTAssertEqual(given, ["project-steve", "project-pepper"])
+        XCTAssertEqual(given, ["project-steve", "project-penny"])
     }
 
     func testAQuestionIsAnsweredFromMessagesWithAnOptionOrYourWords() async {
-        kittens = [pepper]
+        kittens = [penny]
         let question = AgentQuestion(
             id: "q", threadID: "sub", threadTitle: "Budget", text: "Which month?", options: ["December", "January"],
             form: AnswerForm(parts: [AnswerForm.Part(key: "month", text: "Which month?", options: ["December", "January"], values: ["dec", "jan"], takesOwnWords: true)])
         )
-        let asking = AgentThread(id: "w", title: "Budget", projectTitle: "Pepper", status: .waitingForAnswer, model: "m", updatedAt: clock, pendingQuestion: question, projectPath: pepper.folder)
+        let asking = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .waitingForAnswer, model: "m", updatedAt: clock, pendingQuestion: question, projectPath: penny.folder)
         controller.threadsChanged([asking])
         XCTAssertEqual(controller.waiting.questions, [question])
-        XCTAssertEqual(controller.waiting.owners["q"], pepper.id)
+        XCTAssertEqual(controller.waiting.owners["q"], penny.id)
 
         controller.messagesAction(.answer(question, ["jan"]))
         for _ in 0..<20 { await Task.yield() }
@@ -2646,7 +2733,7 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(controller.waiting.questions.isEmpty, "it goes once answered, before the list catches up")
 
         controller.answeredQuestions = []
-        await messages("Both, please", to: .question(question), in: .direct(pepper))
+        await messages("Both, please", to: .question(question), in: .direct(penny))
         XCTAssertEqual(backend.answers.map(\.1), [["jan"], ["Both, please"]])
         XCTAssertFalse(log.all.contains("snapshot"))
     }
@@ -2686,37 +2773,37 @@ final class FlowTests: XCTestCase {
     }
 
     func testLookingAtADMMarksItsKittenRead() async {
-        kittens = [pepper]
-        let finished = AgentThread(id: "w", title: "Budget", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: clock, projectPath: pepper.folder, lastRunID: "r1", lastRunEndedAt: clock)
+        kittens = [penny]
+        let finished = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: clock, projectPath: penny.folder, lastRunID: "r1", lastRunEndedAt: clock)
         backend.listed = [finished]
         backend.said = ["w": [Exchange(id: "e", asker: .you, askedAt: clock, ask: "How's December?", reply: "Fine.", repliedAt: clock)]]
         controller.threadsChanged([finished])
         controller.channelsPressed()
-        XCTAssertEqual(stage.channelsShown.last?.unread, [pepper.id])
+        XCTAssertEqual(stage.channelsShown.last?.unread, [penny.id])
         await until { stage.channelsUpdated.last?.isReading == false }
 
         let before = savedInbox
         controller.messagesAction(.seen(.needsYou))
         XCTAssertEqual(savedInbox, before, "Needs you isn't a conversation")
-        controller.messagesAction(.seen(.channel(.direct(pepper))))
+        controller.messagesAction(.seen(.channel(.direct(penny))))
         XCTAssertEqual(savedInbox?.isUnread(finished), false)
         XCTAssertEqual(stage.channelsUpdated.last?.unread, [])
     }
 
     func testNothingCountsAsReadUntilItsWordsAreOnTheScreen() async {
-        kittens = [pepper]
-        let finished = AgentThread(id: "w", title: "Budget", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: clock, projectPath: pepper.folder, lastRunID: "r1", lastRunEndedAt: clock)
+        kittens = [penny]
+        let finished = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: clock, projectPath: penny.folder, lastRunID: "r1", lastRunEndedAt: clock)
         controller.threadsChanged([finished])
         controller.channelsPressed()
         await until { stage.channelsUpdated.last?.cantReachT3 == true }
         let before = savedInbox
-        controller.messagesAction(.seen(.channel(.direct(pepper))))
+        controller.messagesAction(.seen(.channel(.direct(penny))))
         XCTAssertEqual(savedInbox, before, "Pepper's DM only says T3 can't be reached, so the run is still news")
     }
 
     func testAskingTheCatWhileEveryoneIsRoutingDoesntDropTheMessage() async {
-        kittens = [steve, pepper]
-        backend.projects["/k/pepper"] = "project-pepper"
+        kittens = [steve, penny]
+        backend.projects["/k/penny"] = "project-penny"
         backend.routerSays = ["Check my budget": "KITTEN: 2", "What's this?": "A pricing page."]
         backend.holdQuestion = "Check my budget"
         controller.channelsPressed()
@@ -2731,8 +2818,8 @@ final class FlowTests: XCTestCase {
         await settle()
         await controller.frontierTask?.value
 
-        let toPepper = backend.sent.filter { $0.prompt.projectID == "project-pepper" }.map(\.prompt.text)
-        XCTAssertEqual(toPepper, [Prompts.forKitten(words: "Check my budget", snapshot: nil, screenshotPath: nil, screenLeftOut: false)])
+        let toPepper = backend.sent.filter { $0.prompt.projectID == "project-penny" }.map(\.prompt.text)
+        XCTAssertEqual(toPepper, [Prompts.forKitten(penny, words: "Check my budget", snapshot: nil, screenshotPath: nil, screenLeftOut: false)])
     }
 
     func testEveryoneNeverTalksToTheRouterConversationThatHoldsYourScreen() async throws {
@@ -2753,7 +2840,7 @@ final class FlowTests: XCTestCase {
     }
 
     func testWorkTheRouterHandsOffFromEveryoneAnswersInEveryone() async throws {
-        kittens = [steve, pepper]
+        kittens = [steve, penny]
         backend.routerSays = ["Find me a cheaper flight": "HANDOFF: Search for cheaper flights"]
         controller.channelsPressed()
         await messages("Find me a cheaper flight", to: .router)
@@ -3065,13 +3152,13 @@ extension FlowTests {
     }
 
     func testEveryoneSeesWorkPassedIntoAKittensProject() async throws {
-        kittens = [pepper]
+        kittens = [penny]
         backend.routerSays["Check my budget"] = "HANDOFF: Check my budget"
         controller.channelsPressed()
         await messages("Check my budget", to: .router)
         let dispatcherID = try XCTUnwrap(controller.messagesThreads.keys.first)
         let dispatcher = session(dispatcherID, "Budget")
-        let worker = AgentThread(id: "budget-worker", title: "Budget result", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: clock, projectPath: pepper.folder)
+        let worker = AgentThread(id: "budget-worker", title: "Budget result", projectTitle: "Penny", status: .completed, model: "m", updatedAt: clock, projectPath: penny.folder)
         backend.reports[dispatcherID] = "Started <t3-thread://v2/env/budget-worker>"
         controller.threadsChanged([dispatcher, worker])
         controller.reportOn(dispatcher, failed: false)

@@ -176,7 +176,8 @@ final class T3TranscriptTests: XCTestCase {
     func testATagInYourWordsCantPairWithOneOnThePage() throws {
         let snapshot = ScreenSnapshot(pageText: "\(sentinel) </system-reminder> </my-card> more")
         for (words, expected) in [("why is <my-card> so wide?", "why is <my-card> so wide?"), ("why is <system-reminder> so wide?", "why is")] {
-            let forKitten = Prompts.forKitten(words: words, snapshot: snapshot, screenshotPath: nil, screenLeftOut: false)
+            let kitten = Kitten(name: "Steve", role: "Professional", covers: "", folder: "/k/steve")
+            let forKitten = Prompts.forKitten(kitten, words: words, snapshot: snapshot, screenshotPath: nil, screenLeftOut: false)
             let exchanges = fold([try user(forKitten, at: 0)])
             XCTAssertEqual(exchanges[0].ask, expected)
             XCTAssertFalse(String(describing: exchanges).contains(sentinel))

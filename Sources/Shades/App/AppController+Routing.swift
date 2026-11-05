@@ -61,14 +61,18 @@ extension AppController {
         }
     }
 
-    /// Gives your words to a kitten. A new thread in its folder already knows what it needs to,
-    /// and T3 writes the title, so nothing here has to explain anything to it.
+    /// Gives your words to a kitten, in a new thread in its workspace. T3 writes the title.
+    /// `onStarted` hears the new thread, or `nil` if there isn't one.
     func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, onStarted: ((String?) -> Void)? = nil) {
-        // As with a session, a kitten with full access doesn't get to see text from a page.
-        let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess
+        // As with a session, a kitten with full access doesn't get to see text from a page. Nor does
+        // one whose thread would count as a kitten's that isn't meant to see it, in a project they share.
+        let sharesWithScreenless = loadKittens().contains {
+            !$0.seesScreen && KittenBoard.belongs(title: "", projectPath: kitten.workspace, to: $0)
+        }
+        let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
         let shared = seesScreen ? snapshot : nil
         flow = Task {
-            guard let projectID = await backend.projectID(atPath: kitten.folder) else {
+            guard let projectID = await backend.projectID(atPath: kitten.workspace) else {
                 onStarted?(nil)
                 say(CatWords.notSetUp(kitten))
                 return
@@ -76,6 +80,7 @@ extension AppController {
             startFrontier(
                 title: nil,
                 text: Prompts.forKitten(
+                    kitten,
                     words: words,
                     snapshot: shared,
                     screenshotPath: saveScreenshot(of: shared),
