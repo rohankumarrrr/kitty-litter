@@ -103,13 +103,17 @@ final class AppController {
     var reporting: Set<String> = []
     /// Threads given more to do while being reported on, so that report doesn't close the new work.
     var followedUp: Set<String> = []
+    /// Threads that ended again during their report's wait, and whether that was a failure.
+    var endedMeanwhile: [String: Bool] = [:]
     /// Offers you pressed Esc on, which stay quiet until you ask about that kitten.
     var putOff: Set<String> = []
     /// Which kitten each thread was started for, as seen by the app itself. A list or a report
     /// can't say, since those are a kitten's own words, and this outlasts the item.
     var threadOwners: [String: String] = [:]
-    /// When a thread last was as of its report, so the same ending isn't reported twice.
-    var reportedAt: [String: Date] = [:]
+    /// Threads you've heard about since they last ran, so the same ending isn't reported twice.
+    var told: Set<String> = []
+    /// Where each thread passed its work on to, in case the list couldn't be saved to say so.
+    var movedTo: [String: String] = [:]
     var offerWhenAsked: Offer?
     var lastStatuses: [String: AgentStatus]?
     /// Things that finish this close together get told in one go.

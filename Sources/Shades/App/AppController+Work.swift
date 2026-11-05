@@ -80,7 +80,7 @@ extension AppController {
         let at = now()
         let before = workLists.load(for: kitten)
         var list = before
-        if threadListArrived { followEndings(in: &list, at: at) }
+        if threadListArrived { followEndings(in: &list, of: kitten, at: at) }
 
         // A thread that's being reported on may yet turn out to have passed its work on, or pick up again.
         var room = KittenBoard.room(for: kitten, list: list, threads: latestThreads, now: at)
@@ -99,13 +99,18 @@ extension AppController {
         return wentOut
     }
 
-    private func followEndings(in list: inout WorkList, at: Date) {
+    private func followEndings(in list: inout WorkList, of owner: Kitten, at: Date) {
         for var item in list.items {
             let thread = latestThreads.first { $0.id == item.threadID }
             switch item.state {
             case .working:
                 if let id = item.threadID, reporting.contains(id) { continue }
                 switch KittenBoard.ending(of: item, threads: latestThreads, now: at) {
+                case .report(let thread, _) where kitten(of: thread)?.id != owner.id:
+                    // A line on a list can name any thread, and that's no reason to tell you about it.
+                    item.state = .stopped
+                    item.changedAt = at
+                    list.put(item)
                 case .report(let thread, let failed):
                     follow(thread, failed: failed, in: &list, at: at)
                 case .stopped:
@@ -121,7 +126,7 @@ extension AppController {
                     item.state = .working
                     item.changedAt = at
                     list.put(item)
-                } else if thread.status == .completed, thread.updatedAt > item.changedAt {
+                } else if thread.status == .completed, thread.updatedAt > item.changedAt, kitten(of: thread)?.id == owner.id {
                     // Someone picked it up again and finished it, perhaps while the app was closed.
                     follow(thread, failed: false, in: &list, at: at)
                 }
@@ -134,10 +139,14 @@ extension AppController {
     /// You only hear about an ending once. If that's been done, all that's left is the list,
     /// which couldn't be saved at the time.
     private func follow(_ thread: AgentThread, failed: Bool, in list: inout WorkList, at: Date) {
-        if reportedAt[thread.id] == thread.updatedAt {
-            list.endWork(in: thread.id, as: failed ? .stopped : nil, at: at)
-        } else {
+        guard told.contains(thread.id) else {
             reportOn(thread, failed: failed)
+            return
+        }
+        if let next = movedTo[thread.id] {
+            list.moveWork(from: thread.id, to: next, at: at)
+        } else {
+            list.endWork(in: thread.id, as: failed ? .stopped : nil, at: at)
         }
     }
 

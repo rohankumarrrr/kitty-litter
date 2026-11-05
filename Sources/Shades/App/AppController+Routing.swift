@@ -84,7 +84,7 @@ extension AppController {
     func forward(_ words: String, to thread: AgentThread, snapshot: ScreenSnapshot?) {
         // Only what the app saw for itself can put your words on a list, because a kitten can claim
         // any thread on its own list, or name it in a report.
-        if let owner = loadKittens().first(where: { !$0.planned && (KittenBoard.belongs(thread, to: $0) || threadOwners[thread.id] == $0.id) }) {
+        if let owner = kitten(of: thread), !owner.planned {
             do {
                 try updateList(of: owner) { $0.addFollowUp(words, in: thread.id, at: now()) }
             } catch {
@@ -118,16 +118,22 @@ extension AppController {
                         reportOn(thread, failed: false)
                     case .failed(let message):
                         if isQuick { say(message) }
-                        workEnded(in: thread.id, failed: true)
+                        followUpFailed(on: thread.id)
                     default:
                         break
                     }
                 }
             } catch {
                 say(CatWords.problem(error, while: .agents))
-                workEnded(in: thread.id, failed: true)
+                followUpFailed(on: thread.id)
             }
         }
+    }
+
+    /// It never got there, so a report that was held back for it can go ahead after all.
+    private func followUpFailed(on thread: String) {
+        followedUp.remove(thread)
+        workEnded(in: thread, failed: true)
     }
 
     /// A kitten's work can be in any project and called anything, so this follows who started the
@@ -135,7 +141,7 @@ extension AppController {
     private func isClearOfScreenlessKittens(_ thread: AgentThread) async -> Bool {
         let screenless = loadKittens().filter { !$0.seesScreen }
         if screenless.isEmpty { return true }
-        if screenless.contains(where: { KittenBoard.belongs(thread, to: $0) }) { return false }
+        if screenless.contains(where: { KittenBoard.belongs(thread, to: $0) || threadOwners[thread.id] == $0.id }) { return false }
         let backend = self.backend
         let id = thread.id
         return await firstOf(seconds: Self.rosterWait) {

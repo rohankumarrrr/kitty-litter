@@ -912,6 +912,7 @@ final class FlowTests: XCTestCase {
         let worker = session("worker", "Fix the login bug", status: .running)
         controller.threadsChanged([opus, worker])
         backend.reports["thread-2"] = "The change went to a new thread, <t3-thread://v2/env/worker>, in a worktree."
+        startWorker(by: "thread-2")
         opus.status = .completed
         controller.threadsChanged([opus, worker])
         await controller.reportTask?.value
@@ -1754,6 +1755,11 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(list.items[0].text, "Tidy the career notes", "the record matches what you said yes to")
     }
 
+    /// What T3 knows about a thread an agent started, which is the only thing that says the work went there.
+    private func startWorker(by starter: String) {
+        backend.origins["worker"] = ThreadOrigin(title: "Worker", projectPath: "/k/app", startedBy: .thread(starter))
+    }
+
     /// The kitten's work moved to a thread that doesn't carry its name, as a worktree thread might not.
     private func moveClawdesWorkToAWorker(snapshot: ScreenSnapshot? = nil) async {
         kittens = [clawde]
@@ -1920,6 +1926,7 @@ final class FlowTests: XCTestCase {
         await give("one")
         backend.reports["thread-1"] = "It went to a new thread, <t3-thread://v2/env/worker>, in a worktree."
         backend.reports["worker"] = "All done. This carried on from <t3-thread://v2/env/thread-1>."
+        startWorker(by: "thread-1")
         controller.threadsChanged([thread("thread-1"), session("worker", "Worker", status: .running)])
         controller.threadsChanged([thread("thread-1", .completed), session("worker", "Worker", status: .running)])
         await reported()
@@ -1930,7 +1937,7 @@ final class FlowTests: XCTestCase {
         await reported()
         await settle()
         XCTAssertTrue(list.items.isEmpty)
-        XCTAssertEqual(controller.notices.map(\.caption), ["Done: Worker"])
+        XCTAssertEqual(controller.notices.map(\.caption), ["Steve Pawsniak: Worker"], "T3 says it's Steve's work")
     }
 
     func testAStoppedItemWhoseThreadWentOnToFinishComesOff() async {
@@ -2074,6 +2081,7 @@ final class FlowTests: XCTestCase {
         takeWork()
         lists.lists[steve.id] = WorkList(items: [WorkItem(id: "a", text: "One", state: .working, threadID: "w", at: clock.addingTimeInterval(-300))])
         backend.reports["w"] = "It went to <t3-thread://v2/env/worker>."
+        startWorker(by: "w")
         lists.saveError = URLError(.cannotWriteToFile)
         let threads = [thread("w", .completed), session("worker", "Worker", status: .running)]
         let said = await saidSince {
@@ -2131,6 +2139,158 @@ final class FlowTests: XCTestCase {
         await controller.beginAsk()
         stage.hideInput()
         XCTAssertNil(controller.offerWhenAsked)
+    }
+
+    func testALinkInAReportCantHideOrSettleAThreadItDidntStart() async {
+        takeWork()
+        await give("one")
+        backend.reports["thread-1"] = "It went to <t3-thread://v2/env/plain>."
+        let plain = session("plain", "Migration", status: .running)
+        controller.threadsChanged([thread("thread-1"), plain])
+        controller.threadsChanged([thread("thread-1", .completed), plain])
+        await reported()
+        await settle()
+        XCTAssertEqual(controller.notices.map(\.caption), ["Steve Pawsniak: Work"], "that's the report, since T3 says a person started it")
+        XCTAssertTrue(backend.settled.isEmpty)
+
+        backend.reports["plain"] = "See <t3-thread://v2/env/busy>."
+        let busy = session("busy", "Busy", status: .running)
+        controller.threadsChanged([plain, busy])
+        controller.threadsChanged([session("plain", "Migration"), busy])
+        await reported()
+        await settle()
+        XCTAssertEqual(controller.notices.map(\.caption), ["Steve Pawsniak: Work", "Done: Migration"])
+        XCTAssertFalse(controller.hiddenThreads.contains("plain"))
+        XCTAssertTrue(backend.settled.isEmpty)
+    }
+
+    func testAClaimCantReplayAnOldReportOrSettleAnotherKittensThread() async {
+        let pepper = Kitten(name: "Pepper", role: "Money", covers: "", folder: "/k/pepper")
+        kittens = [steve, pepper]
+        lists.lists[steve.id] = WorkList(items: [WorkItem(id: "f", text: "x", state: .working, threadID: "peppers", at: clock.addingTimeInterval(-300))])
+        backend.reports["peppers"] = "It went to <t3-thread://v2/env/busy>."
+        backend.origins["busy"] = ThreadOrigin(title: "Busy", projectPath: nil, startedBy: .person)
+        controller.threadsChanged([thread("peppers", .completed, of: pepper), session("busy", "Busy", status: .running)])
+        await reported()
+        await settle()
+        XCTAssertEqual(controller.notices.map(\.caption), ["Still on Steve Pawsniak's list"], "it needs a yes, and nothing about Pepper's thread gets told")
+        XCTAssertTrue(backend.settled.isEmpty)
+        XCTAssertFalse(controller.hiddenThreads.contains("peppers"))
+    }
+
+    func testAThreadStartedForAKittenStaysOffTheScreenEvenIfNothingElseSaysSo() async {
+        kittens = [clawde]
+        backend.projects[clawde.folder] = "project-clawde"
+        await give("fix routing", to: clawde)
+        let anonymous = session("thread-1", "Fix routing", status: .running)
+        backend.origins["thread-1"] = ThreadOrigin(title: "Fix routing", projectPath: nil, startedBy: .person)
+        controller.forward("and this", to: anonymous, snapshot: ScreenSnapshot(appName: "Safari", pageText: "A secret page", screenshotJPEG: Data([1, 2, 3])))
+        await settle()
+        let forwarded = backend.sent.last { $0.mode == .forward }
+        XCTAssertEqual(forwarded?.prompt.text.contains("A secret page"), false)
+        XCTAssertEqual(forwarded?.prompt.attachments.count, 0)
+        XCTAssertEqual(lists.load(for: clawde).items.map(\.text), ["fix routing\n\nand this"])
+    }
+
+    func testAFollowUpThatCantBeDeliveredLetsTheReportGoAhead() async {
+        takeWork()
+        controller.threadsChanged([thread("w")])
+        let completed = thread("w", .completed)
+        backend.holdReports = true
+        controller.threadsChanged([completed])
+        for _ in 0..<2_000 where backend.heldReport == nil { await Task.yield() }
+        backend.streamError = URLError(.notConnectedToInternet)
+        controller.forward("A correction", to: completed, snapshot: nil)
+        await settle()
+        backend.holdReports = false
+        backend.heldReport?.resume(returning: "It's finished.")
+        await reported()
+        await settle()
+        XCTAssertTrue(controller.notices.map(\.text).contains("It's finished."))
+    }
+
+    func testAFollowUpsAnswerIsToldIfItFinishesDuringTheOldReportsWait() async {
+        takeWork()
+        await give("Original request")
+        controller.threadsChanged([thread("thread-1")])
+        let completed = thread("thread-1", .completed)
+        backend.holdReports = true
+        controller.threadsChanged([completed])
+        for _ in 0..<2_000 where backend.heldReport == nil { await Task.yield() }
+        controller.forward("A correction", to: completed, snapshot: nil)
+        controller.threadsChanged([thread("thread-1", .running)])
+        controller.threadsChanged([completed])
+        backend.holdReports = false
+        backend.reports["thread-1"] = "Second answer."
+        backend.heldReport?.resume(returning: "First answer.")
+        await reported()
+        await settle()
+        await reported()
+        await settle()
+        XCTAssertEqual(controller.notices.map(\.text), ["Second answer."])
+        XCTAssertTrue(list.items.isEmpty)
+    }
+
+    func testAReportAndAPassingOnArentRepeatedWhenAThreadIsTouched() async {
+        takeWork()
+        lists.lists[steve.id] = WorkList(items: [WorkItem(id: "a", text: "One", state: .working, threadID: "w", at: clock.addingTimeInterval(-300))])
+        backend.reports["w"] = "Your resume is ready."
+        lists.saveError = URLError(.cannotWriteToFile)
+        controller.threadsChanged([thread("w", .completed)])
+        await reported()
+        await settle()
+        for _ in 0..<3 {
+            clock.addTimeInterval(61)
+            controller.threadsChanged([thread("w", .completed)])
+            await reported()
+            await settle()
+        }
+        XCTAssertEqual(controller.notices.map(\.text), ["Your resume is ready."])
+    }
+
+    func testPassedOnWorkFollowsItsThreadOnceTheListCanBeWrittenAgain() async {
+        takeWork()
+        await give("one")
+        await give("two")
+        await give("three")
+        let two = thread("thread-2")
+        let worker = thread("worker")
+        lists.saveError = URLError(.cannotWriteToFile)
+        backend.reports["thread-1"] = "It went to <t3-thread://v2/env/worker>."
+        startWorker(by: "thread-1")
+        controller.threadsChanged([thread("thread-1"), two, worker])
+        controller.threadsChanged([thread("thread-1", .completed), two, worker])
+        await reported()
+        await settle()
+
+        lists.saveError = nil
+        clock.addTimeInterval(120)
+        controller.tendWork()
+        await settle()
+        XCTAssertEqual(list.items.first { $0.text == "one" }?.threadID, "worker", "the work's still going")
+        XCTAssertEqual(kittenPrompts.count, 2, "and it still has its slot")
+    }
+
+    func testASpokenYesAnswersAnOfferEvenWithThePanelOpen() async {
+        offer("Tidy the career notes")
+        controller.start()
+        await drainMainQueue()
+        await controller.beginAsk()
+        await talk(saying: "Yes.")
+        XCTAssertEqual(list.items.map(\.state), [.working])
+        XCTAssertEqual(kittenPrompts.count, 1)
+    }
+
+    func testAThreadsRealOwnerBeatsANameInItsTitle() async {
+        let pepper = Kitten(name: "Pepper", role: "Money", covers: "", folder: "/k/pepper")
+        kittens = [pepper, steve]
+        backend.projects[steve.folder] = "project-steve"
+        await give("one", to: steve)
+        let renamed = AgentThread(id: "thread-1", title: "Pepper: One", projectTitle: nil, status: .running, model: "m", updatedAt: clock)
+        controller.forward("something private", to: renamed, snapshot: nil)
+        await settle()
+        XCTAssertTrue(lists.load(for: pepper).items.isEmpty)
+        XCTAssertEqual(lists.load(for: steve).items.map(\.text), ["one\n\nsomething private"])
     }
 
     func testAYesDoesntCountIfTheOfferGetsCoveredBeforeYoureDone() async {
@@ -2229,6 +2389,7 @@ final class FlowTests: XCTestCase {
         await give("two")
         await give("three")
         backend.reports["thread-1"] = "It went to a new thread, <t3-thread://v2/env/worker>, in a worktree."
+        startWorker(by: "thread-1")
         let other = thread("thread-2")
         controller.threadsChanged([thread("thread-1"), other])
         controller.threadsChanged([thread("thread-1", .completed), other, thread("worker")])
@@ -2296,6 +2457,7 @@ final class FlowTests: XCTestCase {
         takeWork()
         lists.lists[steve.id] = WorkList(items: [WorkItem(id: "a", text: "Tailor my resume", state: .working, threadID: "w", at: clock.addingTimeInterval(-300))])
         backend.reports["w"] = "It's in a new thread, <t3-thread://v2/env/worker>."
+        startWorker(by: "w")
         controller.threadsChanged([thread("w", .completed), thread("worker")])
         await reported()
         XCTAssertEqual(list.items.first?.threadID, "worker", "a restart forgets who started what, but the list doesn't")

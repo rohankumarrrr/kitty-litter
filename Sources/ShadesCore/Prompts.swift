@@ -135,7 +135,8 @@ public enum Prompts {
         encoder.outputFormatting = .withoutEscapingSlashes
         let json = (try? encoder.encode(note)).map { String(decoding: $0, as: UTF8.self) } ?? "\"\""
         return ["<": "\\u003c", "\u{85}": "\\u0085", "\u{2028}": "\\u2028", "\u{2029}": "\\u2029"].reduce(json) {
-            $0.replacingOccurrences(of: $1.key, with: $1.value)
+            // Literal, or a character carrying an invisible mark wouldn't count as a match.
+            $0.replacingOccurrences(of: $1.key, with: $1.value, options: .literal)
         }
     }
 

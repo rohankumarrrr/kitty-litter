@@ -110,16 +110,11 @@ public final class FileWorkLists: WorkListStoring {
 
     public func hasProblem(for kitten: Kitten) -> Bool {
         let paths = Paths(kitten)
-        if isBlocked(paths) || kind(of: paths.broken) != nil { return true }
-        if settledProposals(paths).contains(where: { proposalText(at: $0) == nil }) { return true }
+        if isBlocked(paths) || settledProposals(paths).contains(where: { proposalText(at: $0) == nil }) { return true }
         guard kind(of: paths.folder) != nil else { return !files.isWritableFile(atPath: kitten.folder) }
         // The only sure way to know a save would work, whatever a kitten has done to its folder.
-        do {
-            try save(load(for: kitten), for: kitten)
-            return false
-        } catch {
-            return true
-        }
+        let saves = (try? save(load(for: kitten), for: kitten)) != nil
+        return !saves || kind(of: paths.broken) != nil
     }
 
     // MARK: - Reading what a kitten left

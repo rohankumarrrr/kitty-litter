@@ -14,39 +14,52 @@ extension AppController {
     static let summaryTimeout: TimeInterval = 25
 
     func reportOn(_ thread: AgentThread, failed: Bool) {
-        guard reporting.insert(thread.id).inserted else { return }
+        guard reporting.insert(thread.id).inserted else {
+            // It ended again during the wait, and if the wait comes to nothing this is what's left to tell.
+            endedMeanwhile[thread.id] = failed
+            return
+        }
         followedUp.remove(thread.id)
         reportTask = Task {
-            defer { reporting.remove(thread.id) }
             try? await Task.sleep(nanoseconds: UInt64(reportDelay * 1_000_000_000))
-            if isStillGoing(thread.id) { return }
+            if isStillGoing(thread.id) { return giveUpReport(on: thread) }
 
             let report = await backend.finalReport(threadID: thread.id)
             // It may have picked up again, or been given more to do, while that was being read.
-            if isStillGoing(thread.id) { return }
-            reportedAt[thread.id] = latestThreads.first { $0.id == thread.id }?.updatedAt ?? thread.updatedAt
-            if !failed, let next = threadPassedOnTo(in: report, from: thread) {
+            if isStillGoing(thread.id) { return giveUpReport(on: thread) }
+            let next = failed ? nil : await threadPassedOnTo(in: report, from: thread)
+            if isStillGoing(thread.id) { return giveUpReport(on: thread) }
+
+            told.insert(thread.id)
+            reporting.remove(thread.id)
+            endedMeanwhile[thread.id] = nil
+            if let next {
                 passedOn(thread, to: next)
                 return
             }
-            reporting.remove(thread.id)
             workEnded(in: thread.id, failed: failed)
             tell(FinishedWork(thread: thread, failed: failed, report: report))
         }
+    }
+
+    private func giveUpReport(on thread: AgentThread) {
+        reporting.remove(thread.id)
+        guard let failed = endedMeanwhile.removeValue(forKey: thread.id) else { return }
+        reportOn(latestThreads.first { $0.id == thread.id } ?? thread, failed: failed)
     }
 
     private func isStillGoing(_ thread: String) -> Bool {
         followedUp.contains(thread) || latestThreads.first { $0.id == thread }?.status.isActive == true
     }
 
-    /// A report can mention any thread, so one only counts as where the work went if it's going now.
-    /// Dispatchers are only remembered until a restart, but a thread's name or project still says.
-    /// A list can't, because a kitten could then hide the report of a thread that isn't its own.
-    private func threadPassedOnTo(in report: String?, from thread: AgentThread) -> String? {
+    /// A report is an agent's own words, and can mention any thread. One only counts as where the work
+    /// went if T3 says this thread started it and it's going now, so a link can't hide or settle anything.
+    private func threadPassedOnTo(in report: String?, from thread: AgentThread) async -> String? {
         guard dispatchers.contains(thread.id) || kitten(of: thread) != nil,
               let next = report.flatMap(ReportDigest.linkedThreadID(in:)),
               next != thread.id,
-              latestThreads.first(where: { $0.id == next })?.status.isActive == true
+              latestThreads.first(where: { $0.id == next })?.status.isActive == true,
+              await backend.origin(of: next)?.startedBy == .thread(thread.id)
         else { return nil }
         return next
     }
@@ -78,9 +91,13 @@ extension AppController {
         return "\(caption(for: work))\n\(words)"
     }
 
-    /// Which kitten a thread belongs to, by the project it's in or the name it starts with.
-    private func kitten(of thread: AgentThread) -> Kitten? {
-        loadKittens().first { threadOwners[thread.id] == $0.id || KittenBoard.belongs(thread, to: $0) }
+    /// Which kitten a thread belongs to. What the app saw for itself comes first, then the folder it's
+    /// in, and last the name it starts with, which is the only one of these an agent can choose.
+    func kitten(of thread: AgentThread) -> Kitten? {
+        let everyone = loadKittens()
+        return everyone.first { threadOwners[thread.id] == $0.id }
+            ?? everyone.first { KittenBoard.belongs(title: "", projectPath: thread.projectPath, to: $0) }
+            ?? everyone.first { KittenBoard.belongs(thread, to: $0) }
     }
 
     /// All this thread did was start another one, so that's where the work is now.
@@ -88,6 +105,8 @@ extension AppController {
         dispatchers.insert(next)
         hiddenThreads.insert(thread.id)
         watch.markQuick(thread.id)
+        threadOwners[next] = kitten(of: thread)?.id
+        movedTo[thread.id] = next
         for owner in listOwners(of: thread.id) {
             try? updateList(of: owner) { $0.moveWork(from: thread.id, to: next, at: now()) }
             tend(owner)

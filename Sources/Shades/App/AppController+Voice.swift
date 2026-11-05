@@ -28,9 +28,11 @@ extension AppController {
             return
         }
         stage.catWake()
-        offerWhenAsked = fixIsOpen ? nil : offerShowing
+        // After the panel goes, because closing it forgets what it was opened for.
+        let offer = fixIsOpen ? nil : offerShowing
+        if !fixIsOpen { stage.hideInput() }
+        offerWhenAsked = offer
         if !fixIsOpen {
-            stage.hideInput()
             heard = ""
             renderBubble()
         }

@@ -115,7 +115,7 @@ Anything else on a list comes to you as an offer: a kitten's proposal, a line no
 
 A kitten can also name any thread on its list or in a report, so neither can put your words on its list, or open your screen to it. Your words go on a list when the thread carries that kitten's name, is in its project, or is one Shades started for it. So a kitten's thread in another project should start with its name, as its instructions ask.
 
-A report only counts as passing work on if it's one sentence with one link, to a thread that's running now, which is what a kitten's instructions should ask for. Anything longer is the report.
+A report only counts as passing work on if it's one sentence with one link, to a thread that's running now and that T3 says it started, which is what a kitten's instructions should ask for. Anything else is the report.
 
 If a request can't start, Shades tells you once and keeps trying. Asking again while it's waiting doesn't run it twice.
 

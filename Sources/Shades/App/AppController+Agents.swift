@@ -14,6 +14,7 @@ extension AppController {
 
     func threadsChanged(_ threads: [AgentThread]) {
         latestThreads = threads
+        told.subtract(threads.filter(\.status.isActive).map(\.id))
         threadListArrived = true
         let events = watch.update(threads)
         let hadApprovals = !approvals.isEmpty
