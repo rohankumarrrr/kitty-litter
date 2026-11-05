@@ -32,7 +32,14 @@ MainActor.assumeIsolated {
                 settings: Settings.load(),
                 saveSettings: { try? $0.save() },
                 screenTip: { context.takeJavaScriptTip() },
-                kittens: { Kittens.load() }
+                kittens: { Kittens.load() },
+                systemFacts: { SystemHealth.facts() },
+                fileExists: { FileManager.default.fileExists(atPath: $0) },
+                reportHealth: { findings in
+                    let version = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
+                    let report = HealthCheck.report(findings, pid: getpid(), version: version, at: Date())
+                    SystemHealth.write(report, to: Settings.directory.appendingPathComponent("health.json"))
+                }
             ),
             stage: stage
         )
@@ -50,6 +57,7 @@ MainActor.assumeIsolated {
             real?.projectNames = projects.map(\.title).filter { $0 != "No project" }
         }
         stage.menuBar.extras = [
+            MenuBar.Extra(title: "Check Myself") { real.checkMyselfPressed() },
             MenuBar.Extra(title: "Permissions...", action: Setup.openSettingsForWhatsMissing),
             MenuBar.Extra(title: "Keyboard Settings...", action: KeyHoldMonitor.openKeyboardSettings),
             MenuBar.Extra(title: "Restart", action: Setup.restart),
@@ -64,6 +72,7 @@ MainActor.assumeIsolated {
         if DevFlags.wantsFlow {
             DevFlags.run(on: controller)
         } else {
+            controller.startHealthChecks()
             Setup.runOnFirstLaunch {
                 let globeIsFree = controller.settings.dictateKey != .fn || KeyHoldMonitor.globeAction == .doNothing
                 controller.say(globeIsFree ? CatWords.setUp : "\(CatWords.setUp) \(CatWords.globeTip)", seconds: 20)

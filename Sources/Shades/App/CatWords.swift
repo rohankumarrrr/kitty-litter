@@ -52,6 +52,12 @@ enum CatWords {
         }
     }
 
+    static let allGood = "All good. I checked my signature, permissions, T3 Code and the kittens."
+    static let selfCheckCaption = "Self-check"
+    static func finding(_ finding: HealthFinding) -> String {
+        [finding.problem, finding.fix].compactMap { $0 }.joined(separator: " ")
+    }
+
     static func notSetUp(_ kitten: Kitten) -> String {
         "\(kitten.name) isn't a T3 project yet. Add \(kitten.folder) in T3 and try again."
     }

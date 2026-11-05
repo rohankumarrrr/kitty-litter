@@ -64,7 +64,7 @@ extension AppController {
     /// and T3 writes the title, so nothing here has to explain anything to it.
     func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?) {
         // As with a session, a kitten with full access doesn't get to see text from a page.
-        let seesScreen = settings.frontierMode != .fullAccess
+        let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess
         let shared = seesScreen ? snapshot : nil
         flow = Task {
             guard let projectID = await backend.projectID(atPath: kitten.folder) else {
@@ -90,7 +90,9 @@ extension AppController {
     /// back the usual way, as a notice when it finishes.
     func forward(_ words: String, to thread: AgentThread, snapshot: ScreenSnapshot?) {
         // A session with full access can do anything, so text from a page doesn't get to reach it.
-        let seesScreen = thread.runtimeMode != .fullAccess
+        // Neither does one belonging to a kitten that isn't meant to see it.
+        let owner = loadKittens().first { KittenBoard.belongs(thread, to: $0) }
+        let seesScreen = thread.runtimeMode != .fullAccess && owner?.seesScreen != false
         let shared = seesScreen ? snapshot : nil
         let text = Prompts.forwarded(
             words: words,

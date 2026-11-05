@@ -276,6 +276,9 @@ final class FlowTests: XCTestCase {
     private var keys: FakeKeys!
     private var clock = Date(timeIntervalSince1970: 100_000)
     private var kittens: [Kitten] = []
+    private var facts = HealthFacts()
+    private var missingFiles: Set<String> = []
+    private var reportedHealth: [[HealthFinding]] = []
     private var controller: AppController!
     private var settings: Settings {
         var settings = Settings()
@@ -303,7 +306,10 @@ final class FlowTests: XCTestCase {
                 keys: keys,
                 settings: settings,
                 saveSettings: { _ in },
-                kittens: { [unowned self] in self.kittens }
+                kittens: { [unowned self] in self.kittens },
+                systemFacts: { [unowned self] in self.facts },
+                fileExists: { [unowned self] in !self.missingFiles.contains($0) },
+                reportHealth: { [unowned self] in self.reportedHealth.append($0) }
             ),
             stage: stage,
             now: { [unowned self] in self.clock }
@@ -571,6 +577,80 @@ final class FlowTests: XCTestCase {
         for bubble in stage.bubbles {
             if case .reply? = bubble { XCTFail("the routing decision was shown as an answer") }
         }
+    }
+
+    private let clawde = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", seesScreen: false)
+
+    func testAKittenThatDoesntSeeTheScreenGetsYourWordsOnly() async {
+        kittens = [clawde]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("Steve should stop doing that")
+        await controller.frontierTask?.value
+
+        let given = backend.sent[1].prompt
+        XCTAssertTrue(given.text.hasPrefix("Steve should stop doing that\n"))
+        XCTAssertTrue(given.text.contains("left out"))
+        XCTAssertFalse(given.text.contains("<screen>"))
+        XCTAssertTrue(given.attachments.isEmpty)
+        XCTAssertEqual(context.saved, 0)
+    }
+
+    func testAFollowUpToThatKittensWorkInAnotherProjectStaysOffTheScreenToo() async {
+        kittens = [clawde]
+        controller.threadsChanged([session("w", "Clawde: Fix routing")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("and that part?")
+        let forwarded = backend.sent[1].prompt
+        XCTAssertFalse(forwarded.text.contains("<screen>"))
+        XCTAssertTrue(forwarded.attachments.isEmpty)
+    }
+
+    // MARK: - Self-check
+
+    /// What actually happened: an unsigned build made the cat say to turn on a setting that was already on.
+    func testABadSignatureIsSaidPlainlyInsteadOfBlamingTheSetting() async {
+        facts = HealthFacts(isSignedWithIdentity: false, hasScreenRecording: false)
+        controller.threadListArrived = true
+        controller.startHealthChecks()
+        await controller.healthTask?.value
+        guard case .line(let said, _)? = stage.bubble else { return XCTFail("nothing said") }
+        XCTAssertTrue(said.contains("isn't signed properly"))
+        XCTAssertTrue(said.contains("scripts/install.sh"))
+
+        context.snapshotValue = ScreenSnapshot(appName: "Safari")
+        await controller.beginAsk()
+        XCTAssertEqual(stage.input?.caption, controller.screenBlockedBy)
+        XCTAssertNotEqual(stage.input?.caption, CatWords.needsScreenRecording)
+    }
+
+    func testAPermissionThatsOffIsntAnnouncedAtLaunch() async {
+        facts = HealthFacts(hasScreenRecording: false)
+        controller.threadListArrived = true
+        controller.startHealthChecks()
+        await controller.healthTask?.value
+        XCTAssertNil(stage.bubble)
+        XCTAssertEqual(reportedHealth.count, 1)
+        XCTAssertNil(controller.screenBlockedBy)
+    }
+
+    func testCheckingOnRequestSaysHowItWent() async {
+        controller.threadListArrived = true
+        controller.checkMyselfPressed()
+        await controller.healthTask?.value
+        XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
+    }
+
+    func testTheCheckNoticesAKittenThatCantWork() async {
+        kittens = [steve, Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)]
+        missingFiles = ["/k/steve/CLAUDE.md"]
+        controller.threadListArrived = true
+        controller.checkMyselfPressed()
+        await controller.healthTask?.value
+        guard case .notice(_, let text, _)? = stage.bubble else { return XCTFail("nothing said") }
+        XCTAssertTrue(text.contains("Steve Pawsniak has no instructions"))
+        XCTAssertTrue(text.contains("Steve Pawsniak isn't a T3 project"))
+        XCTAssertFalse(text.contains("Cali"), "a kitten that's only planned isn't a problem")
     }
 
     func testAKittenThatIsntSetUpGetsNothing() async {

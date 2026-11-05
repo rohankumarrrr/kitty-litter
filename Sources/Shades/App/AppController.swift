@@ -27,6 +27,9 @@ final class AppController {
     let saveSettings: (Settings) -> Void
     let screenTip: () -> String?
     let loadKittens: () -> [Kitten]
+    let systemFacts: () -> HealthFacts
+    let fileExists: (String) -> Bool
+    let reportHealth: ([HealthFinding]) -> Void
     let stage: CatStage
     let now: () -> Date
     private(set) var settings: Settings
@@ -105,6 +108,8 @@ final class AppController {
     var replyTask: Task<Void, Never>?
     var frontierTask: Task<Void, Never>?
     var reportTask: Task<Void, Never>?
+    var healthTask: Task<Void, Never>?
+    var health: [HealthFinding]?
     var forwardTask: Task<Void, Never>?
     var voiceTask: Task<Void, Never>?
     private var listeners: [Task<Void, Never>] = []
@@ -119,6 +124,9 @@ final class AppController {
         saveSettings = dependencies.saveSettings
         screenTip = dependencies.screenTip
         loadKittens = dependencies.kittens
+        systemFacts = dependencies.systemFacts
+        fileExists = dependencies.fileExists
+        reportHealth = dependencies.reportHealth
         self.stage = stage
         self.now = now
     }

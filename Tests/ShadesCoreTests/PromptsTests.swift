@@ -46,7 +46,7 @@ final class PromptsTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         for (name, json) in [
             ("steve", #"{"name":"Steve","role":"Professional","covers":"resumes"}"#),
-            ("pepper", ##"{"name":"Pepper","role":"Finance","covers":"money","planned":true,"color":"#b3261e"}"##),
+            ("pepper", ##"{"name":"Pepper","role":"Finance","covers":"money","planned":true,"color":"#b3261e","seesScreen":false}"##),
             ("broken", "not json"),
             ("empty", ""),
         ] {
@@ -62,6 +62,8 @@ final class PromptsTests: XCTestCase {
         XCTAssertNil(kittens[1].color)
         XCTAssertTrue(kittens[0].planned)
         XCTAssertEqual(kittens[0].color, 0xb3261e)
+        XCTAssertFalse(kittens[0].seesScreen)
+        XCTAssertTrue(kittens[1].seesScreen)
         XCTAssertEqual(Kittens.load(from: root.appendingPathComponent("nowhere")), [])
     }
 

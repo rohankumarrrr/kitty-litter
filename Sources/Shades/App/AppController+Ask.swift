@@ -45,7 +45,7 @@ extension AppController {
         guard let snapshot = capture.snapshot else { return CatWords.cantSeeScreen }
         if snapshot.isPrivate { return CatWords.privateApp }
         // Missing permissions mean missing fields rather than errors.
-        if snapshot.screenshotJPEG == nil { return CatWords.needsScreenRecording }
+        if snapshot.screenshotJPEG == nil { return screenBlockedBy ?? CatWords.needsScreenRecording }
         return CatWords.looking(at: snapshot)
     }
 

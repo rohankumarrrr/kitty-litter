@@ -13,16 +13,28 @@ public struct Kitten: Sendable, Equatable, Identifiable {
     public var planned: Bool
     /// The colour of its jacket, as 0xRRGGBB, or `nil` for the black one Shades wears.
     public var color: UInt32?
+    /// Whether text from your screen can reach it. Off for a kitten that can change the rules
+    /// everyone else works by, because a page shouldn't get a say in those.
+    public var seesScreen: Bool
 
     public var id: String { folder }
 
-    public init(name: String, role: String, covers: String, folder: String, planned: Bool = false, color: UInt32? = nil) {
+    public init(
+        name: String,
+        role: String,
+        covers: String,
+        folder: String,
+        planned: Bool = false,
+        color: UInt32? = nil,
+        seesScreen: Bool = true
+    ) {
         self.name = name
         self.role = role
         self.covers = covers
         self.folder = folder
         self.planned = planned
         self.color = color
+        self.seesScreen = seesScreen
     }
 }
 
@@ -34,6 +46,7 @@ public enum Kittens {
         var planned: Bool?
         /// Like "#b3261e".
         var color: String?
+        var seesScreen: Bool?
     }
 
     /// Where kittens live. Their contents are personal, so they stay out of this repo.
@@ -55,7 +68,8 @@ public enum Kittens {
                 covers: profile.covers,
                 folder: home.standardizedFileURL.path,
                 planned: profile.planned ?? false,
-                color: profile.color.flatMap { UInt32($0.replacingOccurrences(of: "#", with: ""), radix: 16) }
+                color: profile.color.flatMap { UInt32($0.replacingOccurrences(of: "#", with: ""), radix: 16) },
+                seesScreen: profile.seesScreen ?? true
             )
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }

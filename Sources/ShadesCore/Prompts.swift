@@ -99,7 +99,7 @@ public enum Prompts {
 
     private static func passedOn(words: String, intro: String, snapshot: ScreenSnapshot?, screenshotPath: String?, screenLeftOut: Bool) -> String {
         if screenLeftOut {
-            return "\(words)\n\n---\n\(intro) Their screen was left out, because this session has full access."
+            return "\(words)\n\n---\n\(intro) Their screen was left out on purpose."
         }
         guard let snapshot else { return "\(words)\n\n---\n\(intro)" }
         return "\(words)\n\n---\n\(intro)\n\n\(untrusted)\n\n\(screenBlock(snapshot, screenshotPath: screenshotPath))"

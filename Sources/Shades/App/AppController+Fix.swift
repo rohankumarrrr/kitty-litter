@@ -26,7 +26,7 @@ extension AppController {
         } else if snapshot.isPrivate {
             caption = CatWords.privateApp
         } else if !canSee {
-            caption = CatWords.needsScreenRecording
+            caption = screenBlockedBy ?? CatWords.needsScreenRecording
         } else {
             caption = CatWords.fixCaption(modelName: frontierName)
         }

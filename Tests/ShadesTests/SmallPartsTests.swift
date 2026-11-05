@@ -329,3 +329,45 @@ final class KittenBoardTests: XCTestCase {
         XCTAssertNotEqual(CatRenderer.pixels(for: pose, theme: .light), CatRenderer.pixels(for: pose, theme: .light, jacket: 0xb3261e))
     }
 }
+
+final class HealthCheckTests: XCTestCase {
+    func testAllGoodHasNoProblems() {
+        XCTAssertTrue(HealthCheck.findings(from: HealthFacts()).allSatisfy(\.ok))
+    }
+
+    func testABadSignatureHidesThePermissionsItWouldMakeLookOff() {
+        let facts = HealthFacts(isSignedWithIdentity: false, hasScreenRecording: false, hasAccessibility: false)
+        let problems = HealthCheck.findings(from: facts).filter { !$0.ok }
+        XCTAssertEqual(problems.map(\.check), [HealthCheck.signature])
+    }
+
+    func testARunWithoutABundleDoesntCareAboutItsSignature() {
+        let facts = HealthFacts(isBundled: false, isSignedWithIdentity: false)
+        XCTAssertTrue(HealthCheck.findings(from: facts).allSatisfy(\.ok))
+    }
+
+    func testAnInvalidSignatureCountsToo() {
+        let facts = HealthFacts(signatureIsValid: false)
+        XCTAssertEqual(HealthCheck.findings(from: facts).filter { !$0.ok }.map(\.check), [HealthCheck.signature])
+    }
+
+    func testEachMissingThingIsNamed() {
+        let facts = HealthFacts(
+            hasScreenRecording: false,
+            hasAccessibility: false,
+            hasInputMonitoring: false,
+            microphoneDenied: true,
+            skillsInstalled: false,
+            reachedT3: false
+        )
+        let problems = HealthCheck.findings(from: facts).filter { !$0.ok }.map(\.check)
+        XCTAssertEqual(problems, ["screen recording", "accessibility", "input monitoring", "microphone", "T3 Code", "kitten skills"])
+    }
+
+    func testAReportIsOnlyOkIfEverythingIs() {
+        let good = [HealthFinding.good("a")]
+        let bad = good + [HealthFinding(check: "b", ok: false, problem: "p", fix: "f")]
+        XCTAssertTrue(HealthCheck.report(good, pid: 1, version: "v", at: Date()).ok)
+        XCTAssertFalse(HealthCheck.report(bad, pid: 1, version: "v", at: Date()).ok)
+    }
+}

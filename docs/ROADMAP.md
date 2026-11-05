@@ -14,6 +14,8 @@ Shades as a conductor with a kitten for each area of your life or work. Shades d
 
 Kittens themselves now exist, as described in [kittens.md](kittens.md). Review, shipping and working across several kittens are the parts still being proven, one kitten end to end before any others.
 
+A kitten for the system itself, a self-check and rollback now exist. Work lists, proposals from kittens and a defined way of taking corrections are next.
+
 ## Next ideas
 
 - **Pointing at things.** Ask "where do I change this?" and the cat runs to the button and sits on it. The agent returns screen coordinates, and the cat's perching does the rest. This also suits step-by-step homework hints, where it shows you the next step without doing it for you.

@@ -1,6 +1,6 @@
-# Shades
+# Kitty Litter
 
-A cat in sunglasses that lives on your Mac. Ask it about whatever's on your screen, point at something broken and have an agent fix it, and keep an eye on your agents without switching windows.
+The home of Shades, a cat in sunglasses that lives on your Mac. Ask it about whatever's on your screen, point at something broken and have an agent fix it, and keep an eye on your agents without switching windows.
 
 ![The cat answering a question about the screen](docs/images/shades-light.png)
 
@@ -36,8 +36,8 @@ The models are settings you can change. Opus 5.5 on xHigh is the default for bot
 You need an Apple Silicon Mac on macOS 14 or later, Xcode 16 or later, and T3 Code running.
 
 ```bash
-git clone https://github.com/rohankumarrrr/shades
-cd shades
+git clone https://github.com/rohankumarrrr/kitty-litter
+cd kitty-litter
 scripts/make-dev-cert.sh   # see below
 scripts/install.sh
 ```
@@ -68,6 +68,16 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 ## Kittens
 
 A kitten is a specialist with a folder of its own: its instructions and what it knows about you, so you don't have to explain yourself each time. Add a folder to `~/kittens`, add it to T3 as a project, and Shades starts sending it things. Normally you just see Shades, and Shift-clicking him shows the rest. See [docs/kittens.md](docs/kittens.md).
+
+## Changing Shades by asking Shades
+
+You can set up a kitten called Clawde whose area is the system itself, so "Steve should stop doing that" or "the bubble's too wide" goes through Shades like anything else. Changes to a kitten's instructions apply straight away, and changes to the app come back as a reviewed pull request that waits for you to say "ship it". See [docs/kittens.md](docs/kittens.md#a-kitten-for-the-system-itself).
+
+## When something goes wrong
+
+Choose **Check Myself** from the cat's menu, and it goes through its signature, permissions, T3 Code and kittens, and tells you what's wrong and what to do. The running app also writes that to `~/Library/Application Support/shades/health.json`, for agents to read.
+
+`scripts/install.sh` only replaces the running app with a properly signed build. It keeps the old copy, and puts it back if the new one doesn't come up. To go back by hand, run `scripts/install.sh --rollback`.
 
 ## How it's built
 
