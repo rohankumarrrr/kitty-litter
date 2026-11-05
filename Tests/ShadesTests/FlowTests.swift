@@ -607,15 +607,21 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(forwarded.attachments.isEmpty)
     }
 
-    /// What actually happened: the kitten could only ask for the link about a minute later.
-    func testWordsThatPointAtAScreenAKittenWontGetSayWhatToDoAndStillGo() async {
+    private let sendTheLink = "It can't see your screen, so send the link or paste the text."
+
+    private func askClawde(_ words: String, thenReply second: [AgentReplyEvent] = [.finished(fullText: "Started.")]) async {
         kittens = [clawde]
         backend.projects["/k/clawde"] = "project-clawde"
-        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
-        await ask("Read this x thread, and see what lessons we can take from it")
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], second]
+        await ask(words)
         await controller.frontierTask?.value
+    }
 
-        XCTAssertEqual(stage.bubble, .line("Clawde has this. It can't see your screen, so send the link or paste the text.", threadID: "thread-2"))
+    /// What actually happened: the kitten could only ask for the link about a minute later.
+    func testWordsThatPointAtAScreenAKittenWontGetSayWhatToDoAndStillGo() async {
+        await askClawde("Read this x thread, and see what lessons we can take from it")
+
+        XCTAssertEqual(stage.bubble, .notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2"))
         let given = backend.sent[1].prompt
         XCTAssertTrue(given.text.hasPrefix("Read this x thread, and see what lessons we can take from it\n"))
         XCTAssertFalse(given.text.contains("<screen>"))
@@ -633,7 +639,7 @@ final class FlowTests: XCTestCase {
         await ask("Read this x thread")
         await controller.frontierTask?.value
 
-        XCTAssertEqual(stage.bubble, .line("Steve Pawsniak has this. It can't see your screen, so send the link or paste the text.", threadID: "thread-2"))
+        XCTAssertEqual(stage.bubble, .notice(caption: "Steve Pawsniak has this.", text: sendTheLink, threadID: "thread-2"))
         XCTAssertFalse(backend.sent[1].prompt.text.contains("<screen>"))
     }
 
@@ -648,19 +654,19 @@ final class FlowTests: XCTestCase {
     }
 
     func testWordsThatDontPointAtTheScreenGetNoWarning() async {
-        kittens = [clawde]
-        backend.projects["/k/clawde"] = "project-clawde"
-        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
-        await ask("Steve should stop doing that")
-        await controller.frontierTask?.value
+        await askClawde("Steve should stop doing that")
         XCTAssertEqual(stage.bubble, .line("Clawde has this.", threadID: "thread-2"))
     }
 
-    func testAKittenThatIsntSetUpGetsNoWarningBecauseNothingWent() async {
+    func testNothingIsSaidAboutTheScreenWhenNothingWent() async {
         kittens = [clawde]
         backend.replies = [[.finished(fullText: "KITTEN: 1")]]
         await ask("Read this x thread")
         XCTAssertEqual(stage.bubble, .line(CatWords.notSetUp(clawde), threadID: nil))
+        XCTAssertFalse(stage.bubbles.contains { bubble in
+            if case .notice? = bubble { return true }
+            return false
+        })
     }
 
     func testAFollowUpThatPointsAtTheScreenWarnsForBothReasons() async {
@@ -668,14 +674,14 @@ final class FlowTests: XCTestCase {
         controller.threadsChanged([session("w", "Clawde: Fix routing")])
         backend.replies = [[.finished(fullText: "SEND TO: 1")]]
         await ask("what does this say?")
-        XCTAssertEqual(stage.bubble, .line("Sent that to Clawde: Fix routing. It can't see your screen, so send the link or paste the text.", threadID: "w"))
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Clawde: Fix routing.", text: sendTheLink, threadID: "w"))
         XCTAssertTrue(backend.sent[1].prompt.text.hasPrefix("what does this say?"))
 
         kittens = []
         controller.threadsChanged([session("f", "Work", mode: .fullAccess)])
         backend.replies = [[.finished(fullText: "SEND TO: 1")]]
         await ask("what does this say?")
-        XCTAssertEqual(stage.bubble, .line("Sent that to Work. It can't see your screen, so send the link or paste the text.", threadID: "f"))
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
     }
 
     func testAFollowUpToASessionThatSeesTheScreenGetsNoWarning() async {
@@ -683,6 +689,65 @@ final class FlowTests: XCTestCase {
         backend.replies = [[.finished(fullText: "SEND TO: 1")]]
         await ask("what does this say?")
         XCTAssertEqual(stage.bubble, .line("Sent that to Work.", threadID: "w"))
+    }
+
+    func testTheWarningWaitsBehindAnApproval() async {
+        let approval = request(thread: "thread-2")
+        await askClawde("Read this x thread", thenReply: [.needsApproval(approval), .finished(fullText: "Started.")])
+        guard case .approval? = stage.bubble else { return XCTFail("the approval should come first") }
+        controller.answer(approval, .accept)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2"))
+    }
+
+    func testAnotherLineDoesntLoseTheWarning() async {
+        await askClawde("Read this x thread")
+        controller.say("Work's started in a new session.", seconds: nil)
+        XCTAssertEqual(stage.bubble, .line("Work's started in a new session.", threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2"))
+    }
+
+    func testTheWarningGoesInFrontOfOlderNotices() async {
+        controller.post(caption: "Done: Old work", text: "It went fine.", threadID: "old")
+        await askClawde("Read this x thread")
+        XCTAssertEqual(stage.bubble, .notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2"))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Done: Old work", text: "It went fine.", threadID: "old"))
+    }
+
+    func testSendingTheLinkClearsTheWarningButNotOtherNotices() async {
+        controller.post(caption: "Done: Old work", text: "It went fine.", threadID: "old")
+        await askClawde("Read this x thread")
+        backend.replies = [[.finished(fullText: "Thanks.")]]
+        await ask("https://example.com/a-thread")
+        guard case .reply? = stage.bubble else { return XCTFail("the reply should show") }
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Done: Old work", text: "It went fine.", threadID: "old"))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertNil(stage.bubble)
+    }
+
+    func testALongTitleCantCutOffWhatToDo() async {
+        let title = String(repeating: "x", count: 190)
+        controller.threadsChanged([session("w", title, mode: .fullAccess)])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("Read this x thread")
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to \(title).", text: sendTheLink, threadID: "w"))
+    }
+
+    func testLoadingTheEarsDoesntCoverTheWarning() async {
+        controller.fetchingEars(0.1)
+        clock = clock.addingTimeInterval(5)
+        controller.fetchingEars(0.2)
+        XCTAssertEqual(stage.bubble, .line(CatWords.fetchingEars(0.2), threadID: nil))
+
+        await askClawde("Read this x thread")
+        let warning = BubbleContent.notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2")
+        XCTAssertEqual(stage.bubble, warning)
+        controller.fetchingEars(0.3)
+        XCTAssertEqual(stage.bubble, warning)
+        controller.fetchingEars(1)
+        XCTAssertEqual(stage.bubble, warning)
     }
 
     // MARK: - Self-check

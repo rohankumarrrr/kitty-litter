@@ -145,7 +145,7 @@ extension AppController {
         let since = fetchingEarsSince ?? now()
         fetchingEarsSince = since
         // Anything else the cat is saying matters more than this.
-        guard now().timeIntervalSince(since) > 2, fraction < 1, line == nil || fetchingEarsLine else { return }
+        guard now().timeIntervalSince(since) > 2, fraction < 1, notices.isEmpty, line == nil || fetchingEarsLine else { return }
         let text = CatWords.fetchingEars(fraction)
         guard line?.text != text else { return }
         fetchingEarsLine = true

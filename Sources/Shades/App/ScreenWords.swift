@@ -8,21 +8,31 @@ enum ScreenWords {
     /// Past this, it's probably the text itself, pasted in.
     private static let pastedLength = 280
 
-    private static let things = "thread|tweet|post|article|blog|page|site|website|link|video|image|picture|photo|screenshot|email|doc|document|pdf|paper|tab|window|screen|chart|comment|error"
+    /// "This week" points at the calendar.
+    private static let this = #"\b(this|these)\b(?! (week|weekend|month|year|quarter|semester|morning|afternoon|evening|time|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b)"#
+
+    /// Things that live on a page. A session's own work, like "this error" or "this PR", isn't here.
+    private static let things = "thread|tweet|post|article|blog|page|site|website|link|video|image|picture|photo|screenshot|email|pdf|paper|tab|window|screen"
 
     private static let pointing = [
-        #"\b(read|look at|see|watch|check out|summari[sz]e|translate|explain) (this|these)\b"#,
-        #"\bwhat( is|.?s| does| are) (this|these)\b"#,
+        #"\b(read|look at|watch|check out|summari[sz]e|translate) \#(this)"#,
+        #"\b(see|what.?s|what is|what are) (this|these) ?([?.!]|$)"#,
+        #"\bwhat does this (\S+ )?(say|mean)\b"#,
         #"\b(what do you think (of|about)|thoughts on) this\b"#,
-        #"\b(this|these) (\S+ )?(\#(things))s?\b"#,
+        #"\#(this) (\S+ )?(\#(things))s?\b"#,
         #"\b(on|at) my screen\b"#,
         #"\b(what|the \w+) i.?m (looking at|reading|watching)\b"#,
     ]
 
     static func pointAtScreen(_ words: String) -> Bool {
-        guard words.count <= pastedLength, !hasLink(words) else { return false }
+        guard words.count <= pastedLength, !hasLink(words), !hasQuotedText(words) else { return false }
         let oneLine = words.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         return pointing.contains { oneLine.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }
+    }
+
+    /// Text after a colon or a quote mark is what they mean, so asking for it again would be silly.
+    private static func hasQuotedText(_ words: String) -> Bool {
+        words.range(of: #"[:"“]\s*\S"#, options: .regularExpression) != nil
     }
 
     private static func hasLink(_ words: String) -> Bool {

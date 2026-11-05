@@ -57,6 +57,8 @@ extension AppController {
         replyGeneration += 1
         let generation = replyGeneration
         line = nil
+        // You've moved on, and may well be sending what it asked for.
+        notices.removeAll { $0.text == CatWords.sendTheLink }
         reply = Reply()
         renderBubble()
         replyTask = Task {

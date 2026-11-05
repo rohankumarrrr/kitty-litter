@@ -60,14 +60,15 @@ extension AppController {
         }
     }
 
-    /// Says your words have gone. If they point at a screen the agent won't get, it also says
-    /// what to do about that, for long enough to act on it. They've gone either way.
-    func sayPassedOn(_ line: String, threadID: String, missesScreen: Bool) {
-        if missesScreen {
-            say("\(line) \(CatWords.sendTheLink)", threadID: threadID, seconds: 20)
-        } else {
-            say(line, threadID: threadID)
+    /// Says your words have gone. If they point at a screen the agent won't get, you need to act
+    /// on that, so it's a notice that goes first and waits to be read, not a line that can be lost.
+    func sayPassedOn(_ said: String, threadID: String, missesScreen: Bool) {
+        guard missesScreen else {
+            say(said, threadID: threadID)
+            return
         }
+        line = nil
+        post(caption: said, text: CatWords.sendTheLink, threadID: threadID, first: true)
     }
 
     /// Gives your words to a kitten. A new thread in its folder already knows what it needs to,

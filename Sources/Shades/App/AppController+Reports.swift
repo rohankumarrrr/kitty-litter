@@ -99,9 +99,9 @@ extension AppController {
     }
 
     /// Notices wait their turn behind each other and anything more urgent, so none get lost.
-    func post(caption: String, text: String, threadID: String?, questionID: String? = nil) {
+    func post(caption: String, text: String, threadID: String?, questionID: String? = nil, first: Bool = false) {
         lineCounter += 1
-        notices.append(Notice(id: lineCounter, caption: caption, text: text, threadID: threadID, questionID: questionID))
+        notices.insert(Notice(id: lineCounter, caption: caption, text: text, threadID: threadID, questionID: questionID), at: first ? 0 : notices.count)
         renderBubble()
     }
 

@@ -37,23 +37,22 @@ final class ScreenWordsTests: XCTestCase {
             "look at this",
             "See this? Do that for the kittens",
             "What's this?",
-            "What’s this?",
+            "What\u{2019}s this?",
             "whats this",
             "what does this say",
+            "What does this error mean?",
             "what are these",
-            "explain this",
             "Summarize this",
             "check out this repo",
             "thoughts on this?",
             "what do you think of this",
             "What can we learn from this article?",
             "Is this reddit post right about the install?",
-            "This error keeps coming back",
             "compare these screenshots",
             "this\nvideo",
             "what's on my screen?",
             "what I'm looking at",
-            "the article I’m reading",
+            "the article I\u{2019}m reading",
         ] {
             XCTAssertTrue(ScreenWords.pointAtScreen(words), words)
         }
@@ -68,7 +67,6 @@ final class ScreenWordsTests: XCTestCase {
             "Stop doing this",
             "Let's do this",
             "Why did this happen?",
-            "What should we build this week?",
             "Can you ship this today?",
             "Does this fix the error?",
             "Check that the page loads",
@@ -80,15 +78,65 @@ final class ScreenWordsTests: XCTestCase {
         }
     }
 
+    func testThisWeekPointsAtTheCalendar() {
+        for words in [
+            "What should we build this week?",
+            "What's this month's budget?",
+            "What's this week looking like?",
+            "What does this month look like for rent?",
+            "What's this Friday look like?",
+            "Look at this month's spending and tell me if I'm over",
+            "Summarize this week",
+            "Read this week's notes and tell me what's due",
+            "Check out this weekend's schedule",
+            "Write this week's blog post",
+            "Send this week's email to the team",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    func testAFollowUpsThisIsUsuallyTheSessionsOwnWork() {
+        for words in [
+            "What does this change do?",
+            "Explain this function",
+            "What is this test for?",
+            "Is this error fixed now?",
+            "Is this doc up to date?",
+            "What are these warnings in the build?",
+            "Did this comment get pushed?",
+            "What does this PR do?",
+            "See this through to the end",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
     func testALinkMeansTheyAlreadySentIt() {
         XCTAssertFalse(ScreenWords.pointAtScreen("Read this x thread https://x.com/someone/status/1"))
         XCTAssertFalse(ScreenWords.pointAtScreen("Read this x thread x.com/someone/status/1"))
         XCTAssertFalse(ScreenWords.pointAtScreen("Read this www.example.com"))
     }
 
+    /// Doing what the cat says mustn't get the same advice again.
+    func testTextAfterAColonOrQuoteMeansTheyPastedIt() {
+        for words in [
+            "Summarize this: the build failed because the signing key expired.",
+            "Read this: Shades is a desktop cat.",
+            "Translate this to Spanish: where is the library?",
+            "Thoughts on this tweet: \"ship small, ship often\"",
+            "Read this \"ship small, ship often\"",
+            "Read this \u{201C}ship small, ship often\u{201D}",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
     func testLotsOfTextMeansTheyPastedIt() {
-        let pasted = "Read this thread: " + String(repeating: "Someone said something long. ", count: 20)
-        XCTAssertFalse(ScreenWords.pointAtScreen(pasted))
+        let fits = "Read this " + String(repeating: "x", count: 270)
+        XCTAssertEqual(fits.count, 280)
+        XCTAssertTrue(ScreenWords.pointAtScreen(fits))
+        XCTAssertFalse(ScreenWords.pointAtScreen(fits + "x"))
     }
 }
 
