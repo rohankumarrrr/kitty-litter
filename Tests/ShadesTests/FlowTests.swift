@@ -1543,6 +1543,45 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .inbox("1 shipped"))
     }
 
+    func testAnAnswerOnAnAlsoRowStillSaysSo() async throws {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "NOTE: The review is still going.")
+        XCTAssertNil(stage.bubble)
+        controller.inboxPressed()
+        controller.inboxAction(.reply(try XCTUnwrap(stage.inboxRows?.first)))
+        stage.type("What's left?")
+        await settle()
+        controller.inboxPressed()
+        controller.line = nil
+        await finish(work(run: "run-2"), sorted: "NOTE: Only the rollback check.")
+        XCTAssertEqual(rows.map(\.kind), [.note], "it's still not something that shipped")
+        XCTAssertEqual(rows[0].answer, "Only the rollback check.")
+        XCTAssertEqual(stage.bubble, .inbox("1 note"))
+    }
+
+    func testARestartWithOnlyNotesWaitingStaysQuiet() async {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "NOTE: The review is still going.")
+        controller = makeController(inbox: savedInbox!)
+        controller.startInbox()
+        XCTAssertNil(stage.bubble)
+    }
+
+    func testSayingItDidntPassWorkOnKeepsTheReport() async {
+        kittens = [inboxKitten]
+        await finish(work(), report: "The review in <t3-thread://v2/env/reviewer> is still going.", sorted: "PASSED: no\nNOTE: The review is still going.")
+        XCTAssertEqual(rows.map(\.text), ["The review is still going."])
+        XCTAssertFalse(controller.hiddenThreads.contains("w"))
+    }
+
+    func testAOneSentenceQuestionWithALinkIsKeptIfSortingDoesntWork() async {
+        kittens = [inboxKitten]
+        controller.dispatchers.insert("w")
+        await finish(work(), report: "Should I merge what's in <t3-thread://v2/env/reviewer>?", sorted: "Sorry, I can't sort this.")
+        XCTAssertEqual(rows.map(\.kind), [.decision])
+        XCTAssertFalse(controller.hiddenThreads.contains("w"))
+    }
+
     private func liveTest(_ status: AgentStatus, asking: ApprovalRequest? = nil, question: AgentQuestion? = nil) -> AgentThread {
         var thread = work("t", title: "Shades test: routing", status: status)
         thread.projectPath = inboxKitten.folder

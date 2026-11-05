@@ -282,6 +282,9 @@ final class InboxTests: XCTestCase {
         XCTAssertEqual(SortedReport(reply: "PASSED: yes"), SortedReport(passedOn: true))
         XCTAssertEqual(SortedReport(reply: "PASSED: yes")?.hasLines, false)
         XCTAssertNil(SortedReport(reply: "PASSED: none"))
+        XCTAssertNil(SortedReport(reply: "PASSED: no"))
+        XCTAssertEqual(SortedReport(reply: "PASSED: no\nNOTE: Still going.")?.passedOn, false)
+        XCTAssertEqual(SortedReport(reply: "PASSED: Yes.")?.passedOn, true)
     }
 
     func testAnythingBeforeTheFirstMarkerIsIgnored() {

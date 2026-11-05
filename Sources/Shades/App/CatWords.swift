@@ -105,6 +105,15 @@ enum CatWords {
         return parts.joined(separator: ", ")
     }
 
+    /// Notes don't count toward the headline, so this only says one's there when it's brought up the bubble
+    /// by itself, which takes it being the answer to something you asked.
+    static func inboxBubble(_ entries: [InboxEntry]) -> String {
+        let headline = inboxHeadline(entries)
+        if !headline.isEmpty { return headline }
+        let notes = entries.filter { $0.kind == .note }.count
+        return notes == 0 ? "" : notes == 1 ? "1 note" : "\(notes) notes"
+    }
+
     /// What the menu says next to Inbox. What needs you comes first, since that's what it's for.
     static func inboxSummary(_ entries: [InboxEntry]) -> String? {
         let decisions = entries.filter(\.needsYou).count

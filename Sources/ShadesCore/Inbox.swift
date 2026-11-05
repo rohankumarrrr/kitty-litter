@@ -218,7 +218,7 @@ public struct SortedReport: Equatable, Sendable {
             shipped: value(Prompts.shippedMarker),
             decision: value(Prompts.decisionMarker),
             note: value(Prompts.noteMarker),
-            passedOn: value(Prompts.passedMarker) != nil
+            passedOn: value(Prompts.passedMarker)?.lowercased().hasPrefix("yes") == true
         )
         // A reply of nothing but "none" would otherwise lose the report without a word.
         if !hasLines, !passedOn { return nil }

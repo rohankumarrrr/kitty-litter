@@ -73,7 +73,9 @@ extension AppController {
     /// The model's call. With no answer from it, a thread the cat started whose report is one sentence and a link,
     /// because anything more may be asking you something, and a false alarm beats a lost report.
     private func onlyPassedOn(_ sorted: SortedReport?, report: String?, of thread: AgentThread) -> Bool {
-        guard let sorted else { return dispatchers.contains(thread.id) && report.map(ReportDigest.isOneSentence) == true }
+        guard let sorted else {
+            return dispatchers.contains(thread.id) && report.map(ReportDigest.isOneSentence) == true && report?.contains("?") == false
+        }
         return sorted.passedOn && sorted.decision == nil && sorted.shipped == nil
     }
 
@@ -119,7 +121,7 @@ extension AppController {
     /// the point the inbox started from, so a run that ends before the next launch still counts.
     func startInbox() {
         keepInbox()
-        if !inbox.entries.isEmpty { inboxNudge = true }
+        if !CatWords.inboxHeadline(inboxEntries).isEmpty { inboxNudge = true }
         renderBubble()
     }
 

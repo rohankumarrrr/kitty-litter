@@ -271,8 +271,8 @@ final class AppController {
             return .notice(caption: notice.caption, text: notice.text, threadID: notice.threadID)
         }
         if inboxNudge {
-            let headline = CatWords.inboxHeadline(inboxEntries)
-            if !headline.isEmpty { return .inbox(headline) }
+            let words = CatWords.inboxBubble(inboxEntries)
+            if !words.isEmpty { return .inbox(words) }
         }
         return nil
     }
