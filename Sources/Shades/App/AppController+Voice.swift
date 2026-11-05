@@ -130,4 +130,24 @@ extension AppController {
     func levelHeard(_ level: Float) {
         if hearing { stage.catLevel(level) }
     }
+
+    /// The first run downloads the speech models. Loading them from disk later is quick
+    /// and needs no comment, so this only speaks up once it's clearly a download.
+    func fetchingEars(_ fraction: Double?) {
+        guard let fraction else {
+            if fetchingEarsLine {
+                fetchingEarsLine = false
+                line = nil
+                renderBubble()
+            }
+            return
+        }
+        let since = fetchingEarsSince ?? now()
+        fetchingEarsSince = since
+        guard now().timeIntervalSince(since) > 2, fraction < 1 else { return }
+        let text = CatWords.fetchingEars(fraction)
+        guard line?.text != text else { return }
+        fetchingEarsLine = true
+        say(text, seconds: nil)
+    }
 }

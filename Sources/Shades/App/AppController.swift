@@ -34,6 +34,10 @@ final class AppController {
     var watch = AgentWatch()
     var approvals = ApprovalQueue()
     var vocabulary: [String] = []
+    /// Your T3 projects, which speech recognition should expect to hear.
+    var projectNames: [String] = [] {
+        didSet { updateVocabulary(watch.threads) }
+    }
 
     struct Reply {
         var text = ""
@@ -71,6 +75,8 @@ final class AppController {
     var openingAsk = false
     var picking = false
     var fixIsOpen = false
+    var fetchingEarsSince: Date?
+    var fetchingEarsLine = false
 
     // Exposed so tests can wait on a flow to finish.
     var flow: Task<Void, Never>?

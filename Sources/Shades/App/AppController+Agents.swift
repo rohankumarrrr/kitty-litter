@@ -37,7 +37,7 @@ extension AppController {
 
     /// Project names are the words speech recognition most often gets wrong.
     func updateVocabulary(_ threads: [AgentThread]) {
-        let words = Array(Set(settings.vocabulary + threads.compactMap(\.projectTitle))).sorted()
+        let words = Array(Set(settings.vocabulary + projectNames + threads.compactMap(\.projectTitle))).sorted()
         guard words != vocabulary else { return }
         vocabulary = words
         voice.setVocabulary(words)

@@ -2,23 +2,7 @@ import AppKit
 import ShadesContext
 import ShadesCore
 import ShadesT3
-
-// The one place that decides what's real. `--demo` swaps all of it for fakes.
-@MainActor
-func realDependencies() -> AppDependencies {
-    let context = ScreenContextProvider()
-    let voice = Demo.make()
-    return AppDependencies(
-        backend: T3Backend(),
-        context: context,
-        voice: voice.voice,
-        inserter: voice.inserter,
-        keys: voice.keys,
-        settings: Settings.load(),
-        saveSettings: { try? $0.save() },
-        screenTip: { context.takeJavaScriptTip() }
-    )
-}
+import ShadesVoice
 
 MainActor.assumeIsolated {
     let app = NSApplication.shared
@@ -34,8 +18,41 @@ MainActor.assumeIsolated {
         controller = AppController(dependencies: parts.dependencies, stage: stage)
         driver = DemoDriver(parts: parts, controller: controller, stage: stage)
     } else {
-        controller = AppController(dependencies: realDependencies(), stage: stage)
-        stage.menuBar.extras = [MenuBar.Extra(title: "Permissions...", action: Setup.openSettingsForWhatsMissing)]
+        let backend = T3Backend()
+        let context = ScreenContextProvider()
+        let voice = ParakeetVoiceEngine()
+        let keys = KeyHoldMonitor()
+        let real = AppController(
+            dependencies: AppDependencies(
+                backend: backend,
+                context: context,
+                voice: voice,
+                inserter: TextInserter(),
+                keys: keys,
+                settings: Settings.load(),
+                saveSettings: { try? $0.save() },
+                screenTip: { context.takeJavaScriptTip() }
+            ),
+            stage: stage
+        )
+        controller = real
+        keys.onCancel = { [weak real] _ in
+            MainActor.assumeIsolated { real?.cancelListening() }
+        }
+        voice.onSetupProgress = { [weak real] progress in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { real?.fetchingEars(progress.stage == .ready ? nil : progress.fraction) }
+            }
+        }
+        Task { [weak real] in
+            let projects = (try? await backend.projects()) ?? []
+            real?.projectNames = projects.map(\.title).filter { $0 != "No project" }
+        }
+        stage.menuBar.extras = [
+            MenuBar.Extra(title: "Permissions...", action: Setup.openSettingsForWhatsMissing),
+            MenuBar.Extra(title: "Keyboard Settings...", action: KeyHoldMonitor.openKeyboardSettings),
+            MenuBar.Extra(title: "Restart", action: Setup.restart),
+        ]
     }
 
     stage.controller = controller
@@ -46,7 +63,10 @@ MainActor.assumeIsolated {
         if DevFlags.wantsFlow {
             DevFlags.run(on: controller)
         } else {
-            Setup.runOnFirstLaunch()
+            Setup.runOnFirstLaunch {
+                let globeIsFree = controller.settings.dictateKey != .fn || KeyHoldMonitor.globeAction == .doNothing
+                controller.say(globeIsFree ? CatWords.setUp : "\(CatWords.setUp) \(CatWords.globeTip)", seconds: 20)
+            }
         }
     }
 

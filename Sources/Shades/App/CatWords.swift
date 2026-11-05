@@ -18,6 +18,10 @@ enum CatWords {
     static let cantSeeScreen = "I can't see your screen just now, but ask away."
     static let approvalFailed = "That answer didn't go through. It's still waiting."
 
+    static let setUp = "Turn those on in System Settings, then choose Restart from my menu."
+    static let globeTip = "To dictate with Fn, set Press 🌐 key to Do Nothing in Keyboard Settings."
+
+    static func fetchingEars(_ fraction: Double) -> String { "Fetching my ears: \(Int(fraction * 100))%" }
     static func shortcutTaken(_ label: String) -> String { "Another app has \(label), so use the menu bar for that one." }
 
     static func looking(at snapshot: ScreenSnapshot) -> String? {

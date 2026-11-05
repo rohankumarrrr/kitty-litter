@@ -24,6 +24,10 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/shades" "$app/Contents/MacOS/Shades"
 
+# The cleanup model's runtime. Without it the app won't launch.
+mkdir -p "$app/Contents/Frameworks"
+ditto "$bin/llama.framework" "$app/Contents/Frameworks/llama.framework"
+
 # Resources from dependencies, if they have any.
 for bundle in "$bin"/*.bundle(N); do
   cp -R "$bundle" "$app/Contents/Resources/"
@@ -56,7 +60,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>So you can talk to the cat and dictate. Your voice stays on your Mac.</string>
+    <string>Shades listens only while you hold your talk or dictate key, and your voice stays on your Mac.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>So the cat can read the page you're looking at when you ask.</string>
 </dict>
@@ -84,10 +88,12 @@ find_identity() {
 
 identity="$(find_identity)"
 if [[ -n "$identity" ]]; then
-  codesign --force --deep --sign "$identity" --identifier me.rohan-is.shades "$app"
+  codesign --force --sign "$identity" "$app/Contents/Frameworks/llama.framework"
+  codesign --force --sign "$identity" --identifier me.rohan-is.shades "$app"
   echo "Signed with $(security find-identity -p codesigning 2>/dev/null | grep -F -- "$identity" | head -1 | sed -E 's/.*"(.*)".*/\1/')."
 else
-  codesign --force --deep --sign - --identifier me.rohan-is.shades "$app"
+  codesign --force --sign - "$app/Contents/Frameworks/llama.framework"
+  codesign --force --sign - --identifier me.rohan-is.shades "$app"
   echo "Signed ad hoc, so macOS will forget this app's permissions on every rebuild."
   echo "Run scripts/make-dev-cert.sh once to fix that."
 fi
