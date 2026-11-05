@@ -27,7 +27,7 @@ A kitten is a folder in `~/kittens`, registered as a T3 project:
 
 Five more fields are optional:
 
-- `project` is the folder of a T3 project the kitten works in, for a kitten that looks after an app that already has one. It's an absolute path, and `~` works, like `"~/code/my-app"`. Its threads start there, and Shades tells it where its own folder is, since its `CLAUDE.md` won't load by itself from another folder. Without it, the kitten's own folder is its project.
+- `project` is the folder of a T3 project the kitten works in, for a kitten that looks after an app that already has one. It's an absolute path, and `~` works, like `"~/code/my-app"`. Its threads start there, and Shades tells it where its own folder is, since its `CLAUDE.md` won't load by itself from another folder. Without it, the kitten's own folder is its project. A kitten with `seesScreen: false` always stays in its own folder, so that its threads can't stop counting as its own.
 - `color` is its jacket in the kitten view, like `"#b3261e"`.
 - `planned: true` means it shows up with the others but isn't taking work yet, which is handy for a kitten you've named but haven't written instructions for.
 - `seesScreen: false` means Shades never sends it your screen. Stopping it from finding a copy by itself takes [the screen block](#keeping-a-kitten-off-your-screen) as well.
@@ -151,7 +151,7 @@ Telling an agent not to look isn't enough. Agents run as you, so they can open w
 
 Shades leaves your screen out of everything it sends to a kitten with `seesScreen: false`. That covers threads in its project, whatever the project is called, including ones another kitten starts there, and any thread traced back to one through whoever started it, whatever that thread is called. A thread an agent started that can't be traced gets no screen either.
 
-The screen block is `.claude/settings.json` in the folder the kitten's threads start in: its `project` if it has one, and otherwise its own. Claude Code enforces it, and the self-check says so if it's missing:
+The screen block is `.claude/settings.json` in the kitten's folder. Claude Code enforces it, and the self-check says so if it's missing:
 
 | Way in | What stops it |
 |---|---|

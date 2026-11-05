@@ -939,27 +939,28 @@ final class FlowTests: XCTestCase {
     }
 
     /// Its thread would count as the other kitten's too, and a follow-up to it gets no screen.
-    func testAKittenSharingAProjectWithOneThatDoesntSeeTheScreenDoesntSeeItEither() async {
-        var screenless = clawde
-        screenless.project = "/code/app"
-        kittens = [screenless, pepper]
-        backend.projects["/code/app"] = "project-app"
+    func testAKittenWorkingInTheFolderOfOneThatDoesntSeeTheScreenDoesntSeeItEither() async {
+        let visitor = Kitten(name: "Pepper", role: "Finance", covers: "the app", folder: "/k/pepper", project: clawde.folder)
+        kittens = [clawde, visitor]
+        backend.projects[clawde.folder] = "project-clawde"
         backend.replies = [[.finished(fullText: "KITTEN: 2")], [.finished(fullText: "Started.")]]
         await ask("how's the app doing?")
         await controller.frontierTask?.value
-        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-app")
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-clawde")
         assertLeftOut(backend.sent[1].prompt)
     }
 
-    func testAKittensScreenBlockIsLookedForWhereItsThreadsStart() async {
-        var away = pepper
-        away.seesScreen = false
-        kittens = [away]
-        backend.projects["/code/app"] = "project-app"
-        screenBlockGaps = ["/code/app": ["sandbox.enabled"]]
-        let finding = await controller.runHealthCheck().first { !$0.ok && $0.check == "kitten: Pepper" }
-        XCTAssertEqual(finding?.problem, "Pepper isn't meant to see your screen, but nothing stops them.")
-        XCTAssertEqual(finding?.fix, "Put the screen block from docs/kittens.md in the folder they work in, and run them on a Claude model.")
+    /// Otherwise moving it to another project would leave its earlier threads seeing the screen.
+    func testAKittenThatDoesntSeeTheScreenStaysInItsOwnFolder() async {
+        let screenless = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", project: "/code/app", seesScreen: false)
+        XCTAssertEqual(screenless.project, "/k/clawde")
+        kittens = [screenless]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("Steve should stop doing that")
+        await controller.frontierTask?.value
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-clawde")
+        XCTAssertFalse(backend.sent[1].prompt.text.contains("CLAUDE.md"))
     }
 
     func testAKittensNumberThatIsntOnTheListGoesNowhere() async {

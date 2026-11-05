@@ -116,7 +116,7 @@ enum HealthCheck {
                 check: "kitten: \(name)",
                 ok: false,
                 problem: "\(name) isn't meant to see your screen, but nothing stops them.",
-                fix: "Put the screen block from docs/kittens.md in the folder they work in, and run them on a Claude model."
+                fix: "Put the screen block from docs/kittens.md in their folder, and run them on a Claude model."
             ))
         }
         results.append(facts.skillsInstalled ? .good("kitten skills") : HealthFinding(
