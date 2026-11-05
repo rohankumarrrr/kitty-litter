@@ -120,6 +120,17 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertNil(messages[3].text)
     }
 
+    func testAThreadWaitingOnYouIsntStillGoing() throws {
+        for status in [AgentStatus.waitingForAnswer, .waitingForApproval] {
+            let built = book(threads: [thread("t", status: status)], transcripts: ["t": [exchange("e")]])
+            let reply = try XCTUnwrap(direct(steve, in: built)?.messages.last)
+            XCTAssertEqual(reply.text, "Reply")
+            XCTAssertFalse(reply.isStillGoing)
+        }
+        let quiet = book(threads: [thread("t", status: .waitingForAnswer)], transcripts: ["t": [exchange("e", reply: nil)]])
+        XCTAssertEqual(direct(steve, in: quiet)?.messages.map(\.text), ["Ask"])
+    }
+
     func testAFailureGetsARowWithOrWithoutAReply() {
         var failed = exchange("e", reply: nil)
         failed.failure = "Ran out of quota"

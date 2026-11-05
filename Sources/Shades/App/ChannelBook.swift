@@ -91,7 +91,8 @@ struct ChannelBook: Equatable {
             guard let owner = KittenBoard.owner(of: thread, among: kittens), let exchanges = transcripts[thread.id] else { continue }
             for (index, exchange) in exchanges.enumerated() {
                 let speaker = speaker(of: exchange.asker, among: kittens)
-                let isStillGoing = thread.status.isActive && index == exchanges.count - 1
+                // Waiting on you isn't working, so what it last said reads as said, and sits at the bottom where you'll see it.
+                let isStillGoing = thread.status.isActive && !KittenBoard.needsYou(thread) && index == exchanges.count - 1
                 let messages = messages(of: exchange, in: thread, owner: owner, speaker: speaker, isStillGoing: isStillGoing)
                 guard !messages.isEmpty else { continue }
                 // A kitten talking to itself has no channel of its own, so its reports go in its DM.
