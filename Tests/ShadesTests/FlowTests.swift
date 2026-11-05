@@ -725,14 +725,33 @@ final class FlowTests: XCTestCase {
         XCTAssertNil(stage.bubble)
     }
 
-    func testAKittenThatBreaksOffTakesTheWarningBack() async {
+    /// The kitten has your words by then, and is working without your screen.
+    func testLosingTheConnectionAfterAKittenStartedKeepsTheWarning() async {
         backend.projects["/k/clawde"] = "project-clawde"
         backend.errorAfterStarting = URLError(.networkConnectionLost)
         controller.give("Read this x thread", to: clawde, snapshot: nil)
         await settle()
         XCTAssertEqual(stage.bubble, .line(CatWords.problem(URLError(.networkConnectionLost), while: .agents), threadID: nil))
         controller.bubbleDismissed(byClick: false)
-        XCTAssertNil(stage.bubble)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-1"))
+    }
+
+    func testAnotherThreadsFailureLeavesTheWarningAlone() async {
+        await askClawde("Read this x thread")
+        let warning = BubbleContent.notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2")
+
+        backend.replies = [[.failed(message: "Stopped.")]]
+        controller.forward("and that part?", to: session("a", "Build"), snapshot: nil)
+        await settle()
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, warning, "a follow-up to another session failed")
+
+        backend.replies = [[.failed(message: "It ran into a problem.")]]
+        controller.startFrontier(title: "Fix it", text: "Fix it", snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .line("It ran into a problem.", threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, warning, "a fix failed")
     }
 
     func testAKittenThatFailsTakesTheWarningBack() async {

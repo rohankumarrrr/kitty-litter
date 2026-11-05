@@ -2,10 +2,10 @@ import Foundation
 
 /// Whether your words only make sense to someone who can see your screen: they point at
 /// something without including it. It reads only your words, so a page can't set it off or
-/// keep it quiet. A wrong guess costs one extra sentence from the cat, or the kitten asking
-/// for the link itself, so a short list is enough.
+/// keep it quiet. A wrong guess costs a notice to dismiss, or the kitten asking for the link
+/// itself, so a short list is enough.
 enum ScreenWords {
-    /// Past this, it's probably the text itself, pasted in.
+    /// Past this, or over more than one line, it's probably the text itself, pasted in.
     private static let pastedLength = 280
 
     /// "This week" points at the calendar.
@@ -24,6 +24,7 @@ enum ScreenWords {
     /// These only point. A new thread has nothing else they could mean, but in a follow-up "this"
     /// is usually the session's own work.
     private static let pointing = [
+        #"\#(this) (\S+ )?(page|site|website|link|email|image)s?(?!-)\b"#,
         #"\b(read|look at|watch|check out|summari[sz]e|translate) \#(this)"#,
         #"\b(see|what.?s|what is|what are) (this|these) ?([?.!]|$)"#,
         #"\bwhat does \#(this) (\S+ )?(say|mean)\b"#,
@@ -31,19 +32,19 @@ enum ScreenWords {
     ]
 
     static func pointAtScreen(_ words: String, isFollowUp: Bool = false) -> Bool {
-        guard words.count <= pastedLength, !hasLink(words) else { return false }
-        let oneLine = words.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let words = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard words.count <= pastedLength, !words.contains(where: \.isNewline), !hasLink(words) else { return false }
         return (isFollowUp ? naming : naming + pointing).contains { pattern in
-            guard let match = oneLine.range(of: pattern, options: [.regularExpression, .caseInsensitive]) else { return false }
-            return !camePasted(before: oneLine[..<match.lowerBound], after: oneLine[match.upperBound...])
+            guard let match = words.range(of: pattern, options: [.regularExpression, .caseInsensitive]) else { return false }
+            return !camePasted(before: words[..<match.lowerBound], after: words[match.upperBound...])
         }
     }
 
     /// What they're pointing at is already here: a sentence before the pointing words, or a
     /// colon or quote mark with text after them. Asking for it would be silly.
     private static func camePasted(before: Substring, after: Substring) -> Bool {
-        before.range(of: #"^(\S+ ){3,}\S*[.!?:"”] "#, options: .regularExpression) != nil
-            || after.range(of: #"(:\s+|["“]\s*)\w"#, options: .regularExpression) != nil
+        before.range(of: #"(\S+ ){3,}\S*[.!?:"”] "#, options: .regularExpression) != nil
+            || after.range(of: #"(:\s+\S|["“]\s*\w)"#, options: .regularExpression) != nil
     }
 
     private static func hasLink(_ words: String) -> Bool {

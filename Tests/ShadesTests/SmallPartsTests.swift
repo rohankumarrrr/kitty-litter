@@ -49,7 +49,9 @@ final class ScreenWordsTests: XCTestCase {
             "What can we learn from this article?",
             "Is this reddit post right about the install?",
             "compare these screenshots",
-            "this\nvideo",
+            "Is this email a scam?",
+            "Is this website legit?",
+            "Check this link",
             "what's on my screen?",
             "what I'm looking at",
             "the article I\u{2019}m reading",
@@ -111,14 +113,12 @@ final class ScreenWordsTests: XCTestCase {
             "What is this test for?",
             "Is this error fixed now?",
             "Is this doc up to date?",
-            "Is this page up to date?",
             "What are these warnings in the build?",
             "Did this comment get pushed?",
             "What does this PR do?",
             "See this through to the end",
             "Is this thread-safe?",
             "Does this window take focus?",
-            "Make this page load faster",
             "Export this to PDF",
         ] {
             XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
@@ -135,6 +135,9 @@ final class ScreenWordsTests: XCTestCase {
             "Translate this function to Swift",
             "what does this say?",
             "What's this?",
+            "Is this page up to date?",
+            "Make this page load faster",
+            "Does this link work now?",
         ] {
             XCTAssertFalse(ScreenWords.pointAtScreen(words, isFollowUp: true), words)
             XCTAssertTrue(ScreenWords.pointAtScreen(words), "a new thread has nothing else it could mean: \(words)")
@@ -172,6 +175,12 @@ final class ScreenWordsTests: XCTestCase {
             "ship small, ship often. Thoughts on this?",
             "\"ship small, ship often\" what do you think of this?",
             "\"ship small, ship often\"\n\nRead this and tell me what lessons we can take from it",
+            "Summarize this:\n- the build failed\n- the signing key expired",
+            "What does this mean: `errSecInternalComponent`",
+            "Translate this: \u{BF}D\u{F3}nde est\u{E1} la biblioteca?",
+            "Thoughts on this: [error] build failed on main",
+            "the build failed because the signing key expired\n\nSummarize this",
+            "Summarize this\n\nThe build failed because the signing key expired.",
         ] {
             XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
         }
@@ -185,6 +194,7 @@ final class ScreenWordsTests: XCTestCase {
             "Read this :)",
             "Read this \"",
             "Hey there: read this x thread",
+            "Read this x thread\n",
         ] {
             XCTAssertTrue(ScreenWords.pointAtScreen(words), words)
         }

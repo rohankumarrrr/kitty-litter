@@ -57,8 +57,10 @@ extension AppController {
         replyGeneration += 1
         let generation = replyGeneration
         line = nil
+        // You've moved on, and may well be sending what it asked for.
+        notices.removeAll { $0.text == CatWords.sendTheLink }
         reply = Reply()
-        dropScreenWarning()
+        renderBubble()
         replyTask = Task {
             let snapshot = await capture?.value.snapshot
             if generation == replyGeneration {
@@ -249,26 +251,25 @@ extension AppController {
         )
         say(CatWords.handingOff(modelName: name), seconds: nil)
         frontierTask = Task {
-            var started = false
+            var startedThread: String?
             do {
                 for try await event in backend.start(prompt) {
                     switch event {
                     case .started(let threadID):
-                        started = true
+                        startedThread = threadID
                         dispatchers.insert(threadID)
                         sayPassedOn(CatWords.onIt(modelName: name), threadID: threadID, missesScreen: missesScreen)
                     case .needsApproval(let request):
                         addApproval(request)
                     case .failed(let message):
-                        dropScreenWarning()
+                        dropScreenWarning(for: startedThread)
                         say(message)
                     case .text, .finished:
                         break
                     }
                 }
-                if !started { say(CatWords.noReply) }
+                if startedThread == nil { say(CatWords.noReply) }
             } catch {
-                dropScreenWarning()
                 say(CatWords.problem(error, while: .agents))
             }
         }

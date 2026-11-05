@@ -71,9 +71,9 @@ extension AppController {
         post(caption: said, text: CatWords.sendTheLink, threadID: threadID, first: true)
     }
 
-    /// You've moved on, or your words never got there, so there's nothing left to warn about.
-    func dropScreenWarning() {
-        notices.removeAll { $0.text == CatWords.sendTheLink }
+    /// That thread's work went wrong, so there's nothing left to warn about. Other threads' warnings stand.
+    func dropScreenWarning(for threadID: String?) {
+        notices.removeAll { $0.text == CatWords.sendTheLink && $0.threadID == threadID }
         renderBubble()
     }
 
@@ -130,14 +130,14 @@ extension AppController {
                     case .finished where isQuick:
                         reportOn(thread, failed: false)
                     case .failed(let message):
-                        dropScreenWarning()
+                        dropScreenWarning(for: thread.id)
                         if isQuick { say(message) }
                     default:
                         break
                     }
                 }
             } catch {
-                dropScreenWarning()
+                dropScreenWarning(for: thread.id)
                 say(CatWords.problem(error, while: .agents))
             }
         }
