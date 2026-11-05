@@ -3,6 +3,7 @@
 # bundle, not to a bare binary.
 #
 #   scripts/bundle.sh [output-folder]        # defaults to build/
+#   scripts/bundle.sh /Applications          # installs it
 #
 # It signs with the first identity it finds, in this order:
 #   1. $SHADES_SIGN_IDENTITY, if you set it
@@ -23,6 +24,7 @@ bin="$(swift build -c release --product shades --show-bin-path)"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/shades" "$app/Contents/MacOS/Shades"
+cp assets/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 
 # The cleanup model's runtime. Without it the app won't launch.
 mkdir -p "$app/Contents/Frameworks"
@@ -47,6 +49,8 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <string>me.rohan-is.shades</string>
     <key>CFBundleExecutable</key>
     <string>Shades</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

@@ -32,8 +32,8 @@ You need an Apple Silicon Mac on macOS 14 or later, Xcode 16 or later, and T3 Co
 git clone https://github.com/rohankumarrrr/shades
 cd shades
 scripts/make-dev-cert.sh   # optional, see below
-scripts/bundle.sh
-open build/Shades.app
+scripts/bundle.sh /Applications
+open /Applications/Shades.app
 ```
 
 The first launch does a few things:
