@@ -47,11 +47,10 @@ final class CaptureStoreTests: XCTestCase {
         XCTAssertNotEqual(first, second)
     }
 
-    func testDeletesCapturesOlderThanAWeekAndNothingElse() throws {
+    func testDeletesCapturesOlderThanADayAndNothingElse() throws {
         let old = try store.save(Data([1]))
         let recent = try store.save(Data([2]))
-        try age(old, days: 8)
-        try age(recent, days: 6)
+        try age(old, days: 2)
         let notOurs = directory.appendingPathComponent("keep-me.jpg")
         try Data([3]).write(to: notOurs)
         try age(notOurs.path, days: 30)
@@ -61,6 +60,13 @@ final class CaptureStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: old))
         XCTAssertTrue(FileManager.default.fileExists(atPath: recent))
         XCTAssertTrue(FileManager.default.fileExists(atPath: notOurs.path))
+    }
+
+    func testAnOldCaptureDoesntWaitForTheNextOneToBeCleanedUp() throws {
+        let old = try store.save(Data([1]))
+        try age(old, days: 2)
+        store.removeOld()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: old))
     }
 
     func testTheRealStoreLivesInTheSettingsDirectory() {

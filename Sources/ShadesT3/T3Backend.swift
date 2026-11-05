@@ -183,6 +183,15 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         return projection.flatMap { T3Wire.finalReport(in: $0.turnItems.compactMap(\.value)) }
     }
 
+    public func origin(of threadID: String) async -> ThreadOrigin? {
+        guard let projection: T3Wire.Projection = try? await socket.call(
+            T3Wire.Method.getThreadProjection,
+            T3Wire.GetThreadProjection(threadId: threadID)
+        ) else { return nil }
+        let path = await hub.projects().first { $0.id == projection.thread.projectId }?.path
+        return ThreadOrigin(title: projection.thread.title, projectPath: path, startedBy: projection.startedBy)
+    }
+
     public func open(threadID: String) {
         Task { [self] in
             guard let environmentID = await environmentID(),

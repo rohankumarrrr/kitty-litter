@@ -233,4 +233,24 @@ final class T3WireTests: XCTestCase {
         XCTAssertLessThan(summary.count, 500)
         XCTAssertTrue(summary.hasSuffix("…"))
     }
+
+    private func projection(createdBy: String?, messages: String) throws -> T3Wire.Projection {
+        let by = createdBy.map { #""createdBy":"\#($0)","# } ?? ""
+        let json = #"{"thread":{\#(by)"title":"T","projectId":"p"},"runs":[],"turnItems":[],"messages":\#(messages)}"#
+        return try T3Wire.decoder().decode(T3Wire.Projection.self, from: Data(json.utf8))
+    }
+
+    func testAThreadAPersonStartedSaysSo() throws {
+        XCTAssertEqual(try projection(createdBy: "user", messages: "[]").startedBy, .person)
+    }
+
+    func testAThreadAnAgentStartedNamesTheThreadOfItsFirstMessage() throws {
+        let messages = #"[{"role":"assistant","createdAt":"2026-01-01T00:00:00Z"},{"role":"user","createdAt":"2026-01-03T00:00:00Z","senderThreadId":"later"},{"role":"user","createdAt":"2026-01-02T00:00:00Z","senderThreadId":"first"}]"#
+        XCTAssertEqual(try projection(createdBy: "agent", messages: messages).startedBy, .thread("first"))
+    }
+
+    func testAnAgentsThreadWithNoSenderCantBeTraced() throws {
+        XCTAssertEqual(try projection(createdBy: "agent", messages: #"[{"role":"user"}]"#).startedBy, .unknown)
+        XCTAssertEqual(try projection(createdBy: nil, messages: "[]").startedBy, .unknown)
+    }
 }
