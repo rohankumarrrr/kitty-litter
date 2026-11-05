@@ -155,6 +155,8 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var id: String
     public var title: String
     public var projectTitle: String?
+    /// The folder of the project it's in. Titles can be renamed, so this is what says whose it is.
+    public var projectPath: String?
     public var status: AgentStatus
     public var model: String
     public var updatedAt: Date
@@ -177,11 +179,13 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         pendingQuestion: AgentQuestion? = nil,
         runtimeMode: RuntimeMode? = nil,
         isSettled: Bool = false,
-        pullRequest: ThreadPullRequest? = nil
+        pullRequest: ThreadPullRequest? = nil,
+        projectPath: String? = nil
     ) {
         self.id = id
         self.title = title
         self.projectTitle = projectTitle
+        self.projectPath = projectPath
         self.status = status
         self.model = model
         self.updatedAt = updatedAt
@@ -233,6 +237,26 @@ public struct Exchange: Sendable, Equatable, Identifiable {
     }
 }
 
+/// Where a thread came from, so its work can be traced back to whoever started it.
+public struct ThreadOrigin: Sendable, Equatable {
+    public enum Starter: Sendable, Equatable {
+        case person
+        case thread(String)
+        /// An agent started it, and nothing says which one.
+        case unknown
+    }
+
+    public var title: String
+    public var projectPath: String?
+    public var startedBy: Starter
+
+    public init(title: String, projectPath: String?, startedBy: Starter) {
+        self.title = title
+        self.projectPath = projectPath
+        self.startedBy = startedBy
+    }
+}
+
 /// Everything the cat needs from whatever runs its agents.
 public protocol AgentBackend: AnyObject, Sendable {
     /// Connects, signing in the first time if needed.
@@ -260,6 +284,8 @@ public protocol AgentBackend: AnyObject, Sendable {
     func allThreads() async -> [AgentThread]?
     /// What's been said in a thread, oldest first. `nil` if it can't be read.
     func exchanges(threadID: String) async -> [Exchange]?
+    /// Where this thread came from, or `nil` if that can't be read.
+    func origin(of threadID: String) async -> ThreadOrigin?
 }
 
 public extension AgentBackend {
@@ -272,4 +298,5 @@ public extension AgentBackend {
     func finalReport(threadID: String) async -> String? { nil }
     func allThreads() async -> [AgentThread]? { nil }
     func exchanges(threadID: String) async -> [Exchange]? { nil }
+    func origin(of threadID: String) async -> ThreadOrigin? { nil }
 }

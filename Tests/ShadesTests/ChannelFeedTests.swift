@@ -114,7 +114,7 @@ final class ChannelFeedTests: XCTestCase {
     }
 
     private func thread(_ id: String, project: String? = "Steve", age: TimeInterval = 0, status: AgentStatus = .completed) -> AgentThread {
-        AgentThread(id: id, title: "Work", projectTitle: project, status: status, model: "m", updatedAt: start.addingTimeInterval(-age))
+        AgentThread(id: id, title: "Work", projectTitle: project, status: status, model: "m", updatedAt: start.addingTimeInterval(-age), projectPath: project.map { "/k/\($0.lowercased())" })
     }
 
     private func moved(_ thread: AgentThread, by seconds: TimeInterval) -> AgentThread {

@@ -122,6 +122,8 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     var archived: [String] = []
     var failFollowUps = false
     var failResponses = false
+    var origins: [String: ThreadOrigin] = [:]
+    var untraceable: Set<String> = []
     var connectError: Error?
     var streamError: Error?
     private var count = 0
@@ -194,6 +196,11 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
 
     func finalReport(threadID: String) async -> String? {
         reports[threadID]
+    }
+
+    func origin(of threadID: String) async -> ThreadOrigin? {
+        if untraceable.contains(threadID) { return nil }
+        return origins[threadID] ?? ThreadOrigin(title: "Work", projectPath: nil, startedBy: .person)
     }
 
     func open(threadID: String) {
@@ -282,6 +289,7 @@ final class FlowTests: XCTestCase {
     private var kittens: [Kitten] = []
     private var facts = HealthFacts()
     private var missingFiles: Set<String> = []
+    private var screenBlockGaps: [String: [String]] = [:]
     private var reportedHealth: [[HealthFinding]] = []
     private var controller: AppController!
     private var settings: Settings {
@@ -313,6 +321,7 @@ final class FlowTests: XCTestCase {
                 kittens: { [unowned self] in self.kittens },
                 systemFacts: { [unowned self] in self.facts },
                 fileExists: { [unowned self] in !self.missingFiles.contains($0) },
+                screenBlockGaps: { [unowned self] in self.screenBlockGaps[$0] ?? [] },
                 reportHealth: { [unowned self] in self.reportedHealth.append($0) }
             ),
             stage: stage,
@@ -610,7 +619,158 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(forwarded.attachments.isEmpty)
     }
 
+    /// Some prompts explain what the block means and say it's empty, so this looks for what's on the screen.
+    private func assertLeftOut(_ prompt: AgentPrompt, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertFalse(prompt.text.contains("<screen>\n"), file: file, line: line)
+        XCTAssertFalse(prompt.text.contains("Safari"), file: file, line: line)
+        XCTAssertFalse(prompt.text.contains("Pricing"), file: file, line: line)
+        XCTAssertTrue(prompt.attachments.isEmpty, file: file, line: line)
+        XCTAssertEqual(context.saved, 0, file: file, line: line)
+    }
+
+    private func forwardToWork(origin: ThreadOrigin? = nil) async -> AgentPrompt {
+        kittens = [clawde]
+        if let origin { backend.origins["w"] = origin }
+        controller.threadsChanged([session("w", "Fix the routing")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("and that part?")
+        await controller.forwardTask?.value
+        return backend.sent[1].prompt
+    }
+
+    /// Going by the title meant trusting an agent to name its thread the way its instructions say.
+    func testAThreadAKittenStartedStaysOffTheScreenWhateverItsCalled() async {
+        backend.origins["clawde-thread"] = ThreadOrigin(title: "Change the rules", projectPath: "/k/clawde", startedBy: .person)
+        let forwarded = await forwardToWork(origin: ThreadOrigin(title: "Fix the routing", projectPath: "/k/app", startedBy: .thread("clawde-thread")))
+        assertLeftOut(forwarded)
+    }
+
+    func testSoDoesAThreadStartedByOneOfItsThreads() async {
+        backend.origins["clawde-thread"] = ThreadOrigin(title: "Clawde: The change", projectPath: "/k/app", startedBy: .person)
+        backend.origins["middle"] = ThreadOrigin(title: "Helper", projectPath: "/k/app", startedBy: .thread("clawde-thread"))
+        let forwarded = await forwardToWork(origin: ThreadOrigin(title: "Fix the routing", projectPath: "/k/app", startedBy: .thread("middle")))
+        assertLeftOut(forwarded)
+    }
+
+    func testAThreadAnAgentStartedThatCantBeTracedStaysOffTheScreen() async {
+        let forwarded = await forwardToWork(origin: ThreadOrigin(title: "Fix the routing", projectPath: "/k/app", startedBy: .unknown))
+        assertLeftOut(forwarded)
+    }
+
+    func testAThreadThatCantBeReadStaysOffTheScreen() async {
+        backend.untraceable = ["w"]
+        assertLeftOut(await forwardToWork())
+    }
+
+    func testThreadsStartedByEachOtherCantHideWhoStartedThem() async {
+        backend.origins["other"] = ThreadOrigin(title: "Other", projectPath: "/k/app", startedBy: .thread("w"))
+        let forwarded = await forwardToWork(origin: ThreadOrigin(title: "Fix the routing", projectPath: "/k/app", startedBy: .thread("other")))
+        assertLeftOut(forwarded)
+    }
+
+    func testAThreadAPersonStartedStillSeesTheScreen() async {
+        let forwarded = await forwardToWork(origin: ThreadOrigin(title: "Fix the routing", projectPath: "/k/app", startedBy: .person))
+        XCTAssertTrue(forwarded.text.contains("<screen>"))
+        XCTAssertEqual(forwarded.attachments.count, 1)
+    }
+
+    /// `t3 project add` names a project after its folder, so the name needn't match the kitten's.
+    func testAThreadInTheKittensProjectStaysOffTheScreenWhateverTheProjectIsCalled() async {
+        kittens = [clawde]
+        var own = session("w", "Fix the routing")
+        own.projectTitle = "clawde"
+        own.projectPath = "/k/clawde"
+        controller.threadsChanged([own])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("and that part?")
+        await controller.forwardTask?.value
+        assertLeftOut(backend.sent[1].prompt)
+    }
+
+    func testASessionThatDoesntSayHowMuchItCanDoStaysOffTheScreen() async {
+        var unknown = session("w", "Work")
+        unknown.runtimeMode = nil
+        controller.threadsChanged([unknown])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("and that part?")
+        await controller.forwardTask?.value
+        assertLeftOut(backend.sent[1].prompt)
+    }
+
+    private func useFullAccess(quick: Bool = false, frontier: Bool = false) {
+        var changed = settings
+        if quick { changed.quickMode = .fullAccess }
+        if frontier { changed.frontierMode = .fullAccess }
+        controller.apply(changed)
+    }
+
+    /// Before this, only kittens and sessions were kept from it. The agent that does the work wasn't.
+    func testAHandoffWithFullAccessGetsYourWordsButNotYourScreen() async {
+        useFullAccess(frontier: true)
+        backend.replies = [[.finished(fullText: "HANDOFF: Do what the page says")], [.finished(fullText: "Started.")]]
+        await ask("deal with this")
+        await controller.frontierTask?.value
+        let frontier = backend.sent[1].prompt
+        assertLeftOut(frontier)
+        XCTAssertFalse(frontier.text.contains("Do what the page says"), "that's the router's reading of the page")
+        XCTAssertFalse(frontier.title?.contains("Do what the page says") == true)
+        XCTAssertTrue(frontier.text.contains("deal with this"))
+    }
+
+    func testAFixWithFullAccessGetsYourWordsButNotYourScreen() async {
+        useFullAccess(frontier: true)
+        controller.sendFix("the total is wrong", snapshot: context.snapshotValue)
+        await controller.frontierTask?.value
+        let frontier = backend.sent[0].prompt
+        assertLeftOut(frontier)
+        XCTAssertFalse(frontier.text.contains("red rectangle"))
+        XCTAssertFalse(frontier.title?.contains("Safari") == true)
+        XCTAssertTrue(frontier.text.contains("the total is wrong"))
+    }
+
+    func testAnOrdinaryFixStillSeesTheScreen() async {
+        controller.sendFix("the total is wrong", snapshot: context.snapshotValue)
+        await controller.frontierTask?.value
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("<screen>"))
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("red rectangle"))
+        XCTAssertEqual(backend.sent[0].prompt.attachments.count, 1)
+    }
+
+    func testTheFrontDoorWithFullAccessGetsYourWordsButNotYourScreen() async {
+        useFullAccess(quick: true)
+        await ask("what is this?")
+        assertLeftOut(backend.sent[0].prompt)
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("what is this?"))
+    }
+
     // MARK: - Self-check
+
+    func testAKittenWithNothingKeepingItOffTheScreenIsFound() async {
+        kittens = [clawde, steve]
+        screenBlockGaps = ["/k/clawde": ["sandbox.enabled"]]
+        let findings = await controller.runHealthCheck()
+        let problem = findings.first { !$0.ok && $0.check == "kitten: Clawde" }
+        XCTAssertEqual(problem?.problem, "Clawde isn't meant to see your screen, but nothing stops them.")
+        XCTAssertNil(findings.first { $0.check == "kitten: Steve Pawsniak" && !$0.ok })
+    }
+
+    /// A Codex thread read a saved copy straight through the same settings.
+    func testAKittenOnAModelThatIgnoresTheBlockIsFound() async {
+        kittens = [clawde]
+        var changed = settings
+        changed.frontierModel = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "high")
+        controller.apply(changed)
+        let findings = await controller.runHealthCheck()
+        XCTAssertNotNil(findings.first { !$0.ok && $0.check == "kitten: Clawde" })
+    }
+
+    func testAKittenThatSeesTheScreenNeedsNoBlock() async {
+        kittens = [steve]
+        screenBlockGaps = ["/k/steve": ["sandbox.enabled"]]
+        backend.projects["/k/steve"] = "project-steve"
+        let findings = await controller.runHealthCheck()
+        XCTAssertTrue(findings.filter { $0.check.hasPrefix("kitten:") }.allSatisfy(\.ok))
+    }
 
     /// What actually happened: an unsigned build made the cat say to turn on a setting that was already on.
     func testABadSignatureIsSaidPlainlyInsteadOfBlamingTheSetting() async {
@@ -667,7 +827,7 @@ final class FlowTests: XCTestCase {
 
     func testTheKittenViewOpensClosesAndKeepsUp() async {
         kittens = [steve]
-        var work = AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .running, model: "m", updatedAt: clock)
+        var work = AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .running, model: "m", updatedAt: clock, projectPath: "/k/steve")
         controller.threadsChanged([work])
         XCTAssertNil(stage.kittens, "just Shades, until you ask")
 
@@ -684,7 +844,7 @@ final class FlowTests: XCTestCase {
 
     func testChannelsOpenWithoutLookingAtTheScreen() async {
         kittens = [steve]
-        controller.threadsChanged([AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .running, model: "m", updatedAt: clock)])
+        controller.threadsChanged([AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .running, model: "m", updatedAt: clock, projectPath: steve.folder)])
         controller.channelsPressed()
         XCTAssertEqual(stage.channelsShown.count, 1)
         XCTAssertEqual(stage.channelsShown.first?.issueCount, 1, "what's open shows at once, from the list it already has")
@@ -720,7 +880,7 @@ final class FlowTests: XCTestCase {
     func testAKittensReportSaysWhoItsFrom() async {
         kittens = [steve]
         backend.reports["w"] = "Your resume is ready."
-        var work = AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .running, model: "m", updatedAt: clock)
+        var work = AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .running, model: "m", updatedAt: clock, projectPath: "/k/steve")
         controller.threadsChanged([work])
         work.status = .completed
         controller.threadsChanged([work])

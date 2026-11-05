@@ -27,6 +27,8 @@ A kitten for the system itself, a self-check, rollback and a window for reading 
 
 ## Smaller things
 
+- A screen block that follows a kitten instead of its folder. T3 can run Claude with `--settings` per provider instance, so a kitten's threads could share one wherever they work. Untested, because it needs a change to T3's settings.
+
 - Answer an agent's question from the bubble. It shows the question and options now, and you answer in T3.
 - Reply from Channels. It only reads for now, because a reply needs a rule for which of a kitten's threads it goes to, and a way of leaving your screen out.
 - Unread counts in Channels, which need somewhere to remember what you've read.

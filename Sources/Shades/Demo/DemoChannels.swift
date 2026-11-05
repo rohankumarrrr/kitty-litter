@@ -17,7 +17,7 @@ enum DemoChannels {
         minutes: Double,
         pullRequest: ThreadPullRequest? = nil
     ) -> AgentThread {
-        AgentThread(id: id, title: title, projectTitle: project, status: status, model: "claude-opus-5-5", updatedAt: ago(minutes: minutes), isSettled: settled, pullRequest: pullRequest)
+        AgentThread(id: id, title: title, projectTitle: project, status: status, model: "claude-opus-5-5", updatedAt: ago(minutes: minutes), isSettled: settled, pullRequest: pullRequest, projectPath: Demo.kittens.first { $0.name == project }?.folder)
     }
 
     private static let clawdeMain = thread("demo-clawde-main", "Tidy the settings panel", project: "Clawde", minutes: 95, pullRequest: ThreadPullRequest(number: 31, state: "merged"))

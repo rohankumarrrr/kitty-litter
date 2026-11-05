@@ -27,6 +27,7 @@ final class AppController {
     let saveSettings: (Settings) -> Void
     let screenTip: () -> String?
     let loadKittens: () -> [Kitten]
+    let screenBlockGaps: (String) -> [String]
     let systemFacts: () -> HealthFacts
     let fileExists: (String) -> Bool
     let reportHealth: ([HealthFinding]) -> Void
@@ -125,6 +126,7 @@ final class AppController {
         saveSettings = dependencies.saveSettings
         screenTip = dependencies.screenTip
         loadKittens = dependencies.kittens
+        screenBlockGaps = dependencies.screenBlockGaps
         systemFacts = dependencies.systemFacts
         fileExists = dependencies.fileExists
         reportHealth = dependencies.reportHealth
@@ -294,7 +296,7 @@ final class AppController {
         }
     }
 
-    private func apply(_ updated: Settings) {
+    func apply(_ updated: Settings) {
         let keysChanged = updated.talkKey != settings.talkKey || updated.dictateKey != settings.dictateKey
         settings = updated
         saveSettings(updated)

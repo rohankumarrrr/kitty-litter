@@ -9,7 +9,7 @@ final class ChannelBookTests: XCTestCase {
     private let cali = Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)
 
     private func thread(_ id: String, project: String? = "Steve", title: String = "Work", status: AgentStatus = .completed, settled: Bool = false, age: TimeInterval = 0) -> AgentThread {
-        AgentThread(id: id, title: title, projectTitle: project, status: status, model: "m", updatedAt: at.addingTimeInterval(-age), isSettled: settled)
+        AgentThread(id: id, title: title, projectTitle: project, status: status, model: "m", updatedAt: at.addingTimeInterval(-age), isSettled: settled, projectPath: project.map { "/k/\($0.lowercased())" })
     }
 
     private func exchange(_ id: String, asker: Exchange.Asker = .you, ask: String? = "Ask", reply: String? = "Reply", asked: TimeInterval = 0, replied: TimeInterval? = nil) -> Exchange {
@@ -145,6 +145,16 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(ChannelRows.rows(.channel(.direct(steve)), in: lost), [.note(CatWords.cantReachT3Yet)])
         let failed = ChannelBook.build(kittens: [steve], threads: [thread("t")], transcripts: [:], isReading: false, unreadable: 1, cantReachT3: false)
         XCTAssertEqual(ChannelRows.rows(.channel(.direct(steve)), in: failed), [.note(CatWords.couldntRead(1))])
+
+        let threads = [thread("read"), thread("missing")]
+        let said = ["read": [exchange("e")]]
+        func notes(unreadable: Int, cantReachT3: Bool) -> [String] {
+            let built = ChannelBook.build(kittens: [steve], threads: threads, transcripts: said, isReading: false, unreadable: unreadable, cantReachT3: cantReachT3)
+            return ChannelRows.rows(.channel(.direct(steve)), in: built).compactMap { if case .note(let text) = $0 { return text } else { return nil } }
+        }
+        XCTAssertEqual(notes(unreadable: 1, cantReachT3: false), [CatWords.couldntRead(1)])
+        XCTAssertEqual(notes(unreadable: 0, cantReachT3: true), [CatWords.cantReachT3Yet])
+        XCTAssertEqual(notes(unreadable: 0, cantReachT3: false), [CatWords.olderMessages], "and once it's only that they're old, it says so")
     }
 
     func testALaterAskInAThreadNeverSitsAboveAnEarlierOne() {

@@ -21,8 +21,8 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     init() {
         threads = [
-            AgentThread(id: "demo-tidy", title: "Steve Pawsniak: Tidy up the pricing page", projectTitle: "site", status: .running, model: "claude-opus-5-5", updatedAt: Date()),
-            AgentThread(id: "demo-research", title: "Compare pixel fonts", projectTitle: nil, status: .running, model: "gpt-6.1-sol", updatedAt: Date()),
+            AgentThread(id: "demo-tidy", title: "Steve Pawsniak: Tidy up the pricing page", projectTitle: "site", status: .running, model: "claude-opus-5-5", updatedAt: Date(), runtimeMode: .auto),
+            AgentThread(id: "demo-research", title: "Compare pixel fonts", projectTitle: nil, status: .running, model: "gpt-6.1-sol", updatedAt: Date(), runtimeMode: .auto),
         ]
     }
 
@@ -194,7 +194,8 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
                 projectTitle: nil,
                 status: .running,
                 model: prompt.model.model,
-                updatedAt: Date()
+                updatedAt: Date(),
+                runtimeMode: .auto
             ), at: 0)
         }
         return AsyncThrowingStream { continuation in

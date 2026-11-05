@@ -9,7 +9,7 @@ final class ChannelRowsTests: XCTestCase {
     private let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: Date(timeIntervalSince1970: 1_000_000))!
 
     private func thread(_ id: String, title: String = "Work", status: AgentStatus = .completed) -> AgentThread {
-        AgentThread(id: id, title: title, projectTitle: "Steve Pawsniak", status: status, model: "m", updatedAt: noon)
+        AgentThread(id: id, title: title, projectTitle: "Steve Pawsniak", status: status, model: "m", updatedAt: noon, projectPath: "/k/steve")
     }
 
     private func exchange(_ id: String, asked: TimeInterval = 0, reply: String? = "Reply") -> Exchange {

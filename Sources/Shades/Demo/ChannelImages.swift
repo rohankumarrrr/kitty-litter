@@ -51,7 +51,7 @@ enum ChannelImages {
             Kitten(name: "Kitten number \(number) with quite a long name", role: "Helper", covers: "", folder: "/demo/kitten-\(number)")
         }
         let threads = kittens.map { kitten in
-            AgentThread(id: kitten.id, title: "A rather long title for what this kitten is working on right now, which won't fit on one line", projectTitle: kitten.name, status: .running, model: "m", updatedAt: Date(), pullRequest: ThreadPullRequest(number: 1_234, state: "open"))
+            AgentThread(id: kitten.id, title: "A rather long title for what this kitten is working on right now, which won't fit on one line", projectTitle: kitten.name, status: .running, model: "m", updatedAt: Date(), pullRequest: ThreadPullRequest(number: 1_234, state: "open"), projectPath: kitten.folder)
         }
         return ChannelBook.build(kittens: kittens, threads: threads, transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
     }

@@ -19,12 +19,15 @@ extension AppController {
         let snapshot = capture.snapshot ?? ScreenSnapshot(focusRegion: region)
 
         // With nothing to look at, a description is the only way it can help.
-        let canSee = !snapshot.isPrivate && snapshot.screenshotJPEG != nil
+        let leftOut = settings.frontierMode == .fullAccess
+        let canSee = !leftOut && !snapshot.isPrivate && snapshot.screenshotJPEG != nil
         let caption: String
         if let error = capture.error {
             caption = CatWords.problem(error, while: .seeing)
         } else if snapshot.isPrivate {
             caption = CatWords.privateApp
+        } else if leftOut {
+            caption = CatWords.fullAccessLeavesScreenOut
         } else if !canSee {
             caption = screenBlockedBy ?? CatWords.needsScreenRecording
         } else {
@@ -48,12 +51,14 @@ extension AppController {
 
     func sendFix(_ description: String, snapshot: ScreenSnapshot) {
         let said = description.isEmpty ? nil : description
-        let path = saveScreenshot(of: snapshot)
-        let what = said ?? snapshot.appName.map { "Something in \($0)" } ?? "Something on screen"
+        // An agent with full access can do anything, so text from a page doesn't get to reach it.
+        let shared = settings.frontierMode == .fullAccess ? nil : snapshot
+        let path = saveScreenshot(of: shared)
+        let what = said ?? shared?.appName.map { "Something in \($0)" } ?? "Something on screen"
         startFrontier(
             title: "Fix: \(what)",
-            text: Prompts.fix(description: said, snapshot: snapshot, screenshotPath: path),
-            snapshot: snapshot
+            text: Prompts.fix(description: said, snapshot: shared, screenshotPath: path),
+            snapshot: shared
         )
         // A moment at the spot to say it's on it, then back home, unless it's needed elsewhere.
         Task {

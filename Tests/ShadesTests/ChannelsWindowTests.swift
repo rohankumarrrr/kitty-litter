@@ -15,7 +15,7 @@ final class ChannelsWindowTests: XCTestCase {
     }
 
     private func book(exchanges: Int = 1, text: String = "Reply") -> ChannelBook {
-        let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at)
+        let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
         let said = (0..<exchanges).map { index in
             Exchange(id: "e\(index)", asker: .you, askedAt: at.addingTimeInterval(TimeInterval(index)), ask: "Ask", reply: text, repliedAt: at.addingTimeInterval(TimeInterval(index)))
         }
@@ -72,8 +72,8 @@ final class ChannelsWindowTests: XCTestCase {
     func testAnEmptyBetweenSectionIsntDrawnAndAPairGetsARowOnceTheyTalk() throws {
         XCTAssertFalse(ChannelSidebarItem.groups(in: book()).contains { $0.heading == CatWords.betweenKittens })
 
-        let pepperThread = AgentThread(id: "p", title: "Work", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at)
-        let steveThread = AgentThread(id: "s", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at)
+        let pepperThread = AgentThread(id: "p", title: "Work", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at, projectPath: "/k/pepper")
+        let steveThread = AgentThread(id: "s", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
         let talked = ChannelBook.build(
             kittens: [steve, pepper],
             threads: [pepperThread, steveThread],
