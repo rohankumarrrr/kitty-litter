@@ -161,6 +161,11 @@ struct ChannelBook: Equatable {
                 latest = max(latest, isStillGoing ? exchange.askedAt : exchange.repliedAt ?? exchange.askedAt)
                 placed[channel, default: []].append(Placed(position: latest, sequence: index, messages: messages))
                 heardIn[thread.id, default: []].insert(channel)
+                // Work from Everyone that was passed on to a kitten answers there as that kitten, not only between kittens.
+                if channel != .direct(owner), let since = inEveryone[thread.id], exchange.askedAt >= since.addingTimeInterval(-60) {
+                    let replies = messages.filter { $0.kind == .reply }
+                    if !replies.isEmpty { placed[.everyone, default: []].append(Placed(position: latest, sequence: index, messages: replies)) }
+                }
             }
         }
 

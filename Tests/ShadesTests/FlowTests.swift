@@ -2990,3 +2990,98 @@ extension FlowTests {
         XCTAssertFalse(routed.prompt.text.contains("4242"), "the Everyone router read what was said about your screen")
     }
 }
+
+extension FlowTests {
+    func testAfterARestartEveryoneNeverReadsTheAskChat() async throws {
+        let secret = "PRIVATE-SCREEN-CODE-9472"
+        backend.replies = [[.finished(fullText: secret)]]
+        await ask("What code is on my screen?")
+        XCTAssertFalse(backend.sent[0].prompt.attachments.isEmpty)
+        let privateID = try XCTUnwrap(controller.quick.thread(at: clock))
+        backend.reports[privateID] = secret
+        var privateChat = session(privateID, "What code is on my screen?", mode: .approvalRequired)
+        privateChat.isSettled = true
+        controller = makeController()
+        controller.threadsChanged([privateChat])
+        backend.routerSays["Repeat that code"] = "SEND TO: 1"
+
+        controller.channelsPressed()
+        await messages("Repeat that code", to: .router)
+
+        let prompt = try XCTUnwrap(backend.sent.last { $0.prompt.text.contains("Their question: Repeat that code") })
+        let readScreen = prompt.prompt.text.contains(secret)
+        let enteredScreenChat = backend.sent.contains { $0.mode == .forward && $0.threadID == privateID }
+        XCTAssertFalse(readScreen, "Everyone's router must never receive the Ask screen chat's report after restart")
+        XCTAssertFalse(enteredScreenChat, "Everyone must not forward into the Ask screen chat after restart")
+        controller.channelsClosed()
+    }
+
+    func testAfterARestartEveryoneStartsARouterConversationOfItsOwn() async throws {
+        backend.routerSays["What's the weather?"] = "Sunny."
+        controller.channelsPressed()
+        await messages("What's the weather?", to: .router)
+        let before = try XCTUnwrap(controller.messagesQuick.thread(at: clock))
+        controller.channelsClosed()
+        controller = makeController()
+        controller.channelsPressed()
+        backend.routerSays["And tomorrow?"] = "Rain."
+        await messages("And tomorrow?", to: .router)
+        let typed = try XCTUnwrap(backend.sent.last { $0.prompt.text.contains("Their question: And tomorrow?") })
+        XCTAssertEqual(typed.mode, .start, "whatever the Ask box sent the old one since, Everyone never talks in it again")
+        XCTAssertNotEqual(controller.messagesQuick.thread(at: clock), before)
+        controller.channelsClosed()
+    }
+
+    func testEveryoneKeepsEarlierAnswersWhenAFollowUpIsPassedOn() async throws {
+        let sentAt = clock
+        backend.routerSays["Find a flight"] = "HANDOFF: Find a flight"
+        controller.channelsPressed()
+        await messages("Find a flight", to: .router)
+        let dispatcherID = try XCTUnwrap(controller.messagesThreads.keys.first)
+        let first = Exchange(id: "first-result", asker: .you, askedAt: sentAt, ask: "Find a flight", reply: "Flight A costs $212.", repliedAt: sentAt.addingTimeInterval(20))
+        let dispatcher = session(dispatcherID, "Flights")
+        let before = ChannelBook.build(kittens: [], threads: [dispatcher], transcripts: [dispatcherID: [first]], isReading: false, unreadable: 0, cantReachT3: false, inEveryone: controller.messagesThreads)
+        XCTAssertEqual(before.everyone.messages.compactMap(\.text), ["Flight A costs $212."])
+
+        clock.addTimeInterval(180)
+        controller.threadsChanged([dispatcher])
+        backend.routerSays["Book that flight"] = "SEND TO: 1"
+        await messages("Book that flight", to: .router)
+        XCTAssertEqual(backend.sent.last?.threadID, dispatcherID)
+        let worker = session("booking-worker", "Book flight")
+        let handoff = "Started <t3-thread://v2/env/booking-worker>"
+        backend.reports[dispatcherID] = handoff
+        controller.threadsChanged([dispatcher, worker])
+        controller.reportOn(dispatcher, failed: false)
+        await controller.reportTask?.value
+        XCTAssertTrue(controller.hiddenThreads.contains(dispatcherID))
+        let second = Exchange(id: "passed-on", asker: .you, askedAt: clock, ask: "Book that flight", reply: handoff, repliedAt: clock)
+        let result = Exchange(id: "booking-result", asker: .agent(threadID: dispatcherID), askedAt: clock, ask: "Book flight A", reply: "Flight A is booked.", repliedAt: clock.addingTimeInterval(30))
+        let after = ChannelBook.build(kittens: [], threads: [dispatcher, worker], transcripts: [dispatcherID: [first, second], worker.id: [result]], isReading: false, unreadable: 0, cantReachT3: false, inEveryone: controller.messagesThreads)
+        let replies = after.everyone.messages.compactMap(\.text)
+        XCTAssertTrue(replies.contains("Flight A costs $212."), "Passing on a follow-up must not remove the earlier answer from Everyone")
+        XCTAssertTrue(replies.contains("Flight A is booked."))
+        controller.channelsClosed()
+    }
+
+    func testEveryoneSeesWorkPassedIntoAKittensProject() async throws {
+        kittens = [pepper]
+        backend.routerSays["Check my budget"] = "HANDOFF: Check my budget"
+        controller.channelsPressed()
+        await messages("Check my budget", to: .router)
+        let dispatcherID = try XCTUnwrap(controller.messagesThreads.keys.first)
+        let dispatcher = session(dispatcherID, "Budget")
+        let worker = AgentThread(id: "budget-worker", title: "Budget result", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: clock, projectPath: pepper.folder)
+        backend.reports[dispatcherID] = "Started <t3-thread://v2/env/budget-worker>"
+        controller.threadsChanged([dispatcher, worker])
+        controller.reportOn(dispatcher, failed: false)
+        await controller.reportTask?.value
+        XCTAssertTrue(controller.messagesThreads.keys.contains(worker.id))
+        let result = Exchange(id: "budget-result", asker: .agent(threadID: dispatcherID), askedAt: clock, ask: "Check their budget", reply: "The budget balances.", repliedAt: clock.addingTimeInterval(30))
+        let book = ChannelBook.build(kittens: kittens, threads: [dispatcher, worker], transcripts: [worker.id: [result]], isReading: false, unreadable: 0, cantReachT3: false, inEveryone: controller.messagesThreads)
+        let replies = book.everyone.messages.compactMap(\.text)
+        XCTAssertTrue(replies.contains("The budget balances."), "Everyone must follow the frontier work even when the worker belongs to a kitten")
+        controller.channelsClosed()
+    }
+}
+
