@@ -132,30 +132,36 @@ struct T3ThreadList {
             .filter(\.isListed)
             .map { thread in
                 let approvals = (approvalsByListedThread[thread.id] ?? []).sorted { $0.createdAt < $1.createdAt }
-                return agentThread(thread, approvals: approvals, question: questionsByListedThread[thread.id])
+                return AgentThread(
+                    id: thread.id,
+                    title: thread.title,
+                    projectTitle: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.title },
+                    status: approvals.isEmpty ? status(of: thread) : .waitingForApproval,
+                    model: thread.modelSelection.model,
+                    updatedAt: thread.updatedAt,
+                    pendingApprovals: approvals,
+                    pendingQuestion: questionsByListedThread[thread.id],
+                    runtimeMode: thread.runtimeMode.flatMap(RuntimeMode.init(rawValue:)),
+                    isSettled: thread.settledAt != nil,
+                    pullRequest: thread.latestPullRequest
+                )
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }
     }
 
-    /// The thread a person knows this one by: itself, or the nearest one above a subagent.
-    func listedThread(of id: String) -> AgentThread? {
-        threads[id].flatMap(listedOwner).map { agentThread($0) }
+    /// The same list for when only who's waiting matters, so nothing has to fetch the words of what they're waiting on.
+    var threadsWithoutWords: [AgentThread] {
+        let summaries = Dictionary(pendingApprovals.map { ($0.requestID, "") }, uniquingKeysWith: { first, _ in first })
+        let questions = Dictionary(
+            pendingQuestions.map { ($0.requestID, QuestionWords(text: "", options: [], moreCount: 0)) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return agentThreads(summaries: summaries, questions: questions)
     }
 
-    private func agentThread(_ thread: T3Wire.ThreadShell, approvals: [ApprovalRequest] = [], question: AgentQuestion? = nil) -> AgentThread {
-        AgentThread(
-            id: thread.id,
-            title: thread.title,
-            projectTitle: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.title },
-            status: approvals.isEmpty ? status(of: thread) : .waitingForApproval,
-            model: thread.modelSelection.model,
-            updatedAt: thread.updatedAt,
-            pendingApprovals: approvals,
-            pendingQuestion: question,
-            runtimeMode: thread.runtimeMode.flatMap(RuntimeMode.init(rawValue:)),
-            isSettled: thread.settledAt != nil,
-            pullRequest: thread.latestPullRequest
-        )
+    /// The thread a person knows this one by: itself, or the nearest one above a subagent.
+    func listedThreadID(of id: String) -> String? {
+        threads[id].flatMap(listedOwner)?.id
     }
 
     /// A thread's turn can end while what it started carries on, and then it'll wake up and carry on

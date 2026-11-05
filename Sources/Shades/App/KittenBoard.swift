@@ -46,19 +46,19 @@ enum KittenBoard {
     }
 
     static func needsYou(_ thread: AgentThread) -> Bool {
-        !thread.pendingApprovals.isEmpty || thread.status == .waitingForApproval || thread.status == .waitingForAnswer
+        !thread.pendingApprovals.isEmpty || thread.pendingQuestion != nil || thread.status == .waitingForApproval || thread.status == .waitingForAnswer
     }
 
     /// Kittens that are taking work come first, and otherwise they stay put, so you can find one at a glance.
     static func statuses(kittens: [Kitten], threads: [AgentThread]) -> [KittenStatus] {
-        let working = kittens.filter { !$0.planned }.map { status(of: $0, threads: threads) }
+        let working = kittens.filter { !$0.planned }.map { status(of: $0, among: kittens, threads: threads) }
         let planned = kittens.filter(\.planned).map { KittenStatus(kitten: $0, state: .notSetUp) }
         return working + planned
     }
 
-    private static func status(of kitten: Kitten, threads: [AgentThread]) -> KittenStatus {
+    private static func status(of kitten: Kitten, among kittens: [Kitten], threads: [AgentThread]) -> KittenStatus {
         let own = threads
-            .filter { belongs($0, to: kitten) }
+            .filter { owner(of: $0, among: kittens) == kitten }
             .sorted { $0.updatedAt > $1.updatedAt }
         let waiting = own.filter(needsYou)
         let active = own.filter(\.status.isActive)

@@ -198,7 +198,7 @@ public struct Exchange: Sendable, Equatable, Identifiable {
     public enum Asker: Sendable, Equatable {
         case you
         /// The thread a person knows that agent by: its own, or the one that started a subagent. `nil` if T3 can't say.
-        case agent(AgentThread?)
+        case agent(threadID: String?)
     }
 
     public var id: String

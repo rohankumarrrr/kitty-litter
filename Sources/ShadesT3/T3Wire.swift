@@ -655,6 +655,12 @@ enum T3Wire {
     /// What T3 sends for a message that's only attachments.
     static let attachmentsOnly = "[User attached one or more files without additional text. Respond using the conversation context and the attached files.]"
 
+    /// Takes out what the coding tool behind an imported thread wrote, which T3 marks as the user's.
+    /// Its tags are hyphenated, like `<system-reminder>`, which nobody types into a message.
+    static func withoutToolBlocks(_ text: String) -> String {
+        text.replacingOccurrences(of: #"(?is)<([a-z]+(?:-[a-z]+)+)\b[^>]*>.*?</\1\s*>"#, with: "", options: .regularExpression)
+    }
+
     /// A thread's own items in time order. Subagents' items have a parent, so they're left out.
     static func ownItems(_ items: [TurnItem]) -> [TurnItem] {
         items.filter { $0.parentItemId == nil }.sorted { $0.when < $1.when }

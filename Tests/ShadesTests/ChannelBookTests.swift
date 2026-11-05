@@ -51,8 +51,8 @@ final class ChannelBookTests: XCTestCase {
         let toSteve = thread("to-steve", project: "Steve")
         let toPepper = thread("to-pepper", project: "Pepper")
         let built = book(threads: [toSteve, toPepper], transcripts: [
-            "to-steve": [exchange("a", asker: .agent(toPepper), asked: 0)],
-            "to-pepper": [exchange("b", asker: .agent(toSteve), asked: 10)],
+            "to-steve": [exchange("a", asker: .agent(threadID: toPepper.id), asked: 0)],
+            "to-pepper": [exchange("b", asker: .agent(threadID: toSteve.id), asked: 10)],
         ])
         XCTAssertEqual(built.between.count, 1)
         let pair = try XCTUnwrap(ChannelID(.kitten(pepper.id), .kitten(steve.id)))
@@ -64,8 +64,8 @@ final class ChannelBookTests: XCTestCase {
 
     func testAKittenTalkingToItselfShowsOnlyItsReportInItsDM() {
         let started = thread("worker", project: "site", title: "Steve: Build it")
-        let brief = exchange("e", asker: .agent(thread("main")), ask: "A long brief")
-        let built = book(threads: [started], transcripts: ["worker": [brief]])
+        let brief = exchange("e", asker: .agent(threadID: "main"), ask: "A long brief")
+        let built = book(threads: [started, thread("main")], transcripts: ["worker": [brief], "main": []])
         XCTAssertEqual(direct(steve, in: built)?.messages.map(\.text), ["Reply"])
         XCTAssertEqual(direct(steve, in: built)?.messages.map(\.threadTitle), ["Build it"])
         XCTAssertEqual(built.between, [])
@@ -73,14 +73,14 @@ final class ChannelBookTests: XCTestCase {
 
     func testAKittenTalkingToItselfWithNoReplyYetHasNoRow() {
         let working = thread("worker", status: .running)
-        let built = book(threads: [working], transcripts: ["worker": [exchange("e", asker: .agent(thread("main")), reply: nil)]])
+        let built = book(threads: [working, thread("main")], transcripts: ["worker": [exchange("e", asker: .agent(threadID: "main"), reply: nil)], "main": []])
         XCTAssertEqual(direct(steve, in: built)?.messages, [])
     }
 
     func testAnUnknownSenderStaysOutOfYourDM() throws {
-        let built = book(threads: [thread("t")], transcripts: ["t": [
-            exchange("archived", asker: .agent(nil), asked: 0),
-            exchange("nobodys", asker: .agent(thread("x", project: "Not a kitten")), asked: 5),
+        let built = book(threads: [thread("t"), thread("x", project: "Not a kitten")], transcripts: ["t": [
+            exchange("archived", asker: .agent(threadID: nil), asked: 0),
+            exchange("nobodys", asker: .agent(threadID: "x"), asked: 5),
         ]])
         XCTAssertEqual(direct(steve, in: built)?.messages, [])
         let channel = try XCTUnwrap(built.between.first)
@@ -131,6 +131,60 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(direct(steve, in: quiet)?.messages.map(\.text), ["Ask"])
     }
 
+    func testASubagentAskingYouSomethingIsntStillGoing() throws {
+        var asking = thread("t", status: .running)
+        asking.pendingQuestion = AgentQuestion(id: "q", threadID: "child", threadTitle: "Work", text: "")
+        let built = book(threads: [asking], transcripts: ["t": [exchange("e")]])
+        XCTAssertEqual(direct(steve, in: built)?.messages.last?.isStillGoing, false)
+        XCTAssertEqual(built.statuses.first?.state, .needsYou)
+    }
+
+    func testALaterAskInAThreadNeverSitsAboveAnEarlierOne() {
+        let built = book(threads: [thread("t", status: .running)], transcripts: ["t": [
+            exchange("first", ask: "First", reply: "Still narrating", asked: 0, replied: 50),
+            exchange("queued", ask: "Queued", reply: nil, asked: 10),
+        ]])
+        XCTAssertEqual(direct(steve, in: built)?.messages.compactMap(\.text), ["First", "Still narrating", "Queued"])
+    }
+
+    func testWhoSentItIsLookedUpWhenItsShown() throws {
+        let sender = thread("sender", project: "site", title: "Work")
+        let transcripts = ["t": [exchange("e", asker: .agent(threadID: "sender"))], "sender": []]
+        let before = book(threads: [thread("t"), sender], transcripts: transcripts)
+        XCTAssertEqual(before.between.first?.id, ChannelID(.someoneElse, .kitten(steve.id)))
+
+        var renamed = sender
+        renamed.title = "Pepper: Work"
+        let after = book(threads: [thread("t"), renamed], transcripts: transcripts)
+        XCTAssertEqual(after.between.map(\.id), [try XCTUnwrap(ChannelID(.kitten(pepper.id), .kitten(steve.id)))])
+    }
+
+    func testAThreadThatWasntReadDoesntMakeADMClaimYouveNeverTalked() throws {
+        let built = book(threads: [thread("old")])
+        let channel = try XCTUnwrap(direct(steve, in: built))
+        XCTAssertTrue(channel.isCut)
+        XCTAssertEqual(ChannelRows.rows(.channel(channel.id), in: built), [.note(CatWords.olderMessages)])
+        XCTAssertFalse(try XCTUnwrap(direct(pepper, in: built)).isCut)
+
+        let reading = ChannelBook.build(kittens: [steve], threads: [thread("old")], transcripts: [:], isReading: true, unreadable: 0, cantReachT3: false)
+        XCTAssertEqual(reading.channel(.direct(steve))?.isCut, false)
+    }
+
+    func testAThreadCarryingAnotherKittensNameCountsOnlyForThatKitten() {
+        var waiting = thread("t", project: "Steve", title: "Pepper: Work", status: .waitingForAnswer)
+        waiting.title = "Pepper: Work"
+        let built = book(threads: [waiting], transcripts: ["t": [exchange("e")]])
+        XCTAssertEqual(built.statuses.map(\.state), [.idle, .needsYou])
+        XCTAssertEqual(built.issues.map(\.threads.count), [0, 1])
+    }
+
+    func testAPlannedKittensOpenThreadIsAnIssue() {
+        let built = book(kittens: [steve, cali], threads: [thread("t", project: "Cali", status: .running)])
+        XCTAssertEqual(built.issues.map(\.kitten), [steve, cali])
+        XCTAssertEqual(built.issueCount, 1)
+        XCTAssertEqual(book(kittens: [steve, cali]).issues.map(\.kitten), [steve])
+    }
+
     func testAFailureGetsARowWithOrWithoutAReply() {
         var failed = exchange("e", reply: nil)
         failed.failure = "Ran out of quota"
@@ -167,8 +221,8 @@ final class ChannelBookTests: XCTestCase {
         let onSteve = thread("s", project: "Steve")
         let onPepper = thread("p", project: "Pepper")
         let built = book(threads: [onSteve, onPepper], transcripts: [
-            "s": [exchange("old", asker: .agent(nil), asked: 0)],
-            "p": [exchange("new", asker: .agent(nil), asked: 50)],
+            "s": [exchange("old", asker: .agent(threadID: nil), asked: 0)],
+            "p": [exchange("new", asker: .agent(threadID: nil), asked: 50)],
         ])
         XCTAssertEqual(built.between.map(\.id), [ChannelID(.someoneElse, .kitten(pepper.id)), ChannelID(.someoneElse, .kitten(steve.id))])
     }

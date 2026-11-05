@@ -4,7 +4,6 @@ import XCTest
 
 final class T3TranscriptTests: XCTestCase {
     private let sentinel = "SENTINEL-FROM-THE-PAGE"
-    private let steve = AgentThread(id: "steve-thread", title: "Steve: Prep", projectTitle: nil, status: .completed, model: "m", updatedAt: .distantPast)
 
     private func item(_ fields: [String: Any], at second: Int) throws -> T3Wire.TurnItem {
         var json = fields
@@ -33,7 +32,7 @@ final class T3TranscriptTests: XCTestCase {
     }
 
     private func fold(_ items: [T3Wire.TurnItem], runs: [T3Wire.Run] = []) -> [Exchange] {
-        T3Transcript.exchanges(in: items, runs: runs) { [steve] id in id == steve.id ? steve : nil }
+        T3Transcript.exchanges(in: items, runs: runs) { $0 == "steve-thread" ? "steve-thread" : nil }
     }
 
     func testAForwardedMessageKeepsOnlyItsTopPart() throws {
@@ -149,6 +148,40 @@ final class T3TranscriptTests: XCTestCase {
         XCTAssertEqual(exchanges.map(\.reply), ["One.", "Two."])
     }
 
+    func testWhatTheCodingToolWroteDoesntReadAsYou() throws {
+        for text in [
+            "<system-reminder>\nAs you answer, you can use this context: \(sentinel)\n</system-reminder>",
+            "<task-notification>\n<status>completed</status>\n<result>\(sentinel)</result>\n</task-notification>",
+            "<local-command-stdout>\(sentinel)</local-command-stdout>",
+        ] {
+            XCTAssertNil(fold([try user(text, at: 0)])[0].ask)
+        }
+        XCTAssertEqual(fold([try user("<system-reminder>\(sentinel)</system-reminder>\nFix the \u{3C}div> please", at: 0)])[0].ask, "Fix the \u{3C}div> please")
+    }
+
+    func testAReplyAfterASteerAnswersTheSteer() throws {
+        let exchanges = fold([
+            try user("Draw a logo", id: "u1", message: "m1", run: "r1", at: 0),
+            try spoken("Starting.", id: "a1", run: "r1", at: 1),
+            try user("Make it blue", id: "u2", message: "m2", run: "r1", at: 5),
+            try spoken("A blue logo.", id: "a2", run: "r1", at: 9),
+        ], runs: [try run("r1", asked: "m1")])
+        XCTAssertEqual(exchanges.map(\.ask), ["Draw a logo", "Make it blue"])
+        XCTAssertEqual(exchanges.map(\.reply), ["Starting.", "A blue logo."])
+    }
+
+    func testAFailureDoesntOutliveALaterAnswer() throws {
+        let exchanges = fold([
+            try user("Go", message: "m1", run: "r1", at: 0),
+            try item(["id": "e", "type": "error", "runId": "r1", "failure": ["message": "Ran out of quota"]], at: 1),
+            try item(["id": "n", "type": "notification", "text": "A reviewer finished", "messageId": "m2", "runId": "r2"], at: 2),
+            try spoken("All done, and it works.", run: "r2", at: 3),
+        ], runs: [try run("r1", asked: "m1"), try run("r2", asked: "m2")])
+        XCTAssertEqual(exchanges.count, 1)
+        XCTAssertEqual(exchanges[0].reply, "All done, and it works.")
+        XCTAssertNil(exchanges[0].failure)
+    }
+
     func testWhoAsked() throws {
         let exchanges = fold([
             try user("From a person", id: "1", at: 0),
@@ -158,7 +191,7 @@ final class T3TranscriptTests: XCTestCase {
             try user("From an agent with no thread", id: "5", at: 4, extra: ["createdBy": "agent"]),
             try user("From something new", id: "6", at: 5, extra: ["createdBy": "a-new-value", "senderThreadId": "steve-thread"]),
         ])
-        XCTAssertEqual(exchanges.map(\.asker), [.you, .you, .agent(steve), .agent(nil), .agent(nil), .agent(nil)])
+        XCTAssertEqual(exchanges.map(\.asker), [.you, .you, .agent(threadID: "steve-thread"), .agent(threadID: nil), .agent(threadID: nil), .agent(threadID: nil)])
     }
 
     func testTheCapHolds() throws {

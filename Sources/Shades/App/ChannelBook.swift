@@ -77,6 +77,7 @@ struct ChannelBook: Equatable {
     /// The messages of one exchange, which always stay together.
     private struct Placed {
         var position: Date
+        var sequence: Int
         var messages: [ChannelMessage]
     }
 
@@ -88,11 +89,19 @@ struct ChannelBook: Equatable {
         unreadable: Int,
         cantReachT3: Bool
     ) -> ChannelBook {
+        let threadsByID = Dictionary(threads.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var placed: [ChannelID: [Placed]] = [:]
+        var leftOut: Set<String> = []
         for thread in threads {
-            guard let owner = KittenBoard.owner(of: thread, among: kittens), let exchanges = transcripts[thread.id] else { continue }
+            guard let owner = KittenBoard.owner(of: thread, among: kittens) else { continue }
+            guard let exchanges = transcripts[thread.id] else {
+                leftOut.insert(owner.id)
+                continue
+            }
+            // Within a thread, a later ask never sits above an earlier one.
+            var latest = Date.distantPast
             for (index, exchange) in exchanges.enumerated() {
-                let speaker = speaker(of: exchange.asker, among: kittens)
+                let speaker = speaker(of: exchange.asker, among: kittens, threads: threadsByID)
                 // Waiting on you isn't working, so what it last said reads as said, and sits at the bottom where you'll see it.
                 let isStillGoing = thread.status.isActive && !KittenBoard.needsYou(thread) && index == exchanges.count - 1
                 let messages = messages(of: exchange, in: thread, owner: owner, speaker: speaker, isStillGoing: isStillGoing)
@@ -100,20 +109,24 @@ struct ChannelBook: Equatable {
                 // A kitten talking to itself has no channel of its own, so its reports go in its DM.
                 let channel = ChannelID(speaker, .kitten(owner.id)) ?? .direct(owner)
                 // It sits where it last finished, and doesn't move while it's going.
-                let position = isStillGoing ? exchange.askedAt : exchange.repliedAt ?? exchange.askedAt
-                placed[channel, default: []].append(Placed(position: position, messages: messages))
+                latest = max(latest, isStillGoing ? exchange.askedAt : exchange.repliedAt ?? exchange.askedAt)
+                placed[channel, default: []].append(Placed(position: latest, sequence: index, messages: messages))
             }
         }
 
         let statuses = KittenBoard.statuses(kittens: kittens, threads: threads)
-        let directs = statuses.map { channel(.direct($0.kitten), placed[.direct($0.kitten)] ?? []) }
+        // Threads with an owner and nothing read are too old to read, or couldn't be read, so don't say you've never talked.
+        let directs = statuses.map { status in
+            channel(.direct(status.kitten), placed[.direct(status.kitten)] ?? [], leavesOutThreads: !isReading && leftOut.contains(status.kitten.id))
+        }
         let directIDs = Set(directs.map(\.id))
         let between = placed
             .filter { !directIDs.contains($0.key) }
             .map { channel($0.key, $0.value) }
             .sorted { (latest($0), latestID($0)) > (latest($1), latestID($1)) }
-        let issues = statuses.filter { $0.state != .notSetUp }.map { status in
-            KittenIssues(kitten: status.kitten, threads: openThreads(of: status.kitten, among: kittens, in: threads))
+        let issues = statuses.compactMap { status -> KittenIssues? in
+            let open = openThreads(of: status.kitten, among: kittens, in: threads)
+            return status.state == .notSetUp && open.isEmpty ? nil : KittenIssues(kitten: status.kitten, threads: open)
         }
         return ChannelBook(
             directs: directs,
@@ -126,12 +139,12 @@ struct ChannelBook: Equatable {
         )
     }
 
-    private static func speaker(of asker: Exchange.Asker, among kittens: [Kitten]) -> Speaker {
+    private static func speaker(of asker: Exchange.Asker, among kittens: [Kitten], threads: [String: AgentThread]) -> Speaker {
         switch asker {
         case .you:
             return .you
-        case .agent(let thread):
-            return thread.flatMap { KittenBoard.owner(of: $0, among: kittens) }.map { .kitten($0.id) } ?? .someoneElse
+        case .agent(let threadID):
+            return threadID.flatMap { threads[$0] }.flatMap { KittenBoard.owner(of: $0, among: kittens) }.map { .kitten($0.id) } ?? .someoneElse
         }
     }
 
@@ -159,9 +172,9 @@ struct ChannelBook: Equatable {
         return messages
     }
 
-    private static func channel(_ id: ChannelID, _ placed: [Placed]) -> Channel {
-        let ordered = placed.sorted { ($0.position, $0.messages[0].id) < ($1.position, $1.messages[0].id) }
-        return Channel(id: id, messages: ordered.suffix(keptExchanges).flatMap(\.messages), isCut: ordered.count > keptExchanges)
+    private static func channel(_ id: ChannelID, _ placed: [Placed], leavesOutThreads: Bool = false) -> Channel {
+        let ordered = placed.sorted { ($0.position, $0.sequence, $0.messages[0].id) < ($1.position, $1.sequence, $1.messages[0].id) }
+        return Channel(id: id, messages: ordered.suffix(keptExchanges).flatMap(\.messages), isCut: leavesOutThreads || ordered.count > keptExchanges)
     }
 
     private static func latest(_ channel: Channel) -> Date { channel.messages.last?.at ?? .distantPast }

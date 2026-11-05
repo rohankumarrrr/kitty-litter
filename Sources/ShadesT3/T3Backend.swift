@@ -200,7 +200,7 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         }
         guard let list else { return nil }
         lock.withLock { catalog = list }
-        return list.agentThreads(summaries: [:])
+        return list.threadsWithoutWords
     }
 
     /// Reads the whole thread, because `getThreadProjection` only answers with its latest 75 or so
@@ -221,7 +221,7 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         return T3Transcript.exchanges(
             in: projection.turnItems.compactMap(\.value),
             runs: projection.runs.compactMap(\.value),
-            sender: known.listedThread(of:)
+            sender: known.listedThreadID(of:)
         )
     }
 

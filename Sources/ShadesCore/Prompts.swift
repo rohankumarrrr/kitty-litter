@@ -109,19 +109,21 @@ public enum Prompts {
     /// `nil` if that's empty or still mentions a screen block, as `frontier` and `fix` prompts do, so
     /// nothing from a screen can pass as their words. That may hide some of them, which is the safe way round.
     public static func ownWords(in text: String) -> String? {
-        let above = text.split(separator: "\n", omittingEmptySubsequences: false).prefix { $0 != "---" }
+        let above = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            .prefix { $0.trimmingCharacters(in: .whitespaces) != "---" }
         let words = above.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !words.isEmpty, words.range(of: "<screen", options: .caseInsensitive) == nil else { return nil }
+        guard !words.isEmpty, words.range(of: #"(?i)(?<!`)<\s*screen\b"#, options: .regularExpression) == nil else { return nil }
         return words
     }
 
-    /// Takes out every screen block, including one that never closes, whatever its case or spacing.
+    /// Takes out screen blocks whatever their case or spacing, from the first opening tag to the last
+    /// closing one, so a nested block can't leave a tail behind, and through the end if one never closes.
+    /// A tag in backticks is someone writing about it, and a screen block is never written that way.
     public static func withoutScreenBlocks(_ text: String) -> String {
-        text.replacingOccurrences(
-            of: #"(?is)<\s*screen\b[^>]*>.*?(<\s*/\s*screen\s*>|\z)"#,
-            with: "",
-            options: .regularExpression
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        text
+            .replacingOccurrences(of: #"(?is)(?<!`)<\s*screen\b[^>]*>.*<\s*/\s*screen\s*>"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?is)(?<!`)<\s*screen\b[^>]*>.*\z"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     public static func frontier(request: String, snapshot: ScreenSnapshot?, screenshotPath: String?) -> String {

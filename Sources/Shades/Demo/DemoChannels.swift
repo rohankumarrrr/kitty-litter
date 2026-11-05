@@ -134,7 +134,7 @@ enum DemoChannels {
         "demo-steve-from-clawde": [
             exchange(
                 "labels-1",
-                asker: .agent(clawdeMain),
+                asker: .agent(threadID: clawdeMain.id),
                 minutes: 70,
                 ask: "Could you check that the button labels on the pricing page still fit after the font change?",
                 reply: "They fit. The longest is Start free trial, and it has 12 points to spare.",
@@ -144,7 +144,7 @@ enum DemoChannels {
         "demo-clawde-from-steve": [
             exchange(
                 "fonts-question",
-                asker: .agent(steveFonts),
+                asker: .agent(threadID: steveFonts.id),
                 minutes: 45,
                 ask: "Is there a rule about which fonts can ship with the app?",
                 reply: "Only that they're permissively licensed. Silkscreen is fine.",
@@ -154,7 +154,7 @@ enum DemoChannels {
         "demo-steve-from-pepper": [
             exchange(
                 "plans-1",
-                asker: .agent(pepperPlans),
+                asker: .agent(threadID: pepperPlans.id),
                 minutes: 28,
                 ask: "Are the plan names on the pricing page final?",
                 reply: "Yes. Free, Pro and Team.",
@@ -173,7 +173,7 @@ enum DemoChannels {
         "demo-pepper-unknown": [
             exchange(
                 "unknown-1",
-                asker: .agent(nil),
+                asker: .agent(threadID: nil),
                 minutes: 310,
                 ask: "Please sum up the plan comparison in two lines.",
                 reply: "Free and Pro are standard. Team is called Business about half the time.",
@@ -183,7 +183,7 @@ enum DemoChannels {
         "demo-clawde-menu": [
             exchange(
                 "menu-1",
-                asker: .agent(clawdeMain),
+                asker: .agent(threadID: clawdeMain.id),
                 minutes: 20,
                 ask: "A long brief that only matters to Clawde itself, so it never gets a row.",
                 reply: "The menu item is in, after Kittens. It's on a branch, with the tests passing.",

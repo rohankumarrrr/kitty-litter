@@ -5,8 +5,10 @@ import ShadesCore
 /// nothing is read in the background, and closing it forgets everything.
 @MainActor
 final class ChannelFeed {
-    private static let newestRead = 60
+    private static let newestReadPerKitten = 30
     private static let readsAtOnce = 4
+    /// How many quiet gaps go by before it looks anyway. Nothing else would tell it that T3 has gone away.
+    private static let quietGaps = 5
 
     private final class Session {
         var threads: [AgentThread]
@@ -21,6 +23,13 @@ final class ChannelFeed {
 
         init(threads: [AgentThread]) {
             self.threads = threads
+        }
+
+        /// A read still in flight can keep this object alive for a moment, so it can't keep the words too.
+        func forget() {
+            threads = []
+            transcripts = [:]
+            published = nil
         }
     }
 
@@ -60,25 +69,28 @@ final class ChannelFeed {
             publish(session)
         }
         session.isDirty = true
-        startLoop(session)
     }
 
     func close() {
         session?.loop?.cancel()
+        session?.forget()
         session = nil
     }
 
-    /// One loop per session. It holds off between passes, then stops if nothing more has happened.
+    /// One loop per session, for as long as it's open. It holds off between passes, so a burst of changes makes one.
     private func startLoop(_ session: Session) {
-        guard session.loop == nil else { return }
         session.loop = Task { [weak self, gap] in
-            while session.isDirty {
-                session.isDirty = false
-                await self?.pass(session)
+            var quiet = 0
+            while self?.session === session {
+                if session.isDirty || quiet >= Self.quietGaps {
+                    session.isDirty = false
+                    quiet = 0
+                    await self?.pass(session)
+                } else {
+                    quiet += 1
+                }
                 try? await Task.sleep(for: gap)
-                guard self?.session === session else { return }
             }
-            session.loop = nil
         }
     }
 
@@ -93,10 +105,10 @@ final class ChannelFeed {
         }
 
         let kittens = kittens()
-        let owned = listed
-            .filter { KittenBoard.owner(of: $0, among: kittens) != nil }
-            .sorted { $0.updatedAt > $1.updatedAt }
-            .prefix(Self.newestRead)
+        let byOwner = Dictionary(grouping: listed) { KittenBoard.owner(of: $0, among: kittens)?.id }
+        let owned = byOwner.filter { $0.key != nil }.values.flatMap { threads in
+            threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
+        }
         let moved = owned.filter { session.readStamps[$0.id] != $0.updatedAt }
         let read = await read(moved)
         // A read landing after the window closed has nowhere to go, so it's dropped here.
@@ -123,7 +135,7 @@ final class ChannelFeed {
         return await withTaskGroup(of: (String, [Exchange]?).self) { group in
             var waiting = threads.makeIterator()
             func readNext() {
-                guard let id = waiting.next()?.id else { return }
+                guard !Task.isCancelled, let id = waiting.next()?.id else { return }
                 group.addTask { (id, await backend.exchanges(threadID: id)) }
             }
             for _ in 0..<Self.readsAtOnce { readNext() }

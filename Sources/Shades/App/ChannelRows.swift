@@ -66,6 +66,7 @@ enum ChannelRows {
         if book.cantReachT3 { return .note(CatWords.cantReachT3Yet) }
         if book.isReading { return .note(CatWords.readingMessages) }
         if book.unreadable > 0 { return .note(CatWords.couldntRead(book.unreadable)) }
+        if book.channel(id)?.isCut == true { return .note(CatWords.olderMessages) }
         let names = id.members.contains(.you) ? [CatWords.you] + others.map(book.name) : others.map(book.name)
         return .note(CatWords.haventTalked(names))
     }

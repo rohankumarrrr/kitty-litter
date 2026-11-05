@@ -273,11 +273,10 @@ final class T3ThreadListTests: XCTestCase {
             thread(id: "grandchild", parent: "child", relationship: "subagent"),
             thread(id: "orphan", parent: "archived", relationship: "subagent"),
         ]))
-        XCTAssertEqual(list.listedThread(of: "parent")?.id, "parent")
-        XCTAssertEqual(list.listedThread(of: "grandchild")?.id, "parent")
-        XCTAssertEqual(list.listedThread(of: "grandchild")?.title, "The parent")
-        XCTAssertNil(list.listedThread(of: "orphan"), "its parent was archived, so T3 can't say")
-        XCTAssertNil(list.listedThread(of: "unknown"))
+        XCTAssertEqual(list.listedThreadID(of: "parent"), "parent")
+        XCTAssertEqual(list.listedThreadID(of: "grandchild"), "parent")
+        XCTAssertNil(list.listedThreadID(of: "orphan"), "its parent was archived, so T3 can't say")
+        XCTAssertNil(list.listedThreadID(of: "unknown"))
     }
 
     func testSettledAndPullRequestsComeThrough() throws {

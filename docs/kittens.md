@@ -66,7 +66,7 @@ One answer is one message. A kitten's narration on the way to its answer shows a
 
 The title rule above decides whose work a thread is. If a thread's title starts with a kitten's name and a colon, it's that kitten's wherever it runs, which beats being in another kitten's project.
 
-The window only reads. It can't send anything, and it never takes the keyboard, so the app you're in keeps its selection and the cat still sees what you're looking at. That also means no selecting text and no arrow keys. Nothing is read until you open it, every word is forgotten when you close it with the red button, and nothing goes to disk except where the window was.
+The window only reads. It can't send anything, and it never takes the keyboard, so the app you're in keeps its selection and the cat still sees what you're looking at. That also means no selecting text and no arrow keys. Nothing is read until you open it. While it's open it reads again when a thread changes, and looks every 15 seconds anyway, so it can tell you if T3 has gone away. It reads each kitten's newest 30 threads, and anything older is in T3. Every word is forgotten when you close it with the red button, and nothing goes to disk except where the window was.
 
 ## How they work
 

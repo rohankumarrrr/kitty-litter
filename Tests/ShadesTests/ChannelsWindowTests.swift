@@ -77,7 +77,7 @@ final class ChannelsWindowTests: XCTestCase {
         let talked = ChannelBook.build(
             kittens: [steve, pepper],
             threads: [pepperThread, steveThread],
-            transcripts: ["s": [Exchange(id: "e", asker: .agent(pepperThread), askedAt: at, ask: "Ask")]],
+            transcripts: ["s": [Exchange(id: "e", asker: .agent(threadID: pepperThread.id), askedAt: at, ask: "Ask")]],
             isReading: false,
             unreadable: 0,
             cantReachT3: false
@@ -223,7 +223,7 @@ final class ChannelsWindowTests: XCTestCase {
             threads: [thread],
             transcripts: [secret: [
                 Exchange(id: secret, asker: .you, askedAt: at, ask: secret, reply: secret, repliedAt: at),
-                Exchange(id: "2", asker: .agent(nil), askedAt: at, ask: secret),
+                Exchange(id: "2", asker: .agent(threadID: nil), askedAt: at, ask: secret),
             ]],
             isReading: false,
             unreadable: 1,

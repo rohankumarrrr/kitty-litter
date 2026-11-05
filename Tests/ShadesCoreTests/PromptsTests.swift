@@ -152,9 +152,22 @@ final class PromptsTests: XCTestCase {
 
     func testScreenBlocksComeOut() {
         XCTAssertEqual(Prompts.withoutScreenBlocks("before <screen>\nSENTINEL\n</screen> after"), "before  after")
-        XCTAssertEqual(Prompts.withoutScreenBlocks("a < SCREEN >x</ Screen > b <screen>y</screen> c"), "a  b  c")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("a < SCREEN >x</ Screen > c"), "a  c")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("kept\n<screen>\nSENTINEL with no end"), "kept")
         XCTAssertEqual(Prompts.withoutScreenBlocks("kept <screen>SENTINEL with no end"), "kept")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("a <screen>SENTINEL <screen>SENTINEL</screen> SENTINEL</screen> b"), "a  b")
+        XCTAssertEqual(
+            Prompts.withoutScreenBlocks("Page text now stays inside `<screen>`. PR #5 is ready."),
+            "Page text now stays inside `<screen>`. PR #5 is ready."
+        )
         XCTAssertEqual(Prompts.withoutScreenBlocks("nothing to take out"), "nothing to take out")
+    }
+
+    func testTheLineCountsWhateverEndsIt() {
+        XCTAssertEqual(Prompts.ownWords(in: "my words\r\n\r\n---\r\nSENTINEL"), "my words")
+        XCTAssertEqual(Prompts.ownWords(in: "my words\n\n--- \nSENTINEL"), "my words")
+        XCTAssertNil(Prompts.ownWords(in: "my words < screen >SENTINEL</ screen >"))
+        XCTAssertEqual(Prompts.ownWords(in: "what does the `<screen>` tag do?"), "what does the `<screen>` tag do?")
     }
 
     func testScreenTextIsMarkedAsData() {

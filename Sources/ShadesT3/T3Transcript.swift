@@ -7,14 +7,16 @@ enum T3Transcript {
     private static let limit = 8_000
     private static let cutEnding = "\n\nThe rest is in T3."
 
-    static func exchanges(in items: [T3Wire.TurnItem], runs: [T3Wire.Run], sender: (String) -> AgentThread?) -> [Exchange] {
+    static func exchanges(in items: [T3Wire.TurnItem], runs: [T3Wire.Run], sender: (String) -> String?) -> [Exchange] {
         let askedInRun = Dictionary(runs.map { ($0.id, $0.userMessageId) }, uniquingKeysWith: { $1 })
         var exchanges: [Exchange] = []
         var byMessage: [String: Int] = [:]
+        var steered: [String: Int] = [:]
 
         /// The exchange its run started, which keeps a queued follow-up from taking an earlier answer.
         /// Most of T3's history has no runs, so otherwise it's the latest one.
         func exchange(answeredBy item: T3Wire.TurnItem) -> Int {
+            if let run = item.runId, let steer = steered[run] { return steer }
             if let message = item.runId.flatMap({ askedInRun[$0] }), let index = byMessage[message] { return index }
             if let latest = exchanges.indices.last { return latest }
             // A kitten's words with no sender belong in its DM.
@@ -26,7 +28,9 @@ enum T3Transcript {
             if item.isUserMessage {
                 guard !item.isWrittenByT3 else { continue }
                 if let message = item.messageId { byMessage[message] = exchanges.count }
-                let asker: Exchange.Asker = item.isFromPerson ? .you : .agent(item.agentSenderThreadID.flatMap(sender))
+                // A steer joins a run that's already going, so what comes after it answers it.
+                if let run = item.runId, let asked = askedInRun[run], asked != item.messageId { steered[run] = exchanges.count }
+                let asker: Exchange.Asker = item.isFromPerson ? .you : .agent(threadID: item.agentSenderThreadID.flatMap(sender))
                 let ask = item.isFromPerson ? ownWords(item.text) : shown(item.text)
                 exchanges.append(Exchange(id: item.id, asker: asker, askedAt: item.when, ask: ask))
             } else if item.isSpoken, let words = shown(item.text) {
@@ -34,6 +38,7 @@ enum T3Transcript {
                 if exchanges[index].reply != nil { exchanges[index].earlierNotes += 1 }
                 exchanges[index].reply = words
                 exchanges[index].repliedAt = item.updatedAt ?? item.when
+                exchanges[index].failure = nil
             } else if item.isError {
                 exchanges[exchange(answeredBy: item)].failure = shown(item.failure?.message) ?? "Something went wrong."
             }
@@ -42,7 +47,7 @@ enum T3Transcript {
     }
 
     private static func ownWords(_ text: String?) -> String? {
-        guard let words = text.flatMap(Prompts.ownWords), words != T3Wire.attachmentsOnly else { return nil }
+        guard let words = text.map(T3Wire.withoutToolBlocks).flatMap(Prompts.ownWords), words != T3Wire.attachmentsOnly else { return nil }
         guard words.hasPrefix(T3Wire.ultrathinkPrefix) else { return capped(words) }
         let rest = words.dropFirst(T3Wire.ultrathinkPrefix.count).trimmingCharacters(in: .whitespacesAndNewlines)
         return rest.isEmpty ? nil : capped(rest)

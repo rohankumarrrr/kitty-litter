@@ -317,10 +317,59 @@ final class ChannelFeedTests: XCTestCase {
         XCTAssertEqual(backend.mostAtOnce, 4)
     }
 
-    func testOnlyTheNewestSixtyAreRead() async {
-        backend.threads = (0..<70).map { thread("t\($0)", age: TimeInterval($0)) }
+    func testEachKittensNewestThreadsAreRead() async {
+        let pepper = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper")
+        feed = ChannelFeed(backend: backend, kittens: { [steve] in [steve, pepper] }, gap: .milliseconds(20))
+        feed.onChange = { [unowned self] in self.books.append($0) }
+        backend.threads = (0..<70).map { thread("t\($0)", age: TimeInterval($0)) } + [thread("quiet", project: "Pepper", age: 500)]
         await openAndRead()
-        XCTAssertEqual(Set(backend.reads), Set((0..<60).map { "t\($0)" }))
+        XCTAssertEqual(Set(backend.reads), Set((0..<30).map { "t\($0)" } + ["quiet"]))
+    }
+
+    func testClosingBeforeTheFirstPassListsNothing() async {
+        backend.threads = [thread("t")]
+        _ = feed.open(threads: [])
+        feed.close()
+        await holdOn()
+        XCTAssertEqual(backend.listings, 0)
+    }
+
+    func testClosingStopsTheReadsStillWaiting() async {
+        backend.threads = (0..<12).map { thread("t\($0)", age: TimeInterval($0)) }
+        backend.holdsReads = true
+        _ = feed.open(threads: [])
+        await eventually { self.backend.heldReads == 4 }
+        feed.close()
+        backend.releaseReads()
+        await holdOn()
+        XCTAssertEqual(backend.reads.count, 4)
+    }
+
+    func testClosingForgetsTheWordsEvenWithAReadStillGoing() async {
+        let first = thread("t")
+        backend.threads = [first]
+        backend.say("Something private", in: "t")
+        await openAndRead()
+
+        backend.holdsReads = true
+        backend.threads = [moved(first, by: 1)]
+        feed.threadsChanged([])
+        await eventually { self.backend.heldReads == 1 }
+        weak var session = Mirror(reflecting: feed!).children.first { $0.label == "session" }
+            .flatMap { Mirror(reflecting: $0.value).children.first?.value as AnyObject? }
+        feed.close()
+        let kept = session.map { String(describing: Mirror(reflecting: $0).children.map(\.value)).contains("Something private") }
+        XCTAssertEqual(kept, false)
+        backend.releaseReads()
+    }
+
+    func testAnIdleWindowNoticesT3HasGone() async {
+        backend.threads = [thread("t")]
+        backend.say("Hello", in: "t")
+        await openAndRead()
+        backend.threads = nil
+        await eventually("nothing told it, so it has to look") { self.latest?.cantReachT3 == true }
+        XCTAssertEqual(words(in: latest), ["Hello"])
     }
 
     func testTheFirstBatchIsOneSwap() async {
