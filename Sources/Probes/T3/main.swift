@@ -648,6 +648,15 @@ func probeReport() async throws {
     await backend.disconnect()
 }
 
+func probeOrigin() async throws {
+    guard CommandLine.arguments.count > 2 else { throw NSError(domain: "usage: origin <thread>", code: 2) }
+    let backend = T3Backend()
+    try await backend.connect()
+    let origin = await backend.origin(of: CommandLine.arguments[2])
+    say("started by: \(origin.map { "\($0.startedBy)" } ?? "can't tell"), project: \(origin?.projectPath ?? "none")")
+    await backend.disconnect()
+}
+
 // MARK: Running
 
 let probes: [String: () async throws -> Void] = [
@@ -663,6 +672,7 @@ let probes: [String: () async throws -> Void] = [
     "timing": probeTiming,
     "settle": probeSettle,
     "report": probeReport,
+    "origin": probeOrigin,
 ]
 
 guard let name = CommandLine.arguments.dropFirst().first, let probe = probes[name] else {

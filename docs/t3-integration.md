@@ -147,6 +147,7 @@ A blocking `pendingRuntimeRequest` of kind `user_input` is an agent asking somet
 ### Reports and settling
 
 - `orchestration.getThreadProjection` gives a thread's turn items, and took about 60 ms even on threads with hundreds of them. The final report is the newest `assistant_message` with no `parentItemId`, since subagents have one. Claude's thinking also arrives as `assistant_message`, with `thinking` in its ID.
+- The same projection says who started a thread, which decides whether it gets your screen. `lineage.parentThreadId` only covers subagents, so a thread from `t3_thread_launch` has none. Its `thread.createdBy` is `"agent"`, and the first user message in `messages` has a `senderThreadId` naming the thread that launched it, even if it was launched idle. `"user"` means a person or Shades started it. `probe-t3 origin <thread>` shows the result.
 - `{"type": "thread.settle", "commandId": …, "threadId": …}` settles a thread. It can still take a follow-up afterwards, which was checked live.
 
 ### Attachments
@@ -156,6 +157,8 @@ A blocking `pendingRuntimeRequest` of kind `user_input` is an agent asking somet
 3. Send `{"type":"image","id":<attachmentId>,"name":…,"mimeType":…,"sizeBytes":…}` in the message.
 
 Images can be GIF, JPEG, PNG or WebP, up to 10 MB each and 80 MB per message. Nothing here checks that the bytes really are an image, so a corrupt one reaches the model.
+
+T3 saves each one as `userdata/attachments/<threadId>-<id>.<ext>`, readable by anything running as you, and doesn't remove it later, even when the thread goes. It sends Claude the image inside the message, as base64, so denying the folder doesn't stop an attached image arriving. It also adds that folder to every Claude thread's additional directories. The base64 ends up in T3's provider log and Claude's transcript too.
 
 ### Opening a thread
 
