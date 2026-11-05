@@ -435,6 +435,13 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("On it.", threadID: nil))
     }
 
+    func testAQuestionOverSeveralLinesKeepsThemButTitlesWithTheFirst() async {
+        backend.replies = [[.finished(fullText: "Red.")]]
+        await ask("first line\nsecond line")
+        XCTAssertEqual(backend.sent[0].prompt.title, "first line")
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("first line\nsecond line"))
+    }
+
     func testAFailedTurnDoesntSettle() async {
         backend.replies = [[.failed(message: "Nope")]]
         await ask("what colour?")

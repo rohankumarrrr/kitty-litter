@@ -263,3 +263,13 @@ final class WordsTests: XCTestCase {
         XCTAssertEqual(SettingsPanel.model("nonsense", fallback: fallback), fallback)
     }
 }
+
+@MainActor
+final class InputPanelKeysTests: XCTestCase {
+    func testReturnSendsAndShiftReturnDoesnt() {
+        XCTAssertTrue(InputPanel.returnSends([]))
+        XCTAssertTrue(InputPanel.returnSends(.command))
+        XCTAssertFalse(InputPanel.returnSends(.shift))
+        XCTAssertFalse(InputPanel.returnSends([.shift, .capsLock]))
+    }
+}

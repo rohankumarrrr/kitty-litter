@@ -76,7 +76,8 @@ extension AppController {
 
     func runQuickTurn(_ question: String, snapshot: ScreenSnapshot?, generation: Int) async {
         let prompt = AgentPrompt(
-            title: String(question.prefix(60)),
+            // A question can run over several lines, and a title can't.
+            title: String(question.prefix { !$0.isNewline }.prefix(60)),
             text: Prompts.quick(question: question, snapshot: snapshot),
             attachments: attachments(for: snapshot),
             model: settings.quickModel,

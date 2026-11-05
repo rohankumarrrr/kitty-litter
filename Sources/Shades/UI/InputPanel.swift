@@ -135,6 +135,8 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
     func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         switch selector {
         case #selector(NSResponder.insertNewline(_:)):
+            // Letting the text view handle it is what adds the new line.
+            guard Self.returnSends(NSApp.currentEvent?.modifierFlags ?? []) else { return false }
             submit()
             return true
         case #selector(NSResponder.cancelOperation(_:)):
@@ -143,6 +145,11 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
         default:
             return false
         }
+    }
+
+    /// Return sends, and Shift-Return starts a new line. AppKit reports both as the same command.
+    static func returnSends(_ modifiers: NSEvent.ModifierFlags) -> Bool {
+        !modifiers.contains(.shift)
     }
 
     /// Clicking somewhere else takes the keyboard back, and that means never mind.
