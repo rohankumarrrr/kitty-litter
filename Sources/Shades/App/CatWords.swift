@@ -64,6 +64,7 @@ enum CatWords {
     static let shades = "Shades"
     static let newTopic = "New topic"
     static let answerInWords = "Type an answer"
+    static let didntStart = "That didn't start. Try again?"
     static let answerInT3 = "This one's answered in T3."
     static let unreadableQuestion = "They asked something I couldn't read."
     static let directMessages = "Direct messages"
@@ -88,6 +89,7 @@ enum CatWords {
         case .router: return "To whoever it's for"
         case .newThread(let kitten): return "New topic with \(kitten.name)"
         case .thread(_, let title): return "In \(title)"
+        case .starting(let kitten): return "Starting a new topic with \(kitten.name)..."
         case .question(let question): return "Answering: \(question.text.isEmpty ? "their question" : question.text)"
         }
     }
@@ -95,7 +97,7 @@ enum CatWords {
     static func placeholder(_ target: MessageTarget) -> String {
         switch target {
         case .router: return "Message everyone"
-        case .newThread, .thread: return "Message"
+        case .newThread, .thread, .starting: return "Message"
         case .question: return "Your answer"
         }
     }

@@ -58,35 +58,119 @@ extension AppController {
 
     /// Each way of sending passes on your words and nothing else: no screen, and nothing anyone else said.
     func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?) {
-        if let channel {
-            let threadID: String
-            let title: String
-            if case .thread(let id, let name) = target { (threadID, title) = (id, name) } else { (threadID, title) = ("", "") }
-            let echo = ChannelMessage(exchangeID: "sent-\(UUID().uuidString)", kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: title)
-            channels.sent(echo, in: channel)
+        let echoID = "sent-\(UUID().uuidString)"
+        func echo(threadID: String = "", title: String = "") {
+            guard let channel else { return }
+            channels.sent(ChannelMessage(exchangeID: echoID, kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: title), in: channel)
         }
         switch target {
         case .router:
-            // One at a time, since a newer question would otherwise drop the one before it.
+            echo()
+            // One at a time, so each goes where it's meant to before the next is read.
             let previous = messagesTurn
+            let sentAt = now()
             messagesTurn = Task {
                 await previous?.value
-                ask(words, snapshot: nil)
-                messagesGeneration = replyGeneration
-                await replyTask?.value
+                await route(words, sentAt: sentAt)
             }
         case .newThread(let kitten):
-            give(words, to: kitten, snapshot: nil)
+            echo()
+            // The box waits for the new thread, so what you add next goes there too.
+            let title = String(words.prefix { !$0.isNewline }.prefix(60))
+            give(words, to: kitten, snapshot: nil) { [weak self] threadID in
+                self?.channels.started(echoID, in: threadID, title: title)
+            }
         case .thread(let id, let title):
+            echo(threadID: id, title: title)
             reply(words, toThread: id, title: title)
+        case .starting:
+            break
         case .question(let question):
             answer(question, with: words)
         }
     }
 
-    /// The router's own answer, for the group chat. A message it passed on gets its answer from whoever took it.
-    func routerAnswered(_ text: String, generation: Int) {
-        guard generation == messagesGeneration, !text.isEmpty else { return }
+    /// The same prompt and model as the Ask box, on Messages' own conversation with the router, so nothing from
+    /// your screen is in what it can see, and asking the cat meanwhile can't cut it short.
+    private func route(_ words: String, sentAt: Date) async {
+        await waitForThreadList()
+        let current = messagesQuick.thread(at: now())
+        let sessions = rosterThreads(excluding: current)
+        let briefs = await briefs(for: sessions)
+        let kittens = loadKittens().filter { !$0.planned }
+        let prompt = AgentPrompt(
+            title: String(words.prefix { !$0.isNewline }.prefix(60)),
+            text: Prompts.quick(question: words, snapshot: nil, sessions: briefs, kittens: kittens),
+            model: settings.quickModel,
+            runtimeMode: settings.quickMode
+        )
+        var outcome: ReplyHoldback.Outcome?
+        if let current { outcome = await routerTurn(backend.followUp(threadID: current, prompt)) }
+        // The old thread might have gone, so it starts fresh.
+        let isFresh = outcome == nil
+        if outcome == nil {
+            messagesQuick.reset()
+            outcome = await routerTurn(backend.start(prompt))
+        }
+        guard let outcome, let threadID = messagesQuick.thread(at: now()) else {
+            catSays(CatWords.noReply)
+            return
+        }
+        switch outcome {
+        case .answer(let text):
+            catSays(text.isEmpty ? CatWords.noReply : text)
+            Task { [backend] in try? await backend.settle(threadID: threadID) }
+            return
+        case .handoff(let task):
+            handOff(task: task, question: words, snapshot: nil) { [weak self] started in
+                if let started { self?.messagesThreads[started] = sentAt }
+            }
+        case .route(let session):
+            guard sessions.indices.contains(session - 1) else { return catSays(CatWords.lostTheSession) }
+            let thread = sessions[session - 1]
+            if KittenBoard.owner(of: thread, among: loadKittens()) == nil { messagesThreads[thread.id] = sentAt }
+            forward(words, to: thread, snapshot: nil)
+        case .kitten(let number):
+            guard kittens.indices.contains(number - 1) else { return catSays(CatWords.lostTheSession) }
+            give(words, to: kittens[number - 1], snapshot: nil)
+        }
+        // A new thread that only passed something on has nothing worth keeping.
+        if isFresh {
+            messagesQuick.reset()
+            Task { [backend] in try? await backend.archive(threadID: threadID) }
+        } else {
+            Task { [backend] in try? await backend.settle(threadID: threadID) }
+        }
+    }
+
+    /// `nil` if the turn didn't work out.
+    private func routerTurn(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>) async -> ReplyHoldback.Outcome? {
+        var holdback = ReplyHoldback()
+        var fullText: String?
+        do {
+            for try await event in stream {
+                switch event {
+                case .started(let threadID):
+                    messagesQuick.use(threadID, at: now())
+                    watch.markQuick(threadID)
+                case .text(let delta):
+                    _ = holdback.add(delta)
+                case .needsApproval(let request):
+                    addApproval(request)
+                case .finished(let text):
+                    fullText = text
+                case .failed:
+                    return nil
+                }
+            }
+        } catch {
+            return nil
+        }
+        return holdback.finish(fullText: fullText)
+    }
+
+    /// The router's own words, in the group chat.
+    private func catSays(_ text: String) {
         channels.sent(ChannelMessage(exchangeID: "cat-\(UUID().uuidString)", kind: .reply, speaker: .cat, text: text, at: now(), threadID: "", threadTitle: ""), in: .everyone)
     }
 

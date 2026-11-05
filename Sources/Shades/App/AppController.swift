@@ -98,7 +98,11 @@ final class AppController {
     var answeredQuestions: Set<String> = []
     /// The router's turn for what you said in Messages, so each waits for the one before.
     var messagesTurn: Task<Void, Never>?
-    var messagesGeneration: Int?
+    /// Messages' own conversation with the router, apart from the Ask box's, which can hold your screen.
+    var messagesQuick = QuickSession()
+    /// Threads no kitten owns that Messages passed your words to, and when, so their answers show in Everyone.
+    /// shortcut: kept only while the app runs, so a restart takes them out of Everyone. Save the IDs with the inbox if that matters.
+    var messagesThreads: [String: Date] = [:]
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
@@ -162,6 +166,7 @@ final class AppController {
         channels.onChange = { [weak self] in self?.stage.updateChannels($0) }
         channels.waiting = { [weak self] in self?.waiting ?? Waiting() }
         channels.isUnread = { [weak self] in self?.inbox.isUnread($0) ?? false }
+        channels.alsoInEveryone = { [weak self] in self?.messagesThreads ?? [:] }
     }
 
     func start() {

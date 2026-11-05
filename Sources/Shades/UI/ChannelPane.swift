@@ -149,10 +149,11 @@ final class ChannelPane: QuietView {
 
     /// Selecting something shows its latest. A refresh only follows along if you were already at the bottom.
     func show(_ selection: ChannelSelection, in book: ChannelBook, isNewSelection: Bool) {
-        if isNewSelection || selection != self.selection { picked = nil }
+        let isNew = isNewSelection || selection != self.selection
+        if isNew { picked = nil }
         self.selection = selection
         self.book = book
-        updateComposer()
+        updateComposer(keepingDraft: !isNew)
         arrange()
         header.show(selection, in: book)
         let rows = ChannelRows.rows(selection, in: book)
@@ -197,8 +198,12 @@ final class ChannelPane: QuietView {
         }
     }
 
-    private func updateComposer() {
-        let target = book.flatMap { picked ?? MessageTarget.standard(for: selection, in: $0) }
+    private func updateComposer(keepingDraft: Bool = false) {
+        var target = book.flatMap { picked ?? MessageTarget.standard(for: selection, in: $0) }
+        // Words already typed go where the box said when you started, so a refresh can't send them somewhere else.
+        if keepingDraft, picked == nil, composer.hasDraft, let current = composer.target, let book, current.isStill(in: book) {
+            target = current
+        }
         let kitten: Kitten? = if case .channel(let id) = selection {
             book?.statuses.first { id == .direct($0.kitten) && $0.state != .notSetUp }?.kitten
         } else { nil }

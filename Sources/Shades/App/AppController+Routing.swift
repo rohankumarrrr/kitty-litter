@@ -62,12 +62,13 @@ extension AppController {
 
     /// Gives your words to a kitten. A new thread in its folder already knows what it needs to,
     /// and T3 writes the title, so nothing here has to explain anything to it.
-    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?) {
+    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, onStarted: ((String?) -> Void)? = nil) {
         // As with a session, a kitten with full access doesn't get to see text from a page.
         let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess
         let shared = seesScreen ? snapshot : nil
         flow = Task {
             guard let projectID = await backend.projectID(atPath: kitten.folder) else {
+                onStarted?(nil)
                 say(CatWords.notSetUp(kitten))
                 return
             }
@@ -81,7 +82,8 @@ extension AppController {
                 ),
                 snapshot: shared,
                 projectID: projectID,
-                name: kitten.name
+                name: kitten.name,
+                onStarted: onStarted
             )
         }
     }

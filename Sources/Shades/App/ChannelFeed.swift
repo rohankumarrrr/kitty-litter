@@ -38,6 +38,7 @@ final class ChannelFeed {
     var onChange: ((ChannelBook) -> Void)?
     var waiting: () -> Waiting = { Waiting() }
     var isUnread: (AgentThread) -> Bool = { _ in false }
+    var alsoInEveryone: () -> [String: Date] = { [:] }
 
     private let backend: AgentBackend
     private let kittens: () -> [Kitten]
@@ -88,12 +89,24 @@ final class ChannelFeed {
         publish(session)
     }
 
-    /// The threads behind what you're looking at, so they can count as read.
+    /// A new topic you started now has a thread, or `nil` if it never got one.
+    func started(_ exchangeID: String, in threadID: String?, title: String) {
+        guard let session, let index = session.sent.firstIndex(where: { $0.message.exchangeID == exchangeID }) else { return }
+        if let threadID {
+            session.sent[index].message.threadID = threadID
+            session.sent[index].message.threadTitle = title
+        } else {
+            session.sent[index].message.failure = CatWords.didntStart
+        }
+        publish(session)
+    }
+
+    /// The threads behind what you're looking at whose words are on the screen as they are now, so they can count as read.
     func threads(in selection: ChannelSelection) -> [AgentThread] {
         guard let session, case .channel(let id) = selection else { return [] }
         let kittens = kittens()
         return session.threads.filter { thread in
-            guard let owner = KittenBoard.owner(of: thread, among: kittens) else { return false }
+            guard let owner = KittenBoard.owner(of: thread, among: kittens), session.readStamps[thread.id] == thread.updatedAt else { return false }
             return id == .everyone || id == .direct(owner)
         }
     }
@@ -132,9 +145,10 @@ final class ChannelFeed {
 
         let kittens = kittens()
         let byOwner = Dictionary(grouping: listed) { KittenBoard.owner(of: $0, among: kittens)?.id }
+        let mine = alsoInEveryone()
         let owned = byOwner.filter { $0.key != nil }.values.flatMap { threads in
             threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
-        }
+        } + (byOwner[nil] ?? []).filter { mine[$0.id] != nil }
         let moved = owned.filter { session.readStamps[$0.id] != $0.updatedAt }
         let read = await read(moved)
         // A read landing after the window closed has nowhere to go, so it's dropped here.
@@ -192,7 +206,8 @@ final class ChannelFeed {
             cantReachT3: session.cantReachT3,
             waiting: waiting(),
             sent: session.sent,
-            isUnread: isUnread
+            isUnread: isUnread,
+            inEveryone: alsoInEveryone()
         )
     }
 }

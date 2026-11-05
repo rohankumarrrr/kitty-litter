@@ -117,7 +117,8 @@ struct ChannelBook: Equatable {
         cantReachT3: Bool,
         waiting: Waiting = Waiting(),
         sent: [SentMessage] = [],
-        isUnread: (AgentThread) -> Bool = { _ in false }
+        isUnread: (AgentThread) -> Bool = { _ in false },
+        inEveryone: [String: Date] = [:]
     ) -> ChannelBook {
         // A subagent's question holds up the thread above it, even if that one's turn has ended.
         let threads = threads.map { thread -> AgentThread in
@@ -130,7 +131,12 @@ struct ChannelBook: Equatable {
         var placed: [ChannelID: [Placed]] = [:]
         var leftOut: Set<String> = []
         for thread in threads {
-            guard let owner = KittenBoard.owner(of: thread, among: kittens) else { continue }
+            guard let owner = KittenBoard.owner(of: thread, among: kittens) else {
+                if let since = inEveryone[thread.id], let exchanges = transcripts[thread.id] {
+                    placed[.everyone, default: []] += answers(in: thread, exchanges, since: since)
+                }
+                continue
+            }
             guard let exchanges = transcripts[thread.id] else {
                 leftOut.insert(owner.id)
                 continue
@@ -229,6 +235,29 @@ struct ChannelBook: Equatable {
     private static func channel(_ id: ChannelID, _ placed: [Placed], leavesOutThreads: Bool = false) -> Channel {
         let ordered = placed.sorted { ($0.position, $0.sequence, $0.messages[0].id) < ($1.position, $1.sequence, $1.messages[0].id) }
         return Channel(id: id, messages: ordered.suffix(keptExchanges).flatMap(\.messages), isCut: leavesOutThreads || ordered.count > keptExchanges)
+    }
+
+    /// Work the router took on from Everyone outside any kitten. Only its answers, as Shades, since what you said is already there.
+    private static func answers(in thread: AgentThread, _ exchanges: [Exchange], since: Date) -> [Placed] {
+        exchanges.enumerated().compactMap { index, exchange in
+            guard exchange.askedAt >= since.addingTimeInterval(-60) else { return nil }
+            let isStillGoing = thread.status.isActive && !KittenBoard.needsYou(thread) && index == exchanges.count - 1
+            guard exchange.reply != nil || exchange.failure != nil || isStillGoing else { return nil }
+            let at = exchange.repliedAt ?? exchange.askedAt
+            let message = ChannelMessage(
+                exchangeID: exchange.id,
+                kind: .reply,
+                speaker: .cat,
+                text: exchange.reply,
+                at: at,
+                threadID: thread.id,
+                threadTitle: thread.title,
+                earlierNotes: exchange.earlierNotes,
+                isStillGoing: isStillGoing,
+                failure: exchange.failure
+            )
+            return Placed(position: isStillGoing ? exchange.askedAt : at, sequence: index, messages: [message])
+        }
     }
 
     /// T3 has it once you're the one asking the same thing there, since a minute before it was sent.

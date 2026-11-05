@@ -140,9 +140,11 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         send()
     }
 
+    var hasDraft: Bool { textView.string.contains { !$0.isWhitespace } }
+
     private func send() {
         let words = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let target, !words.isEmpty else {
+        guard let target, !words.isEmpty, target.isReady else {
             NSSound.beep()
             return
         }

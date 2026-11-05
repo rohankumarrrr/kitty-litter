@@ -26,6 +26,8 @@ enum MessageTarget: Equatable {
     /// A new thread in the kitten's folder.
     case newThread(Kitten)
     case thread(id: String, title: String)
+    /// The new topic you just started, until T3 has its thread. Nothing can be sent before then.
+    case starting(Kitten)
     /// Your own words as the answer.
     case question(AgentQuestion)
 
@@ -34,6 +36,9 @@ enum MessageTarget: Equatable {
         guard case .channel(let id) = selection else { return nil }
         if id == .everyone { return .router }
         guard let status = book.statuses.first(where: { id == .direct($0.kitten) }), status.state != .notSetUp else { return nil }
+        if let last = book.channel(id)?.messages.last, last.speaker == .you, last.threadID.isEmpty, last.failure == nil {
+            return .starting(status.kitten)
+        }
         if let question = book.waiting.questions.first(where: { book.kitten(of: $0.id) == status.kitten && $0.form?.takesOwnWords == true }) {
             return .question(question)
         }
@@ -42,6 +47,23 @@ enum MessageTarget: Equatable {
             return .thread(id: last.threadID, title: last.threadTitle)
         }
         return .newThread(status.kitten)
+    }
+}
+
+extension MessageTarget {
+    /// Whether words already typed can still go here. An answered question can't take them, and a new topic
+    /// that's started moves on to its thread.
+    var isReady: Bool {
+        if case .starting = self { return false }
+        return true
+    }
+
+    func isStill(in book: ChannelBook) -> Bool {
+        switch self {
+        case .starting: return false
+        case .question(let question): return book.waiting.questions.contains { $0.id == question.id }
+        case .router, .newThread, .thread: return true
+        }
     }
 }
 
