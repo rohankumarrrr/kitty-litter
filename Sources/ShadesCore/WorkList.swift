@@ -12,8 +12,12 @@ public struct WorkItem: Codable, Equatable, Identifiable, Sendable {
     public var threadID: String?
     public var changedAt: Date
 
+    public static func newID() -> String {
+        String(UUID().uuidString.prefix(8)).lowercased()
+    }
+
     public init(
-        id: String = String(UUID().uuidString.prefix(8)).lowercased(),
+        id: String = WorkItem.newID(),
         text: String,
         state: State,
         threadID: String? = nil,

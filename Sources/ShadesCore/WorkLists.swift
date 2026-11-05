@@ -17,6 +17,7 @@ public protocol WorkListStoring: AnyObject {
 ///     worklist/proposals/          The kitten writes, one plain text file per idea. Shades reads and removes.
 public final class FileWorkLists: WorkListStoring {
     private struct FolderBlocked: Error {}
+    private struct ListTooBig: Error {}
 
     private struct Paths {
         let folder: URL
@@ -75,21 +76,50 @@ public final class FileWorkLists: WorkListStoring {
     public func save(_ list: WorkList, for kitten: Kitten) throws {
         let paths = Paths(kitten)
         guard !isBlocked(paths) else { throw FolderBlocked() }
-        try files.createDirectory(at: paths.proposals, withIntermediateDirectories: true)
-        try files.setAttributes([.posixPermissions: 0o700], ofItemAtPath: paths.folder.path)
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(list).write(to: paths.items, options: .atomic)
+        let data = try encoder.encode(list)
+        // Anything bigger would be set aside as junk the next time it's read.
+        guard data.count <= Self.listByteLimit else { throw ListTooBig() }
+
+        // Held open without following links, so swapping the folder for a link partway through
+        // can't send your words anywhere else.
+        try? files.createDirectory(at: paths.folder, withIntermediateDirectories: false)
+        let folder = open(paths.folder.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        guard folder >= 0 else { throw FolderBlocked() }
+        defer { close(folder) }
+        guard fchmod(folder, 0o700) == 0, mkdirat(folder, "proposals", 0o700) == 0 || errno == EEXIST else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+
+        let temporary = "items-\(UUID().uuidString).tmp"
+        let descriptor = openat(folder, temporary, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
+        guard descriptor >= 0 else { throw CocoaError(.fileWriteUnknown) }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        do {
+            try handle.write(contentsOf: data)
+            try handle.close()
+            guard renameat(folder, temporary, folder, "items.json") == 0 else { throw CocoaError(.fileWriteUnknown) }
+        } catch {
+            unlinkat(folder, temporary, 0)
+            throw error
+        }
     }
 
     public func hasProblem(for kitten: Kitten) -> Bool {
         let paths = Paths(kitten)
         if isBlocked(paths) || kind(of: paths.broken) != nil { return true }
-        if kind(of: paths.items) != nil, !files.isWritableFile(atPath: paths.items.path) { return true }
-        let writesTo = kind(of: paths.folder) == nil ? kitten.folder : paths.folder.path
-        return !files.isWritableFile(atPath: writesTo) || settledProposals(paths).contains { proposalText(at: $0) == nil }
+        if settledProposals(paths).contains(where: { proposalText(at: $0) == nil }) { return true }
+        guard kind(of: paths.folder) != nil else { return !files.isWritableFile(atPath: kitten.folder) }
+        // The only sure way to know a save would work, whatever a kitten has done to its folder.
+        do {
+            try save(load(for: kitten), for: kitten)
+            return false
+        } catch {
+            return true
+        }
     }
 
     // MARK: - Reading what a kitten left

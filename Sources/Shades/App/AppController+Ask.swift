@@ -37,7 +37,7 @@ extension AppController {
             caption: early.flatMap(askCaption),
             allowsEmpty: false,
             onSubmit: { [weak self] words in self?.takeWords(words, capture: capture) },
-            onCancel: {}
+            onCancel: { [weak self] in self?.offerWhenAsked = nil }
         ))
     }
 
@@ -191,7 +191,7 @@ extension AppController {
             }
             // A bare yes only means something as an answer. A new thread has nothing it could be
             // answering, and a kitten mustn't take it for your answer to something on its list.
-            guard OfferAnswer(question) == nil else {
+            guard !OfferAnswer.isBare(question) else {
                 say(CatWords.answerToWhat)
                 return
             }

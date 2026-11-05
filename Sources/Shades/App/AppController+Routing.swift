@@ -63,14 +63,17 @@ extension AppController {
     /// Gives your words to a kitten, by way of its list. A new thread in its folder already knows
     /// what it needs to, and T3 writes the title, so nothing here has to explain anything to it.
     func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?) {
-        // Asking again while it's still waiting to go shouldn't run it twice.
-        if let index = ready.firstIndex(where: { $0.kittenID == kitten.id && $0.listText == words }) {
+        // Asking again while it hasn't gone out shouldn't run it twice.
+        let said = OfferAnswer.plain(words)
+        if let index = ready.firstIndex(where: { $0.kittenID == kitten.id && OfferAnswer.plain($0.listText) == said }) {
             ready[index].tried = false
             startOrSayItsWaiting(ready[index].itemID, for: kitten)
             return
         }
+        // One that's back as an offer, say after a restart, is yours again now, so it takes that place.
+        let leftover = workLists.load(for: kitten).items.first { [.waiting, .stopped].contains($0.state) && OfferAnswer.plain($0.text) == said }
         takeOn(
-            WorkItem(text: words, state: .waiting, at: now()),
+            WorkItem(id: leftover?.id ?? WorkItem.newID(), text: words, state: .waiting, at: now()),
             words: .yours(words, sharedScreen(with: kitten, from: snapshot)),
             for: kitten
         )
@@ -93,10 +96,11 @@ extension AppController {
             }
             tend(owner)
         }
+        if reporting.contains(thread.id) { followedUp.insert(thread.id) }
 
         // A session with full access can do anything, so text from a page doesn't get to reach it.
         // Neither does one belonging to a kitten that isn't meant to see it.
-        let seesScreen = thread.runtimeMode != .fullAccess && (owners + claiming).allSatisfy(\.seesScreen)
+        let seesScreen = thread.runtimeMode != .fullAccess && (owners + claiming).allSatisfy(\.seesScreen) && !keptOffScreen.contains(thread.id)
         let shared = seesScreen ? snapshot : nil
         let text = Prompts.forwarded(
             words: words,

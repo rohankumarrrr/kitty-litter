@@ -30,10 +30,16 @@ public enum ReportDigest {
         return String(kept.prefix(cutLimit)).trimmingCharacters(in: .whitespaces) + "…"
     }
 
-    /// The thread a report points to, when all an agent did was start another one.
+    /// The thread a report points to, when all an agent did was start another one. That's one sentence
+    /// with one link, as agents are told to write it, because a longer report can mention a thread in passing.
     public static func linkedThreadID(in report: String) -> String? {
-        guard let match = report.firstMatch(of: #/t3-thread://v2/[^/\s>]+/([^>\s)]+)/#) else { return nil }
-        return String(match.1)
+        let links = linkedThreadIDs(in: report)
+        guard links.count == 1, sentences(in: report).count == 1 else { return nil }
+        return links.first
+    }
+
+    public static func linkedThreadIDs(in report: String) -> [String] {
+        report.matches(of: #/t3-thread://v2/[^/\s>]+/([^>\s)]+)/#).map { String($0.1) }
     }
 
     private static func withoutMarks(_ line: String) -> String {

@@ -36,10 +36,24 @@ enum OfferAnswer: Equatable {
 
     private static let yeses: Set<String> = ["yes", "yep", "yeah", "yes please", "yes, please", "go ahead", "do it", "start it"]
     private static let nos: Set<String> = ["no", "nope", "no thanks", "no, thanks", "skip it", "drop it"]
+    /// These don't answer an offer, since a yes has to be plain, but they aren't a request either.
+    private static let otherBareAnswers: Set<String> = [
+        "ok", "okay", "sure", "yup", "y", "n", "nah", "not now", "sounds good", "go for it", "please do",
+        "yes go ahead", "yes, go ahead", "yes do it", "yes, do it",
+    ]
+
+    static func plain(_ words: String) -> String {
+        words.lowercased().trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ".!?,;:…\"'")))
+    }
+
+    /// Something that only means anything as an answer to something.
+    static func isBare(_ words: String) -> Bool {
+        OfferAnswer(words) != nil || otherBareAnswers.contains(plain(words))
+    }
 
     /// A closed list, so "yes, but only the main branch" is no answer, and goes to the router as usual.
     init?(_ words: String) {
-        let said = words.lowercased().trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ".!?,")))
+        let said = Self.plain(words)
         if Self.yeses.contains(said) {
             self = .yes
         } else if Self.nos.contains(said) {
@@ -93,8 +107,7 @@ extension AppController {
                 if let id = item.threadID, reporting.contains(id) { continue }
                 switch KittenBoard.ending(of: item, threads: latestThreads, now: at) {
                 case .report(let thread, let failed):
-                    // Once is enough, even if the list couldn't be saved to say it's been done.
-                    if reportedAt[thread.id] != thread.updatedAt { reportOn(thread, failed: failed) }
+                    follow(thread, failed: failed, in: &list, at: at)
                 case .stopped:
                     item.state = .stopped
                     item.changedAt = at
@@ -108,13 +121,23 @@ extension AppController {
                     item.state = .working
                     item.changedAt = at
                     list.put(item)
-                } else if thread.status == .completed, thread.updatedAt > item.changedAt, reportedAt[thread.id] != thread.updatedAt {
+                } else if thread.status == .completed, thread.updatedAt > item.changedAt {
                     // Someone picked it up again and finished it, perhaps while the app was closed.
-                    reportOn(thread, failed: false)
+                    follow(thread, failed: false, in: &list, at: at)
                 }
             case .proposed, .waiting, .dropped:
                 break
             }
+        }
+    }
+
+    /// You only hear about an ending once. If that's been done, all that's left is the list,
+    /// which couldn't be saved at the time.
+    private func follow(_ thread: AgentThread, failed: Bool, in list: inout WorkList, at: Date) {
+        if reportedAt[thread.id] == thread.updatedAt {
+            list.endWork(in: thread.id, as: failed ? .stopped : nil, at: at)
+        } else {
+            reportOn(thread, failed: failed)
         }
     }
 
@@ -179,6 +202,7 @@ extension AppController {
                 return
             }
             let text: String
+            var title: String?
             var shared: ScreenSnapshot?
             switch work.words {
             case .yours(let words, let screen):
@@ -195,9 +219,11 @@ extension AppController {
                 )
             case .yes(let words, let note):
                 text = Prompts.approved(yes: words, note: note)
+                // T3 would write its title from "yes", which says nothing about the work.
+                title = "\(kitten.name): \(note.prefix { !$0.isNewline })"
             }
             startFrontier(
-                title: nil,
+                title: title,
                 text: text,
                 snapshot: shared,
                 projectID: projectID,
@@ -244,8 +270,8 @@ extension AppController {
 
     // MARK: - Your answer
 
-    /// Whatever you start saying with an offer showing can answer it. An offer that appears
-    /// mid-sentence, or one that's covered, wasn't what you were answering.
+    /// An offer only counts if it's showing both when you start and when you finish. One that
+    /// appears mid-sentence, or gets covered before you're done, isn't what you were answering.
     var offerShowing: Offer? {
         guard case .notice? = currentBubble else { return nil }
         return notices.first?.offer
@@ -255,7 +281,7 @@ extension AppController {
     func takeWords(_ words: String, capture: Task<Capture, Never>?) {
         let offer = offerWhenAsked
         offerWhenAsked = nil
-        if let offer, notices.contains(where: { $0.offer == offer }), let answer = OfferAnswer(words) {
+        if let offer, offerShowing == offer, let answer = OfferAnswer(words) {
             answerOffer(offer, answer, words: words)
         } else {
             ask(words, capture: capture)

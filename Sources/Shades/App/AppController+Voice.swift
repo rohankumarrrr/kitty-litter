@@ -28,9 +28,9 @@ extension AppController {
             return
         }
         stage.catWake()
+        offerWhenAsked = fixIsOpen ? nil : offerShowing
         if !fixIsOpen {
             stage.hideInput()
-            offerWhenAsked = offerShowing
             heard = ""
             renderBubble()
         }

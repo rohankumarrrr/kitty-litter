@@ -100,11 +100,15 @@ final class AppController {
     var sending: Set<String> = []
     /// Threads waiting to be reported on, so one that's finished isn't reported twice.
     var reporting: Set<String> = []
+    /// Threads given more to do while being reported on, so that report doesn't close the new work.
+    var followedUp: Set<String> = []
     /// Offers you pressed Esc on, which stay quiet until you ask about that kitten.
     var putOff: Set<String> = []
-    /// Which kitten each thread was started for, as seen by the app itself. A list can't say,
-    /// since a kitten can write anything on its own, and this outlasts the item.
+    /// Which kitten each thread was started for, as seen by the app itself. A list or a report
+    /// can't say, since those are a kitten's own words, and this outlasts the item.
     var threadOwners: [String: String] = [:]
+    /// Threads named in the report of a kitten that can't see your screen, which may be its work.
+    var keptOffScreen: Set<String> = []
     /// When a thread last was as of its report, so the same ending isn't reported twice.
     var reportedAt: [String: Date] = [:]
     var offerWhenAsked: Offer?

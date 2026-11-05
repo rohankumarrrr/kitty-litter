@@ -15,27 +15,37 @@ extension AppController {
 
     func reportOn(_ thread: AgentThread, failed: Bool) {
         guard reporting.insert(thread.id).inserted else { return }
+        followedUp.remove(thread.id)
         reportTask = Task {
             defer { reporting.remove(thread.id) }
             try? await Task.sleep(nanoseconds: UInt64(reportDelay * 1_000_000_000))
-            if latestThreads.first(where: { $0.id == thread.id })?.status.isActive == true { return }
+            if isStillGoing(thread.id) { return }
 
             let report = await backend.finalReport(threadID: thread.id)
+            // It may have picked up again, or been given more to do, while that was being read.
+            if isStillGoing(thread.id) { return }
+            // A report is a kitten's own words, so a link in one can keep your screen back, but nothing more.
+            if kitten(of: thread)?.seesScreen == false { keptOffScreen.formUnion(ReportDigest.linkedThreadIDs(in: report ?? "")) }
+            reportedAt[thread.id] = latestThreads.first { $0.id == thread.id }?.updatedAt ?? thread.updatedAt
             if !failed, let next = threadPassedOnTo(in: report, from: thread) {
                 passedOn(thread, to: next)
                 return
             }
-            reportedAt[thread.id] = thread.updatedAt
             reporting.remove(thread.id)
             workEnded(in: thread.id, failed: failed)
             tell(FinishedWork(thread: thread, failed: failed, report: report))
         }
     }
 
+    private func isStillGoing(_ thread: String) -> Bool {
+        followedUp.contains(thread) || latestThreads.first { $0.id == thread }?.status.isActive == true
+    }
+
     /// A report can mention any thread, so one only counts as where the work went if it's going now.
-    /// Dispatchers are only remembered until a restart, but a list still knows.
+    /// Dispatchers are only remembered until a restart, but a thread's name or project still says.
+    /// A list can't, because a kitten could then hide the report of a thread that isn't its own.
     private func threadPassedOnTo(in report: String?, from thread: AgentThread) -> String? {
-        guard dispatchers.contains(thread.id) || !listOwners(of: thread.id).isEmpty,
+        guard dispatchers.contains(thread.id) || kitten(of: thread) != nil,
               let next = report.flatMap(ReportDigest.linkedThreadID(in:)),
               next != thread.id,
               latestThreads.first(where: { $0.id == next })?.status.isActive == true
@@ -72,9 +82,7 @@ extension AppController {
 
     /// Which kitten a thread belongs to, by the project it's in or the name it starts with.
     private func kitten(of thread: AgentThread) -> Kitten? {
-        loadKittens().first { kitten in
-            thread.projectTitle == kitten.name || thread.title.hasPrefix("\(kitten.name):")
-        }
+        loadKittens().first { threadOwners[thread.id] == $0.id || KittenBoard.belongs(thread, to: $0) }
     }
 
     /// All this thread did was start another one, so that's where the work is now.
@@ -82,7 +90,6 @@ extension AppController {
         dispatchers.insert(next)
         hiddenThreads.insert(thread.id)
         watch.markQuick(thread.id)
-        threadOwners[next] = threadOwners[thread.id] ?? loadKittens().first { KittenBoard.belongs(thread, to: $0) }?.id
         for owner in listOwners(of: thread.id) {
             try? updateList(of: owner) { $0.moveWork(from: thread.id, to: next, at: now()) }
             tend(owner)
