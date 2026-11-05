@@ -290,3 +290,15 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(try projection(createdBy: nil, messages: "[]").startedBy, .unknown)
     }
 }
+
+extension T3WireTests {
+    func testQuestionsSharingAnIDAreAnsweredInT3() throws {
+        let item = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"choice","header":"A","question":"Which colour?","options":[{"label":"Red","description":""}]},{"id":"choice","header":"B","question":"Which size?","options":[{"label":"Large","description":""}]}]}"#)
+        XCTAssertNil(T3Wire.answerForm(item.questions), "one ID can't hold two answers")
+        let shared = AnswerForm(parts: [
+            AnswerForm.Part(key: "choice", text: "Which colour?", options: [], values: [], takesOwnWords: true),
+            AnswerForm.Part(key: "choice", text: "Which size?", options: [], values: [], takesOwnWords: true),
+        ])
+        XCTAssertEqual(T3Wire.answers(["Red", "Large"], to: shared), ["choice": .one("Red")], "and answering one anyway can't crash")
+    }
+}

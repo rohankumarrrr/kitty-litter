@@ -725,7 +725,7 @@ enum T3Wire {
         return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
     }
 
-    /// `nil` if any question has no ID to file its answer under, so it can only be answered in T3.
+    /// `nil` if any question has no ID of its own to file its answer under, so it can only be answered in T3.
     static func answerForm(_ questions: [TurnItem.Question]?) -> AnswerForm? {
         guard let questions, !questions.isEmpty else { return nil }
         var parts: [AnswerForm.Part] = []
@@ -741,15 +741,17 @@ enum T3Wire {
                 picksSeveral: question.multiSelect == true
             ))
         }
+        guard Set(parts.map(\.key)).count == parts.count else { return nil }
         return AnswerForm(parts: parts)
     }
 
     /// One answer per part, in order. An option for a question that takes several goes as a list of one.
     static func answers(_ answers: [String], to form: AnswerForm) -> [String: RespondToRequest.Answer]? {
         guard answers.count == form.parts.count else { return nil }
-        return Dictionary(uniqueKeysWithValues: zip(form.parts, answers).map { part, answer in
-            (part.key, part.picksSeveral && part.values.contains(answer) ? .several([answer]) : .one(answer))
-        })
+        let filed = zip(form.parts, answers).map { part, answer in
+            (part.key, part.picksSeveral && part.values.contains(answer) ? RespondToRequest.Answer.several([answer]) : .one(answer))
+        }
+        return Dictionary(filed) { first, _ in first }
     }
 
     /// Plain words for the approval bubble. It comes from the agent, so it's only ever shown.

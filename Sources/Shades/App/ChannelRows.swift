@@ -36,7 +36,8 @@ enum MessageTarget: Equatable {
         guard case .channel(let id) = selection else { return nil }
         if id == .everyone { return .router }
         guard let status = book.statuses.first(where: { id == .direct($0.kitten) }), status.state != .notSetUp else { return nil }
-        if let last = book.channel(id)?.messages.last, last.speaker == .you, last.threadID.isEmpty, last.failure == nil {
+        // Your words with no thread yet are a new topic still starting, even if something else has been said since.
+        if book.channel(id)?.messages.contains(where: { $0.speaker == .you && $0.threadID.isEmpty && $0.failure == nil }) == true {
             return .starting(status.kitten)
         }
         if let question = book.waiting.questions.first(where: { book.kitten(of: $0.id) == status.kitten && $0.form?.parts.first?.takesOwnWords == true }) {
@@ -65,7 +66,8 @@ extension MessageTarget {
         switch self {
         case .starting: return false
         case .question(let question): return book.waiting.questions.contains { $0.id == question.id }
-        case .router, .newThread, .thread: return true
+        case .thread(let id, _): return !book.elsewhere.contains(id)
+        case .router, .newThread: return true
         }
     }
 }

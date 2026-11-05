@@ -81,6 +81,8 @@ final class ChannelFeed {
         if let session { publish(session) }
     }
 
+    var isOpen: Bool { session != nil }
+
     /// Shows it at once, until T3 has it. Nothing's kept once the window closes.
     func sent(_ message: ChannelMessage, in channel: ChannelID) {
         guard let session else { return }

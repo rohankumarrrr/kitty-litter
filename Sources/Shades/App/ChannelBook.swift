@@ -100,6 +100,8 @@ struct ChannelBook: Equatable {
     /// Each kitten's newest thread you could be talking in, with its title as shown: one with your DM in it, or
     /// one whose words aren't known yet. By kitten ID.
     var newestThreads: [String: AgentThread]
+    /// Threads only ever heard between kittens, which aren't yours to carry on.
+    var elsewhere: Set<String>
     var isReading: Bool
     var unreadable: Int
     var cantReachT3: Bool
@@ -191,12 +193,14 @@ struct ChannelBook: Equatable {
         let everyone = channel(.everyone, directIDs.flatMap { placed[$0] ?? [] } + (placed[.everyone] ?? []))
         let unread = Set(threads.filter(isUnread).compactMap { KittenBoard.owner(of: $0, among: kittens)?.id })
         var newestThreads: [String: AgentThread] = [:]
+        var elsewhere: Set<String> = []
         for thread in threads {
             guard let owner = KittenBoard.owner(of: thread, among: kittens) else { continue }
-            // A thread only ever heard between kittens isn't one you're talking in.
-            guard heardIn[thread.id].map({ $0.contains(.direct(owner)) }) ?? true,
-                  thread.updatedAt > newestThreads[owner.id]?.updatedAt ?? .distantPast
-            else { continue }
+            if let heard = heardIn[thread.id], !heard.contains(.direct(owner)) {
+                elsewhere.insert(thread.id)
+                continue
+            }
+            guard thread.updatedAt > newestThreads[owner.id]?.updatedAt ?? .distantPast else { continue }
             var named = thread
             named.title = title(of: thread, owner: owner)
             newestThreads[owner.id] = named
@@ -210,6 +214,7 @@ struct ChannelBook: Equatable {
             waiting: waiting,
             unread: unread,
             newestThreads: newestThreads,
+            elsewhere: elsewhere,
             isReading: isReading,
             unreadable: unreadable,
             cantReachT3: cantReachT3

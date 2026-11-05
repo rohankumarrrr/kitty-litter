@@ -2777,3 +2777,56 @@ private extension NSLock {
     }
 
 }
+
+
+// MARK: - Messages, review round 2
+
+extension FlowTests {
+    func testEveryoneNeverReachesTheAskChatThatHoldsYourScreen() async throws {
+        let answer = "That's Acme's pricing page, and the card on it ends 4242."
+        backend.replies = [[.finished(fullText: answer)]]
+        await ask("what's this?")
+        XCTAssertFalse(backend.sent[0].prompt.attachments.isEmpty, "the Ask chat has your screen")
+        backend.reports["thread-1"] = answer
+        controller.threadsChanged([session("thread-1", "what's this?", mode: .approvalRequired)])
+
+        backend.routerSays = ["What was that card again?": "SEND TO: 1"]
+        controller.channelsPressed()
+        await messages("What was that card again?", to: .router)
+
+        let routed = try XCTUnwrap(backend.sent.first { $0.prompt.text.contains("Their question: What was that card again?") })
+        XCTAssertFalse(routed.prompt.text.contains("4242"), "the Everyone router read what the Ask box said about your screen")
+        XCTAssertFalse(backend.sent.contains { $0.mode == .forward && $0.threadID == "thread-1" }, "your Everyone words went to the chat that holds your screen")
+    }
+
+    func testTheAskBoxCantPutYourScreenIntoEveryonesRouter() async throws {
+        backend.routerSays = ["What's the weather tomorrow?": "Sunny.", "and on this page?": "SEND TO: 1", "And the day after?": "Rain."]
+        controller.channelsPressed()
+        await messages("What's the weather tomorrow?", to: .router)
+        let everyoneRouter = try XCTUnwrap(controller.messagesQuick.thread(at: clock))
+        controller.threadsChanged([session(everyoneRouter, "What's the weather tomorrow?", mode: .approvalRequired)])
+
+        await ask("and on this page?")
+        await messages("And the day after?", to: .router)
+
+        let intoEveryone = backend.sent.filter { $0.threadID == everyoneRouter }
+        XCTAssertFalse(intoEveryone.contains { !$0.prompt.attachments.isEmpty || $0.prompt.text.contains("App: Safari") }, "Everyone's router conversation was given your screen")
+        XCTAssertEqual(backend.sent.last?.threadID, everyoneRouter, "and Everyone carries on in it")
+    }
+}
+
+extension FlowTests {
+    func testTheRoutersAnswerReachesYouEvenIfMessagesClosed() async {
+        backend.routerSays = ["What day is it?": "It's Tuesday."]
+        backend.holdQuestion = "What day is it?"
+        controller.channelsPressed()
+        controller.messagesAction(.send("What day is it?", to: .router, shownIn: .everyone))
+        await until { backend.sent.contains { $0.prompt.text.contains("Their question: What day is it?") } }
+        controller.channelsClosed()
+        backend.releaseHeld()
+        await controller.messagesTurn?.value
+        await settle()
+        controller.channelsPressed()
+        XCTAssertTrue(stage.bubbles.contains(.notice(caption: "Everyone", text: "It's Tuesday.", threadID: nil)), "with Messages closed, it comes over the cat")
+    }
+}

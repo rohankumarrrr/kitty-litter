@@ -402,3 +402,52 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: withBetween), .thread(id: "old", title: "Old budget"), "a thread only another kitten talks in isn't yours to carry on")
     }
 }
+
+
+// MARK: - Messages, review round 2
+
+extension ChannelsWindowTests {
+    func testADraftNeverStaysOnAThreadOnlyAnotherKittenTalksIn() {
+        let older = AgentThread(id: "old", title: "Old budget", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
+        let between = AgentThread(id: "asked", title: "From Pepper", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at.addingTimeInterval(120), projectPath: "/k/steve")
+        let pepperThread = AgentThread(id: "p", title: "Plans", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at, projectPath: "/k/pepper")
+        let threads = [older, between, pepperThread]
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: [:], isReading: true, unreadable: 0, cantReachT3: false))
+        view.select(.channel(.direct(steve)))
+        view.pane.composer.textView.string = "Make the summary shorter"
+
+        let asked = Exchange(id: "x", asker: .agent(threadID: "p"), askedAt: at.addingTimeInterval(100), ask: "Which font?", reply: "Silkscreen.", repliedAt: at.addingTimeInterval(101))
+        let mine = Exchange(id: "e", asker: .you, askedAt: at, ask: "Old question", reply: "Old answer", repliedAt: at.addingTimeInterval(1))
+        let read = ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: ["old": [mine], "asked": [asked], "p": []], isReading: false, unreadable: 0, cantReachT3: false)
+        view.show(read)
+        view.pane.composer.send(view.pane.composer.textView.string)
+        XCTAssertEqual(sent, [.send("Make the summary shorter", to: .thread(id: "old", title: "Old budget"), shownIn: .direct(steve))], "your DM went into the thread where Pepper was asking Steve")
+    }
+
+    func testANewTopicHoldsTheBoxEvenIfAnotherThreadAnswersFirst() {
+        var threads = [AgentThread(id: "t", title: "Resume", projectTitle: "Steve", status: .running, model: "m", updatedAt: at, projectPath: "/k/steve")]
+        var transcripts = ["t": [Exchange(id: "e", asker: .you, askedAt: at, ask: "Tidy my resume", reply: nil, repliedAt: nil)]]
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false))
+        view.select(.channel(.direct(steve)))
+
+        // New topic sent at +60, and T3 hasn't said what its thread is yet.
+        let echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Write a cover letter", at: at.addingTimeInterval(60), threadID: "", threadTitle: "")
+        let pending = [SentMessage(channel: .direct(steve), message: echo)]
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: pending))
+        XCTAssertEqual(view.pane.composer.target, .starting(steve))
+
+        // Meanwhile the resume thread finishes.
+        threads[0].status = .completed
+        threads[0].updatedAt = at.addingTimeInterval(61)
+        transcripts["t"] = [Exchange(id: "e", asker: .you, askedAt: at, ask: "Tidy my resume", reply: "Done.", repliedAt: at.addingTimeInterval(61))]
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: pending))
+        view.pane.composer.send("Keep it to one page")
+        XCTAssertEqual(sent, [], "the follow-up to the new topic went to the old thread")
+    }
+}

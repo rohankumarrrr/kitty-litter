@@ -168,8 +168,9 @@ extension AppController {
         return holdback.finish(fullText: fullText)
     }
 
-    /// The router's own words, in the group chat.
+    /// The router's own words, in the group chat, or over the cat if you've closed Messages since.
     private func catSays(_ text: String) {
+        guard channels.isOpen else { return post(caption: CatWords.everyone, text: text, threadID: nil) }
         channels.sent(ChannelMessage(exchangeID: "cat-\(UUID().uuidString)", kind: .reply, speaker: .cat, text: text, at: now(), threadID: "", threadTitle: ""), in: .everyone)
     }
 
