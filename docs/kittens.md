@@ -29,7 +29,7 @@ Three more fields are optional:
 
 - `color` is its jacket in the kitten view, like `"#b3261e"`.
 - `planned: true` means it shows up with the others but isn't taking work yet, which is handy for a kitten you've named but haven't written instructions for.
-- `seesScreen: false` keeps text from your screen away from it, including in follow-ups to its work in other projects. If your words point at your screen, like "read this thread" with no link, the cat tells you as it passes them on, so you can send the link or paste the text. That goes by a short list of phrases in `ScreenWords.swift`, which only reads your words, so it can miss one or warn when it didn't need to. A follow-up only warns if your words name something like a thread or an article, because "this" there usually means the session's own work. Your words go through either way.
+- `seesScreen: false` means Shades never sends it your screen. Stopping it from finding a copy by itself takes [the screen block](#keeping-a-kitten-off-your-screen) as well. If your words point at your screen, like "read this thread" with no link, the cat tells you as it passes them on, so you can send the link or paste the text. That goes by a short list of phrases in `ScreenWords.swift`, which only reads your words, so it can miss one or warn when it didn't need to. A follow-up only warns if your words name something like a thread or an article, because "this" there usually means the session's own work. Your words go through either way.
 
 Shades reads `covers` to decide what goes to a kitten, so write it the way you'd brief someone new. The folder is read fresh for every question, so adding a kitten only takes the folder and this:
 
@@ -50,7 +50,7 @@ Normally you only see Shades. Shift-click him, or choose Kittens from his menu, 
 - **Idle**, asleep
 - **Not set up yet**, for a `planned` kitten
 
-Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the kitten's project, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
+Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the folder of the kitten's project, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
 
 ## How they work
 
@@ -91,11 +91,85 @@ The most useful kitten looks after Shades and the other kittens, so you change h
 
 Since it can change the rules everyone works by, it needs more care than the others:
 
-- **Set `seesScreen: false`.** A page shouldn't get a say in the rules.
+- **Set `seesScreen: false`, and add the screen block.** A page shouldn't get a say in the rules.
 - **Protected rules.** Its instructions should list what it can't loosen unless you ask for that exact change: `RULES.md`, screen text being data, only your words shipping, the install's signature check and rollback.
 - **A privacy check before every push.** This repo is public, and kittens are full of personal details.
 - **Find the cause.** It should read `health.json` and the logs before suggesting a fix, then teach the self-check to catch the problem next time.
 - **A way back in.** If the cat won't start, the kitten's T3 project still works, so you can reach it there. `scripts/install.sh --rollback` restores the last working copy.
+
+## Keeping a kitten off your screen
+
+Telling an agent not to look isn't enough. Agents run as you, so they can open whatever you can, and copies of your screen end up in several places however careful Shades is:
+
+- **The router sees it first.** It looks at your screen before it knows who the question is for, so a screenshot and the page text are saved with its thread even when the kitten gets neither.
+- **T3 keeps everything.** Its database, logs and attachments folder hold every message, and it opens that folder to every Claude thread.
+- **Claude and Codex keep transcripts,** with the screenshots inside them.
+- **T3 Code can have permission to see your screen.** If it does, so does every agent it runs, whatever the privacy list says.
+
+### What's enforced
+
+Shades leaves your screen out of everything it sends to a kitten with `seesScreen: false`. That covers threads in its project, whatever the project is called, and any thread traced back to one through whoever started it, whatever that thread is called. A thread an agent started that can't be traced gets no screen either.
+
+The screen block is `.claude/settings.json` in the kitten's folder. Claude Code enforces it, and the self-check says so if it's missing:
+
+| Way in | What stops it |
+|---|---|
+| Saved copies, through Claude's file tools | `Read` deny rules |
+| Saved copies, through the shell | The sandbox, and an `Edit` rule so they can't be moved out either |
+| Looking at the live screen, a browser or the clipboard | The sandbox |
+| T3's server and its `t3` command | The sandbox |
+| Another thread's words | Search, forking and queued messages are denied, and reading a thread is cut down to your own words by a hook |
+| Attached images | Nothing: T3 sends them in the message, so a kitten that's meant to see them still does |
+| Turning all this off | `Edit(.claude/**)` and the sandbox. A change to this repo's block still goes through a pull request and your say-so |
+
+Deny rules don't do it alone. With `Read` denied on T3's folder, `grep` in the shell still read the same files. A sandbox that only denies reading doesn't either: T3 makes its attachments folder writable for every thread, and `mv` carried a file straight out of it. Nor do the sandbox's defaults: an agent can ask to run outside it, and commands inside it stop asking for permission.
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(~/.t3/userdata/**)",
+      "Read(~/.t3/scratch/**)",
+      "Read(~/.claude/projects/**/*.jsonl)",
+      "Read(~/.codex/**)",
+      "Read(~/Library/Application Support/shades/captures/**)",
+      "Edit(~/.t3/userdata/**)",
+      "Edit(.claude/**)",
+      "mcp__t3-code__t3_thread_search",
+      "mcp__t3-code__t3_thread_transfer",
+      "mcp__t3-code__t3_queue"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "autoAllowBashIfSandboxed": false
+  },
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "mcp__t3-code__t3_thread_read",
+      "hooks": [{ "type": "command", "command": "python3 -I \"$CLAUDE_PROJECT_DIR/.claude/hooks/thread-read-filter.py\"" }]
+    }]
+  }
+}
+```
+
+Copy `.claude/hooks/thread-read-filter.py` from this repo too. The hook keeps what a kitten needs to check that a correction really came from you, your own words above the `---` line, and leaves out everything an agent wrote.
+
+This repo has a block of its own, since a kitten's code changes happen here. It lets `swift build`, `swift test`, `swift run` and `scripts/install.sh` out of the sandbox, because they can't work inside one. Only the plain form counts, so `swift build | tail` stays in and fails. `gh` and `git` stay in, with only GitHub reachable. To install from another thread's checkout, use `~/shades/scripts/install.sh --pull`.
+
+### What isn't
+
+These are still open, and most can only be fixed in T3:
+
+- **Other models.** Only Claude Code reads these settings. A Codex thread in the same folder read a saved screenshot straight through them, so a kitten that's kept off the screen has to run on Claude. Reviewers on other models aren't covered either.
+- **Folders with no block.** It belongs to the folder, not the agent. A kitten's thread in a project without one can still look.
+- **Asking someone else.** A kitten can start or message any thread, and that thread can look for it. It would have to mean to. Clawde's folder also turns away a message with a screen block in it, but a paraphrase gets through.
+- **Commands let out of the sandbox.** `swift run` can run code an agent wrote.
+- **Thread titles.** The thread list still shows them, and a handoff's title is the router's reading of what you asked.
+- **T3 keeping it all.** Nothing in T3 deletes old attachments or logs, and deleting a thread leaves its attachments behind. Shades keeps its own saved screenshots for a day.
+- **T3's macOS permissions.** The block stops a kitten using them, but every other agent can. If you don't use T3 Code for something that needs them, turn off Screen Recording and Accessibility for it in System Settings. Shades has its own.
 
 ## Instructions worth including
 

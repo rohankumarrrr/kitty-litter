@@ -27,6 +27,8 @@ A kitten for the system itself, a self-check and rollback now exist. Work lists,
 
 ## Smaller things
 
+- A screen block that follows a kitten instead of its folder. T3 can run Claude with `--settings` per provider instance, so a kitten's threads could share one wherever they work. Untested, because it needs a change to T3's settings.
+
 - Answer an agent's question from the bubble. It shows the question and options now, and you answer in T3.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
 - Remember project nicknames, so the frontier agent can skip the search next time.

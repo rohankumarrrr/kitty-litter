@@ -25,7 +25,7 @@ There's no list of projects to maintain. Shades acts as one router in front of y
 - **Gives it to a kitten** if it's in a specialist's area.
 - **Starts new work** if nothing has the context, saying so as it does. Fix always starts new work.
 
-Sessions with full access get your words but not your screen, so text on a page can't reach an agent that's allowed to do anything. If your words point at your screen, like "read this thread" with no link, the cat says so as it passes them on, so you can send the link or paste the text. In a follow-up it only says so if your words name something like a thread or an article, because "this" there usually means the session's own work.
+Agents with full access get your words but not your screen, so text on a page can't reach an agent that's allowed to do anything. When a kitten or session won't get your screen and your words point at it, like "read this thread" with no link, the cat says so as it passes them on, so you can send the link or paste the text. In a follow-up it only says so if your words name something like a thread or an article, because "this" there usually means the session's own work.
 
 The frontier agent starts with no project, and finds the right one from what you said and what's on your screen, reading READMEs when a project's name isn't its folder name. For code changes it starts a new thread in that project's worktree. Research and questions it just answers.
 
@@ -63,7 +63,8 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 - **What leaves your Mac:** your question, a screenshot, the app and window names, the address, and any selected or page text go to the model you've chosen, through T3 Code. T3 Code keeps them with the thread. Your voice stays on your Mac, and only the resulting text is sent. When a session ends, its final report goes to the summary model, which may be a different provider from the one that ran the session.
 - **Private apps stay private:** password managers are on a list you can edit, and incognito windows in Chromium browsers are skipped. Nothing is captured while they're in front. Background windows can still show up in a screenshot, and Safari's private windows mostly can't be detected.
 - **Screen text is treated as data:** the agents are told it's never instructions, and they run in T3's `auto` mode rather than with full access. That lowers the risk of a page steering an agent, but doesn't remove it. For that reason, Allow is never a default in the cat's approval requests.
-- **Saved screenshots:** agents get a copy to open, kept in `~/Library/Application Support/shades/captures` for 7 days.
+- **Saved screenshots:** agents get a copy to open, kept in `~/Library/Application Support/shades/captures` for a day.
+- **Agents run as you:** they can open anything you can, including the copies of your screen that T3 Code, Claude and Codex keep. If T3 Code has Screen Recording or Accessibility, so does every agent it runs, whatever the privacy list says. Shades has its own permissions and doesn't need T3 Code to have them. [Keeping a kitten off your screen](docs/kittens.md#keeping-a-kitten-off-your-screen) says what can be enforced and what can't.
 
 ## Kittens
 
