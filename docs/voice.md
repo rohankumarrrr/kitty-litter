@@ -79,7 +79,7 @@ The model's window is a fixed 15 seconds, so re-reading a growing clip costs abo
 - **lowercased input** got fewer words wrong on the held-out set but more on the main corpus, got fewer sentences exactly right on both, and tripped the guard on 3.3% of held-out clips.
 - **Qwen3 1.7B with a careful prompt** was far worse on every measure and over twice the download. Its time is inflated, because the probe re-reads its long prompt on every call. An earlier run with the prompt cached took 70 / 143 ms on the main corpus. **Bark Clean** without S1-mini was worse too. Apple's Foundation Models won't compile with this SDK, so they aren't used at all.
 
-Both tables are 294 and 180 clips of Ultra's transcripts with vocabulary off, timed on clips under 15 s. Words wrong ignores case and punctuation. Exactly right doesn't, which is why it's far from 100% even when the words are fine.
+The held-out table is 180 clips and the main one 294, all from Ultra's transcripts with vocabulary off, and timed on clips under 15 s. Words wrong ignores case and punctuation. Exactly right doesn't, which is why it's far from 100% even when the words are fine.
 
 **Drafting.** Greedy decoding has to run the model once per output token. Cleanup mostly copies, so `LlamaModel` guesses the next 8 tokens from the input and checks them in one batch. The output is identical, because the model still confirms every token, and it runs about twice as fast: 335 ms down to about 160 ms on a 64-token clip.
 
@@ -159,7 +159,7 @@ Each cell is a single press, so read this as a direction rather than a precise f
 | Download | Size | Where |
 |---|---:|---|
 | Parakeet Ultra | 613 MB | `~/Library/Application Support/FluidAudio/Models` |
-| Parakeet CTC 110M, only if you have a vocabulary | 114 MB | same |
+| Parakeet CTC 110M, only if you have a vocabulary | 98 MB | same |
 | S1-mini | 462 MB | `~/Library/Application Support/shades/models` |
 
 ## The first word
