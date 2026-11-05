@@ -1563,8 +1563,93 @@ final class FlowTests: XCTestCase {
         await finish(work(), report: "The fix is live.", sorted: "SHIPPED: The fix is live.")
         backend.silentRuns = ["run-2"]
         await finish(work(run: "run-2"), report: "The fix is live.", sorted: "SHIPPED: The fix is live.")
-        XCTAssertEqual(rows.filter { $0.text == "The fix is live." }.count, 1)
-        XCTAssertEqual(rows.last?.text, CatWords.reportUnreadable)
+        XCTAssertEqual(rows.map(\.text), ["The fix is live."])
+        XCTAssertEqual(rows[0].answer, CatWords.reportUnreadable)
+    }
+
+    func testARunThatSaidNothingLeavesAnOpenDecisionWhereItIs() async {
+        kittens = [inboxKitten]
+        await finish(work(), report: "Should I merge it?", sorted: "DECISION: Merge it?")
+        backend.silentRuns = ["run-2"]
+        await finish(work(run: "run-2"))
+        XCTAssertEqual(rows.map(\.text), ["Merge it?"])
+        XCTAssertTrue(rows[0].needsYou)
+    }
+
+    func testAKittenWhoseFileCantBeReadDoesntLoseItsReport() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        func write(_ name: String, _ text: String) throws {
+            let folder = root.appendingPathComponent(name)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try text.write(to: folder.appendingPathComponent("kitten.json"), atomically: true, encoding: .utf8)
+        }
+        try write("steve", #"{"name":"Steve","role":"r","covers":"c"}"#)
+        try write("clawde", #"{"name":"Clawde","role":"r","covers":"c","inbox":tru}"#)
+        kittens = Kittens.load(from: root)
+        controller = makeController(inbox: Inbox(since: clock.addingTimeInterval(-3600)))
+        await finish(work(), report: "Should I merge it?")
+
+        try write("clawde", #"{"name":"Clawde","role":"r","covers":"c","inbox":true}"#)
+        kittens = Kittens.load(from: root)
+        controller = makeController(inbox: savedInbox ?? Inbox(since: clock.addingTimeInterval(-3600)))
+        await finish(work(), report: "Should I merge it?", sorted: "DECISION: Merge it?")
+        XCTAssertEqual(rows.map(\.text), ["Merge it?"])
+    }
+
+    func testAKittenBackInTimeForItsReportStillGetsIt() async {
+        kittens = [steve]
+        controller.reportDelay = 0.05
+        backend.reports["w"] = "Should I merge it?"
+        backend.replies = [[.finished(fullText: "DECISION: Merge it?")]]
+        controller.threadsChanged([work(status: .running)])
+        controller.threadsChanged([work()])
+        kittens = [inboxKitten, steve]
+        await controller.reportTask?.value
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(rows.map(\.text), ["Merge it?"])
+    }
+
+    func testAQuestionFromAThreadThatPassedWorkOnIsKeptIfSortingDoesntWork() async {
+        kittens = [inboxKitten]
+        controller.dispatchers.insert("w")
+        await finish(work(), report: "It's ready. Should I merge it? The review is in <t3-thread://v2/env/reviewer>.", sorted: "Sorry, I can't sort this.")
+        XCTAssertEqual(rows.map(\.kind), [.decision])
+        XCTAssertFalse(controller.hiddenThreads.contains("w"))
+    }
+
+    func testYourOwnThreadNamedLikeASummaryIsLeftAlone() async {
+        let title = "Shades summary: plan for the launch post"
+        let asking = ApprovalRequest(id: "mine", threadID: "own", threadTitle: title, kind: .command, summary: "Run: swift test", createdAt: clock)
+        func own(_ status: AgentStatus, _ approvals: [ApprovalRequest] = []) -> AgentThread {
+            AgentThread(id: "own", title: title, projectTitle: "Blog", status: status, model: "m", updatedAt: clock, pendingApprovals: approvals, projectPath: "/work/blog")
+        }
+        controller.threadsChanged([own(.waitingForApproval, [asking])])
+        await settle()
+        controller.threadsChanged([own(.completed)])
+        await settle()
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertTrue(backend.responses.isEmpty)
+        XCTAssertTrue(backend.archived.isEmpty)
+        XCTAssertEqual(stage.threads.map(\.id), ["own"])
+    }
+
+    func testASummaryThatHasOnlyJustStartedIsntTidiedAway() async {
+        kittens = [inboxKitten]
+        backend.holdStarts = true
+        let live = AgentThread(id: "thread-1", title: "Shades summary: Clawde: Fix login", projectTitle: nil, status: .idle, model: "m", updatedAt: clock)
+        controller.threadsChanged([live])
+        backend.reports["w"] = "The report."
+        controller.threadsChanged([live, work()])
+        for _ in 0..<50 where backend.sent.isEmpty { await Task.yield() }
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertTrue(backend.archived.isEmpty)
+    }
+
+    func testAKittenWithoutAnInboxGetsTheSameSummaryAsBefore() {
+        let report = String(repeating: "Worked through another file. ", count: 500) + "THE-LAST-LINE"
+        XCTAssertFalse(Prompts.summary(of: report, title: "t", failed: false).contains("The middle is cut"))
+        XCTAssertTrue(Prompts.sortReport(report, title: "t").contains("THE-LAST-LINE"))
     }
 
     func testNotesYouDidntAskForWaitTogether() async {
@@ -1691,6 +1776,36 @@ final class FlowTests: XCTestCase {
         await settle()
         XCTAssertTrue(routerPrompts.isEmpty)
         XCTAssertTrue(backend.sent.allSatisfy(\.prompt.attachments.isEmpty))
+    }
+
+    private func twoOpenDecisions() async throws -> (a: InboxEntry, b: InboxEntry) {
+        kittens = [inboxKitten]
+        await finish(work("a", title: "Clawde: Thread A"), report: "Report A.", sorted: "DECISION: Ship A?")
+        await finish(work("b", title: "Clawde: Thread B"), report: "Report B.", sorted: "DECISION: Ship B?")
+        controller.inboxPressed()
+        let rows = try XCTUnwrap(stage.inboxRows)
+        return (try XCTUnwrap(rows.first { $0.threadID == "a" }), try XCTUnwrap(rows.first { $0.threadID == "b" }))
+    }
+
+    func testWordsSaidForOneRowDontGoToTheNextYouClick() async throws {
+        let (a, b) = try await twoOpenDecisions()
+        controller.inboxAction(.reply(a))
+        controller.keyPressed(settings.talkKey)
+        controller.keyReleased(settings.talkKey)
+        controller.inboxAction(.reply(b))
+        await settle()
+        XCTAssertFalse(backend.sent.contains { $0.mode == .forward })
+        XCTAssertNotNil(stage.input, "B's box is still yours to use")
+    }
+
+    func testWordsSaidForARowDontBecomeAFix() async throws {
+        let (a, _) = try await twoOpenDecisions()
+        controller.inboxAction(.reply(a))
+        controller.keyPressed(settings.talkKey)
+        await controller.beginFix()
+        controller.keyReleased(settings.talkKey)
+        await settle()
+        XCTAssertFalse(backend.sent.contains { $0.prompt.title?.hasPrefix("Fix:") == true })
     }
 
     func testAQuestionForTheCatStaysAQuestionIfYouPressReplyWhileItsTranscribed() async throws {

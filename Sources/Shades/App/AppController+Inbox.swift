@@ -12,19 +12,26 @@ extension AppController {
     /// Anything an inbox kitten finished that isn't filed yet, however long ago. Runs on every list, so a finish while
     /// the app was off looks exactly like one while it was on, and no event has to be caught.
     func fileOwedReports() {
-        let candidates = watch.threads.filter { inbox.owes($0) && !filing.contains($0.id) && !hiddenThreads.contains($0.id) }
+        let candidates = watch.threads.filter { thread in
+            inbox.owes(thread) && !filing.contains(thread.id) && !hiddenThreads.contains(thread.id)
+                && !notForInbox.contains(thread.lastRunID ?? "")
+        }
         // So kittens are only read from disk when there's something to check.
         guard !candidates.isEmpty else { return }
         let kittens = loadKittens()
-        guard !kittens.isEmpty else { return }
         var skipped = false
         for thread in candidates {
-            if kittens.contains(where: { $0.usesInbox && KittenBoard.belongs(thread, to: $0) }) {
+            let owners = kittens.filter { KittenBoard.belongs(thread, to: $0) }
+            if owners.contains(where: \.usesInbox) {
                 filing.insert(thread.id)
                 reportOn(thread, failed: thread.status == .failed)
-            } else {
-                // Saved, so turning the inbox on for its kitten later doesn't bring this up again.
-                // shortcut: this grows by a short line per thread, prune it if that ever matters.
+                continue
+            }
+            if let run = thread.lastRunID { notForInbox.insert(run) }
+            // Saved for a kitten that just has no inbox, so turning it on later doesn't bring this up again. A thread
+            // that matches no kitten could be one whose file can't be read right now, so it isn't written off.
+            // shortcut: this grows by a short line per thread, prune it if that ever matters.
+            if !owners.isEmpty {
                 inbox.skip(thread)
                 skipped = true
             }
@@ -36,8 +43,10 @@ extension AppController {
     /// means it's filed on the next launch.
     func file(_ report: String?, of thread: AgentThread, failed: Bool, startedAnother next: String?) async {
         let sorted = await sort(report, of: thread, failed: failed)
-        // All it did was start another thread, unless it also has something for you.
-        if let next, !failed, sorted?.decision == nil, sorted?.shipped == nil {
+        // All it did was start another thread, unless it also has something for you. With no sorted answer
+        // to go on, a question mark is the one sign of that, and a false alarm beats a lost report.
+        let mayBeAsking = sorted == nil && report?.contains("?") == true
+        if let next, !failed, !mayBeAsking, sorted?.decision == nil, sorted?.shipped == nil {
             passedOn(thread, to: next)
             inbox.skip(thread)
             keepInbox()
@@ -54,7 +63,9 @@ extension AppController {
     private func sort(_ report: String?, of thread: AgentThread, failed: Bool) async -> SortedReport? {
         if failed { return SortedReport(decision: opening(of: report).map(CatWords.failedRow) ?? CatWords.failedWithoutReport) }
         guard let report, report.contains(where: { !$0.isWhitespace }) else {
-            return SortedReport(decision: CatWords.reportUnreadable)
+            // It may be saying nothing at all, so this doesn't take the place of what's already waiting on you.
+            let hasRow = inbox.entries.contains { $0.threadID == thread.id }
+            return hasRow ? SortedReport(note: CatWords.reportUnreadable) : SortedReport(decision: CatWords.reportUnreadable)
         }
         let prompt = summaryPrompt(Prompts.sortReport(report, title: thread.title), about: thread)
         let reply = await firstOf(seconds: Self.summaryTimeout) { [self] in await summarize(prompt) }
@@ -138,6 +149,7 @@ extension AppController {
         guard entry.questionID == nil else { return }
         stage.hideInput()
         inboxReplyIsOpen = true
+        boxesOpened += 1
         stage.showInput(InputRequest(
             placeholder: CatWords.replyPlaceholder(talkKey: settings.talkKey),
             caption: entry.text,

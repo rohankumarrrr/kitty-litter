@@ -151,7 +151,7 @@ public enum Prompts {
         to decide or do next. If the report asks them a question, include the question and their options. \
         Plain text only, with no markdown, no preamble and no mention of "the report". Don't use any tools.
 
-        \(reportBlock(report, title: title, doing: "summarize"))
+        \(reportBlock(String(report.prefix(reportLimit)), title: title, doing: "summarize"))
         """
     }
 
@@ -167,16 +167,20 @@ public enum Prompts {
 
         Write to them directly. Plain text only, with no markdown, no preamble and no mention of "the report" or "the agent". Don't use any tools.
 
-        \(reportBlock(report, title: title, doing: "sort"))
+        \(reportBlock(keepingBothEnds(report), title: title, doing: "sort"))
         """
     }
 
     private static let reportLimit = 12_000
 
+    /// A long report opens with what happened and ends on what's needed from them, so it's the middle that goes.
+    private static func keepingBothEnds(_ report: String) -> String {
+        guard report.count > reportLimit else { return report }
+        return "\(report.prefix(reportLimit / 2))\n\n(The middle is cut.)\n\n\(report.suffix(reportLimit / 2))"
+    }
+
     private static func reportBlock(_ report: String, title: String, doing: String) -> String {
-        // A long report opens with what happened and ends on what's needed from them, so it's the middle that goes.
-        let kept = report.count <= reportLimit ? report : "\(report.prefix(reportLimit / 2))\n\n(The middle is cut.)\n\n\(report.suffix(reportLimit / 2))"
-        let quoted = "Task: \(title)\n\n\(kept)".replacingOccurrences(
+        let quoted = "Task: \(title)\n\n\(report)".replacingOccurrences(
             of: #"<\s*/?\s*report\b[^>]*>"#,
             with: "(report tag)",
             options: [.regularExpression, .caseInsensitive]

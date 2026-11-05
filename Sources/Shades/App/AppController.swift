@@ -81,11 +81,15 @@ final class AppController {
     var filing: Set<String> = []
     /// Summaries that were already running when the app started, which nobody's following.
     var leftoverSummaries: Set<String> = []
+    /// Runs that don't belong to a kitten with an inbox, so nobody reads the kittens again for them.
+    var notForInbox: Set<String> = []
     /// Whether the bubble should mention the inbox.
     var inboxNudge = false
     var inboxReplyIsOpen = false
-    /// Whether what's being said belongs in the box that was up when the key went down.
-    var talkIsForBox = false
+    /// Counts the boxes that take what you say, so words meant for one can't land in the next.
+    var boxesOpened = 0
+    /// The box what's being said belongs in, fixed when the key goes down.
+    var talkBox: Int?
     var inboxSaveFailed = false
     var latestThreads: [AgentThread] = []
     var threadListArrived = false

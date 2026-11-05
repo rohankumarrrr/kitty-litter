@@ -92,7 +92,8 @@ extension AppController {
     /// A summary still running when the app last stopped carries on without it, and it's reading
     /// a report just the same. So nothing it says or asks for gets through, and it's tidied up as usual.
     func tidyLeftoverSummaries(_ threads: [AgentThread]) {
-        for thread in threads where thread.title.hasPrefix(Self.summaryTitle) {
+        // They're never in a project, which keeps a thread of yours with a title like that out of this.
+        for thread in threads where thread.title.hasPrefix(Self.summaryTitle) && thread.projectPath == nil {
             if hiddenThreads.insert(thread.id).inserted {
                 watch.markQuick(thread.id)
                 leftoverSummaries.insert(thread.id)
@@ -101,7 +102,7 @@ extension AppController {
             for request in thread.pendingApprovals {
                 Task { [backend] in try? await backend.respond(to: request, with: .decline) }
             }
-            if !thread.status.isActive {
+            if !thread.status.isActive, thread.status != .idle {
                 leftoverSummaries.remove(thread.id)
                 Task { [backend] in try? await backend.archive(threadID: thread.id) }
             }

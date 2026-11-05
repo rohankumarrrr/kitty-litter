@@ -5,6 +5,7 @@ import ShadesCore
 extension AppController {
     /// A box is up that what you say belongs in, so nothing needs a look at the screen.
     var boxTakesVoice: Bool { fixIsOpen || inboxReplyIsOpen }
+    private var talkBoxIsStillUp: Bool { boxTakesVoice && talkBox == boxesOpened }
 
     func keyPressed(_ key: HoldKey) {
         if key == settings.talkKey {
@@ -28,15 +29,15 @@ extension AppController {
             say(CatWords.replyFirst)
             return
         }
-        talkIsForBox = boxTakesVoice
+        talkBox = boxTakesVoice ? boxesOpened : nil
         // The look happens as the key goes down: that's the moment you mean.
-        if !talkIsForBox { talkLook = startLook(CaptureOptions()) }
+        if talkBox == nil { talkLook = startLook(CaptureOptions()) }
         guard beginListening(.talk) else {
             talkLook = nil
             return
         }
         stage.catWake()
-        if !talkIsForBox {
+        if talkBox == nil {
             stage.hideInput()
             heard = ""
             renderBubble()
@@ -53,9 +54,9 @@ extension AppController {
             voiceMode = nil
             refreshStatus()
             let text = transcript.cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-            if talkIsForBox {
+            if talkBox != nil {
                 // Saying it counts as pressing Return. If the box has gone, you meant never mind, not ask the cat.
-                if !text.isEmpty, boxTakesVoice { stage.submitInput(text) }
+                if !text.isEmpty, talkBoxIsStillUp { stage.submitInput(text) }
                 return
             }
             let capture = talkLook
@@ -128,8 +129,8 @@ extension AppController {
 
     func heardSoFar(_ text: String) {
         guard hearing, voiceMode == .talk else { return }
-        if talkIsForBox {
-            if boxTakesVoice { stage.setInputText(text) }
+        if talkBox != nil {
+            if talkBoxIsStillUp { stage.setInputText(text) }
         } else {
             heard = text
             renderBubble()
