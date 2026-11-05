@@ -80,7 +80,12 @@ public enum Kittens {
                 covers: profile.covers,
                 folder: home.standardizedFileURL.path,
                 project: profile.project.map {
-                    URL(fileURLWithPath: NSString(string: $0).expandingTildeInPath, relativeTo: home).standardizedFileURL.path
+                    // A kitten folder that's a link comes without its trailing slash, which would
+                    // make a relative path start one folder up.
+                    URL(
+                        fileURLWithPath: NSString(string: $0).expandingTildeInPath,
+                        relativeTo: URL(fileURLWithPath: home.path, isDirectory: true)
+                    ).standardizedFileURL.path
                 },
                 planned: profile.planned ?? false,
                 color: profile.color.flatMap { UInt32($0.replacingOccurrences(of: "#", with: ""), radix: 16) },

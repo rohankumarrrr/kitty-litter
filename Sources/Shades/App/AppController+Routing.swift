@@ -62,8 +62,12 @@ extension AppController {
 
     /// Gives your words to a kitten, in a new thread in its project. T3 writes the title.
     func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?) {
-        // As with a session, a kitten with full access doesn't get to see text from a page.
-        let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess
+        // As with a session, a kitten with full access doesn't get to see text from a page. Nor does
+        // one whose thread would count as a kitten's that isn't meant to see it, in a project they share.
+        let sharesWithScreenless = loadKittens().contains {
+            !$0.seesScreen && KittenBoard.belongs(title: "", projectPath: kitten.project, to: $0)
+        }
+        let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
         let shared = seesScreen ? snapshot : nil
         flow = Task {
             guard let projectID = await backend.projectID(atPath: kitten.project) else {

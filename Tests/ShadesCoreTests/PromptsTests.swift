@@ -105,10 +105,16 @@ final class PromptsTests: XCTestCase {
             try Data(json.utf8).write(to: folder.appendingPathComponent("kitten.json"))
         }
         try FileManager.default.createDirectory(at: root.appendingPathComponent("cali-app"), withIntermediateDirectories: true)
+        let keptElsewhere = root.appendingPathComponent("elsewhere/linked")
+        try FileManager.default.createDirectory(at: keptElsewhere, withIntermediateDirectories: true)
+        try Data(#"{"name":"Linked","role":"Scheduling","covers":"the calendar","project":"../cali-app"}"#.utf8)
+            .write(to: keptElsewhere.appendingPathComponent("kitten.json"))
+        try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("linked"), withDestinationURL: keptElsewhere)
         let kittens = Dictionary(uniqueKeysWithValues: Kittens.load(from: root).map { ($0.name, $0) })
         XCTAssertEqual(kittens["Steve"]?.project, kittens["Steve"]?.folder)
         XCTAssertEqual(kittens["Pepper"]?.project, FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("code/app").path)
         XCTAssertEqual(kittens["Cali"]?.project, root.appendingPathComponent("cali-app").standardizedFileURL.path)
+        XCTAssertEqual(kittens["Linked"]?.project, kittens["Cali"]?.project, "a linked folder is still where the path starts")
     }
 
     func testAKittenInAnotherProjectIsToldWhereItsInstructionsAre() {

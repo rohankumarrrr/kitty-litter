@@ -938,14 +938,28 @@ final class FlowTests: XCTestCase {
         XCTAssertNotNil(findings.first { !$0.ok && $0.check == "kitten: Pepper" })
     }
 
+    /// Its thread would count as the other kitten's too, and a follow-up to it gets no screen.
+    func testAKittenSharingAProjectWithOneThatDoesntSeeTheScreenDoesntSeeItEither() async {
+        var screenless = clawde
+        screenless.project = "/code/app"
+        kittens = [screenless, pepper]
+        backend.projects["/code/app"] = "project-app"
+        backend.replies = [[.finished(fullText: "KITTEN: 2")], [.finished(fullText: "Started.")]]
+        await ask("how's the app doing?")
+        await controller.frontierTask?.value
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-app")
+        assertLeftOut(backend.sent[1].prompt)
+    }
+
     func testAKittensScreenBlockIsLookedForWhereItsThreadsStart() async {
         var away = pepper
         away.seesScreen = false
         kittens = [away]
         backend.projects["/code/app"] = "project-app"
         screenBlockGaps = ["/code/app": ["sandbox.enabled"]]
-        let findings = await controller.runHealthCheck()
-        XCTAssertEqual(findings.first { !$0.ok && $0.check == "kitten: Pepper" }?.problem, "Pepper isn't meant to see your screen, but nothing stops them.")
+        let finding = await controller.runHealthCheck().first { !$0.ok && $0.check == "kitten: Pepper" }
+        XCTAssertEqual(finding?.problem, "Pepper isn't meant to see your screen, but nothing stops them.")
+        XCTAssertEqual(finding?.fix, "Put the screen block from docs/kittens.md in the folder they work in, and run them on a Claude model.")
     }
 
     func testAKittensNumberThatIsntOnTheListGoesNowhere() async {

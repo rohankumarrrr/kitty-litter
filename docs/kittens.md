@@ -149,7 +149,7 @@ Telling an agent not to look isn't enough. Agents run as you, so they can open w
 
 ### What's enforced
 
-Shades leaves your screen out of everything it sends to a kitten with `seesScreen: false`. That covers threads in its project, whatever the project is called, and any thread traced back to one through whoever started it, whatever that thread is called. A thread an agent started that can't be traced gets no screen either.
+Shades leaves your screen out of everything it sends to a kitten with `seesScreen: false`. That covers threads in its project, whatever the project is called, including ones another kitten starts there, and any thread traced back to one through whoever started it, whatever that thread is called. A thread an agent started that can't be traced gets no screen either.
 
 The screen block is `.claude/settings.json` in the folder the kitten's threads start in: its `project` if it has one, and otherwise its own. Claude Code enforces it, and the self-check says so if it's missing:
 
