@@ -326,6 +326,8 @@ public protocol AgentBackend: AnyObject, Sendable {
     func open(threadID: String)
     /// The project registered at this folder, if any.
     func projectID(atPath path: String) async -> String?
+    /// Registers this folder as a project, and gives back its ID.
+    func addProject(atPath path: String, title: String) async throws -> String
     /// Takes a thread out of T3 Code's lists. It can still be read there.
     func archive(threadID: String) async throws
     /// Marks a finished thread as dealt with, without hiding it.
@@ -346,6 +348,7 @@ public extension AgentBackend {
         AsyncThrowingStream { $0.finish() }
     }
     func projectID(atPath path: String) async -> String? { nil }
+    func addProject(atPath path: String, title: String) async throws -> String { throw CocoaError(.featureUnsupported) }
     func archive(threadID: String) async throws {}
     func settle(threadID: String) async throws {}
     func answer(_ question: AgentQuestion, with answers: [String]) async throws {}

@@ -102,11 +102,19 @@ extension AppController {
         }
         let briefs = await briefs(for: sessions)
         let kittens = owners.filter { !$0.planned }
+        let model = settings.quickModel
+        let projectID: String
+        do {
+            projectID = try await routerProjectID(for: model)
+        } catch {
+            return catSays(CatWords.problem(error, while: .agents))
+        }
         let prompt = AgentPrompt(
             title: String(words.prefix { !$0.isNewline }.prefix(60)),
             text: Prompts.quick(question: words, snapshot: nil, sessions: briefs, kittens: kittens),
-            model: settings.quickModel,
-            runtimeMode: settings.quickMode
+            model: model,
+            runtimeMode: settings.quickMode,
+            projectID: projectID
         )
         var outcome: ReplyHoldback.Outcome?
         if let current { outcome = await routerTurn(backend.followUp(threadID: current, prompt)) }

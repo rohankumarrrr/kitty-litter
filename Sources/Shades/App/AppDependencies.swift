@@ -20,6 +20,9 @@ struct AppDependencies {
     var fileExists: (String) -> Bool = { _ in true }
     /// What's missing from what keeps a kitten in this folder off your screen.
     var screenBlockGaps: (String) -> [String] = { _ in [] }
+    /// The folder the router runs in, once what keeps it from passing your screen on is in place. `nil` if that
+    /// can't be done, and then the router doesn't run.
+    var routerFolder: () -> String? = { nil }
     /// Where each self-check's findings go.
     var reportHealth: ([HealthFinding]) -> Void = { _ in }
     /// What was in the inbox when the app last stopped.

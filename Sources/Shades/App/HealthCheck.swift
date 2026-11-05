@@ -39,6 +39,10 @@ struct HealthFacts: Equatable {
     var kittensWithoutInstructions: [String] = []
     /// Kittens that aren't meant to see your screen, with nothing to stop them.
     var kittensOffScreenInNameOnly: [String] = []
+    /// Why the router won't run, if it won't: no folder to keep it from passing your screen on, a model that
+    /// doesn't read it, or what T3 said when asked for the folder's project.
+    var frontDoorProblem: FrontDoorProblem?
+    var frontDoorProjectTrouble: String?
     var inboxSaves = true
     /// Whether finished threads say which run they last finished, which is how the inbox tells reports apart.
     var t3GivesRunIDs = true
@@ -118,6 +122,31 @@ enum HealthCheck {
                 problem: "\(name) isn't meant to see your screen, but nothing stops them.",
                 fix: "Put the screen block from docs/kittens.md in their folder, and run them on a Claude model."
             ))
+        }
+        switch (facts.frontDoorProblem, facts.frontDoorProjectTrouble) {
+        case (.noFolder?, _):
+            results.append(HealthFinding(
+                check: "front door",
+                ok: false,
+                problem: "I can't get the folder I answer from ready, so I won't take questions.",
+                fix: "Check that I can write to my folder in Application Support."
+            ))
+        case (.notClaude?, _):
+            results.append(HealthFinding(
+                check: "front door",
+                ok: false,
+                problem: "My front door model doesn't read Claude's settings, so I won't take questions, since nothing would stop it passing your screen to another thread.",
+                fix: "Choose a Claude model for Front door model in my settings."
+            ))
+        case (nil, let trouble?):
+            results.append(HealthFinding(
+                check: "front door",
+                ok: false,
+                problem: "T3 won't give me the project I answer from, so I won't take questions. \(trouble)",
+                fix: "Open T3 Code, and check it still has a project called Shades router."
+            ))
+        case (nil, nil):
+            results.append(.good("front door"))
         }
         results.append(facts.skillsInstalled ? .good("kitten skills") : HealthFinding(
             check: "kitten skills",
