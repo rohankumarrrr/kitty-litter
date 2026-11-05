@@ -84,7 +84,7 @@ extension AppController {
         let briefs = await briefs(for: sessions)
         guard generation == replyGeneration else { return }
         roster = sessions
-        kittens = loadKittens()
+        kittens = loadKittens().filter { !$0.planned }
 
         let prompt = AgentPrompt(
             // A question can run over several lines, and a title can't.

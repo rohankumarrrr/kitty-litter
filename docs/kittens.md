@@ -25,6 +25,8 @@ A kitten is a folder in `~/kittens`, registered as a T3 project:
 }
 ```
 
+Two more fields are optional. `color` is its jacket in the kitten view, like `"#b3261e"`. `planned: true` means it shows up with the others but isn't taking work yet, which is handy for a kitten you've named but haven't written instructions for.
+
 Shades reads `covers` to decide what goes to a kitten, so write it the way you'd brief someone new. The folder is read fresh for every question, so adding a kitten only takes the folder and this:
 
 ```bash
@@ -32,6 +34,19 @@ t3 project add ~/kittens/steve-pawsniak
 ```
 
 Keep kittens out of this repo. They're full of personal details, which is why they live in your home folder.
+
+## Seeing them
+
+Normally you only see Shades. Shift-click him, or choose Kittens from his menu, to see every kitten and how it's doing:
+
+![Four kittens, showing each state](images/kittens.png)
+
+- **Working**, running around, with a count if it's on several things
+- **Needs you**, when it's waiting on an approval or has a question
+- **Idle**, asleep
+- **Not set up yet**, for a `planned` kitten
+
+Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the kitten's project, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
 
 ## How they work
 

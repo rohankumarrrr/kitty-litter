@@ -12,6 +12,7 @@ final class AppStage: CatStage {
     let input = InputPanel()
     let pill = SayPill()
     let dashboard = DashboardPanel()
+    let kittens = KittenPanel()
     let settingsPanel = SettingsPanel()
     let menuBar = MenuBar()
     weak var controller: AppController?
@@ -21,8 +22,8 @@ final class AppStage: CatStage {
     init() {
         bubble.anchor = { [weak self] in
             guard let self else { return (.zero, .zero) }
-            // Stack above the input panel if one's open, so both stay readable.
-            let frame = self.input.isVisible ? self.input.frame : self.cat.destinationFrame
+            // Stack above whatever else is open over the cat, so both stay readable.
+            let frame = self.input.isVisible ? self.input.frame : self.kittens.isVisible ? self.kittens.frame : self.cat.destinationFrame
             return (frame, self.cat.visibleFrame)
         }
         bubble.onDismiss = { [weak self] byClick in self?.controller?.bubbleDismissed(byClick: byClick) }
@@ -44,13 +45,25 @@ final class AppStage: CatStage {
             guard let self else { return }
             self.pill.follow(self.pillAnchor, in: self.cat.visibleFrame)
             self.input.reposition()
+            self.kittens.reposition()
             self.bubble.reposition()
         }
         cat.onClick = { [weak self] in self?.controller?.catClicked() }
+        cat.onShiftClick = { [weak self] in self?.controller?.kittensPressed() }
         cat.onStroke = { [weak self] in self?.catPet() }
         cat.onRightClick = { [weak self] event in
             guard let self else { return }
             self.menuBar.popUpMenu(at: event.locationInWindow, in: self.cat.view)
+        }
+
+        kittens.anchor = { [weak self] in
+            guard let self else { return (.zero, .zero) }
+            return (self.cat.destinationFrame, self.cat.visibleFrame)
+        }
+        kittens.onOpen = { [weak self] id in self?.controller?.openThread(id) }
+        kittens.onChange = { [weak self] in
+            self?.bubble.reposition()
+            self?.updateEscape()
         }
 
         dashboard.anchor = { [weak self] in self?.menuBar.corner ?? .zero }
@@ -60,6 +73,7 @@ final class AppStage: CatStage {
         menuBar.onAsk = { [weak self] in self?.controller?.askPressed() }
         menuBar.onFix = { [weak self] in self?.controller?.fixPressed() }
         menuBar.onDashboard = { [weak self] in self?.toggleDashboard() }
+        menuBar.onKittens = { [weak self] in self?.controller?.kittensPressed() }
         menuBar.onSettings = { [weak self] in self?.controller?.settingsPressed() }
         menuBar.onOpenThread = { [weak self] id in self?.controller?.openThread(id) }
     }
@@ -152,6 +166,18 @@ final class AppStage: CatStage {
         input.cancel()
     }
 
+    // MARK: - The kittens
+
+    var isKittensVisible: Bool { kittens.isVisible }
+
+    func showKittens(_ statuses: [KittenStatus]) {
+        kittens.show(statuses)
+    }
+
+    func hideKittens() {
+        kittens.hide()
+    }
+
     // MARK: - Everything else
 
     func showThreads(_ threads: [AgentThread], status: String) {
@@ -178,7 +204,7 @@ final class AppStage: CatStage {
 
     /// Esc is only taken from other apps while there's something up for it to dismiss.
     private func updateEscape() {
-        let wanted = bubble.isVisible || dashboard.isVisible
+        let wanted = bubble.isVisible || dashboard.isVisible || kittens.isVisible
         if wanted, escape == nil {
             escape = Hotkeys.shared.register(keyCode: kVK_Escape, modifiers: 0) { [weak self] in self?.escapePressed() }
         } else if !wanted, let id = escape {
@@ -192,6 +218,8 @@ final class AppStage: CatStage {
             input.cancel()
         } else if dashboard.isVisible {
             dashboard.hide()
+        } else if kittens.isVisible {
+            kittens.hide()
         } else {
             controller?.bubbleDismissed(byClick: false)
         }

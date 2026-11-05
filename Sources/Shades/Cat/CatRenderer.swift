@@ -8,22 +8,24 @@ final class CatRenderer {
     private struct Key: Hashable {
         var pose: CatPose
         var theme: CatTheme
+        var jacket: UInt32?
     }
 
     private var cache: [Key: CGImage] = [:]
 
-    func image(for pose: CatPose, theme: CatTheme) -> CGImage {
-        let key = Key(pose: pose, theme: theme)
+    func image(for pose: CatPose, theme: CatTheme, jacket: UInt32? = nil) -> CGImage {
+        let key = Key(pose: pose, theme: theme, jacket: jacket)
         if let image = cache[key] { return image }
-        let image = Self.render(Self.pixels(for: pose, theme: theme))
+        let image = Self.render(Self.pixels(for: pose, theme: theme, jacket: jacket))
         cache[key] = image
         return image
     }
 
     /// Premultiplied RGBA, row by row from the top.
-    nonisolated static func pixels(for pose: CatPose, theme: CatTheme) -> [UInt8] {
+    nonisolated static func pixels(for pose: CatPose, theme: CatTheme, jacket: UInt32? = nil) -> [UInt8] {
         var palette = theme.palette
         if let eyes = pose.glint.color { palette["g"] = eyes }
+        if let jacket { palette["j"] = jacket }
 
         let size = CatArt.grid
         var bytes = [UInt8](repeating: 0, count: size * size * 4)

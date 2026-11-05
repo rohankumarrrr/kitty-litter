@@ -31,6 +31,7 @@ final class CatController {
     private var strokeAt = Date.distantPast
 
     var onClick: (() -> Void)?
+    var onShiftClick: (() -> Void)?
     var onRightClick: ((NSEvent) -> Void)?
     var onStroke: (() -> Void)?
     /// The cat's window moved, so whatever hangs off it should follow.
@@ -49,7 +50,7 @@ final class CatController {
         view.onAppearanceChange = { [weak self] in self?.apply() }
         view.onMouseDown = { [weak self] _ in self?.mouseDown() }
         view.onMouseDragged = { [weak self] _ in self?.mouseDragged() }
-        view.onMouseUp = { [weak self] _ in self?.mouseUp() }
+        view.onMouseUp = { [weak self] event in self?.mouseUp(event) }
         view.onRightMouseDown = { [weak self] event in self?.onRightClick?(event) }
 
         // These events don't need any permission, and only wake us while the mouse moves.
@@ -253,14 +254,18 @@ final class CatController {
         onMove?()
     }
 
-    private func mouseUp() {
+    private func mouseUp(_ event: NSEvent) {
         defer {
             dragStart = nil
             dragging = false
             updateClickThrough()
         }
         guard dragging else {
-            onClick?()
+            if event.modifierFlags.contains(.shift) {
+                onShiftClick?()
+            } else {
+                onClick?()
+            }
             return
         }
         let origin = ScreenBounds.clamp(panel.frame.origin, size: Self.size, to: Self.screens())

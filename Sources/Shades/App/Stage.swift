@@ -59,6 +59,12 @@ protocol CatStage: AnyObject {
     func submitInput(_ text: String)
     func hideInput()
 
+    // The kittens
+    var isKittensVisible: Bool { get }
+    /// Opens the view of all the kittens, or brings it up to date if it's open.
+    func showKittens(_ statuses: [KittenStatus])
+    func hideKittens()
+
     // Everything else
     func showThreads(_ threads: [AgentThread], status: String)
     func toggleDashboard()

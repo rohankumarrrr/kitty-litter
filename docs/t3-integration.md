@@ -122,6 +122,8 @@ The shell stream sends a `snapshot`, then `thread.updated`, `thread.removed`, `p
 
 A blocking `pendingRuntimeRequest` overrides this: `user_input` is `waitingForAnswer`, and the approval kinds are `waitingForApproval`.
 
+A thread's turn can end while work it started carries on, and it wakes up again when that work hands back. So a `completed` thread with anything in `pendingBackgroundTasks`, or with an active thread whose `lineage.parentThreadId` is this one, counts as `running`. The app also waits a few seconds before reporting a thread as finished, to cover the gap between a child finishing and its parent waking.
+
 ### Approvals
 
 The shell only gives `pendingRuntimeRequest {id, kind, createdAt, blocking}`. The words are on a turn item with `type: "approval_request"`, whose ID is `turn-item:runtime-request:<encodeURIComponent(requestId)>`.

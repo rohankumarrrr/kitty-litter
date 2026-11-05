@@ -273,3 +273,59 @@ final class InputPanelKeysTests: XCTestCase {
         XCTAssertFalse(InputPanel.returnSends([.shift, .capsLock]))
     }
 }
+
+final class KittenBoardTests: XCTestCase {
+    private let at = Date(timeIntervalSince1970: 1_000)
+    private let steve = Kitten(name: "Steve", role: "Professional", covers: "", folder: "/k/steve")
+    private let pepper = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper", planned: true)
+
+    private func thread(_ id: String, _ status: AgentStatus, title: String = "Work", project: String? = "Steve", age: TimeInterval = 0) -> AgentThread {
+        AgentThread(id: id, title: title, projectTitle: project, status: status, model: "m", updatedAt: at.addingTimeInterval(-age))
+    }
+
+    private func status(_ threads: [AgentThread]) -> KittenStatus {
+        KittenBoard.statuses(kittens: [steve], threads: threads)[0]
+    }
+
+    func testIdleWithNothingToOpen() {
+        let idle = status([thread("x", .running, project: "Someone else")])
+        XCTAssertEqual(idle.state, .idle)
+        XCTAssertNil(idle.threadID)
+    }
+
+    func testIdleOpensTheLatestThing() {
+        let idle = status([thread("old", .completed, age: 100), thread("new", .completed, age: 1)])
+        XCTAssertEqual(idle.state, .idle)
+        XCTAssertEqual(idle.threadID, "new")
+    }
+
+    func testCountsWhatItsWorkingOn() {
+        let working = status([thread("a", .running, age: 5), thread("b", .starting, age: 1), thread("c", .completed)])
+        XCTAssertEqual(working.state, .working(sessions: 2))
+        XCTAssertEqual(working.threadID, "b")
+    }
+
+    func testAThreadInAnotherProjectCountsIfItCarriesTheName() {
+        let working = status([thread("site", .running, title: "Steve: Shrink logos", project: "personal-website")])
+        XCTAssertEqual(working.state, .working(sessions: 1))
+    }
+
+    func testWhatNeedsYouComesBeforeEverythingElse() {
+        let asking = status([thread("a", .running, age: 0), thread("q", .waitingForAnswer, age: 50)])
+        XCTAssertEqual(asking.state, .needsYou)
+        XCTAssertEqual(asking.threadID, "q")
+    }
+
+    func testKittensThatArentSetUpGoLastAndDontMove() {
+        let statuses = KittenBoard.statuses(kittens: [pepper, steve], threads: [])
+        XCTAssertEqual(statuses.map(\.kitten.name), ["Steve", "Pepper"])
+        XCTAssertEqual(statuses[1].state, .notSetUp)
+        XCTAssertEqual(statuses[1].pose(tick: 0), statuses[1].pose(tick: 7))
+    }
+
+    func testAJacketTakesItsColour() {
+        let pose = CatPose(frame: .sit)
+        XCTAssertEqual(CatRenderer.pixels(for: pose, theme: .light), CatRenderer.pixels(for: pose, theme: .light, jacket: nil))
+        XCTAssertNotEqual(CatRenderer.pixels(for: pose, theme: .light), CatRenderer.pixels(for: pose, theme: .light, jacket: 0xb3261e))
+    }
+}

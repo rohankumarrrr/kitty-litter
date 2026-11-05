@@ -87,6 +87,8 @@ final class DemoDriver {
             hold(.talk)
         case "dictate":
             hold(.dictate)
+        case "kittens":
+            controller.kittensPressed()
         case "dash":
             stage.toggleDashboard()
         case "settings":

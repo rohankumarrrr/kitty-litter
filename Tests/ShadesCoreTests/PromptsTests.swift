@@ -46,6 +46,7 @@ final class PromptsTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         for (name, json) in [
             ("steve", #"{"name":"Steve","role":"Professional","covers":"resumes"}"#),
+            ("pepper", ##"{"name":"Pepper","role":"Finance","covers":"money","planned":true,"color":"#b3261e"}"##),
             ("broken", "not json"),
             ("empty", ""),
         ] {
@@ -54,9 +55,13 @@ final class PromptsTests: XCTestCase {
             if !json.isEmpty { try Data(json.utf8).write(to: folder.appendingPathComponent("kitten.json")) }
         }
         let kittens = Kittens.load(from: root)
-        XCTAssertEqual(kittens.map(\.name), ["Steve"])
-        XCTAssertEqual(kittens.first?.covers, "resumes")
-        XCTAssertTrue(kittens.first?.folder.hasSuffix("/steve") == true)
+        XCTAssertEqual(kittens.map(\.name), ["Pepper", "Steve"])
+        XCTAssertEqual(kittens[1].covers, "resumes")
+        XCTAssertTrue(kittens[1].folder.hasSuffix("/steve"))
+        XCTAssertFalse(kittens[1].planned)
+        XCTAssertNil(kittens[1].color)
+        XCTAssertTrue(kittens[0].planned)
+        XCTAssertEqual(kittens[0].color, 0xb3261e)
         XCTAssertEqual(Kittens.load(from: root.appendingPathComponent("nowhere")), [])
     }
 

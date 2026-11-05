@@ -21,7 +21,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     init() {
         threads = [
-            AgentThread(id: "demo-tidy", title: "Tidy up the pricing page", projectTitle: "site", status: .running, model: "claude-opus-5-5", updatedAt: Date()),
+            AgentThread(id: "demo-tidy", title: "Steve Pawsniak: Tidy up the pricing page", projectTitle: "site", status: .running, model: "claude-opus-5-5", updatedAt: Date()),
             AgentThread(id: "demo-research", title: "Compare pixel fonts", projectTitle: nil, status: .running, model: "gpt-6.1-sol", updatedAt: Date()),
         ]
     }
@@ -341,6 +341,14 @@ enum Demo {
         var keys: DemoKeys
     }
 
+    /// Enough of a team to show every state in the kitten view.
+    static let kittens = [
+        Kitten(name: "Steve Pawsniak", role: "Professional", covers: "Their career, resume and interviews.", folder: "/demo/steve"),
+        Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: 0xb3261e),
+        Kitten(name: "Cali", role: "Scheduling", covers: "Their time.", folder: "/demo/cali", planned: true, color: 0x1e7fb3),
+        Kitten(name: "Furbit", role: "Health", covers: "Their health.", folder: "/demo/furbit", planned: true, color: 0x2e9e4f),
+    ]
+
     static func make() -> Parts {
         let backend = DemoBackend()
         let context = DemoContext()
@@ -354,7 +362,8 @@ enum Demo {
             inserter: inserter,
             keys: keys,
             settings: Settings(),
-            saveSettings: { _ in print("[demo] settings aren't saved in demo mode") }
+            saveSettings: { _ in print("[demo] settings aren't saved in demo mode") },
+            kittens: { Demo.kittens }
         )
         return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys)
     }

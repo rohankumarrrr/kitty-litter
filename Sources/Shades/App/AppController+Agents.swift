@@ -23,6 +23,7 @@ extension AppController {
 
         stage.catAgentsBusy(watch.isBusy)
         stage.showThreads(watch.rows(at: now()), status: watch.summary)
+        if stage.isKittensVisible { stage.showKittens(kittenStatuses) }
         updateVocabulary(threads)
 
         for event in events {
@@ -35,6 +36,19 @@ extension AppController {
             case .hasQuestion(let question):
                 announce(question)
             }
+        }
+    }
+
+    var kittenStatuses: [KittenStatus] {
+        KittenBoard.statuses(kittens: loadKittens(), threads: latestThreads)
+    }
+
+    /// Normally there's just Shades. This shows everyone else, and how they're doing.
+    func kittensPressed() {
+        if stage.isKittensVisible {
+            stage.hideKittens()
+        } else {
+            stage.showKittens(kittenStatuses)
         }
     }
 

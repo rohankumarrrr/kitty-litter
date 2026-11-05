@@ -18,6 +18,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     var onAsk: (() -> Void)?
     var onFix: (() -> Void)?
     var onDashboard: (() -> Void)?
+    var onKittens: (() -> Void)?
     var onSettings: (() -> Void)?
     var onOpenThread: ((String) -> Void)?
     /// Extra items, such as setting up permissions or demo mode's controls.
@@ -90,6 +91,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         addAction("Ask...", shortcut: Shortcut.askLabel) { [weak self] in self?.onAsk?() }
         addAction("Fix what I'm looking at", shortcut: Shortcut.fixLabel) { [weak self] in self?.onFix?() }
         addAction("Dashboard") { [weak self] in self?.onDashboard?() }
+        addAction("Kittens", shortcut: "Shift-click the cat") { [weak self] in self?.onKittens?() }
 
         if !extras.isEmpty {
             menu.addItem(.separator())

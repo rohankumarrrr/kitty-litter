@@ -43,6 +43,15 @@ enum CatWords {
     }
     static func failedCaption(_ thread: AgentThread) -> String { "Hit a snag: \(thread.title)" }
     static func questionCaption(_ question: AgentQuestion) -> String { "Asking: \(question.threadTitle)" }
+    static func kittenState(_ state: KittenStatus.State) -> String {
+        switch state {
+        case .working(let sessions): return sessions == 1 ? "Working" : "Working on \(sessions) things"
+        case .needsYou: return "Needs you"
+        case .idle: return "Idle"
+        case .notSetUp: return "Not set up yet"
+        }
+    }
+
     static func notSetUp(_ kitten: Kitten) -> String {
         "\(kitten.name) isn't a T3 project yet. Add \(kitten.folder) in T3 and try again."
     }

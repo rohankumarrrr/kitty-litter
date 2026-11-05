@@ -34,6 +34,10 @@ To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-
 - Never log or store tokens, transcripts, screenshots or page text beyond what a feature needs.
 - Keep dependencies few, and permissively licensed only. Don't copy from GPL projects.
 
+## Documentation
+
+This is open source, and people learn it from the docs, so they change in the same commit as the code. `README.md` covers what someone using Shades needs, and `docs/` covers how things work: `kittens.md`, `t3-integration.md` and `voice.md`. New ideas go in `docs/ROADMAP.md`, and things that get built come off it.
+
 ## Testing
 
 - Never send synthetic clicks or keystrokes while testing. They land on whatever's really on the desktop, which has already meant stray clicks in someone's calendar. Use `--demo`, the flags above, the probes, or a person.

@@ -9,14 +9,20 @@ public struct Kitten: Sendable, Equatable, Identifiable {
     /// What it looks after, in the words Shades reads to decide what goes to it.
     public var covers: String
     public var folder: String
+    /// Not taking work yet. It shows up with the others, but nothing gets sent to it.
+    public var planned: Bool
+    /// The colour of its jacket, as 0xRRGGBB, or `nil` for the black one Shades wears.
+    public var color: UInt32?
 
     public var id: String { folder }
 
-    public init(name: String, role: String, covers: String, folder: String) {
+    public init(name: String, role: String, covers: String, folder: String, planned: Bool = false, color: UInt32? = nil) {
         self.name = name
         self.role = role
         self.covers = covers
         self.folder = folder
+        self.planned = planned
+        self.color = color
     }
 }
 
@@ -25,6 +31,9 @@ public enum Kittens {
         let name: String
         let role: String
         let covers: String
+        var planned: Bool?
+        /// Like "#b3261e".
+        var color: String?
     }
 
     /// Where kittens live. Their contents are personal, so they stay out of this repo.
@@ -40,7 +49,14 @@ public enum Kittens {
             guard let data = try? Data(contentsOf: file),
                   let profile = try? JSONDecoder().decode(Profile.self, from: data)
             else { return nil }
-            return Kitten(name: profile.name, role: profile.role, covers: profile.covers, folder: home.standardizedFileURL.path)
+            return Kitten(
+                name: profile.name,
+                role: profile.role,
+                covers: profile.covers,
+                folder: home.standardizedFileURL.path,
+                planned: profile.planned ?? false,
+                color: profile.color.flatMap { UInt32($0.replacingOccurrences(of: "#", with: ""), radix: 16) }
+            )
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }

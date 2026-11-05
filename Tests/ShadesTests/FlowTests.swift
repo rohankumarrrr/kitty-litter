@@ -37,6 +37,8 @@ private final class FakeStage: CatStage {
     var held: [String?] = []
     var threads: [AgentThread] = []
     var statusText = ""
+    var kittens: [KittenStatus]?
+    var isKittensVisible: Bool { kittens != nil }
     var copied: String?
     var arriveImmediately = true
     var pendingArrival: (() -> Void)?
@@ -85,6 +87,8 @@ private final class FakeStage: CatStage {
         statusText = status
     }
     func toggleDashboard() {}
+    func showKittens(_ statuses: [KittenStatus]) { kittens = statuses }
+    func hideKittens() { kittens = nil }
     func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {}
     func copyToPasteboard(_ text: String) { copied = text }
 
@@ -567,6 +571,31 @@ final class FlowTests: XCTestCase {
         for bubble in stage.bubbles {
             if case .reply? = bubble { XCTFail("the routing decision was shown as an answer") }
         }
+    }
+
+    func testAKittenThatIsntSetUpGetsNothing() async {
+        kittens = [Kitten(name: "Pepper", role: "Finance", covers: "money", folder: "/k/pepper", planned: true), steve]
+        await ask("hello")
+        let router = backend.sent[0].prompt.text
+        XCTAssertFalse(router.contains("Pepper, Finance"))
+        XCTAssertTrue(router.contains("1. Steve Pawsniak, Professional"))
+    }
+
+    func testTheKittenViewOpensClosesAndKeepsUp() async {
+        kittens = [steve]
+        var work = AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .running, model: "m", updatedAt: clock)
+        controller.threadsChanged([work])
+        XCTAssertNil(stage.kittens, "just Shades, until you ask")
+
+        controller.kittensPressed()
+        XCTAssertEqual(stage.kittens?.first?.state, .working(sessions: 1))
+
+        work.status = .completed
+        controller.threadsChanged([work])
+        XCTAssertEqual(stage.kittens?.first?.state, .idle)
+
+        controller.kittensPressed()
+        XCTAssertNil(stage.kittens)
     }
 
     func testAKittenThatIsntInT3SaysSo() async {

@@ -17,7 +17,7 @@ Kittens themselves now exist, as described in [kittens.md](kittens.md). Review, 
 ## Next ideas
 
 - **Pointing at things.** Ask "where do I change this?" and the cat runs to the button and sits on it. The agent returns screen coordinates, and the cat's perching does the rest. This also suits step-by-step homework hints, where it shows you the next step without doing it for you.
-- **Kittens for agents.** Each running agent gets its own small cat that walks around the screen. Click one to open its thread.
+- **Kittens out on the desktop.** Shift-clicking Shades already shows every kitten and how it's doing. Next, each working kitten could walk around the screen as its own small cat. Click one to open its thread.
 - **Your own data in context.** Bring in the connectors your agents already have. "Can I afford this?" on a checkout page checks your budget app, and a job posting goes to your resume project. The no-project agent already finds projects on its own, so much of the routing exists.
 - **Drop onto the cat.** Drag a PDF, link or screenshot onto it to summarize it or turn it into an issue.
 - **Local screen memory.** An opt-in, on-device history for "where did I see that article?", plus a summary at the end of the day. It's the riskiest for privacy, so it comes last and never leaves your Mac.
