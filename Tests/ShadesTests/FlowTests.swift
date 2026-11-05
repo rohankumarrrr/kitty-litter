@@ -133,6 +133,7 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     /// New threads start, and then never finish.
     var holdStarts = false
     var whileReadingAReport: (() async -> Void)?
+    var whileFindingAProject: (() async -> Void)?
     var connectError: Error?
     var streamError: Error?
     var droppedAfterReply: Error?
@@ -242,7 +243,10 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     }
 
     func projectID(atPath path: String) async -> String? {
-        projects[path]
+        let happening = whileFindingAProject
+        whileFindingAProject = nil
+        await happening?()
+        return projects[path]
     }
 
     func addProject(atPath path: String, title: String) async throws -> String {
@@ -502,6 +506,21 @@ final class FlowTests: XCTestCase {
         routerFolder = nil
         await ask("and a follow-up")
         XCTAssertEqual(backend.sent.map(\.mode), [.start])
+    }
+
+    /// Settings can be saved while T3 is slow to answer, and the model that runs has to be the one checked.
+    func testTheFrontDoorRunsOnTheModelItChecked() async {
+        var changed = settings
+        changed.quickModel = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "medium")
+        backend.whileFindingAProject = { [unowned self] in self.controller.apply(changed) }
+        await ask("what's this?")
+        XCTAssertEqual(backend.sent.map(\.prompt.model), [settings.quickModel])
+
+        backend.whileFindingAProject = { [unowned self] in self.controller.apply(changed) }
+        controller.apply(settings)
+        controller.channelsPressed()
+        await messages("What day is it?", to: .router)
+        XCTAssertEqual(backend.sent.filter { $0.mode == .start }.map(\.prompt.model), [settings.quickModel, settings.quickModel])
     }
 
     /// T3 not running is said as it always was, rather than blamed on the folder.

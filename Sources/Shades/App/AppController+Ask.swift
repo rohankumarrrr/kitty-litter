@@ -86,9 +86,11 @@ extension AppController {
         guard generation == replyGeneration else { return }
         roster = sessions
         kittens = loadKittens().filter { !$0.planned }
+        // Settings can change while T3 answers, so the model that's checked is the one that runs.
+        let model = settings.quickModel
         let projectID: String
         do {
-            projectID = try await routerProjectID()
+            projectID = try await routerProjectID(for: model)
         } catch {
             guard generation == replyGeneration else { return }
             reply = nil
@@ -104,7 +106,7 @@ extension AppController {
             title: String(question.prefix { !$0.isNewline }.prefix(60)),
             text: Prompts.quick(question: question, snapshot: shared, sessions: briefs, kittens: kittens),
             attachments: attachments(for: shared),
-            model: settings.quickModel,
+            model: model,
             runtimeMode: settings.quickMode,
             projectID: projectID
         )

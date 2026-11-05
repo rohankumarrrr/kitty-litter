@@ -75,9 +75,9 @@ extension AppController {
 
     /// The router's own project, where it can't pass on what it's seen. Asked before every turn, since a follow-up
     /// runs on whatever its folder says by then. Only Claude Code reads that folder, so no other model gets to be
-    /// the router. If this throws, the router doesn't run.
-    func routerProjectID() async throws -> String {
-        guard settings.quickModel.provider == "claudeAgent" else { throw FrontDoorProblem.notClaude }
+    /// the router, and the turn runs on the `model` checked here. If this throws, the router doesn't run.
+    func routerProjectID(for model: ModelChoice) async throws -> String {
+        guard model.provider == "claudeAgent" else { throw FrontDoorProblem.notClaude }
         guard let folder = routerFolder() else { throw FrontDoorProblem.noFolder }
         if let id = await backend.projectID(atPath: folder) { return id }
         do {

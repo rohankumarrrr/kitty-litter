@@ -34,7 +34,7 @@ extension AppController {
         facts.inboxSaves = !inboxSaveFailed
         facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
         do {
-            _ = try await routerProjectID()
+            _ = try await routerProjectID(for: settings.quickModel)
         } catch let problem as FrontDoorProblem {
             facts.frontDoorProblem = problem
         } catch {
