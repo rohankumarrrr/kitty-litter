@@ -35,7 +35,7 @@ struct HealthFacts: Equatable {
     var skillsInstalled = true
     var reachedT3 = true
     /// Kittens taking work whose folders aren't T3 projects, or have no instructions.
-    var kittensNotInT3: [String] = []
+    var kittensNotInT3: [Kitten] = []
     var kittensWithoutInstructions: [String] = []
     /// Kittens that aren't meant to see your screen, with nothing to stop them.
     var kittensOffScreenInNameOnly: [String] = []
@@ -95,12 +95,12 @@ enum HealthCheck {
             problem: "I can't reach T3 Code, so my agents can't run.",
             fix: "Open T3 Code."
         ))
-        for name in facts.kittensNotInT3 {
+        for kitten in facts.kittensNotInT3 {
             results.append(HealthFinding(
-                check: "kitten: \(name)",
+                check: "kitten: \(kitten.name)",
                 ok: false,
-                problem: "\(name) isn't a T3 project, so nothing can reach them.",
-                fix: "Add the folder they work in as a project in T3."
+                problem: "\(kitten.name) isn't a T3 project, so nothing can reach them.",
+                fix: "Add \(kitten.workspace) as a project in T3."
             ))
         }
         for name in facts.kittensWithoutInstructions {

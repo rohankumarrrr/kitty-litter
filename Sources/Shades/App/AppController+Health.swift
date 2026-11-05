@@ -37,7 +37,7 @@ extension AppController {
         for kitten in loadKittens() where !kitten.planned {
             if !fileExists(kitten.folder + "/CLAUDE.md") { facts.kittensWithoutInstructions.append(kitten.name) }
             if facts.reachedT3, await backend.projectID(atPath: kitten.workspace) == nil {
-                facts.kittensNotInT3.append(kitten.name)
+                facts.kittensNotInT3.append(kitten)
             }
             // Only Claude Code reads the settings that make up the block.
             if !kitten.seesScreen, settings.frontierModel.provider != "claudeAgent" || !screenBlockGaps(kitten.folder).isEmpty {

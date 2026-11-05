@@ -39,7 +39,7 @@ Shades reads `covers` to decide what goes to a kitten, so write it the way you'd
 t3 project add ~/kittens/steve-pawsniak
 ```
 
-A kitten with a `project` skips that step, since the project's already there.
+A kitten with a `project` skips that step, since the project's already there, unless it has `seesScreen: false`.
 
 Keep kittens out of this repo. They're full of personal details, which is why they live in your home folder.
 

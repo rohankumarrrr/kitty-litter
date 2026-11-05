@@ -935,7 +935,7 @@ final class FlowTests: XCTestCase {
 
         controller.threadListArrived = true
         let findings = await controller.runHealthCheck()
-        XCTAssertNotNil(findings.first { !$0.ok && $0.check == "kitten: Pepper" })
+        XCTAssertEqual(findings.first { !$0.ok && $0.check == "kitten: Pepper" }?.fix, "Add /code/app as a project in T3.")
     }
 
     /// Its thread would count as the other kitten's too, and a follow-up to it gets no screen.
@@ -961,6 +961,11 @@ final class FlowTests: XCTestCase {
         await controller.frontierTask?.value
         XCTAssertEqual(backend.sent[1].prompt.projectID, "project-clawde")
         XCTAssertFalse(backend.sent[1].prompt.text.contains("CLAUDE.md"))
+
+        backend.projects = ["/code/app": "project-app"]
+        controller.threadListArrived = true
+        let findings = await controller.runHealthCheck()
+        XCTAssertEqual(findings.first { !$0.ok && $0.check == "kitten: Clawde" }?.fix, "Add /k/clawde as a project in T3.")
     }
 
     func testTurningOffTheScreenKeepsAKittensEarlierThreadsInItsProjectOffIt() async {
