@@ -29,6 +29,7 @@ final class AppController {
     let screenTip: () -> String?
     let loadKittens: () -> [Kitten]
     let workLists: WorkListStoring
+    let screenBlockGaps: (String) -> [String]
     let systemFacts: () -> HealthFacts
     let fileExists: (String) -> Bool
     let reportHealth: ([HealthFinding]) -> Void
@@ -107,8 +108,6 @@ final class AppController {
     /// Which kitten each thread was started for, as seen by the app itself. A list or a report
     /// can't say, since those are a kitten's own words, and this outlasts the item.
     var threadOwners: [String: String] = [:]
-    /// Threads named in the report of a kitten that can't see your screen, which may be its work.
-    var keptOffScreen: Set<String> = []
     /// When a thread last was as of its report, so the same ending isn't reported twice.
     var reportedAt: [String: Date] = [:]
     var offerWhenAsked: Offer?
@@ -153,6 +152,7 @@ final class AppController {
         screenTip = dependencies.screenTip
         loadKittens = dependencies.kittens
         workLists = dependencies.workLists
+        screenBlockGaps = dependencies.screenBlockGaps
         systemFacts = dependencies.systemFacts
         fileExists = dependencies.fileExists
         reportHealth = dependencies.reportHealth
@@ -329,7 +329,7 @@ final class AppController {
         }
     }
 
-    private func apply(_ updated: Settings) {
+    func apply(_ updated: Settings) {
         let keysChanged = updated.talkKey != settings.talkKey || updated.dictateKey != settings.dictateKey
         settings = updated
         saveSettings(updated)

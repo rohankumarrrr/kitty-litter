@@ -152,14 +152,16 @@ public enum Prompts {
     }
 
     /// The user pointed at something broken. The marked area is what they mean.
-    public static func fix(description: String?, snapshot: ScreenSnapshot, screenshotPath: String?) -> String {
+    public static func fix(description: String?, snapshot: ScreenSnapshot?, screenshotPath: String?) -> String {
         let said = description.map { "What they said about it: \($0)" }
             ?? "They didn't describe it, so work out what's wrong from the screenshot."
+        let pointedAt = snapshot == nil
+            ? "The user says something is wrong. You can't see their screen, so work from what they said."
+            : "The user pointed at something on their screen that's wrong. The red rectangle in the screenshot marks the exact spot."
         return """
         \(dispatchPreamble)
 
-        The user pointed at something on their screen that's wrong. The red rectangle in the screenshot \
-        marks the exact spot. Find the cause and fix it, then check the fix actually works. \
+        \(pointedAt) Find the cause and fix it, then check the fix actually works. \
         Open a pull request if the project's own instructions don't say otherwise.
 
         \(said)

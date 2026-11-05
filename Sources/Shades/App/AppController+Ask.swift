@@ -87,11 +87,13 @@ extension AppController {
         roster = sessions
         kittens = loadKittens().filter { !$0.planned }
 
+        // Whoever it's passed to gets their own say on the snapshot, so this only holds it back from here.
+        let shared = settings.quickMode == .fullAccess ? nil : snapshot
         let prompt = AgentPrompt(
             // A question can run over several lines, and a title can't.
             title: String(question.prefix { !$0.isNewline }.prefix(60)),
-            text: Prompts.quick(question: question, snapshot: snapshot, sessions: briefs, kittens: kittens),
-            attachments: attachments(for: snapshot),
+            text: Prompts.quick(question: question, snapshot: shared, sessions: briefs, kittens: kittens),
+            attachments: attachments(for: shared),
             model: settings.quickModel,
             runtimeMode: settings.quickMode
         )
@@ -231,6 +233,11 @@ extension AppController {
 
     /// The quick agent decided this needs more, so it goes straight to the frontier agent, which says so.
     func handOff(task: String, question: String, snapshot: ScreenSnapshot?) {
+        // With full access, neither the page nor the quick agent's reading of it gets to reach it.
+        guard settings.frontierMode != .fullAccess else {
+            startFrontier(title: question, text: Prompts.frontier(request: question, snapshot: nil, screenshotPath: nil), snapshot: nil)
+            return
+        }
         let path = saveScreenshot(of: snapshot)
         // The task is the quick agent's reading of it, and the question is what you really said.
         let request = "\(task)\n\nTheir own words: \(question)"

@@ -6,6 +6,7 @@
 #   scripts/install.sh              # build and install
 #   scripts/install.sh --ad-hoc     # allow a build with no stable signature, losing permissions
 #   scripts/install.sh --rollback   # put the last working copy back
+#   scripts/install.sh --pull       # stop if there's uncommitted work, pull, then build and install
 #
 # macOS may ask whether codesign can use your signing key. Choose Always Allow, and it won't
 # ask again.
@@ -48,6 +49,16 @@ if [[ "${1:-}" == "--rollback" ]]; then
   restore
   echo "Back on the last working copy."
   exit 0
+fi
+
+if [[ "${1:-}" == "--pull" ]]; then
+  if [[ -n "$(git -C "$root" status --porcelain)" ]]; then
+    echo "$root has uncommitted work, so nothing was installed."
+    exit 1
+  fi
+  git -C "$root" pull --ff-only
+  # Run what was just pulled, not the copy of this script that's already going.
+  exec "$root/scripts/install.sh"
 fi
 
 next="$(mktemp -d)"

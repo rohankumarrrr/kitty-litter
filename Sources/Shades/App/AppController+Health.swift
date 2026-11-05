@@ -38,6 +38,10 @@ extension AppController {
                 facts.kittensNotInT3.append(kitten.name)
             }
             if workLists.hasProblem(for: kitten) { facts.kittensWithListProblems.append(kitten.name) }
+            // Only Claude Code reads the settings that make up the block.
+            if !kitten.seesScreen, settings.frontierModel.provider != "claudeAgent" || !screenBlockGaps(kitten.folder).isEmpty {
+                facts.kittensOffScreenInNameOnly.append(kitten.name)
+            }
         }
 
         let findings = HealthCheck.findings(from: facts)

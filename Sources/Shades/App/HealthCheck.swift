@@ -38,6 +38,8 @@ struct HealthFacts: Equatable {
     var kittensNotInT3: [String] = []
     var kittensWithoutInstructions: [String] = []
     var kittensWithListProblems: [String] = []
+    /// Kittens that aren't meant to see your screen, with nothing to stop them.
+    var kittensOffScreenInNameOnly: [String] = []
 }
 
 enum HealthCheck {
@@ -113,6 +115,14 @@ enum HealthCheck {
                 ok: false,
                 problem: "I can't use \(name)'s work list.",
                 fix: "Look in the worklist folder in their folder. An unreadable list is kept there as items.broken.json."
+            ))
+        }
+        for name in facts.kittensOffScreenInNameOnly {
+            results.append(HealthFinding(
+                check: "kitten: \(name)",
+                ok: false,
+                problem: "\(name) isn't meant to see your screen, but nothing stops them.",
+                fix: "Put the screen block from docs/kittens.md in their folder, and run them on a Claude model."
             ))
         }
         results.append(facts.skillsInstalled ? .good("kitten skills") : HealthFinding(

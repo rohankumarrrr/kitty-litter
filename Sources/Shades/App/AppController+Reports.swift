@@ -24,8 +24,6 @@ extension AppController {
             let report = await backend.finalReport(threadID: thread.id)
             // It may have picked up again, or been given more to do, while that was being read.
             if isStillGoing(thread.id) { return }
-            // A report is a kitten's own words, so a link in one can keep your screen back, but nothing more.
-            if kitten(of: thread)?.seesScreen == false { keptOffScreen.formUnion(ReportDigest.linkedThreadIDs(in: report ?? "")) }
             reportedAt[thread.id] = latestThreads.first { $0.id == thread.id }?.updatedAt ?? thread.updatedAt
             if !failed, let next = threadPassedOnTo(in: report, from: thread) {
                 passedOn(thread, to: next)

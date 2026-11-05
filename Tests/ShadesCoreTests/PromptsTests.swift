@@ -141,4 +141,11 @@ final class PromptsTests: XCTestCase {
         XCTAssertNil(ReportDigest.linkedThreadID(in: "See <t3-thread://v2/env/old> and <t3-thread://v2/env/new>."), "which one?")
         XCTAssertEqual(ReportDigest.linkedThreadIDs(in: "See <t3-thread://v2/env/old> and <t3-thread://v2/env/new>."), ["old", "new"])
     }
+
+    func testAFixWithNothingToLookAtDoesntMentionAScreenshot() {
+        let prompt = Prompts.fix(description: "the total is wrong", snapshot: nil, screenshotPath: nil)
+        XCTAssertTrue(prompt.contains("the total is wrong"))
+        XCTAssertFalse(prompt.contains("red rectangle"))
+        XCTAssertTrue(prompt.contains("<screen>Not captured.</screen>"))
+    }
 }

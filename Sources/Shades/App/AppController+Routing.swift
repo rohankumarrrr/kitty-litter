@@ -83,11 +83,8 @@ extension AppController {
     /// back the usual way, as a notice when it finishes.
     func forward(_ words: String, to thread: AgentThread, snapshot: ScreenSnapshot?) {
         // Only what the app saw for itself can put your words on a list, because a kitten can claim
-        // any thread on its own. A claim can still keep your screen back, since that only narrows.
-        let everyone = loadKittens()
-        let owners = everyone.filter { KittenBoard.belongs(thread, to: $0) || threadOwners[thread.id] == $0.id }
-        let claiming = everyone.filter { workLists.load(for: $0).holds(thread: thread.id) }
-        if let owner = owners.first(where: { !$0.planned }) {
+        // any thread on its own list, or name it in a report.
+        if let owner = loadKittens().first(where: { !$0.planned && (KittenBoard.belongs(thread, to: $0) || threadOwners[thread.id] == $0.id) }) {
             do {
                 try updateList(of: owner) { $0.addFollowUp(words, in: thread.id, at: now()) }
             } catch {
@@ -98,21 +95,22 @@ extension AppController {
         }
         if reporting.contains(thread.id) { followedUp.insert(thread.id) }
 
-        // A session with full access can do anything, so text from a page doesn't get to reach it.
-        // Neither does one belonging to a kitten that isn't meant to see it.
-        let seesScreen = thread.runtimeMode != .fullAccess && (owners + claiming).allSatisfy(\.seesScreen) && !keptOffScreen.contains(thread.id)
-        let shared = seesScreen ? snapshot : nil
-        let text = Prompts.forwarded(
-            words: words,
-            snapshot: shared,
-            screenshotPath: saveScreenshot(of: shared),
-            screenLeftOut: !seesScreen && snapshot != nil
-        )
         say(CatWords.sentTo(thread), threadID: thread.id)
 
         // Quick chats are left out of the thread list's news, so their replies are picked up here.
         let isQuick = watch.isQuick(thread.id)
         forwardTask = Task {
+            // A session with full access can do anything, so text from a page doesn't get to reach it.
+            // Neither does one working for a kitten that isn't meant to see it, or one that won't say.
+            var seesScreen = thread.runtimeMode != nil && thread.runtimeMode != .fullAccess
+            if seesScreen, snapshot != nil { seesScreen = await isClearOfScreenlessKittens(thread) }
+            let shared = seesScreen ? snapshot : nil
+            let text = Prompts.forwarded(
+                words: words,
+                snapshot: shared,
+                screenshotPath: saveScreenshot(of: shared),
+                screenLeftOut: !seesScreen && snapshot != nil
+            )
             do {
                 for try await event in backend.forward(threadID: thread.id, text: text, attachments: attachments(for: shared)) {
                     switch event {
@@ -130,5 +128,34 @@ extension AppController {
                 workEnded(in: thread.id, failed: true)
             }
         }
+    }
+
+    /// A kitten's work can be in any project and called anything, so this follows who started the
+    /// thread. One that can't be traced doesn't count as clear, since the screen can't be taken back.
+    private func isClearOfScreenlessKittens(_ thread: AgentThread) async -> Bool {
+        let screenless = loadKittens().filter { !$0.seesScreen }
+        if screenless.isEmpty { return true }
+        if screenless.contains(where: { KittenBoard.belongs(thread, to: $0) }) { return false }
+        let backend = self.backend
+        let id = thread.id
+        return await firstOf(seconds: Self.rosterWait) {
+            await Self.traceIsClear(from: id, of: screenless, backend: backend)
+        } ?? false
+    }
+
+    private nonisolated static func traceIsClear(from threadID: String, of screenless: [Kitten], backend: AgentBackend) async -> Bool {
+        var next = threadID
+        var seen: Set<String> = []
+        while seen.insert(next).inserted {
+            guard let origin = await backend.origin(of: next),
+                  !screenless.contains(where: { KittenBoard.belongs(title: origin.title, projectPath: origin.projectPath, to: $0) })
+            else { return false }
+            switch origin.startedBy {
+            case .person: return true
+            case .thread(let starter): next = starter
+            case .unknown: return false
+            }
+        }
+        return false
     }
 }
