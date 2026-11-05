@@ -1,0 +1,69 @@
+import AppKit
+import Carbon.HIToolbox
+
+/// Global shortcuts through Carbon, which is still the one way that needs no permissions.
+@MainActor
+final class Hotkeys {
+    static let shared = Hotkeys()
+
+    private var handlers: [UInt32: () -> Void] = [:]
+    private var refs: [UInt32: EventHotKeyRef] = [:]
+    private var nextID: UInt32 = 1
+    private var installed = false
+
+    private static let signature: OSType = 0x5348_4453 // SHDS
+
+    @discardableResult
+    func register(keyCode: Int, modifiers: Int, handler: @escaping () -> Void) -> UInt32? {
+        installIfNeeded()
+        let id = nextID
+        nextID += 1
+        var ref: EventHotKeyRef?
+        let status = RegisterEventHotKey(
+            UInt32(keyCode),
+            UInt32(modifiers),
+            EventHotKeyID(signature: Self.signature, id: id),
+            GetApplicationEventTarget(),
+            0,
+            &ref
+        )
+        guard status == noErr, let ref else { return nil }
+        refs[id] = ref
+        handlers[id] = handler
+        return id
+    }
+
+    func unregister(_ id: UInt32) {
+        if let ref = refs.removeValue(forKey: id) { UnregisterEventHotKey(ref) }
+        handlers.removeValue(forKey: id)
+    }
+
+    private func installIfNeeded() {
+        guard !installed else { return }
+        installed = true
+        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
+            var id = EventHotKeyID()
+            let status = GetEventParameter(
+                event,
+                EventParamName(kEventParamDirectObject),
+                EventParamType(typeEventHotKeyID),
+                nil,
+                MemoryLayout<EventHotKeyID>.size,
+                nil,
+                &id
+            )
+            guard status == noErr, id.signature == Hotkeys.signature else { return OSStatus(eventNotHandledErr) }
+            MainActor.assumeIsolated { Hotkeys.shared.handlers[id.id]?() }
+            return noErr
+        }, 1, &spec, nil, nil)
+    }
+}
+
+/// The app's fixed shortcuts.
+enum Shortcut {
+    static let ask = (keyCode: kVK_Space, modifiers: optionKey)
+    static let fix = (keyCode: kVK_ANSI_F, modifiers: controlKey | optionKey)
+    static let askLabel = "⌥Space"
+    static let fixLabel = "⌃⌥F"
+}
