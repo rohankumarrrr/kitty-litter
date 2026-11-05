@@ -27,9 +27,7 @@ extension AppController {
 
     /// Which kitten a thread belongs to, by the project it's in or the name it starts with.
     private func kitten(of thread: AgentThread) -> Kitten? {
-        loadKittens().first { kitten in
-            thread.projectTitle == kitten.name || thread.title.hasPrefix("\(kitten.name):")
-        }
+        loadKittens().first { KittenBoard.belongs(thread, to: $0) }
     }
 
     /// All this thread did was start another one, so that's where the work is now.

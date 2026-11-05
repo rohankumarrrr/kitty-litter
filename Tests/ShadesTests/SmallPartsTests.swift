@@ -279,8 +279,8 @@ final class KittenBoardTests: XCTestCase {
     private let steve = Kitten(name: "Steve", role: "Professional", covers: "", folder: "/k/steve")
     private let pepper = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper", planned: true)
 
-    private func thread(_ id: String, _ status: AgentStatus, title: String = "Work", project: String? = "Steve", age: TimeInterval = 0) -> AgentThread {
-        AgentThread(id: id, title: title, projectTitle: project, status: status, model: "m", updatedAt: at.addingTimeInterval(-age))
+    private func thread(_ id: String, _ status: AgentStatus, title: String = "Work", project: String? = "/k/steve", age: TimeInterval = 0) -> AgentThread {
+        AgentThread(id: id, title: title, projectTitle: nil, status: status, model: "m", updatedAt: at.addingTimeInterval(-age), projectPath: project)
     }
 
     private func status(_ threads: [AgentThread]) -> KittenStatus {
@@ -288,7 +288,7 @@ final class KittenBoardTests: XCTestCase {
     }
 
     func testIdleWithNothingToOpen() {
-        let idle = status([thread("x", .running, project: "Someone else")])
+        let idle = status([thread("x", .running, project: "/k/someone-else")])
         XCTAssertEqual(idle.state, .idle)
         XCTAssertNil(idle.threadID)
     }
