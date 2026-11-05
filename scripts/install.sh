@@ -24,8 +24,11 @@ stop_running() {
 }
 
 put_in_place() {
+  # Copied alongside first, so running out of disk or any other failure leaves the old copy where it is.
+  rm -rf "$app.new"
+  ditto "$1" "$app.new"
   rm -rf "$app"
-  ditto "$1" "$app"
+  mv "$app.new" "$app"
   /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app"
 }
 
@@ -35,6 +38,8 @@ restore() {
     exit 1
   fi
   stop_running
+  # A report from the copy that's gone would look like one from the copy coming back.
+  rm -f "$health"
   put_in_place "$keep"
   open "$app"
 }
@@ -71,7 +76,8 @@ put_in_place "$next/Shades.app"
 # The app writes this once it's up and has checked itself. A problem it finds, such as a
 # permission that's off, isn't a reason to go back: not coming up at all is.
 rm -f "$health"
-open "$app"
+# A copy too broken to open is what the wait below is for, so that can't stop the script here.
+open "$app" || true
 deadline=$(( SECONDS + wait_seconds ))
 while (( SECONDS < deadline )); do
   if [[ -f "$health" ]] && pgrep -x Shades >/dev/null; then
