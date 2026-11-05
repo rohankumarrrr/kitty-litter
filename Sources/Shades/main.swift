@@ -1,11 +1,21 @@
 import AppKit
 import ShadesCore
 
-// The one place that decides what's real.
+// The one place that decides what's real. To wire in the real modules, import them here
+// and replace the body of this function with:
 //
-// Integrator: replace the body of `realDependencies()` with the real modules, such as
-// `T3Client()` from ShadesT3, the context provider from ShadesContext, and the voice
-// engine, text inserter and key monitor from ShadesVoice. Nothing else needs to change.
+//     let voice = ParakeetVoiceEngine()
+//     return AppDependencies(
+//         backend: T3Backend(),                 // ShadesT3
+//         context: ScreenContextProvider(),     // ShadesContext
+//         voice: voice,                         // ShadesVoice, as are the next two
+//         inserter: TextInserter(),
+//         keys: KeyHoldMonitor(),
+//         settings: Settings.load(),
+//         saveSettings: { try? $0.save() }
+//     )
+//
+// Nothing else needs to change. `--demo` keeps working either way.
 @MainActor
 func realDependencies() -> AppDependencies? {
     nil

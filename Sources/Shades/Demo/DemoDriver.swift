@@ -67,7 +67,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | fix | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | front | quit")
+            print("ask [question] | fix | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -137,6 +137,13 @@ final class DemoDriver {
                 print("window \(name) id=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) frame=\(NSStringFromRect(window.frame)) clicks=\(!window.ignoresMouseEvents)")
             }
             print("state \(stage.cat.brain.state) pose=\(stage.cat.brain.pose.frame.rawValue) active=\(NSApp.isActive)")
+        case "buttons":
+            for case let button as QuietButton in stage.bubble.view.subviews {
+                let frame = stage.bubble.panel.convertToScreen(button.convert(button.bounds, to: nil))
+                print("button \(button.accessibilityLabel() ?? "") \(frame.midX) \(frame.midY)")
+            }
+            let text = stage.bubble.panel.convertToScreen(stage.bubble.view.textView.convert(stage.bubble.view.textView.bounds, to: nil))
+            print("text \(text.minX) \(text.maxY)")
         case "typed":
             print("typed [\(stage.input.typedText)]")
         case "menu":

@@ -11,7 +11,6 @@ final class BubbleView: BalloonView {
     private static let rowGap: CGFloat = 10
 
     var onAction: ((BubbleAction) -> Void)?
-    var onUserScroll: (() -> Void)?
 
     private let scroll = NSScrollView()
     let textView = BubbleTextView()
@@ -33,7 +32,6 @@ final class BubbleView: BalloonView {
         scroll.scrollerStyle = .overlay
         scroll.borderType = .noBorder
         scroll.documentView = textView
-        scroll.contentView.postsBoundsChangedNotifications = true
         addSubview(scroll)
 
         textView.isEditable = false
@@ -126,7 +124,7 @@ final class BubbleView: BalloonView {
         if textView.string != body || textView.font != font {
             textView.textStorage?.setAttributedString(attributed)
         }
-        // A question's for selecting and reading; a "thinking" line isn't.
+        // Anything worth keeping can be selected, and "Thinking..." isn't.
         textView.isSelectable = content.hasSelectableText
         return layout(limitHeight: limitHeight, code: code)
     }

@@ -6,6 +6,8 @@
 # This changes your keychain, so nothing runs it for you. It adds one certificate and
 # its private key, and asks for your password to trust it for code signing. Nothing
 # leaves your Mac, and a build signed this way won't run on anyone else's without a warning.
+# The first time scripts/bundle.sh signs with it, macOS may ask whether codesign can use
+# the key. Choose Always Allow.
 #
 # To undo it:
 #   security delete-identity -c "Shades Dev" ~/Library/Keychains/login.keychain-db

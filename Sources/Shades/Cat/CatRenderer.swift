@@ -65,10 +65,10 @@ final class CatRenderer {
         return rows[row][rows[row].index(rows[row].startIndex, offsetBy: column)] != "."
     }
 
-    nonisolated private static let zGlyph = ["zzz", ".z.", "zzz"]
+    nonisolated private static let zGlyph = ["zzzz", "..z.", ".z..", "zzzz"]
     // The empty rows above a sleeping cat. It floats up and fades, as on the site.
     nonisolated private static let sleepZ: [(x: Int, y: Int, alpha: Double)] = [
-        (11, 2, 0.45), (12, 1, 1), (13, 0, 0.7), (13, 0, 0.3),
+        (10, 1, 0.45), (11, 1, 1), (11, 0, 0.7), (12, 0, 0.3),
     ]
 
     private static func render(_ pixels: [UInt8]) -> CGImage {
