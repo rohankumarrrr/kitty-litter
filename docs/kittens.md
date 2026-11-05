@@ -25,8 +25,9 @@ A kitten is a folder in `~/kittens`, registered as a T3 project:
 }
 ```
 
-Four more fields are optional:
+Five more fields are optional:
 
+- `project` is the folder of a T3 project the kitten works in, for a kitten that looks after an app that already has one. It's an absolute path, and `~` works, like `"~/code/my-app"`. Its threads start there, and Shades tells it where its own folder is, since its `CLAUDE.md` won't load by itself from another folder. Without it, the kitten's own folder is its project. A kitten with `seesScreen: false` still starts its threads in its own folder, so a change to its `project` can't leave them counting as nobody's.
 - `color` is its jacket in the kitten view, like `"#b3261e"`.
 - `planned: true` means it shows up with the others but isn't taking work yet, which is handy for a kitten you've named but haven't written instructions for.
 - `seesScreen: false` means Shades never sends it your screen. Stopping it from finding a copy by itself takes [the screen block](#keeping-a-kitten-off-your-screen) as well.
@@ -37,6 +38,8 @@ Shades reads `covers` to decide what goes to a kitten, so write it the way you'd
 ```bash
 t3 project add ~/kittens/steve-pawsniak
 ```
+
+A kitten with a `project` skips that step, since the project's already there, unless it has `seesScreen: false`.
 
 Keep kittens out of this repo. They're full of personal details, which is why they live in your home folder.
 
@@ -51,7 +54,7 @@ Normally you only see Shades. Shift-click him, or choose Kittens from his menu, 
 - **Idle**, asleep
 - **Not set up yet**, for a `planned` kitten
 
-Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the folder of the kitten's project, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
+Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the kitten's folder or its `project`, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
 
 ### Channels
 
@@ -146,7 +149,7 @@ Telling an agent not to look isn't enough. Agents run as you, so they can open w
 
 ### What's enforced
 
-Shades leaves your screen out of everything it sends to a kitten with `seesScreen: false`. That covers threads in its project, whatever the project is called, and any thread traced back to one through whoever started it, whatever that thread is called. A thread an agent started that can't be traced gets no screen either.
+Shades leaves your screen out of everything it sends to a kitten with `seesScreen: false`. That covers threads in its project, whatever the project is called, including ones another kitten starts there, and any thread traced back to one through whoever started it, whatever that thread is called. A thread an agent started that can't be traced gets no screen either.
 
 The screen block is `.claude/settings.json` in the kitten's folder. Claude Code enforces it, and the self-check says so if it's missing:
 
@@ -204,6 +207,7 @@ These are still open, and most can only be fixed in T3:
 - **Other models.** Only Claude Code reads these settings. A Codex thread in the same folder read a saved screenshot straight through them, so a kitten that's kept off the screen has to run on Claude. Reviewers on other models aren't covered either.
 - **Folders with no block.** It belongs to the folder, not the agent. A kitten's thread in a project without one can still look.
 - **Asking someone else.** A kitten can start or message any thread, and that thread can look for it. It would have to mean to. Clawde's folder also turns away a message with a screen block in it, but a paraphrase gets through.
+- **Earlier setups.** Shades goes by what each `kitten.json` says now. If a kitten that works in a `project` stops seeing your screen, leave that `project` in its file until you've archived its threads there, or they'll count as nobody's.
 - **Commands let out of the sandbox.** `swift run` can run code an agent wrote.
 - **Thread titles.** The thread list still shows them, and a handoff's title is the router's reading of what you asked.
 - **T3 keeping it all.** Nothing in T3 deletes old attachments or logs, and deleting a thread leaves its attachments behind. Shades keeps its own saved screenshots for a day.

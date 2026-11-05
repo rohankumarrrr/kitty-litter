@@ -906,6 +906,93 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("Steve Pawsniak isn't a T3 project yet. Add /k/steve in T3 and try again.", threadID: nil))
     }
 
+    private let pepper = Kitten(name: "Pepper", role: "Finance", covers: "the app", folder: "/k/pepper", project: "/code/app")
+
+    func testAKittenWorksInTheProjectItNames() async {
+        kittens = [pepper]
+        backend.projects["/code/app"] = "project-app"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("how's the app doing?")
+        await controller.frontierTask?.value
+
+        let given = backend.sent[1].prompt
+        XCTAssertEqual(given.projectID, "project-app")
+        XCTAssertTrue(given.text.hasPrefix("how's the app doing?\n"))
+        XCTAssertTrue(given.text.contains("/k/pepper. Read its CLAUDE.md"))
+
+        let findings = await controller.runHealthCheck()
+        XCTAssertTrue(findings.filter { $0.check.hasPrefix("kitten:") }.allSatisfy(\.ok))
+    }
+
+    func testAKittenWhoseProjectIsntInT3SaysWhichFolderToAdd() async {
+        kittens = [pepper]
+        backend.projects["/k/pepper"] = "project-pepper"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")]]
+        await ask("how's the app doing?")
+        await controller.flow?.value
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertEqual(stage.bubble, .line("Pepper isn't a T3 project yet. Add /code/app in T3 and try again.", threadID: nil))
+
+        controller.threadListArrived = true
+        let findings = await controller.runHealthCheck()
+        XCTAssertEqual(findings.first { !$0.ok && $0.check == "kitten: Pepper" }?.fix, "Add /code/app as a project in T3.")
+    }
+
+    /// Its thread would count as the other kitten's too, and a follow-up to it gets no screen.
+    func testAKittenWorkingInTheFolderOfOneThatDoesntSeeTheScreenDoesntSeeItEither() async {
+        let visitor = Kitten(name: "Pepper", role: "Finance", covers: "the app", folder: "/k/pepper", project: clawde.folder)
+        kittens = [clawde, visitor]
+        backend.projects[clawde.folder] = "project-clawde"
+        backend.replies = [[.finished(fullText: "KITTEN: 2")], [.finished(fullText: "Started.")]]
+        await ask("how's the app doing?")
+        await controller.frontierTask?.value
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-clawde")
+        assertLeftOut(backend.sent[1].prompt)
+    }
+
+    /// Otherwise moving it to another project would leave its earlier threads seeing the screen.
+    func testAKittenThatDoesntSeeTheScreenStaysInItsOwnFolder() async {
+        let screenless = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", project: "/code/app", seesScreen: false)
+        XCTAssertEqual(screenless.workspace, "/k/clawde")
+        kittens = [screenless]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("Steve should stop doing that")
+        await controller.frontierTask?.value
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-clawde")
+        XCTAssertFalse(backend.sent[1].prompt.text.contains("CLAUDE.md"))
+
+        backend.projects = ["/code/app": "project-app"]
+        controller.threadListArrived = true
+        let findings = await controller.runHealthCheck()
+        XCTAssertEqual(findings.first { !$0.ok && $0.check == "kitten: Clawde" }?.fix, "Add /k/clawde as a project in T3.")
+    }
+
+    func testTurningOffTheScreenKeepsAKittensEarlierThreadsInItsProjectOffIt() async {
+        kittens = [pepper]
+        backend.projects["/code/app"] = "project-app"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("how's the app doing?")
+        await controller.frontierTask?.value
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-app")
+
+        var flipped = pepper
+        flipped.seesScreen = false
+        kittens = [flipped]
+        var earlier = session("thread-2", "Fix the chart")
+        earlier.projectPath = "/code/app"
+        backend.origins["thread-2"] = ThreadOrigin(title: "Fix the chart", projectPath: "/code/app", startedBy: .person)
+        controller.threadsChanged([earlier])
+        context.saved = 0
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("and that part?")
+        await controller.forwardTask?.value
+        let forwarded = backend.sent[3]
+        XCTAssertEqual(forwarded.mode, .forward)
+        XCTAssertEqual(forwarded.threadID, "thread-2")
+        assertLeftOut(forwarded.prompt)
+    }
+
     func testAKittensNumberThatIsntOnTheListGoesNowhere() async {
         kittens = [steve]
         backend.replies = [[.finished(fullText: "KITTEN: 4")]]

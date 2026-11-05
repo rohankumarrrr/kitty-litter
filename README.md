@@ -73,7 +73,7 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 
 ## Kittens
 
-A kitten is a specialist with a folder of its own: its instructions and what it knows about you, so you don't have to explain yourself each time. Add a folder to `~/kittens`, add it to T3 as a project, and Shades starts sending it things. Normally you just see Shades, and Shift-clicking him shows the rest. Channels shows what they've said to you and to each other, and what each one is on. Add `"inbox": true` to a kitten that sends you a lot, and its reports wait in one place, which keeps them across a restart. See [docs/kittens.md](docs/kittens.md).
+A kitten is a specialist with a folder of its own: its instructions and what it knows about you, so you don't have to explain yourself each time. Add a folder to `~/kittens`, add it to T3 as a project, and Shades starts sending it things. A kitten that looks after an app can work in that app's T3 project instead. Normally you just see Shades, and Shift-clicking him shows the rest. Channels shows what they've said to you and to each other, and what each one is on. Add `"inbox": true` to a kitten that sends you a lot, and its reports wait in one place, which keeps them across a restart. See [docs/kittens.md](docs/kittens.md).
 
 ## Changing Shades by asking Shades
 
