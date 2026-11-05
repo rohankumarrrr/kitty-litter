@@ -3,6 +3,23 @@ import ShadesCore
 import XCTest
 
 final class ReplyHoldbackTests: XCTestCase {
+    func testARouteIsHeldBackAndReadAtTheEnd() {
+        var holdback = ReplyHoldback()
+        XCTAssertNil(holdback.add("SE"))
+        XCTAssertNil(holdback.add("ND TO: 2"))
+        XCTAssertEqual(holdback.finish(fullText: "SEND TO: 2"), .route(session: 2))
+    }
+
+    func testAnAnswerThatStartsTheSameWayIsStillAnAnswer() {
+        var holdback = ReplyHoldback()
+        XCTAssertNil(holdback.add("S"))
+        XCTAssertEqual(holdback.add("o you could"), "So you could")
+    }
+
+    func testARouteToNowhereIsNothingWorthReading() {
+        XCTAssertEqual(ReplyHoldback().finish(fullText: "SEND TO: the second one"), .answer(""))
+    }
+
     func testARealAnswerShowsFromItsFirstLetter() {
         var holdback = ReplyHoldback()
         XCTAssertEqual(holdback.add("That's"), "That's")

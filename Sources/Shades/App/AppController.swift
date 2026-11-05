@@ -68,6 +68,16 @@ final class AppController {
     var notices: [Notice] = []
     /// Threads that are the cat's own plumbing, like writing a summary.
     var hiddenThreads: Set<String> = []
+    /// Threads the cat started to do real work, which may pass it on to another thread.
+    var dispatchers: Set<String> = []
+    var latestThreads: [AgentThread] = []
+    var threadListArrived = false
+    /// How long a question waits for the first list of sessions, so one asked right after launch can still be routed.
+    var threadListWait: TimeInterval = 2
+    /// The sessions the router was shown for the question it's on, in the order it saw them.
+    var roster: [AgentThread] = []
+    /// Whether the quick thread is on its first turn, with no conversation worth keeping yet.
+    var quickIsFresh = false
     var lineCounter = 0
     var replyGeneration = 0
 
@@ -89,6 +99,7 @@ final class AppController {
     var replyTask: Task<Void, Never>?
     var frontierTask: Task<Void, Never>?
     var reportTask: Task<Void, Never>?
+    var forwardTask: Task<Void, Never>?
     var voiceTask: Task<Void, Never>?
     private var listeners: [Task<Void, Never>] = []
 

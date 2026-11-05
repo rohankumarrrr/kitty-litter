@@ -1,14 +1,17 @@
 import Foundation
 import ShadesCore
 
-/// A handoff should never flash up as an answer, but real answers shouldn't wait. So
-/// text is held only while it could still turn out to be the marker, which for most
-/// replies is no longer than the first letter.
+/// Passing something on should never flash up as an answer, but real answers shouldn't wait.
+/// So text is held only while it could still turn out to be a marker, which for most replies
+/// is no longer than the first letter.
 struct ReplyHoldback {
     enum Outcome: Equatable {
         case answer(String)
         case handoff(task: String)
+        case route(session: Int)
     }
+
+    private static let markers = [Prompts.handoffMarker, Prompts.routeMarker]
 
     private(set) var text = ""
     private(set) var released = false
@@ -18,7 +21,7 @@ struct ReplyHoldback {
         text += delta
         if released { return Self.visible(text) }
         let start = Self.visible(text)
-        if start.isEmpty || start.hasPrefix(Prompts.handoffMarker) || Prompts.handoffMarker.hasPrefix(start) {
+        if start.isEmpty || Self.markers.contains(where: { start.hasPrefix($0) || $0.hasPrefix(start) }) {
             return nil
         }
         released = true
@@ -28,8 +31,11 @@ struct ReplyHoldback {
     /// The reply is done, so it's clear what it was. Prefers the backend's full text, if any.
     func finish(fullText: String?) -> Outcome {
         let full = fullText ?? text
+        if let session = Prompts.routeTarget(in: full) { return .route(session: session) }
         if let task = Prompts.handoffTask(in: full) { return .handoff(task: task) }
         let visible = Self.visible(full)
+        // A marker that goes nowhere is nothing worth reading.
+        if visible.hasPrefix(Prompts.routeMarker) { return .answer("") }
         // The marker with nothing after it is nothing worth reading.
         return .answer(visible.trimmingCharacters(in: .whitespacesAndNewlines) == Prompts.handoffMarker ? "" : visible)
     }

@@ -39,6 +39,26 @@ enum CatWords {
     static func finishedCaption(_ thread: AgentThread) -> String { "Done: \(thread.title)" }
     static func failedCaption(_ thread: AgentThread) -> String { "Hit a snag: \(thread.title)" }
     static func questionCaption(_ question: AgentQuestion) -> String { "Asking: \(question.threadTitle)" }
+    static let lostTheSession = "I lost track of which session that was for. Try asking again?"
+    static func sentTo(_ thread: AgentThread) -> String { "Sent that to \(thread.title)." }
+    static func passedOn(to title: String?) -> String {
+        title.map { "Work's started in a new session: \($0)." } ?? "Work's started in a new session."
+    }
+
+    /// A session's state and how long ago that was, for the router to read.
+    static func sessionStatus(_ thread: AgentThread, now: Date) -> String {
+        let minutes = Int(now.timeIntervalSince(thread.updatedAt) / 60)
+        let when: String
+        switch minutes {
+        case ..<1: when = "just now"
+        case 1: when = "1 minute ago"
+        case ..<60: when = "\(minutes) minutes ago"
+        case 60..<120: when = "1 hour ago"
+        default: when = "\(minutes / 60) hours ago"
+        }
+        return "\(status(thread)), \(when)"
+    }
+
     static let finishedWithoutReport = "It's finished, but didn't leave a report."
     static let failedWithoutReport = "It stopped before it could say why."
 

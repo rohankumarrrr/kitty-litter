@@ -239,7 +239,7 @@ final class WordsTests: XCTestCase {
 
     func testFriendlyModelNames() {
         XCTAssertEqual(ModelNames.friendly(.frontier), "Opus")
-        XCTAssertEqual(ModelNames.friendly(.quick), "GPT-6.1 Sol")
+        XCTAssertEqual(ModelNames.friendly(ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "medium")), "GPT-6.1 Sol")
         XCTAssertEqual(ModelNames.friendly(model: "claude-sonnet-5-5"), "Sonnet")
         XCTAssertEqual(ModelNames.friendly(model: "claude-fable-5-1"), "Fable")
         XCTAssertEqual(ModelNames.friendly(model: "llama-3"), "llama-3")

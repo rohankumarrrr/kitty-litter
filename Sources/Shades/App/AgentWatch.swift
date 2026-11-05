@@ -23,6 +23,10 @@ struct AgentWatch {
         quickThreads.insert(threadID)
     }
 
+    func isQuick(_ threadID: String) -> Bool {
+        quickThreads.contains(threadID)
+    }
+
     /// Takes a new thread list, returning what just happened in it.
     mutating func update(_ threads: [AgentThread]) -> [Event] {
         let work = threads.filter { !quickThreads.contains($0.id) }

@@ -13,6 +13,8 @@ extension AppController {
     }
 
     func threadsChanged(_ threads: [AgentThread]) {
+        latestThreads = threads
+        threadListArrived = true
         let events = watch.update(threads)
         let hadApprovals = !approvals.isEmpty
         approvals.sync(with: threads.filter { !hiddenThreads.contains($0.id) })

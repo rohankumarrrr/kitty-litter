@@ -15,7 +15,7 @@ final class T3WireTests: XCTestCase {
     // MARK: Effort maps to each provider's own option
 
     func testCodexEffortUsesReasoningEffort() {
-        let selection = T3Wire.ModelSelection(.quick)
+        let selection = T3Wire.ModelSelection(ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "medium"))
         XCTAssertEqual(selection.instanceId, "codex")
         XCTAssertEqual(selection.model, "gpt-6.1-sol")
         XCTAssertEqual(selection.options, [.init(id: "reasoningEffort", value: "medium")])

@@ -90,7 +90,7 @@ A new thread needs a project, so a thread with no project uses the one from `pro
 
 The effort option is `reasoningEffort` for Codex and `effort` for Claude and the rest. `generateTitle: true` has T3 write a title in the background.
 
-A follow-up is a `message.dispatch` command with `dispatchMode {"type":"start_immediately"}` and no `deliveryIntent`. That always gives the message its own run: it starts now on an idle thread and queues behind an active one. Adding `deliveryIntent: "auto"`, as T3's own composer does, can steer a run that's already going, and then there's no separate turn to report on.
+A follow-up is a `message.dispatch` command with `dispatchMode {"type":"start_immediately"}` and no `deliveryIntent`. Leaving out `modelSelection` keeps the thread's own model, which is how the router forwards a message into a session. That always gives the message its own run: it starts now on an idle thread and queues behind an active one. Adding `deliveryIntent: "auto"`, as T3's own composer does, can steer a run that's already going, and then there's no separate turn to report on.
 
 Only send `thread.runtime-mode.set` when the mode really changes. For providers that can't switch mode inside a session, it ends the session, and the next turn pays to start a new one.
 

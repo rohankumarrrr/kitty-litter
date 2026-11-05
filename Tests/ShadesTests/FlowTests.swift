@@ -95,7 +95,7 @@ private final class FakeStage: CatStage {
 }
 
 private final class FakeBackend: AgentBackend, @unchecked Sendable {
-    enum Mode: String { case start, followUp }
+    enum Mode: String { case start, followUp, forward }
     struct Sent {
         var mode: Mode
         var threadID: String?
@@ -154,6 +154,12 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
             events.forEach { continuation.yield($0) }
             continuation.finish()
         }
+    }
+
+    func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        let prompt = AgentPrompt(text: text, attachments: attachments, model: .quick, runtimeMode: .auto)
+        lock.withLock { _sent.append(Sent(mode: .forward, threadID: threadID, prompt: prompt)) }
+        return play(threadID: threadID)
     }
 
     func watchThreads() -> AsyncStream<[AgentThread]> {
@@ -291,12 +297,14 @@ final class FlowTests: XCTestCase {
             stage: stage,
             now: { [unowned self] in self.clock }
         )
+        controller.threadListWait = 0
     }
 
     private func settle() async {
         await controller.flow?.value
         await controller.replyTask?.value
         await controller.frontierTask?.value
+        await controller.forwardTask?.value
         await controller.voiceTask?.value
         for _ in 0..<20 { await Task.yield() }
     }
@@ -420,11 +428,148 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.archived, [])
     }
 
-    func testTheQuickThreadThatHandedOffSettlesButTheWorkDoesNot() async {
+    func testANewThreadThatOnlyPassedWorkOnIsTidiedAway() async {
         backend.replies = [[.finished(fullText: "HANDOFF: Fix the bug")], [.finished(fullText: "Done.")]]
         await ask("fix it")
         try? await Task.sleep(nanoseconds: 20_000_000)
-        XCTAssertEqual(backend.settled, ["thread-1"])
+        XCTAssertEqual(backend.archived, ["thread-1"])
+        XCTAssertEqual(backend.settled, [])
+    }
+
+    func testAConversationThatLaterPassesWorkOnIsKept() async {
+        backend.replies = [[.finished(fullText: "Red.")], [.finished(fullText: "HANDOFF: Fix the bug")], [.finished(fullText: "Done.")]]
+        await ask("what colour?")
+        await ask("now fix it")
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(backend.settled, ["thread-1", "thread-1"])
+        XCTAssertEqual(backend.archived, [])
+    }
+
+    // MARK: - Routing
+
+    private func session(_ id: String, _ title: String, status: AgentStatus = .completed, mode: RuntimeMode = .auto, age: TimeInterval = 60) -> AgentThread {
+        AgentThread(id: id, title: title, projectTitle: nil, status: status, model: "claude-opus-5-5", updatedAt: clock.addingTimeInterval(-age), runtimeMode: mode)
+    }
+
+    /// What really happened: a follow-up to Opus's report went to the Sol chat, which had never seen it.
+    func testAFollowUpAfterAHandoffGoesToTheSessionDoingTheWork() async {
+        backend.replies = [
+            [.finished(fullText: "HANDOFF: Review the video")],
+            [.finished(fullText: "Done.")],
+            [.finished(fullText: "SEND TO: 1")],
+        ]
+        await ask("what can I learn from this video?")
+
+        backend.reports["thread-2"] = "The main lesson is verification."
+        controller.threadsChanged([session("thread-2", "Review the video")])
+        await ask("I don't mean just CareerPilot")
+
+        let router = backend.sent[2].prompt.text
+        XCTAssertTrue(router.contains("1. Review the video"))
+        XCTAssertTrue(router.contains("Last said: The main lesson is verification."))
+
+        let forwarded = backend.sent[3]
+        XCTAssertEqual(forwarded.mode, .forward)
+        XCTAssertEqual(forwarded.threadID, "thread-2")
+        XCTAssertTrue(forwarded.prompt.text.hasPrefix("I don't mean just CareerPilot\n"))
+        XCTAssertEqual(stage.bubble, .line("Sent that to Review the video.", threadID: "thread-2"))
+        for bubble in stage.bubbles {
+            if case .reply? = bubble { XCTFail("the routing decision was shown as an answer") }
+        }
+    }
+
+    func testPassingOnIsNeverShownAsAnAnswerEvenWhileStreaming() async {
+        controller.threadsChanged([session("w", "Work")])
+        backend.replies = [[.text(delta: "SE"), .text(delta: "ND TO"), .text(delta: ": 1"), .finished(fullText: "SEND TO: 1")]]
+        await ask("and that part?")
+        for bubble in stage.bubbles {
+            if case .reply? = bubble { XCTFail("the routing decision was shown as an answer") }
+        }
+        XCTAssertEqual(backend.sent.last?.mode, .forward)
+    }
+
+    func testASessionWithFullAccessGetsYourWordsButNotYourScreen() async {
+        controller.threadsChanged([session("w", "Work", mode: .fullAccess)])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("and that part?")
+        let forwarded = backend.sent[1].prompt
+        XCTAssertTrue(forwarded.text.hasPrefix("and that part?"))
+        XCTAssertTrue(forwarded.text.contains("left out"))
+        XCTAssertFalse(forwarded.text.contains("<screen>"))
+        XCTAssertTrue(forwarded.attachments.isEmpty)
+        XCTAssertEqual(context.saved, 0)
+    }
+
+    func testAnOrdinarySessionSeesYourScreenToo() async {
+        controller.threadsChanged([session("w", "Work")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("and that part?")
+        let forwarded = backend.sent[1].prompt
+        XCTAssertTrue(forwarded.text.contains("<screen>"))
+        XCTAssertEqual(forwarded.attachments.count, 1)
+    }
+
+    func testANumberThatIsntOnTheListSendsNothing() async {
+        controller.threadsChanged([session("w", "Work")])
+        backend.replies = [[.finished(fullText: "SEND TO: 7")]]
+        await ask("and that part?")
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertEqual(stage.bubble, .line("I lost track of which session that was for. Try asking again?", threadID: nil))
+    }
+
+    func testTheRouterSeesRecentSessionsWithWhatsRunningFirst() async {
+        controller.threadsChanged([
+            session("old", "Old work", age: 2 * 24 * 60 * 60),
+            session("done", "Finished work", age: 300),
+            session("busy", "Running work", status: .running, age: 3000),
+        ])
+        await ask("hello")
+        let router = backend.sent[0].prompt.text
+        XCTAssertTrue(router.contains("1. Running work"))
+        XCTAssertTrue(router.contains("2. Finished work"))
+        XCTAssertFalse(router.contains("Old work"))
+    }
+
+    func testAQuestionRightAfterLaunchWaitsForTheSessions() async {
+        controller.threadListWait = 2
+        let asking = Task { await ask("and that part?") }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertTrue(backend.sent.isEmpty, "the list hasn't arrived yet")
+        controller.threadsChanged([session("w", "Work")])
+        await asking.value
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("1. Work"))
+    }
+
+    func testTheRouterDoesntListTheChatItsIn() async {
+        backend.replies = [[.finished(fullText: "Red.")], [.finished(fullText: "Blue.")]]
+        await ask("what colour?")
+        controller.threadsChanged([session("thread-1", "What colour?")])
+        await ask("and now?")
+        XCTAssertFalse(backend.sent[1].prompt.text.contains("1. What colour?"))
+    }
+
+    func testAnAgentThatOnlyStartedAnotherSessionStepsAside() async {
+        backend.replies = [[.finished(fullText: "HANDOFF: Fix the bug")], [.finished(fullText: "Started.")]]
+        await ask("fix it")
+
+        var opus = session("thread-2", "Fix the bug", status: .running)
+        let worker = session("worker", "Fix the login bug", status: .running)
+        controller.threadsChanged([opus, worker])
+        backend.reports["thread-2"] = "The change went to a new thread, <t3-thread://v2/env/worker>, in a worktree."
+        opus.status = .completed
+        controller.threadsChanged([opus, worker])
+        await controller.reportTask?.value
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertEqual(stage.bubble, .line("Work's started in a new session: Fix the login bug.", threadID: "worker"))
+        XCTAssertTrue(backend.settled.contains("thread-2"))
+        XCTAssertEqual(backend.sent.count, 2, "no summary for a thread that only passed work on")
+
+        backend.replies = [[.finished(fullText: "Okay.")]]
+        await ask("how's it going?")
+        let router = backend.sent[2].prompt.text
+        XCTAssertTrue(router.contains("1. Fix the login bug"))
+        XCTAssertFalse(router.contains("Fix the bug ("))
     }
 
     func testLoadingTheEarsDoesntTalkOverAnything() async {

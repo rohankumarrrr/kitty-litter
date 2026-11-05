@@ -101,8 +101,8 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         fields = form
 
         for view in [
-            row("Quick model", form.quickModel),
-            row("Quick mode", form.quickMode),
+            row("Front door model", form.quickModel),
+            row("Front door mode", form.quickMode),
             row("Frontier model", form.frontierModel),
             row("Frontier mode", form.frontierMode),
             row("Summary model", form.summaryModel),

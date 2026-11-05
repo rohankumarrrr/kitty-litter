@@ -88,23 +88,49 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
             let attachments = try await upload(prompt.attachments)
             try await setRuntimeMode(prompt.runtimeMode, on: threadID)
             continuation.yield(.started(threadID: threadID))
-
-            let messageID = Self.newID()
-            let message = T3Wire.DispatchMessage(
-                commandId: Self.newID(),
-                threadId: threadID,
-                messageId: messageID,
-                text: prompt.text,
+            await send(
+                prompt.text,
                 attachments: attachments,
-                modelSelection: T3Wire.ModelSelection(prompt.model)
+                model: T3Wire.ModelSelection(prompt.model),
+                title: prompt.title ?? "",
+                to: threadID,
+                continuation: continuation
             )
-            let tracker = TurnProgress(T3TurnTracker(threadID: threadID, messageID: messageID, threadTitle: prompt.title ?? ""))
+        }
+    }
 
-            // Listen first: the snapshot this asks for and the events after it can't miss the new run.
-            // Nothing waits for that snapshot, so sending the message isn't held up.
-            await follow(threadID: threadID, afterSequence: nil, tracker: tracker, continuation: continuation) { [socket] in
-                let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, message)
-            }
+    public func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        stream { [self] continuation in
+            try await connect()
+            let uploaded = try await upload(attachments)
+            continuation.yield(.started(threadID: threadID))
+            await send(text, attachments: uploaded, model: nil, title: "", to: threadID, continuation: continuation)
+        }
+    }
+
+    private func send(
+        _ text: String,
+        attachments: [T3Wire.ImageAttachment],
+        model: T3Wire.ModelSelection?,
+        title: String,
+        to threadID: String,
+        continuation: AsyncThrowingStream<AgentReplyEvent, Error>.Continuation
+    ) async {
+        let messageID = Self.newID()
+        let message = T3Wire.DispatchMessage(
+            commandId: Self.newID(),
+            threadId: threadID,
+            messageId: messageID,
+            text: text,
+            attachments: attachments,
+            modelSelection: model
+        )
+        let tracker = TurnProgress(T3TurnTracker(threadID: threadID, messageID: messageID, threadTitle: title))
+
+        // Listen first: the snapshot this asks for and the events after it can't miss the new run.
+        // Nothing waits for that snapshot, so sending the message isn't held up.
+        await follow(threadID: threadID, afterSequence: nil, tracker: tracker, continuation: continuation) { [socket] in
+            let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, message)
         }
     }
 

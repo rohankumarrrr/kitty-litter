@@ -9,6 +9,10 @@ extension AppController {
     func reportOn(_ thread: AgentThread, failed: Bool) {
         reportTask = Task {
             let report = await backend.finalReport(threadID: thread.id)
+            if !failed, dispatchers.contains(thread.id), let next = report.flatMap(ReportDigest.linkedThreadID(in:)), next != thread.id {
+                passedOn(thread, to: next)
+                return
+            }
             let words = await words(for: report, of: thread, failed: failed)
             post(
                 caption: failed ? CatWords.failedCaption(thread) : CatWords.finishedCaption(thread),
@@ -16,6 +20,17 @@ extension AppController {
                 threadID: thread.id
             )
         }
+    }
+
+    /// All this thread did was start another one, so that's where the work is now.
+    private func passedOn(_ thread: AgentThread, to next: String) {
+        dispatchers.insert(next)
+        hiddenThreads.insert(thread.id)
+        watch.markQuick(thread.id)
+        Task { [backend] in try? await backend.settle(threadID: thread.id) }
+        stage.showThreads(watch.rows(at: now()), status: watch.summary)
+        let title = latestThreads.first { $0.id == next }?.title
+        say(CatWords.passedOn(to: title), threadID: next)
     }
 
     func announce(_ question: AgentQuestion) {

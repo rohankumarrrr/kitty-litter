@@ -12,8 +12,8 @@ public struct ModelChoice: Codable, Sendable, Hashable {
         self.effort = effort
     }
 
-    /// Answers quick questions about the screen.
-    public static let quick = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "medium")
+    /// The front door: answers what it can, and decides where everything else belongs.
+    public static let quick = ModelChoice(provider: "claudeAgent", model: "claude-opus-5-5", effort: "xhigh")
     /// Takes on anything that needs real work.
     public static let frontier = ModelChoice(provider: "claudeAgent", model: "claude-opus-5-5", effort: "xhigh")
     /// Sums up how a session went.
@@ -149,6 +149,8 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var updatedAt: Date
     public var pendingApprovals: [ApprovalRequest]
     public var pendingQuestion: AgentQuestion?
+    /// How much this thread is allowed to do. `nil` if the backend doesn't say.
+    public var runtimeMode: RuntimeMode?
 
     public init(
         id: String,
@@ -158,7 +160,8 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         model: String,
         updatedAt: Date,
         pendingApprovals: [ApprovalRequest] = [],
-        pendingQuestion: AgentQuestion? = nil
+        pendingQuestion: AgentQuestion? = nil,
+        runtimeMode: RuntimeMode? = nil
     ) {
         self.id = id
         self.title = title
@@ -168,6 +171,7 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         self.updatedAt = updatedAt
         self.pendingApprovals = pendingApprovals
         self.pendingQuestion = pendingQuestion
+        self.runtimeMode = runtimeMode
     }
 }
 
@@ -179,6 +183,8 @@ public protocol AgentBackend: AnyObject, Sendable {
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error>
     /// Sends another message to an existing thread and streams that turn.
     func followUp(threadID: String, _ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error>
+    /// Sends a message into a thread that's someone else's, leaving its model and permissions as they are.
+    func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error>
     /// The current threads, sent again whenever anything changes.
     func watchThreads() -> AsyncStream<[AgentThread]>
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws
@@ -193,6 +199,9 @@ public protocol AgentBackend: AnyObject, Sendable {
 }
 
 public extension AgentBackend {
+    func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
     func archive(threadID: String) async throws {}
     func settle(threadID: String) async throws {}
     func finalReport(threadID: String) async -> String? { nil }

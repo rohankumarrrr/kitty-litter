@@ -291,7 +291,8 @@ enum T3Wire {
         let messageId: String
         let text: String
         let attachments: [ImageAttachment]
-        let modelSelection: ModelSelection
+        /// Left out, the thread carries on with the model it already has.
+        let modelSelection: ModelSelection?
         var dispatchMode = Mode()
         var createdBy = "user"
         var creationSource = "web"

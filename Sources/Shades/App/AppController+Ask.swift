@@ -75,10 +75,20 @@ extension AppController {
     }
 
     func runQuickTurn(_ question: String, snapshot: ScreenSnapshot?, generation: Int) async {
+        await waitForThreadList()
+        guard generation == replyGeneration else { return }
+
+        let current = quick.thread(at: now())
+        quickIsFresh = current == nil
+        let sessions = rosterThreads(excluding: current)
+        let briefs = await briefs(for: sessions)
+        guard generation == replyGeneration else { return }
+        roster = sessions
+
         let prompt = AgentPrompt(
             // A question can run over several lines, and a title can't.
             title: String(question.prefix { !$0.isNewline }.prefix(60)),
-            text: Prompts.quick(question: question, snapshot: snapshot),
+            text: Prompts.quick(question: question, snapshot: snapshot, sessions: briefs),
             attachments: attachments(for: snapshot),
             model: settings.quickModel,
             runtimeMode: settings.quickMode
@@ -91,6 +101,7 @@ extension AppController {
             // The old thread might have gone. Nothing was shown yet, so just start fresh.
             if case .failed(_, _, false) = end {
                 quick.reset()
+                quickIsFresh = true
                 end = await consume(start(), question: question, snapshot: snapshot, generation: generation)
             }
         } else {
@@ -147,10 +158,7 @@ extension AppController {
         // The ten minutes run from the last time the thread was used.
         if let threadID = quick.thread(at: now()) {
             quick.use(threadID, at: now())
-            // Its job is done either way, whether that was answering or passing the work on.
-            if outcome != .answer("") {
-                Task { [backend] in try? await backend.settle(threadID: threadID) }
-            }
+            wrapUpQuickThread(threadID, after: outcome)
         }
         guard generation == replyGeneration else { return }
         switch outcome {
@@ -166,7 +174,33 @@ extension AppController {
         case .handoff(let task):
             reply = nil
             handOff(task: task, question: question, snapshot: snapshot)
+        case .route(let session):
+            reply = nil
+            guard roster.indices.contains(session - 1) else {
+                say(CatWords.lostTheSession)
+                return
+            }
+            forward(question, to: roster[session - 1], snapshot: snapshot)
         }
+    }
+
+    /// Its job is done, whether that was answering or passing the work on. A new thread that
+    /// only passed something on has nothing worth keeping, so it goes rather than cluttering T3.
+    private func wrapUpQuickThread(_ threadID: String, after outcome: ReplyHoldback.Outcome) {
+        var passedOn = false
+        switch outcome {
+        case .answer(let text):
+            if text.isEmpty { return }
+        case .handoff, .route:
+            passedOn = true
+        }
+        if passedOn && quickIsFresh {
+            quick.reset()
+            Task { [backend] in try? await backend.archive(threadID: threadID) }
+        } else {
+            Task { [backend] in try? await backend.settle(threadID: threadID) }
+        }
+        quickIsFresh = false
     }
 
     // MARK: - Handing off
@@ -212,6 +246,7 @@ extension AppController {
                     switch event {
                     case .started(let threadID):
                         started = true
+                        dispatchers.insert(threadID)
                         say(CatWords.onIt(modelName: frontierName), threadID: threadID)
                     case .needsApproval(let request):
                         addApproval(request)

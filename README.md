@@ -18,11 +18,17 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 ## How the work gets routed
 
-There's no list of projects to maintain. A quick model answers what it can, and when something needs real work it hands off to the frontier agent by itself, saying so as it does. Fix goes straight to the frontier agent.
+There's no list of projects to maintain. Shades acts as one router in front of your agents. Everything you say goes to one model that can see your recent T3 sessions, and it does one of three things:
+
+- **Answers** if it can.
+- **Sends it to a session** if it carries on from one, such as a follow-up to what Opus just reported. Your exact words go there, never a paraphrase, and that session keeps its own model and permissions.
+- **Starts new work** if nothing has the context, saying so as it does. Fix always starts new work.
+
+Sessions with full access get your words but not your screen, so text on a page can't reach an agent that's allowed to do anything.
 
 The frontier agent starts with no project, and finds the right one from what you said and what's on your screen, reading READMEs when a project's name isn't its folder name. For code changes it starts a new thread in that project's worktree. Research and questions it just answers.
 
-Both models are T3 settings you can change, and default to GPT-6.1 Sol on medium for quick answers and Claude Opus 5.5 on xHigh for real work.
+The models are settings you can change. Opus 5.5 on xHigh is the default for both the front door and real work, and GPT-6.1 Sol on low writes the summaries.
 
 ## Install
 

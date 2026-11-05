@@ -8,6 +8,7 @@ import ShadesCore
 ///     shades --ask "What's on my screen?" --image page.jpg
 ///     shades --hand-off "Which of my projects is the budget app?" --image page.jpg
 ///     shades --fix "The total is wrong" --image page.jpg
+///     shades --ask "Research this" --then "And that part?" --image page.jpg   # waits for the agents first
 @MainActor
 enum DevFlags {
     static var wantsFlow: Bool { ["--ask", "--hand-off", "--fix"].contains { value(after: $0) != nil } }
@@ -15,6 +16,14 @@ enum DevFlags {
     static func run(on controller: AppController) {
         if let question = value(after: "--ask") {
             controller.ask(question, capture: look(controller))
+            if let next = value(after: "--then") {
+                Task {
+                    repeat {
+                        try? await Task.sleep(nanoseconds: 15_000_000_000)
+                    } while controller.watch.isBusy || controller.reply?.done == false
+                    controller.ask(next, capture: look(controller))
+                }
+            }
         } else if let request = value(after: "--hand-off") {
             Task {
                 let snapshot = await look(controller).value.snapshot

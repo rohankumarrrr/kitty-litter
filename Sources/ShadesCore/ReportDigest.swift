@@ -30,6 +30,12 @@ public enum ReportDigest {
         return String(kept.prefix(cutLimit)).trimmingCharacters(in: .whitespaces) + "…"
     }
 
+    /// The thread a report points to, when all an agent did was start another one.
+    public static func linkedThreadID(in report: String) -> String? {
+        guard let match = report.firstMatch(of: #/t3-thread://v2/[^/\s>]+/([^>\s)]+)/#) else { return nil }
+        return String(match.1)
+    }
+
     private static func withoutMarks(_ line: String) -> String {
         var text = line.replacingOccurrences(of: #"^([-*•]|\d+\.)\s+"#, with: "", options: .regularExpression)
         text = text.replacingOccurrences(of: #"\[([^\]]+)\]\([^)]*\)"#, with: "$1", options: .regularExpression)

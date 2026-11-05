@@ -42,6 +42,18 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         quickTurn(threadID: threadID, prompt: prompt)
     }
 
+    func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        print("[demo] forwarded to \(threadID): \(text.prefix(60))")
+        update { threads in
+            guard let index = threads.firstIndex(where: { $0.id == threadID }) else { return }
+            threads[index].status = .running
+        }
+        return AsyncThrowingStream { continuation in
+            continuation.yield(.started(threadID: threadID))
+            continuation.finish()
+        }
+    }
+
     func watchThreads() -> AsyncStream<[AgentThread]> {
         AsyncStream { continuation in
             let id = UUID()
@@ -187,6 +199,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     private static func reply(to question: String) -> String {
         let lower = question.lowercased()
+        if lower.contains("follow") || lower.contains("what you") { return "\(Prompts.routeMarker) 1" }
         if ["fix", "change", "refactor", "build", "rewrite"].contains(where: lower.contains) {
             return "\(Prompts.handoffMarker) Fix the Buy button on the pricing page so it opens checkout."
         }

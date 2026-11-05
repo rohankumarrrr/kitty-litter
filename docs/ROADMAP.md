@@ -2,6 +2,18 @@
 
 Shades starts small on purpose. Version one is four things done well: ask about your screen, fix what you're looking at, talk and dictate, and keep an eye on your agents. These are the ideas saved for later.
 
+## Where this is heading
+
+Shades as a conductor with a kitten for each area of your life or work. Shades decides what goes where and reports back, and each kitten owns its work from start to finish.
+
+- **Kittens.** Each one is a short charter, kept on your Mac: what it covers, which repos and connectors it uses, how it ships, and what done means. Each task gets a fresh thread, and the router sends follow-ups to it.
+- **Review before reporting.** A kitten passes its change to a reviewer with fresh context that has to actually run it, and they go back and forth a few times at most. Then Shades tells you what's been done, and what's still open.
+- **"Ship it."** Your own words go to that kitten, which merges, watches CI and the PR, and checks production where it can.
+- **Working together.** Something like a trip touches several kittens. Shades asks each one and combines the answers, so they don't need to talk among themselves and private data stays where it belongs.
+- **The right model for the job.** Shades and its kittens use Opus for judgment, and something cheaper and faster for simple tasks.
+
+One kitten gets built end to end before any others.
+
 ## Next ideas
 
 - **Pointing at things.** Ask "where do I change this?" and the cat runs to the button and sits on it. The agent returns screen coordinates, and the cat's perching does the rest. This also suits step-by-step homework hints, where it shows you the next step without doing it for you.

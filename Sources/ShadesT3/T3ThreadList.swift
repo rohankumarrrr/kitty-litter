@@ -140,7 +140,8 @@ struct T3ThreadList {
                     model: thread.modelSelection.model,
                     updatedAt: thread.updatedAt,
                     pendingApprovals: approvals,
-                    pendingQuestion: questionsByListedThread[thread.id]
+                    pendingQuestion: questionsByListedThread[thread.id],
+                    runtimeMode: thread.runtimeMode.flatMap(RuntimeMode.init(rawValue:))
                 )
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }
