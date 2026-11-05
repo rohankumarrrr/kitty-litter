@@ -68,7 +68,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | fix | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | buttons | typed | front | quit")
+            print("ask [question] | fix | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -80,7 +80,13 @@ final class DemoDriver {
         case "submit":
             stage.input.submit(rest)
         case "esc":
-            if stage.input.isVisible { stage.input.cancel() } else { controller.bubbleDismissed(byClick: false) }
+            if stage.input.isVisible {
+                stage.input.cancel()
+            } else if stage.inbox.isVisible {
+                stage.inbox.hide()
+            } else {
+                controller.bubbleDismissed(byClick: false)
+            }
         case "clickaway":
             controller.bubbleDismissed(byClick: true)
         case "talk":
@@ -105,6 +111,21 @@ final class DemoDriver {
             let kind = parts.first.flatMap(ApprovalKind.init(rawValue:)) ?? .command
             let threadID = kind == .fileRead ? "demo-research" : "demo-tidy"
             self.parts.backend.requestApproval(threadID: threadID, kind: kind, summary: parts.count > 1 ? parts[1] : "npm run build && npm test")
+        case "report":
+            parts.backend.report(rest)
+        case "inbox":
+            // The same as pressing the first row's buttons, so nothing has to click.
+            let first = controller.inboxEntries.first { $0.questionID == nil }
+            switch rest {
+            case "reply":
+                if let first { controller.inboxAction(.reply(first)) }
+            case "done":
+                if let first { controller.inboxAction(.done(id: first.id)) }
+            case "clear":
+                controller.inboxAction(.clearShipped)
+            default:
+                controller.inboxPressed()
+            }
         case "finish":
             parts.backend.finish(threadID: rest.isEmpty ? "demo-tidy" : rest)
         case "quiet":
@@ -136,6 +157,7 @@ final class DemoDriver {
                 ("bubble", stage.bubble.panel),
                 ("input", stage.input.panel),
                 ("dashboard", stage.dashboard.panel),
+                ("inbox", stage.inbox.panel),
             ] {
                 print("window \(name) id=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) frame=\(NSStringFromRect(window.frame)) clicks=\(!window.ignoresMouseEvents)")
             }

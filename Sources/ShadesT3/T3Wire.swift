@@ -432,6 +432,8 @@ enum T3Wire {
         let pendingRuntimeRequest: PendingRequest?
         /// Shells and the like it left running when its turn ended. Only how many matters.
         let pendingBackgroundTasks: [Lossy<Ignored>]?
+        let latestRunId: String?
+        let latestRunCompletedAt: Date?
         let updatedAt: Date
         let archivedAt: Date?
         let deletedAt: Date?

@@ -153,6 +153,9 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var pendingQuestion: AgentQuestion?
     /// How much this thread is allowed to do. `nil` if the backend doesn't say.
     public var runtimeMode: RuntimeMode?
+    /// The thread's latest run, which tells one report from the next. `nil` if the backend doesn't say.
+    public var lastRunID: String?
+    public var lastRunEndedAt: Date?
 
     public init(
         id: String,
@@ -164,7 +167,9 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         pendingApprovals: [ApprovalRequest] = [],
         pendingQuestion: AgentQuestion? = nil,
         runtimeMode: RuntimeMode? = nil,
-        projectPath: String? = nil
+        projectPath: String? = nil,
+        lastRunID: String? = nil,
+        lastRunEndedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -176,6 +181,8 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         self.pendingApprovals = pendingApprovals
         self.pendingQuestion = pendingQuestion
         self.runtimeMode = runtimeMode
+        self.lastRunID = lastRunID
+        self.lastRunEndedAt = lastRunEndedAt
     }
 }
 

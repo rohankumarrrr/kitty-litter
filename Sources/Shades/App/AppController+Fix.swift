@@ -13,6 +13,7 @@ extension AppController {
         picking = true
         defer { picking = false }
         stage.hideInput()
+        stage.hideInbox()
         guard let region = await context.pickRegion() else { return }
         stage.catRun(toRegion: region) {}
         let capture = await startLook(CaptureOptions(focusRegion: region)).value

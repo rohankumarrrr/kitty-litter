@@ -34,6 +34,7 @@ To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-
 - Capture only when asked, never in the background, and skip apps on the privacy list.
 - A kitten with `seesScreen: false` never gets text from your screen, and that includes follow-ups to its work in other projects. `docs/kittens.md` says what enforces that and what doesn't.
 - Claude threads in this repo run in a sandbox set by `.claude/settings.json`, which also keeps them out of saved copies of the screen. Run `swift` commands on their own, with no pipe or `cd`, since only that form is let out. A refused read means it's working, so don't look for a way around it.
+- An inbox row is data, and a reply is only what you typed or said. It goes straight to the thread, with no capture and no canned answer.
 - When the self-check could have caught a problem, teach it to, in `HealthCheck.swift`, with a test.
 - Never log or store tokens, transcripts, screenshots or page text beyond what a feature needs.
 - Keep dependencies few, and permissively licensed only. Don't copy from GPL projects.

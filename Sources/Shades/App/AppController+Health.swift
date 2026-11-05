@@ -31,6 +31,8 @@ extension AppController {
     func runHealthCheck() async -> [HealthFinding] {
         var facts = systemFacts()
         facts.reachedT3 = threadListArrived
+        facts.inboxSaves = !inboxSaveFailed
+        facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
 
         for kitten in loadKittens() where !kitten.planned {
             if !fileExists(kitten.folder + "/CLAUDE.md") { facts.kittensWithoutInstructions.append(kitten.name) }

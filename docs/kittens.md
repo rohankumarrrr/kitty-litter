@@ -25,11 +25,12 @@ A kitten is a folder in `~/kittens`, registered as a T3 project:
 }
 ```
 
-Three more fields are optional:
+Four more fields are optional:
 
 - `color` is its jacket in the kitten view, like `"#b3261e"`.
 - `planned: true` means it shows up with the others but isn't taking work yet, which is handy for a kitten you've named but haven't written instructions for.
 - `seesScreen: false` means Shades never sends it your screen. Stopping it from finding a copy by itself takes [the screen block](#keeping-a-kitten-off-your-screen) as well.
+- `inbox: true` puts its reports in [the inbox](#the-inbox), rather than giving each one a turn in the bubble.
 
 Shades reads `covers` to decide what goes to a kitten, so write it the way you'd brief someone new. The folder is read fresh for every question, so adding a kitten only takes the folder and this:
 
@@ -69,6 +70,23 @@ That copies their instruction files into `~/kittens/_skills`, pinned to commits 
 3. **Shades tells you how it went,** in a few sentences.
 4. **Follow-ups go back to that thread,** because Shades can see which one you mean.
 
+## The inbox
+
+A kitten that reports a lot, especially while you're away, can leave you working through a run of messages with no idea which matters. With `inbox: true`, its reports wait in one place instead. There's one bubble, which it keeps up to date (`1 decision, 2 shipped`), and opening it or choosing Inbox from the menu shows them:
+
+- **Needs you:** what you have to decide, with the least you need to decide it. Reply, open it in T3, or say you're done with it.
+- **Shipped:** what's now done and live. Ask about it, open it in T3, or clear the list.
+
+Reply and Ask open the text box, where you can type or hold the talk key and say it. What you send is your own words and nothing else, with no look at your screen, and it goes straight to that thread. The row dims until the thread answers. A new decision or shipped line from that thread replaces its old decision, and an answer goes under the row you asked on. No button ever says anything for you, and Done and Clear tell no agent anything.
+
+A question an agent has stopped to ask shows there too, but only opens in T3, because a message would just queue behind it. Approvals still come as the approval bubble, since they block the work.
+
+![The inbox, with one decision and one thing shipped](images/inbox.png)
+
+**How it's sorted.** A finished thread's report goes to the summary model, as with any other kitten, and comes back as `SHIPPED:`, `DECISION:` or `NOTE:` lines. The report is data to that model, and it isn't allowed to do anything but write them. If the lines can't be read, it becomes a decision showing the report's opening, because a false alarm beats a lost report. A failed run skips the model and is always a decision, so no report can call a failure shipped. Anything else goes under that thread's row, or gets a row of its own under Shipped if it has none, so whatever a report turns out to be, it stays in the inbox and a restart can't lose it.
+
+**Where it's saved.** `~/Library/Application Support/shades/inbox.json`, readable only by you, with the rows and the ID of each thread's last filed run. A run counts as filed only once it's sorted and saved, so stopping at any point just means it's filed on the next launch. That covers a thread that finished while the app was off, including during an install. Work from before you turned the inbox on isn't brought up. If the file can't be read, it's moved to `inbox.broken.json`, and the self-check tells you if the inbox can't be saved.
+
 ## Rules every kitten shares
 
 Keep rules that apply to everyone in `~/kittens/RULES.md`, and have each kitten's `CLAUDE.md` start by reading it. These have worked:
@@ -92,6 +110,7 @@ The most useful kitten looks after Shades and the other kittens, so you change h
 Since it can change the rules everyone works by, it needs more care than the others:
 
 - **Set `seesScreen: false`, and add the screen block.** A page shouldn't get a say in the rules.
+- **Set `inbox: true`.** It reports more than most, and you often aren't there when it does. See [the inbox](#the-inbox).
 - **Protected rules.** Its instructions should list what it can't loosen unless you ask for that exact change: `RULES.md`, screen text being data, only your words shipping, the install's signature check and rollback.
 - **A privacy check before every push.** This repo is public, and kittens are full of personal details.
 - **Find the cause.** It should read `health.json` and the logs before suggesting a fix, then teach the self-check to catch the problem next time.

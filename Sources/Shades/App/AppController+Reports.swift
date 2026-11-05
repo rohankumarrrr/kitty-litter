@@ -8,12 +8,28 @@ extension AppController {
 
     func reportOn(_ thread: AgentThread, failed: Bool) {
         reportTask = Task {
+            // A run that ended while this one was being read gets its turn here.
+            defer {
+                filing.remove(thread.id)
+                fileOwedReports()
+            }
             try? await Task.sleep(nanoseconds: UInt64(reportDelay * 1_000_000_000))
-            if latestThreads.first(where: { $0.id == thread.id })?.status.isActive == true { return }
+            // Taken before the report is read, so the run it names can't be newer than the words.
+            let current = latestThreads.first { $0.id == thread.id } ?? thread
+            if current.status.isActive { return }
 
             let report = await backend.finalReport(threadID: thread.id)
+            let toInbox = goesToInbox(current)
             if !failed, dispatchers.contains(thread.id), let next = report.flatMap(ReportDigest.linkedThreadID(in:)), next != thread.id {
                 passedOn(thread, to: next)
+                if toInbox {
+                    inbox.skip(current)
+                    keepInbox()
+                }
+                return
+            }
+            if toInbox {
+                await file(report, of: current, failed: current.status == .failed)
                 return
             }
             let words = await words(for: report, of: thread, failed: failed)
@@ -42,6 +58,11 @@ extension AppController {
     }
 
     func announce(_ question: AgentQuestion) {
+        if let thread = latestThreads.first(where: { $0.pendingQuestion?.id == question.id }), goesToInbox(thread) {
+            nudgeInbox()
+            renderBubble()
+            return
+        }
         post(
             caption: CatWords.questionCaption(question),
             text: CatWords.question(question),
@@ -68,7 +89,7 @@ extension AppController {
 
     /// Runs out of sight and tidies up after itself. It only has words to write, so it isn't
     /// allowed to do anything else, and the report it's reading doesn't get a say in that.
-    private func summarize(_ prompt: AgentPrompt) async -> String? {
+    func summarize(_ prompt: AgentPrompt) async -> String? {
         var threadID: String?
         var text: String?
         do {

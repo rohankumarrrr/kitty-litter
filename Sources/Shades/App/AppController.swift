@@ -31,6 +31,7 @@ final class AppController {
     let systemFacts: () -> HealthFacts
     let fileExists: (String) -> Bool
     let reportHealth: ([HealthFinding]) -> Void
+    let saveInbox: (Inbox) throws -> Void
     let stage: CatStage
     let now: () -> Date
     private(set) var settings: Settings
@@ -75,6 +76,15 @@ final class AppController {
     var hiddenThreads: Set<String> = []
     /// Threads the cat started to do real work, which may pass it on to another thread.
     var dispatchers: Set<String> = []
+    var inbox: Inbox
+    /// Threads whose report is being read and sorted, so each is only filed once.
+    var filing: Set<String> = []
+    /// Runs that turned out not to belong to a kitten with an inbox, so nobody reads the kittens again for them.
+    var notForInbox: Set<String> = []
+    /// Whether the bubble should mention the inbox.
+    var inboxNudge = false
+    var inboxReplyIsOpen = false
+    var inboxSaveFailed = false
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
@@ -129,6 +139,8 @@ final class AppController {
         systemFacts = dependencies.systemFacts
         fileExists = dependencies.fileExists
         reportHealth = dependencies.reportHealth
+        inbox = dependencies.inbox
+        saveInbox = dependencies.saveInbox
         self.stage = stage
         self.now = now
     }
@@ -162,6 +174,7 @@ final class AppController {
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.keyReleased(key) } }
         }
         startKeys()
+        startInbox()
     }
 
     func startKeys() {
@@ -198,6 +211,8 @@ final class AppController {
             stage.copyToPasteboard(text)
         case .approval(let request, let decision):
             answer(request, decision)
+        case .openInbox:
+            inboxPressed()
         }
     }
 
@@ -225,6 +240,10 @@ final class AppController {
             replyGeneration += 1
         case .line:
             line = nil
+        case .inbox:
+            // Clicking elsewhere shouldn't lose something that needs you.
+            guard !byClick || !inboxEntries.contains(where: \.needsYou) else { return }
+            inboxNudge = false
         }
         renderBubble()
     }
@@ -239,6 +258,10 @@ final class AppController {
             return .reply(text: reply.text, done: reply.done, threadID: reply.threadID, note: reply.note)
         }
         if let line { return .line(line.text, threadID: line.threadID) }
+        if inboxNudge {
+            let headline = CatWords.inboxHeadline(inboxEntries)
+            if !headline.isEmpty { return .inbox(headline) }
+        }
         if let notice = notices.first {
             return .notice(caption: notice.caption, text: notice.text, threadID: notice.threadID)
         }
@@ -258,7 +281,7 @@ final class AppController {
             status = .attention
         } else if reply?.text.isEmpty == true {
             status = .thinking
-        } else if watch.needsYouCount > 0 {
+        } else if watch.needsYouCount > 0 || inbox.entries.contains(where: \.needsYou) {
             status = .attention
         } else {
             status = .none

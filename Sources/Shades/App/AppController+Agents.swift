@@ -24,19 +24,21 @@ extension AppController {
         stage.catAgentsBusy(watch.isBusy)
         stage.showThreads(watch.rows(at: now()), status: watch.summary)
         if stage.isKittensVisible { stage.showKittens(kittenStatuses) }
+        if stage.isInboxVisible { stage.showInbox(inboxEntries) }
         updateVocabulary(threads)
 
         for event in events {
             switch event {
             case .finished(let thread):
                 stage.catCelebrate()
-                reportOn(thread, failed: false)
+                if !goesToInbox(thread) { reportOn(thread, failed: false) }
             case .failed(let thread):
-                reportOn(thread, failed: true)
+                if !goesToInbox(thread) { reportOn(thread, failed: true) }
             case .hasQuestion(let question):
                 announce(question)
             }
         }
+        fileOwedReports()
     }
 
     var kittenStatuses: [KittenStatus] {
@@ -48,6 +50,7 @@ extension AppController {
         if stage.isKittensVisible {
             stage.hideKittens()
         } else {
+            stage.hideInbox()
             stage.showKittens(kittenStatuses)
         }
     }

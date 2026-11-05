@@ -95,10 +95,10 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
         let used = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0
         let lines = max(Self.lineHeight, ceil(used))
         let visibleText = min(lines, Self.lineHeight * Self.maxLines)
-        // The caption's own padding lines it up with the text above it.
-        let captionHeight = caption.isHidden ? 0 : ceil(caption.attributedStringValue.boundingRect(
-            with: NSSize(width: inner, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        // The caption's own padding lines it up with the text above it. Its cell does the measuring,
+        // since anything else comes up short over a few lines, and the last one doesn't get drawn.
+        let captionHeight = caption.isHidden ? 0 : ceil(caption.cell!.cellSize(
+            forBounds: NSRect(x: 0, y: 0, width: inner + 4, height: .greatestFiniteMagnitude)
         ).height) + 4
         let height = visibleText + padding * 2 + captionHeight + BubbleLayout.tailHeight
 

@@ -10,12 +10,14 @@ private struct DemoError: LocalizedError {
     var errorDescription: String?
 }
 
-/// A fake T3: canned streaming replies, a running thread and an agent that asks permission.
+/// A fake T3: canned streaming replies, a running thread, an agent that asks permission and a kitten with an inbox.
 final class DemoBackend: AgentBackend, @unchecked Sendable {
     private let lock = NSLock()
     private var threads: [AgentThread]
     private var watchers: [UUID: AsyncStream<[AgentThread]>.Continuation] = [:]
     private var counter = 0
+    /// What sorting a thread's report comes to, by the thread's title.
+    private var sortedReplies: [String: String] = [:]
     var connectFails = false
     var onOpen: ((String) -> Void)?
 
@@ -23,6 +25,8 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         threads = [
             AgentThread(id: "demo-tidy", title: "Steve Pawsniak: Tidy up the pricing page", projectTitle: "site", status: .running, model: "claude-opus-5-5", updatedAt: Date(), runtimeMode: .auto),
             AgentThread(id: "demo-research", title: "Compare pixel fonts", projectTitle: nil, status: .running, model: "gpt-6.1-sol", updatedAt: Date(), runtimeMode: .auto),
+            AgentThread(id: "demo-login", title: "Clawde: Fix login", projectTitle: nil, status: .idle, model: "claude-opus-5-5", updatedAt: Date(), runtimeMode: .auto),
+            AgentThread(id: "demo-icon", title: "Clawde: New icon", projectTitle: nil, status: .idle, model: "claude-opus-5-5", updatedAt: Date(), runtimeMode: .auto),
         ]
     }
 
@@ -32,6 +36,14 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         let id = nextID()
+        if prompt.text.contains("<report>") {
+            let reply = sortedReplies.first { prompt.text.contains("Task: \($0.key)") }?.value ?? ""
+            return AsyncThrowingStream { continuation in
+                continuation.yield(.started(threadID: id))
+                continuation.yield(.finished(fullText: reply))
+                continuation.finish()
+            }
+        }
         if prompt.text.contains("started from the user's desktop cat") {
             return frontierTurn(threadID: id, prompt: prompt)
         }
@@ -123,18 +135,37 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     func finish(threadID: String, status: AgentStatus = .completed) {
         update { threads in
             guard let index = threads.firstIndex(where: { $0.id == threadID }) else { return }
-            threads[index].status = status
-            threads[index].updatedAt = Date()
+            Self.end(&threads[index], status: status)
         }
+    }
+
+    /// The kitten with an inbox finishes a run. Its report comes to what's asked for here once it's sorted.
+    func report(_ kind: String) {
+        let replies = [
+            "decision": ("demo-login", "Clawde: Fix login", "\(Prompts.decisionMarker) Ship the login fix? Tests pass, and it only touches the sign-in page."),
+            "shipped": ("demo-icon", "Clawde: New icon", "\(Prompts.shippedMarker) The new icon is live and healthy."),
+            "note": ("demo-login", "Clawde: Fix login", "\(Prompts.noteMarker) The risk is low, since nothing else uses that page."),
+            "long": ("demo-login", "Clawde: Fix login", "\(Prompts.decisionMarker) \(String(repeating: "Should the sign-in page keep its old layout for now? ", count: 12))"),
+        ]
+        guard let (threadID, title, reply) = replies[kind] else { return }
+        sortedReplies[title] = reply
+        finish(threadID: threadID)
     }
 
     func stopEverything() {
         update { threads in
             for index in threads.indices where threads[index].status.isActive {
-                threads[index].status = .completed
-                threads[index].updatedAt = Date()
+                Self.end(&threads[index], status: .completed)
             }
         }
+    }
+
+    private static func end(_ thread: inout AgentThread, status: AgentStatus) {
+        thread.status = status
+        thread.updatedAt = Date()
+        thread.lastRunID = UUID().uuidString
+        thread.lastRunEndedAt = thread.updatedAt
+        thread.pendingQuestion = nil
     }
 
     private func nextID() -> String {
@@ -348,6 +379,7 @@ enum Demo {
         Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: 0xb3261e),
         Kitten(name: "Cali", role: "Scheduling", covers: "Their time.", folder: "/demo/cali", planned: true, color: 0x1e7fb3),
         Kitten(name: "Furbit", role: "Health", covers: "Their health.", folder: "/demo/furbit", planned: true, color: 0x2e9e4f),
+        Kitten(name: "Clawde", role: "The system", covers: "Shades itself.", folder: "/demo/clawde", seesScreen: false, usesInbox: true),
     ]
 
     static func make() -> Parts {

@@ -63,7 +63,8 @@ enum CatWords {
         "\(kitten.name) isn't a T3 project yet. Add \(kitten.folder) in T3 and try again."
     }
     static let lostTheSession = "I lost track of which session that was for. Try asking again?"
-    static func sentTo(_ thread: AgentThread) -> String { "Sent that to \(thread.title)." }
+    static func sentTo(_ thread: AgentThread) -> String { sentTo(thread.title) }
+    static func sentTo(_ title: String) -> String { "Sent that to \(title)." }
     static func passedOn(to title: String?) -> String {
         title.map { "Work's started in a new session: \($0)." } ?? "Work's started in a new session."
     }
@@ -84,6 +85,44 @@ enum CatWords {
 
     static let finishedWithoutReport = "It's finished, but didn't leave a report."
     static let failedWithoutReport = "It stopped before it could say why."
+    static let reportUnreadable = "It finished, but I couldn't read its report."
+    static func failedRow(_ opening: String) -> String { "Hit a snag: \(opening)" }
+
+    static let inboxCaption = "Inbox"
+    static let inboxEmpty = "All clear. Nothing shipped or waiting on you."
+    static let inboxSent = "Sent. Waiting to hear back."
+    static let replyFirst = "Click Reply on the one you mean, then talk."
+
+    static func replyPlaceholder(talkKey: HoldKey) -> String {
+        talkKey == .off ? "Type your reply" : "Type your reply, or say it"
+    }
+
+    static func inboxHeadline(_ entries: [InboxEntry]) -> String {
+        let decisions = entries.filter(\.needsYou).count
+        let shipped = entries.filter { $0.kind == .shipped }.count
+        var parts: [String] = []
+        if decisions > 0 { parts.append(decisions == 1 ? "1 decision" : "\(decisions) decisions") }
+        if shipped > 0 { parts.append("\(shipped) shipped") }
+        return parts.joined(separator: ", ")
+    }
+
+    /// What the menu says next to Inbox. What needs you comes first, since that's what it's for.
+    static func inboxSummary(_ entries: [InboxEntry]) -> String? {
+        let decisions = entries.filter(\.needsYou).count
+        if decisions > 0 { return decisions == 1 ? "1 needs you" : "\(decisions) need you" }
+        let shipped = entries.filter { $0.kind == .shipped }.count
+        return shipped > 0 ? "\(shipped) shipped" : nil
+    }
+
+    static func ago(_ date: Date, now: Date) -> String {
+        let minutes = Int(now.timeIntervalSince(date) / 60)
+        switch minutes {
+        case ..<1: return "just now"
+        case ..<60: return "\(minutes)m ago"
+        case ..<(24 * 60): return "\(minutes / 60)h ago"
+        default: return "\(minutes / (24 * 60))d ago"
+        }
+    }
 
     /// The question and what you can say to it. Answering happens in T3.
     static func question(_ question: AgentQuestion) -> String {
