@@ -172,12 +172,17 @@ public struct SortedReport: Equatable, Sendable {
     public var shipped: String?
     public var decision: String?
     public var note: String?
+    /// All it did was start another thread to do the work.
+    public var passedOn: Bool
 
-    public init(shipped: String? = nil, decision: String? = nil, note: String? = nil) {
+    public init(shipped: String? = nil, decision: String? = nil, note: String? = nil, passedOn: Bool = false) {
         self.shipped = shipped
         self.decision = decision
         self.note = note
+        self.passedOn = passedOn
     }
+
+    public var hasLines: Bool { shipped != nil || decision != nil || note != nil }
 
     /// `nil` when the reply has nothing to file. Takes lines by marker, joins continuation lines with a space,
     /// ignores anything before the first marker, drops empty or "none" values, cuts each to 400 characters.
@@ -186,7 +191,7 @@ public struct SortedReport: Equatable, Sendable {
         var current: String?
         for line in reply.components(separatedBy: .newlines) {
             var words = line.trimmingCharacters(in: .whitespaces)
-            let markers = [Prompts.shippedMarker, Prompts.decisionMarker, Prompts.noteMarker]
+            let markers = [Prompts.shippedMarker, Prompts.decisionMarker, Prompts.noteMarker, Prompts.passedMarker]
             if let marker = markers.first(where: { words.range(of: $0, options: [.anchored, .caseInsensitive]) != nil }) {
                 current = marker
                 words = String(words.dropFirst(marker.count)).trimmingCharacters(in: .whitespaces)
@@ -198,8 +203,13 @@ public struct SortedReport: Equatable, Sendable {
             if text.trimmingCharacters(in: CharacterSet(charactersIn: " .")).lowercased() == "none" { return nil }
             return text.count > Self.lineLimit ? String(text.prefix(Self.lineLimit - 1)) + "…" : text
         }
-        self.init(shipped: value(Prompts.shippedMarker), decision: value(Prompts.decisionMarker), note: value(Prompts.noteMarker))
+        self.init(
+            shipped: value(Prompts.shippedMarker),
+            decision: value(Prompts.decisionMarker),
+            note: value(Prompts.noteMarker),
+            passedOn: value(Prompts.passedMarker) != nil
+        )
         // A reply of nothing but "none" would otherwise lose the report without a word.
-        if shipped == nil, decision == nil, note == nil { return nil }
+        if !hasLines, !passedOn { return nil }
     }
 }

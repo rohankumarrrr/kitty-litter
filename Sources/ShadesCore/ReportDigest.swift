@@ -14,6 +14,10 @@ public enum ReportDigest {
         return !looksFormatted && sentences(in: text).count <= 3
     }
 
+    public static func isOneSentence(_ report: String) -> Bool {
+        sentences(in: report).count <= 1
+    }
+
     /// The first few sentences, with the formatting taken out. Reports tend to lead with how it went.
     public static func firstSentences(of report: String, count: Int = 3) -> String {
         let prose = report

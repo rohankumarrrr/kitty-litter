@@ -4,6 +4,8 @@ import ShadesCore
 /// One place for a kitten's reports: what shipped, and what needs you. A report is an agent's words,
 /// so here it's only ever something to read. All that goes back to a thread is what you typed or said.
 extension AppController {
+    private static let kittenRecheck: TimeInterval = 60
+
     /// A thread whose reports go in the inbox. Without a run ID there's no telling reports apart, so it keeps to the bubble.
     func goesToInbox(_ thread: AgentThread) -> Bool {
         thread.lastRunID != nil && loadKittens().contains { $0.usesInbox && KittenBoard.belongs(thread, to: $0) }
@@ -12,6 +14,11 @@ extension AppController {
     /// Anything an inbox kitten finished that isn't filed yet, however long ago. Runs on every list, so a finish while
     /// the app was off looks exactly like one while it was on, and no event has to be caught.
     func fileOwedReports() {
+        // A kitten's file can be fixed while the app runs, so this only holds for a minute.
+        if now().timeIntervalSince(notForInboxSince) > Self.kittenRecheck {
+            notForInbox = []
+            notForInboxSince = now()
+        }
         let candidates = watch.threads.filter { thread in
             inbox.owes(thread) && !filing.contains(thread.id) && !hiddenThreads.contains(thread.id)
                 && !notForInbox.contains(thread.lastRunID ?? "")
@@ -42,30 +49,41 @@ extension AppController {
     /// The run only counts as handled once this has sorted it and saved, so stopping at any point before that
     /// means it's filed on the next launch.
     func file(_ report: String?, of thread: AgentThread, failed: Bool, startedAnother next: String?) async {
+        // It said nothing this time, so whatever's already waiting on you stays as it is.
+        let saidNothing = report?.contains(where: { !$0.isWhitespace }) != true
+        if saidNothing, !failed, inbox.entries.contains(where: { $0.threadID == thread.id }) {
+            inbox.skip(thread)
+            keepInbox()
+            return
+        }
         let sorted = await sort(report, of: thread, failed: failed)
-        // All it did was start another thread, unless it also has something for you. With no sorted answer
-        // to go on, a question mark is the one sign of that, and a false alarm beats a lost report.
-        let mayBeAsking = sorted == nil && report?.contains("?") == true
-        if let next, !failed, !mayBeAsking, sorted?.decision == nil, sorted?.shipped == nil {
+        if let next, !failed, onlyPassedOn(sorted, report: report, of: thread) {
             passedOn(thread, to: next)
             inbox.skip(thread)
             keepInbox()
             return
         }
         let before = inbox.entries
-        inbox.file(sorted ?? unsorted(report), from: thread, at: now(), id: { UUID().uuidString })
+        // A reply can say it passed work on and name nowhere it went, and that doesn't get to lose a report.
+        let lines = sorted.flatMap { $0.hasLines ? $0 : nil } ?? unsorted(report)
+        inbox.file(lines, from: thread, at: now(), id: { UUID().uuidString })
         keepInbox()
         if inbox.entries != before { nudgeInbox() }
         inboxChanged()
+    }
+
+    /// The model's call. With no answer from it, a thread the cat started whose report is one sentence and a link,
+    /// because anything more may be asking you something, and a false alarm beats a lost report.
+    private func onlyPassedOn(_ sorted: SortedReport?, report: String?, of thread: AgentThread) -> Bool {
+        guard let sorted else { return dispatchers.contains(thread.id) && report.map(ReportDigest.isOneSentence) == true }
+        return sorted.passedOn && sorted.decision == nil && sorted.shipped == nil
     }
 
     /// A failure never goes near the model, so no report can call one shipped. `nil` means the model's answer didn't work out.
     private func sort(_ report: String?, of thread: AgentThread, failed: Bool) async -> SortedReport? {
         if failed { return SortedReport(decision: opening(of: report).map(CatWords.failedRow) ?? CatWords.failedWithoutReport) }
         guard let report, report.contains(where: { !$0.isWhitespace }) else {
-            // It may be saying nothing at all, so this doesn't take the place of what's already waiting on you.
-            let hasRow = inbox.entries.contains { $0.threadID == thread.id }
-            return hasRow ? SortedReport(note: CatWords.reportUnreadable) : SortedReport(decision: CatWords.reportUnreadable)
+            return SortedReport(decision: CatWords.finishedWithoutReport)
         }
         let prompt = summaryPrompt(Prompts.sortReport(report, title: thread.title), about: thread)
         let reply = await firstOf(seconds: Self.summaryTimeout) { [self] in await summarize(prompt) }
@@ -74,7 +92,7 @@ extension AppController {
 
     /// It's a decision, because a false alarm beats a lost report.
     private func unsorted(_ report: String?) -> SortedReport {
-        SortedReport(decision: opening(of: report) ?? CatWords.reportUnreadable)
+        SortedReport(decision: opening(of: report) ?? CatWords.finishedWithoutReport)
     }
 
     private func opening(of report: String?) -> String? {

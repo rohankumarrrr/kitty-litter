@@ -83,6 +83,7 @@ final class AppController {
     var leftoverSummaries: Set<String> = []
     /// Runs that don't belong to a kitten with an inbox, so nobody reads the kittens again for them.
     var notForInbox: Set<String> = []
+    var notForInboxSince = Date.distantPast
     /// Whether the bubble should mention the inbox.
     var inboxNudge = false
     var inboxReplyIsOpen = false

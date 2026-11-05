@@ -9,25 +9,34 @@ extension AppController {
 
     func reportOn(_ thread: AgentThread, failed: Bool) {
         reportTask = Task {
+            var unread = false
             // A run that ended while this one was being read gets its turn here.
             defer {
                 filing.remove(thread.id)
-                fileOwedReports()
+                if !unread { fileOwedReports() }
             }
             try? await Task.sleep(nanoseconds: UInt64(reportDelay * 1_000_000_000))
             let current = latestThreads.first { $0.id == thread.id } ?? thread
             if current.status.isActive { return }
 
-            let toInbox = goesToInbox(current)
-            let report = await backend.finalReport(threadID: thread.id, run: toInbox ? current.lastRunID : nil)
-            let next = dispatchers.contains(thread.id) ? report.flatMap(ReportDigest.linkedThreadID(in:)) : nil
-            let startedAnother = !failed && next != thread.id ? next : nil
+            // Settled when this started, so a kitten's file changing partway can't leave a report with nowhere to go.
+            let toInbox = filing.contains(thread.id)
+            let report: String?
+            do {
+                report = try await backend.report(threadID: thread.id, run: toInbox ? current.lastRunID : nil)
+            } catch {
+                // It's still owed, and the next list tries again. Not being able to read it doesn't mean it said nothing.
+                unread = toInbox
+                if toInbox { return }
+                report = nil
+            }
+            let link = report.flatMap(ReportDigest.linkedThreadID(in:)).flatMap { $0 == thread.id ? nil : $0 }
             if toInbox {
-                await file(report, of: current, failed: current.status == .failed, startedAnother: startedAnother)
+                await file(report, of: current, failed: current.status == .failed, startedAnother: link)
                 return
             }
-            if let startedAnother {
-                passedOn(thread, to: startedAnother)
+            if !failed, dispatchers.contains(thread.id), let link {
+                passedOn(thread, to: link)
                 return
             }
             let words = await words(for: report, of: thread, failed: failed)
@@ -92,7 +101,7 @@ extension AppController {
     /// A summary still running when the app last stopped carries on without it, and it's reading
     /// a report just the same. So nothing it says or asks for gets through, and it's tidied up as usual.
     func tidyLeftoverSummaries(_ threads: [AgentThread]) {
-        // They're never in a project, which keeps a thread of yours with a title like that out of this.
+        // They're never in a project, which keeps a thread of yours in one with a title like that out of this.
         for thread in threads where thread.title.hasPrefix(Self.summaryTitle) && thread.projectPath == nil {
             if hiddenThreads.insert(thread.id).inserted {
                 watch.markQuick(thread.id)

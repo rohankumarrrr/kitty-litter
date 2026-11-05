@@ -252,6 +252,12 @@ final class InboxTests: XCTestCase {
         XCTAssertEqual(SortedReport(reply: "SHIPPED: One.\nSHIPPED: Two.")?.shipped, "One. Two.")
     }
 
+    func testPassedIsReadAndCountsAsAnAnswer() {
+        XCTAssertEqual(SortedReport(reply: "PASSED: yes"), SortedReport(passedOn: true))
+        XCTAssertEqual(SortedReport(reply: "PASSED: yes")?.hasLines, false)
+        XCTAssertNil(SortedReport(reply: "PASSED: none"))
+    }
+
     func testAnythingBeforeTheFirstMarkerIsIgnored() {
         XCTAssertEqual(SortedReport(reply: "Here you go:\nSHIPPED: Done."), SortedReport(shipped: "Done."))
     }

@@ -87,7 +87,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     func projectID(atPath path: String) async -> String? { "demo-project" }
 
-    func finalReport(threadID: String, run: String?) async -> String? {
+    func report(threadID: String, run: String?) async throws -> String? {
         try? await Task.sleep(nanoseconds: 800_000_000)
         return """
         Moved the pricing page to the new grid and fixed the checkout button on small screens. \

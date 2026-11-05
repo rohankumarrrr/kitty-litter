@@ -85,7 +85,6 @@ enum CatWords {
 
     static let finishedWithoutReport = "It's finished, but didn't leave a report."
     static let failedWithoutReport = "It stopped before it could say why."
-    static let reportUnreadable = "It finished, but I couldn't read its report."
     static func failedRow(_ opening: String) -> String { "Hit a snag: \(opening)" }
 
     static let inboxCaption = "Inbox"
