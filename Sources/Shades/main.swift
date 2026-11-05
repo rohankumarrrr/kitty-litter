@@ -33,6 +33,7 @@ MainActor.assumeIsolated {
                 saveSettings: { try? $0.save() },
                 screenTip: { context.takeJavaScriptTip() },
                 kittens: { Kittens.load() },
+                workLists: FileWorkLists(),
                 systemFacts: { SystemHealth.facts() },
                 fileExists: { FileManager.default.fileExists(atPath: $0) },
                 reportHealth: { findings in

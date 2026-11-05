@@ -17,6 +17,7 @@ final class AppController {
     static let captureTimeout: TimeInterval = 4
     nonisolated private static let lineSeconds: TimeInterval = 5
     static let settleSeconds: TimeInterval = 2
+    private static let tendSeconds: TimeInterval = 30
     private static let longestLine = 200
 
     let backend: AgentBackend
@@ -27,6 +28,7 @@ final class AppController {
     let saveSettings: (Settings) -> Void
     let screenTip: () -> String?
     let loadKittens: () -> [Kitten]
+    let workLists: WorkListStoring
     let systemFacts: () -> HealthFacts
     let fileExists: (String) -> Bool
     let reportHealth: ([HealthFinding]) -> Void
@@ -57,6 +59,8 @@ final class AppController {
         var threadID: String?
         /// Set for a question, which goes away by itself once it's answered.
         var questionID: String?
+        /// Set for something on a kitten's list that needs your yes.
+        var offer: Offer?
     }
     struct Line {
         var text: String
@@ -90,6 +94,20 @@ final class AppController {
     var lineCounter = 0
     var replyGeneration = 0
 
+    /// The only things that can be sent to a kitten: your words, and your yes to an offer.
+    var ready: [ReadyWork] = []
+    /// Items in `ready` on their way out, which count against a kitten's slots.
+    var sending: Set<String> = []
+    /// Threads waiting to be reported on, so one that's finished isn't reported twice.
+    var reporting: Set<String> = []
+    /// Offers you pressed Esc on, which stay quiet until you ask about that kitten.
+    var putOff: Set<String> = []
+    var offerWhenAsked: Offer?
+    var lastStatuses: [String: AgentStatus]?
+    /// Things that finish this close together get told in one go.
+    var digestWindow: TimeInterval = 20
+    var finishing: [FinishedWork] = []
+
     enum VoiceMode {
         case talk, dictate
     }
@@ -108,6 +126,7 @@ final class AppController {
     var replyTask: Task<Void, Never>?
     var frontierTask: Task<Void, Never>?
     var reportTask: Task<Void, Never>?
+    var digestTask: Task<Void, Never>?
     var healthTask: Task<Void, Never>?
     var health: [HealthFinding]?
     var forwardTask: Task<Void, Never>?
@@ -124,6 +143,7 @@ final class AppController {
         saveSettings = dependencies.saveSettings
         screenTip = dependencies.screenTip
         loadKittens = dependencies.kittens
+        workLists = dependencies.workLists
         systemFacts = dependencies.systemFacts
         fileExists = dependencies.fileExists
         reportHealth = dependencies.reportHealth
@@ -147,6 +167,14 @@ final class AppController {
             },
             Task { [weak self] in
                 for await level in levels { self?.levelHeard(level) }
+            },
+            // New proposals only turn up in files, and sends that failed need another go.
+            Task { [weak self] in
+                while true {
+                    try? await Task.sleep(nanoseconds: UInt64(Self.tendSeconds * 1_000_000_000))
+                    guard let self else { return }
+                    self.tendWork()
+                }
             },
         ]
 
@@ -211,8 +239,9 @@ final class AppController {
             guard !byClick else { return }
             approvalsHidden = true
         case .notice:
-            // Clicking elsewhere shouldn't lose a question you haven't answered.
-            guard let notice = notices.first, !(byClick && notice.questionID != nil) else { return }
+            // Clicking elsewhere shouldn't lose a question you haven't answered, or an offer.
+            guard let notice = notices.first, !(byClick && (notice.questionID != nil || notice.offer != nil)) else { return }
+            if let offer = notice.offer { putOff.insert(offer.itemID) }
             notices.removeFirst()
         case .thinking:
             guard !byClick else { return }

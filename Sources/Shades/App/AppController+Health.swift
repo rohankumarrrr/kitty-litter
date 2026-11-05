@@ -37,6 +37,7 @@ extension AppController {
             if facts.reachedT3, await backend.projectID(atPath: kitten.folder) == nil {
                 facts.kittensNotInT3.append(kitten.name)
             }
+            if workLists.hasProblem(for: kitten) { facts.kittensWithListProblems.append(kitten.name) }
         }
 
         let findings = HealthCheck.findings(from: facts)

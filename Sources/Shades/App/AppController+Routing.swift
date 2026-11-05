@@ -60,39 +60,35 @@ extension AppController {
         }
     }
 
-    /// Gives your words to a kitten. A new thread in its folder already knows what it needs to,
-    /// and T3 writes the title, so nothing here has to explain anything to it.
+    /// Gives your words to a kitten, by way of its list. A new thread in its folder already knows
+    /// what it needs to, and T3 writes the title, so nothing here has to explain anything to it.
     func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?) {
-        // As with a session, a kitten with full access doesn't get to see text from a page.
-        let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess
-        let shared = seesScreen ? snapshot : nil
-        flow = Task {
-            guard let projectID = await backend.projectID(atPath: kitten.folder) else {
-                say(CatWords.notSetUp(kitten))
-                return
-            }
-            startFrontier(
-                title: nil,
-                text: Prompts.forKitten(
-                    words: words,
-                    snapshot: shared,
-                    screenshotPath: saveScreenshot(of: shared),
-                    screenLeftOut: !seesScreen && snapshot != nil
-                ),
-                snapshot: shared,
-                projectID: projectID,
-                name: kitten.name
-            )
-        }
+        takeOn(
+            WorkItem(text: words, state: .waiting, at: now()),
+            words: .yours(words, sharedScreen(with: kitten, from: snapshot)),
+            for: kitten
+        )
     }
 
     /// Passes your words to a session that already has the context. The session's reply comes
     /// back the usual way, as a notice when it finishes.
     func forward(_ words: String, to thread: AgentThread, snapshot: ScreenSnapshot?) {
+        // A kitten's work may have moved to a thread that doesn't carry its name, and then only its list knows.
+        let everyone = loadKittens()
+        let owners = everyone.filter { KittenBoard.belongs(thread, to: $0) } + everyone.filter { workLists.load(for: $0).holds(thread: thread.id) }
+        if let owner = owners.first(where: { !$0.planned }) {
+            do {
+                try updateList(of: owner) { $0.addFollowUp(words, in: thread.id, at: now()) }
+            } catch {
+                say(CatWords.cantWriteList(owner))
+                return
+            }
+            tend(owner)
+        }
+
         // A session with full access can do anything, so text from a page doesn't get to reach it.
         // Neither does one belonging to a kitten that isn't meant to see it.
-        let owner = loadKittens().first { KittenBoard.belongs(thread, to: $0) }
-        let seesScreen = thread.runtimeMode != .fullAccess && owner?.seesScreen != false
+        let seesScreen = thread.runtimeMode != .fullAccess && owners.allSatisfy(\.seesScreen)
         let shared = seesScreen ? snapshot : nil
         let text = Prompts.forwarded(
             words: words,
@@ -110,14 +106,16 @@ extension AppController {
                     switch event {
                     case .finished where isQuick:
                         reportOn(thread, failed: false)
-                    case .failed(let message) where isQuick:
-                        say(message)
+                    case .failed(let message):
+                        if isQuick { say(message) }
+                        workEnded(in: thread.id, failed: true)
                     default:
                         break
                     }
                 }
             } catch {
                 say(CatWords.problem(error, while: .agents))
+                workEnded(in: thread.id, failed: true)
             }
         }
     }

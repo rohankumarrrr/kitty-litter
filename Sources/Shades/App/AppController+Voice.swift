@@ -30,6 +30,7 @@ extension AppController {
         stage.catWake()
         if !fixIsOpen {
             stage.hideInput()
+            offerWhenAsked = offerShowing
             heard = ""
             renderBubble()
         }
@@ -56,7 +57,7 @@ extension AppController {
                 say(CatWords.didntCatch)
                 return
             }
-            ask(text, capture: capture)
+            takeWords(text, capture: capture)
         } catch {
             voiceMode = nil
             refreshStatus()
@@ -114,6 +115,7 @@ extension AppController {
         voiceMode = nil
         heard = nil
         talkLook = nil
+        offerWhenAsked = nil
         renderBubble()
     }
 

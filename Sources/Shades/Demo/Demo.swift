@@ -32,6 +32,12 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         let id = nextID()
+        // A project means a kitten. Its title carries its name, so the thread counts as its work.
+        if let folder = prompt.projectID, let kitten = Demo.kittens.first(where: { $0.folder == folder }) {
+            var titled = prompt
+            titled.title = "\(kitten.name): \(prompt.text.prefix { !$0.isNewline })"
+            return frontierTurn(threadID: id, prompt: titled)
+        }
         if prompt.text.contains("started from the user's desktop cat") {
             return frontierTurn(threadID: id, prompt: prompt)
         }
@@ -73,7 +79,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    func projectID(atPath path: String) async -> String? { "demo-project" }
+    func projectID(atPath path: String) async -> String? { path }
 
     func finalReport(threadID: String) async -> String? {
         try? await Task.sleep(nanoseconds: 800_000_000)
@@ -201,6 +207,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     private static func reply(to question: String) -> String {
         let lower = question.lowercased()
+        if lower.contains("plate") || lower.contains("list") { return "\(Prompts.listMarker) 1" }
         if lower.contains("follow") || lower.contains("what you") { return "\(Prompts.routeMarker) 1" }
         if lower.contains("interview") || lower.contains("resume") { return "\(Prompts.kittenMarker) 1" }
         if ["fix", "change", "refactor", "build", "rewrite"].contains(where: lower.contains) {
@@ -339,6 +346,7 @@ enum Demo {
         var voice: DemoVoice
         var inserter: DemoInserter
         var keys: DemoKeys
+        var workLists: MemoryWorkLists
     }
 
     /// Enough of a team to show every state in the kitten view.
@@ -355,6 +363,7 @@ enum Demo {
         let voice = DemoVoice()
         let inserter = DemoInserter()
         let keys = DemoKeys()
+        let workLists = MemoryWorkLists(lists: seededLists())
         let dependencies = AppDependencies(
             backend: backend,
             context: context,
@@ -363,8 +372,24 @@ enum Demo {
             keys: keys,
             settings: Settings(),
             saveSettings: { _ in print("[demo] settings aren't saved in demo mode") },
-            kittens: { Demo.kittens }
+            kittens: { Demo.kittens },
+            workLists: workLists
         )
-        return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys)
+        return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys, workLists: workLists)
+    }
+
+    /// Enough on the lists to show every kind of thing in them.
+    private static func seededLists() -> [String: WorkList] {
+        let now = Date()
+        return [
+            "/demo/steve": WorkList(items: [
+                WorkItem(text: "Tidy up the pricing page", state: .working, threadID: "demo-tidy", at: now),
+                WorkItem(text: "Tailor my resume for the design job", state: .waiting, at: now),
+                WorkItem(text: "Practice interview questions", state: .waiting, at: now),
+            ]),
+            "/demo/pepper": WorkList(items: [
+                WorkItem(text: "Move the savings goal to the new account. It's small, and it stops the transfers failing.", state: .proposed, at: now),
+            ]),
+        ]
     }
 }

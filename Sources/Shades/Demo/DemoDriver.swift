@@ -68,7 +68,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | fix | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | buttons | typed | front | quit")
+            print("ask [question] | propose [text] | bubble | fix | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -89,6 +89,17 @@ final class DemoDriver {
             hold(.dictate)
         case "kittens":
             controller.kittensPressed()
+            for status in controller.kittenStatuses {
+                print("kitten \(status.kitten.name): \(CatWords.kittenState(status.state)), \(status.things)")
+            }
+        case "propose":
+            let kitten = Demo.kittens[0]
+            var list = parts.workLists.load(for: kitten)
+            list.put(WorkItem(text: rest, state: .proposed, at: Date()))
+            try? parts.workLists.save(list, for: kitten)
+            controller.tendWork()
+        case "bubble":
+            print("bubble \(controller.currentBubble.map { String(describing: $0) } ?? "nothing")")
         case "dash":
             stage.toggleDashboard()
         case "settings":

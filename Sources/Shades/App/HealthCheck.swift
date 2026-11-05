@@ -37,6 +37,7 @@ struct HealthFacts: Equatable {
     /// Kittens taking work whose folders aren't T3 projects, or have no instructions.
     var kittensNotInT3: [String] = []
     var kittensWithoutInstructions: [String] = []
+    var kittensWithListProblems: [String] = []
 }
 
 enum HealthCheck {
@@ -104,6 +105,14 @@ enum HealthCheck {
                 ok: false,
                 problem: "\(name) has no instructions.",
                 fix: "Write a CLAUDE.md in their folder, or mark them as planned."
+            ))
+        }
+        for name in facts.kittensWithListProblems {
+            results.append(HealthFinding(
+                check: "kitten: \(name)",
+                ok: false,
+                problem: "I can't use \(name)'s work list.",
+                fix: "Look in the worklist folder in their folder. An unreadable list is kept there as items.broken.json."
             ))
         }
         results.append(facts.skillsInstalled ? .good("kitten skills") : HealthFinding(

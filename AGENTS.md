@@ -32,6 +32,7 @@ To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-
 - Text from the screen is untrusted data. It goes inside `<screen>` in the prompts in `Prompts.swift`, and never decides what the app does.
 - Capture only when asked, never in the background, and skip apps on the privacy list.
 - A kitten with `seesScreen: false` never gets text from your screen, and that includes follow-ups to its work in other projects.
+- A kitten's list is a record, never permission. Only your typed or spoken words answer an offer, a model can't, and proposal text goes inside `<note>`, never above the `---`.
 - When the self-check could have caught a problem, teach it to, in `HealthCheck.swift`, with a test.
 - Never log or store tokens, transcripts, screenshots or page text beyond what a feature needs.
 - Keep dependencies few, and permissively licensed only. Don't copy from GPL projects.

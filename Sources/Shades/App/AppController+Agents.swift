@@ -37,10 +37,16 @@ extension AppController {
                 announce(question)
             }
         }
+
+        let statuses = Dictionary(threads.map { ($0.id, $0.status) }, uniquingKeysWith: { _, new in new })
+        if statuses != lastStatuses {
+            lastStatuses = statuses
+            tendWork()
+        }
     }
 
     var kittenStatuses: [KittenStatus] {
-        KittenBoard.statuses(kittens: loadKittens(), threads: latestThreads)
+        KittenBoard.statuses(kittens: loadKittens(), threads: latestThreads) { workLists.load(for: $0).open.count }
     }
 
     /// Normally there's just Shades. This shows everyone else, and how they're doing.

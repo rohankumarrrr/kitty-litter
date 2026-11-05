@@ -116,7 +116,8 @@ private final class KittenRow: NSView {
         super.init(frame: .zero)
         setAccessibilityElement(true)
         setAccessibilityRole(status.threadID == nil ? .staticText : .button)
-        setAccessibilityLabel("\(status.kitten.name), \(status.kitten.role), \(CatWords.kittenState(status.state))")
+        let count = status.things > 0 ? ", \(CatWords.things(status.things))" : ""
+        setAccessibilityLabel("\(status.kitten.name), \(status.kitten.role), \(CatWords.kittenState(status.state))\(count)")
     }
 
     @available(*, unavailable)
@@ -159,11 +160,22 @@ private final class KittenRow: NSView {
         let width = bounds.width - left - 28
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
+        // The name gives up room for the count, so truncating it can't hide how much there is.
+        var nameWidth = width
+        if status.things > 0 {
+            let things = NSAttributedString(string: CatWords.things(status.things), attributes: [
+                .font: NSFont.systemFont(ofSize: 11),
+                .foregroundColor: Ink.soft,
+            ])
+            let thingsWidth = ceil(things.size().width)
+            things.draw(at: NSPoint(x: left + width - thingsWidth, y: 8))
+            nameWidth -= thingsWidth + 6
+        }
         NSAttributedString(string: status.kitten.name, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium),
             .foregroundColor: notSetUp ? Ink.soft : Ink.text,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: left, y: 6, width: width, height: 17))
+        ]).draw(in: NSRect(x: left, y: 6, width: nameWidth, height: 17))
         NSAttributedString(string: "\(status.kitten.role) · \(CatWords.kittenState(status.state))", attributes: [
             .font: NSFont.systemFont(ofSize: 11),
             .foregroundColor: Ink.soft,

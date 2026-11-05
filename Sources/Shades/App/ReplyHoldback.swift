@@ -10,9 +10,10 @@ struct ReplyHoldback {
         case handoff(task: String)
         case route(session: Int)
         case kitten(number: Int)
+        case list(number: Int)
     }
 
-    private static let markers = [Prompts.handoffMarker, Prompts.routeMarker, Prompts.kittenMarker]
+    private static let markers = [Prompts.handoffMarker, Prompts.routeMarker, Prompts.kittenMarker, Prompts.listMarker]
 
     private(set) var text = ""
     private(set) var released = false
@@ -34,10 +35,11 @@ struct ReplyHoldback {
         let full = fullText ?? text
         if let session = Prompts.routeTarget(in: full) { return .route(session: session) }
         if let kitten = Prompts.kittenTarget(in: full) { return .kitten(number: kitten) }
+        if let kitten = Prompts.listTarget(in: full) { return .list(number: kitten) }
         if let task = Prompts.handoffTask(in: full) { return .handoff(task: task) }
         let visible = Self.visible(full)
         // A marker that goes nowhere is nothing worth reading.
-        if visible.hasPrefix(Prompts.routeMarker) || visible.hasPrefix(Prompts.kittenMarker) { return .answer("") }
+        if [Prompts.routeMarker, Prompts.kittenMarker, Prompts.listMarker].contains(where: visible.hasPrefix) { return .answer("") }
         // The marker with nothing after it is nothing worth reading.
         return .answer(visible.trimmingCharacters(in: .whitespacesAndNewlines) == Prompts.handoffMarker ? "" : visible)
     }

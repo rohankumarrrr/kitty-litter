@@ -15,6 +15,7 @@ struct AppDependencies {
     var screenTip: () -> String? = { nil }
     /// The kittens there are right now. Read for every question, so a new one just needs its folder.
     var kittens: () -> [Kitten] = { [] }
+    var workLists: WorkListStoring = MemoryWorkLists()
     /// What the cat can find out about its own situation, for its self-check.
     var systemFacts: () -> HealthFacts = { HealthFacts() }
     var fileExists: (String) -> Bool = { _ in true }

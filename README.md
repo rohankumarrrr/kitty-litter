@@ -14,7 +14,7 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 **Talk and dictate.** Hold right Option to talk to the cat. Hold Fn to dictate into any app, and your rambling comes out as clean text: fillers gone, self-corrections applied. Speech recognition and cleanup both run on your Mac.
 
-**Watch your agents.** The cat sleeps when nothing's running, and is up and about when agents are working. When a session ends, it tells you how it went in two or three sentences. When an agent has a question, it shows you the question and your options. When one needs permission, the cat comes over with the exact command, so you can allow or deny it without leaving what you're doing. Shift-click the cat to see all your kittens and which are working, need you or are idle.
+**Watch your agents.** The cat sleeps when nothing's running, and is up and about when agents are working. When a session ends, it tells you how it went in two or three sentences, and things that finish around the same time come as one digest. When an agent has a question, it shows you the question and your options. When one needs permission, the cat comes over with the exact command, so you can allow or deny it without leaving what you're doing. Shift-click the cat to see all your kittens, which are working, need you or are idle, and how many things each has. Ask "what's on Steve's plate?" to hear what's on one kitten's list.
 
 ## How the work gets routed
 
@@ -64,10 +64,13 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 - **Private apps stay private:** password managers are on a list you can edit, and incognito windows in Chromium browsers are skipped. Nothing is captured while they're in front. Background windows can still show up in a screenshot, and Safari's private windows mostly can't be detected.
 - **Screen text is treated as data:** the agents are told it's never instructions, and they run in T3's `auto` mode rather than with full access. That lowers the risk of a page steering an agent, but doesn't remove it. For that reason, Allow is never a default in the cat's approval requests.
 - **Saved screenshots:** agents get a copy to open, kept in `~/Library/Application Support/shades/captures` for 7 days.
+- **Work lists:** what you ask a kitten goes on a list in its folder, at `worklist/items.json`. Your screen never does.
 
 ## Kittens
 
-A kitten is a specialist with a folder of its own: its instructions and what it knows about you, so you don't have to explain yourself each time. Add a folder to `~/kittens`, add it to T3 as a project, and Shades starts sending it things. Normally you just see Shades, and Shift-clicking him shows the rest. See [docs/kittens.md](docs/kittens.md).
+A kitten is a specialist with a folder of its own: its instructions and what it knows about you, so you don't have to explain yourself each time. Add a folder to `~/kittens`, add it to T3 as a project, and Shades starts sending it things. Normally you just see Shades, and Shift-clicking him shows the rest.
+
+Each kitten keeps a work list in its folder, and works on two things at a time while the rest wait. It can propose work of its own too. Shades brings those to you as "this kitten proposed this", and they don't start until you say yes. See [docs/kittens.md](docs/kittens.md).
 
 ## Changing Shades by asking Shades
 

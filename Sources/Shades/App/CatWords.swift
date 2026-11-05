@@ -61,6 +61,35 @@ enum CatWords {
     static func notSetUp(_ kitten: Kitten) -> String {
         "\(kitten.name) isn't a T3 project yet. Add \(kitten.folder) in T3 and try again."
     }
+    static func cantWriteList(_ kitten: Kitten) -> String { "I can't write to \(kitten.name)'s list, so I didn't send that." }
+    static func onTheList(_ kitten: Kitten, ahead: Int) -> String {
+        guard ahead > 0 else { return "That's on \(kitten.name)'s list, and it's next." }
+        return "That's on \(kitten.name)'s list, with \(things(ahead)) ahead of it."
+    }
+    static func things(_ count: Int) -> String { count == 1 ? "1 thing" : "\(count) things" }
+    static func digestCaption(_ count: Int) -> String { "\(things(count)) finished" }
+    static let dropped = "Okay, dropped."
+
+    /// Worded so it can't read as you having asked for it.
+    static func offerCaption(_ kitten: Kitten, _ item: WorkItem) -> String {
+        item.state == .proposed ? "\(kitten.name) proposed this" : "Still on \(kitten.name)'s list"
+    }
+    static func offerText(_ text: String) -> String { "\(text)\n\nSay yes to start it, or no to drop it." }
+
+    static func list(of kitten: Kitten, _ list: WorkList) -> String {
+        let open = list.open
+        guard !open.isEmpty else { return "Nothing on \(kitten.name)'s list." }
+        let sections: [(heading: String, state: WorkItem.State)] = [
+            ("Working on:", .working), ("Waiting:", .waiting), ("Stopped:", .stopped), ("Proposed:", .proposed),
+        ]
+        var parts = ["\(kitten.name) has \(things(open.count))."]
+        for section in sections {
+            let lines = open.filter { $0.state == section.state }.map { "• \($0.firstLine)" }
+            if !lines.isEmpty { parts.append(([section.heading] + lines).joined(separator: "\n")) }
+        }
+        return parts.joined(separator: "\n\n")
+    }
+
     static let lostTheSession = "I lost track of which session that was for. Try asking again?"
     static func sentTo(_ thread: AgentThread) -> String { "Sent that to \(thread.title)." }
     static func passedOn(to title: String?) -> String {

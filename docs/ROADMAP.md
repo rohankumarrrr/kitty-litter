@@ -14,7 +14,7 @@ Shades as a conductor with a kitten for each area of your life or work. Shades d
 
 Kittens themselves now exist, as described in [kittens.md](kittens.md). Review, shipping and working across several kittens are the parts still being proven, one kitten end to end before any others.
 
-A kitten for the system itself, a self-check and rollback now exist. Work lists, proposals from kittens and a defined way of taking corrections are next.
+A kitten for the system itself, a self-check, rollback, work lists and proposals from kittens now exist. A defined way of taking corrections is next.
 
 ## Next ideas
 
@@ -27,6 +27,9 @@ A kitten for the system itself, a self-check and rollback now exist. Work lists,
 
 ## Smaller things
 
+- Priorities on a kitten's work list, so something urgent can go first.
+- Cancel something waiting on a list by asking.
+- Ask "what's on everyone's plate?" and hear about every kitten at once.
 - Answer an agent's question from the bubble. It shows the question and options now, and you answer in T3.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
 - Remember project nicknames, so the frontier agent can skip the search next time.

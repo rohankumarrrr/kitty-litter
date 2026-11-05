@@ -19,6 +19,7 @@ extension AppController {
     }
 
     func beginAsk() async {
+        offerWhenAsked = offerShowing
         if stage.isInputVisible {
             stage.hideInput()
             return
@@ -35,7 +36,7 @@ extension AppController {
             placeholder: CatWords.askPlaceholder,
             caption: early.flatMap(askCaption),
             allowsEmpty: false,
-            onSubmit: { [weak self] question in self?.ask(question, capture: capture) },
+            onSubmit: { [weak self] words in self?.takeWords(words, capture: capture) },
             onCancel: {}
         ))
     }
@@ -189,6 +190,13 @@ extension AppController {
                 return
             }
             give(question, to: kittens[number - 1], snapshot: snapshot)
+        case .list(let number):
+            reply = nil
+            guard kittens.indices.contains(number - 1) else {
+                say(CatWords.lostTheSession)
+                return
+            }
+            showList(of: kittens[number - 1])
         }
     }
 
@@ -199,7 +207,7 @@ extension AppController {
         switch outcome {
         case .answer(let text):
             if text.isEmpty { return }
-        case .handoff, .route, .kitten:
+        case .handoff, .route, .kitten, .list:
             passedOn = true
         }
         if passedOn && quickIsFresh {
@@ -237,7 +245,17 @@ extension AppController {
         return [AgentAttachment(name: "screen.jpg", mimeType: "image/jpeg", data: jpeg)]
     }
 
-    func startFrontier(title: String?, text: String, snapshot: ScreenSnapshot?, projectID: String? = nil, name: String? = nil) {
+    /// With `announce` off it says nothing at all, because a retry that keeps failing isn't news.
+    func startFrontier(
+        title: String?,
+        text: String,
+        snapshot: ScreenSnapshot?,
+        projectID: String? = nil,
+        name: String? = nil,
+        announce: Bool = true,
+        onStarted: ((String) -> Void)? = nil,
+        onGaveUp: (() -> Void)? = nil
+    ) {
         let name = name ?? frontierName
         let prompt = AgentPrompt(
             title: title.map { String($0.prefix(80)) },
@@ -247,7 +265,7 @@ extension AppController {
             runtimeMode: settings.frontierMode,
             projectID: projectID
         )
-        say(CatWords.handingOff(modelName: name), seconds: nil)
+        if announce { say(CatWords.handingOff(modelName: name), seconds: nil) }
         frontierTask = Task {
             var started = false
             do {
@@ -256,19 +274,21 @@ extension AppController {
                     case .started(let threadID):
                         started = true
                         dispatchers.insert(threadID)
-                        say(CatWords.onIt(modelName: name), threadID: threadID)
+                        onStarted?(threadID)
+                        if announce { say(CatWords.onIt(modelName: name), threadID: threadID) }
                     case .needsApproval(let request):
                         addApproval(request)
                     case .failed(let message):
-                        say(message)
+                        if announce { say(message) }
                     case .text, .finished:
                         break
                     }
                 }
-                if !started { say(CatWords.noReply) }
+                if !started, announce { say(CatWords.noReply) }
             } catch {
-                say(CatWords.problem(error, while: .agents))
+                if announce { say(CatWords.problem(error, while: .agents)) }
             }
+            if !started { onGaveUp?() }
         }
     }
 }

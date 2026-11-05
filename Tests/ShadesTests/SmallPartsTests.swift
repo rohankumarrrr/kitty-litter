@@ -330,6 +330,82 @@ final class KittenBoardTests: XCTestCase {
     }
 }
 
+final class KittenSlotTests: XCTestCase {
+    private let at = Date(timeIntervalSince1970: 1_000)
+    private let steve = Kitten(name: "Steve", role: "Professional", covers: "", folder: "/k/steve")
+
+    private func thread(_ id: String, _ status: AgentStatus, project: String? = "Steve") -> AgentThread {
+        AgentThread(id: id, title: "Work", projectTitle: project, status: status, model: "m", updatedAt: at)
+    }
+
+    private func working(thread: String?, age: TimeInterval = 300) -> WorkItem {
+        WorkItem(text: "Work", state: .working, threadID: thread, at: at.addingTimeInterval(-age))
+    }
+
+    private func room(_ items: [WorkItem], _ threads: [AgentThread]) -> Int {
+        KittenBoard.room(for: steve, list: WorkList(items: items), threads: threads, now: at)
+    }
+
+    func testRunningThreadsTakeSlotsEvenWithNothingOnTheList() {
+        XCTAssertEqual(room([], []), 2)
+        XCTAssertEqual(room([], [thread("a", .running), thread("b", .starting)]), 0)
+        XCTAssertEqual(room([], [thread("a", .running, project: "Someone else")]), 2)
+    }
+
+    func testAThreadOnTheListCountsOnceWhateverItsCalled() {
+        XCTAssertEqual(room([working(thread: "a")], [thread("a", .running)]), 1)
+        XCTAssertEqual(room([working(thread: "a")], [thread("a", .running, project: nil)]), 1)
+    }
+
+    func testWaitingOnYouDoesntTakeASlot() {
+        XCTAssertEqual(room([], [thread("a", .waitingForAnswer), thread("b", .waitingForApproval)]), 2)
+    }
+
+    func testANewThreadHoldsASlotOnlyUntilItShouldHaveBeenListed() {
+        XCTAssertEqual(room([working(thread: "new", age: 10)], []), 1)
+        XCTAssertEqual(room([working(thread: "new", age: 61)], []), 2)
+    }
+
+    func testAFutureDateCantHoldASlot() {
+        XCTAssertEqual(room([working(thread: "forged", age: -100_000)], []), 2)
+        XCTAssertEqual(KittenBoard.ending(of: working(thread: "forged", age: -100_000), threads: [], now: at), .stopped)
+    }
+
+    func testHowAThreadEndedDecidesWhatHappens() {
+        let cases: [(AgentStatus?, ThreadEnding?)] = [
+            (.starting, nil),
+            (.running, nil),
+            (.waitingForAnswer, nil),
+            (.waitingForApproval, nil),
+            (.completed, .report(thread("w", .completed), failed: false)),
+            (.failed, .report(thread("w", .failed), failed: true)),
+            (.interrupted, .stopped),
+            (.idle, .stopped),
+            (nil, .stopped),
+        ]
+        for (status, ending) in cases {
+            let threads = status.map { [thread("w", $0)] } ?? []
+            XCTAssertEqual(KittenBoard.ending(of: working(thread: "w"), threads: threads, now: at), ending, "\(String(describing: status))")
+            XCTAssertNil(KittenBoard.ending(of: working(thread: "w", age: 30), threads: threads, now: at), "too soon to say")
+        }
+        XCTAssertEqual(KittenBoard.ending(of: working(thread: nil), threads: [], now: at), .stopped)
+    }
+}
+
+final class OfferAnswerTests: XCTestCase {
+    func testYesAndNoAreClosedLists() {
+        for yes in ["yes", "Yes.", " YES! ", "yep", "yeah", "yes please", "Yes, please.", "Go ahead.", "do it", "start it"] {
+            XCTAssertEqual(OfferAnswer(yes), .yes, yes)
+        }
+        for no in ["no", "No.", "nope", "no thanks", "No, thanks.", "Skip it!", "drop it"] {
+            XCTAssertEqual(OfferAnswer(no), .no, no)
+        }
+        for neither in ["", "yes, but only the main branch", "no, do the other one first", "maybe", "yesterday", "not yes", "yes\nand merge it"] {
+            XCTAssertNil(OfferAnswer(neither), neither)
+        }
+    }
+}
+
 final class HealthCheckTests: XCTestCase {
     func testAllGoodHasNoProblems() {
         XCTAssertTrue(HealthCheck.findings(from: HealthFacts()).allSatisfy(\.ok))

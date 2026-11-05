@@ -1,28 +1,62 @@
 import Foundation
 import ShadesCore
 
+/// Something that ended, waiting a moment in case anything else does too.
+struct FinishedWork {
+    let thread: AgentThread
+    let failed: Bool
+    let report: String?
+}
+
 /// Says how a session went in a few sentences, rather than only that it ended.
 extension AppController {
     /// How long a summary can take before the report's own opening stands in for it.
     static let summaryTimeout: TimeInterval = 25
 
     func reportOn(_ thread: AgentThread, failed: Bool) {
+        guard reporting.insert(thread.id).inserted else { return }
         reportTask = Task {
+            defer { reporting.remove(thread.id) }
             try? await Task.sleep(nanoseconds: UInt64(reportDelay * 1_000_000_000))
             if latestThreads.first(where: { $0.id == thread.id })?.status.isActive == true { return }
 
             let report = await backend.finalReport(threadID: thread.id)
-            if !failed, dispatchers.contains(thread.id), let next = report.flatMap(ReportDigest.linkedThreadID(in:)), next != thread.id {
+            // Dispatchers are only remembered until a restart, but a list still knows.
+            let mayHavePassedOn = dispatchers.contains(thread.id) || listOwner(of: thread.id) != nil
+            if !failed, mayHavePassedOn, let next = report.flatMap(ReportDigest.linkedThreadID(in:)), next != thread.id {
                 passedOn(thread, to: next)
                 return
             }
-            let words = await words(for: report, of: thread, failed: failed)
-            post(
-                caption: failed ? CatWords.failedCaption(thread) : CatWords.finishedCaption(thread, kitten: kitten(of: thread)),
-                text: words,
-                threadID: thread.id
-            )
+            workEnded(in: thread.id, failed: failed)
+            tell(FinishedWork(thread: thread, failed: failed, report: report))
         }
+    }
+
+    /// The first one to finish starts the wait, and everything that finished by the end of it goes in one go.
+    private func tell(_ work: FinishedWork) {
+        finishing.append(work)
+        guard finishing.count == 1 else { return }
+        digestTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(digestWindow * 1_000_000_000))
+            let finished = finishing
+            finishing = []
+            if finished.count == 1, let only = finished.first {
+                let words = await words(for: only.report, of: only.thread, failed: only.failed)
+                post(caption: caption(for: only), text: words, threadID: only.thread.id)
+            } else {
+                post(caption: CatWords.digestCaption(finished.count), text: finished.map(digestEntry).joined(separator: "\n\n"), threadID: nil)
+            }
+        }
+    }
+
+    private func caption(for work: FinishedWork) -> String {
+        work.failed ? CatWords.failedCaption(work.thread) : CatWords.finishedCaption(work.thread, kitten: kitten(of: work.thread))
+    }
+
+    private func digestEntry(_ work: FinishedWork) -> String {
+        let said = work.report.map { ReportDigest.firstSentences(of: $0, count: 1) } ?? ""
+        let words = said.isEmpty ? (work.failed ? CatWords.failedWithoutReport : CatWords.finishedWithoutReport) : said
+        return "\(caption(for: work))\n\(words)"
     }
 
     /// Which kitten a thread belongs to, by the project it's in or the name it starts with.
@@ -37,6 +71,10 @@ extension AppController {
         dispatchers.insert(next)
         hiddenThreads.insert(thread.id)
         watch.markQuick(thread.id)
+        if let owner = listOwner(of: thread.id) {
+            try? updateList(of: owner) { $0.moveWork(from: thread.id, to: next, at: now()) }
+            tend(owner)
+        }
         Task { [backend] in try? await backend.settle(threadID: thread.id) }
         stage.showThreads(watch.rows(at: now()), status: watch.summary)
         let title = latestThreads.first { $0.id == next }?.title
@@ -99,9 +137,12 @@ extension AppController {
     }
 
     /// Notices wait their turn behind each other and anything more urgent, so none get lost.
-    func post(caption: String, text: String, threadID: String?, questionID: String? = nil) {
+    /// An offer can sit for as long as you like, so everything else goes ahead of it.
+    func post(caption: String, text: String, threadID: String?, questionID: String? = nil, offer: Offer? = nil) {
         lineCounter += 1
-        notices.append(Notice(id: lineCounter, caption: caption, text: text, threadID: threadID, questionID: questionID))
+        let notice = Notice(id: lineCounter, caption: caption, text: text, threadID: threadID, questionID: questionID, offer: offer)
+        let firstOffer = offer == nil ? notices.firstIndex { $0.offer != nil } : nil
+        notices.insert(notice, at: firstOffer ?? notices.endIndex)
         renderBubble()
     }
 
