@@ -42,6 +42,7 @@ private final class FakeStage: CatStage {
     var copied: String?
     var arriveImmediately = true
     var pendingArrival: (() -> Void)?
+    var saveSettings: ((Settings) -> Void)?
 
     init(log: Log) { self.log = log }
 
@@ -89,7 +90,7 @@ private final class FakeStage: CatStage {
     func toggleDashboard() {}
     func showKittens(_ statuses: [KittenStatus]) { kittens = statuses }
     func hideKittens() { kittens = nil }
-    func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {}
+    func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) { saveSettings = onSave }
     func copyToPasteboard(_ text: String) { copied = text }
 
     /// What a person does: types into the panel and presses Return.
@@ -604,6 +605,84 @@ final class FlowTests: XCTestCase {
         let forwarded = backend.sent[1].prompt
         XCTAssertFalse(forwarded.text.contains("<screen>"))
         XCTAssertTrue(forwarded.attachments.isEmpty)
+    }
+
+    /// What actually happened: the kitten could only ask for the link about a minute later.
+    func testWordsThatPointAtAScreenAKittenWontGetSayWhatToDoAndStillGo() async {
+        kittens = [clawde]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("Read this x thread, and see what lessons we can take from it")
+        await controller.frontierTask?.value
+
+        XCTAssertEqual(stage.bubble, .line("Clawde has this. It can't see your screen, so send the link or paste the text.", threadID: "thread-2"))
+        let given = backend.sent[1].prompt
+        XCTAssertTrue(given.text.hasPrefix("Read this x thread, and see what lessons we can take from it\n"))
+        XCTAssertFalse(given.text.contains("<screen>"))
+        XCTAssertTrue(given.attachments.isEmpty)
+    }
+
+    func testAKittenWithFullAccessGetsTheSameWarning() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.settingsPressed()
+        var fullAccess = settings
+        fullAccess.frontierMode = .fullAccess
+        stage.saveSettings?(fullAccess)
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("Read this x thread")
+        await controller.frontierTask?.value
+
+        XCTAssertEqual(stage.bubble, .line("Steve Pawsniak has this. It can't see your screen, so send the link or paste the text.", threadID: "thread-2"))
+        XCTAssertFalse(backend.sent[1].prompt.text.contains("<screen>"))
+    }
+
+    func testAKittenThatSeesTheScreenGetsNoWarning() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("Read this x thread")
+        await controller.frontierTask?.value
+        XCTAssertEqual(stage.bubble, .line("Steve Pawsniak has this.", threadID: "thread-2"))
+        XCTAssertTrue(backend.sent[1].prompt.text.contains("<screen>"))
+    }
+
+    func testWordsThatDontPointAtTheScreenGetNoWarning() async {
+        kittens = [clawde]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("Steve should stop doing that")
+        await controller.frontierTask?.value
+        XCTAssertEqual(stage.bubble, .line("Clawde has this.", threadID: "thread-2"))
+    }
+
+    func testAKittenThatIsntSetUpGetsNoWarningBecauseNothingWent() async {
+        kittens = [clawde]
+        backend.replies = [[.finished(fullText: "KITTEN: 1")]]
+        await ask("Read this x thread")
+        XCTAssertEqual(stage.bubble, .line(CatWords.notSetUp(clawde), threadID: nil))
+    }
+
+    func testAFollowUpThatPointsAtTheScreenWarnsForBothReasons() async {
+        kittens = [clawde]
+        controller.threadsChanged([session("w", "Clawde: Fix routing")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("what does this say?")
+        XCTAssertEqual(stage.bubble, .line("Sent that to Clawde: Fix routing. It can't see your screen, so send the link or paste the text.", threadID: "w"))
+        XCTAssertTrue(backend.sent[1].prompt.text.hasPrefix("what does this say?"))
+
+        kittens = []
+        controller.threadsChanged([session("f", "Work", mode: .fullAccess)])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("what does this say?")
+        XCTAssertEqual(stage.bubble, .line("Sent that to Work. It can't see your screen, so send the link or paste the text.", threadID: "f"))
+    }
+
+    func testAFollowUpToASessionThatSeesTheScreenGetsNoWarning() async {
+        controller.threadsChanged([session("w", "Work")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("what does this say?")
+        XCTAssertEqual(stage.bubble, .line("Sent that to Work.", threadID: "w"))
     }
 
     // MARK: - Self-check

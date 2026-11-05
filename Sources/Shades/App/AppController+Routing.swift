@@ -60,12 +60,23 @@ extension AppController {
         }
     }
 
+    /// Says your words have gone. If they point at a screen the agent won't get, it also says
+    /// what to do about that, for long enough to act on it. They've gone either way.
+    func sayPassedOn(_ line: String, threadID: String, missesScreen: Bool) {
+        if missesScreen {
+            say("\(line) \(CatWords.sendTheLink)", threadID: threadID, seconds: 20)
+        } else {
+            say(line, threadID: threadID)
+        }
+    }
+
     /// Gives your words to a kitten. A new thread in its folder already knows what it needs to,
     /// and T3 writes the title, so nothing here has to explain anything to it.
     func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?) {
         // As with a session, a kitten with full access doesn't get to see text from a page.
         let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess
         let shared = seesScreen ? snapshot : nil
+        let missesScreen = !seesScreen && ScreenWords.pointAtScreen(words)
         flow = Task {
             guard let projectID = await backend.projectID(atPath: kitten.folder) else {
                 say(CatWords.notSetUp(kitten))
@@ -81,7 +92,8 @@ extension AppController {
                 ),
                 snapshot: shared,
                 projectID: projectID,
-                name: kitten.name
+                name: kitten.name,
+                missesScreen: missesScreen
             )
         }
     }
@@ -100,7 +112,7 @@ extension AppController {
             screenshotPath: saveScreenshot(of: shared),
             screenLeftOut: !seesScreen && snapshot != nil
         )
-        say(CatWords.sentTo(thread), threadID: thread.id)
+        sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: !seesScreen && ScreenWords.pointAtScreen(words))
 
         // Quick chats are left out of the thread list's news, so their replies are picked up here.
         let isQuick = watch.isQuick(thread.id)

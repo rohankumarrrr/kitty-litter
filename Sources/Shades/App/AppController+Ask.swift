@@ -237,7 +237,7 @@ extension AppController {
         return [AgentAttachment(name: "screen.jpg", mimeType: "image/jpeg", data: jpeg)]
     }
 
-    func startFrontier(title: String?, text: String, snapshot: ScreenSnapshot?, projectID: String? = nil, name: String? = nil) {
+    func startFrontier(title: String?, text: String, snapshot: ScreenSnapshot?, projectID: String? = nil, name: String? = nil, missesScreen: Bool = false) {
         let name = name ?? frontierName
         let prompt = AgentPrompt(
             title: title.map { String($0.prefix(80)) },
@@ -256,7 +256,7 @@ extension AppController {
                     case .started(let threadID):
                         started = true
                         dispatchers.insert(threadID)
-                        say(CatWords.onIt(modelName: name), threadID: threadID)
+                        sayPassedOn(CatWords.onIt(modelName: name), threadID: threadID, missesScreen: missesScreen)
                     case .needsApproval(let request):
                         addApproval(request)
                     case .failed(let message):

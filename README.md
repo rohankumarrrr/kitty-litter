@@ -25,7 +25,7 @@ There's no list of projects to maintain. Shades acts as one router in front of y
 - **Gives it to a kitten** if it's in a specialist's area.
 - **Starts new work** if nothing has the context, saying so as it does. Fix always starts new work.
 
-Sessions with full access get your words but not your screen, so text on a page can't reach an agent that's allowed to do anything.
+Sessions with full access get your words but not your screen, so text on a page can't reach an agent that's allowed to do anything. If your words point at your screen, like "read this thread" with no link, the cat says so as it passes them on, so you can send the link or paste the text.
 
 The frontier agent starts with no project, and finds the right one from what you said and what's on your screen, reading READMEs when a project's name isn't its folder name. For code changes it starts a new thread in that project's worktree. Research and questions it just answers.
 

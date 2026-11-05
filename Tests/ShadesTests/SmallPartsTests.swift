@@ -30,6 +30,68 @@ final class QuickSessionTests: XCTestCase {
     }
 }
 
+final class ScreenWordsTests: XCTestCase {
+    func testWordsThatOnlyMakeSenseWithTheScreen() {
+        for words in [
+            "Read this x thread, and see what lessons we can take from it to improve our kitten litter.",
+            "look at this",
+            "See this? Do that for the kittens",
+            "What's this?",
+            "What’s this?",
+            "whats this",
+            "what does this say",
+            "what are these",
+            "explain this",
+            "Summarize this",
+            "check out this repo",
+            "thoughts on this?",
+            "what do you think of this",
+            "What can we learn from this article?",
+            "Is this reddit post right about the install?",
+            "This error keeps coming back",
+            "compare these screenshots",
+            "this\nvideo",
+            "what's on my screen?",
+            "what I'm looking at",
+            "the article I’m reading",
+        ] {
+            XCTAssertTrue(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    func testWordsThatStandOnTheirOwn() {
+        for words in [
+            "Steve should stop doing that",
+            "and that part?",
+            "Make the bubble a little bigger",
+            "Fix the install script",
+            "Stop doing this",
+            "Let's do this",
+            "Why did this happen?",
+            "What should we build this week?",
+            "Can you ship this today?",
+            "Does this fix the error?",
+            "Check that the page loads",
+            "I read that the new model is out",
+            "the cat sits too low on the screen",
+            "I'm reading the logs now",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    func testALinkMeansTheyAlreadySentIt() {
+        XCTAssertFalse(ScreenWords.pointAtScreen("Read this x thread https://x.com/someone/status/1"))
+        XCTAssertFalse(ScreenWords.pointAtScreen("Read this x thread x.com/someone/status/1"))
+        XCTAssertFalse(ScreenWords.pointAtScreen("Read this www.example.com"))
+    }
+
+    func testLotsOfTextMeansTheyPastedIt() {
+        let pasted = "Read this thread: " + String(repeating: "Someone said something long. ", count: 20)
+        XCTAssertFalse(ScreenWords.pointAtScreen(pasted))
+    }
+}
+
 final class ApprovalQueueTests: XCTestCase {
     private func request(_ id: String, at time: TimeInterval = 0, kind: ApprovalKind = .command) -> ApprovalRequest {
         ApprovalRequest(id: id, threadID: "t", threadTitle: "Thread", kind: kind, summary: "do \(id)", createdAt: Date(timeIntervalSince1970: time))
