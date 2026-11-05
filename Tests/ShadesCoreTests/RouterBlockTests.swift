@@ -108,6 +108,18 @@ final class RouterBlockTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: settingsFile), RouterBlock.settings)
     }
 
+    /// An atomic write keeps the old file's permissions, so a settings file nothing can read stayed that way.
+    func testSettingsNothingCanReadAreReplaced() throws {
+        _ = try RouterBlock.prepare(folder)
+        for mode in [0o000, 0o200] {
+            try FileManager.default.setAttributes([.posixPermissions: mode], ofItemAtPath: settingsFile.path)
+            _ = try RouterBlock.prepare(folder)
+            XCTAssertEqual(try Data(contentsOf: settingsFile), RouterBlock.settings)
+            let now = try FileManager.default.attributesOfItem(atPath: settingsFile.path)[.posixPermissions] as? Int
+            XCTAssertEqual(now, 0o644)
+        }
+    }
+
     func testAFolderThatCantBeMadeFails() throws {
         let blocked = root.appendingPathComponent("file")
         try Data().write(to: blocked)

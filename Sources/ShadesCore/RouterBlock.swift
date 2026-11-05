@@ -29,12 +29,21 @@ public enum RouterBlock {
         try keepOnly(".claude", in: folder)
         try keepOnly("settings.json", in: claude)
         let file = claude.appendingPathComponent("settings.json")
-        let found = try? FileManager.default.attributesOfItem(atPath: file.path)
-        // A link, or a second name for the same file, could change it later from somewhere else. An atomic write
-        // replaces either with a file of its own.
-        let ownFile = found?[.type] as? FileAttributeType == .typeRegular && found?[.referenceCount] as? Int == 1
-        if !ownFile || FileManager.default.contents(atPath: file.path) != settings {
-            try settings.write(to: file, options: .atomic)
+        let files = FileManager.default
+        let found = try? files.attributesOfItem(atPath: file.path)
+        // A link, or a second name for the same file, could change it later from somewhere else, and Claude Code
+        // has to be able to read it. Writing over it would keep its permissions, so it's replaced with a new file.
+        let ownFile = found?[.type] as? FileAttributeType == .typeRegular
+            && found?[.referenceCount] as? Int == 1
+            && found?[.posixPermissions] as? Int == 0o644
+        if !ownFile || files.contents(atPath: file.path) != settings {
+            try? files.removeItem(at: file)
+            guard files.createFile(atPath: file.path, contents: settings, attributes: [.posixPermissions: 0o644]) else {
+                throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: file.path])
+            }
+        }
+        guard files.contents(atPath: file.path) == settings else {
+            throw CocoaError(.fileReadNoPermission, userInfo: [NSFilePathErrorKey: file.path])
         }
         return folder.path
     }
