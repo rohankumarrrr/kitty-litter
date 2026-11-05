@@ -17,7 +17,8 @@ A desktop cat for macOS. It sees your screen when you ask, answers quick questio
 ```bash
 swift build
 swift test
-scripts/bundle.sh   # builds Shades.app, which macOS permissions need. Add /Applications to install it
+scripts/install.sh  # builds, signs and swaps in Shades.app, only touching the running copy if all that worked
+scripts/bundle.sh   # just builds Shades.app
 swift scripts/make-icon.swift assets   # redraws the app icon from the cat's art
 swift run shades --demo   # everything faked: no T3, permissions or microphone
 ```

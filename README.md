@@ -38,9 +38,8 @@ You need an Apple Silicon Mac on macOS 14 or later, Xcode 16 or later, and T3 Co
 ```bash
 git clone https://github.com/rohankumarrrr/shades
 cd shades
-scripts/make-dev-cert.sh   # optional, see below
-scripts/bundle.sh /Applications
-open /Applications/Shades.app
+scripts/make-dev-cert.sh   # see below
+scripts/install.sh
 ```
 
 The first launch does a few things:
@@ -49,7 +48,7 @@ The first launch does a few things:
 - **Connects to T3 Code** by itself, with nothing to click.
 - **Downloads about 1.2 GB of speech models.** The cat shows the progress. Asking by typing works in the meantime.
 
-macOS ties permissions to an app's signature. Without a signing certificate, every rebuild has a new signature, so macOS forgets them. `scripts/make-dev-cert.sh` makes a local self-signed certificate that fixes this, and adds it to your keychain, so read the script first.
+macOS ties permissions to an app's signature. Without a signing certificate, every rebuild has a new signature, so macOS forgets them. `scripts/make-dev-cert.sh` makes a local self-signed certificate that fixes this, and adds it to your keychain, so read the script first. When macOS asks whether codesign can use the key, choose **Always Allow**. `scripts/install.sh` won't replace a working app with an ad hoc build unless you pass `--ad-hoc`.
 
 Two settings are worth changing:
 
