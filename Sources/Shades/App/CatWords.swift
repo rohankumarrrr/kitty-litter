@@ -18,6 +18,7 @@ enum CatWords {
     static let tellMeWhatsWrong = "I can't see this one, so tell me what's wrong."
     static let cantSeeScreen = "I can't see your screen just now, but ask away."
     static let approvalFailed = "That answer didn't go through. It's still waiting."
+    static let frontDoorNotReady = "I can't get my own folder in T3 ready, so I can't take questions yet. Choose Check Myself from my menu to see why."
 
     static let setUp = "Turn those on in System Settings, then choose Restart from my menu."
     static let globeTip = "To dictate with Fn, set Press 🌐 key to Do Nothing in Keyboard Settings."

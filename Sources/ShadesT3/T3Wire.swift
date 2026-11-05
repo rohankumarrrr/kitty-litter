@@ -24,6 +24,7 @@ enum T3Wire {
         static let getTurnItem = "orchestration.getTurnItem"
         static let getThreadProjection = "orchestration.getThreadProjection"
         static let ensureScratch = "projects.ensureScratch"
+        static let mutateProject = "projects.mutate"
         static let createUploadURL = "attachments.createUploadUrl"
     }
 
@@ -248,6 +249,18 @@ enum T3Wire {
 
     struct ScratchProject: Decodable {
         let projectId: String
+    }
+
+    struct CreateProject: Encodable {
+        var type = "project.create"
+        let commandId: String
+        let projectId: String
+        let title: String
+        let workspaceRoot: String
+    }
+
+    struct Project: Decodable {
+        let id: String
     }
 
     struct LaunchThread: Encodable {

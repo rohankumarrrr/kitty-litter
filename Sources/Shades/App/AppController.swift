@@ -28,6 +28,7 @@ final class AppController {
     let screenTip: () -> String?
     let loadKittens: () -> [Kitten]
     let screenBlockGaps: (String) -> [String]
+    let routerFolder: () -> String?
     let systemFacts: () -> HealthFacts
     let fileExists: (String) -> Bool
     let reportHealth: ([HealthFinding]) -> Void
@@ -154,6 +155,7 @@ final class AppController {
         screenTip = dependencies.screenTip
         loadKittens = dependencies.kittens
         screenBlockGaps = dependencies.screenBlockGaps
+        routerFolder = dependencies.routerFolder
         systemFacts = dependencies.systemFacts
         fileExists = dependencies.fileExists
         reportHealth = dependencies.reportHealth

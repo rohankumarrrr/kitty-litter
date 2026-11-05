@@ -139,6 +139,8 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     var runReports: [String: String] = [:]
     var silentRuns: Set<String> = []
     var readFails = false
+    var addedProjects: [String] = []
+    var addProjectFails = false
     private var count = 0
 
     var sent: [Sent] { lock.withLock { _sent } }
@@ -150,6 +152,8 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     }
 
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        // The router sees your screen, so wherever it's started from, it can only start where it can't pass that on.
+        if prompt.text.hasPrefix("You are Shades,") { XCTAssertEqual(prompt.projectID, "project-router") }
         let id = lock.withLock { () -> Int in
             count += 1
             _sent.append(Sent(mode: .start, threadID: nil, prompt: prompt))
@@ -239,6 +243,13 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
 
     func projectID(atPath path: String) async -> String? {
         projects[path]
+    }
+
+    func addProject(atPath path: String, title: String) async throws -> String {
+        if addProjectFails { throw URLError(.cannotConnectToHost) }
+        addedProjects.append(path)
+        projects[path] = "project-router"
+        return "project-router"
     }
 
     func archive(threadID: String) async throws {
@@ -355,13 +366,14 @@ final class FlowTests: XCTestCase {
     private var facts = HealthFacts()
     private var missingFiles: Set<String> = []
     private var screenBlockGaps: [String: [String]] = [:]
+    private var routerFolder: String? = "/shades/router"
     private var reportedHealth: [[HealthFinding]] = []
     private var savedInbox: Inbox?
     private var inboxSaveError: Error?
     private var controller: AppController!
     private var settings: Settings {
         var settings = Settings()
-        settings.quickModel = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "medium")
+        settings.quickModel = ModelChoice(provider: "claudeAgent", model: "claude-haiku-5-5", effort: "medium")
         settings.frontierModel = ModelChoice(provider: "claudeAgent", model: "claude-fable-5-1", effort: "high")
         settings.quickMode = .approvalRequired
         settings.frontierMode = .autoAcceptEdits
@@ -394,6 +406,7 @@ final class FlowTests: XCTestCase {
                 systemFacts: { [unowned self] in self.facts },
                 fileExists: { [unowned self] in !self.missingFiles.contains($0) },
                 screenBlockGaps: { [unowned self] in self.screenBlockGaps[$0] ?? [] },
+                routerFolder: { [unowned self] in self.routerFolder },
                 reportHealth: { [unowned self] in self.reportedHealth.append($0) },
                 inbox: inbox,
                 saveInbox: { [unowned self] in
@@ -443,12 +456,47 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(sent.mode, .start)
         XCTAssertEqual(sent.prompt.model, settings.quickModel)
         XCTAssertEqual(sent.prompt.runtimeMode, .approvalRequired)
-        XCTAssertNil(sent.prompt.projectID)
+        XCTAssertEqual(sent.prompt.projectID, "project-router")
+        XCTAssertEqual(backend.addedProjects, ["/shades/router"])
         XCTAssertTrue(sent.prompt.text.contains("Their question: what's this?"))
         XCTAssertTrue(sent.prompt.text.contains("App: Safari"))
         XCTAssertEqual(sent.prompt.attachments.first?.data, Data([1, 2, 3]))
         XCTAssertEqual(sent.prompt.attachments.first?.mimeType, "image/jpeg")
         XCTAssertEqual(stage.bubble, .reply(text: "Hi.", done: true, threadID: "thread-1", note: nil))
+    }
+
+    /// What actually happened: a front door sent text from the screen into the thread of a kitten that isn't
+    /// meant to see it, with T3's own tools. Its folder is what stops that, so it only ever runs there.
+    func testTheFrontDoorOnlyRunsInItsOwnFolder() async {
+        await ask("first")
+        await ask("and a follow-up")
+        clock += QuickSession.lifetime
+        await ask("much later")
+        XCTAssertEqual(backend.sent.map(\.mode), [.start, .followUp, .start])
+        XCTAssertEqual(backend.sent.filter { $0.mode == .start }.map(\.prompt.projectID), ["project-router", "project-router"])
+        XCTAssertEqual(backend.addedProjects, ["/shades/router"])
+    }
+
+    func testWithoutItsFolderTheFrontDoorDoesntRun() async {
+        routerFolder = nil
+        await ask("what's this?")
+        XCTAssertTrue(backend.sent.isEmpty)
+        guard case .line(let said, _)? = stage.bubble else { return XCTFail("nothing said") }
+        XCTAssertEqual(said, CatWords.frontDoorNotReady)
+    }
+
+    /// A follow-up runs on whatever its folder says by then, so that has to be put right first too.
+    func testWithoutItsFolderTheFrontDoorDoesntCarryOn() async {
+        await ask("first")
+        routerFolder = nil
+        await ask("and a follow-up")
+        XCTAssertEqual(backend.sent.map(\.mode), [.start])
+    }
+
+    func testIfT3WontTakeItsFolderTheFrontDoorDoesntRun() async {
+        backend.addProjectFails = true
+        await ask("what's this?")
+        XCTAssertTrue(backend.sent.isEmpty)
     }
 
     func testShowsThinkingStraightAway() async {
@@ -841,6 +889,22 @@ final class FlowTests: XCTestCase {
         controller.apply(changed)
         let findings = await controller.runHealthCheck()
         XCTAssertNotNil(findings.first { !$0.ok && $0.check == "kitten: Clawde" })
+    }
+
+    func testAFrontDoorOnAModelThatIgnoresItsFolderIsFound() async {
+        var changed = settings
+        changed.quickModel = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "medium")
+        controller.apply(changed)
+        let finding = await controller.runHealthCheck().first { $0.check == "front door" }
+        XCTAssertEqual(finding?.ok, false)
+        XCTAssertEqual(finding?.fix, "Choose a Claude model for Front door model in my settings.")
+    }
+
+    func testAFrontDoorWithoutItsFolderIsFound() async {
+        routerFolder = nil
+        let finding = await controller.runHealthCheck().first { $0.check == "front door" }
+        XCTAssertEqual(finding?.ok, false)
+        XCTAssertEqual(finding?.fix, "Check that I can write to my folder in Application Support.")
     }
 
     func testAKittenThatSeesTheScreenNeedsNoBlock() async {
