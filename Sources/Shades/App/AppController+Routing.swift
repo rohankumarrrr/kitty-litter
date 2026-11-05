@@ -18,10 +18,11 @@ extension AppController {
         }
     }
 
-    func rosterThreads(excluding current: String?) -> [AgentThread] {
+    func rosterThreads(excluding current: String?, only isOffered: (AgentThread) -> Bool = { _ in true }) -> [AgentThread] {
         let at = now()
+        // Neither router conversation lists the other, since the Ask box's can hold your screen and Messages' never may.
         return latestThreads
-            .filter { $0.id != current && !hiddenThreads.contains($0.id) }
+            .filter { $0.id != current && !hiddenThreads.contains($0.id) && !watch.isQuick($0.id) && isOffered($0) }
             .filter { $0.status.isActive || at.timeIntervalSince($0.updatedAt) < Self.rosterWindow }
             .sorted { a, b in
                 if a.status.isActive != b.status.isActive { return a.status.isActive }
@@ -61,7 +62,8 @@ extension AppController {
     }
 
     /// Gives your words to a kitten, in a new thread in its workspace. T3 writes the title.
-    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?) {
+    /// `onStarted` hears the new thread, or `nil` if there isn't one.
+    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, onStarted: ((String?) -> Void)? = nil) {
         // As with a session, a kitten with full access doesn't get to see text from a page. Nor does
         // one whose thread would count as a kitten's that isn't meant to see it, in a project they share.
         let sharesWithScreenless = loadKittens().contains {
@@ -71,6 +73,7 @@ extension AppController {
         let shared = seesScreen ? snapshot : nil
         flow = Task {
             guard let projectID = await backend.projectID(atPath: kitten.workspace) else {
+                onStarted?(nil)
                 say(CatWords.notSetUp(kitten))
                 return
             }
@@ -85,7 +88,8 @@ extension AppController {
                 ),
                 snapshot: shared,
                 projectID: projectID,
-                name: kitten.name
+                name: kitten.name,
+                onStarted: onStarted
             )
         }
     }

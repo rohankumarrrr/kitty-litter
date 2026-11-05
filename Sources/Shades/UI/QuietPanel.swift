@@ -29,13 +29,17 @@ class QuietPanel: NSPanel {
     override var canBecomeKey: Bool { allowsKey }
     override var canBecomeMain: Bool { false }
 
-    // There's no menu bar of ours while another app is active, so the editing keys come through here.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        Self.performEdit(event, from: self) || super.performKeyEquivalent(with: event)
+    }
+
+    /// There's no menu bar of ours while another app is active, so the editing keys come through here.
+    static func performEdit(_ event: NSEvent, from sender: NSWindow) -> Bool {
         guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
               let key = event.charactersIgnoringModifiers?.lowercased(),
-              let action = Self.editActions[key]
-        else { return super.performKeyEquivalent(with: event) }
-        return NSApp.sendAction(action, to: nil, from: self)
+              let action = editActions[key]
+        else { return false }
+        return NSApp.sendAction(action, to: nil, from: sender)
     }
 
     private static let editActions: [String: Selector] = [

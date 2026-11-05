@@ -219,10 +219,10 @@ extension AppController {
     var frontierName: String { ModelNames.friendly(settings.frontierModel) }
 
     /// The quick agent decided this needs more, so it goes straight to the frontier agent, which says so.
-    func handOff(task: String, question: String, snapshot: ScreenSnapshot?) {
+    func handOff(task: String, question: String, snapshot: ScreenSnapshot?, onStarted: ((String?) -> Void)? = nil) {
         // With full access, neither the page nor the quick agent's reading of it gets to reach it.
         guard settings.frontierMode != .fullAccess else {
-            startFrontier(title: question, text: Prompts.frontier(request: question, snapshot: nil, screenshotPath: nil), snapshot: nil)
+            startFrontier(title: question, text: Prompts.frontier(request: question, snapshot: nil, screenshotPath: nil), snapshot: nil, onStarted: onStarted)
             return
         }
         let path = saveScreenshot(of: snapshot)
@@ -231,7 +231,8 @@ extension AppController {
         startFrontier(
             title: task,
             text: Prompts.frontier(request: request, snapshot: snapshot, screenshotPath: path),
-            snapshot: snapshot
+            snapshot: snapshot,
+            onStarted: onStarted
         )
     }
 
@@ -245,7 +246,15 @@ extension AppController {
         return [AgentAttachment(name: "screen.jpg", mimeType: "image/jpeg", data: jpeg)]
     }
 
-    func startFrontier(title: String?, text: String, snapshot: ScreenSnapshot?, projectID: String? = nil, name: String? = nil) {
+    /// `onStarted` hears the new thread, or `nil` if there isn't one.
+    func startFrontier(
+        title: String?,
+        text: String,
+        snapshot: ScreenSnapshot?,
+        projectID: String? = nil,
+        name: String? = nil,
+        onStarted: ((String?) -> Void)? = nil
+    ) {
         let name = name ?? frontierName
         let prompt = AgentPrompt(
             title: title.map { String($0.prefix(80)) },
@@ -264,6 +273,7 @@ extension AppController {
                     case .started(let threadID):
                         started = true
                         dispatchers.insert(threadID)
+                        onStarted?(threadID)
                         say(CatWords.onIt(modelName: name), threadID: threadID)
                     case .needsApproval(let request):
                         addApproval(request)
@@ -273,8 +283,12 @@ extension AppController {
                         break
                     }
                 }
-                if !started { say(CatWords.noReply) }
+                if !started {
+                    onStarted?(nil)
+                    say(CatWords.noReply)
+                }
             } catch {
+                if !started { onStarted?(nil) }
                 say(CatWords.problem(error, while: .agents))
             }
         }

@@ -97,7 +97,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         addAction("Inbox", shortcut: inboxSummary?() ?? nil) { [weak self] in self?.onInbox?() }
         addAction("Dashboard") { [weak self] in self?.onDashboard?() }
         addAction("Kittens", shortcut: "Shift-click the cat") { [weak self] in self?.onKittens?() }
-        addAction("Channels") { [weak self] in self?.onChannels?() }
+        addAction(CatWords.messagesTitle) { [weak self] in self?.onChannels?() }
 
         if !extras.isEmpty {
             menu.addItem(.separator())

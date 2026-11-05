@@ -75,6 +75,8 @@ final class AppStage: CatStage {
         channels.onClose = { [weak self] in self?.controller?.channelsClosed() }
         channels.view.pane.onOpenThread = { [weak self] id in self?.controller?.openThread(id) }
         channels.view.pane.onCopy = { [weak self] text in self?.copyToPasteboard(text) }
+        channels.view.pane.onAction = { [weak self] action in self?.controller?.messagesAction(action) }
+        channels.view.onSeen = { [weak self] selection in self?.controller?.messagesAction(.seen(selection)) }
 
         inbox.anchor = { [weak self] in
             guard let self else { return (.zero, .zero) }

@@ -65,9 +65,9 @@ A `cause` entry is `Fail` with an `error` (`detail` and `message` are for people
 | Method | Used for |
 | --- | --- |
 | `orchestration.launchThread` | New thread. Answers `threadId`, `projection` and `sequence`. |
-| `orchestration.dispatchCommand` | Follow-ups, approvals, settling, archiving, mode changes. Answers `sequence`. |
-| `orchestration.subscribeThread` | One thread's events. Also one whole thread, for Channels. |
-| `orchestration.subscribeShell` | Every thread, for the dashboard. Also one full snapshot, for Channels. |
+| `orchestration.dispatchCommand` | Follow-ups, approvals, answers to questions, settling, archiving, mode changes. Answers `sequence`. |
+| `orchestration.subscribeThread` | One thread's events. Also one whole thread, for Messages. |
+| `orchestration.subscribeShell` | Every thread, for the dashboard. Also one full snapshot, for Messages. |
 | `orchestration.getTurnItem` | The words of an approval or a question. |
 | `orchestration.getThreadProjection` | A thread's final report, a fallback for those words, and a settled thread's runtime mode. |
 | `projects.ensureScratch` | The "No project" project. The client remembers it. |
@@ -144,7 +144,15 @@ Testing tip: under `approval-required`, Codex runs with its `untrusted` policy, 
 
 ### Questions
 
-A blocking `pendingRuntimeRequest` of kind `user_input` is an agent asking something. The words are on a turn item with `type: "user_input_request"`, at the same ID an approval would use, with `questions: [{question, options: [{label, description}], multiSelect, allowCustomAnswer}]`. The cat shows the first question and its options, and you answer in T3, because a request can hold several questions, and some allow free text.
+A blocking `pendingRuntimeRequest` of kind `user_input` is an agent asking something. The words are on a turn item with `type: "user_input_request"`, at the same ID an approval would use, with `questions: [{id, question, options: [{label, description, value}], multiSelect, allowCustomAnswer}]`. The cat's bubble shows the first question and its options.
+
+The same command answers it, with `answers` in place of `decision`, filed under each question's `id`:
+
+```json
+{"type": "runtime-request.respond", "commandId": "<uuid>", "threadId": "…", "requestId": "…", "answers": {"<question id>": "Blue", "<another>": ["Large"]}}
+```
+
+An option sends its `value`, or its `label` if it has none, and your own words go in as they are, unless `allowCustomAnswer` is `false`. A `multiSelect` question wants a list of values, so an option for one goes as a list of one, while your own words stay a string. T3's own composer won't send until every question has an answer, so Messages asks them one at a time and sends them together. A question with no `id`, or one sharing its `id` with another, has nowhere of its own to file its answer, and is answered in T3. As with approvals, the thread is the request's own, which for a subagent isn't the listed one. `probe-t3 question` checks it live: a thread asks two questions at once, Shades answers each with an option, and the thread carries on with both answers.
 
 ### Reports and settling
 
@@ -155,7 +163,7 @@ A blocking `pendingRuntimeRequest` of kind `user_input` is an agent asking somet
 
 ### Who said what
 
-Channels reads a thread's turn items and folds them into exchanges: someone asked, and the agent answered. The fold is `T3Transcript.exchanges`, and it's pure.
+Messages reads a thread's turn items and folds them into exchanges: someone asked, and the agent answered. The fold is `T3Transcript.exchanges`, and it's pure.
 
 - **The full list.** `orchestration.subscribeShell` with `omitIdleSubagents: false` and `omitOlderSettled: false` gives one snapshot of every thread that isn't archived, subagents included. A real one was 234 threads and 470 KB, in 143 ms. The client interrupts the stream after that first snapshot. The snapshot's `archivedThreads` key exists but is empty, so an archived thread can't be named, and a sender in one shows as someone else.
 - **Shell fields.** `settledAt` is set exactly when a thread is settled. `pullRequests` is `[{number, url, snapshot: {state, title, …}}]`, where `state` is `open`, `merged` or `closed`, and the last one counts.

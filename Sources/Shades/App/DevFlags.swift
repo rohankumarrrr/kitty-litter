@@ -13,7 +13,7 @@ import ShadesT3
 ///
 /// And for the Channels window, none of which sends anything:
 ///
-///     shades --channels                     # opens it at launch, with --demo or for real
+///     shades --channels                     # opens Messages at launch, with --demo or for real
 ///     shades --demo --channels-image out    # draws it to PNGs from canned data, then quits
 ///     shades --channels-check               # reads real T3 once, prints only counts, then signs out
 @MainActor

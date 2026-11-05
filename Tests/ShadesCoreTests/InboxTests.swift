@@ -336,6 +336,38 @@ final class InboxTests: XCTestCase {
         XCTAssertTrue(loaded.owes(thread(run: "run-2")), "and since stays where it was")
     }
 
+    // MARK: - What you've read
+
+    func testAFinishedRunIsUnreadUntilYouveSeenIt() {
+        var inbox = Inbox(since: start)
+        XCTAssertTrue(inbox.isUnread(thread()))
+        XCTAssertFalse(inbox.isUnread(thread(status: .running)), "one still going isn't news yet")
+        XCTAssertFalse(inbox.isUnread(thread(run: nil)))
+        XCTAssertFalse(inbox.isUnread(thread(ended: -1)), "nothing from before since")
+
+        XCTAssertTrue(inbox.markRead([thread(), thread("other", status: .running)]))
+        XCTAssertFalse(inbox.isUnread(thread()))
+        XCTAssertTrue(inbox.isUnread(thread(run: "run-2")), "its next run is news again")
+        XCTAssertFalse(inbox.markRead([thread()]), "seeing it twice changes nothing, so there's nothing to save")
+    }
+
+    func testWhatYouveReadIsSavedAsIDsAndAFileFromBeforeItStillLoads() throws {
+        let file = try folder().appendingPathComponent("inbox.json")
+        var inbox = Inbox(since: start)
+        _ = inbox.markRead([thread()])
+        try inbox.save(to: file)
+        XCTAssertFalse(Inbox.load(from: file, now: start).isUnread(thread()))
+        let saved = try String(contentsOf: file, encoding: .utf8)
+        XCTAssertTrue(saved.contains(#""t" : "run-1""#))
+        XCTAssertFalse(saved.contains("Clawde"), "no titles or words, only IDs")
+
+        let older = #"{"entries":[],"handled":{},"since":-999999999}"#
+        try older.write(to: file, atomically: true, encoding: .utf8)
+        let loaded = Inbox.load(from: file, now: start)
+        XCTAssertTrue(loaded.isUnread(thread()))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
+    }
+
     func testOnlyYouCanReadIt() throws {
         let file = try folder().appendingPathComponent("inbox.json")
         try Inbox(since: start).save(to: file)

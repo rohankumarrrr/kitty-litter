@@ -14,6 +14,7 @@ import ShadesT3
 //   probe-t3 project    a thread bound to a project
 //   probe-t3 watch      the live thread list following one thread
 //   probe-t3 approval   one approval-required thread, answered in code within a moment
+//   probe-t3 question   one thread that asks two questions at once, answered with an option each as Messages would
 //   probe-t3 open       shows a thread in T3 Code and checks T3 navigated to it
 //   probe-t3 restart    runs its own throwaway T3 server, restarts it mid-turn, and checks recovery
 //   probe-t3 timing     how much time this client adds to a turn
@@ -377,6 +378,56 @@ actor ListSighting {
     var description: String { sighting ?? "no" }
 }
 
+func probeQuestion() async throws {
+    let backend = makeBackend()
+    try await backend.connect()
+    let claude = ModelChoice(provider: "claudeAgent", model: "claude-sonnet-5-5", effort: "low")
+    let turn = AgentPrompt(
+        title: "Shades test: question",
+        text: "Use your tool for asking the user questions to ask two questions at once: \"Which colour?\" with the options Red and Blue, and \"Which size?\" with the options Small and Large. Then reply with only the colour and size they picked.",
+        model: claude,
+        runtimeMode: .auto
+    )
+    var threadID = ""
+    let run = Task { () -> String in
+        var said = ""
+        for try await event in backend.start(turn) {
+            if case let .started(id) = event { threadID = id }
+            if case let .finished(text) = event { said = text }
+        }
+        return said
+    }
+
+    var answered: AgentQuestion?
+    let deadline = clock.now + .seconds(90)
+    watching: for await threads in backend.watchThreads() {
+        for thread in threads where thread.title == "Shades test: question" {
+            guard let question = thread.pendingQuestion, let form = question.form else { continue }
+            for part in form.parts { say("  asked: \(part.text), options \(part.options), own words \(part.takesOwnWords)") }
+            try await backend.answer(question, with: form.parts.map { $0.values.last ?? "" })
+            say("  answered each with its last option")
+            answered = question
+            break watching
+        }
+        if clock.now > deadline { break }
+    }
+    let finished = await withTaskGroup(of: String?.self) { group -> String? in
+        group.addTask { try? await run.value }
+        group.addTask {
+            try? await Task.sleep(for: .seconds(90))
+            return nil
+        }
+        let first = await group.next() ?? nil
+        group.cancelAll()
+        return first
+    }
+    run.cancel()
+    say("  a question with a form: \(answered != nil)")
+    say("  it carried on with the answer: \(finished.map { "\($0.prefix(40))" } ?? "no")")
+    if !threadID.isEmpty { try await backend.archive(threadID: threadID) }
+    await backend.signOut()
+}
+
 func probeOpen() async throws {
     let store = MemoryCredentialStore()
     let backend = makeBackend(credentials: store)
@@ -667,6 +718,7 @@ let probes: [String: () async throws -> Void] = [
     "project": probeProject,
     "watch": probeWatch,
     "approval": probeApproval,
+    "question": probeQuestion,
     "open": probeOpen,
     "restart": probeRestart,
     "timing": probeTiming,

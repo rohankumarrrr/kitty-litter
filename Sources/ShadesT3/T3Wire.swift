@@ -305,12 +305,28 @@ enum T3Wire {
         let runtimeMode: String
     }
 
+    /// An approval sends a `decision`, and a question sends `answers`, by each question's ID.
     struct RespondToRequest: Encodable {
+        /// A question that takes several choices wants a list, even of one, unless it's your own words.
+        enum Answer: Encodable, Equatable {
+            case one(String)
+            case several([String])
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.singleValueContainer()
+                switch self {
+                case .one(let value): try container.encode(value)
+                case .several(let values): try container.encode(values)
+                }
+            }
+        }
+
         var type = "runtime-request.respond"
         let commandId: String
         let threadId: String
         let requestId: String
-        let decision: String
+        var decision: String?
+        var answers: [String: Answer]?
     }
 
     struct ArchiveThread: Encodable {
@@ -610,9 +626,14 @@ enum T3Wire {
         struct Question: Decodable {
             struct Option: Decodable {
                 let label: String
+                /// What answering with it sends. Without one, it's the label.
+                let value: String?
             }
+            let id: String?
             let question: String
             let options: [Option]?
+            let allowCustomAnswer: Bool?
+            let multiSelect: Bool?
         }
 
         struct NativeRef: Decodable {
@@ -702,6 +723,35 @@ enum T3Wire {
         let error = ordered.last { $0.isError && $0.runId == lastRun }?.failure?.message
         let parts = [error.map { "Error: \($0)" }, message?.text].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
+    }
+
+    /// `nil` if any question has no ID of its own to file its answer under, so it can only be answered in T3.
+    static func answerForm(_ questions: [TurnItem.Question]?) -> AnswerForm? {
+        guard let questions, !questions.isEmpty else { return nil }
+        var parts: [AnswerForm.Part] = []
+        for question in questions {
+            guard let key = question.id else { return nil }
+            let options = question.options ?? []
+            parts.append(AnswerForm.Part(
+                key: key,
+                text: question.question,
+                options: options.map(\.label),
+                values: options.map { $0.value ?? $0.label },
+                takesOwnWords: question.allowCustomAnswer != false,
+                picksSeveral: question.multiSelect == true
+            ))
+        }
+        guard Set(parts.map(\.key)).count == parts.count else { return nil }
+        return AnswerForm(parts: parts)
+    }
+
+    /// One answer per part, in order. An option for a question that takes several goes as a list of one.
+    static func answers(_ answers: [String], to form: AnswerForm) -> [String: RespondToRequest.Answer]? {
+        guard answers.count == form.parts.count else { return nil }
+        let filed = zip(form.parts, answers).map { part, answer in
+            (part.key, part.picksSeveral && part.values.contains(answer) ? RespondToRequest.Answer.several([answer]) : .one(answer))
+        }
+        return Dictionary(filed) { first, _ in first }
     }
 
     /// Plain words for the approval bubble. It comes from the agent, so it's only ever shown.

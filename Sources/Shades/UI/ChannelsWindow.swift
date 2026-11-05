@@ -1,9 +1,10 @@
 import AppKit
 import ShadesCore
 
-/// A window that stays open beside your work without ever taking the keyboard, so the app you're
-/// in keeps its selection and the cat can still tell what you're looking at. It isn't a
-/// `QuietPanel`, because those float over everything, and this one is big enough to get in the way.
+/// A window that stays open beside your work without ever activating Shades, so the app you were in
+/// stays in front and the cat can still tell what you're looking at. It takes the keyboard only when
+/// you click into the box at the bottom, the way the Ask box does, and nothing typed there takes your
+/// screen. It isn't a `QuietPanel`, because those float over everything, and this one is big enough to get in the way.
 final class ChannelsPanel: NSPanel {
     init() {
         super.init(
@@ -21,10 +22,19 @@ final class ChannelsPanel: NSPanel {
         contentMinSize = ChannelsWindow.minimumSize
         backgroundColor = Ink.paper
         animationBehavior = .none
+        becomesKeyOnlyIfNeeded = true
+        title = CatWords.messagesTitle
+        // Shades' own captures leave out all its windows. This keeps Messages out of anyone else's too, such as a
+        // kitten's own screen tools, so one kitten can't be shown another's messages.
+        sharingType = .none
     }
 
-    override var canBecomeKey: Bool { false }
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        QuietPanel.performEdit(event, from: self) || super.performKeyEquivalent(with: event)
+    }
 
     /// A click raises it without activating anything.
     override func sendEvent(_ event: NSEvent) {
@@ -37,8 +47,10 @@ final class ChannelsPanel: NSPanel {
 final class ChannelsView: QuietView {
     let sidebar = ChannelSidebar()
     let pane = ChannelPane()
-    private(set) var selection: ChannelSelection = .issues
+    private(set) var selection: ChannelSelection = .needsYou
     private var book: ChannelBook?
+    /// You've seen what's there, which is what takes its unread dot away.
+    var onSeen: ((ChannelSelection) -> Void)?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -69,6 +81,7 @@ final class ChannelsView: QuietView {
         arrange()
         sidebar.show(book, selection: selection)
         pane.show(selection, in: book, isNewSelection: isFresh)
+        onSeen?(selection)
     }
 
     func select(_ selection: ChannelSelection) {
@@ -76,6 +89,7 @@ final class ChannelsView: QuietView {
         guard let book else { return }
         sidebar.show(book, selection: selection)
         pane.show(selection, in: book, isNewSelection: true)
+        onSeen?(selection)
     }
 
     func forget() {
@@ -89,8 +103,8 @@ final class ChannelsView: QuietView {
     }
 }
 
-/// The Channels window: your DMs with each kitten, what they say to each other, and what each has open.
-/// It only reads, and closing it forgets every word.
+/// The Messages window: what needs you, a group chat with every kitten, your DMs with each, and what
+/// they say to each other. Closing it forgets every word.
 @MainActor
 final class ChannelsWindow: NSObject, NSWindowDelegate {
     nonisolated static let size = NSSize(width: 820, height: 560)

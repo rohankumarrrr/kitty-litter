@@ -56,21 +56,28 @@ Normally you only see Shades. Shift-click him, or choose Kittens from his menu, 
 
 Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the kitten's folder or its `project`, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
 
-### Channels
+### Messages
 
-Choose Channels from the cat's menu to read what's being said, without opening T3:
+Choose Messages from the cat's menu to see and answer everything without opening T3:
 
-![The Channels window, with two kittens talking to each other](images/channels.png)
+![Messages, with what needs you at the top](images/messages.png)
 
-- **Issues** is what each kitten has open. There's no tracker yet, so an issue is one of a kitten's threads that's still working or isn't settled. A finished thread stays until it's settled, because that's a pull request waiting on your "ship it".
-- **Direct messages** has one row per kitten, whether or not you've talked. Your words and its replies are there, and so are the reports of work it started itself. Forwarded messages only show your own words, never the note or the screen below them.
-- **Between kittens** has one row per pair that's talked. A kitten's messages show up here by themselves when it sends them with T3's tools, such as `t3_thread_send`, because T3 records which thread sent each one. If that thread can't be named, such as one that's been archived, it's listed as "someone else".
+- **Needs you** is pinned at the top. Approvals and questions come first, then the inbox's reports: what needs a decision, what shipped, and anything else. Under them, **In progress** is what each kitten has open. There's no tracker yet, so that's one of a kitten's threads that's still working or isn't settled. A finished thread stays until it's settled, because that's a pull request waiting on your "ship it".
+- **Everyone** is a group chat with every kitten, which is all your DMs in one place. What you type there goes to the router with the same prompt and model as the Ask box, and whoever takes it answers in the chat as itself, with its name and jacket. The router keeps a conversation for Messages apart from the Ask box's, so your screen is never in it, and asking the cat something meanwhile can't cut it short. It only offers the kittens' threads and work Messages itself passed your words to, never anything the Ask box started, since that can hold your screen. When the router answers itself, or passes the work to the frontier agent, Shades answers. If you've closed Messages by then, the router's answer comes over the cat instead.
+- **Direct messages** has one row per kitten, whether or not you've talked, with a dot when it has finished something you haven't seen. Your words and its replies are there, and so are the reports of work it started itself. Forwarded messages only show your own words, never the note or the screen below them. Whatever it's waiting on you for sits at the bottom, to answer right there.
+- **Between kittens** has one row per pair that's talked. A kitten's messages show up here by themselves when it sends them with T3's tools, such as `t3_thread_send`, because T3 records which thread sent each one. If that thread can't be named, such as one that's been archived, it's listed as "someone else". These are only for reading.
 
-One answer is one message. A kitten's narration on the way to its answer shows as "2 earlier notes", and the rest is in T3. Hover over a message to copy it or open its thread, or click the line above it, which is the thread's title.
+One answer is one message. A kitten's narration on the way to its answer shows as "2 earlier notes", and the rest is in T3. Hover over a message to reply to it, copy it or open its thread, or click the line above it, which is the thread's title. A thread whose title starts with a kitten's name and a colon is listed as that kitten's wherever it runs, even in another kitten's project.
 
-In Channels, a thread whose title starts with a kitten's name and a colon is listed as that kitten's wherever it runs, even in another kitten's project.
+**Typing.** The line over the box says where your words go. In a kitten's DM they carry on in its latest thread, which is where you last talked or a newer thread whose words haven't been read yet, unless it's asked a question that takes your own words, which they then answer. **New topic** starts a fresh thread with that kitten instead, and **Reply** on a message carries on in that message's thread. In Needs you there's no box until you press **Reply**, **Ask** or **Type an answer** on something. Return sends and Shift-Return starts a new line. Once you've typed something, the box keeps pointing where it was, so a kitten finishing something else can't move your words to another thread. After a new topic, the box waits until T3 has started its thread, usually a second, and then carries on there.
 
-The window only reads. It can't send anything, and it never takes the keyboard, so the app you're in keeps its selection and the cat still sees what you're looking at. That also means no selecting text and no arrow keys. Nothing is read until you open it. While it's open it reads again when a thread changes, and looks every 15 seconds anyway, so it can tell you if T3 has gone away. It reads each kitten's newest 30 threads, and anything older is in T3. Every word is forgotten when you close it with the red button, and nothing goes to disk except where the window was.
+**What gets sent is only your words.** Nothing typed in Messages looks at your screen, since you're looking at Messages and not your work. Nothing anyone else said goes with your words either: not another kitten's messages, and not the group chat. An option on a question sends just that option. A question in several parts asks them one at a time and sends nothing until each has an answer, because T3 wants them all at once. Where T3 would let you pick several choices, Messages takes one, or your own words. Approvals offer Deny, Allow and, for commands and files, Allow for this session, and Return presses none of them, so allowing always takes a click of its own. No button says anything for you, so shipping still takes your own "ship it".
+
+**Focus.** The cat's windows never make Shades the active app, so the app you're using stays in front and the cat can still tell what you're looking at. Typing needs the keyboard, so Messages takes it the way the Ask box does: it's a panel that takes the keyboard without activating Shades, and only when you click into its box or press something that opens it. Everything else in the window takes clicks and leaves the keyboard where it was, and clicking back into your app takes it back. Nothing typed in Messages looks at the screen, so there's no capture for it to get in the way of.
+
+**Out of every screenshot.** Shades leaves its own windows out of every capture it takes. Messages is also marked as not for sharing, so other apps' captures can't see it either, including a kitten's own screen tools. Otherwise asking about your screen while it's open could hand one kitten another's messages. That also keeps it out of screenshots and screen sharing you start yourself. `probe-context --synthetic` checks both.
+
+**What's kept.** T3 has every word. Nothing is read until you open the window. While it's open it reads again when a thread changes, and looks every 15 seconds anyway, so it can tell you if T3 has gone away. It reads each kitten's newest 30 threads, and anything older is in T3. What you've just sent shows at once and waits in memory until T3 has it, and so does an answer from the router itself. Every word is forgotten when you close the window with the red button. All that's saved is which of each thread's runs you've seen, as IDs, in `inbox.json` with the inbox, plus where the window was. A run only counts as seen once its words have been read and shown, so a DM that's still reading or can't reach T3 keeps its dot. Work the router passed on from Everyone keeps answering there until the app quits, wherever it's passed after that, even into a kitten's folder.
 
 ## How they work
 
@@ -101,7 +108,7 @@ Reply and Ask open the text box, where you can type or hold the talk key and say
 
 A thread's reports go here if it counts as the work of any kitten with `inbox: true`, by its folder or its title. A thread titled `Shades test:` is a live test, so it stays out of the inbox and the bubble altogether, whichever kitten it belongs to. A copy of the app trying a flow out with `--ask`, `--hand-off` or `--fix` still sees them, so a test can see its own result.
 
-A question an agent has stopped to ask shows there too, but only opens in T3, because a message would just queue behind it. Approvals still come as the approval bubble, since they block the work.
+A question an agent has stopped to ask shows there too. Answer it in Messages or T3, since a reply would just queue behind it. Approvals still come as the approval bubble, since they block the work, and you can answer them in Messages too.
 
 ![The inbox, with one decision and one thing shipped](images/inbox.png)
 

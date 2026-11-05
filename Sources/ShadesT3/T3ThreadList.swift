@@ -34,6 +34,7 @@ struct T3ThreadList {
         var text: String
         var options: [String]
         var moreCount: Int
+        var form: AnswerForm? = nil
     }
 
     let scratchRoot: String?
@@ -109,7 +110,8 @@ struct T3ThreadList {
                 threadTitle: owner.title,
                 text: words.text,
                 options: words.options,
-                moreCount: words.moreCount
+                moreCount: words.moreCount,
+                form: words.form
             )
         }
         for thread in threads.values {
