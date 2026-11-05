@@ -174,7 +174,9 @@ public enum Prompts {
     private static let reportLimit = 12_000
 
     private static func reportBlock(_ report: String, title: String, doing: String) -> String {
-        let quoted = "Task: \(title)\n\n\(report.prefix(reportLimit))".replacingOccurrences(
+        // A long report opens with what happened and ends on what's needed from them, so it's the middle that goes.
+        let kept = report.count <= reportLimit ? report : "\(report.prefix(reportLimit / 2))\n\n(The middle is cut.)\n\n\(report.suffix(reportLimit / 2))"
+        let quoted = "Task: \(title)\n\n\(kept)".replacingOccurrences(
             of: #"<\s*/?\s*report\b[^>]*>"#,
             with: "(report tag)",
             options: [.regularExpression, .caseInsensitive]

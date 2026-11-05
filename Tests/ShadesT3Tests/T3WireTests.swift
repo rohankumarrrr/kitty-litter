@@ -117,6 +117,16 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(T3Wire.finalReport(in: items), "Error: Ran out of quota\n\nTrying that.")
     }
 
+    func testAskingForARunOnlyGetsWhatThatRunSaid() throws {
+        let items = try [
+            #"{"id":"a","type":"assistant_message","status":"completed","runId":"r1","startedAt":"2026-11-05T04:00:00.000Z","text":"It's live."}"#,
+            #"{"id":"c","type":"command_execution","status":"completed","runId":"r2","startedAt":"2026-11-05T05:00:00.000Z"}"#,
+        ].map(turnItem)
+        XCTAssertEqual(T3Wire.finalReport(in: items), "It's live.")
+        XCTAssertEqual(T3Wire.finalReport(in: items, run: "r1"), "It's live.")
+        XCTAssertNil(T3Wire.finalReport(in: items, run: "r2"))
+    }
+
     func testAQuestionsWordsAndOptionsAreRead() throws {
         let item = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"1","header":"Pick","question":"Which one?","options":[{"label":"A","description":"First"},{"label":"B","description":"Second"}]},{"id":"2","header":"More","question":"And?","options":[]}]}"#)
         XCTAssertEqual(item.questions?.first?.question, "Which one?")

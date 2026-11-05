@@ -13,6 +13,7 @@ extension AppController {
     }
 
     func threadsChanged(_ threads: [AgentThread]) {
+        tidyLeftoverSummaries(threads)
         latestThreads = threads
         threadListArrived = true
         let events = watch.update(threads)

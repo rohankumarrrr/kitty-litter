@@ -128,6 +128,17 @@ final class InboxTests: XCTestCase {
         XCTAssertNotNil(inbox.entries.first { $0.id == "row-1" }?.repliedAt)
     }
 
+    func testAFreshAnswerReplacesTheLastOneAndOtherNotesWaitWithIt() {
+        var inbox = Inbox(since: start)
+        inbox.file(SortedReport(decision: "B?"), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(note: "One."), from: thread(run: "r2"), at: start, id: counter())
+        inbox.file(SortedReport(note: "Two."), from: thread(run: "r3"), at: start, id: counter())
+        XCTAssertEqual(inbox.entries[0].answer, "One.\n\nTwo.")
+        inbox.markReplied("row-1", at: start)
+        inbox.file(SortedReport(note: "Three."), from: thread(run: "r4"), at: start, id: counter())
+        XCTAssertEqual(inbox.entries[0].answer, "Three.")
+    }
+
     func testAnAnsweredDecisionNeedsYouAgain() {
         var inbox = Inbox(since: start)
         inbox.file(SortedReport(decision: "B?"), from: thread(), at: start, id: counter())
@@ -344,5 +355,40 @@ final class InboxTests: XCTestCase {
             try Data(json.utf8).write(to: home.appendingPathComponent("kitten.json"))
         }
         XCTAssertEqual(Kittens.load(from: root).map(\.usesInbox), [false, true])
+    }
+
+    func testTheFileIsNeverReadableByOthersEvenWhileSaving() throws {
+        final class Modes: @unchecked Sendable {
+            private let lock = NSLock()
+            private var seen: Set<UInt16> = []
+            private var running = true
+            var isRunning: Bool { lock.withLock { running } }
+            func add(_ mode: UInt16) { lock.withLock { _ = seen.insert(mode) } }
+            func stop() -> Set<UInt16> {
+                lock.withLock {
+                    running = false
+                    return seen
+                }
+            }
+        }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("inbox.json")
+        var inbox = Inbox(since: start)
+        inbox.file(SortedReport(decision: String(repeating: "private ", count: 50)), from: thread(), at: start, id: counter())
+
+        let modes = Modes()
+        let watcher = Thread {
+            while modes.isRunning {
+                for name in (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [] {
+                    var info = stat()
+                    if stat(folder.appendingPathComponent(name).path, &info) == 0 { modes.add(info.st_mode & 0o777) }
+                }
+            }
+        }
+        watcher.start()
+        for _ in 0..<500 { try inbox.save(to: file) }
+        XCTAssertEqual(modes.stop(), [0o600])
     }
 }

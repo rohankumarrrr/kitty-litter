@@ -148,6 +148,7 @@ A blocking `pendingRuntimeRequest` of kind `user_input` is an agent asking somet
 
 ### Reports and settling
 
+- Each turn item has a `runId`, so asking for one run's report can come back empty when that run said nothing, rather than with the words of the run before.
 - `orchestration.getThreadProjection` gives a thread's turn items, and took about 60 ms even on threads with hundreds of them. The final report is the newest `assistant_message` with no `parentItemId`, since subagents have one. Claude's thinking also arrives as `assistant_message`, with `thinking` in its ID.
 - The same projection says who started a thread, which decides whether it gets your screen. `lineage.parentThreadId` only covers subagents, so a thread from `t3_thread_launch` has none. Its `thread.createdBy` is `"agent"`, and the first user message in `messages` has a `senderThreadId` naming the thread that launched it, even if it was launched idle. `"user"` means a person or Shades started it. `probe-t3 origin <thread>` shows the result.
 - `{"type": "thread.settle", "commandId": …, "threadId": …}` settles a thread. It can still take a follow-up afterwards, which was checked live.

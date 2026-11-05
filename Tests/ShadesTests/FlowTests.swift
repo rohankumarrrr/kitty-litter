@@ -130,6 +130,8 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     var connectError: Error?
     var streamError: Error?
     var droppedAfterReply: Error?
+    var runReports: [String: String] = [:]
+    var silentRuns: Set<String> = []
     private var count = 0
 
     var sent: [Sent] { lock.withLock { _sent } }
@@ -200,10 +202,12 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
         settled.append(threadID)
     }
 
-    func finalReport(threadID: String) async -> String? {
+    func finalReport(threadID: String, run: String?) async -> String? {
         let happening = whileReadingAReport
         whileReadingAReport = nil
         await happening?()
+        if let run, silentRuns.contains(run) { return nil }
+        if let run, let said = runReports[run] { return said }
         return reports[threadID]
     }
 
@@ -244,6 +248,7 @@ private final class FakeContext: ScreenContextProviding, @unchecked Sendable {
 }
 
 private final class FakeVoice: VoiceEngine {
+    var endError: Error?
     let partials: AsyncStream<String>
     let levels: AsyncStream<Float>
     let partialsIn: AsyncStream<String>.Continuation
@@ -265,7 +270,10 @@ private final class FakeVoice: VoiceEngine {
         if let beginError { throw beginError }
         began += 1
     }
-    func end() async throws -> Transcript { transcript }
+    func end() async throws -> Transcript {
+        if let endError { throw endError }
+        return transcript
+    }
     func cancel() { cancelled += 1 }
 }
 
@@ -1515,11 +1523,186 @@ final class FlowTests: XCTestCase {
     func testAPassedOnThreadIsntFiled() async {
         kittens = [inboxKitten]
         controller.dispatchers.insert("w")
-        await finish(work(), report: "The change went to a new thread, <t3-thread://v2/env/worker>, in a worktree.")
+        await finish(work(), report: "The change went to a new thread, <t3-thread://v2/env/worker>, in a worktree.", sorted: "NOTE: It went to a new thread.")
         XCTAssertTrue(rows.isEmpty)
-        XCTAssertTrue(backend.sent.isEmpty, "no sorting for a thread that only passed work on")
         XCTAssertEqual(stage.bubble, .line("Work's started in a new session.", threadID: "worker"))
         XCTAssertEqual(savedInbox?.owes(work()), false, "and it stays dealt with after a restart")
+    }
+
+    func testAPassedOnThreadStillStepsAsideIfSortingDoesntWork() async {
+        kittens = [inboxKitten]
+        controller.dispatchers.insert("w")
+        await finish(work(), report: "The change went to a new thread, <t3-thread://v2/env/worker>.", sorted: "Sorry, I can't sort this.")
+        XCTAssertTrue(rows.isEmpty, "no false alarm every time work moves")
+        XCTAssertEqual(stage.bubble, .line("Work's started in a new session.", threadID: "worker"))
+    }
+
+    func testADecisionThatMentionsAnotherThreadIsKept() async {
+        kittens = [inboxKitten]
+        controller.dispatchers.insert("w")
+        await finish(work(), report: "It's ready. Should I merge it? The review is in <t3-thread://v2/env/reviewer>.", sorted: "DECISION: Merge it?")
+        XCTAssertEqual(rows.map(\.kind), [.decision])
+        XCTAssertEqual(rows.map(\.text), ["Merge it?"])
+        XCTAssertFalse(controller.hiddenThreads.contains("w"))
+    }
+
+    func testEachRunIsFiledWithItsOwnWords() async {
+        kittens = [inboxKitten]
+        backend.runReports = ["run-1": "The first change is live.", "run-2": "The second change is live."]
+        backend.replies = [[.finished(fullText: "SHIPPED: First.")], [.finished(fullText: "SHIPPED: Second.")]]
+        backend.whileReadingAReport = { [unowned self] in self.controller.threadsChanged([self.work(run: "run-2")]) }
+        controller.threadsChanged([work()])
+        await settleFiling()
+        XCTAssertEqual(rows.map(\.text), ["First.", "Second."])
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("The first change is live."))
+        XCTAssertTrue(backend.sent[1].prompt.text.contains("The second change is live."))
+    }
+
+    func testARunThatSaidNothingDoesntFileTheLastReportAgain() async {
+        kittens = [inboxKitten]
+        await finish(work(), report: "The fix is live.", sorted: "SHIPPED: The fix is live.")
+        backend.silentRuns = ["run-2"]
+        await finish(work(run: "run-2"), report: "The fix is live.", sorted: "SHIPPED: The fix is live.")
+        XCTAssertEqual(rows.filter { $0.text == "The fix is live." }.count, 1)
+        XCTAssertEqual(rows.last?.text, CatWords.reportUnreadable)
+    }
+
+    func testNotesYouDidntAskForWaitTogether() async {
+        kittens = [inboxKitten]
+        await finish(work(run: "r1"), sorted: "NOTE: First.")
+        await finish(work(run: "r2"), sorted: "NOTE: Second.")
+        await finish(work(run: "r3"), sorted: "NOTE: Third.")
+        XCTAssertEqual(rows.map(\.text), ["First."])
+        XCTAssertEqual(rows.map(\.answer), ["Second.\n\nThird."])
+    }
+
+    func testTurningTheInboxOnDoesntBringUpOldWork() async {
+        let off = Kitten(name: "Steve", role: "r", covers: "c", folder: "/k/steve")
+        kittens = [off]
+        controller = makeController(inbox: Inbox(since: clock.addingTimeInterval(-86_400)))
+        await finish(work("s", title: "Steve: Resume", status: .running), report: "Your resume is ready.")
+        await finish(work("s", title: "Steve: Resume"), report: "Your resume is ready.")
+        XCTAssertEqual(stage.bubble, .notice(caption: "Steve: Resume", text: "Your resume is ready.", threadID: "s"))
+
+        kittens = [Kitten(name: "Steve", role: "r", covers: "c", folder: "/k/steve", usesInbox: true)]
+        controller = makeController(inbox: savedInbox!)
+        await finish(work("s", title: "Steve: Resume"), report: "Your resume is ready.", sorted: "SHIPPED: Your resume is ready.")
+        XCTAssertTrue(rows.isEmpty)
+    }
+
+    func testAnotherKittensReportComesBeforeTheInboxBubble() async {
+        kittens = [inboxKitten, steve]
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        backend.reports["s"] = "Your resume is ready."
+        controller.threadsChanged([work(), work("s", title: "Tailor resume", status: .running)])
+        var done = work("s", title: "Tailor resume")
+        done.projectPath = steve.folder
+        controller.threadsChanged([work(), done])
+        await controller.reportTask?.value
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(stage.bubble, .notice(caption: "Steve Pawsniak: Tailor resume", text: "Your resume is ready.", threadID: "s"))
+        controller.bubbleDismissed(byClick: true)
+        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+    }
+
+    func testTheEndOfALongReportStillGetsSorted() async {
+        kittens = [inboxKitten]
+        let report = String(repeating: "Worked through another file. ", count: 500) + "Should I merge it?"
+        await finish(work(), report: report, sorted: "DECISION: Merge it?")
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("Should I merge it?"))
+    }
+
+    private func leftoverSummary(_ status: AgentStatus, asking: [ApprovalRequest] = []) -> AgentThread {
+        AgentThread(id: "old", title: "Shades summary: Clawde: Fix login", projectTitle: nil, status: status, model: "m", updatedAt: clock, pendingApprovals: asking, lastRunID: "r", lastRunEndedAt: clock)
+    }
+
+    func testASummaryLeftRunningAcrossARestartCantAskForAnything() async {
+        kittens = [inboxKitten]
+        let asking = ApprovalRequest(id: "r", threadID: "old", threadTitle: "Shades summary: Clawde: Fix login", kind: .command, summary: "Run: rm -rf /", createdAt: clock)
+        controller.threadsChanged([leftoverSummary(.waitingForApproval, asking: [asking])])
+        await settle()
+        XCTAssertEqual(backend.responses.map(\.1), [.decline])
+        for bubble in stage.bubbles {
+            if case .approval? = bubble { XCTFail("a summary's request was shown") }
+        }
+    }
+
+    func testASummaryLeftRunningAcrossARestartSaysNothingAndIsTidiedUp() async {
+        kittens = [inboxKitten]
+        backend.reports["old"] = "SHIPPED: The fix is live."
+        controller.threadsChanged([leftoverSummary(.running)])
+        controller.threadsChanged([leftoverSummary(.completed)])
+        await settle()
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertTrue(controller.notices.isEmpty)
+        XCTAssertTrue(rows.isEmpty)
+        XCTAssertEqual(backend.archived, ["old"])
+    }
+
+    private var routerPrompts: [FakeBackend.Sent] {
+        backend.sent.filter { $0.prompt.text.contains("Their question:") }
+    }
+
+    func testLettingGoAfterTheReplyBoxHasGoneSendsNothing() async throws {
+        _ = try await replyWithPanelOpen()
+        let sends = backend.sent.count
+        controller.keyPressed(settings.talkKey)
+        stage.hideInput()
+        controller.keyReleased(settings.talkKey)
+        await settle()
+        XCTAssertEqual(backend.sent.count, sends, "it means never mind, and doesn't turn into a question for the cat")
+    }
+
+    func testEscWhileItsBeingTranscribedSendsNothing() async throws {
+        _ = try await replyWithPanelOpen()
+        let sends = backend.sent.count
+        controller.keyPressed(settings.talkKey)
+        controller.keyReleased(settings.talkKey)
+        stage.hideInput()
+        await settle()
+        XCTAssertEqual(backend.sent.count, sends)
+    }
+
+    func testPressingReturnWhileHoldingTheKeySendsOnce() async throws {
+        _ = try await replyWithPanelOpen()
+        controller.keyPressed(settings.talkKey)
+        stage.type("What is")
+        controller.keyReleased(settings.talkKey)
+        await settle()
+        XCTAssertTrue(routerPrompts.isEmpty)
+        XCTAssertEqual(backend.sent.filter { $0.mode == .forward }.count, 1)
+    }
+
+    func testAnOldLookCantComeWithAReply() async throws {
+        kittens = [inboxKitten]
+        await finish(work(), report: "The report.", sorted: "DECISION: Ship the fix?")
+        voice.endError = URLError(.cannotDecodeRawData)
+        controller.keyPressed(settings.talkKey)
+        controller.keyReleased(settings.talkKey)
+        await settle()
+        voice.endError = nil
+        XCTAssertNil(controller.talkLook)
+
+        controller.inboxPressed()
+        controller.inboxAction(.reply(try XCTUnwrap(stage.inboxRows?.first)))
+        controller.keyPressed(settings.talkKey)
+        stage.hideInput()
+        controller.keyReleased(settings.talkKey)
+        await settle()
+        XCTAssertTrue(routerPrompts.isEmpty)
+        XCTAssertTrue(backend.sent.allSatisfy(\.prompt.attachments.isEmpty))
+    }
+
+    func testAQuestionForTheCatStaysAQuestionIfYouPressReplyWhileItsTranscribed() async throws {
+        kittens = [inboxKitten]
+        await finish(work(), report: "The report.", sorted: "DECISION: Ship the fix?")
+        controller.keyPressed(settings.talkKey)
+        controller.keyReleased(settings.talkKey)
+        controller.inboxPressed()
+        controller.inboxAction(.reply(try XCTUnwrap(stage.inboxRows?.first)))
+        await settle()
+        XCTAssertFalse(backend.sent.contains { $0.mode == .forward }, "you were asking the cat, not replying")
+        XCTAssertEqual(routerPrompts.count, 1)
     }
 
     func testOtherKittensStillGetABubble() async {
@@ -1533,7 +1716,7 @@ final class FlowTests: XCTestCase {
         for _ in 0..<20 { await Task.yield() }
         XCTAssertEqual(stage.bubble, .notice(caption: "Steve Pawsniak: Tailor resume", text: "Your resume is ready.", threadID: "s"))
         XCTAssertTrue(rows.isEmpty)
-        XCTAssertNil(savedInbox)
+        XCTAssertEqual(savedInbox?.entries ?? [], [])
     }
 
     func testAThreadWithNoRunIDKeepsToTheBubble() async {

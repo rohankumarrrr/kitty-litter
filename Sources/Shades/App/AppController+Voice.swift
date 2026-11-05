@@ -28,14 +28,15 @@ extension AppController {
             say(CatWords.replyFirst)
             return
         }
+        talkIsForBox = boxTakesVoice
         // The look happens as the key goes down: that's the moment you mean.
-        if !boxTakesVoice { talkLook = startLook(CaptureOptions()) }
+        if !talkIsForBox { talkLook = startLook(CaptureOptions()) }
         guard beginListening(.talk) else {
             talkLook = nil
             return
         }
         stage.catWake()
-        if !boxTakesVoice {
+        if !talkIsForBox {
             stage.hideInput()
             heard = ""
             renderBubble()
@@ -52,9 +53,9 @@ extension AppController {
             voiceMode = nil
             refreshStatus()
             let text = transcript.cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-            if boxTakesVoice {
-                // Saying it counts as pressing Return.
-                if !text.isEmpty { stage.submitInput(text) }
+            if talkIsForBox {
+                // Saying it counts as pressing Return. If the box has gone, you meant never mind, not ask the cat.
+                if !text.isEmpty, boxTakesVoice { stage.submitInput(text) }
                 return
             }
             let capture = talkLook
@@ -66,6 +67,7 @@ extension AppController {
             ask(text, capture: capture)
         } catch {
             voiceMode = nil
+            talkLook = nil
             refreshStatus()
             say(CatWords.problem(error, while: .listening))
         }
@@ -126,8 +128,8 @@ extension AppController {
 
     func heardSoFar(_ text: String) {
         guard hearing, voiceMode == .talk else { return }
-        if boxTakesVoice {
-            stage.setInputText(text)
+        if talkIsForBox {
+            if boxTakesVoice { stage.setInputText(text) }
         } else {
             heard = text
             renderBubble()

@@ -227,8 +227,8 @@ public protocol AgentBackend: AnyObject, Sendable {
     func archive(threadID: String) async throws
     /// Marks a finished thread as dealt with, without hiding it.
     func settle(threadID: String) async throws
-    /// What the agent last said in this thread, or `nil` if it can't be read.
-    func finalReport(threadID: String) async -> String?
+    /// What the agent last said in this thread, or `nil` if it can't be read. Given a run, only what it said in that run.
+    func finalReport(threadID: String, run: String?) async -> String?
     /// Where this thread came from, or `nil` if that can't be read.
     func origin(of threadID: String) async -> ThreadOrigin?
 }
@@ -240,6 +240,7 @@ public extension AgentBackend {
     func projectID(atPath path: String) async -> String? { nil }
     func archive(threadID: String) async throws {}
     func settle(threadID: String) async throws {}
-    func finalReport(threadID: String) async -> String? { nil }
+    func finalReport(threadID: String, run: String?) async -> String? { nil }
+    func finalReport(threadID: String) async -> String? { await finalReport(threadID: threadID, run: nil) }
     func origin(of threadID: String) async -> ThreadOrigin? { nil }
 }

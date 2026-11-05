@@ -82,7 +82,9 @@ public struct Inbox: Codable, Equatable, Sendable {
                 add(.shipped, note)
                 return
             }
-            entries[row].answer = note
+            // An answer to what you just asked replaces the last one, which you've seen. Anything else waits with it.
+            let earlier = entries[row].repliedAt == nil ? entries[row].answer : nil
+            entries[row].answer = [earlier, note].compactMap { $0 }.joined(separator: "\n\n")
             entries[row].repliedAt = nil
             return
         }
@@ -150,9 +152,16 @@ public struct Inbox: Codable, Equatable, Sendable {
         try manager.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(self).write(to: file, options: .atomic)
-        // Reports can hold anything from a kitten's folder.
-        try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        let data = try encoder.encode(self)
+        // Reports can hold anything from a kitten's folder, so it's only ever yours to read, even mid-save.
+        let temp = file.deletingLastPathComponent().appendingPathComponent(".\(file.lastPathComponent).\(UUID().uuidString)")
+        let descriptor = open(temp.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        guard descriptor >= 0 else { throw CocoaError(.fileWriteUnknown) }
+        defer { try? manager.removeItem(at: temp) }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        try handle.write(contentsOf: data)
+        try handle.close()
+        guard rename(temp.path, file.path) == 0 else { throw CocoaError(.fileWriteUnknown) }
     }
 }
 

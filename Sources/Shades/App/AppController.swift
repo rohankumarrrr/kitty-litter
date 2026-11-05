@@ -79,11 +79,13 @@ final class AppController {
     var inbox: Inbox
     /// Threads whose report is being read and sorted, so each is only filed once.
     var filing: Set<String> = []
-    /// Runs that turned out not to belong to a kitten with an inbox, so nobody reads the kittens again for them.
-    var notForInbox: Set<String> = []
+    /// Summaries that were already running when the app started, which nobody's following.
+    var leftoverSummaries: Set<String> = []
     /// Whether the bubble should mention the inbox.
     var inboxNudge = false
     var inboxReplyIsOpen = false
+    /// Whether what's being said belongs in the box that was up when the key went down.
+    var talkIsForBox = false
     var inboxSaveFailed = false
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
@@ -258,12 +260,12 @@ final class AppController {
             return .reply(text: reply.text, done: reply.done, threadID: reply.threadID, note: reply.note)
         }
         if let line { return .line(line.text, threadID: line.threadID) }
+        if let notice = notices.first {
+            return .notice(caption: notice.caption, text: notice.text, threadID: notice.threadID)
+        }
         if inboxNudge {
             let headline = CatWords.inboxHeadline(inboxEntries)
             if !headline.isEmpty { return .inbox(headline) }
-        }
-        if let notice = notices.first {
-            return .notice(caption: notice.caption, text: notice.text, threadID: notice.threadID)
         }
         return nil
     }

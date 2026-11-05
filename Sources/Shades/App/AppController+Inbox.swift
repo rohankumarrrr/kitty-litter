@@ -12,50 +12,62 @@ extension AppController {
     /// Anything an inbox kitten finished that isn't filed yet, however long ago. Runs on every list, so a finish while
     /// the app was off looks exactly like one while it was on, and no event has to be caught.
     func fileOwedReports() {
-        let candidates = watch.threads.filter { thread in
-            inbox.owes(thread) && !filing.contains(thread.id) && !hiddenThreads.contains(thread.id)
-                && !notForInbox.contains(thread.lastRunID ?? "")
-        }
+        let candidates = watch.threads.filter { inbox.owes($0) && !filing.contains($0.id) && !hiddenThreads.contains($0.id) }
         // So kittens are only read from disk when there's something to check.
         guard !candidates.isEmpty else { return }
-        let kittens = loadKittens().filter(\.usesInbox)
+        let kittens = loadKittens()
+        guard !kittens.isEmpty else { return }
+        var skipped = false
         for thread in candidates {
-            if kittens.contains(where: { KittenBoard.belongs(thread, to: $0) }) {
+            if kittens.contains(where: { $0.usesInbox && KittenBoard.belongs(thread, to: $0) }) {
                 filing.insert(thread.id)
                 reportOn(thread, failed: thread.status == .failed)
-            } else if let run = thread.lastRunID {
-                notForInbox.insert(run)
+            } else {
+                // Saved, so turning the inbox on for its kitten later doesn't bring this up again.
+                // shortcut: this grows by a short line per thread, prune it if that ever matters.
+                inbox.skip(thread)
+                skipped = true
             }
         }
+        if skipped { keepInbox() }
     }
 
     /// The run only counts as handled once this has sorted it and saved, so stopping at any point before that
     /// means it's filed on the next launch.
-    func file(_ report: String?, of thread: AgentThread, failed: Bool) async {
+    func file(_ report: String?, of thread: AgentThread, failed: Bool, startedAnother next: String?) async {
         let sorted = await sort(report, of: thread, failed: failed)
+        // All it did was start another thread, unless it also has something for you.
+        if let next, !failed, sorted?.decision == nil, sorted?.shipped == nil {
+            passedOn(thread, to: next)
+            inbox.skip(thread)
+            keepInbox()
+            return
+        }
         let before = inbox.entries
-        inbox.file(sorted, from: thread, at: now(), id: { UUID().uuidString })
+        inbox.file(sorted ?? unsorted(report), from: thread, at: now(), id: { UUID().uuidString })
         keepInbox()
         if inbox.entries != before { nudgeInbox() }
         inboxChanged()
     }
 
-    /// A failure never goes near the model, so no report can call one shipped. When sorting doesn't
-    /// work out it's a decision, because a false alarm beats a lost report.
-    private func sort(_ report: String?, of thread: AgentThread, failed: Bool) async -> SortedReport {
-        let opening = report.map { ReportDigest.firstSentences(of: $0) }.flatMap { $0.isEmpty ? nil : $0 }
-        if failed { return SortedReport(decision: opening.map(CatWords.failedRow) ?? CatWords.failedWithoutReport) }
+    /// A failure never goes near the model, so no report can call one shipped. `nil` means the model's answer didn't work out.
+    private func sort(_ report: String?, of thread: AgentThread, failed: Bool) async -> SortedReport? {
+        if failed { return SortedReport(decision: opening(of: report).map(CatWords.failedRow) ?? CatWords.failedWithoutReport) }
         guard let report, report.contains(where: { !$0.isWhitespace }) else {
             return SortedReport(decision: CatWords.reportUnreadable)
         }
-        let prompt = AgentPrompt(
-            title: String("Shades summary: \(thread.title)".prefix(80)),
-            text: Prompts.sortReport(report, title: thread.title),
-            model: settings.summaryModel,
-            runtimeMode: .approvalRequired
-        )
+        let prompt = summaryPrompt(Prompts.sortReport(report, title: thread.title), about: thread)
         let reply = await firstOf(seconds: Self.summaryTimeout) { [self] in await summarize(prompt) }
-        return (reply ?? nil).flatMap(SortedReport.init(reply:)) ?? SortedReport(decision: opening ?? CatWords.reportUnreadable)
+        return (reply ?? nil).flatMap(SortedReport.init(reply:))
+    }
+
+    /// It's a decision, because a false alarm beats a lost report.
+    private func unsorted(_ report: String?) -> SortedReport {
+        SortedReport(decision: opening(of: report) ?? CatWords.reportUnreadable)
+    }
+
+    private func opening(of report: String?) -> String? {
+        report.map { ReportDigest.firstSentences(of: $0) }.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// What's saved, plus any question a thread has stopped to ask. That's answered in T3, since a message would
