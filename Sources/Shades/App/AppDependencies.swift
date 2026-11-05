@@ -11,4 +11,6 @@ struct AppDependencies {
     var settings: Settings
     /// Where changed settings go.
     var saveSettings: (Settings) -> Void
+    /// A one-time tip for seeing more of the screen, such as a browser setting to turn on.
+    var screenTip: () -> String? = { nil }
 }

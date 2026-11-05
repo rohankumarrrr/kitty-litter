@@ -162,6 +162,12 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
         lock.withLock { _responses.append((request.id, decision)) }
     }
 
+    var archived: [String] = []
+
+    func archive(threadID: String) async throws {
+        archived.append(threadID)
+    }
+
     func open(threadID: String) {
         lock.withLock { _opened.append(threadID) }
     }
@@ -711,6 +717,19 @@ final class FlowTests: XCTestCase {
         quick.status = .completed
         controller.threadsChanged([quick])
         XCTAssertEqual(stage.celebrated, 0)
+    }
+
+    func testAFinishedQuickThreadIsTidiedAwayOnce() async {
+        backend.replies = [[.finished(fullText: "One.")], [.finished(fullText: "Two.")], [.finished(fullText: "Three.")]]
+        await ask("first")
+        await ask("second")
+        XCTAssertEqual(backend.archived, [])
+
+        clock = clock.addingTimeInterval(QuickSession.lifetime + 1)
+        await ask("third")
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(backend.archived, ["thread-1"])
     }
 
     func testProjectNamesBecomeVocabulary() async {

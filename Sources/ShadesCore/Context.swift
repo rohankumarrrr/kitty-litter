@@ -44,7 +44,8 @@ public struct ScreenSnapshot: Sendable {
 public struct CaptureOptions: Sendable {
     public var includeScreenshot: Bool
     public var includePageText: Bool
-    /// Screen area to mark on the screenshot, in global points.
+    /// Screen area to mark on the screenshot, in AppKit global points: the origin is at
+    /// the bottom left of the primary display.
     public var focusRegion: CGRect?
 
     public init(includeScreenshot: Bool = true, includePageText: Bool = true, focusRegion: CGRect? = nil) {
@@ -57,7 +58,7 @@ public struct CaptureOptions: Sendable {
 public protocol ScreenContextProviding: AnyObject, Sendable {
     /// Must be called before any cat window takes focus, and never captures the cat.
     func snapshot(_ options: CaptureOptions) async throws -> ScreenSnapshot
-    /// Lets you drag out the part of the screen you mean. `nil` if you cancel.
+    /// Lets you drag out the part of the screen you mean, in AppKit global points. `nil` if you cancel.
     func pickRegion() async -> CGRect?
     /// Saves the screenshot for an agent to open, returning its path. Old ones get cleaned up.
     func saveScreenshot(of snapshot: ScreenSnapshot) throws -> String?

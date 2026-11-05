@@ -62,9 +62,9 @@ extension AppController {
         renderBubble()
         replyTask = Task {
             let snapshot = await capture?.value.snapshot
-            if generation == replyGeneration, snapshot?.isPrivate == true {
-                reply?.note = CatWords.privateApp
-                renderBubble()
+            if generation == replyGeneration {
+                reply?.note = snapshot?.isPrivate == true ? CatWords.privateApp : screenTip()
+                if reply?.note != nil { renderBubble() }
             }
             await runQuickTurn(question, snapshot: snapshot, generation: generation)
         }
@@ -76,6 +76,11 @@ extension AppController {
     }
 
     func runQuickTurn(_ question: String, snapshot: ScreenSnapshot?, generation: Int) async {
+        // Quick questions shouldn't pile up in your T3 sidebar once they're done with.
+        if let finished = quick.takeFinished(at: now()) {
+            Task { [backend] in try? await backend.archive(threadID: finished) }
+        }
+
         let prompt = AgentPrompt(
             title: String(question.prefix(60)),
             text: Prompts.quick(question: question, snapshot: snapshot),

@@ -20,7 +20,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     var onDashboard: (() -> Void)?
     var onSettings: (() -> Void)?
     var onOpenThread: ((String) -> Void)?
-    /// Extra items, which only demo mode uses.
+    /// Extra items, such as setting up permissions or demo mode's controls.
     var extras: [Extra] = []
 
     override init() {

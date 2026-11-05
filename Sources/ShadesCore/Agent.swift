@@ -157,4 +157,10 @@ public protocol AgentBackend: AnyObject, Sendable {
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws
     /// Shows the thread in T3 Code.
     func open(threadID: String)
+    /// Tidies a finished thread away. It can still be read in T3 Code.
+    func archive(threadID: String) async throws
+}
+
+public extension AgentBackend {
+    func archive(threadID: String) async throws {}
 }

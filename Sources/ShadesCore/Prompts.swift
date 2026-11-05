@@ -86,7 +86,16 @@ public enum Prompts {
         if let path = screenshotPath { lines.append("Screenshot file: \(path)") }
         if let selected = snapshot.selectedText, !selected.isEmpty { lines.append("Selected text:\n\(selected)") }
         if let page = snapshot.pageText, !page.isEmpty { lines.append("Page text:\n\(String(page.prefix(pageTextLimit)))") }
-        return "<screen>\n\(lines.joined(separator: "\n"))\n</screen>"
+        return "<screen>\n\(withoutScreenTags(lines.joined(separator: "\n")))\n</screen>"
+    }
+
+    /// A page must not be able to close the block it's quoted in and speak for itself.
+    private static func withoutScreenTags(_ text: String) -> String {
+        text.replacingOccurrences(
+            of: #"<\s*/?\s*screen\b[^>]*>"#,
+            with: "(screen tag)",
+            options: [.regularExpression, .caseInsensitive]
+        )
     }
 
     private static let pageTextLimit = 20_000

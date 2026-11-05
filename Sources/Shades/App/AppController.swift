@@ -25,6 +25,7 @@ final class AppController {
     let inserter: TextInserting
     let keys: KeyHoldMonitoring
     let saveSettings: (Settings) -> Void
+    let screenTip: () -> String?
     let stage: CatStage
     let now: () -> Date
     private(set) var settings: Settings
@@ -86,6 +87,7 @@ final class AppController {
         keys = dependencies.keys
         settings = dependencies.settings
         saveSettings = dependencies.saveSettings
+        screenTip = dependencies.screenTip
         self.stage = stage
         self.now = now
     }

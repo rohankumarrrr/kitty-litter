@@ -1,24 +1,23 @@
 import AppKit
+import ShadesContext
 import ShadesCore
+import ShadesT3
 
-// The one place that decides what's real. To wire in the real modules, import them here
-// and replace the body of this function with:
-//
-//     let voice = ParakeetVoiceEngine()
-//     return AppDependencies(
-//         backend: T3Backend(),                 // ShadesT3
-//         context: ScreenContextProvider(),     // ShadesContext
-//         voice: voice,                         // ShadesVoice, as are the next two
-//         inserter: TextInserter(),
-//         keys: KeyHoldMonitor(),
-//         settings: Settings.load(),
-//         saveSettings: { try? $0.save() }
-//     )
-//
-// Nothing else needs to change. `--demo` keeps working either way.
+// The one place that decides what's real. `--demo` swaps all of it for fakes.
 @MainActor
-func realDependencies() -> AppDependencies? {
-    nil
+func realDependencies() -> AppDependencies {
+    let context = ScreenContextProvider()
+    let voice = Demo.make()
+    return AppDependencies(
+        backend: T3Backend(),
+        context: context,
+        voice: voice.voice,
+        inserter: voice.inserter,
+        keys: voice.keys,
+        settings: Settings.load(),
+        saveSettings: { try? $0.save() },
+        screenTip: { context.takeJavaScriptTip() }
+    )
 }
 
 MainActor.assumeIsolated {
@@ -30,19 +29,26 @@ MainActor.assumeIsolated {
     let controller: AppController
     var driver: DemoDriver?
 
-    if !wantsDemo, let real = realDependencies() {
-        controller = AppController(dependencies: real, stage: stage)
-    } else {
-        if !wantsDemo { print("The real modules aren't wired in yet, so this is the demo.") }
+    if wantsDemo {
         let parts = Demo.make()
         controller = AppController(dependencies: parts.dependencies, stage: stage)
         driver = DemoDriver(parts: parts, controller: controller, stage: stage)
+    } else {
+        controller = AppController(dependencies: realDependencies(), stage: stage)
+        stage.menuBar.extras = [MenuBar.Extra(title: "Permissions...", action: Setup.openSettingsForWhatsMissing)]
     }
 
     stage.controller = controller
     stage.start()
     controller.start()
     driver?.start(script: !CommandLine.arguments.contains("--no-script"))
+    if !wantsDemo {
+        if DevFlags.wantsFlow {
+            DevFlags.run(on: controller)
+        } else {
+            Setup.runOnFirstLaunch()
+        }
+    }
 
     // The run loop never returns, so these stay alive for the life of the app.
     withExtendedLifetime((stage, controller, driver)) {
