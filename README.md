@@ -8,7 +8,7 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 ## What it does
 
-**Ask.** Press ⌥Space or click the cat, and ask anything. It looks at your screen at that moment and answers in a bubble, usually within 5 to 10 seconds. Good for "how do I start problem 3?" or "what does this error mean?"
+**Ask.** Press ⌥Space or click the cat, and ask anything. It looks at your screen at that moment and answers in a bubble, usually in about 10 seconds, though a model can occasionally take much longer. Good for "how do I start problem 3?" or "what does this error mean?"
 
 **Fix what I'm looking at.** Press ⌃⌥F and drag a box around whatever's wrong. Say what's wrong, or just press Return. A frontier agent works out which of your projects it is, and fixes it in its own worktree, so your checkout stays untouched.
 
