@@ -30,10 +30,13 @@ enum Setup {
     }
 
     /// macOS only asks once, so after that the way to change an answer is System Settings.
+    /// Asking comes first anyway, because that's what puts the app in Settings' list.
     static func openSettingsForWhatsMissing() {
         if !Permissions.hasScreenRecording {
+            Permissions.requestScreenRecording()
             Permissions.openSettings(.screenRecording)
         } else if !Permissions.hasAccessibility {
+            Permissions.promptForAccessibility()
             Permissions.openSettings(.accessibility)
         } else if !KeyHoldMonitor.hasPermission, let page = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
             NSWorkspace.shared.open(page)
