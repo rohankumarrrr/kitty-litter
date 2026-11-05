@@ -16,6 +16,8 @@ public struct Kitten: Sendable, Equatable, Identifiable {
     /// Whether text from your screen can reach it. Off for a kitten that can change the rules
     /// everyone else works by, because a page shouldn't get a say in those.
     public var seesScreen: Bool
+    /// Whether its reports wait in the inbox, rather than each taking a turn in the bubble.
+    public var usesInbox: Bool
 
     public var id: String { folder }
 
@@ -26,7 +28,8 @@ public struct Kitten: Sendable, Equatable, Identifiable {
         folder: String,
         planned: Bool = false,
         color: UInt32? = nil,
-        seesScreen: Bool = true
+        seesScreen: Bool = true,
+        usesInbox: Bool = false
     ) {
         self.name = name
         self.role = role
@@ -35,6 +38,7 @@ public struct Kitten: Sendable, Equatable, Identifiable {
         self.planned = planned
         self.color = color
         self.seesScreen = seesScreen
+        self.usesInbox = usesInbox
     }
 }
 
@@ -47,6 +51,7 @@ public enum Kittens {
         /// Like "#b3261e".
         var color: String?
         var seesScreen: Bool?
+        var inbox: Bool?
     }
 
     /// Where kittens live. Their contents are personal, so they stay out of this repo.
@@ -69,7 +74,8 @@ public enum Kittens {
                 folder: home.standardizedFileURL.path,
                 planned: profile.planned ?? false,
                 color: profile.color.flatMap { UInt32($0.replacingOccurrences(of: "#", with: ""), radix: 16) },
-                seesScreen: profile.seesScreen ?? true
+                seesScreen: profile.seesScreen ?? true,
+                usesInbox: profile.inbox ?? false
             )
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }

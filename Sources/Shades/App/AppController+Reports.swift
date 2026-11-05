@@ -5,15 +5,38 @@ import ShadesCore
 extension AppController {
     /// How long a summary can take before the report's own opening stands in for it.
     static let summaryTimeout: TimeInterval = 25
+    private static let summaryTitle = "Shades summary:"
 
     func reportOn(_ thread: AgentThread, failed: Bool) {
         reportTask = Task {
+            var unread = false
+            // A run that ended while this one was being read gets its turn here.
+            defer {
+                filing.remove(thread.id)
+                if !unread { fileOwedReports() }
+            }
             try? await Task.sleep(nanoseconds: UInt64(reportDelay * 1_000_000_000))
-            if latestThreads.first(where: { $0.id == thread.id })?.status.isActive == true { return }
+            let current = latestThreads.first { $0.id == thread.id } ?? thread
+            if current.status.isActive { return }
 
-            let report = await backend.finalReport(threadID: thread.id)
-            if !failed, dispatchers.contains(thread.id), let next = report.flatMap(ReportDigest.linkedThreadID(in:)), next != thread.id {
-                passedOn(thread, to: next)
+            // Settled when this started, so a kitten's file changing partway can't leave a report with nowhere to go.
+            let toInbox = filing.contains(thread.id)
+            let report: String?
+            do {
+                report = try await backend.report(threadID: thread.id, run: toInbox ? current.lastRunID : nil)
+            } catch {
+                // It's still owed, and the next list tries again. Not being able to read it doesn't mean it said nothing.
+                unread = toInbox
+                if toInbox { return }
+                report = nil
+            }
+            let link = report.flatMap(ReportDigest.linkedThreadID(in:)).flatMap { $0 == thread.id ? nil : $0 }
+            if toInbox {
+                await file(report, of: current, failed: current.status == .failed, startedAnother: link)
+                return
+            }
+            if !failed, dispatchers.contains(thread.id), let link {
+                passedOn(thread, to: link)
                 return
             }
             let words = await words(for: report, of: thread, failed: failed)
@@ -31,7 +54,7 @@ extension AppController {
     }
 
     /// All this thread did was start another one, so that's where the work is now.
-    private func passedOn(_ thread: AgentThread, to next: String) {
+    func passedOn(_ thread: AgentThread, to next: String) {
         dispatchers.insert(next)
         hiddenThreads.insert(thread.id)
         watch.markQuick(thread.id)
@@ -42,6 +65,11 @@ extension AppController {
     }
 
     func announce(_ question: AgentQuestion) {
+        if let thread = latestThreads.first(where: { $0.pendingQuestion?.id == question.id }), goesToInbox(thread) {
+            nudgeInbox()
+            renderBubble()
+            return
+        }
         post(
             caption: CatWords.questionCaption(question),
             text: CatWords.question(question),
@@ -56,19 +84,43 @@ extension AppController {
         }
         if ReportDigest.isShort(report) { return report.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-        let prompt = AgentPrompt(
-            title: String("Shades summary: \(thread.title)".prefix(80)),
-            text: Prompts.summary(of: report, title: thread.title, failed: failed),
-            model: settings.summaryModel,
-            runtimeMode: .approvalRequired
-        )
+        let prompt = summaryPrompt(Prompts.summary(of: report, title: thread.title, failed: failed), about: thread)
         let summary = await firstOf(seconds: Self.summaryTimeout) { [self] in await summarize(prompt) }
         return (summary ?? nil) ?? ReportDigest.firstSentences(of: report)
     }
 
+    func summaryPrompt(_ text: String, about thread: AgentThread) -> AgentPrompt {
+        AgentPrompt(
+            title: String("\(Self.summaryTitle) \(thread.title)".prefix(80)),
+            text: text,
+            model: settings.summaryModel,
+            runtimeMode: .approvalRequired
+        )
+    }
+
+    /// A summary still running when the app last stopped carries on without it, and it's reading
+    /// a report just the same. So nothing it says or asks for gets through, and it's tidied up as usual.
+    func tidyLeftoverSummaries(_ threads: [AgentThread]) {
+        // They're never in a project, which keeps a thread of yours in one with a title like that out of this.
+        for thread in threads where thread.title.hasPrefix(Self.summaryTitle) && thread.projectPath == nil {
+            if hiddenThreads.insert(thread.id).inserted {
+                watch.markQuick(thread.id)
+                leftoverSummaries.insert(thread.id)
+            }
+            guard leftoverSummaries.contains(thread.id) else { continue }
+            for request in thread.pendingApprovals {
+                Task { [backend] in try? await backend.respond(to: request, with: .decline) }
+            }
+            if !thread.status.isActive, thread.status != .idle {
+                leftoverSummaries.remove(thread.id)
+                Task { [backend] in try? await backend.archive(threadID: thread.id) }
+            }
+        }
+    }
+
     /// Runs out of sight and tidies up after itself. It only has words to write, so it isn't
     /// allowed to do anything else, and the report it's reading doesn't get a say in that.
-    private func summarize(_ prompt: AgentPrompt) async -> String? {
+    func summarize(_ prompt: AgentPrompt) async -> String? {
         var threadID: String?
         var text: String?
         do {

@@ -110,6 +110,8 @@ The shell stream sends a `snapshot`, then `thread.updated`, `thread.removed`, `p
 
 - A snapshot with `resolvedRepositoryIdentityRoots` only refreshes projects and has an empty `threads`. Treat it as a full snapshot and the dashboard goes blank, as it would about 100 ms after every connect.
 - `omitOlderSettled` and `omitIdleSubagents` took a real list from 179 threads to 35. Servers that don't know these flags ignore them.
+- `omitOlderSettled` never drops an unsettled thread. Settled ones were dropped from about 33 hours old upward, with some up to 67 hours old kept. So a run that settled and got that old while the app was off can be missed by [the inbox](kittens.md#the-inbox).
+- `latestRunId` and `latestRunCompletedAt` say which run a thread last finished and when. The inbox compares that ID with the last one it filed on every list, so a finish while the app was off looks the same as one while it was on. `status` stays `completed` after a thread settles, and `idle` means it has no finished run. The self-check says so if completed threads stop naming a run.
 - `lineage.relationshipToParent == "subagent"` and `lineage.sideChat` threads don't get listed. A subagent's approval shows on its nearest listed parent, but answering it must name the subagent's own thread.
 
 | Shell `status` | `AgentStatus` |
@@ -146,6 +148,7 @@ A blocking `pendingRuntimeRequest` of kind `user_input` is an agent asking somet
 
 ### Reports and settling
 
+- Each turn item has a `runId`, so asking for one run's report can come back empty when that run said nothing, rather than with the words of the run before.
 - `orchestration.getThreadProjection` gives a thread's turn items, and took about 60 ms even on threads with hundreds of them. The final report is the newest `assistant_message` with no `parentItemId`, since subagents have one. Claude's thinking also arrives as `assistant_message`, with `thinking` in its ID.
 - The same projection says who started a thread, which decides whether it gets your screen. `lineage.parentThreadId` only covers subagents, so a thread from `t3_thread_launch` has none. Its `thread.createdBy` is `"agent"`, and the first user message in `messages` has a `senderThreadId` naming the thread that launched it, even if it was launched idle. `"user"` means a person or Shades started it. `probe-t3 origin <thread>` shows the result.
 - `{"type": "thread.settle", "commandId": …, "threadId": …}` settles a thread. It can still take a follow-up afterwards, which was checked live.

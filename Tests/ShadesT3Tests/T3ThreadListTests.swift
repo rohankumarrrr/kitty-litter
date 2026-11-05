@@ -33,6 +33,24 @@ final class T3ThreadListTests: XCTestCase {
             .replacingOccurrences(of: "__ROOT__", with: root)
     }
 
+    func testALastRunIsReadWhenThereIsOneAndNotNeededWhenThereIsnt() throws {
+        let withRun = thread(id: "ran", status: "completed")
+            .replacingOccurrences(of: #""latestRunId":null"#, with: #""latestRunId":"run-3""#)
+        let withoutFields = thread(id: "old", status: "completed")
+            .replacingOccurrences(of: #""latestRunId":null,"#, with: "")
+            .replacingOccurrences(of: #""latestRunCompletedAt":"2026-11-02T19:11:15.374Z","#, with: "")
+        var list = T3ThreadList()
+        list.apply(try snapshot(threads: [withRun, withoutFields]))
+        let listed = list.agentThreads(summaries: [:])
+
+        let ran = try XCTUnwrap(listed.first { $0.id == "ran" })
+        XCTAssertEqual(ran.lastRunID, "run-3")
+        XCTAssertEqual(ran.lastRunEndedAt, T3Wire.parseDate("2026-11-02T19:11:15.374Z"))
+        let old = try XCTUnwrap(listed.first { $0.id == "old" })
+        XCTAssertNil(old.lastRunID)
+        XCTAssertNil(old.lastRunEndedAt)
+    }
+
     func testAThreadWaitingOnASubagentIsStillWorking() throws {
         var list = T3ThreadList()
         let parent = thread(id: "parent", status: "completed")

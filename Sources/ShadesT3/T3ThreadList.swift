@@ -144,7 +144,9 @@ struct T3ThreadList {
                     runtimeMode: thread.runtimeMode.flatMap(RuntimeMode.init(rawValue:)),
                     isSettled: thread.settledAt != nil,
                     pullRequest: thread.latestPullRequest,
-                    projectPath: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.workspaceRoot }
+                    projectPath: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.workspaceRoot },
+                    lastRunID: thread.latestRunId,
+                    lastRunEndedAt: thread.latestRunCompletedAt
                 )
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }

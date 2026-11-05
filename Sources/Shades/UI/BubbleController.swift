@@ -46,6 +46,9 @@ final class BubbleController {
         if case .notice(_, let shown, _)? = self.content, case .notice(_, let next, _) = content, shown != next {
             shownAt = Date()
         }
+        if case .inbox(let shown)? = self.content, case .inbox(let next) = content, shown != next {
+            shownAt = Date()
+        }
         self.content = content
 
         relayout(keepingWidth: !isNew)
@@ -98,7 +101,7 @@ final class BubbleController {
     private func kindMatches(_ a: BubbleContent, _ b: BubbleContent) -> Bool {
         switch (a, b) {
         case (.thinking, .thinking), (.listening, .listening), (.reply, .reply), (.line, .line),
-             (.notice, .notice), (.approval, .approval):
+             (.notice, .notice), (.approval, .approval), (.inbox, .inbox):
             return true
         default:
             return false
@@ -143,7 +146,10 @@ final class BubbleController {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 var grace = Self.clickAwayGrace
-                if case .notice = self.content { grace = Self.noticeClickAwayGrace }
+                switch self.content {
+                case .notice, .inbox: grace = Self.noticeClickAwayGrace
+                default: break
+                }
                 guard Date().timeIntervalSince(self.shownAt) > grace else { return }
                 self.onDismiss?(true)
             }

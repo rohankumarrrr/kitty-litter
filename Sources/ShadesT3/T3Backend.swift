@@ -179,12 +179,12 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, command)
     }
 
-    public func finalReport(threadID: String) async -> String? {
-        let projection: T3Wire.Projection? = try? await socket.call(
+    public func report(threadID: String, run: String?) async throws -> String? {
+        let projection: T3Wire.Projection = try await socket.call(
             T3Wire.Method.getThreadProjection,
             T3Wire.GetThreadProjection(threadId: threadID)
         )
-        return projection.flatMap { T3Wire.finalReport(in: $0.turnItems.compactMap(\.value)) }
+        return T3Wire.finalReport(in: projection.turnItems.compactMap(\.value), run: run)
     }
 
     public func allThreads() async -> [AgentThread]? {

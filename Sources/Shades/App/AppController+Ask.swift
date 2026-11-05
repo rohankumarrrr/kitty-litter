@@ -26,6 +26,7 @@ extension AppController {
         guard !openingAsk else { return }
         openingAsk = true
         defer { openingAsk = false }
+        stage.hideInbox()
         stage.catWake()
 
         // The look at the screen comes first, before anything can take focus.

@@ -100,7 +100,7 @@ final class DashboardPanel {
     }
 }
 
-private final class FlippedView: NSView {
+final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
 

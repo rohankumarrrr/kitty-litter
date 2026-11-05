@@ -13,6 +13,7 @@ extension AppController {
         picking = true
         defer { picking = false }
         stage.hideInput()
+        stage.hideInbox()
         guard let region = await context.pickRegion() else { return }
         stage.catRun(toRegion: region) {}
         let capture = await startLook(CaptureOptions(focusRegion: region)).value
@@ -34,6 +35,7 @@ extension AppController {
             caption = CatWords.fixCaption(modelName: frontierName)
         }
         fixIsOpen = true
+        boxesOpened += 1
         stage.showInput(InputRequest(
             placeholder: canSee ? CatWords.fixPlaceholder(talkKey: settings.talkKey) : CatWords.tellMeWhatsWrong,
             caption: caption,

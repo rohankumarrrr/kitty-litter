@@ -167,6 +167,11 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     /// Marked as dealt with.
     public var isSettled: Bool
     public var pullRequest: ThreadPullRequest?
+    /// A live test of Shades itself, which is how those are named. Not work anyone's waiting on.
+    public var isLiveTest: Bool { title.hasPrefix("Shades test:") }
+    /// The thread's latest run, which tells one report from the next. `nil` if the backend doesn't say.
+    public var lastRunID: String?
+    public var lastRunEndedAt: Date?
 
     public init(
         id: String,
@@ -180,7 +185,9 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         runtimeMode: RuntimeMode? = nil,
         isSettled: Bool = false,
         pullRequest: ThreadPullRequest? = nil,
-        projectPath: String? = nil
+        projectPath: String? = nil,
+        lastRunID: String? = nil,
+        lastRunEndedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -192,6 +199,8 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         self.pendingApprovals = pendingApprovals
         self.pendingQuestion = pendingQuestion
         self.runtimeMode = runtimeMode
+        self.lastRunID = lastRunID
+        self.lastRunEndedAt = lastRunEndedAt
         self.isSettled = isSettled
         self.pullRequest = pullRequest
     }
@@ -278,8 +287,9 @@ public protocol AgentBackend: AnyObject, Sendable {
     func archive(threadID: String) async throws
     /// Marks a finished thread as dealt with, without hiding it.
     func settle(threadID: String) async throws
-    /// What the agent last said in this thread, or `nil` if it can't be read.
-    func finalReport(threadID: String) async -> String?
+    /// What the agent last said in this thread, or in that run if it's given. `nil` means it said nothing,
+    /// and not being able to read it throws, because that's not the same thing.
+    func report(threadID: String, run: String?) async throws -> String?
     /// Every thread a person can see, finished ones too. `nil` if T3 can't be reached.
     func allThreads() async -> [AgentThread]?
     /// What's been said in a thread, oldest first. `nil` if it can't be read.
@@ -295,8 +305,10 @@ public extension AgentBackend {
     func projectID(atPath path: String) async -> String? { nil }
     func archive(threadID: String) async throws {}
     func settle(threadID: String) async throws {}
-    func finalReport(threadID: String) async -> String? { nil }
     func allThreads() async -> [AgentThread]? { nil }
     func exchanges(threadID: String) async -> [Exchange]? { nil }
+    func report(threadID: String, run: String?) async throws -> String? { nil }
+    /// What the agent last said in this thread, or `nil` if it can't be read.
+    func finalReport(threadID: String) async -> String? { (try? await report(threadID: threadID, run: nil)) ?? nil }
     func origin(of threadID: String) async -> ThreadOrigin? { nil }
 }

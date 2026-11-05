@@ -106,6 +106,9 @@ final class BubbleView: BalloonView {
             headingText = CatWords.asks(request.kind)
             body = request.summary
             code = request.kind == .command
+        case .inbox(let headline):
+            captionText = CatWords.inboxCaption
+            body = headline
         }
 
         setLabel(caption, captionText)
@@ -264,6 +267,8 @@ final class BubbleView: BalloonView {
             if ApprovalPolicy.offersSessionAllow(request.kind) {
                 add("Allow for this session", .text, .approval(request, .acceptForSession))
             }
+        case .inbox:
+            add("Open", .text, .openInbox)
         }
     }
 }
@@ -291,6 +296,7 @@ extension BubbleContent {
         case .line: return 3
         case .notice: return 4
         case .approval: return 5
+        case .inbox: return 6
         }
     }
 
@@ -301,12 +307,13 @@ extension BubbleContent {
         case .line(_, let thread): return "line|\(thread ?? "")"
         case .notice(_, _, let thread): return "notice|\(thread ?? "")"
         case .approval(let request, _, _): return "approval|\(request.id)"
+        case .inbox: return "inbox"
         }
     }
 
     fileprivate var hasSelectableText: Bool {
         switch self {
-        case .thinking, .listening: return false
+        case .thinking, .listening, .inbox: return false
         case .reply, .line, .notice, .approval: return true
         }
     }

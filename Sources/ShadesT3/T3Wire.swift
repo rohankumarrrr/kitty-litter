@@ -448,6 +448,8 @@ enum T3Wire {
         let pendingRuntimeRequest: PendingRequest?
         /// Shells and the like it left running when its turn ended. Only how many matters.
         let pendingBackgroundTasks: [Lossy<Ignored>]?
+        let latestRunId: String?
+        let latestRunCompletedAt: Date?
         let updatedAt: Date
         let archivedAt: Date?
         let deletedAt: Date?
@@ -691,9 +693,10 @@ enum T3Wire {
         items.filter { $0.parentItemId == nil }.sorted { $0.when < $1.when }
     }
 
-    /// What the agent last said in a thread, with any error it ended on first.
-    static func finalReport(in items: [TurnItem]) -> String? {
-        let ordered = ownItems(items)
+    /// What the agent last said in a thread, with any error it ended on first. Given a run, a run that
+    /// said nothing has nothing to say, rather than the words of the one before it.
+    static func finalReport(in items: [TurnItem], run: String? = nil) -> String? {
+        let ordered = ownItems(items).filter { run == nil || $0.runId == run }
         let message = ordered.last(where: \.isSpoken)
         let lastRun = ordered.last { $0.runId != nil }?.runId
         let error = ordered.last { $0.isError && $0.runId == lastRun }?.failure?.message
