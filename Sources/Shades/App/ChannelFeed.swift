@@ -11,7 +11,6 @@ final class ChannelFeed {
     private final class Session {
         var threads: [AgentThread]
         var transcripts: [String: [Exchange]] = [:]
-        /// Each thread's `updatedAt` at its last good read.
         var readStamps: [String: Date] = [:]
         var isReading = true
         var unreadable = 0
@@ -40,7 +39,6 @@ final class ChannelFeed {
         self.gap = gap
     }
 
-    /// How many threads' words are held right now.
     var threadsHeld: Int { session?.transcripts.count ?? 0 }
 
     /// Returns at once, still reading. Opening what's already open changes nothing.
@@ -54,7 +52,6 @@ final class ChannelFeed {
         return book
     }
 
-    /// Does nothing while closed.
     func threadsChanged(_ threads: [AgentThread]) {
         guard let session else { return }
         // Until the first full list lands, this one is the best there is.
@@ -121,7 +118,6 @@ final class ChannelFeed {
         publish(session)
     }
 
-    /// What could be read. A thread that couldn't be is left out.
     private func read(_ threads: [AgentThread]) async -> [String: [Exchange]] {
         let backend = backend
         return await withTaskGroup(of: (String, [Exchange]?).self) { group in

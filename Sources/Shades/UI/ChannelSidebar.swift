@@ -11,10 +11,8 @@ struct ChannelSidebarItem: Equatable {
     var selection: ChannelSelection
     var title: String
     var cats: [Cat] = []
-    /// Issues shows its total.
     var count: Int?
 
-    /// The channels in the order they're listed, with each group's heading.
     static func groups(in book: ChannelBook) -> [(heading: String?, items: [ChannelSidebarItem])] {
         let directs = book.statuses.map { status in
             ChannelSidebarItem(selection: .channel(.direct(status.kitten)), title: status.kitten.name, cats: [.kitten(status)])

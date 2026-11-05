@@ -55,9 +55,7 @@ extension KittenStatus.State {
     }
 }
 
-/// Who a message is from, as it's drawn.
 struct ChannelSpeakerLook {
-    /// For someone Shades can't name.
     static let otherJacket: UInt32 = 0x8f8f95
 
     var name: String
@@ -80,7 +78,6 @@ class ChannelRowView: QuietView {
     var hovering = false { didSet { if hovering != oldValue { hoverChanged() } } }
 
     func fit(width: CGFloat) -> CGFloat { 0 }
-    /// What clicking the row does, if anything.
     func press() {}
     var isPressable: Bool { false }
     func hoverChanged() { needsDisplay = true }
@@ -184,7 +181,6 @@ final class SubjectRowView: ChannelRowView {
     }
 }
 
-/// One thing someone said.
 final class MessageRowView: ChannelRowView {
     private static let clampedLines = 12
     private static let catSide: CGFloat = 32
@@ -315,7 +311,6 @@ final class MessageRowView: ChannelRowView {
     }
 }
 
-/// A kitten in the Issues pane.
 final class HeadingRowView: ChannelRowView {
     private let status: KittenStatus
 
@@ -380,10 +375,9 @@ final class IssueRowView: ChannelRowView {
             Ink.hover.setFill()
             NSBezierPath(roundedRect: NSRect(x: left - 8, y: 1, width: bounds.width - left - Self.margin + 16, height: bounds.height - 2), xRadius: 7, yRadius: 7).fill()
         }
-        Self.color(for: thread).setFill()
+        thread.dotColor.setFill()
         NSBezierPath(rect: NSRect(x: left, y: bounds.midY - 4, width: 8, height: 8)).fill()
 
-        // Measured from the right, so the title gets all the room that's left.
         var edge = bounds.width - Self.margin
         let details = [CatWords.age(of: thread.updatedAt, now: now()), CatWords.status(thread), thread.pullRequest.map(CatWords.pullRequest)]
         for text in details.compactMap({ $0 }) {
@@ -402,20 +396,8 @@ final class IssueRowView: ChannelRowView {
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: left + 16, y: 6, width: max(edge - left - 16, 40), height: 17))
     }
-
-    /// The same colours as the dashboard, so a status always looks the same.
-    private static func color(for thread: AgentThread) -> NSColor {
-        if KittenBoard.needsYou(thread) { return Ink.hex(CatGlint.attention(bright: true).color!) }
-        switch thread.status {
-        case .starting, .running, .waitingForApproval, .waitingForAnswer: return Ink.hex(CatGlint.thinking(bright: true).color!)
-        case .completed: return Ink.hex(CatGlint.listening(loudness: 1).color!)
-        case .failed: return Ink.hex(0xff3b30)
-        case .idle, .interrupted: return Ink.soft
-        }
-    }
 }
 
-/// A short line of soft text, for when there's nothing to show or something's wrong.
 final class NoteRowView: ChannelRowView {
     private let block: ChannelTextBlock
     private let isCentered: Bool

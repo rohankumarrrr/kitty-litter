@@ -180,8 +180,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertNil(KittenBoard.owner(of: thread("t", project: "site"), among: [pepper, steve]))
     }
 
-    // MARK: Issues
-
     func testAnIssueIsAnOpenThread() throws {
         let built = book(kittens: [steve], threads: [
             thread("done-unsettled", status: .completed),

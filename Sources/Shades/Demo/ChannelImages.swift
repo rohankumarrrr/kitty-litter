@@ -46,7 +46,6 @@ enum ChannelImages {
         )
     }
 
-    /// More kittens than fit, with names too long for their rows.
     private static func crowded() -> ChannelBook {
         let kittens = (1...16).map { number in
             Kitten(name: "Kitten number \(number) with quite a long name", role: "Helper", covers: "", folder: "/demo/kitten-\(number)")
@@ -123,7 +122,6 @@ enum ChannelImages {
         return rep.representation(using: .png, properties: [:])
     }
 
-    /// They only show while you're scrolling.
     private static func hideScrollers(in view: NSView) {
         if view is NSScroller { view.isHidden = true }
         view.subviews.forEach(hideScrollers)

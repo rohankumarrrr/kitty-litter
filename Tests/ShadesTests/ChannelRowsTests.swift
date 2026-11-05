@@ -98,8 +98,6 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(CatWords.age(of: noon, now: noon.addingTimeInterval(90_000)), "1d ago")
     }
 
-    // MARK: Notes
-
     func testAnEmptyDMSaysSo() {
         XCTAssertEqual(notes(dm(steve, in: book())), ["You and Steve Pawsniak haven't talked yet."])
         XCTAssertEqual(notes(dm(cali, in: book())), ["Cali isn't set up yet."])
@@ -139,8 +137,6 @@ final class ChannelRowsTests: XCTestCase {
         let rows = dm(steve, in: book(threads: [thread("a")], transcripts: ["a": many]))
         XCTAssertEqual(rows.first, .note("Older messages are in T3."))
     }
-
-    // MARK: Issues
 
     func testIssuesAreGroupedByKitten() {
         let built = book(threads: [thread("a", status: .running), thread("b")])

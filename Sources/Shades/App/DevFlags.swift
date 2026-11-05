@@ -75,9 +75,9 @@ enum DevFlags {
 
     static func checkLine(_ book: ChannelBook, threadsRead: Int, milliseconds: Int) -> String {
         let all = (book.directs + book.between).flatMap(\.messages)
-        let asks = all.filter { $0.id.hasSuffix(":ask") }
-        let askIDs = Set(asks.map { $0.id.dropLast(":ask".count) })
-        let unasked = all.filter { $0.id.hasSuffix(":reply") && !askIDs.contains($0.id.dropLast(":reply".count)) }
+        let asks = all.filter { $0.kind == .ask }
+        let askIDs = Set(asks.map(\.exchangeID))
+        let unasked = all.filter { $0.kind == .reply && !askIDs.contains($0.exchangeID) }
         func asked(by matches: (Speaker) -> Bool) -> Int { asks.filter { matches($0.speaker) }.count }
         return [
             "reached T3: \(!book.cantReachT3)",

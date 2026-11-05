@@ -79,7 +79,6 @@ private final class FeedBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    // Channels only ever reads, so anything that would send or change something stops the tests.
     func connect() async throws { fatalError("Channels never connects by itself") }
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> { fatalError("Channels never sends") }
     func followUp(threadID: String, _ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> { fatalError("Channels never sends") }
@@ -132,7 +131,6 @@ final class ChannelFeedTests: XCTestCase {
         XCTFail(what, file: file, line: line)
     }
 
-    /// Long enough for anything that was going to happen to have happened.
     private func holdOn() async {
         try? await Task.sleep(for: .milliseconds(120))
     }

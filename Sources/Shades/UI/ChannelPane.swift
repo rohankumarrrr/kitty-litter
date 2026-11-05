@@ -81,7 +81,6 @@ final class ChannelHeader: QuietView {
 
 /// The right side of the window: a header, then rows measured at the current width.
 final class ChannelPane: QuietView {
-    /// Closer than this to the bottom counts as being there.
     private static let stickyDistance: CGFloat = 40
     private static let topPad: CGFloat = 6
     private static let bottomPad: CGFloat = 14
@@ -115,7 +114,6 @@ final class ChannelPane: QuietView {
         arrange()
     }
 
-    /// Fits the header and rows to the pane, keeping you at the bottom if that's where you were.
     func arrange() {
         header.frame = NSRect(x: 0, y: 0, width: bounds.width, height: ChannelHeader.height)
         scroll.frame = NSRect(x: 0, y: ChannelHeader.height, width: bounds.width, height: max(bounds.height - ChannelHeader.height, 0))
@@ -161,7 +159,6 @@ final class ChannelPane: QuietView {
         document.subviews.forEach { $0.needsDisplay = true }
     }
 
-    /// The first message that's been cut short, if there is one.
     var longMessageRow: MessageRowView? {
         shownMessageRows.first(where: \.isCut)
     }
@@ -220,7 +217,6 @@ final class ChannelPane: QuietView {
         let clipHeight = stackedSize.height
         let heights = views.map { $0.fit(width: width) }
         let total = heights.reduce(0, +) + Self.topPad + Self.bottomPad
-        // A note on its own sits in the middle of the pane.
         var y = isLoneNote ? max((clipHeight - total) / 2, 0) : Self.topPad
         for (view, height) in zip(views, heights) {
             view.frame = NSRect(x: 0, y: y, width: width, height: height)

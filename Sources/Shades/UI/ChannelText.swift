@@ -39,7 +39,6 @@ final class ChannelTextBlock {
     private let storage: NSTextStorage
     private var fitted: (width: CGFloat, maxLines: Int?)?
     private(set) var height: CGFloat = 0
-    /// Whether there's more than the lines shown.
     private(set) var isCut = false
 
     init(_ text: NSAttributedString) {
@@ -60,8 +59,8 @@ final class ChannelTextBlock {
         let lines = lineWidths
         if let maxLines, lines.count > maxLines {
             // A blank line at the end would look like the end of the message, so it stops short of one.
-            let kept = lines.prefix(maxLines).lastIndex { $0 > 0 } ?? maxLines - 1
-            container.maximumNumberOfLines = kept + 1
+            let lastWithWords = lines.prefix(maxLines).lastIndex { $0 > 0 } ?? maxLines - 1
+            container.maximumNumberOfLines = lastWithWords + 1
             container.lineBreakMode = .byTruncatingTail
             isCut = true
         }

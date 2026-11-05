@@ -1,4 +1,5 @@
 import AppKit
+import ShadesCore
 
 /// The site's colours, so the bubbles look like its messages.
 enum Ink {
@@ -35,5 +36,18 @@ enum Ink {
 extension NSAppearance {
     var isDark: Bool {
         bestMatch(from: [.darkAqua, .aqua, .vibrantDark, .vibrantLight]).map { $0 == .darkAqua || $0 == .vibrantDark } ?? false
+    }
+}
+
+extension AgentThread {
+    /// The same colours as the glint, so a status always looks the same.
+    var dotColor: NSColor {
+        if KittenBoard.needsYou(self) { return Ink.hex(CatGlint.attention(bright: true).color!) }
+        switch status {
+        case .starting, .running, .waitingForApproval, .waitingForAnswer: return Ink.hex(CatGlint.thinking(bright: true).color!)
+        case .completed: return Ink.hex(CatGlint.listening(loudness: 1).color!)
+        case .failed: return Ink.hex(0xff3b30)
+        case .idle, .interrupted: return Ink.soft
+        }
     }
 }

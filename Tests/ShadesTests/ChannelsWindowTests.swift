@@ -187,8 +187,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(frame.midY, screen.midY, accuracy: 1)
     }
 
-    // MARK: Words
-
     func testMarkdownIsInlineOnlyAndNothingCanAct() {
         let text = ChannelMarkdown.attributed("**Bold** and *soft* with `code` and [a link](https://example.com)\n# Not a heading")
         XCTAssertEqual(text.string, "Bold and soft with code and a link\n# Not a heading")
@@ -215,8 +213,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertLessThan(cut, full)
         XCTAssertEqual(block.fit(width: 400, maxLines: 1), cut, "stopping at the blank line leaves just the first")
     }
-
-    // MARK: The check
 
     func testTheCheckPrintsOnlyCounts() {
         let secret = "SENTINEL"

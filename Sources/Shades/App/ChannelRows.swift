@@ -7,7 +7,6 @@ enum ChannelSelection: Hashable {
 }
 
 enum ChannelRow: Equatable {
-    /// The start of that day.
     case day(Date)
     case subject(String, threadID: String)
     case message(ChannelMessage)
@@ -71,7 +70,6 @@ enum ChannelRows {
         return .note(CatWords.haventTalked(names))
     }
 
-    /// Anything going wrong, which doesn't take away what's already here.
     private static func statusNotes(of book: ChannelBook) -> [ChannelRow] {
         var notes: [ChannelRow] = []
         if book.cantReachT3 { notes.append(.note(CatWords.cantReachT3Yet)) }

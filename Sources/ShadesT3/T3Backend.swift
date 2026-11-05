@@ -15,7 +15,7 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
     private let scratchRoot: String
     private let lock = NSLock()
     private var scratchProjectID: String?
-    /// What `exchanges(threadID:)` names senders from, so whoever asks for those asks `allThreads()` first.
+    /// What `exchanges(threadID:)` names senders from, as of the last `allThreads()`.
     private var catalog = T3ThreadList()
 
     /// - Parameters:
@@ -207,6 +207,7 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
     /// rows, which leaves out what a long thread was asked.
     /// shortcut: a thread over `T3Socket`'s 64 MB frame limit would drop the connection, and the largest seen is 15 MB. Check its `itemCount` first if they get near that.
     public func exchanges(threadID: String) async -> [Exchange]? {
+        if !lock.withLock({ catalog.isLoaded }) { _ = await allThreads() }
         let projection = await firstSnapshot(
             T3Wire.Method.subscribeThread,
             payload: T3Wire.encode(T3Wire.SubscribeThread.whole(threadID: threadID)),

@@ -28,8 +28,12 @@ struct ChannelID: Hashable {
 }
 
 struct ChannelMessage: Equatable, Identifiable {
-    /// The exchange's, plus "ask" or "reply".
-    var id: String
+    enum Kind: String {
+        case ask, reply
+    }
+
+    var exchangeID: String
+    var kind: Kind
     var speaker: Speaker
     /// `nil` for a reply that hasn't come yet, or never will because of a failure.
     var text: String?
@@ -41,6 +45,8 @@ struct ChannelMessage: Equatable, Identifiable {
     var earlierNotes = 0
     var isStillGoing = false
     var failure: String?
+
+    var id: String { "\(exchangeID):\(kind.rawValue)" }
 }
 
 struct Channel: Equatable, Identifiable {
@@ -60,13 +66,9 @@ struct KittenIssues: Equatable {
 struct ChannelBook: Equatable {
     private static let keptExchanges = 200
 
-    /// One per kitten, in `KittenBoard`'s order.
     var directs: [Channel]
-    /// For dots and poses.
     var statuses: [KittenStatus]
-    /// Only the ones with something in them, newest first.
     var between: [Channel]
-    /// Every kitten that's set up.
     var issues: [KittenIssues]
     var isReading: Bool
     var unreadable: Int
@@ -138,11 +140,12 @@ struct ChannelBook: Equatable {
         let title = title(of: thread, owner: owner)
         var messages: [ChannelMessage] = []
         if let ask = exchange.ask, !talkingToItself {
-            messages.append(ChannelMessage(id: "\(exchange.id):ask", speaker: speaker, text: ask, at: exchange.askedAt, threadID: thread.id, threadTitle: title))
+            messages.append(ChannelMessage(exchangeID: exchange.id, kind: .ask, speaker: speaker, text: ask, at: exchange.askedAt, threadID: thread.id, threadTitle: title))
         }
         if exchange.reply != nil || exchange.failure != nil || (isStillGoing && !talkingToItself) {
             messages.append(ChannelMessage(
-                id: "\(exchange.id):reply",
+                exchangeID: exchange.id,
+                kind: .reply,
                 speaker: .kitten(owner.id),
                 text: exchange.reply,
                 at: exchange.repliedAt ?? exchange.askedAt,
@@ -207,13 +210,11 @@ extension ChannelBook {
         }
     }
 
-    /// Who's in a channel besides you: kittens in their usual order, then anyone else.
     func others(in id: ChannelID) -> [Speaker] {
         let kittens = statuses.map { Speaker.kitten($0.id) }.filter(id.members.contains)
         return kittens + id.members.subtracting(kittens).subtracting([.you])
     }
 
-    /// Reads like "Steve Pawsniak, someone else".
     func title(of id: ChannelID) -> String {
         others(in: id)
             .map { $0 == .someoneElse ? CatWords.someoneElse.lowercased() : name(of: $0) }
