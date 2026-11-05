@@ -15,6 +15,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
 
     private struct Form {
         var quickModel: NSTextField
+        var summaryModel: NSTextField
         var frontierModel: NSTextField
         var quickMode: NSPopUpButton
         var frontierMode: NSPopUpButton
@@ -88,6 +89,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
 
         let form = Form(
             quickModel: field("\(settings.quickModel.provider) / \(settings.quickModel.model) / \(settings.quickModel.effort)"),
+            summaryModel: field("\(settings.summaryModel.provider) / \(settings.summaryModel.model) / \(settings.summaryModel.effort)"),
             frontierModel: field("\(settings.frontierModel.provider) / \(settings.frontierModel.model) / \(settings.frontierModel.effort)"),
             quickMode: popup(RuntimeMode.allCases, settings.quickMode, title: Self.modeName),
             frontierMode: popup(RuntimeMode.allCases, settings.frontierMode, title: Self.modeName),
@@ -103,6 +105,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             row("Quick mode", form.quickMode),
             row("Frontier model", form.frontierModel),
             row("Frontier mode", form.frontierMode),
+            row("Summary model", form.summaryModel),
             row("Hold to talk", form.talkKey),
             row("Hold to dictate", form.dictateKey),
             row("Private apps", form.privateApps),
@@ -141,6 +144,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         var settings = current
         settings.quickModel = Self.model(form.quickModel.stringValue, fallback: current.quickModel)
         settings.frontierModel = Self.model(form.frontierModel.stringValue, fallback: current.frontierModel)
+        settings.summaryModel = Self.model(form.summaryModel.stringValue, fallback: current.summaryModel)
         settings.quickMode = Self.selected(form.quickMode) ?? current.quickMode
         settings.frontierMode = Self.selected(form.frontierMode) ?? current.frontierMode
         settings.talkKey = Self.selected(form.talkKey) ?? current.talkKey

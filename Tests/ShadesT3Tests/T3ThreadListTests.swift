@@ -33,6 +33,22 @@ final class T3ThreadListTests: XCTestCase {
             .replacingOccurrences(of: "__ROOT__", with: root)
     }
 
+    func testAQuestionGoesOnTheThreadOnceItsWordsAreKnown() throws {
+        var list = T3ThreadList()
+        let pending = #"{"id":"req-1","kind":"user_input","createdAt":"2026-11-05T04:00:00.000Z","blocking":true}"#
+        list.apply(try snapshot(threads: [thread(id: "t", title: "Work", pending: pending)]))
+
+        XCTAssertEqual(list.pendingQuestions, [T3ThreadList.PendingQuestion(requestID: "req-1", threadID: "t")])
+        XCTAssertTrue(list.pendingApprovals.isEmpty)
+        let waiting = list.agentThreads(summaries: [:])
+        XCTAssertEqual(waiting.first?.status, .waitingForAnswer)
+        XCTAssertNil(waiting.first?.pendingQuestion)
+
+        let words = T3ThreadList.QuestionWords(text: "Which?", options: ["A", "B"], moreCount: 0)
+        let asked = list.agentThreads(summaries: [:], questions: ["req-1": words])
+        XCTAssertEqual(asked.first?.pendingQuestion, AgentQuestion(id: "req-1", threadID: "t", threadTitle: "Work", text: "Which?", options: ["A", "B"]))
+    }
+
     private func item(_ json: String) throws -> T3Wire.ShellItem {
         try T3Wire.decoder().decode(T3Wire.ShellItem.self, from: Data(json.utf8))
     }

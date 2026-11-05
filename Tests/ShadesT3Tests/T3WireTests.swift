@@ -92,6 +92,38 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(T3Wire.approvalItemID(requestID: T3Fixtures.approvalRequestID), T3Fixtures.approvalItemID)
     }
 
+    private func turnItem(_ json: String) throws -> T3Wire.TurnItem {
+        try T3Wire.decoder().decode(T3Wire.TurnItem.self, from: Data(json.utf8))
+    }
+
+    func testTheFinalReportIsTheLastThingTheAgentItselfSaid() throws {
+        let items = try [
+            #"{"id":"a","type":"assistant_message","status":"completed","runId":"r","startedAt":"2026-11-05T04:00:00.000Z","text":"Looking into it."}"#,
+            #"{"id":"sub","type":"assistant_message","status":"completed","runId":"r","parentItemId":"x","startedAt":"2026-11-05T04:00:05.000Z","text":"A subagent talking."}"#,
+            #"{"id":"b","type":"assistant_message","status":"completed","runId":"r","startedAt":"2026-11-05T04:00:03.000Z","text":"It's fixed."}"#,
+            #"{"id":"msg:thinking:1","type":"assistant_message","status":"completed","runId":"r","startedAt":"2026-11-05T04:00:04.000Z","text":"Hmm, let me think."}"#,
+            #"{"id":"c","type":"command_execution","status":"completed","runId":"r","startedAt":"2026-11-05T04:00:06.000Z"}"#,
+        ].map(turnItem)
+        XCTAssertEqual(T3Wire.finalReport(in: items), "It's fixed.")
+        XCTAssertNil(T3Wire.finalReport(in: []))
+    }
+
+    func testAFinalReportLeadsWithTheErrorItEndedOn() throws {
+        let items = try [
+            #"{"id":"old","type":"error","status":"failed","runId":"r1","startedAt":"2026-11-05T04:00:00.000Z","failure":{"message":"An old problem"}}"#,
+            #"{"id":"a","type":"assistant_message","status":"completed","runId":"r2","startedAt":"2026-11-05T04:01:00.000Z","text":"Trying that."}"#,
+            #"{"id":"e","type":"error","status":"failed","runId":"r2","startedAt":"2026-11-05T04:01:05.000Z","failure":{"message":"Ran out of quota"}}"#,
+        ].map(turnItem)
+        XCTAssertEqual(T3Wire.finalReport(in: items), "Error: Ran out of quota\n\nTrying that.")
+    }
+
+    func testAQuestionsWordsAndOptionsAreRead() throws {
+        let item = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"1","header":"Pick","question":"Which one?","options":[{"label":"A","description":"First"},{"label":"B","description":"Second"}]},{"id":"2","header":"More","question":"And?","options":[]}]}"#)
+        XCTAssertEqual(item.questions?.first?.question, "Which one?")
+        XCTAssertEqual(item.questions?.first?.options?.map(\.label), ["A", "B"])
+        XCTAssertEqual(item.questions?.count, 2)
+    }
+
     func testThreadLinkEncodesIDs() {
         let link = T3Wire.threadLink(environmentID: "env-1", threadID: "mcp:launch:abc")
         XCTAssertEqual(link?.absoluteString, "t3code://threads/env-1/mcp%3Alaunch%3Aabc")

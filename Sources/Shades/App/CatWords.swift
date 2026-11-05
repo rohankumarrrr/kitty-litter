@@ -36,9 +36,21 @@ enum CatWords {
     static func fixCaption(modelName: String) -> String { "\(modelName) will take a look." }
     static func handingOff(modelName: String) -> String { "Passing it to \(modelName)..." }
     static func onIt(modelName: String) -> String { "On it. \(modelName) has this." }
-    static func finished(_ thread: AgentThread) -> String { "Done: \(thread.title)" }
-    static func failed(_ thread: AgentThread) -> String { "That one hit a snag: \(thread.title)" }
-    static func hasQuestion(_ thread: AgentThread) -> String { "\(thread.title) has a question for you." }
+    static func finishedCaption(_ thread: AgentThread) -> String { "Done: \(thread.title)" }
+    static func failedCaption(_ thread: AgentThread) -> String { "Hit a snag: \(thread.title)" }
+    static func questionCaption(_ question: AgentQuestion) -> String { "Asking: \(question.threadTitle)" }
+    static let finishedWithoutReport = "It's finished, but didn't leave a report."
+    static let failedWithoutReport = "It stopped before it could say why."
+
+    /// The question and what you can say to it. Answering happens in T3.
+    static func question(_ question: AgentQuestion) -> String {
+        guard !question.text.isEmpty else { return "It has a question for you." }
+        var parts = [question.text]
+        if !question.options.isEmpty { parts.append(question.options.map { "• \($0)" }.joined(separator: "\n")) }
+        if question.moreCount == 1 { parts.append("And 1 more question.") }
+        if question.moreCount > 1 { parts.append("And \(question.moreCount) more questions.") }
+        return parts.joined(separator: "\n\n")
+    }
 
     static func asks(_ kind: ApprovalKind) -> String {
         switch kind {

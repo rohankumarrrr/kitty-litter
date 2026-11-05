@@ -134,6 +134,24 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, command)
     }
 
+    public func archive(threadID: String) async throws {
+        let command = T3Wire.ArchiveThread(commandId: Self.newID(), threadId: threadID)
+        let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, command)
+    }
+
+    public func settle(threadID: String) async throws {
+        let command = T3Wire.SettleThread(commandId: Self.newID(), threadId: threadID)
+        let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, command)
+    }
+
+    public func finalReport(threadID: String) async -> String? {
+        let projection: T3Wire.Projection? = try? await socket.call(
+            T3Wire.Method.getThreadProjection,
+            T3Wire.GetThreadProjection(threadId: threadID)
+        )
+        return projection.flatMap { T3Wire.finalReport(in: $0.turnItems.compactMap(\.value)) }
+    }
+
     public func open(threadID: String) {
         Task { [self] in
             guard let environmentID = await environmentID(),
@@ -149,11 +167,6 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
     public func projects() async throws -> [T3Project] {
         try await connect()
         return await hub.projects()
-    }
-
-    public func archive(threadID: String) async throws {
-        let command = T3Wire.ArchiveThread(commandId: Self.newID(), threadId: threadID)
-        let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, command)
     }
 
     /// Closes the connection. A backend can't be used again after this.

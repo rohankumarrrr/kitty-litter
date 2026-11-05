@@ -8,6 +8,8 @@ final class BubbleController {
     /// Long enough to stop a click that was already on its way from landing on a new button.
     static let armDelay: TimeInterval = 0.7
     private static let clickAwayGrace: TimeInterval = 1
+    /// A notice turns up unasked, so a click that was already on its way shouldn't lose it unread.
+    private static let noticeClickAwayGrace: TimeInterval = 6
 
     let panel = QuietPanel(allowsKey: true)
     let view = BubbleView(frame: .zero)
@@ -41,6 +43,9 @@ final class BubbleController {
             nextApproval = shown.id != next.id
         }
         let isNew = !(sameKind && panel.isVisible)
+        if case .notice(_, let shown, _)? = self.content, case .notice(_, let next, _) = content, shown != next {
+            shownAt = Date()
+        }
         self.content = content
 
         relayout(keepingWidth: !isNew)
@@ -93,7 +98,7 @@ final class BubbleController {
     private func kindMatches(_ a: BubbleContent, _ b: BubbleContent) -> Bool {
         switch (a, b) {
         case (.thinking, .thinking), (.listening, .listening), (.reply, .reply), (.line, .line),
-             (.handoff, .handoff), (.approval, .approval):
+             (.notice, .notice), (.approval, .approval):
             return true
         default:
             return false
@@ -104,7 +109,7 @@ final class BubbleController {
     /// else can't land on them as they appear under the pointer.
     private func armIfNeeded(_ content: BubbleContent) {
         switch content {
-        case .approval, .handoff: break
+        case .approval: break
         default: return
         }
         view.setButtonsArmed(false)
@@ -136,7 +141,10 @@ final class BubbleController {
         guard clickMonitor == nil else { return }
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, Date().timeIntervalSince(self.shownAt) > Self.clickAwayGrace else { return }
+                guard let self else { return }
+                var grace = Self.clickAwayGrace
+                if case .notice = self.content { grace = Self.noticeClickAwayGrace }
+                guard Date().timeIntervalSince(self.shownAt) > grace else { return }
                 self.onDismiss?(true)
             }
         }

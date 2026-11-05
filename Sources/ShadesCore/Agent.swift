@@ -16,6 +16,8 @@ public struct ModelChoice: Codable, Sendable, Hashable {
     public static let quick = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "medium")
     /// Takes on anything that needs real work.
     public static let frontier = ModelChoice(provider: "claudeAgent", model: "claude-opus-5-5", effort: "xhigh")
+    /// Sums up how a session went.
+    public static let summary = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "low")
 }
 
 /// T3 Code's permission modes, narrowest first.
@@ -115,6 +117,28 @@ public struct ApprovalRequest: Identifiable, Sendable, Hashable {
     }
 }
 
+/// An agent has stopped to ask you something.
+public struct AgentQuestion: Identifiable, Sendable, Hashable {
+    /// The request this belongs to. It stays the same until you answer.
+    public var id: String
+    public var threadID: String
+    public var threadTitle: String
+    /// Empty if the words couldn't be read.
+    public var text: String
+    public var options: [String]
+    /// How many more questions came with this one.
+    public var moreCount: Int
+
+    public init(id: String, threadID: String, threadTitle: String, text: String, options: [String] = [], moreCount: Int = 0) {
+        self.id = id
+        self.threadID = threadID
+        self.threadTitle = threadTitle
+        self.text = text
+        self.options = options
+        self.moreCount = moreCount
+    }
+}
+
 /// A thread as the dashboard shows it.
 public struct AgentThread: Identifiable, Sendable, Hashable {
     public var id: String
@@ -124,6 +148,7 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var model: String
     public var updatedAt: Date
     public var pendingApprovals: [ApprovalRequest]
+    public var pendingQuestion: AgentQuestion?
 
     public init(
         id: String,
@@ -132,7 +157,8 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         status: AgentStatus,
         model: String,
         updatedAt: Date,
-        pendingApprovals: [ApprovalRequest] = []
+        pendingApprovals: [ApprovalRequest] = [],
+        pendingQuestion: AgentQuestion? = nil
     ) {
         self.id = id
         self.title = title
@@ -141,6 +167,7 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         self.model = model
         self.updatedAt = updatedAt
         self.pendingApprovals = pendingApprovals
+        self.pendingQuestion = pendingQuestion
     }
 }
 
@@ -157,10 +184,16 @@ public protocol AgentBackend: AnyObject, Sendable {
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws
     /// Shows the thread in T3 Code.
     func open(threadID: String)
-    /// Tidies a finished thread away. It can still be read in T3 Code.
+    /// Takes a thread out of T3 Code's lists. It can still be read there.
     func archive(threadID: String) async throws
+    /// Marks a finished thread as dealt with, without hiding it.
+    func settle(threadID: String) async throws
+    /// What the agent last said in this thread, or `nil` if it can't be read.
+    func finalReport(threadID: String) async -> String?
 }
 
 public extension AgentBackend {
     func archive(threadID: String) async throws {}
+    func settle(threadID: String) async throws {}
+    func finalReport(threadID: String) async -> String? { nil }
 }

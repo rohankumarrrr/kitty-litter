@@ -25,6 +25,7 @@ final class DemoDriver {
             .init(title: "Try talking") { [weak self] in self?.hold(.talk) },
             .init(title: "Try dictating") { [weak self] in self?.hold(.dictate) },
             .init(title: "Ask for permission") { [weak self] in self?.parts.backend.requestApproval() },
+            .init(title: "Ask a question") { [weak self] in self?.parts.backend.askQuestion(threadID: "demo-research") },
             .init(title: "Finish all the work") { [weak self] in self?.parts.backend.stopEverything() },
         ]
         readCommands()
@@ -95,8 +96,8 @@ final class DemoDriver {
                 let decision: ApprovalDecision = word == "allow" ? .accept : word == "deny" ? .decline : .acceptForSession
                 controller.bubbleAction(.approval(request, decision))
             }
-        case "handoff":
-            controller.bubbleAction(rest == "yes" ? .acceptHandoff : .declineHandoff)
+        case "question":
+            parts.backend.askQuestion(threadID: rest.isEmpty ? "demo-research" : rest)
         case "approval":
             let parts = rest.split(separator: " ", maxSplits: 1).map(String.init)
             let kind = parts.first.flatMap(ApprovalKind.init(rawValue:)) ?? .command

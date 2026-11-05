@@ -13,6 +13,7 @@ Shades starts small on purpose. Version one is four things done well: ask about 
 
 ## Smaller things
 
+- Answer an agent's question from the bubble. It shows the question and options now, and you answer in T3.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
 - Remember project nicknames, so the frontier agent can skip the search next time.
 - Replace text in place after a rewrite, starting with apps that expose selected text well.

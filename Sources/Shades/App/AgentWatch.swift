@@ -6,7 +6,7 @@ struct AgentWatch {
     enum Event: Equatable {
         case finished(AgentThread)
         case failed(AgentThread)
-        case hasQuestion(AgentThread)
+        case hasQuestion(AgentQuestion)
     }
 
     /// Finished threads stay on the dashboard for a little while.
@@ -15,6 +15,7 @@ struct AgentWatch {
 
     private var last: [String: AgentStatus] = [:]
     private var quickThreads: Set<String> = []
+    private var announcedQuestions: Set<String> = []
     private(set) var threads: [AgentThread] = []
 
     /// A quick question's thread isn't work, so it doesn't count as agents running.
@@ -27,10 +28,13 @@ struct AgentWatch {
         let work = threads.filter { !quickThreads.contains($0.id) }
         var events: [Event] = []
         for thread in work {
+            // A question counts once its words arrive, which is a moment after the thread stops.
+            if let question = thread.pendingQuestion, announcedQuestions.insert(question.id).inserted {
+                events.append(.hasQuestion(question))
+            }
             guard let before = last[thread.id], before != thread.status else { continue }
             if before.isActive && thread.status == .completed { events.append(.finished(thread)) }
             if before.isActive && thread.status == .failed { events.append(.failed(thread)) }
-            if thread.status == .waitingForAnswer { events.append(.hasQuestion(thread)) }
         }
         last = Dictionary(work.map { ($0.id, $0.status) }, uniquingKeysWith: { _, new in new })
         self.threads = work

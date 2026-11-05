@@ -61,6 +61,29 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
+    func finalReport(threadID: String) async -> String? {
+        try? await Task.sleep(nanoseconds: 800_000_000)
+        return """
+        Moved the pricing page to the new grid and fixed the checkout button on small screens. \
+        It's in a pull request, and the tests pass. It needs your review before it can go out.
+        """
+    }
+
+    /// An agent stops to ask you something, which then shows on the dashboard too.
+    func askQuestion(threadID: String) {
+        update { threads in
+            guard let index = threads.firstIndex(where: { $0.id == threadID }) else { return }
+            threads[index].status = .waitingForAnswer
+            threads[index].pendingQuestion = AgentQuestion(
+                id: "demo-question-\(threadID)",
+                threadID: threadID,
+                threadTitle: threads[index].title,
+                text: "Which pixel font should the headings use?",
+                options: ["Silkscreen (Recommended)", "Press Start 2P", "Keep the system font"]
+            )
+        }
+    }
+
     func open(threadID: String) {
         print("[demo] would open \(threadID) in T3")
         DispatchQueue.main.async { self.onOpen?(threadID) }

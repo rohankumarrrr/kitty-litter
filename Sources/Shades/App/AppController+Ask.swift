@@ -1,7 +1,7 @@
 import Foundation
 import ShadesCore
 
-/// Ask: look at the screen, take the question, stream the answer, and offer to hand off real work.
+/// Ask: look at the screen, take the question, stream the answer, and hand off real work.
 extension AppController {
     /// The cat was clicked. It always gets a word, and then you get to ask.
     func catClicked() {
@@ -56,7 +56,6 @@ extension AppController {
     func ask(_ question: String, capture: Task<Capture, Never>?) {
         replyGeneration += 1
         let generation = replyGeneration
-        handoff = nil
         line = nil
         reply = Reply()
         renderBubble()
@@ -76,11 +75,6 @@ extension AppController {
     }
 
     func runQuickTurn(_ question: String, snapshot: ScreenSnapshot?, generation: Int) async {
-        // Quick questions shouldn't pile up in your T3 sidebar once they're done with.
-        if let finished = quick.takeFinished(at: now()) {
-            Task { [backend] in try? await backend.archive(threadID: finished) }
-        }
-
         let prompt = AgentPrompt(
             title: String(question.prefix(60)),
             text: Prompts.quick(question: question, snapshot: snapshot),
@@ -150,7 +144,13 @@ extension AppController {
 
     func finish(_ outcome: ReplyHoldback.Outcome, question: String, snapshot: ScreenSnapshot?, generation: Int) {
         // The ten minutes run from the last time the thread was used.
-        if let threadID = quick.thread(at: now()) { quick.use(threadID, at: now()) }
+        if let threadID = quick.thread(at: now()) {
+            quick.use(threadID, at: now())
+            // Its job is done either way, whether that was answering or passing the work on.
+            if outcome != .answer("") {
+                Task { [backend] in try? await backend.settle(threadID: threadID) }
+            }
+        }
         guard generation == replyGeneration else { return }
         switch outcome {
         case .answer(let text):
@@ -164,8 +164,7 @@ extension AppController {
             }
         case .handoff(let task):
             reply = nil
-            handoff = HandoffOffer(task: task, question: question, snapshot: snapshot)
-            renderBubble()
+            handOff(task: task, question: question, snapshot: snapshot)
         }
     }
 
@@ -173,15 +172,13 @@ extension AppController {
 
     var frontierName: String { ModelNames.friendly(settings.frontierModel) }
 
-    func acceptHandoff() {
-        guard let offer = handoff else { return }
-        handoff = nil
-        let snapshot = offer.snapshot
+    /// The quick agent decided this needs more, so it goes straight to the frontier agent, which says so.
+    func handOff(task: String, question: String, snapshot: ScreenSnapshot?) {
         let path = saveScreenshot(of: snapshot)
         // The task is the quick agent's reading of it, and the question is what you really said.
-        let request = "\(offer.task)\n\nTheir own words: \(offer.question)"
+        let request = "\(task)\n\nTheir own words: \(question)"
         startFrontier(
-            title: offer.task,
+            title: task,
             text: Prompts.frontier(request: request, snapshot: snapshot, screenshotPath: path),
             snapshot: snapshot
         )

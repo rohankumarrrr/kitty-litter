@@ -17,13 +17,6 @@ struct QuickSession {
         lastUsed = now
     }
 
-    /// A thread whose conversation is over, once, so it can be tidied away.
-    mutating func takeFinished(at now: Date) -> String? {
-        guard let threadID, now.timeIntervalSince(lastUsed) >= Self.lifetime else { return nil }
-        self.threadID = nil
-        return threadID
-    }
-
     mutating func reset() {
         threadID = nil
         lastUsed = .distantPast

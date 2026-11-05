@@ -17,6 +17,8 @@ import ShadesT3
 //   probe-t3 open       shows a thread in T3 Code and checks T3 navigated to it
 //   probe-t3 restart    runs its own throwaway T3 server, restarts it mid-turn, and checks recovery
 //   probe-t3 timing     how much time this client adds to a turn
+//   probe-t3 settle     settles a finished thread, then checks a follow-up still works
+//   probe-t3 report <thread>   how fast a thread's last report can be read, and how long it is
 
 let sol = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "low")
 let clock = ContinuousClock()
@@ -604,6 +606,48 @@ func probeTiming() async throws {
     await backend.disconnect()
 }
 
+func probeSettle() async throws {
+    let backend = T3Backend()
+    try await backend.connect()
+    func turn(_ events: AsyncThrowingStream<AgentReplyEvent, Error>) async throws -> (String?, String?) {
+        var threadID: String?
+        var text: String?
+        for try await event in events {
+            if case let .started(id) = event { threadID = id }
+            if case let .finished(full) = event { text = full }
+            if case let .failed(message) = event { say("turn failed: \(message)") }
+        }
+        return (threadID, text)
+    }
+    let prompt = AgentPrompt(title: "Shades test: settle", text: "Reply with exactly: one", model: sol, runtimeMode: .auto)
+    let (threadID, first) = try await turn(backend.start(prompt))
+    guard let threadID else { throw NSError(domain: "probe", code: 1) }
+    say("first reply: \(first ?? "none")")
+    try await backend.settle(threadID: threadID)
+    say("settled \(threadID)")
+    let next = AgentPrompt(title: "Shades test: settle", text: "Reply with exactly: two", model: sol, runtimeMode: .auto)
+    let (_, second) = try await turn(backend.followUp(threadID: threadID, next))
+    say("follow-up after settling: \(second ?? "none")")
+    try await backend.settle(threadID: threadID)
+    let report = await backend.finalReport(threadID: threadID)
+    say("final report: \(report ?? "none")")
+    say("thread to check and archive: \(threadID)")
+    await backend.signOut()
+    await backend.disconnect()
+}
+
+func probeReport() async throws {
+    guard CommandLine.arguments.count > 2 else { throw NSError(domain: "usage: report <thread>", code: 2) }
+    let backend = T3Backend()
+    try await backend.connect()
+    let started = clock.now
+    let report = await backend.finalReport(threadID: CommandLine.arguments[2])
+    say("\(milliseconds(clock.now - started)), \(report?.count ?? 0) characters")
+    say(String((report ?? "").prefix(90)))
+    await backend.signOut()
+    await backend.disconnect()
+}
+
 // MARK: Running
 
 let probes: [String: () async throws -> Void] = [
@@ -617,6 +661,8 @@ let probes: [String: () async throws -> Void] = [
     "open": probeOpen,
     "restart": probeRestart,
     "timing": probeTiming,
+    "settle": probeSettle,
+    "report": probeReport,
 ]
 
 guard let name = CommandLine.arguments.dropFirst().first, let probe = probes[name] else {

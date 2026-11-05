@@ -10,6 +10,7 @@ actor T3ThreadHub {
     private var subscription: UUID?
     private var published: [AgentThread]?
     private var summaries: [String: String] = [:]
+    private var questions: [String: T3ThreadList.QuestionWords] = [:]
     private var fetching: Set<String> = []
     private var loadWaiters: [CheckedContinuation<Void, Never>] = []
 
@@ -72,12 +73,13 @@ actor T3ThreadHub {
             loadWaiters = []
         }
         fetchMissingSummaries()
+        fetchMissingQuestions()
         publish()
     }
 
     private func publish() {
         guard list.isLoaded else { return }
-        let threads = list.agentThreads(summaries: summaries)
+        let threads = list.agentThreads(summaries: summaries, questions: questions)
         guard threads != published else { return }
         published = threads
         for watcher in watchers.values { watcher.yield(threads) }
@@ -102,7 +104,7 @@ actor T3ThreadHub {
     }
 
     private func loadSummary(_ pending: T3ThreadList.PendingApproval) async -> String {
-        let item = await approvalItem(pending)
+        let item = await requestItem(requestID: pending.requestID, threadID: pending.threadID)
         var related: T3Wire.TurnItem?
         if let ref = item?.nativeItemRef {
             related = await turnItem(id: T3Wire.providerItemID(ref), threadID: pending.threadID)
@@ -110,16 +112,16 @@ actor T3ThreadHub {
         return T3Wire.approvalSummary(kind: pending.kind, item: item, related: related)
     }
 
-    private func approvalItem(_ pending: T3ThreadList.PendingApproval) async -> T3Wire.TurnItem? {
-        let id = T3Wire.approvalItemID(requestID: pending.requestID)
-        if let item = await turnItem(id: id, threadID: pending.threadID) { return item }
+    private func requestItem(requestID: String, threadID: String) async -> T3Wire.TurnItem? {
+        let id = T3Wire.approvalItemID(requestID: requestID)
+        if let item = await turnItem(id: id, threadID: threadID) { return item }
 
         // That ID is T3's convention rather than a promise, so fall back to reading the thread.
         let projection: T3Wire.Projection? = try? await socket.call(
             T3Wire.Method.getThreadProjection,
-            T3Wire.GetThreadProjection(threadId: pending.threadID)
+            T3Wire.GetThreadProjection(threadId: threadID)
         )
-        return projection?.turnItems.lazy.compactMap(\.value).first { $0.requestId == pending.requestID }
+        return projection?.turnItems.lazy.compactMap(\.value).first { $0.requestId == requestID }
     }
 
     private func turnItem(id: String, threadID: String) async -> T3Wire.TurnItem? {
@@ -131,6 +133,36 @@ actor T3ThreadHub {
     private func didLoad(_ summary: String, for requestID: String) {
         fetching.remove(requestID)
         summaries[requestID] = summary
+        publish()
+    }
+
+    // MARK: Question words
+
+    /// A question's words live on a turn item too. Words that can't be read still count, so you hear about it.
+    private func fetchMissingQuestions() {
+        let pendingQuestions = list.pendingQuestions
+        let pendingIDs = Set(pendingQuestions.map(\.requestID))
+        questions = questions.filter { pendingIDs.contains($0.key) }
+
+        for pending in pendingQuestions where questions[pending.requestID] == nil && !fetching.contains(pending.requestID) {
+            fetching.insert(pending.requestID)
+            Task { [weak self] in
+                guard let self else { return }
+                let item = await self.requestItem(requestID: pending.requestID, threadID: pending.threadID)
+                let first = item?.questions?.first
+                let words = T3ThreadList.QuestionWords(
+                    text: first?.question ?? "",
+                    options: first?.options?.map(\.label) ?? [],
+                    moreCount: max(0, (item?.questions?.count ?? 0) - 1)
+                )
+                await self.didLoad(words, for: pending.requestID)
+            }
+        }
+    }
+
+    private func didLoad(_ words: T3ThreadList.QuestionWords, for requestID: String) {
+        fetching.remove(requestID)
+        questions[requestID] = words
         publish()
     }
 }

@@ -108,6 +108,9 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     private var _opened: [String] = []
     private var watcher: AsyncStream<[AgentThread]>.Continuation?
     var replies: [[AgentReplyEvent]] = []
+    var reports: [String: String] = [:]
+    var settled: [String] = []
+    var archived: [String] = []
     var failFollowUps = false
     var failResponses = false
     var connectError: Error?
@@ -162,10 +165,16 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
         lock.withLock { _responses.append((request.id, decision)) }
     }
 
-    var archived: [String] = []
-
     func archive(threadID: String) async throws {
         archived.append(threadID)
+    }
+
+    func settle(threadID: String) async throws {
+        settled.append(threadID)
+    }
+
+    func finalReport(threadID: String) async -> String? {
+        reports[threadID]
     }
 
     func open(threadID: String) {
@@ -357,26 +366,27 @@ final class FlowTests: XCTestCase {
     // MARK: - Handing off
 
     func testAHandoffIsNeverShownAsAnAnswer() async {
-        backend.replies = [[
-            .text(delta: "HAND"), .text(delta: "OFF: Fix"), .text(delta: " the bug"),
-            .finished(fullText: "HANDOFF: Fix the bug"),
-        ]]
+        backend.replies = [
+            [
+                .text(delta: "HAND"), .text(delta: "OFF: Fix"), .text(delta: " the bug"),
+                .finished(fullText: "HANDOFF: Fix the bug"),
+            ],
+            [.finished(fullText: "Done.")],
+        ]
         await ask("fix it")
         for bubble in stage.bubbles {
             if case .reply? = bubble { XCTFail("a handoff was shown as a reply") }
         }
-        XCTAssertEqual(stage.bubble, .handoff(task: "Fix the bug", modelName: "Fable"))
     }
 
-    func testHandingOverStartsTheFrontierAgentWithNoProject() async {
+    func testAHandoffStartsTheFrontierAgentByItself() async {
         backend.replies = [
             [.finished(fullText: "HANDOFF: Fix the bug")],
             [.finished(fullText: "Done.")],
         ]
         await ask("please fix it")
-        controller.bubbleAction(.acceptHandoff)
-        await settle()
 
+        XCTAssertEqual(backend.sent.count, 2)
         XCTAssertEqual(context.saved, 1)
         let sent = backend.sent[1]
         XCTAssertEqual(sent.mode, .start)
@@ -388,15 +398,154 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(sent.prompt.text.contains("Fix the bug"))
         XCTAssertTrue(sent.prompt.text.contains("please fix it"))
         XCTAssertEqual(sent.prompt.attachments.count, 1)
+        XCTAssertTrue(stage.bubbles.contains(.line("Passing it to Fable...", threadID: nil)))
         XCTAssertEqual(stage.bubble, .line("On it. Fable has this.", threadID: "thread-2"))
     }
 
-    func testNotNowStartsNothing() async {
+    func testCancellingBeforeTheReplyStopsAHandoff() async {
+        controller.ask("fix it", snapshot: nil)
+        controller.bubbleDismissed(byClick: false)
         backend.replies = [[.finished(fullText: "HANDOFF: Fix the bug")]]
-        await ask("fix it")
-        controller.bubbleAction(.declineHandoff)
         await settle()
-        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertLessThanOrEqual(backend.sent.count, 1)
+    }
+
+    // MARK: - Settling
+
+    func testASimpleAnswerSettlesItsThread() async {
+        backend.replies = [[.finished(fullText: "Red.")]]
+        await ask("what colour?")
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(backend.settled, ["thread-1"])
+        XCTAssertEqual(backend.archived, [])
+    }
+
+    func testTheQuickThreadThatHandedOffSettlesButTheWorkDoesNot() async {
+        backend.replies = [[.finished(fullText: "HANDOFF: Fix the bug")], [.finished(fullText: "Done.")]]
+        await ask("fix it")
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(backend.settled, ["thread-1"])
+    }
+
+    func testLoadingTheEarsDoesntTalkOverAnything() async {
+        controller.say("On it.", seconds: nil)
+        controller.fetchingEars(0.1)
+        clock = clock.addingTimeInterval(5)
+        controller.fetchingEars(0.5)
+        XCTAssertEqual(stage.bubble, .line("On it.", threadID: nil))
+    }
+
+    func testAFailedTurnDoesntSettle() async {
+        backend.replies = [[.failed(message: "Nope")]]
+        await ask("what colour?")
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(backend.settled, [])
+    }
+
+    // MARK: - Session reports
+
+    private func finishWork(report: String?, summary: [AgentReplyEvent]? = nil, status: AgentStatus = .completed) async {
+        backend.reports["w"] = report
+        if let summary { backend.replies = [summary] }
+        var work = thread(.running)
+        work.id = "w"
+        work.title = "Work"
+        controller.threadsChanged([work])
+        work.status = status
+        controller.threadsChanged([work])
+        await controller.reportTask?.value
+        for _ in 0..<20 { await Task.yield() }
+    }
+
+    func testAShortReportIsPassedOnAsItIs() async {
+        await finishWork(report: "Fixed the login bug. The tests pass.")
+        XCTAssertEqual(stage.bubble, .notice(caption: "Done: Work", text: "Fixed the login bug. The tests pass.", threadID: "w"))
+        XCTAssertEqual(backend.sent.count, 0)
+    }
+
+    func testALongReportGetsSummedUpOutOfSight() async {
+        let report = "## Result\n\n" + String(repeating: "A long sentence about the work. ", count: 30)
+        await finishWork(report: report, summary: [.started(threadID: "s"), .finished(fullText: " It went well. Please review the PR.\n")])
+
+        XCTAssertEqual(stage.bubble, .notice(caption: "Done: Work", text: "It went well. Please review the PR.", threadID: "w"))
+        let sent = backend.sent[0]
+        XCTAssertEqual(sent.prompt.model, settings.summaryModel)
+        XCTAssertEqual(sent.prompt.runtimeMode, .approvalRequired)
+        XCTAssertTrue(sent.prompt.text.contains("<report>"))
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(backend.archived, ["s"])
+    }
+
+    func testAFailedSummaryFallsBackToTheReportsOpening() async {
+        let report = "Fixed the bug, and the tests pass. " + String(repeating: "More detail follows here. ", count: 30)
+        await finishWork(report: report, summary: [.failed(message: "Nope")])
+        guard case .notice(_, let text, _)? = stage.bubble else { return XCTFail("no notice") }
+        XCTAssertTrue(text.hasPrefix("Fixed the bug, and the tests pass."))
+        XCTAssertLessThan(text.count, 200)
+    }
+
+    func testAFailureSaysSoAndNoReportStillSaysSomething() async {
+        await finishWork(report: nil, status: .failed)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Hit a snag: Work", text: "It stopped before it could say why.", threadID: "w"))
+    }
+
+    func testASummaryCantAskForAnything() async {
+        let request = ApprovalRequest(id: "r", threadID: "s", threadTitle: "Shades summary", kind: .command, summary: "Run: rm -rf /", createdAt: Date())
+        let report = String(repeating: "A long sentence about the work. ", count: 30)
+        await finishWork(report: report, summary: [.started(threadID: "s"), .needsApproval(request), .finished(fullText: "Fine.")])
+        XCTAssertEqual(backend.responses.map(\.1), [.decline])
+        for bubble in stage.bubbles {
+            if case .approval? = bubble { XCTFail("a summary's request was shown") }
+        }
+    }
+
+    func testNoticesWaitTheirTurn() async {
+        await finishWork(report: "First.")
+        var other = thread(.running)
+        other.id = "o"
+        other.title = "Other"
+        backend.reports["o"] = "Second."
+        controller.threadsChanged([other])
+        other.status = .completed
+        controller.threadsChanged([other])
+        await controller.reportTask?.value
+        for _ in 0..<20 { await Task.yield() }
+
+        XCTAssertEqual(stage.bubble, .notice(caption: "Done: Work", text: "First.", threadID: "w"))
+        controller.bubbleDismissed(byClick: true)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Done: Other", text: "Second.", threadID: "o"))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertNil(stage.bubble)
+    }
+
+    func testAQuestionShowsItsOptionsAndWaitsForAnAnswer() async {
+        var work = thread(.running)
+        work.id = "w"
+        work.title = "Work"
+        controller.threadsChanged([work])
+
+        // The thread stops first, and the words follow a moment later.
+        work.status = .waitingForAnswer
+        controller.threadsChanged([work])
+        XCTAssertNil(stage.bubble)
+
+        work.pendingQuestion = AgentQuestion(id: "q", threadID: "w", threadTitle: "Work", text: "Which one?", options: ["A (Recommended)", "B"], moreCount: 1)
+        controller.threadsChanged([work])
+        let expected = BubbleContent.notice(
+            caption: "Asking: Work",
+            text: "Which one?\n\n• A (Recommended)\n• B\n\nAnd 1 more question.",
+            threadID: "w"
+        )
+        XCTAssertEqual(stage.bubble, expected)
+
+        // Only once, and a stray click doesn't lose it.
+        controller.threadsChanged([work])
+        controller.bubbleDismissed(byClick: true)
+        XCTAssertEqual(stage.bubble, expected)
+
+        work.pendingQuestion = nil
+        work.status = .running
+        controller.threadsChanged([work])
         XCTAssertNil(stage.bubble)
     }
 
@@ -703,7 +852,8 @@ final class FlowTests: XCTestCase {
         controller.threadsChanged([thread(.completed)])
         XCTAssertFalse(stage.busy)
         XCTAssertEqual(stage.celebrated, 1)
-        XCTAssertEqual(stage.bubble, .line("Done: Work", threadID: "w"))
+        await controller.reportTask?.value
+        XCTAssertEqual(stage.bubble, .notice(caption: "Done: Work", text: "It's finished, but didn't leave a report.", threadID: "w"))
         XCTAssertEqual(stage.statusText, "Napping")
     }
 
@@ -717,19 +867,6 @@ final class FlowTests: XCTestCase {
         quick.status = .completed
         controller.threadsChanged([quick])
         XCTAssertEqual(stage.celebrated, 0)
-    }
-
-    func testAFinishedQuickThreadIsTidiedAwayOnce() async {
-        backend.replies = [[.finished(fullText: "One.")], [.finished(fullText: "Two.")], [.finished(fullText: "Three.")]]
-        await ask("first")
-        await ask("second")
-        XCTAssertEqual(backend.archived, [])
-
-        clock = clock.addingTimeInterval(QuickSession.lifetime + 1)
-        await ask("third")
-        await Task.yield()
-        try? await Task.sleep(nanoseconds: 50_000_000)
-        XCTAssertEqual(backend.archived, ["thread-1"])
     }
 
     func testProjectNamesBecomeVocabulary() async {

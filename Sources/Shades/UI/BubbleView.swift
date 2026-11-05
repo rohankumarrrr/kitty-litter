@@ -97,9 +97,9 @@ final class BubbleView: BalloonView {
             body = text
         case .line(let text, _):
             body = text
-        case .handoff(let task, let modelName):
-            headingText = "Hand this to \(modelName)?"
-            body = task
+        case .notice(let noticeCaption, let text, _):
+            captionText = noticeCaption
+            body = text
         case .approval(let request, let position, let total):
             captionText = request.threadTitle
             counterText = total > 1 ? "\(position) of \(total)" : nil
@@ -255,9 +255,8 @@ final class BubbleView: BalloonView {
             }
         case .line(_, let threadID):
             if let threadID { add("Open in T3", .text, .open(threadID: threadID)) }
-        case .handoff:
-            add("Hand it over", .filled, .acceptHandoff)
-            add("Not now", .plain, .declineHandoff)
+        case .notice(_, _, let threadID):
+            if let threadID { add("Open in T3", .text, .open(threadID: threadID)) }
         case .approval(let request, _, _):
             // The same weight for both: nothing here should lean you toward yes.
             add("Deny", .plain, .approval(request, .decline))
@@ -290,7 +289,7 @@ extension BubbleContent {
         case .listening: return 1
         case .reply: return 2
         case .line: return 3
-        case .handoff: return 4
+        case .notice: return 4
         case .approval: return 5
         }
     }
@@ -300,7 +299,7 @@ extension BubbleContent {
         case .thinking, .listening: return ""
         case .reply(let text, let done, let thread, _): return done ? "reply|\(thread ?? "")|\(text)" : ""
         case .line(_, let thread): return "line|\(thread ?? "")"
-        case .handoff: return "handoff"
+        case .notice(_, _, let thread): return "notice|\(thread ?? "")"
         case .approval(let request, _, _): return "approval|\(request.id)"
         }
     }
@@ -308,7 +307,7 @@ extension BubbleContent {
     fileprivate var hasSelectableText: Bool {
         switch self {
         case .thinking, .listening: return false
-        case .reply, .line, .handoff, .approval: return true
+        case .reply, .line, .notice, .approval: return true
         }
     }
 
@@ -319,7 +318,7 @@ extension BubbleContent {
 
     fileprivate var fixedWidth: Bool {
         if case .approval = self { return true }
-        if case .handoff = self { return true }
+        if case .notice = self { return true }
         return false
     }
 }

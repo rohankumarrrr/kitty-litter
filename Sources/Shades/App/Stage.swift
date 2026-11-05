@@ -8,7 +8,7 @@ enum BubbleContent: Equatable {
     case listening(String)
     case reply(text: String, done: Bool, threadID: String?, note: String?)
     case line(String, threadID: String?)
-    case handoff(task: String, modelName: String)
+    case notice(caption: String, text: String, threadID: String?)
     case approval(ApprovalRequest, position: Int, total: Int)
 }
 
@@ -17,8 +17,6 @@ enum BubbleAction: Equatable {
     case open(threadID: String)
     case copy(String)
     case approval(ApprovalRequest, ApprovalDecision)
-    case acceptHandoff
-    case declineHandoff
 }
 
 /// One question for the user, typed into the small panel over the cat.

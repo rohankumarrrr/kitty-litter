@@ -45,10 +45,14 @@ final class AppController {
         var threadID: String?
         var note: String?
     }
-    struct HandoffOffer {
-        var task: String
-        var question: String
-        var snapshot: ScreenSnapshot?
+    /// Something an agent has to tell you, which stays until you've had a chance to read it.
+    struct Notice {
+        var id: Int
+        var caption: String
+        var text: String
+        var threadID: String?
+        /// Set for a question, which goes away by itself once it's answered.
+        var questionID: String?
     }
     struct Line {
         var text: String
@@ -59,9 +63,11 @@ final class AppController {
     var approvalsOnShow = false
     var approvalsHidden = false
     var catIsAway = false
-    var handoff: HandoffOffer?
     var reply: Reply?
     var line: Line?
+    var notices: [Notice] = []
+    /// Threads that are the cat's own plumbing, like writing a summary.
+    var hiddenThreads: Set<String> = []
     var lineCounter = 0
     var replyGeneration = 0
 
@@ -82,6 +88,7 @@ final class AppController {
     var flow: Task<Void, Never>?
     var replyTask: Task<Void, Never>?
     var frontierTask: Task<Void, Never>?
+    var reportTask: Task<Void, Never>?
     var voiceTask: Task<Void, Never>?
     private var listeners: [Task<Void, Never>] = []
 
@@ -163,11 +170,6 @@ final class AppController {
             stage.copyToPasteboard(text)
         case .approval(let request, let decision):
             answer(request, decision)
-        case .acceptHandoff:
-            acceptHandoff()
-        case .declineHandoff:
-            handoff = nil
-            renderBubble()
         }
     }
 
@@ -182,8 +184,10 @@ final class AppController {
         case .approval:
             guard !byClick else { return }
             approvalsHidden = true
-        case .handoff:
-            handoff = nil
+        case .notice:
+            // Clicking elsewhere shouldn't lose a question you haven't answered.
+            guard let notice = notices.first, !(byClick && notice.questionID != nil) else { return }
+            notices.removeFirst()
         case .thinking:
             guard !byClick else { return }
             reply = nil
@@ -202,12 +206,14 @@ final class AppController {
         if approvalsOnShow, !approvalsHidden, let request = approvals.first {
             return .approval(request, position: approvals.position, total: approvals.total)
         }
-        if let handoff { return .handoff(task: handoff.task, modelName: frontierName) }
         if let reply {
             if reply.text.isEmpty { return .thinking(note: reply.note) }
             return .reply(text: reply.text, done: reply.done, threadID: reply.threadID, note: reply.note)
         }
         if let line { return .line(line.text, threadID: line.threadID) }
+        if let notice = notices.first {
+            return .notice(caption: notice.caption, text: notice.text, threadID: notice.threadID)
+        }
         return nil
     }
 
@@ -220,7 +226,7 @@ final class AppController {
         let status: CatStatus
         if voiceMode != nil {
             status = .listening
-        } else if !approvals.isEmpty || handoff != nil {
+        } else if !approvals.isEmpty {
             status = .attention
         } else if reply?.text.isEmpty == true {
             status = .thinking

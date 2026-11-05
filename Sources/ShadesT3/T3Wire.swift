@@ -318,6 +318,12 @@ enum T3Wire {
         let threadId: String
     }
 
+    struct SettleThread: Encodable {
+        var type = "thread.settle"
+        let commandId: String
+        let threadId: String
+    }
+
     struct SubscribeShell: Encodable {
         var requestCompletionMarker = true
         var omitIdleSubagents = true
@@ -555,6 +561,14 @@ enum T3Wire {
             let message: String?
         }
 
+        struct Question: Decodable {
+            struct Option: Decodable {
+                let label: String
+            }
+            let question: String
+            let options: [Option]?
+        }
+
         struct NativeRef: Decodable {
             let driver: String
             let nativeId: String
@@ -584,6 +598,8 @@ enum T3Wire {
         let fileName: String?
         /// Errors.
         let failure: Failure?
+        /// Questions for the user.
+        let questions: [Question]?
 
         var isAssistantMessage: Bool { type == "assistant_message" }
         var isError: Bool { type == "error" }
@@ -591,6 +607,21 @@ enum T3Wire {
         var isOpenApproval: Bool {
             type == "approval_request" && !["completed", "failed", "cancelled"].contains(status)
         }
+    }
+
+    /// What the agent last said in a thread, with any error it ended on first. Claude's thinking comes
+    /// through as assistant messages too, and subagents' messages have a parent, so neither counts.
+    static func finalReport(in items: [TurnItem]) -> String? {
+        let own = items.filter { $0.parentItemId == nil }
+        let ordered = own.sorted { ($0.startedAt ?? $0.updatedAt ?? .distantPast) < ($1.startedAt ?? $1.updatedAt ?? .distantPast) }
+        let message = ordered.last { item in
+            guard item.isAssistantMessage, !item.id.contains("thinking") else { return false }
+            return item.text?.contains(where: { !$0.isWhitespace }) == true
+        }
+        let lastRun = ordered.last { $0.runId != nil }?.runId
+        let error = ordered.last { $0.isError && $0.runId == lastRun }?.failure?.message
+        let parts = [error.map { "Error: \($0)" }, message?.text].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
     }
 
     /// Plain words for the approval bubble. It comes from the agent, so it's only ever shown.

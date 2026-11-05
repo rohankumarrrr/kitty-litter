@@ -23,6 +23,19 @@ struct T3ThreadList {
         let kind: ApprovalKind
     }
 
+    /// A question the list knows about, whose words have to be fetched separately.
+    struct PendingQuestion: Equatable {
+        let requestID: String
+        let threadID: String
+    }
+
+    /// The words of a question, as they'll be shown.
+    struct QuestionWords: Equatable {
+        var text: String
+        var options: [String]
+        var moreCount: Int
+    }
+
     let scratchRoot: String?
     private(set) var isLoaded = false
     private var threads: [String: T3Wire.ThreadShell] = [:]
@@ -72,9 +85,33 @@ struct T3ThreadList {
         }
     }
 
-    /// The dashboard's view, newest first. `summaries` holds the words for each approval by request ID.
-    func agentThreads(summaries: [String: String]) -> [AgentThread] {
+    /// Questions waiting anywhere, including in subagents that aren't listed themselves.
+    var pendingQuestions: [PendingQuestion] {
+        threads.values.compactMap { thread in
+            guard let pending = thread.pendingRuntimeRequest, pending.kind == "user_input" else { return nil }
+            return PendingQuestion(requestID: pending.id, threadID: thread.id)
+        }
+    }
+
+    /// The dashboard's view, newest first. `summaries` and `questions` hold the words by request ID.
+    func agentThreads(summaries: [String: String], questions: [String: QuestionWords] = [:]) -> [AgentThread] {
         var approvalsByListedThread: [String: [ApprovalRequest]] = [:]
+        var questionsByListedThread: [String: AgentQuestion] = [:]
+        for thread in threads.values {
+            guard let pending = thread.pendingRuntimeRequest,
+                  pending.kind == "user_input",
+                  let words = questions[pending.id],
+                  let owner = listedOwner(of: thread)
+            else { continue }
+            questionsByListedThread[owner.id] = AgentQuestion(
+                id: pending.id,
+                threadID: thread.id,
+                threadTitle: owner.title,
+                text: words.text,
+                options: words.options,
+                moreCount: words.moreCount
+            )
+        }
         for thread in threads.values {
             guard let pending = thread.pendingRuntimeRequest,
                   let kind = T3Wire.approvalKind(pending.kind),
@@ -102,7 +139,8 @@ struct T3ThreadList {
                     status: approvals.isEmpty ? thread.agentStatus : .waitingForApproval,
                     model: thread.modelSelection.model,
                     updatedAt: thread.updatedAt,
-                    pendingApprovals: approvals
+                    pendingApprovals: approvals,
+                    pendingQuestion: questionsByListedThread[thread.id]
                 )
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }

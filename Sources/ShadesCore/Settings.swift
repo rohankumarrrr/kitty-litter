@@ -4,6 +4,8 @@ import Foundation
 public struct Settings: Codable, Sendable, Equatable {
     public var quickModel: ModelChoice
     public var frontierModel: ModelChoice
+    /// Writes the few sentences the cat says when a session ends.
+    public var summaryModel: ModelChoice
     public var quickMode: RuntimeMode
     /// `auto` avoids constant prompts without giving text from your screen free rein.
     public var frontierMode: RuntimeMode
@@ -19,6 +21,7 @@ public struct Settings: Codable, Sendable, Equatable {
     public init(
         quickModel: ModelChoice = .quick,
         frontierModel: ModelChoice = .frontier,
+        summaryModel: ModelChoice = .summary,
         quickMode: RuntimeMode = .auto,
         frontierMode: RuntimeMode = .auto,
         privateApps: [String] = Settings.defaultPrivateApps,
@@ -28,12 +31,32 @@ public struct Settings: Codable, Sendable, Equatable {
     ) {
         self.quickModel = quickModel
         self.frontierModel = frontierModel
+        self.summaryModel = summaryModel
         self.quickMode = quickMode
         self.frontierMode = frontierMode
         self.privateApps = privateApps
         self.vocabulary = vocabulary
         self.talkKey = talkKey
         self.dictateKey = dictateKey
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey
+    }
+
+    /// Anything missing takes its default, so a settings file from an older version keeps working.
+    public init(from decoder: Decoder) throws {
+        let saved = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = Settings()
+        quickModel = try saved.decodeIfPresent(ModelChoice.self, forKey: .quickModel) ?? defaults.quickModel
+        frontierModel = try saved.decodeIfPresent(ModelChoice.self, forKey: .frontierModel) ?? defaults.frontierModel
+        summaryModel = try saved.decodeIfPresent(ModelChoice.self, forKey: .summaryModel) ?? defaults.summaryModel
+        quickMode = try saved.decodeIfPresent(RuntimeMode.self, forKey: .quickMode) ?? defaults.quickMode
+        frontierMode = try saved.decodeIfPresent(RuntimeMode.self, forKey: .frontierMode) ?? defaults.frontierMode
+        privateApps = try saved.decodeIfPresent([String].self, forKey: .privateApps) ?? defaults.privateApps
+        vocabulary = try saved.decodeIfPresent([String].self, forKey: .vocabulary) ?? defaults.vocabulary
+        talkKey = try saved.decodeIfPresent(HoldKey.self, forKey: .talkKey) ?? defaults.talkKey
+        dictateKey = try saved.decodeIfPresent(HoldKey.self, forKey: .dictateKey) ?? defaults.dictateKey
     }
 
     public static let defaultPrivateApps = [

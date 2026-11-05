@@ -15,8 +15,9 @@ extension AppController {
     func threadsChanged(_ threads: [AgentThread]) {
         let events = watch.update(threads)
         let hadApprovals = !approvals.isEmpty
-        approvals.sync(with: threads)
+        approvals.sync(with: threads.filter { !hiddenThreads.contains($0.id) })
         approvalsChanged(hadApprovals: hadApprovals)
+        dropAnsweredQuestions(threads)
 
         stage.catAgentsBusy(watch.isBusy)
         stage.showThreads(watch.rows(at: now()), status: watch.summary)
@@ -26,11 +27,11 @@ extension AppController {
             switch event {
             case .finished(let thread):
                 stage.catCelebrate()
-                say(CatWords.finished(thread), threadID: thread.id)
+                reportOn(thread, failed: false)
             case .failed(let thread):
-                say(CatWords.failed(thread), threadID: thread.id)
-            case .hasQuestion(let thread):
-                say(CatWords.hasQuestion(thread), threadID: thread.id)
+                reportOn(thread, failed: true)
+            case .hasQuestion(let question):
+                announce(question)
             }
         }
     }

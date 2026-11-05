@@ -138,8 +138,13 @@ final class AgentWatchTests: XCTestCase {
         var watch = AgentWatch()
         _ = watch.update([thread("a", .running), thread("b", .running)])
         let failed = thread("a", .failed)
-        let asking = thread("b", .waitingForAnswer)
-        XCTAssertEqual(watch.update([failed, asking]), [.failed(failed), .hasQuestion(asking)])
+        var asking = thread("b", .waitingForAnswer)
+        // The words arrive a moment after the thread stops, and then it counts, once.
+        XCTAssertEqual(watch.update([failed, asking]), [.failed(failed)])
+        let question = AgentQuestion(id: "q", threadID: "b", threadTitle: "b", text: "Which?")
+        asking.pendingQuestion = question
+        XCTAssertEqual(watch.update([failed, asking]), [.hasQuestion(question)])
+        XCTAssertEqual(watch.update([failed, asking]), [])
     }
 
     func testRowsPutWhatNeedsYouFirstAndHideOldThreads() {

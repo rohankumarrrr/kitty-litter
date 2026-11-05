@@ -65,11 +65,11 @@ A `cause` entry is `Fail` with an `error` (`detail` and `message` are for people
 | Method | Used for |
 | --- | --- |
 | `orchestration.launchThread` | New thread. Answers `threadId`, `projection` and `sequence`. |
-| `orchestration.dispatchCommand` | Follow-ups, approvals, archiving, mode changes. Answers `sequence`. |
+| `orchestration.dispatchCommand` | Follow-ups, approvals, settling, archiving, mode changes. Answers `sequence`. |
 | `orchestration.subscribeThread` | One thread's events. |
 | `orchestration.subscribeShell` | Every thread, for the dashboard. |
-| `orchestration.getTurnItem` | The words of an approval. |
-| `orchestration.getThreadProjection` | Fallback for those words, and a settled thread's runtime mode. |
+| `orchestration.getTurnItem` | The words of an approval or a question. |
+| `orchestration.getThreadProjection` | A thread's final report, a fallback for those words, and a settled thread's runtime mode. |
 | `projects.ensureScratch` | The "No project" project. The client remembers it. |
 | `attachments.createUploadUrl` | A signed URL for one upload. |
 
@@ -137,6 +137,15 @@ To answer:
 Decisions are `accept`, `acceptForSession`, `acceptAlways`, `decline` and `cancel`. Some requests only allow a subset, listed in the item's `options`.
 
 Testing tip: under `approval-required`, Codex runs with its `untrusted` policy, which runs commands it knows are safe without asking. A plain `echo` won't prompt, but `echo x > /tmp/file` will.
+
+### Questions
+
+A blocking `pendingRuntimeRequest` of kind `user_input` is an agent asking something. The words are on a turn item with `type: "user_input_request"`, at the same ID an approval would use, with `questions: [{question, options: [{label, description}], multiSelect, allowCustomAnswer}]`. The cat shows the first question and its options, and you answer in T3, because a request can hold several questions, and some allow free text.
+
+### Reports and settling
+
+- `orchestration.getThreadProjection` gives a thread's turn items, and took about 60 ms even on threads with hundreds of them. The final report is the newest `assistant_message` with no `parentItemId`, since subagents have one. Claude's thinking also arrives as `assistant_message`, with `thinking` in its ID.
+- `{"type": "thread.settle", "commandId": …, "threadId": …}` settles a thread. It can still take a follow-up afterwards, which was checked live.
 
 ### Attachments
 
