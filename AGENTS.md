@@ -1,6 +1,6 @@
 # Shades
 
-A desktop cat for macOS. It sees your screen when you ask, answers quick questions, and hands real work to agents running in [T3 Code](https://t3.codes).
+A desktop cat for macOS. It sees your screen when you ask, answers quick questions, hands real work to agents running in [T3 Code](https://t3.codes), and shows you what those agents are doing. It also does hold-to-talk and dictation on your Mac.
 
 ## Layout
 
@@ -17,7 +17,10 @@ A desktop cat for macOS. It sees your screen when you ask, answers quick questio
 swift build
 swift test
 scripts/bundle.sh   # builds Shades.app, which macOS permissions need
+swift run shades --demo   # everything faked: no T3, permissions or microphone
 ```
+
+To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-off` or `--fix` with `--image`, as described in `Sources/Shades/App/DevFlags.swift`. The `probe-t3`, `probe-context` and `probe-voice` tools try one module at a time.
 
 ## Rules
 
@@ -27,6 +30,12 @@ scripts/bundle.sh   # builds Shades.app, which macOS permissions need
 - Capture only when asked, never in the background, and skip apps on the privacy list.
 - Never log or store tokens, transcripts, screenshots or page text beyond what a feature needs.
 - Keep dependencies few, and permissively licensed only. Don't copy from GPL projects.
+
+## Testing
+
+- Never send synthetic clicks or keystrokes while testing. They land on whatever's really on the desktop, which has already meant stray clicks in someone's calendar. Use `--demo`, the flags above, the probes, or a person.
+- Don't send a real screenshot to a model in a test. Use `--image` with a picture you made.
+- Name live test threads "Shades test: ..." and archive them afterwards.
 
 ## Style
 

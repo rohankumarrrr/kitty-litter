@@ -1,6 +1,6 @@
 # Roadmap
 
-Shades starts small on purpose. Version one is three things done well: ask about your screen, fix what you're looking at, and keep an eye on your agents. These are the ideas saved for later.
+Shades starts small on purpose. Version one is four things done well: ask about your screen, fix what you're looking at, talk and dictate, and keep an eye on your agents. These are the ideas saved for later.
 
 ## Next ideas
 
