@@ -293,4 +293,84 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(built.issues[0].threads.map(\.title), ["Fix the site"])
         XCTAssertEqual(built.issues[1].threads, [])
     }
+
+    // MARK: - Messages
+
+    private func echo(_ text: String, at offset: TimeInterval = 0, in channel: ChannelID) -> SentMessage {
+        SentMessage(channel: channel, message: ChannelMessage(exchangeID: "sent-\(text)", kind: .ask, speaker: .you, text: text, at: at.addingTimeInterval(offset), threadID: "", threadTitle: ""))
+    }
+
+    func testEveryoneHoldsEveryDMInOrderAndNothingBetweenKittens() {
+        let built = book(
+            threads: [thread("s"), thread("p", project: "Pepper"), thread("b")],
+            transcripts: [
+                "s": [exchange("s1", ask: "Steve?", asked: 0)],
+                "p": [exchange("p1", ask: "Pepper?", asked: 10)],
+                "b": [exchange("b1", asker: .agent(threadID: "p"), ask: "From Pepper", asked: 20)],
+            ]
+        )
+        let said = built.everyone.messages.compactMap(\.text)
+        XCTAssertEqual(said, ["Steve?", "Reply", "Pepper?", "Reply"])
+        XCTAssertEqual(built.title(of: .everyone), "Everyone")
+        XCTAssertFalse(built.between.contains { $0.id == .everyone })
+    }
+
+    func testWhatYouSentShowsAtOnceAndGoesOnceT3HasIt() {
+        let waitingForT3 = ChannelBook.build(
+            kittens: [steve, pepper], threads: [thread("s")], transcripts: ["s": []],
+            isReading: false, unreadable: 0, cantReachT3: false,
+            sent: [echo("Tidy it", in: .direct(steve)), echo("Anyone?", in: .everyone)]
+        )
+        XCTAssertEqual(direct(steve, in: waitingForT3)?.messages.compactMap(\.text), ["Tidy it"])
+        XCTAssertEqual(Set(waitingForT3.everyone.messages.compactMap(\.text)), ["Tidy it", "Anyone?"])
+
+        let heard = ChannelBook.build(
+            kittens: [steve, pepper], threads: [thread("s"), thread("p", project: "Pepper")],
+            transcripts: ["s": [exchange("s1", ask: "Tidy it", reply: nil, asked: 1)], "p": [exchange("p1", ask: "Anyone?", reply: nil, asked: 2)]],
+            isReading: false, unreadable: 0, cantReachT3: false,
+            sent: [echo("Tidy it", in: .direct(steve)), echo("Anyone?", in: .everyone)]
+        )
+        XCTAssertEqual(direct(steve, in: heard)?.messages.compactMap(\.text), ["Tidy it"], "said once, by T3")
+        XCTAssertEqual(heard.everyone.messages.filter { $0.speaker == .you }.count, 2, "the router's choice of kitten counts as having it")
+    }
+
+    func testAnOldMessageWithTheSameWordsDoesntHideANewOne() {
+        let built = ChannelBook.build(
+            kittens: [steve, pepper], threads: [thread("s")], transcripts: ["s": [exchange("s1", ask: "ok", asked: -600)]],
+            isReading: false, unreadable: 0, cantReachT3: false,
+            sent: [echo("ok", in: .direct(steve))]
+        )
+        XCTAssertEqual(direct(steve, in: built)?.messages.filter { $0.speaker == .you }.count, 2)
+    }
+
+    func testTheCatsOwnAnswerStaysInEveryone() {
+        let answer = SentMessage(channel: .everyone, message: ChannelMessage(exchangeID: "cat-1", kind: .reply, speaker: .cat, text: "It's Tuesday.", at: at, threadID: "", threadTitle: ""))
+        let built = ChannelBook.build(kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, sent: [answer])
+        XCTAssertEqual(built.everyone.messages.map(\.speaker), [.cat])
+        XCTAssertEqual(built.name(of: .cat), "Shades")
+    }
+
+    func testAKittenIsUnreadWhenAnyOfItsThreadsIs() {
+        let built = ChannelBook.build(
+            kittens: [steve, pepper], threads: [thread("s"), thread("p", project: "Pepper"), thread("nobody", project: nil)],
+            transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false,
+            isUnread: { $0.id != "p" }
+        )
+        XCTAssertEqual(built.unread, [steve.id])
+    }
+
+    func testWaitingItemsKnowTheirKittenAndReportsAreTracedThroughTheirThread() {
+        let waiting = Waiting(
+            approvals: [ApprovalRequest(id: "a", threadID: "s", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: at)],
+            owners: ["a": steve.id],
+            reports: [InboxEntry(id: "r", kind: .decision, text: "Merged. Say ship it.", threadID: "p", threadTitle: "Plans", at: at)]
+        )
+        let built = ChannelBook.build(
+            kittens: [steve, pepper], threads: [thread("s"), thread("p", project: "Pepper")], transcripts: [:],
+            isReading: false, unreadable: 0, cantReachT3: false, waiting: waiting
+        )
+        XCTAssertEqual(built.kitten(of: "a"), steve)
+        XCTAssertEqual(built.kitten(of: "r"), pepper)
+        XCTAssertEqual(built.waiting.count, 2)
+    }
 }

@@ -94,6 +94,11 @@ final class AppController {
     /// The box what's being said belongs in, fixed when the key goes down.
     var talkBox: Int?
     var inboxSaveFailed = false
+    /// Questions answered from Messages, kept out of it until the list catches up.
+    var answeredQuestions: Set<String> = []
+    /// The router's turn for what you said in Messages, so each waits for the one before.
+    var messagesTurn: Task<Void, Never>?
+    var messagesGeneration: Int?
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
@@ -155,6 +160,8 @@ final class AppController {
         self.now = now
         channels = ChannelFeed(backend: dependencies.backend, kittens: dependencies.kittens)
         channels.onChange = { [weak self] in self?.stage.updateChannels($0) }
+        channels.waiting = { [weak self] in self?.waiting ?? Waiting() }
+        channels.isUnread = { [weak self] in self?.inbox.isUnread($0) ?? false }
     }
 
     func start() {

@@ -15,6 +15,7 @@ final class QuietScrollView: NSScrollView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         drawsBackground = false
+        verticalScroller = QuietScroller()
         hasVerticalScroller = true
         autohidesScrollers = true
         scrollerStyle = .overlay
@@ -23,6 +24,12 @@ final class QuietScrollView: NSScrollView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+}
+
+/// Dragging it doesn't take the keyboard from the app you're in.
+final class QuietScroller: NSScroller {
+    override var acceptsFirstResponder: Bool { false }
+    override var needsPanelToBecomeKey: Bool { false }
 }
 
 /// The pixel cat, with no smoothing, in anyone's jacket.
@@ -187,7 +194,8 @@ final class MessageRowView: ChannelRowView {
     private static let pad: CGFloat = 8
     private static let wordsTop: CGFloat = 28
 
-    var onOpen: (() -> Void)?
+    var onOpen: (() -> Void)? { didSet { setActions() } }
+    var onReply: (() -> Void)? { didSet { setActions() } }
     var onCopy: ((String) -> Void)?
     var onShowMore: (() -> Void)?
     var isExpanded = false
@@ -199,6 +207,7 @@ final class MessageRowView: ChannelRowView {
     private let showMore = QuietButton("Show more", style: .text)
     private let copyButton = QuietButton("Copy", style: .text)
     private let openButton = QuietButton("Open", style: .text)
+    private let replyButton = QuietButton("Reply", style: .text)
     private var failureTop: CGFloat = 0
 
     init(message: ChannelMessage, look: ChannelSpeakerLook) {
@@ -212,8 +221,9 @@ final class MessageRowView: ChannelRowView {
 
         showMore.onPress = { [weak self] in self?.onShowMore?() }
         openButton.onPress = { [weak self] in self?.onOpen?() }
+        replyButton.onPress = { [weak self] in self?.onReply?() }
         copyButton.onPress = { [weak self] in self?.copyPressed() }
-        for button in [showMore, copyButton, openButton] {
+        for button in [showMore, copyButton, openButton, replyButton] {
             button.isHidden = true
             addSubview(button)
         }
@@ -221,10 +231,23 @@ final class MessageRowView: ChannelRowView {
         setAccessibilityElement(true)
         setAccessibilityRole(.staticText)
         setAccessibilityLabel([look.name, time, said, message.failure].compactMap { $0 }.joined(separator: ", "))
-        var actions = [NSAccessibilityCustomAction(name: "Open") { [weak self] in
-            self?.onOpen?()
-            return self != nil
-        }]
+        setActions()
+    }
+
+    private func setActions() {
+        var actions: [NSAccessibilityCustomAction] = []
+        if onReply != nil {
+            actions.append(NSAccessibilityCustomAction(name: "Reply") { [weak self] in
+                self?.onReply?()
+                return self != nil
+            })
+        }
+        if onOpen != nil {
+            actions.append(NSAccessibilityCustomAction(name: "Open") { [weak self] in
+                self?.onOpen?()
+                return self != nil
+            })
+        }
         if message.text != nil {
             actions.append(NSAccessibilityCustomAction(name: "Copy") { [weak self] in
                 self?.copyPressed()
@@ -251,7 +274,8 @@ final class MessageRowView: ChannelRowView {
 
     override func hoverChanged() {
         copyButton.isHidden = !hovering || message.text == nil
-        openButton.isHidden = !hovering
+        openButton.isHidden = !hovering || onOpen == nil
+        replyButton.isHidden = !hovering || onReply == nil
         needsDisplay = true
     }
 
@@ -270,8 +294,11 @@ final class MessageRowView: ChannelRowView {
             showMore.frame.origin = NSPoint(x: Self.textLeft - 6, y: bottom + 1)
             bottom += showMore.frame.height + 2
         }
-        openButton.frame.origin = NSPoint(x: width - Self.margin - openButton.frame.width + 6, y: 4)
-        copyButton.frame.origin = NSPoint(x: openButton.frame.minX - copyButton.frame.width, y: 4)
+        var right = width - Self.margin + 6
+        for button in [openButton, copyButton, replyButton] {
+            right -= button.frame.width
+            button.frame.origin = NSPoint(x: right, y: 4)
+        }
         return max(bottom + Self.pad, Self.pad * 2 + Self.catSide)
     }
 
@@ -428,5 +455,138 @@ final class NoteRowView: ChannelRowView {
 
     override func draw(_ dirtyRect: NSRect) {
         block.draw(at: NSPoint(x: left, y: 6))
+    }
+}
+
+/// A heading in Needs you, with a way to clear a section of reports.
+final class SectionRowView: ChannelRowView {
+    private let title: String
+    let clear: QuietButton?
+
+    init(title: String, onClear: (() -> Void)?) {
+        self.title = title
+        clear = onClear.map { QuietButton("Clear", style: .text, onPress: $0) }
+        super.init(frame: .zero)
+        if let clear { addSubview(clear) }
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityLabel(title)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func fit(width: CGFloat) -> CGFloat {
+        clear?.frame.origin = NSPoint(x: width - Self.margin - (clear?.frame.width ?? 0) + 6, y: 10)
+        return 36
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSAttributedString(string: title.uppercased(), attributes: [
+            .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+            .foregroundColor: Ink.soft,
+            .kern: 0.5,
+        ]).draw(at: NSPoint(x: Self.catLeft, y: 16))
+    }
+}
+
+/// Something waiting on you: an approval, a question or a report. The buttons only ever answer it as
+/// asked or take you somewhere, and none of them is the one Return would press.
+final class CardRowView: ChannelRowView {
+    struct Button {
+        var title: String
+        /// Somewhere else to go rather than an answer, so it stays quiet.
+        var isWayOut = false
+        var action: () -> Void
+    }
+
+    private static let catSide: CGFloat = 32
+    private static let pad: CGFloat = 8
+    private static let wordsTop: CGFloat = 28
+    private static let buttonHeight: CGFloat = 26
+
+    let buttons: [QuietButton]
+    private let look: ChannelSpeakerLook
+    private let heading: String
+    private let at: Date?
+    private let words: ChannelTextBlock
+    private let answer: ChannelTextBlock?
+    private let footer: String?
+    private var answerTop: CGFloat = 0
+    private var footerTop: CGFloat = 0
+
+    init(look: ChannelSpeakerLook, heading: String, at: Date?, text: String, answer: String? = nil, footer: String? = nil, buttons: [Button]) {
+        self.look = look
+        self.heading = heading
+        self.at = at
+        words = ChannelTextBlock(ChannelMarkdown.attributed(text, color: Ink.text))
+        self.answer = answer.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Ink.text)) }
+        self.footer = footer
+        self.buttons = buttons.map { QuietButton($0.title, style: $0.isWayOut ? .text : .plain, onPress: $0.action) }
+        super.init(frame: .zero)
+        self.buttons.forEach(addSubview)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
+        setAccessibilityLabel([heading, text, answer, footer].compactMap { $0 }.joined(separator: ", "))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func fit(width: CGFloat) -> CGFloat {
+        let room = max(width - Self.textLeft - Self.margin, 60)
+        var bottom = Self.wordsTop + words.fit(width: room)
+        if let answer {
+            answerTop = bottom + 6
+            bottom = answerTop + answer.fit(width: room - 12)
+        }
+        if footer != nil {
+            footerTop = bottom + 2
+            bottom = footerTop + 16
+        }
+        bottom += 8
+        var x = Self.textLeft
+        for button in buttons {
+            if x > Self.textLeft, x + button.frame.width > width - Self.margin {
+                x = Self.textLeft
+                bottom += Self.buttonHeight + 4
+            }
+            button.frame.origin = NSPoint(x: x, y: bottom)
+            x += button.frame.width + 6
+        }
+        if !buttons.isEmpty { bottom += Self.buttonHeight }
+        return max(bottom + Self.pad + 4, Self.pad * 2 + Self.catSide)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let cat = NSRect(x: Self.catLeft, y: Self.pad + 1, width: Self.catSide, height: Self.catSide)
+        CatStamp.draw(CatPose(frame: .sit, glint: .attention(bright: true)), jacket: look.jacket, in: cat, on: self)
+
+        let left = Self.textLeft
+        var right = bounds.width - Self.margin
+        if let at {
+            let time = NSAttributedString(string: CatWords.age(of: at, now: Date()), attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: Ink.soft])
+            right -= ceil(time.size().width)
+            time.draw(at: NSPoint(x: right, y: Self.pad + 2))
+            right -= 8
+        }
+        let truncating = NSMutableParagraphStyle()
+        truncating.lineBreakMode = .byTruncatingTail
+        NSAttributedString(string: heading, attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: Ink.text,
+            .paragraphStyle: truncating,
+        ]).draw(in: NSRect(x: left, y: Self.pad, width: max(right - left, 40), height: 18))
+
+        words.draw(at: NSPoint(x: left, y: Self.wordsTop))
+        if let answer {
+            Ink.line.setFill()
+            NSRect(x: left, y: answerTop, width: 2, height: answer.height).fill()
+            answer.draw(at: NSPoint(x: left + 12, y: answerTop))
+        }
+        if let footer {
+            NSAttributedString(string: footer, attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: Ink.soft])
+                .draw(at: NSPoint(x: left, y: footerTop))
+        }
     }
 }

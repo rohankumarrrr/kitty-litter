@@ -19,6 +19,8 @@ final class FixtureWindow {
         window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.level = .floating
         window.isReleasedWhenClosed = false
+        // As Messages is, so the check below proves another app's capture can't see it.
+        if arguments.contains("--unshared") { window.sharingType = .none }
         window.backgroundColor = Self.background
         let content = NSView(frame: CGRect(origin: .zero, size: frame.size))
         content.wantsLayer = true
@@ -107,6 +109,7 @@ func runSyntheticChecks(in directory: URL) async {
     await checkMarkLandsOnTarget(windows, target: Layout.targetOnScreen, in: directory)
     await checkCornerRegions(windows, frame: Layout.frame, in: directory)
     await checkOwnWindowsStayOut(target: Layout.targetOnScreen)
+    await checkUnsharedWindowStaysOut()
 
     await MainActor.run {
         fixture.close()
@@ -160,23 +163,45 @@ final class Backdrop {
     func close() { window.orderOut(nil) }
 }
 
+/// Another app's window that isn't for sharing, as Messages isn't, never shows up in a capture. The same window
+/// shared has to, or a fixture that never came up would pass.
+private func checkUnsharedWindowStaysOut() async {
+    let shared = await cyanInAnotherAppsFixture(unshared: false)
+    let unshared = await cyanInAnotherAppsFixture(unshared: true)
+    let works = (shared ?? 0) > 0 && unshared == 0
+    print("unshared window: \(unshared.map(String.init) ?? "no capture") cyan pixels, against \(shared.map(String.init) ?? "no capture") shared  \(works ? "OK" : "WRONG")")
+}
+
+private func cyanInAnotherAppsFixture(unshared: Bool) async -> Int? {
+    guard let server = await startFixture(unshared: unshared) else { return nil }
+    defer { server.terminate() }
+    let target = await MainActor.run { Layout.targetOnScreen }
+    guard let result = try? await ScreenCapture.capture(ScreenCapture.Request(focusRegion: target)), let region = result.focusRegion else { return nil }
+    let inner = region.insetBy(dx: region.width * 0.2, dy: region.height * 0.2)
+    return count(in: inner, of: decode(result.jpeg)) { $0.red < 60 && $0.green > 170 && $0.blue > 170 }
+}
+
+/// The fixture in a process of its own, once it's on the screen.
+private func startFixture(unshared: Bool = false) async -> Process? {
+    let server = Process()
+    server.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+    server.arguments = ["--serve-fixture", "--screen", value(after: "--screen") ?? "0"] + (unshared ? ["--unshared"] : [])
+    let ready = Pipe()
+    server.standardOutput = ready
+    guard (try? server.run()) != nil else { return nil }
+    _ = ready.fileHandleForReading.availableData
+    try? await Task.sleep(for: .milliseconds(500))
+    return server
+}
+
 /// A true full-display capture, with your real screen around the fixture. It only gets counted
 /// in memory here, never saved or shown.
 private func checkRealCapturePath() async {
-    let server = Process()
-    server.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
-    server.arguments = ["--serve-fixture", "--screen", value(after: "--screen") ?? "0"]
-    let ready = Pipe()
-    server.standardOutput = ready
-    do {
-        try server.run()
-    } catch {
+    guard let server = await startFixture() else {
         print("real path: couldn't start the fixture")
         return
     }
     defer { server.terminate() }
-    _ = ready.fileHandleForReading.availableData
-    try? await Task.sleep(for: .milliseconds(500))
 
     let target = await MainActor.run { Layout.targetOnScreen }
     do {

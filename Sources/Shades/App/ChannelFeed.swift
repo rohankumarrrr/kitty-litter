@@ -13,6 +13,7 @@ final class ChannelFeed {
     private final class Session {
         var threads: [AgentThread]
         var transcripts: [String: [Exchange]] = [:]
+        var sent: [SentMessage] = []
         var readStamps: [String: Date] = [:]
         var isReading = true
         var unreadable = 0
@@ -29,11 +30,14 @@ final class ChannelFeed {
         func forget() {
             threads = []
             transcripts = [:]
+            sent = []
             published = nil
         }
     }
 
     var onChange: ((ChannelBook) -> Void)?
+    var waiting: () -> Waiting = { Waiting() }
+    var isUnread: (AgentThread) -> Bool = { _ in false }
 
     private let backend: AgentBackend
     private let kittens: () -> [Kitten]
@@ -69,6 +73,29 @@ final class ChannelFeed {
             publish(session)
         }
         session.isDirty = true
+    }
+
+    /// Shows a change to what's waiting or what's been read, with no need to read anything again.
+    func refresh() {
+        if let session { publish(session) }
+    }
+
+    /// Shows it at once, until T3 has it. Nothing's kept once the window closes.
+    func sent(_ message: ChannelMessage, in channel: ChannelID) {
+        guard let session else { return }
+        session.sent.append(SentMessage(channel: channel, message: message))
+        session.isDirty = true
+        publish(session)
+    }
+
+    /// The threads behind what you're looking at, so they can count as read.
+    func threads(in selection: ChannelSelection) -> [AgentThread] {
+        guard let session, case .channel(let id) = selection else { return [] }
+        let kittens = kittens()
+        return session.threads.filter { thread in
+            guard let owner = KittenBoard.owner(of: thread, among: kittens) else { return false }
+            return id == .everyone || id == .direct(owner)
+        }
     }
 
     func close() {
@@ -162,7 +189,10 @@ final class ChannelFeed {
             transcripts: session.transcripts,
             isReading: session.isReading,
             unreadable: session.unreadable,
-            cantReachT3: session.cantReachT3
+            cantReachT3: session.cantReachT3,
+            waiting: waiting(),
+            sent: session.sent,
+            isUnread: isUnread
         )
     }
 }

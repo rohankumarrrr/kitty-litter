@@ -305,12 +305,14 @@ enum T3Wire {
         let runtimeMode: String
     }
 
+    /// An approval sends a `decision`, and a question sends `answers`, by each question's ID.
     struct RespondToRequest: Encodable {
         var type = "runtime-request.respond"
         let commandId: String
         let threadId: String
         let requestId: String
-        let decision: String
+        var decision: String?
+        var answers: [String: String]?
     }
 
     struct ArchiveThread: Encodable {
@@ -610,9 +612,14 @@ enum T3Wire {
         struct Question: Decodable {
             struct Option: Decodable {
                 let label: String
+                /// What answering with it sends. Without one, it's the label.
+                let value: String?
             }
+            let id: String?
             let question: String
             let options: [Option]?
+            let allowCustomAnswer: Bool?
+            let multiSelect: Bool?
         }
 
         struct NativeRef: Decodable {
@@ -702,6 +709,13 @@ enum T3Wire {
         let error = ordered.last { $0.isError && $0.runId == lastRun }?.failure?.message
         let parts = [error.map { "Error: \($0)" }, message?.text].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
+    }
+
+    /// One question with one choice is answered from Shades. Anything more is answered in T3.
+    static func answerForm(_ questions: [TurnItem.Question]?) -> AnswerForm? {
+        guard let questions, questions.count == 1, let key = questions[0].id, questions[0].multiSelect != true else { return nil }
+        let values = (questions[0].options ?? []).map { $0.value ?? $0.label }
+        return AnswerForm(key: key, values: values, takesOwnWords: questions[0].allowCustomAnswer != false)
     }
 
     /// Plain words for the approval bubble. It comes from the agent, so it's only ever shown.

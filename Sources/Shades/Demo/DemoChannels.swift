@@ -42,6 +42,24 @@ enum DemoChannels {
         thread("demo-pepper-unknown", "Sum up the plan comparison", project: "Pepper", minutes: 300),
     ]
 
+    /// What's waiting on you in the pictures: one of each kind, all made up.
+    static let waiting = Waiting(
+        approvals: [ApprovalRequest(id: "demo-approve", threadID: "demo-clawde-menu", threadTitle: "Clawde: Add a menu item for the new window", kind: .command, summary: "Run: swift test", createdAt: ago(minutes: 3))],
+        questions: [AgentQuestion(
+            id: "demo-ask",
+            threadID: pepperPlans.id,
+            threadTitle: pepperPlans.title,
+            text: "Which plan name should lead the page?",
+            options: ["Starter", "Basic", "Keep both"],
+            form: AnswerForm(key: "plan", values: ["Starter", "Basic", "Keep both"], takesOwnWords: true)
+        )],
+        owners: ["demo-approve": "/demo/clawde", "demo-ask": "/demo/pepper"],
+        reports: [
+            InboxEntry(id: "demo-decision", kind: .decision, text: "The settings panel change is merged. Say ship it to install it.", threadID: clawdeMain.id, threadTitle: clawdeMain.title, at: ago(minutes: 90)),
+            InboxEntry(id: "demo-shipped", kind: .shipped, text: "Shipped the smaller logo on small screens.", threadID: "demo-steve-yesterday", threadTitle: "Shrink the logo on small screens", at: ago(minutes: 1_400)),
+        ]
+    )
+
     private static func exchange(
         _ id: String,
         asker: Exchange.Asker = .you,

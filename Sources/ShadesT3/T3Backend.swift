@@ -164,6 +164,17 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, command)
     }
 
+    public func answer(_ question: AgentQuestion, with value: String) async throws {
+        guard let form = question.form else { return }
+        let command = T3Wire.RespondToRequest(
+            commandId: Self.newID(),
+            threadId: question.threadID,
+            requestId: question.id,
+            answers: [form.key: value]
+        )
+        let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, command)
+    }
+
     public func projectID(atPath path: String) async -> String? {
         let wanted = URL(fileURLWithPath: path).standardizedFileURL.path
         return (try? await projects())?.first { URL(fileURLWithPath: $0.path).standardizedFileURL.path == wanted }?.id

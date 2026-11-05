@@ -120,6 +120,8 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     private var _opened: [String] = []
     private var watcher: AsyncStream<[AgentThread]>.Continuation?
     var replies: [[AgentReplyEvent]] = []
+    /// The router's reply to a question, whatever order things start in.
+    var routerSays: [String: String] = [:]
     var reports: [String: String] = [:]
     var projects: [String: String] = [:]
     var settled: [String] = []
@@ -154,7 +156,7 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
             return count
         }
         if holdStarts { return AsyncThrowingStream { $0.yield(.started(threadID: "thread-\(id)")) } }
-        return play(threadID: "thread-\(id)")
+        return play(threadID: "thread-\(id)", prompt: prompt)
     }
 
     func followUp(threadID: String, _ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
@@ -162,11 +164,15 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
         if failFollowUps {
             return AsyncThrowingStream { $0.finish(throwing: URLError(.badServerResponse)) }
         }
-        return play(threadID: threadID)
+        return play(threadID: threadID, prompt: prompt)
     }
 
-    private func play(threadID: String) -> AsyncThrowingStream<AgentReplyEvent, Error> {
-        let events = lock.withLock { replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst() }
+    private func play(threadID: String, prompt: AgentPrompt? = nil) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        let routed = prompt.flatMap { prompt in routerSays.first { prompt.text.contains("Their question: \($0.key)") }?.value }
+        let events = lock.withLock {
+            if let routed { return [AgentReplyEvent.finished(fullText: routed)] }
+            return replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst()
+        }
         let error = streamError
         let dropped = droppedAfterReply
         return AsyncThrowingStream { continuation in
@@ -193,6 +199,14 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws {
         if failResponses { throw URLError(.notConnectedToInternet) }
         lock.withLock { _responses.append((request.id, decision)) }
+    }
+
+    private var _answers: [(String, String)] = []
+    var answers: [(String, String)] { lock.withLock { _answers } }
+
+    func answer(_ question: AgentQuestion, with value: String) async throws {
+        if failResponses { throw URLError(.notConnectedToInternet) }
+        lock.withLock { _answers.append((question.id, value)) }
     }
 
     func projectID(atPath path: String) async -> String? {
@@ -2508,6 +2522,151 @@ final class FlowTests: XCTestCase {
             DispatchQueue.main.async { continuation.resume() }
         }
     }
+
+    // MARK: - Messages
+
+    private let pepper = Kitten(name: "Pepper", role: "Finance", covers: "their money", folder: "/k/pepper")
+
+    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID? = .everyone) async {
+        controller.messagesAction(.send(words, to: target, shownIn: channel))
+        await controller.messagesTurn?.value
+        await settle()
+        await controller.frontierTask?.value
+    }
+
+    private var everyoneSaid: [String] {
+        (stage.channelsUpdated.last ?? stage.channelsShown.last)?.everyone.messages.compactMap(\.text) ?? []
+    }
+
+    func testNothingTypedInMessagesTakesYourScreenOrCarriesMoreThanYourWords() async {
+        kittens = [steve, pepper]
+        backend.projects["/k/pepper"] = "project-pepper"
+        let work = AgentThread(id: "w", title: "Budget", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: pepper.folder)
+        controller.threadsChanged([work])
+        controller.channelsPressed()
+
+        await messages("How's December looking?", to: .newThread(pepper), in: .direct(pepper))
+        await messages("And January?", to: .thread(id: "w", title: "Budget"), in: .direct(pepper))
+        await messages("What day is it?", to: .router)
+
+        XCTAssertFalse(log.all.contains("snapshot"), "nothing was captured")
+        XCTAssertEqual(context.saved, 0)
+        let started = backend.sent.first { $0.mode == .start && $0.prompt.projectID == "project-pepper" }
+        XCTAssertEqual(started?.prompt.text, Prompts.forKitten(words: "How's December looking?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
+        let forwarded = backend.sent.first { $0.mode == .forward }
+        XCTAssertEqual(forwarded?.threadID, "w")
+        XCTAssertEqual(forwarded?.prompt.text, Prompts.forwarded(words: "And January?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
+        let routed = backend.sent.last { $0.prompt.text.contains("Their question: What day is it?") }
+        XCTAssertTrue(routed?.prompt.text.contains("<screen>Not captured.</screen>") == true)
+        for sent in backend.sent {
+            XCTAssertTrue(sent.prompt.attachments.isEmpty)
+            XCTAssertFalse(sent.prompt.text.contains("App: Safari"))
+        }
+    }
+
+    func testEveryoneGoesThroughTheRouterAndTheKittenGetsOnlyYourWords() async {
+        kittens = [steve, pepper]
+        backend.projects["/k/pepper"] = "project-pepper"
+        backend.replies = [[.finished(fullText: "KITTEN: 2")], [.finished(fullText: "On it.")]]
+        controller.channelsPressed()
+        await messages("Can I afford a new laptop?", to: .router)
+
+        XCTAssertEqual(backend.sent.count, 2)
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-pepper")
+        XCTAssertEqual(backend.sent[1].prompt.text, Prompts.forKitten(words: "Can I afford a new laptop?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
+        XCTAssertEqual(everyoneSaid, ["Can I afford a new laptop?"], "it shows at once, and the kitten's thread answers it")
+    }
+
+    func testTheRoutersOwnAnswerShowsInEveryone() async {
+        backend.replies = [[.finished(fullText: "It's Tuesday.")]]
+        controller.channelsPressed()
+        await messages("What day is it?", to: .router)
+        XCTAssertEqual(everyoneSaid, ["What day is it?", "It's Tuesday."])
+        XCTAssertEqual(stage.channelsUpdated.last?.everyone.messages.last?.speaker, .cat)
+    }
+
+    func testTwoMessagesInARowBothGetWhereTheyreGoing() async {
+        kittens = [steve, pepper]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.projects["/k/pepper"] = "project-pepper"
+        backend.routerSays = ["Update my resume": "KITTEN: 1", "Check my budget": "KITTEN: 2"]
+        controller.channelsPressed()
+        controller.messagesAction(.send("Update my resume", to: .router, shownIn: .everyone))
+        controller.messagesAction(.send("Check my budget", to: .router, shownIn: .everyone))
+        await controller.messagesTurn?.value
+        await settle()
+        await controller.frontierTask?.value
+
+        let given = backend.sent.filter { $0.prompt.projectID != nil }.map(\.prompt.projectID)
+        XCTAssertEqual(given, ["project-steve", "project-pepper"])
+    }
+
+    func testAQuestionIsAnsweredFromMessagesWithAnOptionOrYourWords() async {
+        kittens = [pepper]
+        let question = AgentQuestion(
+            id: "q", threadID: "sub", threadTitle: "Budget", text: "Which month?", options: ["December", "January"],
+            form: AnswerForm(key: "month", values: ["dec", "jan"], takesOwnWords: true)
+        )
+        let asking = AgentThread(id: "w", title: "Budget", projectTitle: "Pepper", status: .waitingForAnswer, model: "m", updatedAt: clock, pendingQuestion: question, projectPath: pepper.folder)
+        controller.threadsChanged([asking])
+        XCTAssertEqual(controller.waiting.questions, [question])
+        XCTAssertEqual(controller.waiting.owners["q"], pepper.id)
+
+        controller.messagesAction(.pick(question, option: 1))
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(backend.answers.map(\.1), ["jan"])
+        XCTAssertTrue(controller.waiting.questions.isEmpty, "it goes once answered, before the list catches up")
+
+        controller.answeredQuestions = []
+        await messages("Both, please", to: .question(question), in: .direct(pepper))
+        XCTAssertEqual(backend.answers.map(\.1), ["jan", "Both, please"])
+        XCTAssertFalse(log.all.contains("snapshot"))
+    }
+
+    func testAnAnswerThatDidntGoThroughComesBack() async {
+        backend.failResponses = true
+        let question = AgentQuestion(id: "q", threadID: "w", threadTitle: "Budget", text: "Which?", form: AnswerForm(key: "k", values: [], takesOwnWords: true))
+        controller.threadsChanged([AgentThread(id: "w", title: "Budget", projectTitle: nil, status: .waitingForAnswer, model: "m", updatedAt: clock, pendingQuestion: question)])
+        controller.messagesAction(.send("Yes", to: .question(question), shownIn: nil))
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(controller.waiting.questions, [question])
+        XCTAssertEqual(stage.bubble, .line(CatWords.approvalFailed, threadID: nil))
+    }
+
+    func testAnApprovalIsAnsweredFromMessages() async {
+        controller.threadsChanged([AgentThread(id: "w", title: "Work", projectTitle: nil, status: .waitingForApproval, model: "m", updatedAt: clock, pendingApprovals: [request()])])
+        XCTAssertEqual(controller.waiting.approvals, [request()])
+        controller.messagesAction(.approval(request(), .decline))
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(backend.responses.map(\.1), [.decline])
+        XCTAssertTrue(controller.waiting.approvals.isEmpty)
+    }
+
+    func testReplyingInAThreadStopsItsReportAsking() async {
+        var inbox = Inbox(since: .distantPast)
+        let finished = AgentThread(id: "w", title: "Settings", projectTitle: nil, status: .completed, model: "m", updatedAt: clock, lastRunID: "r1")
+        inbox.file(SortedReport(decision: "Merged. Say ship it to install."), from: finished, at: clock) { "row" }
+        controller = makeController(inbox: inbox)
+        await messages("ship it", to: .thread(id: "w", title: "Settings"), in: nil)
+        XCTAssertEqual(backend.sent.last?.threadID, "w")
+        XCTAssertNotNil(controller.inbox.entries.first?.repliedAt)
+        XCTAssertFalse(controller.waiting.reports.contains(where: \.needsYou))
+    }
+
+    func testLookingAtADMMarksItsKittenRead() async {
+        kittens = [pepper]
+        let finished = AgentThread(id: "w", title: "Budget", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: clock, projectPath: pepper.folder, lastRunID: "r1", lastRunEndedAt: clock)
+        controller.threadsChanged([finished])
+        controller.channelsPressed()
+        XCTAssertEqual(stage.channelsShown.last?.unread, [pepper.id])
+
+        let before = savedInbox
+        controller.messagesAction(.seen(.needsYou))
+        XCTAssertEqual(savedInbox, before, "Needs you isn't a conversation")
+        controller.messagesAction(.seen(.channel(.direct(pepper))))
+        XCTAssertEqual(savedInbox?.isUnread(finished), false)
+        XCTAssertEqual(stage.channelsUpdated.last?.unread, [])
+    }
 }
 
 private extension NSLock {
@@ -2516,4 +2675,5 @@ private extension NSLock {
         defer { unlock() }
         return body()
     }
+
 }

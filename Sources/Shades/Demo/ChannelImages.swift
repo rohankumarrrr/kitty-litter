@@ -42,7 +42,9 @@ enum ChannelImages {
             transcripts: transcripts,
             isReading: isReading,
             unreadable: unreadable,
-            cantReachT3: cantReachT3
+            cantReachT3: cantReachT3,
+            waiting: DemoChannels.waiting,
+            isUnread: { $0.id == "demo-steve-yesterday" }
         )
     }
 
@@ -62,7 +64,7 @@ enum ChannelImages {
 
     private static func shots() -> [Shot] {
         let full = book()
-        var shots = [Shot(name: "issues", selection: .issues, book: full)]
+        var shots = [Shot(name: "needs-you", selection: .needsYou, book: full), Shot(name: "everyone", selection: .channel(.everyone), book: full)]
         for status in full.statuses {
             shots.append(Shot(name: "dm-\(slug(status.kitten.name))", selection: .channel(.direct(status.kitten)), book: full))
         }
@@ -74,17 +76,17 @@ enum ChannelImages {
         shots += [
             Shot(name: "dm-expanded", selection: steve, book: full, expandsLongMessage: true),
             Shot(name: "dm-hover", selection: steve, book: full, hoversLastMessage: true),
-            Shot(name: "crowded", selection: .issues, book: crowded(), height: ChannelsWindow.minimumSize.height),
+            Shot(name: "crowded", selection: .needsYou, book: crowded(), height: ChannelsWindow.minimumSize.height),
             Shot(name: "narrow-dm", selection: steve, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
-            Shot(name: "narrow-issues", selection: .issues, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
+            Shot(name: "narrow-needs-you", selection: .needsYou, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
             Shot(name: "reading", selection: steve, book: book(threads: [], transcripts: [:], isReading: true)),
-            Shot(name: "reading-issues", selection: .issues, book: book(threads: [], transcripts: [:], isReading: true)),
+            Shot(name: "reading-needs-you", selection: .needsYou, book: book(threads: [], transcripts: [:], isReading: true)),
             Shot(name: "cant-reach", selection: steve, book: book(threads: [], transcripts: [:], isReading: true, cantReachT3: true)),
-            Shot(name: "cant-reach-issues", selection: .issues, book: book(threads: [], transcripts: [:], isReading: true, cantReachT3: true)),
+            Shot(name: "cant-reach-needs-you", selection: .needsYou, book: book(threads: [], transcripts: [:], isReading: true, cantReachT3: true)),
             Shot(name: "cant-reach-with-words", selection: steve, book: book(cantReachT3: true)),
             Shot(name: "unreadable", selection: steve, book: book(unreadable: 2)),
             Shot(name: "nothing-said", selection: steve, book: book(threads: [], transcripts: [:])),
-            Shot(name: "nothing-open", selection: .issues, book: book(threads: [], transcripts: [:])),
+            Shot(name: "nothing-open", selection: .needsYou, book: book(threads: [], transcripts: [:])),
         ]
         return shots
     }

@@ -86,6 +86,14 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(json, ["type": "runtime-request.respond", "commandId": "c", "threadId": "t", "requestId": "r", "decision": "acceptForSession"])
     }
 
+    func testAnAnswerIsFiledUnderTheQuestionAndSendsNoDecision() throws {
+        let command = T3Wire.RespondToRequest(commandId: "c", threadId: "t", requestId: "r", answers: ["plan": "Starter"])
+        let json = try decoded(T3Wire.encode(command))
+        XCTAssertEqual(json["type"] as? String, "runtime-request.respond")
+        XCTAssertEqual(json["answers"] as? [String: String], ["plan": "Starter"])
+        XCTAssertNil(json["decision"])
+    }
+
     // MARK: IDs and links
 
     func testApprovalItemIDMatchesWhatTheServerBuilds() {
@@ -132,6 +140,25 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(item.questions?.first?.question, "Which one?")
         XCTAssertEqual(item.questions?.first?.options?.map(\.label), ["A", "B"])
         XCTAssertEqual(item.questions?.count, 2)
+    }
+
+    func testOneQuestionWithOneChoiceCanBeAnsweredFromShades() throws {
+        let item = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"plan","header":"Pick","question":"Which?","options":[{"label":"Starter","description":"","value":"starter-v2"},{"label":"Basic","description":""}]}]}"#)
+        XCTAssertEqual(T3Wire.answerForm(item.questions), AnswerForm(key: "plan", values: ["starter-v2", "Basic"], takesOwnWords: true), "an option sends its value, or its label without one")
+    }
+
+    func testAQuestionThatRefusesYourOwnWordsSaysSo() throws {
+        let item = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"1","header":"Pick","question":"Which?","options":[{"label":"A","description":""}],"allowCustomAnswer":false}]}"#)
+        XCTAssertEqual(T3Wire.answerForm(item.questions)?.takesOwnWords, false)
+    }
+
+    func testSeveralQuestionsOrChoicesAreAnsweredInT3() throws {
+        let several = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"1","header":"A","question":"One?","options":[]},{"id":"2","header":"B","question":"Two?","options":[]}]}"#)
+        XCTAssertNil(T3Wire.answerForm(several.questions))
+        let choices = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"1","header":"A","question":"Which?","options":[{"label":"A","description":""}],"multiSelect":true}]}"#)
+        XCTAssertNil(T3Wire.answerForm(choices.questions))
+        let unnamed = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"header":"A","question":"Which?","options":[]}]}"#)
+        XCTAssertNil(T3Wire.answerForm(unnamed.questions), "with no ID there's nothing to file an answer under")
     }
 
     func testThreadLinkEncodesIDs() {

@@ -53,8 +53,19 @@ enum CatWords {
         }
     }
 
-    static let issuesTitle = "Issues"
-    static let issuesSubtitle = "What each kitten has open"
+    static let messagesTitle = "Messages"
+    static let needsYouTitle = "Needs you"
+    static let needsYouSubtitle = "What's waiting on you, and what each kitten is on"
+    static let nothingNeedsYou = "Nothing needs you."
+    static let inProgress = "In progress"
+    static let everyone = "Everyone"
+    static let everyoneSubtitle = "Goes to whoever it's for"
+    static let everyoneEmpty = "Say something and it goes to whoever it's for."
+    static let shades = "Shades"
+    static let newTopic = "New topic"
+    static let answerInWords = "Type an answer"
+    static let answerInT3 = "This one's answered in T3."
+    static let unreadableQuestion = "They asked something I couldn't read."
     static let directMessages = "Direct messages"
     static let betweenKittens = "Between kittens"
     static let you = "You"
@@ -68,7 +79,26 @@ enum CatWords {
     static func notSetUpYet(_ kitten: Kitten) -> String { "\(kitten.name) isn't set up yet." }
     static func couldntRead(_ count: Int) -> String { "Couldn't read \(count) \(count == 1 ? "thread" : "threads"). I'll try again." }
     static func earlierNotes(_ count: Int) -> String { "\(count) earlier \(count == 1 ? "note" : "notes")" }
-    static func issues(_ count: Int) -> String { "\(count) \(count == 1 ? "issue" : "issues")" }
+    static func issues(_ count: Int) -> String { "\(count) open" }
+    static func reportsTitle(_ kind: InboxEntry.Kind) -> String { kind == .shipped ? "Shipped" : "Also" }
+
+    /// The line over the box, saying where what you type goes.
+    static func target(_ target: MessageTarget) -> String {
+        switch target {
+        case .router: return "To whoever it's for"
+        case .newThread(let kitten): return "New topic with \(kitten.name)"
+        case .thread(_, let title): return "In \(title)"
+        case .question(let question): return "Answering: \(question.text.isEmpty ? "their question" : question.text)"
+        }
+    }
+
+    static func placeholder(_ target: MessageTarget) -> String {
+        switch target {
+        case .router: return "Message everyone"
+        case .newThread, .thread: return "Message"
+        case .question: return "Your answer"
+        }
+    }
     static func pullRequest(_ pullRequest: ThreadPullRequest) -> String { "PR #\(pullRequest.number) \(pullRequest.state)" }
 
     static func day(_ date: Date, now: Date, calendar: Calendar = .current) -> String {

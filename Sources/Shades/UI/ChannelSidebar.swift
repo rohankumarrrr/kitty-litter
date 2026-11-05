@@ -5,6 +5,7 @@ import ShadesCore
 struct ChannelSidebarItem: Equatable {
     enum Cat: Equatable {
         case kitten(KittenStatus)
+        case shades
         case other
     }
 
@@ -12,22 +13,29 @@ struct ChannelSidebarItem: Equatable {
     var title: String
     var cats: [Cat] = []
     var count: Int?
+    var isUnread = false
 
     static func groups(in book: ChannelBook) -> [(heading: String?, items: [ChannelSidebarItem])] {
         let directs = book.statuses.map { status in
-            ChannelSidebarItem(selection: .channel(.direct(status.kitten)), title: status.kitten.name, cats: [.kitten(status)])
+            ChannelSidebarItem(
+                selection: .channel(.direct(status.kitten)),
+                title: status.kitten.name,
+                cats: [.kitten(status)],
+                isUnread: book.unread.contains(status.kitten.id)
+            )
         }
         let between = book.between.map { channel in
             ChannelSidebarItem(selection: .channel(channel.id), title: book.title(of: channel.id), cats: book.others(in: channel.id).map { other in
                 book.status(of: other).map(Cat.kitten) ?? .other
             })
         }
-        let issues = ChannelSidebarItem(selection: .issues, title: CatWords.issuesTitle, count: book.issueCount)
-        return [(nil, [issues]), (CatWords.directMessages, directs)] + (between.isEmpty ? [] : [(CatWords.betweenKittens, between)])
+        let needsYou = ChannelSidebarItem(selection: .needsYou, title: CatWords.needsYouTitle, count: book.waiting.count)
+        let everyone = ChannelSidebarItem(selection: .channel(.everyone), title: CatWords.everyone, cats: [.shades], isUnread: !book.unread.isEmpty)
+        return [(nil, [needsYou, everyone]), (CatWords.directMessages, directs)] + (between.isEmpty ? [] : [(CatWords.betweenKittens, between)])
     }
 }
 
-/// The left side of the window: Issues, then a row for each kitten, then each pair that's talked.
+/// The left side of the window: Needs you and Everyone, then a row for each kitten, then each pair that's talked.
 final class ChannelSidebar: QuietView {
     static let width: CGFloat = 220
     /// Leaves room for the window's buttons.
@@ -136,8 +144,10 @@ final class ChannelSidebarRow: ChannelRowView {
 
     private var accessibilityWords: String {
         if let count = item.count { return "\(item.title), \(count)" }
-        guard case .kitten(let status)? = item.cats.first, item.cats.count == 1 else { return item.title }
-        return "\(item.title), \(CatWords.kittenState(status.state))"
+        var words = [item.title]
+        if case .kitten(let status)? = item.cats.first, item.cats.count == 1 { words.append(CatWords.kittenState(status.state)) }
+        if item.isUnread { words.append("unread") }
+        return words.joined(separator: ", ")
     }
 
     override var isPressable: Bool { true }
@@ -174,6 +184,8 @@ final class ChannelSidebarRow: ChannelRowView {
             switch cat {
             case .kitten(let status):
                 CatStamp.draw(status.pose(tick: isLive ? tick : 0), jacket: status.kitten.color, in: frame, on: self, fraction: fraction)
+            case .shades:
+                CatStamp.draw(CatPose(frame: .sit), jacket: nil, in: frame, on: self)
             case .other:
                 CatStamp.draw(CatPose(frame: .sit), jacket: ChannelSpeakerLook.otherJacket, in: frame, on: self)
             }
@@ -183,6 +195,11 @@ final class ChannelSidebarRow: ChannelRowView {
         if case .kitten(let status)? = item.cats.first, item.cats.count == 1, let dot = status.state.dotColor {
             dot.setFill()
             NSBezierPath(rect: NSRect(x: right - 8, y: bounds.midY - 4, width: 8, height: 8)).fill()
+            right -= 16
+        }
+        if item.isUnread {
+            Ink.accent.setFill()
+            NSBezierPath(ovalIn: NSRect(x: right - 8, y: bounds.midY - 4, width: 8, height: 8)).fill()
             right -= 16
         }
         if let count = item.count, count > 0 {
@@ -196,7 +213,7 @@ final class ChannelSidebarRow: ChannelRowView {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         NSAttributedString(string: item.title, attributes: [
-            .font: NSFont.systemFont(ofSize: 13, weight: item.count != nil ? .medium : .regular),
+            .font: NSFont.systemFont(ofSize: 13, weight: item.isUnread ? .semibold : item.count != nil ? .medium : .regular),
             .foregroundColor: isFaded ? Ink.soft : Ink.text,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: left, y: (bounds.height - 17) / 2, width: max(right - left, 0), height: 17))

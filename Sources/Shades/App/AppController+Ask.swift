@@ -159,6 +159,7 @@ extension AppController {
     }
 
     func finish(_ outcome: ReplyHoldback.Outcome, question: String, snapshot: ScreenSnapshot?, generation: Int) {
+        if case .answer(let text) = outcome { routerAnswered(text, generation: generation) }
         // The ten minutes run from the last time the thread was used.
         if let threadID = quick.thread(at: now()) {
             quick.use(threadID, at: now())

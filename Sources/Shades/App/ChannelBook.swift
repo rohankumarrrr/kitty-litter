@@ -5,6 +5,8 @@ enum Speaker: Hashable {
     case you
     /// A `Kitten.id`.
     case kitten(String)
+    /// Shades itself, answering in Everyone.
+    case cat
     case someoneElse
 }
 
@@ -25,6 +27,9 @@ struct ChannelID: Hashable {
     static func direct(_ kitten: Kitten) -> ChannelID {
         ChannelID(members: [.you, .kitten(kitten.id)])
     }
+
+    /// The group chat: every DM at once, and what you say there goes through the router.
+    static let everyone = ChannelID(members: [.you])
 }
 
 struct ChannelMessage: Equatable, Identifiable {
@@ -56,6 +61,24 @@ struct Channel: Equatable, Identifiable {
     var isCut: Bool
 }
 
+/// Something said in Messages that T3 doesn't have yet, or never will, like the cat's own answer.
+/// It's kept in memory only while the window's open.
+struct SentMessage: Equatable {
+    var channel: ChannelID
+    var message: ChannelMessage
+}
+
+/// What's waiting on you right now. It comes from the live thread list and the inbox, never from what was said.
+struct Waiting: Equatable {
+    var approvals: [ApprovalRequest] = []
+    var questions: [AgentQuestion] = []
+    /// The kitten each approval, question or report is for, by its ID.
+    var owners: [String: String] = [:]
+    var reports: [InboxEntry] = []
+
+    var count: Int { approvals.count + questions.count + reports.filter(\.needsYou).count }
+}
+
 struct KittenIssues: Equatable {
     var kitten: Kitten
     /// Their titles are without the owner's "Name:" prefix.
@@ -70,6 +93,10 @@ struct ChannelBook: Equatable {
     var statuses: [KittenStatus]
     var between: [Channel]
     var issues: [KittenIssues]
+    var everyone: Channel
+    var waiting: Waiting
+    /// Kittens with a finished run you haven't looked at.
+    var unread: Set<String>
     var isReading: Bool
     var unreadable: Int
     var cantReachT3: Bool
@@ -87,7 +114,10 @@ struct ChannelBook: Equatable {
         transcripts: [String: [Exchange]],
         isReading: Bool,
         unreadable: Int,
-        cantReachT3: Bool
+        cantReachT3: Bool,
+        waiting: Waiting = Waiting(),
+        sent: [SentMessage] = [],
+        isUnread: (AgentThread) -> Bool = { _ in false }
     ) -> ChannelBook {
         // A subagent's question holds up the thread above it, even if that one's turn has ended.
         let threads = threads.map { thread -> AgentThread in
@@ -121,6 +151,14 @@ struct ChannelBook: Equatable {
             }
         }
 
+        // What you just sent waits where you sent it until T3 has it.
+        let heard = placed
+        for (order, sent) in sent.enumerated() {
+            let there = sent.channel == .everyone ? Array(heard.values.joined()) : heard[sent.channel] ?? []
+            guard !isEchoed(sent.message, in: there) else { continue }
+            placed[sent.channel, default: []].append(Placed(position: sent.message.at, sequence: order, messages: [sent.message]))
+        }
+
         let statuses = KittenBoard.statuses(kittens: kittens, threads: threads)
         // Threads with an owner and nothing read are too old to read, or couldn't be read, so don't say you've never talked.
         let directs = statuses.map { status in
@@ -128,18 +166,27 @@ struct ChannelBook: Equatable {
         }
         let directIDs = Set(directs.map(\.id))
         let between = placed
-            .filter { !directIDs.contains($0.key) }
+            .filter { !directIDs.contains($0.key) && $0.key != .everyone }
             .map { channel($0.key, $0.value) }
             .sorted { (latest($0), latestID($0)) > (latest($1), latestID($1)) }
         let issues = statuses.compactMap { status -> KittenIssues? in
             let open = openThreads(of: status.kitten, among: kittens, in: threads)
             return status.state == .notSetUp && open.isEmpty ? nil : KittenIssues(kitten: status.kitten, threads: open)
         }
+        var waiting = waiting
+        for entry in waiting.reports {
+            waiting.owners[entry.id] = threadsByID[entry.threadID].flatMap { KittenBoard.owner(of: $0, among: kittens) }?.id
+        }
+        let everyone = channel(.everyone, directIDs.flatMap { placed[$0] ?? [] } + (placed[.everyone] ?? []))
+        let unread = Set(threads.filter(isUnread).compactMap { KittenBoard.owner(of: $0, among: kittens)?.id })
         return ChannelBook(
             directs: directs,
             statuses: statuses,
             between: between,
             issues: issues,
+            everyone: everyone,
+            waiting: waiting,
+            unread: unread,
             isReading: isReading,
             unreadable: unreadable,
             cantReachT3: cantReachT3
@@ -184,6 +231,14 @@ struct ChannelBook: Equatable {
         return Channel(id: id, messages: ordered.suffix(keptExchanges).flatMap(\.messages), isCut: leavesOutThreads || ordered.count > keptExchanges)
     }
 
+    /// T3 has it once you're the one asking the same thing there, since a minute before it was sent.
+    private static func isEchoed(_ message: ChannelMessage, in placed: [Placed]) -> Bool {
+        guard message.speaker == .you else { return false }
+        return placed.lazy.flatMap(\.messages).contains { said in
+            said.speaker == .you && said.text == message.text && said.at >= message.at.addingTimeInterval(-60)
+        }
+    }
+
     private static func latest(_ channel: Channel) -> Date { channel.messages.last?.at ?? .distantPast }
     private static func latestID(_ channel: Channel) -> String { channel.messages.last?.id ?? "" }
 
@@ -205,9 +260,14 @@ struct ChannelBook: Equatable {
     }
 
     private static func title(of thread: AgentThread, owner: Kitten) -> String {
+        title(of: thread.title, owner: owner)
+    }
+
+    /// Without the owner's "Name:" prefix.
+    static func title(of title: String, owner: Kitten) -> String {
         let prefix = "\(owner.name):"
-        guard thread.title.hasPrefix(prefix) else { return thread.title }
-        return thread.title.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
+        guard title.hasPrefix(prefix) else { return title }
+        return title.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
     }
 }
 
@@ -215,7 +275,11 @@ extension ChannelBook {
     var issueCount: Int { issues.reduce(0) { $0 + $1.threads.count } }
 
     func channel(_ id: ChannelID) -> Channel? {
-        directs.first { $0.id == id } ?? between.first { $0.id == id }
+        id == .everyone ? everyone : directs.first { $0.id == id } ?? between.first { $0.id == id }
+    }
+
+    func kitten(of requestID: String) -> Kitten? {
+        waiting.owners[requestID].flatMap { owner in statuses.first { $0.id == owner }?.kitten }
     }
 
     func status(of speaker: Speaker) -> KittenStatus? {
@@ -226,6 +290,7 @@ extension ChannelBook {
         switch speaker {
         case .you: return CatWords.you
         case .kitten: return status(of: speaker)?.kitten.name ?? CatWords.someoneElse
+        case .cat: return CatWords.shades
         case .someoneElse: return CatWords.someoneElse
         }
     }
@@ -236,7 +301,8 @@ extension ChannelBook {
     }
 
     func title(of id: ChannelID) -> String {
-        others(in: id)
+        if id == .everyone { return CatWords.everyone }
+        return others(in: id)
             .map { $0 == .someoneElse ? CatWords.someoneElse.lowercased() : name(of: $0) }
             .joined(separator: ", ")
     }

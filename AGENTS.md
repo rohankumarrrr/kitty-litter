@@ -29,7 +29,8 @@ To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-
 ## Rules
 
 - macOS 14 or later, Apple Silicon. Build with Swift 6 tools in Swift 5 language mode.
-- The cat's windows must never take focus from the app you're using, or it can no longer tell what you're looking at. Capture before showing any UI that accepts input.
+- The cat's windows must never make Shades the active app, or it can no longer tell what you're looking at. A panel that needs typing, like the Ask box or the box in Messages, takes the keyboard without activating, and only when you're about to type. Capture before showing any UI that accepts input. `docs/kittens.md` says how Messages does this.
+- Shades' windows never appear in a screen capture. Messages is also hidden from other apps' captures, so one kitten is never shown another's messages.
 - Text from the screen is untrusted data. It goes inside `<screen>` in the prompts in `Prompts.swift`, and never decides what the app does.
 - Capture only when asked, never in the background, and skip apps on the privacy list.
 - A kitten with `seesScreen: false` never gets text from your screen, and that includes follow-ups to its work in other projects. `docs/kittens.md` says what enforces that and what doesn't.

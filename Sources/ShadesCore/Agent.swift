@@ -128,14 +128,40 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
     public var options: [String]
     /// How many more questions came with this one.
     public var moreCount: Int
+    /// What an answer from Shades needs. `nil` means it's answered in T3: several questions, or several choices at once.
+    public var form: AnswerForm?
 
-    public init(id: String, threadID: String, threadTitle: String, text: String, options: [String] = [], moreCount: Int = 0) {
+    public init(
+        id: String,
+        threadID: String,
+        threadTitle: String,
+        text: String,
+        options: [String] = [],
+        moreCount: Int = 0,
+        form: AnswerForm? = nil
+    ) {
         self.id = id
         self.threadID = threadID
         self.threadTitle = threadTitle
         self.text = text
         self.options = options
         self.moreCount = moreCount
+        self.form = form
+    }
+}
+
+/// How to answer a question: one option's value, or your own words where it takes them.
+public struct AnswerForm: Sendable, Hashable {
+    /// The question's own ID, which the answer is filed under.
+    public var key: String
+    /// What each option sends, in the order of `options`.
+    public var values: [String]
+    public var takesOwnWords: Bool
+
+    public init(key: String, values: [String], takesOwnWords: Bool) {
+        self.key = key
+        self.values = values
+        self.takesOwnWords = takesOwnWords
     }
 }
 
@@ -279,6 +305,8 @@ public protocol AgentBackend: AnyObject, Sendable {
     /// The current threads, sent again whenever anything changes.
     func watchThreads() -> AsyncStream<[AgentThread]>
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws
+    /// Answers a question that has a `form`, with one of its values or your own words.
+    func answer(_ question: AgentQuestion, with value: String) async throws
     /// Shows the thread in T3 Code.
     func open(threadID: String)
     /// The project registered at this folder, if any.
@@ -305,6 +333,7 @@ public extension AgentBackend {
     func projectID(atPath path: String) async -> String? { nil }
     func archive(threadID: String) async throws {}
     func settle(threadID: String) async throws {}
+    func answer(_ question: AgentQuestion, with value: String) async throws {}
     func allThreads() async -> [AgentThread]? { nil }
     func exchanges(threadID: String) async -> [Exchange]? { nil }
     func report(threadID: String, run: String?) async throws -> String? { nil }

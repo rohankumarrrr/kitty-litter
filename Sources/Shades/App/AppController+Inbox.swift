@@ -180,26 +180,36 @@ extension AppController {
         ))
     }
 
-    /// Takes no snapshot, so no caller can pass one, and doesn't go near the router, whose thread is what would carry the screen.
     func reply(_ words: String, to entry: InboxEntry) {
+        reply(words, toThread: entry.threadID, title: entry.threadTitle, marking: entry.id)
+    }
+
+    /// Takes no snapshot, so no caller can pass one, and doesn't go near the router, whose thread is what would carry the screen.
+    /// A report from that thread that's waiting on you stops asking, unless it's told which one.
+    func reply(_ words: String, toThread threadID: String, title: String, marking entryID: String? = nil) {
         let text = Prompts.forwarded(words: words, snapshot: nil, screenshotPath: nil, screenLeftOut: false)
-        inbox.markReplied(entry.id, at: now())
-        keepInbox()
-        inboxChanged()
-        say(CatWords.sentTo(entry.threadTitle), threadID: entry.threadID)
+        let entryID = entryID ?? inbox.entries.last { $0.threadID == threadID && $0.needsYou }?.id
+        if let entryID {
+            inbox.markReplied(entryID, at: now())
+            keepInbox()
+            inboxChanged()
+        }
+        say(CatWords.sentTo(title), threadID: threadID)
         forwardTask = Task {
             var heardBack = false
             do {
-                for try await event in backend.forward(threadID: entry.threadID, text: text, attachments: []) {
+                for try await event in backend.forward(threadID: threadID, text: text, attachments: []) {
                     if case .started = event { continue }
                     heardBack = true
                 }
             } catch {
                 // Losing the connection partway through a turn doesn't mean your words didn't arrive.
                 if heardBack { return }
-                inbox.markReplied(entry.id, at: nil)
-                keepInbox()
-                inboxChanged()
+                if let entryID {
+                    inbox.markReplied(entryID, at: nil)
+                    keepInbox()
+                    inboxChanged()
+                }
                 say(CatWords.problem(error, while: .agents))
             }
         }
@@ -216,6 +226,7 @@ extension AppController {
 
     private func inboxChanged() {
         if stage.isInboxVisible { stage.showInbox(inboxEntries) }
+        channels.refresh()
         renderBubble()
     }
 }

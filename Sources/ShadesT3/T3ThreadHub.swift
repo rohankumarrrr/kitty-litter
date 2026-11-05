@@ -153,7 +153,8 @@ actor T3ThreadHub {
                 let words = T3ThreadList.QuestionWords(
                     text: first?.question ?? "",
                     options: first?.options?.map(\.label) ?? [],
-                    moreCount: max(0, (item?.questions?.count ?? 0) - 1)
+                    moreCount: max(0, (item?.questions?.count ?? 0) - 1),
+                    form: T3Wire.answerForm(item?.questions)
                 )
                 await self.didLoad(words, for: pending.requestID)
             }

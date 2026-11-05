@@ -26,15 +26,20 @@ final class ChannelsWindowTests: XCTestCase {
         view.subviews + view.subviews.flatMap(subviews)
     }
 
-    func testThePanelCanNeverTakeTheKeyboardOrFloatOverYourWork() {
+    func testThePanelTakesTheKeyboardOnlyWhenNeededAndNeverFloatsOverYourWork() {
         let panel = ChannelsPanel()
-        XCTAssertFalse(panel.canBecomeKey)
+        XCTAssertTrue(panel.canBecomeKey, "for the box at the bottom")
+        XCTAssertTrue(panel.becomesKeyOnlyIfNeeded, "a click anywhere else leaves the keyboard where it was")
         XCTAssertFalse(panel.canBecomeMain)
         XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
         XCTAssertEqual(panel.level, .normal)
         XCTAssertFalse(panel.hidesOnDeactivate)
         XCTAssertFalse(panel.isReleasedWhenClosed)
         XCTAssertTrue(panel.collectionBehavior.contains(.ignoresCycle))
+    }
+
+    func testNoScreenCaptureCanSeeIt() {
+        XCTAssertEqual(ChannelsPanel().sharingType, .none, "so a kitten's own screen tools can't be shown another kitten's messages")
     }
 
     func testEveryViewTakesClicksAndRefusesTheKeyboard() {
@@ -46,14 +51,20 @@ final class ChannelsWindowTests: XCTestCase {
         for row in rows {
             XCTAssertTrue(row.acceptsFirstMouse(for: nil), "\(row)")
             XCTAssertFalse(row.acceptsFirstResponder, "\(row)")
+            XCTAssertFalse(row.needsPanelToBecomeKey, "\(row)")
         }
+        let box = Set(subviews(of: view.pane.composer).map(ObjectIdentifier.init))
+        let typing = subviews(of: view).filter { !box.contains(ObjectIdentifier($0)) && ($0.acceptsFirstResponder || $0.needsPanelToBecomeKey) }
+        XCTAssertTrue(typing.isEmpty, "only the box takes the keyboard, not \(typing.map { type(of: $0) })")
+        XCTAssertTrue(view.pane.composer.textView.acceptsFirstResponder)
+        XCTAssertTrue(view.pane.composer.textView.needsPanelToBecomeKey)
     }
 
-    func testItStartsOnIssues() {
+    func testItStartsOnNeedsYou() {
         let view = view()
         view.show(book())
-        XCTAssertEqual(view.selection, .issues)
-        XCTAssertEqual(view.sidebar.row(for: .issues)?.isSelected, true)
+        XCTAssertEqual(view.selection, .needsYou)
+        XCTAssertEqual(view.sidebar.row(for: .needsYou)?.isSelected, true)
     }
 
     func testPressingARowSelectsItsChannelAndShowsIt() throws {
@@ -64,7 +75,7 @@ final class ChannelsWindowTests: XCTestCase {
         row.press()
         XCTAssertEqual(view.selection, .channel(.direct(steve)))
         XCTAssertTrue(row.isSelected)
-        XCTAssertEqual(view.sidebar.row(for: .issues)?.isSelected, false)
+        XCTAssertEqual(view.sidebar.row(for: .needsYou)?.isSelected, false)
         XCTAssertEqual(view.pane.shown, ChannelRows.rows(.channel(.direct(steve)), in: book))
         XCTAssertTrue(row.accessibilityPerformPress())
     }
@@ -124,14 +135,14 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertNil(view.pane.longMessageRow)
     }
 
-    func testSelectingAChannelGoesToTheBottomAndIssuesToTheTop() {
+    func testSelectingAChannelGoesToTheBottomAndNeedsYouToTheTop() {
         let view = view()
         view.show(book(exchanges: 40))
         view.select(.channel(.direct(steve)))
         XCTAssertGreaterThan(view.pane.scrollOffset, 0)
         XCTAssertEqual(view.pane.distanceFromBottom, 0, accuracy: 1)
 
-        view.select(.issues)
+        view.select(.needsYou)
         XCTAssertEqual(view.pane.scrollOffset, 0)
     }
 
@@ -234,5 +245,64 @@ final class ChannelsWindowTests: XCTestCase {
         for expected in ["threads read: 7", "unreadable: 1", "DMs with messages: 1", "between channels: 1", "messages: 4", "asked by you: 1", "asked by a kitten: 0", "asked by someone else: 1", "replies with no ask: 0", "issues: 1", "milliseconds: 9"] {
             XCTAssertTrue(line.contains(expected), expected)
         }
+    }
+
+    // MARK: - The box
+
+    func testTheBoxSendsYourWordsWhereItSays() {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        view.show(book())
+        view.select(.channel(.direct(steve)))
+        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
+
+        view.pane.composer.send("  Make it shorter  ")
+        XCTAssertEqual(sent, [.send("Make it shorter", to: .thread(id: "t", title: "Work"), shownIn: .direct(steve))])
+        XCTAssertEqual(view.pane.composer.textView.string, "")
+
+        view.pane.composer.send("   ")
+        XCTAssertEqual(sent.count, 1, "nothing to send")
+    }
+
+    func testANewTopicLastsUntilItsSentOrYouLookElsewhere() throws {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        view.show(book())
+        view.select(.channel(.direct(steve)))
+        view.pane.pick(.newThread(steve))
+        view.pane.composer.send("Something else")
+        XCTAssertEqual(sent.last, .send("Something else", to: .newThread(steve), shownIn: .direct(steve)))
+        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"), "back to carrying on")
+
+        view.pane.pick(.newThread(steve))
+        view.select(.channel(.direct(pepper)))
+        view.select(.channel(.direct(steve)))
+        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
+    }
+
+    func testNeedsYouHasNoBoxUntilYouReplyToSomething() throws {
+        let report = InboxEntry(id: "r", kind: .decision, text: "Merged. Say ship it.", threadID: "t", threadTitle: "Work", at: at)
+        let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
+        let built = ChannelBook.build(kittens: [steve, pepper], threads: [thread], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(reports: [report]))
+        let view = view()
+        view.show(built)
+        XCTAssertTrue(view.pane.composer.isHidden)
+        XCTAssertNil(view.pane.composer.target)
+
+        let card = try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first)
+        XCTAssertTrue(try XCTUnwrap(card.buttons.first).accessibilityPerformPress())
+        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
+        XCTAssertFalse(view.pane.composer.isHidden)
+    }
+
+    func testLookingAtAConversationCountsAsSeeingIt() {
+        let view = view()
+        var seen: [ChannelSelection] = []
+        view.onSeen = { seen.append($0) }
+        view.show(book())
+        view.select(.channel(.direct(steve)))
+        XCTAssertEqual(seen, [.needsYou, .channel(.direct(steve))])
     }
 }
