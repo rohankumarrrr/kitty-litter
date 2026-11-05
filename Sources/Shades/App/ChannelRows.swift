@@ -39,13 +39,16 @@ enum MessageTarget: Equatable {
         if let last = book.channel(id)?.messages.last, last.speaker == .you, last.threadID.isEmpty, last.failure == nil {
             return .starting(status.kitten)
         }
-        if let question = book.waiting.questions.first(where: { book.kitten(of: $0.id) == status.kitten && $0.form?.takesOwnWords == true }) {
+        if let question = book.waiting.questions.first(where: { book.kitten(of: $0.id) == status.kitten && $0.form?.parts.first?.takesOwnWords == true }) {
             return .question(question)
         }
-        // Carrying on where you left off is what a message in a DM usually means.
-        if let last = book.channel(id)?.messages.last(where: { !$0.threadID.isEmpty }) {
-            return .thread(id: last.threadID, title: last.threadTitle)
+        // Carrying on where you left off is what a message in a DM usually means: the last thing said, or a newer
+        // thread whose words haven't been read yet.
+        let lastSaid = book.channel(id)?.messages.last { !$0.threadID.isEmpty }
+        if let newest = book.newestThreads[status.kitten.id], newest.updatedAt > lastSaid?.at ?? .distantPast {
+            return .thread(id: newest.id, title: newest.title)
         }
+        if let lastSaid { return .thread(id: lastSaid.threadID, title: lastSaid.threadTitle) }
         return .newThread(status.kitten)
     }
 }

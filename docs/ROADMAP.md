@@ -36,7 +36,7 @@ A kitten for the system itself, a self-check, rollback and a window for reading 
 - A screen block that follows a kitten instead of its folder. T3 can run Claude with `--settings` per provider instance, so a kitten's threads could share one wherever they work. Untested, because it needs a change to T3's settings.
 
 - Answer an agent's question from the bubble. It shows the question and options now, and you answer in Messages or T3.
-- Questions in several parts, or with several choices at once, answered in Messages. Only one question with one choice is for now.
+- Several choices at once for a question that takes them, from Messages. It takes one choice or your own words for now.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
 - Remember project nicknames, so the frontier agent can skip the search next time.
 - Replace text in place after a rewrite, starting with apps that expose selected text well.

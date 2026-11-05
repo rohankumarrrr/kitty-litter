@@ -128,7 +128,7 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
     public var options: [String]
     /// How many more questions came with this one.
     public var moreCount: Int
-    /// What an answer from Shades needs. `nil` means it's answered in T3: several questions, or several choices at once.
+    /// What an answer from Shades needs, or `nil` if it can only be answered in T3.
     public var form: AnswerForm?
 
     public init(
@@ -150,18 +150,33 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
     }
 }
 
-/// How to answer a question: one option's value, or your own words where it takes them.
+/// How to answer a request: every one of its questions, each with one option's value or your own words where it takes them.
 public struct AnswerForm: Sendable, Hashable {
-    /// The question's own ID, which the answer is filed under.
-    public var key: String
-    /// What each option sends, in the order of `options`.
-    public var values: [String]
-    public var takesOwnWords: Bool
+    public struct Part: Sendable, Hashable {
+        /// The question's own ID, which its answer is filed under.
+        public var key: String
+        public var text: String
+        public var options: [String]
+        /// What each option sends, in the order of `options`.
+        public var values: [String]
+        public var takesOwnWords: Bool
+        /// T3 takes several choices for it. From Shades it gets one, or your own words.
+        public var picksSeveral: Bool
 
-    public init(key: String, values: [String], takesOwnWords: Bool) {
-        self.key = key
-        self.values = values
-        self.takesOwnWords = takesOwnWords
+        public init(key: String, text: String, options: [String], values: [String], takesOwnWords: Bool, picksSeveral: Bool = false) {
+            self.key = key
+            self.text = text
+            self.options = options
+            self.values = values
+            self.takesOwnWords = takesOwnWords
+            self.picksSeveral = picksSeveral
+        }
+    }
+
+    public var parts: [Part]
+
+    public init(parts: [Part]) {
+        self.parts = parts
     }
 }
 
@@ -305,8 +320,8 @@ public protocol AgentBackend: AnyObject, Sendable {
     /// The current threads, sent again whenever anything changes.
     func watchThreads() -> AsyncStream<[AgentThread]>
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws
-    /// Answers a question that has a `form`, with one of its values or your own words.
-    func answer(_ question: AgentQuestion, with value: String) async throws
+    /// Answers a question that has a `form`, with one answer for each of its parts, in order.
+    func answer(_ question: AgentQuestion, with answers: [String]) async throws
     /// Shows the thread in T3 Code.
     func open(threadID: String)
     /// The project registered at this folder, if any.
@@ -333,7 +348,7 @@ public extension AgentBackend {
     func projectID(atPath path: String) async -> String? { nil }
     func archive(threadID: String) async throws {}
     func settle(threadID: String) async throws {}
-    func answer(_ question: AgentQuestion, with value: String) async throws {}
+    func answer(_ question: AgentQuestion, with answers: [String]) async throws {}
     func allThreads() async -> [AgentThread]? { nil }
     func exchanges(threadID: String) async -> [Exchange]? { nil }
     func report(threadID: String, run: String?) async throws -> String? { nil }

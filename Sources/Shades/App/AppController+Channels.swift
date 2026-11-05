@@ -5,8 +5,8 @@ import ShadesCore
 enum MessagesAction: Equatable {
     case send(String, to: MessageTarget, shownIn: ChannelID?)
     case approval(ApprovalRequest, ApprovalDecision)
-    /// One of a question's options, by its place in the list.
-    case pick(AgentQuestion, option: Int)
+    /// Every part of a question's answer, in order.
+    case answer(AgentQuestion, [String])
     case inbox(InboxAction)
     case seen(ChannelSelection)
 }
@@ -43,9 +43,8 @@ extension AppController {
             send(words, to: target, shownIn: channel)
         case .approval(let request, let decision):
             answer(request, decision)
-        case .pick(let question, let option):
-            guard let values = question.form?.values, values.indices.contains(option) else { return }
-            answer(question, with: values[option])
+        case .answer(let question, let answers):
+            answer(question, with: answers)
         case .inbox(let action):
             inboxAction(action)
         case .seen(let selection):
@@ -86,7 +85,7 @@ extension AppController {
         case .starting:
             break
         case .question(let question):
-            answer(question, with: words)
+            answer(question, with: [words])
         }
     }
 
@@ -174,12 +173,12 @@ extension AppController {
         channels.sent(ChannelMessage(exchangeID: "cat-\(UUID().uuidString)", kind: .reply, speaker: .cat, text: text, at: now(), threadID: "", threadTitle: ""), in: .everyone)
     }
 
-    func answer(_ question: AgentQuestion, with value: String) {
+    func answer(_ question: AgentQuestion, with answers: [String]) {
         answeredQuestions.insert(question.id)
         channels.refresh()
         Task { [backend] in
             do {
-                try await backend.answer(question, with: value)
+                try await backend.answer(question, with: answers)
             } catch {
                 answeredQuestions.remove(question.id)
                 channels.refresh()

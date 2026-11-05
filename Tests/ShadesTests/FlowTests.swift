@@ -229,12 +229,12 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
         lock.withLock { _responses.append((request.id, decision)) }
     }
 
-    private var _answers: [(String, String)] = []
-    var answers: [(String, String)] { lock.withLock { _answers } }
+    private var _answers: [(String, [String])] = []
+    var answers: [(String, [String])] { lock.withLock { _answers } }
 
-    func answer(_ question: AgentQuestion, with value: String) async throws {
+    func answer(_ question: AgentQuestion, with answers: [String]) async throws {
         if failResponses { throw URLError(.notConnectedToInternet) }
-        lock.withLock { _answers.append((question.id, value)) }
+        lock.withLock { _answers.append((question.id, answers)) }
     }
 
     func projectID(atPath path: String) async -> String? {
@@ -2633,27 +2633,27 @@ final class FlowTests: XCTestCase {
         kittens = [pepper]
         let question = AgentQuestion(
             id: "q", threadID: "sub", threadTitle: "Budget", text: "Which month?", options: ["December", "January"],
-            form: AnswerForm(key: "month", values: ["dec", "jan"], takesOwnWords: true)
+            form: AnswerForm(parts: [AnswerForm.Part(key: "month", text: "Which month?", options: ["December", "January"], values: ["dec", "jan"], takesOwnWords: true)])
         )
         let asking = AgentThread(id: "w", title: "Budget", projectTitle: "Pepper", status: .waitingForAnswer, model: "m", updatedAt: clock, pendingQuestion: question, projectPath: pepper.folder)
         controller.threadsChanged([asking])
         XCTAssertEqual(controller.waiting.questions, [question])
         XCTAssertEqual(controller.waiting.owners["q"], pepper.id)
 
-        controller.messagesAction(.pick(question, option: 1))
+        controller.messagesAction(.answer(question, ["jan"]))
         for _ in 0..<20 { await Task.yield() }
-        XCTAssertEqual(backend.answers.map(\.1), ["jan"])
+        XCTAssertEqual(backend.answers.map(\.1), [["jan"]])
         XCTAssertTrue(controller.waiting.questions.isEmpty, "it goes once answered, before the list catches up")
 
         controller.answeredQuestions = []
         await messages("Both, please", to: .question(question), in: .direct(pepper))
-        XCTAssertEqual(backend.answers.map(\.1), ["jan", "Both, please"])
+        XCTAssertEqual(backend.answers.map(\.1), [["jan"], ["Both, please"]])
         XCTAssertFalse(log.all.contains("snapshot"))
     }
 
     func testAnAnswerThatDidntGoThroughComesBack() async {
         backend.failResponses = true
-        let question = AgentQuestion(id: "q", threadID: "w", threadTitle: "Budget", text: "Which?", form: AnswerForm(key: "k", values: [], takesOwnWords: true))
+        let question = AgentQuestion(id: "q", threadID: "w", threadTitle: "Budget", text: "Which?", form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which?", options: [], values: [], takesOwnWords: true)]))
         controller.threadsChanged([AgentThread(id: "w", title: "Budget", projectTitle: nil, status: .waitingForAnswer, model: "m", updatedAt: clock, pendingQuestion: question)])
         controller.messagesAction(.send("Yes", to: .question(question), shownIn: nil))
         for _ in 0..<20 { await Task.yield() }

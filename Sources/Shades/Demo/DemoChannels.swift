@@ -51,7 +51,7 @@ enum DemoChannels {
             threadTitle: pepperPlans.title,
             text: "Which plan name should lead the page?",
             options: ["Starter", "Basic", "Keep both"],
-            form: AnswerForm(key: "plan", values: ["Starter", "Basic", "Keep both"], takesOwnWords: true)
+            form: AnswerForm(parts: [AnswerForm.Part(key: "plan", text: "Which plan name should lead the page?", options: ["Starter", "Basic", "Keep both"], values: ["Starter", "Basic", "Keep both"], takesOwnWords: true)])
         )],
         owners: ["demo-approve": "/demo/clawde", "demo-ask": "/demo/pepper"],
         reports: [

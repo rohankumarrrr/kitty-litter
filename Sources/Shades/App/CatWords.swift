@@ -66,6 +66,7 @@ enum CatWords {
     static let answerInWords = "Type an answer"
     static let didntStart = "That didn't start. Try again?"
     static let answerInT3 = "This one's answered in T3."
+    static func part(_ index: Int, of count: Int, _ text: String) -> String { count > 1 ? "\(index + 1) of \(count): \(text)" : text }
     static let unreadableQuestion = "They asked something I couldn't read."
     static let directMessages = "Direct messages"
     static let betweenKittens = "Between kittens"
@@ -90,9 +91,11 @@ enum CatWords {
         case .newThread(let kitten): return "New topic with \(kitten.name)"
         case .thread(_, let title): return "In \(title)"
         case .starting(let kitten): return "Starting a new topic with \(kitten.name)..."
-        case .question(let question): return "Answering: \(question.text.isEmpty ? "their question" : question.text)"
+        case .question(let question): return answering(question.text)
         }
     }
+
+    static func answering(_ text: String) -> String { "Answering: \(text.isEmpty ? "their question" : text)" }
 
     static func placeholder(_ target: MessageTarget) -> String {
         switch target {

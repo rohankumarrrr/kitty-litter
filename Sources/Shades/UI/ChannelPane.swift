@@ -103,6 +103,8 @@ final class ChannelPane: QuietView {
     private var book: ChannelBook?
     /// Somewhere you chose to send to instead of the usual. It holds until you send or look elsewhere.
     private var picked: MessageTarget?
+    /// Answers to the parts of a question so far, by its ID. Nothing goes until every part has one, as T3 wants.
+    private var partAnswers: [String: [String]] = [:]
     private(set) var shown: [ChannelRow] = []
     private var views: [ChannelRowView] = []
     private var expanded: Set<String> = []
@@ -117,6 +119,15 @@ final class ChannelPane: QuietView {
         header.onIssues = { [weak self] in self?.onSelect?(.needsYou) }
         composer.onSend = { [weak self] words, target in
             guard let self else { return }
+            if case .question(let question) = target {
+                guard self.part(of: question)?.part.takesOwnWords == true else {
+                    NSSound.beep()
+                    self.composer.textView.string = words
+                    return
+                }
+                self.answer(question, with: words)
+                return
+            }
             let shownIn: ChannelID? = if case .channel(let id) = self.selection { id } else { nil }
             self.picked = nil
             self.onAction?(.send(words, to: target, shownIn: shownIn))
@@ -151,6 +162,7 @@ final class ChannelPane: QuietView {
     func show(_ selection: ChannelSelection, in book: ChannelBook, isNewSelection: Bool) {
         let isNew = isNewSelection || selection != self.selection
         if isNew { picked = nil }
+        partAnswers = partAnswers.filter { id, _ in book.waiting.questions.contains { $0.id == id } }
         self.selection = selection
         self.book = book
         updateComposer(keepingDraft: !isNew)
@@ -182,6 +194,7 @@ final class ChannelPane: QuietView {
         expanded = []
         book = nil
         picked = nil
+        partAnswers = [:]
         composer.clear()
         stack()
     }
@@ -207,7 +220,40 @@ final class ChannelPane: QuietView {
         let kitten: Kitten? = if case .channel(let id) = selection {
             book?.statuses.first { id == .direct($0.kitten) && $0.state != .notSetUp }?.kitten
         } else { nil }
-        composer.show(target, picked: picked != nil, kitten: kitten)
+        var label: String?
+        if case .question(let question)? = target, let part = part(of: question) { label = CatWords.answering(part.part.text) }
+        composer.show(target, picked: picked != nil, kitten: kitten, label: label)
+    }
+
+    /// The part of a question that's next to answer.
+    private func part(of question: AgentQuestion) -> (index: Int, part: AnswerForm.Part)? {
+        guard let parts = question.form?.parts else { return nil }
+        let index = partAnswers[question.id]?.count ?? 0
+        return parts.indices.contains(index) ? (index, parts[index]) : nil
+    }
+
+    private func answer(_ question: AgentQuestion, with answer: String) {
+        let answers = (partAnswers[question.id] ?? []) + [answer]
+        if answers.count >= question.form?.parts.count ?? 1 {
+            partAnswers[question.id] = nil
+            if picked == .question(question) { picked = nil }
+            onAction?(.answer(question, answers))
+        } else {
+            partAnswers[question.id] = answers
+            rebuild(.question(question))
+        }
+        updateComposer()
+        arrange(force: true)
+    }
+
+    /// For a row whose look changed while its value didn't.
+    private func rebuild(_ row: ChannelRow) {
+        guard let book, let index = shown.firstIndex(of: row) else { return }
+        let fresh = view(for: row, in: book, among: shown, selection: selection)
+        views[index].removeFromSuperview()
+        views[index] = fresh
+        document.addSubview(fresh)
+        stack()
     }
 
     /// Replying is only offered where there's a box to reply from.
@@ -308,16 +354,18 @@ final class ChannelPane: QuietView {
     private func card(for question: AgentQuestion, in book: ChannelBook) -> CardRowView {
         let kitten = book.kitten(of: question.id)
         var buttons: [CardRowView.Button] = []
-        if let form = question.form {
-            buttons = question.options.indices.filter { form.values.indices.contains($0) }.map { index in
-                CardRowView.Button(title: question.options[index]) { [weak self] in self?.onAction?(.pick(question, option: index)) }
+        var text = question.text
+        if let (index, part) = part(of: question) {
+            text = CatWords.part(index, of: question.form?.parts.count ?? 1, part.text)
+            buttons = part.options.indices.filter { part.values.indices.contains($0) }.map { option in
+                CardRowView.Button(title: part.options[option]) { [weak self] in self?.answer(question, with: part.values[option]) }
             }
-            if form.takesOwnWords {
+            if part.takesOwnWords {
                 buttons.append(CardRowView.Button(title: CatWords.answerInWords) { [weak self] in self?.pick(.question(question)) })
             }
         }
         buttons.append(openButton(question.threadID))
-        let text = question.text.isEmpty ? CatWords.unreadableQuestion : question.text
+        text = text.isEmpty ? CatWords.unreadableQuestion : text
         let footer = question.form == nil ? CatWords.answerInT3 : nil
         return CardRowView(look: look(kitten, in: book), heading: heading(kitten, title: question.threadTitle), at: nil, text: text, footer: footer, buttons: buttons)
     }

@@ -173,7 +173,7 @@ final class ChannelRowsTests: XCTestCase {
     private func question(_ id: String = "q", ownWords: Bool = true, form: Bool = true) -> AgentQuestion {
         AgentQuestion(
             id: id, threadID: "a", threadTitle: "Work", text: "Which?", options: ["A", "B"],
-            form: form ? AnswerForm(key: "k", values: ["A", "B"], takesOwnWords: ownWords) : nil
+            form: form ? AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which?", options: ["A", "B"], values: ["A", "B"], takesOwnWords: ownWords)]) : nil
         )
     }
 

@@ -14,7 +14,7 @@ import ShadesT3
 //   probe-t3 project    a thread bound to a project
 //   probe-t3 watch      the live thread list following one thread
 //   probe-t3 approval   one approval-required thread, answered in code within a moment
-//   probe-t3 question   one thread that asks a question, answered with one of its options as Messages would
+//   probe-t3 question   one thread that asks two questions at once, answered with an option each as Messages would
 //   probe-t3 open       shows a thread in T3 Code and checks T3 navigated to it
 //   probe-t3 restart    runs its own throwaway T3 server, restarts it mid-turn, and checks recovery
 //   probe-t3 timing     how much time this client adds to a turn
@@ -384,7 +384,7 @@ func probeQuestion() async throws {
     let claude = ModelChoice(provider: "claudeAgent", model: "claude-sonnet-5-5", effort: "low")
     let turn = AgentPrompt(
         title: "Shades test: question",
-        text: "Use your tool for asking the user a question to ask exactly one question, \"Which colour?\", with the options Red and Blue. Then reply with only the colour they picked.",
+        text: "Use your tool for asking the user questions to ask two questions at once: \"Which colour?\" with the options Red and Blue, and \"Which size?\" with the options Small and Large. Then reply with only the colour and size they picked.",
         model: claude,
         runtimeMode: .auto
     )
@@ -402,11 +402,10 @@ func probeQuestion() async throws {
     let deadline = clock.now + .seconds(90)
     watching: for await threads in backend.watchThreads() {
         for thread in threads where thread.title == "Shades test: question" {
-            guard let question = thread.pendingQuestion, let form = question.form, !form.values.isEmpty else { continue }
-            say("  asked: \(question.text), options \(question.options), own words \(form.takesOwnWords)")
-            let pick = form.values.count - 1
-            try await backend.answer(question, with: form.values[pick])
-            say("  answered with option \(pick + 1)")
+            guard let question = thread.pendingQuestion, let form = question.form else { continue }
+            for part in form.parts { say("  asked: \(part.text), options \(part.options), own words \(part.takesOwnWords)") }
+            try await backend.answer(question, with: form.parts.map { $0.values.last ?? "" })
+            say("  answered each with its last option")
             answered = question
             break watching
         }

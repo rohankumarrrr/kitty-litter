@@ -66,14 +66,14 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     required init?(coder: NSCoder) { fatalError() }
 
     /// `kitten` is whose DM this is, if it's one, which is what lets you start something new.
-    func show(_ target: MessageTarget?, picked: Bool, kitten: Kitten?) {
+    func show(_ target: MessageTarget?, picked: Bool, kitten: Kitten?, label: String? = nil) {
         let changed = target != self.target
         self.target = target
         self.kitten = kitten
         isPicked = picked
         isHidden = target == nil
         guard let target else { return }
-        label.stringValue = CatWords.target(target)
+        self.label.stringValue = label ?? CatWords.target(target)
         textView.placeholder = CatWords.placeholder(target)
         cancel.isHidden = !picked
         if case .newThread = target { newTopic.isHidden = true } else { newTopic.isHidden = kitten == nil }

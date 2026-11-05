@@ -149,10 +149,10 @@ A blocking `pendingRuntimeRequest` of kind `user_input` is an agent asking somet
 The same command answers it, with `answers` in place of `decision`, filed under each question's `id`:
 
 ```json
-{"type": "runtime-request.respond", "commandId": "<uuid>", "threadId": "…", "requestId": "…", "answers": {"<question id>": "Blue"}}
+{"type": "runtime-request.respond", "commandId": "<uuid>", "threadId": "…", "requestId": "…", "answers": {"<question id>": "Blue", "<another>": ["Large"]}}
 ```
 
-An option sends its `value`, or its `label` if it has none, and your own words go in as they are, unless `allowCustomAnswer` is `false`. T3's own composer won't send until every question has an answer, so Messages only answers a request with one question and one choice, and leaves the rest to T3. As with approvals, the thread is the request's own, which for a subagent isn't the listed one. `probe-t3 question` checks it live: a thread asks which colour, Shades answers with an option, and the thread carries on with that answer.
+An option sends its `value`, or its `label` if it has none, and your own words go in as they are, unless `allowCustomAnswer` is `false`. A `multiSelect` question wants a list of values, so an option for one goes as a list of one, while your own words stay a string. T3's own composer won't send until every question has an answer, so Messages asks them one at a time and sends them together. A question with no `id` has nothing to file its answer under, and is answered in T3. As with approvals, the thread is the request's own, which for a subagent isn't the listed one. `probe-t3 question` checks it live: a thread asks two questions at once, Shades answers each with an option, and the thread carries on with both answers.
 
 ### Reports and settling
 

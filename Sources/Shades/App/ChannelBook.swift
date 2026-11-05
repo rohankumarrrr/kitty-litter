@@ -97,6 +97,9 @@ struct ChannelBook: Equatable {
     var waiting: Waiting
     /// Kittens with a finished run you haven't looked at.
     var unread: Set<String>
+    /// Each kitten's newest thread you could be talking in, with its title as shown: one with your DM in it, or
+    /// one whose words aren't known yet. By kitten ID.
+    var newestThreads: [String: AgentThread]
     var isReading: Bool
     var unreadable: Int
     var cantReachT3: Bool
@@ -130,6 +133,7 @@ struct ChannelBook: Equatable {
         let threadsByID = Dictionary(threads.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var placed: [ChannelID: [Placed]] = [:]
         var leftOut: Set<String> = []
+        var heardIn: [String: Set<ChannelID>] = [:]
         for thread in threads {
             guard let owner = KittenBoard.owner(of: thread, among: kittens) else {
                 if let since = inEveryone[thread.id], let exchanges = transcripts[thread.id] {
@@ -154,6 +158,7 @@ struct ChannelBook: Equatable {
                 // It sits where it last finished, and doesn't move while it's going.
                 latest = max(latest, isStillGoing ? exchange.askedAt : exchange.repliedAt ?? exchange.askedAt)
                 placed[channel, default: []].append(Placed(position: latest, sequence: index, messages: messages))
+                heardIn[thread.id, default: []].insert(channel)
             }
         }
 
@@ -185,6 +190,17 @@ struct ChannelBook: Equatable {
         }
         let everyone = channel(.everyone, directIDs.flatMap { placed[$0] ?? [] } + (placed[.everyone] ?? []))
         let unread = Set(threads.filter(isUnread).compactMap { KittenBoard.owner(of: $0, among: kittens)?.id })
+        var newestThreads: [String: AgentThread] = [:]
+        for thread in threads {
+            guard let owner = KittenBoard.owner(of: thread, among: kittens) else { continue }
+            // A thread only ever heard between kittens isn't one you're talking in.
+            guard heardIn[thread.id].map({ $0.contains(.direct(owner)) }) ?? true,
+                  thread.updatedAt > newestThreads[owner.id]?.updatedAt ?? .distantPast
+            else { continue }
+            var named = thread
+            named.title = title(of: thread, owner: owner)
+            newestThreads[owner.id] = named
+        }
         return ChannelBook(
             directs: directs,
             statuses: statuses,
@@ -193,6 +209,7 @@ struct ChannelBook: Equatable {
             everyone: everyone,
             waiting: waiting,
             unread: unread,
+            newestThreads: newestThreads,
             isReading: isReading,
             unreadable: unreadable,
             cantReachT3: cantReachT3

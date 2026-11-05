@@ -315,7 +315,7 @@ final class ChannelsWindowTests: XCTestCase {
     }
 
     func testTheBoxDoesntMoveToAnotherThreadWhileYoureTyping() {
-        let threads = [work("t", title: "Resume"), work("c", title: "Cover letter", updated: 120)]
+        var threads = [work("t", title: "Resume", updated: 61), work("c", title: "Cover letter", updated: 1)]
         var transcripts = ["t": [said("e1", ask: "Tidy my resume", reply: "Done.", at: 60)], "c": [said("e2", ask: "Draft a cover letter", reply: "On it.", at: 0)]]
         let view = view()
         var sent: [MessagesAction] = []
@@ -325,8 +325,9 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Resume"))
         view.pane.composer.textView.string = "Make the summary shorter"
 
+        threads[1] = work("c", title: "Cover letter", updated: 121)
         transcripts["c"] = [said("e2", ask: "Draft a cover letter", reply: "Here's the draft.", at: 120)]
-        let question = AgentQuestion(id: "q", threadID: "c", threadTitle: "Cover letter", text: "Which company?", form: AnswerForm(key: "k", values: [], takesOwnWords: true))
+        let question = AgentQuestion(id: "q", threadID: "c", threadTitle: "Cover letter", text: "Which company?", form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which company?", options: [], values: [], takesOwnWords: true)]))
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id])))
         view.pane.composer.send(view.pane.composer.textView.string)
         XCTAssertEqual(sent, [.send("Make the summary shorter", to: .thread(id: "t", title: "Resume"), shownIn: .direct(steve))])
@@ -353,5 +354,51 @@ final class ChannelsWindowTests: XCTestCase {
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .direct(steve), message: echo)]))
         view.pane.composer.send("Keep it to one page")
         XCTAssertEqual(sent, [.send("Keep it to one page", to: .thread(id: "n", title: "Write a cover letter"), shownIn: .direct(steve))])
+    }
+
+    private func twoPartQuestion() -> AgentQuestion {
+        AgentQuestion(id: "q", threadID: "t", threadTitle: "Work", text: "Which month?", options: ["December", "January"], moreCount: 1, form: AnswerForm(parts: [
+            AnswerForm.Part(key: "month", text: "Which month?", options: ["December", "January"], values: ["dec", "jan"], takesOwnWords: true),
+            AnswerForm.Part(key: "currency", text: "Which currency?", options: ["USD", "EUR"], values: ["usd", "eur"], takesOwnWords: true),
+        ]))
+    }
+
+    private func card(in view: NSView) throws -> CardRowView {
+        try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first)
+    }
+
+    private func press(_ title: String, in view: NSView) throws {
+        let buttons = try card(in: view).buttons
+        let button = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == title }, "no \(title) in \(buttons.compactMap { $0.accessibilityLabel() })")
+        XCTAssertTrue(button.accessibilityPerformPress())
+    }
+
+    func testAQuestionInSeveralPartsIsAnsweredOneAtATimeAndSentWhole() throws {
+        let question = twoPartQuestion()
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id])))
+        try press("January", in: view)
+        XCTAssertEqual(sent, [], "nothing goes until every part has an answer")
+        XCTAssertNil(try card(in: view).buttons.first { $0.accessibilityLabel() == "January" })
+
+        try press(CatWords.answerInWords, in: view)
+        XCTAssertEqual(view.pane.composer.target, .question(question))
+        view.pane.composer.send("Pounds, please")
+        XCTAssertEqual(sent, [.answer(question, ["jan", "Pounds, please"])])
+    }
+
+    func testADMCarriesOnInANewerThreadEvenBeforeItsWordsAreRead() {
+        let older = AgentThread(id: "old", title: "Old budget", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
+        let newer = AgentThread(id: "new", title: "New budget", projectTitle: "Steve", status: .running, model: "m", updatedAt: at.addingTimeInterval(60), projectPath: "/k/steve")
+        let built = ChannelBook.build(kittens: [steve, pepper], threads: [older, newer], transcripts: ["old": [said("e", ask: "Old question", reply: "Old answer", at: 0)], "new": []], isReading: false, unreadable: 0, cantReachT3: false)
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: built), .thread(id: "new", title: "New budget"))
+
+        let between = AgentThread(id: "asked", title: "From Pepper", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at.addingTimeInterval(120), projectPath: "/k/steve")
+        let pepperThread = AgentThread(id: "p", title: "Plans", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at, projectPath: "/k/pepper")
+        let asked = Exchange(id: "x", asker: .agent(threadID: "p"), askedAt: at.addingTimeInterval(100), ask: "Which font?", reply: "Silkscreen.", repliedAt: at.addingTimeInterval(101))
+        let withBetween = ChannelBook.build(kittens: [steve, pepper], threads: [older, between, pepperThread], transcripts: ["old": [said("e", ask: "Old question", reply: "Old answer", at: 0)], "asked": [asked], "p": []], isReading: false, unreadable: 0, cantReachT3: false)
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: withBetween), .thread(id: "old", title: "Old budget"), "a thread only another kitten talks in isn't yours to carry on")
     }
 }
