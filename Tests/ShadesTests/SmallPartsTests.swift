@@ -390,3 +390,9 @@ final class HealthCheckTests: XCTestCase {
         XCTAssertFalse(HealthCheck.report(bad, pid: 1, version: "v", at: Date()).ok)
     }
 }
+
+final class DemoTests: XCTestCase {
+    func testEachDemoKittenHasItsOwnFolder() {
+        XCTAssertEqual(Set(Demo.kittens.map(\.folder)).count, Demo.kittens.count)
+    }
+}
