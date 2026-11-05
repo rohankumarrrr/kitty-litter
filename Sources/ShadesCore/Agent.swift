@@ -139,6 +139,17 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
     }
 }
 
+/// The pull request a thread last opened. `state` is `open`, `merged` or `closed`.
+public struct ThreadPullRequest: Sendable, Hashable {
+    public var number: Int
+    public var state: String
+
+    public init(number: Int, state: String) {
+        self.number = number
+        self.state = state
+    }
+}
+
 /// A thread as the dashboard shows it.
 public struct AgentThread: Identifiable, Sendable, Hashable {
     public var id: String
@@ -153,6 +164,14 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var pendingQuestion: AgentQuestion?
     /// How much this thread is allowed to do. `nil` if the backend doesn't say.
     public var runtimeMode: RuntimeMode?
+    /// Marked as dealt with.
+    public var isSettled: Bool
+    public var pullRequest: ThreadPullRequest?
+    /// A live test of Shades itself, which is how those are named. Not work anyone's waiting on.
+    public var isLiveTest: Bool { title.hasPrefix("Shades test:") }
+    /// The thread's latest run, which tells one report from the next. `nil` if the backend doesn't say.
+    public var lastRunID: String?
+    public var lastRunEndedAt: Date?
 
     public init(
         id: String,
@@ -164,7 +183,11 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         pendingApprovals: [ApprovalRequest] = [],
         pendingQuestion: AgentQuestion? = nil,
         runtimeMode: RuntimeMode? = nil,
-        projectPath: String? = nil
+        isSettled: Bool = false,
+        pullRequest: ThreadPullRequest? = nil,
+        projectPath: String? = nil,
+        lastRunID: String? = nil,
+        lastRunEndedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -176,6 +199,50 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         self.pendingApprovals = pendingApprovals
         self.pendingQuestion = pendingQuestion
         self.runtimeMode = runtimeMode
+        self.lastRunID = lastRunID
+        self.lastRunEndedAt = lastRunEndedAt
+        self.isSettled = isSettled
+        self.pullRequest = pullRequest
+    }
+}
+
+/// One thing someone asked a thread's agent, and what it last said back.
+public struct Exchange: Sendable, Equatable, Identifiable {
+    public enum Asker: Sendable, Equatable {
+        case you
+        /// The thread a person knows that agent by: its own, or the one that started a subagent. `nil` if T3 can't say.
+        case agent(threadID: String?)
+    }
+
+    public var id: String
+    public var asker: Asker
+    public var askedAt: Date
+    /// `nil`: nothing fit to show, so it gets no row.
+    public var ask: String?
+    public var reply: String?
+    public var repliedAt: Date?
+    /// How many things it said on the way to that reply.
+    public var earlierNotes: Int
+    public var failure: String?
+
+    public init(
+        id: String,
+        asker: Asker,
+        askedAt: Date,
+        ask: String? = nil,
+        reply: String? = nil,
+        repliedAt: Date? = nil,
+        earlierNotes: Int = 0,
+        failure: String? = nil
+    ) {
+        self.id = id
+        self.asker = asker
+        self.askedAt = askedAt
+        self.ask = ask
+        self.reply = reply
+        self.repliedAt = repliedAt
+        self.earlierNotes = earlierNotes
+        self.failure = failure
     }
 }
 
@@ -220,8 +287,13 @@ public protocol AgentBackend: AnyObject, Sendable {
     func archive(threadID: String) async throws
     /// Marks a finished thread as dealt with, without hiding it.
     func settle(threadID: String) async throws
-    /// What the agent last said in this thread, or `nil` if it can't be read.
-    func finalReport(threadID: String) async -> String?
+    /// What the agent last said in this thread, or in that run if it's given. `nil` means it said nothing,
+    /// and not being able to read it throws, because that's not the same thing.
+    func report(threadID: String, run: String?) async throws -> String?
+    /// Every thread a person can see, finished ones too. `nil` if T3 can't be reached.
+    func allThreads() async -> [AgentThread]?
+    /// What's been said in a thread, oldest first. `nil` if it can't be read.
+    func exchanges(threadID: String) async -> [Exchange]?
     /// Where this thread came from, or `nil` if that can't be read.
     func origin(of threadID: String) async -> ThreadOrigin?
 }
@@ -233,6 +305,10 @@ public extension AgentBackend {
     func projectID(atPath path: String) async -> String? { nil }
     func archive(threadID: String) async throws {}
     func settle(threadID: String) async throws {}
-    func finalReport(threadID: String) async -> String? { nil }
+    func allThreads() async -> [AgentThread]? { nil }
+    func exchanges(threadID: String) async -> [Exchange]? { nil }
+    func report(threadID: String, run: String?) async throws -> String? { nil }
+    /// What the agent last said in this thread, or `nil` if it can't be read.
+    func finalReport(threadID: String) async -> String? { (try? await report(threadID: threadID, run: nil)) ?? nil }
     func origin(of threadID: String) async -> ThreadOrigin? { nil }
 }

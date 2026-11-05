@@ -66,8 +66,8 @@ A `cause` entry is `Fail` with an `error` (`detail` and `message` are for people
 | --- | --- |
 | `orchestration.launchThread` | New thread. Answers `threadId`, `projection` and `sequence`. |
 | `orchestration.dispatchCommand` | Follow-ups, approvals, settling, archiving, mode changes. Answers `sequence`. |
-| `orchestration.subscribeThread` | One thread's events. |
-| `orchestration.subscribeShell` | Every thread, for the dashboard. |
+| `orchestration.subscribeThread` | One thread's events. Also one whole thread, for Channels. |
+| `orchestration.subscribeShell` | Every thread, for the dashboard. Also one full snapshot, for Channels. |
 | `orchestration.getTurnItem` | The words of an approval or a question. |
 | `orchestration.getThreadProjection` | A thread's final report, a fallback for those words, and a settled thread's runtime mode. |
 | `projects.ensureScratch` | The "No project" project. The client remembers it. |
@@ -110,6 +110,8 @@ The shell stream sends a `snapshot`, then `thread.updated`, `thread.removed`, `p
 
 - A snapshot with `resolvedRepositoryIdentityRoots` only refreshes projects and has an empty `threads`. Treat it as a full snapshot and the dashboard goes blank, as it would about 100 ms after every connect.
 - `omitOlderSettled` and `omitIdleSubagents` took a real list from 179 threads to 35. Servers that don't know these flags ignore them.
+- `omitOlderSettled` never drops an unsettled thread. Settled ones were dropped from about 33 hours old upward, with some up to 67 hours old kept. So a run that settled and got that old while the app was off can be missed by [the inbox](kittens.md#the-inbox).
+- `latestRunId` and `latestRunCompletedAt` say which run a thread last finished and when. The inbox compares that ID with the last one it filed on every list, so a finish while the app was off looks the same as one while it was on. `status` stays `completed` after a thread settles, and `idle` means it has no finished run. The self-check says so if completed threads stop naming a run.
 - `lineage.relationshipToParent == "subagent"` and `lineage.sideChat` threads don't get listed. A subagent's approval shows on its nearest listed parent, but answering it must name the subagent's own thread.
 
 | Shell `status` | `AgentStatus` |
@@ -146,9 +148,23 @@ A blocking `pendingRuntimeRequest` of kind `user_input` is an agent asking somet
 
 ### Reports and settling
 
+- Each turn item has a `runId`, so asking for one run's report can come back empty when that run said nothing, rather than with the words of the run before.
 - `orchestration.getThreadProjection` gives a thread's turn items, and took about 60 ms even on threads with hundreds of them. The final report is the newest `assistant_message` with no `parentItemId`, since subagents have one. Claude's thinking also arrives as `assistant_message`, with `thinking` in its ID.
 - The same projection says who started a thread, which decides whether it gets your screen. `lineage.parentThreadId` only covers subagents, so a thread from `t3_thread_launch` has none. Its `thread.createdBy` is `"agent"`, and the first user message in `messages` has a `senderThreadId` naming the thread that launched it, even if it was launched idle. `"user"` means a person or Shades started it. `probe-t3 origin <thread>` shows the result.
 - `{"type": "thread.settle", "commandId": …, "threadId": …}` settles a thread. It can still take a follow-up afterwards, which was checked live.
+
+### Who said what
+
+Channels reads a thread's turn items and folds them into exchanges: someone asked, and the agent answered. The fold is `T3Transcript.exchanges`, and it's pure.
+
+- **The full list.** `orchestration.subscribeShell` with `omitIdleSubagents: false` and `omitOlderSettled: false` gives one snapshot of every thread that isn't archived, subagents included. A real one was 234 threads and 470 KB, in 143 ms. The client interrupts the stream after that first snapshot. The snapshot's `archivedThreads` key exists but is empty, so an archived thread can't be named, and a sender in one shows as someone else.
+- **Shell fields.** `settledAt` is set exactly when a thread is settled. `pullRequests` is `[{number, url, snapshot: {state, title, …}}]`, where `state` is `open`, `merged` or `closed`, and the last one counts.
+- **A `user_message` item** has `text`, `messageId`, `createdBy` (`user` or `agent`), `creationSource`, `senderThreadId` and `inputIntent` (`turn_start`, `queued_turn` or `steer`). A missing or `user` `createdBy` is a person. `agent` with `senderThreadId` is that thread, or the nearest listed thread above it for a subagent. Anything else, including a value T3 adds later, is never treated as a person.
+- **Items T3 writes itself.** Some `user_message` items carry a non-null `idleCompaction` or `workflowScript`. Some of those say `createdBy: user`, so they're skipped by name. Notifications and delegated completions are their own `notification` item type, so skipping by type removes them, and a reply after one carries on the same exchange.
+- **Words.** Only what's above the first `---` line of a person's message is theirs, from `Prompts.ownWords`, whatever ends that line, and it comes out as nothing if it still has a screen tag that isn't alone in backticks. Imported threads mark what the coding tool behind them wrote as the user's, in tags such as `<system-reminder>` and `<task-notification>`, so `T3Wire.withoutToolBlocks` takes those out of what's above the line. It only knows the tags found in real threads, because people write hyphenated tags too, so a new one reads as the person until it's added to `T3Wire.toolTags`. Agents' messages and replies keep their `---` lines, which are usually just markdown, and lose any screen block. `Prompts.withoutBlocks` counts tags to balance them, so nested blocks come out whole, one that never closes goes through the end, and an extra closing tag takes what came before it. A tag alone in backticks is someone writing about it, so it stays, but a block in backticks still comes out. T3 leaves `Ultrathink:` on the front of some messages, and uses `[User attached one or more files without additional text. Respond using the conversation context and the attached files.]` for one that's only attachments.
+- **Pairing a reply with its ask.** A reply goes to the exchange its run started, matching the run's `userMessageId` to the message's `messageId`, which keeps a queued follow-up from taking an earlier answer. Runs are missing on most of T3's old items (72% of assistant items across its history), so without one it goes to the latest exchange. A steer shares the run it joined, and what comes after it answers the steer. A later reply clears an earlier failure from its exchange, as `finalReport` only counts errors from the last run.
+
+- **The whole thread.** `orchestration.getThreadProjection` never answers with more than the latest 75 or so rows, and commands, reasoning and tool calls count as rows. That left 8 of 19 real kitten threads with no user message at all. `orchestration.subscribeThread` with no `acceptBoundedSnapshot` and no `afterSequence` starts with the whole thread, as a `snapshot` item, and the client interrupts it after that, the same way as the full list. Those 19 threads came to 11.3 MB. The largest of 192 was 15 MB, and took about a second. The socket accepts frames up to 64 MB, so a much larger thread would drop the connection.
 
 ### Attachments
 

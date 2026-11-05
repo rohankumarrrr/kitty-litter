@@ -508,6 +508,18 @@ final class KittenBoardTests: XCTestCase {
     }
 }
 
+final class InboxWordsTests: XCTestCase {
+    func testHowLongAgoIsShort() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        func ago(_ seconds: TimeInterval) -> String { CatWords.ago(now.addingTimeInterval(-seconds), now: now) }
+        XCTAssertEqual(ago(30), "just now")
+        XCTAssertEqual(ago(-5), "just now", "a clock that's a little off isn't news")
+        XCTAssertEqual(ago(5 * 60), "5m ago")
+        XCTAssertEqual(ago(2 * 3600), "2h ago")
+        XCTAssertEqual(ago(3 * 86400), "3d ago")
+    }
+}
+
 final class HealthCheckTests: XCTestCase {
     func testAllGoodHasNoProblems() {
         XCTAssertTrue(HealthCheck.findings(from: HealthFacts()).allSatisfy(\.ok))
@@ -542,10 +554,23 @@ final class HealthCheckTests: XCTestCase {
         XCTAssertEqual(problems, ["screen recording", "accessibility", "input monitoring", "microphone", "T3 Code", "kitten skills"])
     }
 
+    func testAnInboxThatWontSaveAndARunIDThatsGoneAreNamed() {
+        let facts = HealthFacts(inboxSaves: false, t3GivesRunIDs: false)
+        let problems = HealthCheck.findings(from: facts).filter { !$0.ok }
+        XCTAssertEqual(problems.map(\.check), ["inbox", "T3 run IDs"])
+        XCTAssertTrue(problems.allSatisfy { $0.problem != nil && $0.fix != nil })
+    }
+
     func testAReportIsOnlyOkIfEverythingIs() {
         let good = [HealthFinding.good("a")]
         let bad = good + [HealthFinding(check: "b", ok: false, problem: "p", fix: "f")]
         XCTAssertTrue(HealthCheck.report(good, pid: 1, version: "v", at: Date()).ok)
         XCTAssertFalse(HealthCheck.report(bad, pid: 1, version: "v", at: Date()).ok)
+    }
+}
+
+final class DemoTests: XCTestCase {
+    func testEachDemoKittenHasItsOwnFolder() {
+        XCTAssertEqual(Set(Demo.kittens.map(\.folder)).count, Demo.kittens.count)
     }
 }

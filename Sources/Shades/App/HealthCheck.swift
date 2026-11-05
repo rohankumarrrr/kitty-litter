@@ -39,6 +39,9 @@ struct HealthFacts: Equatable {
     var kittensWithoutInstructions: [String] = []
     /// Kittens that aren't meant to see your screen, with nothing to stop them.
     var kittensOffScreenInNameOnly: [String] = []
+    var inboxSaves = true
+    /// Whether finished threads say which run they last finished, which is how the inbox tells reports apart.
+    var t3GivesRunIDs = true
 }
 
 enum HealthCheck {
@@ -121,6 +124,18 @@ enum HealthCheck {
             ok: false,
             problem: "The skills kittens work by aren't installed.",
             fix: "Run scripts/install-kitten-skills.sh."
+        ))
+        results.append(facts.inboxSaves ? .good("inbox") : HealthFinding(
+            check: "inbox",
+            ok: false,
+            problem: "I can't save your inbox, so a restart would lose what's in it.",
+            fix: "Check that I can write to my folder in Application Support."
+        ))
+        results.append(facts.t3GivesRunIDs ? .good("T3 run IDs") : HealthFinding(
+            check: "T3 run IDs",
+            ok: false,
+            problem: "T3 Code has stopped saying which run a thread last finished, so reports go to the bubble instead of the inbox, and a restart can lose them.",
+            fix: "Run swift run probe-t3 to see what changed."
         ))
         return results
     }

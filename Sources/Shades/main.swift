@@ -9,6 +9,12 @@ MainActor.assumeIsolated {
     app.setActivationPolicy(.accessory)
 
     let wantsDemo = CommandLine.arguments.contains("--demo")
+    if DevFlags.wantsChannelsCheck { DevFlags.checkChannels() }
+    // Only with --demo, so real messages can't reach an image.
+    if wantsDemo, let folder = DevFlags.channelsImageFolder {
+        ChannelImages.draw(to: folder)
+        exit(0)
+    }
     let stage = AppStage()
     let controller: AppController
     var driver: DemoDriver?
@@ -22,6 +28,7 @@ MainActor.assumeIsolated {
         let context = ScreenContextProvider()
         let voice = ParakeetVoiceEngine()
         let keys = KeyHoldMonitor()
+        let inboxFile = Settings.directory.appendingPathComponent("inbox.json")
         let real = AppController(
             dependencies: AppDependencies(
                 backend: backend,
@@ -40,7 +47,13 @@ MainActor.assumeIsolated {
                     let version = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
                     let report = HealthCheck.report(findings, pid: getpid(), version: version, at: Date())
                     SystemHealth.write(report, to: Settings.directory.appendingPathComponent("health.json"))
-                }
+                },
+                // A run that's only trying a flow out has no business filing anything, or touching the real file.
+                inbox: DevFlags.wantsFlow ? Inbox(since: .distantFuture) : Inbox.load(from: inboxFile, now: Date()),
+                saveInbox: { inbox in
+                    if !DevFlags.wantsFlow { try inbox.save(to: inboxFile) }
+                },
+                hidesTestThreads: !DevFlags.wantsFlow
             ),
             stage: stage
         )
@@ -69,6 +82,7 @@ MainActor.assumeIsolated {
     stage.start()
     controller.start()
     driver?.start(script: !CommandLine.arguments.contains("--no-script"))
+    if DevFlags.wantsChannels { controller.channelsPressed() }
     if !wantsDemo {
         if DevFlags.wantsFlow {
             DevFlags.run(on: controller)

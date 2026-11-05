@@ -31,8 +31,11 @@ final class AppController {
     let systemFacts: () -> HealthFacts
     let fileExists: (String) -> Bool
     let reportHealth: ([HealthFinding]) -> Void
+    let saveInbox: (Inbox) throws -> Void
+    let hidesTestThreads: Bool
     let stage: CatStage
     let now: () -> Date
+    let channels: ChannelFeed
     private(set) var settings: Settings
 
     var quick = QuickSession()
@@ -75,6 +78,22 @@ final class AppController {
     var hiddenThreads: Set<String> = []
     /// Threads the cat started to do real work, which may pass it on to another thread.
     var dispatchers: Set<String> = []
+    var inbox: Inbox
+    /// Threads whose report is being read and sorted, so each is only filed once.
+    var filing: Set<String> = []
+    /// Summaries that were already running when the app started, which nobody's following.
+    var leftoverSummaries: Set<String> = []
+    /// Runs that don't belong to a kitten with an inbox, so nobody reads the kittens again for them.
+    var notForInbox: Set<String> = []
+    var notForInboxSince = Date.distantPast
+    /// Whether the bubble should mention the inbox.
+    var inboxNudge = false
+    var inboxReplyIsOpen = false
+    /// Counts the boxes that take what you say, so words meant for one can't land in the next.
+    var boxesOpened = 0
+    /// The box what's being said belongs in, fixed when the key goes down.
+    var talkBox: Int?
+    var inboxSaveFailed = false
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
@@ -129,8 +148,13 @@ final class AppController {
         systemFacts = dependencies.systemFacts
         fileExists = dependencies.fileExists
         reportHealth = dependencies.reportHealth
+        inbox = dependencies.inbox
+        saveInbox = dependencies.saveInbox
+        hidesTestThreads = dependencies.hidesTestThreads
         self.stage = stage
         self.now = now
+        channels = ChannelFeed(backend: dependencies.backend, kittens: dependencies.kittens)
+        channels.onChange = { [weak self] in self?.stage.updateChannels($0) }
     }
 
     func start() {
@@ -162,6 +186,7 @@ final class AppController {
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.keyReleased(key) } }
         }
         startKeys()
+        startInbox()
     }
 
     func startKeys() {
@@ -198,6 +223,8 @@ final class AppController {
             stage.copyToPasteboard(text)
         case .approval(let request, let decision):
             answer(request, decision)
+        case .openInbox:
+            inboxPressed()
         }
     }
 
@@ -225,6 +252,10 @@ final class AppController {
             replyGeneration += 1
         case .line:
             line = nil
+        case .inbox:
+            // Clicking elsewhere shouldn't lose something that needs you.
+            guard !byClick || !inboxEntries.contains(where: \.needsYou) else { return }
+            inboxNudge = false
         }
         renderBubble()
     }
@@ -242,6 +273,10 @@ final class AppController {
         if let notice = notices.first {
             return .notice(caption: notice.caption, text: notice.text, threadID: notice.threadID)
         }
+        if inboxNudge {
+            let words = CatWords.inboxBubble(inboxEntries)
+            if !words.isEmpty { return .inbox(words) }
+        }
         return nil
     }
 
@@ -258,7 +293,7 @@ final class AppController {
             status = .attention
         } else if reply?.text.isEmpty == true {
             status = .thinking
-        } else if watch.needsYouCount > 0 {
+        } else if watch.needsYouCount > 0 || inbox.entries.contains(where: \.needsYou) {
             status = .attention
         } else {
             status = .none

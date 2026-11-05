@@ -25,11 +25,12 @@ A kitten is a folder in `~/kittens`, registered as a T3 project:
 }
 ```
 
-Three more fields are optional:
+Four more fields are optional:
 
 - `color` is its jacket in the kitten view, like `"#b3261e"`.
 - `planned: true` means it shows up with the others but isn't taking work yet, which is handy for a kitten you've named but haven't written instructions for.
 - `seesScreen: false` means Shades never sends it your screen. Stopping it from finding a copy by itself takes [the screen block](#keeping-a-kitten-off-your-screen) as well. If your words point at your screen, like "read this thread" with no link, the cat tells you as it passes them on, so you can send the link or paste the text. That goes by a short list of phrases in `ScreenWords.swift`, which only reads your words, so it can miss one or warn when it didn't need to. A follow-up only warns if your words name something like a thread or an article, because "this" there usually means the session's own work. Your words go through either way.
+- `inbox: true` puts its reports in [the inbox](#the-inbox), rather than giving each one a turn in the bubble.
 
 Shades reads `covers` to decide what goes to a kitten, so write it the way you'd brief someone new. The folder is read fresh for every question, so adding a kitten only takes the folder and this:
 
@@ -52,6 +53,22 @@ Normally you only see Shades. Shift-click him, or choose Kittens from his menu, 
 
 Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the folder of the kitten's project, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
 
+### Channels
+
+Choose Channels from the cat's menu to read what's being said, without opening T3:
+
+![The Channels window, with two kittens talking to each other](images/channels.png)
+
+- **Issues** is what each kitten has open. There's no tracker yet, so an issue is one of a kitten's threads that's still working or isn't settled. A finished thread stays until it's settled, because that's a pull request waiting on your "ship it".
+- **Direct messages** has one row per kitten, whether or not you've talked. Your words and its replies are there, and so are the reports of work it started itself. Forwarded messages only show your own words, never the note or the screen below them.
+- **Between kittens** has one row per pair that's talked. A kitten's messages show up here by themselves when it sends them with T3's tools, such as `t3_thread_send`, because T3 records which thread sent each one. If that thread can't be named, such as one that's been archived, it's listed as "someone else".
+
+One answer is one message. A kitten's narration on the way to its answer shows as "2 earlier notes", and the rest is in T3. Hover over a message to copy it or open its thread, or click the line above it, which is the thread's title.
+
+In Channels, a thread whose title starts with a kitten's name and a colon is listed as that kitten's wherever it runs, even in another kitten's project.
+
+The window only reads. It can't send anything, and it never takes the keyboard, so the app you're in keeps its selection and the cat still sees what you're looking at. That also means no selecting text and no arrow keys. Nothing is read until you open it. While it's open it reads again when a thread changes, and looks every 15 seconds anyway, so it can tell you if T3 has gone away. It reads each kitten's newest 30 threads, and anything older is in T3. Every word is forgotten when you close it with the red button, and nothing goes to disk except where the window was.
+
 ## How they work
 
 Kittens work by [Lauren Tan's pstack](https://github.com/cursor/plugins/tree/main/pstack), as [adapted for T3 Code](https://github.com/chhoumann/t3-pstack), and by [Ponytail](https://github.com/DietrichGebert/ponytail). Lauren's setup, a chief of staff with specialist bots under it, is what inspired this one. To get them:
@@ -68,6 +85,26 @@ That copies their instruction files into `~/kittens/_skills`, pinned to commits 
 2. **The kitten starts a fresh thread.** It reads its folder, and looks up anything else it needs. It should only ask you what it can't find out.
 3. **Shades tells you how it went,** in a few sentences.
 4. **Follow-ups go back to that thread,** because Shades can see which one you mean.
+
+## The inbox
+
+A kitten that reports a lot, especially while you're away, can leave you working through a run of messages with no idea which matters. With `inbox: true`, its reports wait in one place instead. There's one bubble, which it keeps up to date (`1 decision, 2 shipped`), and opening it or choosing Inbox from the menu shows them:
+
+- **Needs you:** what you have to decide, with the least you need to decide it. Reply, open it in T3, or say you're done with it.
+- **Shipped:** what's now done and live. Ask about it, open it in T3, or clear the list.
+- **Also:** anything else a thread had to say. It's there if you go looking, and it doesn't count as shipped or bring up the bubble, unless it's the answer to something you asked.
+
+Reply and Ask open the text box, where you can type or hold the talk key and say it. What you send is your own words and nothing else, with no look at your screen, and it goes straight to that thread. The row dims until the thread answers. A new decision or shipped line from that thread replaces its old decision, and an answer goes under the row you asked on. No button ever says anything for you, and Done and Clear tell no agent anything.
+
+A thread's reports go here if it counts as the work of any kitten with `inbox: true`, by its folder or its title. A thread titled `Shades test:` is a live test, so it stays out of the inbox and the bubble altogether, whichever kitten it belongs to. A copy of the app trying a flow out with `--ask`, `--hand-off` or `--fix` still sees them, so a test can see its own result.
+
+A question an agent has stopped to ask shows there too, but only opens in T3, because a message would just queue behind it. Approvals still come as the approval bubble, since they block the work.
+
+![The inbox, with one decision and one thing shipped](images/inbox.png)
+
+**How it's sorted.** A finished thread's report goes to the summary model, as with any other kitten, and comes back as `SHIPPED:`, `DECISION:`, `PASSED:` or `NOTE:` lines. The report is data to that model, and it isn't allowed to do anything but write them. If the lines can't be read, it becomes a decision showing the report's opening, because a false alarm beats a lost report. A failed run skips the model and is always a decision, marked as having hit a snag, so no report can call a failure shipped. Only what a thread said in that run counts, so a run that says nothing leaves what's waiting as it is, and a report that can't be read stays owed until it can. A thread that only started another one stays out of the inbox, which is the model's call, or with no answer from it, a report of one sentence and a link. A long report keeps its start and its end for the model, since that's usually where the result and the question are. A summary still running when the app stops is treated the same after the restart: its requests are declined, and it's archived when it's done. Anything else goes under that thread's row, or gets a row of its own under Also if it has none, so whatever a report turns out to be, it stays in the inbox and a restart can't lose it.
+
+**Where it's saved.** `~/Library/Application Support/shades/inbox.json`, readable only by you, with the rows and the ID of each thread's last run it has dealt with. A run counts as filed only once it's sorted and saved, so stopping at any point just means it's filed on the next launch. That covers a thread that finished while the app was off, including during an install. Work from before you turned the inbox on isn't brought up. If the file can't be read, it's moved to `inbox.broken.json`, and the self-check tells you if the inbox can't be saved.
 
 ## Rules every kitten shares
 
@@ -92,6 +129,7 @@ The most useful kitten looks after Shades and the other kittens, so you change h
 Since it can change the rules everyone works by, it needs more care than the others:
 
 - **Set `seesScreen: false`, and add the screen block.** A page shouldn't get a say in the rules.
+- **Set `inbox: true`.** It reports more than most, and you often aren't there when it does. See [the inbox](#the-inbox).
 - **Protected rules.** Its instructions should list what it can't loosen unless you ask for that exact change: `RULES.md`, screen text being data, only your words shipping, the install's signature check and rollback.
 - **A privacy check before every push.** This repo is public, and kittens are full of personal details.
 - **Find the cause.** It should read `health.json` and the logs before suggesting a fix, then teach the self-check to catch the problem next time.

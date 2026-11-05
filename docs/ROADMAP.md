@@ -14,7 +14,7 @@ Shades as a conductor with a kitten for each area of your life or work. Shades d
 
 Kittens themselves now exist, as described in [kittens.md](kittens.md). Review, shipping and working across several kittens are the parts still being proven, one kitten end to end before any others.
 
-A kitten for the system itself, a self-check and rollback now exist. Work lists, proposals from kittens and a defined way of taking corrections are next.
+A kitten for the system itself, a self-check, rollback and a window for reading what kittens say now exist. Work lists, proposals from kittens and a defined way of taking corrections are next.
 
 ## Next ideas
 
@@ -23,6 +23,7 @@ A kitten for the system itself, a self-check and rollback now exist. Work lists,
 - **Your own data in context.** Bring in the connectors your agents already have. "Can I afford this?" on a checkout page checks your budget app, and a job posting goes to your resume project. The no-project agent already finds projects on its own, so much of the routing exists.
 - **Drop onto the cat.** Drag a PDF, link or screenshot onto it to summarize it or turn it into an issue.
 - **Local screen memory.** An opt-in, on-device history for "where did I see that article?", plus a summary at the end of the day. It's the riskiest for privacy, so it comes last and never leaves your Mac.
+- **An inbox for everyone.** The inbox started with the kitten that looks after the system, and it works for any kitten that sets `inbox: true`. Next, make it the default for every kitten, and show a kitten's proposals as decision rows, so everything waiting on you is in one place. A digest of several finishes would do the same job, so it should become this rather than sit beside it.
 - **The cat's eyes as a tool.** Expose "see screen" and "cat say" as an MCP server, so any T3 agent can look at your screen or speak through the cat, and you can ask about your screen from inside T3.
 
 ## Smaller things
@@ -30,6 +31,8 @@ A kitten for the system itself, a self-check and rollback now exist. Work lists,
 - A screen block that follows a kitten instead of its folder. T3 can run Claude with `--settings` per provider instance, so a kitten's threads could share one wherever they work. Untested, because it needs a change to T3's settings.
 
 - Answer an agent's question from the bubble. It shows the question and options now, and you answer in T3.
+- Reply from Channels. It only reads for now, because a reply needs a rule for which of a kitten's threads it goes to, and a way of leaving your screen out.
+- Unread counts in Channels, which need somewhere to remember what you've read.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
 - Remember project nicknames, so the frontier agent can skip the search next time.
 - Replace text in place after a rewrite, starting with apps that expose selected text well.

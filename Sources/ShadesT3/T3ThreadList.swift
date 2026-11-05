@@ -142,10 +142,29 @@ struct T3ThreadList {
                     pendingApprovals: approvals,
                     pendingQuestion: questionsByListedThread[thread.id],
                     runtimeMode: thread.runtimeMode.flatMap(RuntimeMode.init(rawValue:)),
-                    projectPath: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.workspaceRoot }
+                    isSettled: thread.settledAt != nil,
+                    pullRequest: thread.latestPullRequest,
+                    projectPath: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.workspaceRoot },
+                    lastRunID: thread.latestRunId,
+                    lastRunEndedAt: thread.latestRunCompletedAt
                 )
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }
+    }
+
+    /// The same list for when only who's waiting matters, so nothing has to fetch the words of what they're waiting on.
+    var threadsWithoutWords: [AgentThread] {
+        let summaries = Dictionary(pendingApprovals.map { ($0.requestID, "") }, uniquingKeysWith: { first, _ in first })
+        let questions = Dictionary(
+            pendingQuestions.map { ($0.requestID, QuestionWords(text: "", options: [], moreCount: 0)) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return agentThreads(summaries: summaries, questions: questions)
+    }
+
+    /// The thread a person knows this one by: itself, or the nearest one above a subagent.
+    func listedThreadID(of id: String) -> String? {
+        threads[id].flatMap(listedOwner)?.id
     }
 
     /// A thread's turn can end while what it started carries on, and then it'll wake up and carry on

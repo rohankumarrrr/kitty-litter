@@ -329,12 +329,20 @@ enum T3Wire {
         var requestCompletionMarker = true
         var omitIdleSubagents = true
         var omitOlderSettled = true
+
+        /// Every thread that isn't archived, subagents and long-settled ones too.
+        static let everything = SubscribeShell(omitIdleSubagents: false, omitOlderSettled: false)
     }
 
     struct SubscribeThread: Encodable {
         let threadId: String
         let afterSequence: Int?
         var acceptBoundedSnapshot = true
+
+        /// Starts with the whole thread, rather than a window of its latest rows.
+        static func whole(threadID: String) -> SubscribeThread {
+            SubscribeThread(threadId: threadID, afterSequence: nil, acceptBoundedSnapshot: false)
+        }
     }
 
     struct GetTurnItem: Encodable {
@@ -422,6 +430,14 @@ enum T3Wire {
             let blocking: Bool?
         }
 
+        struct PullRequest: Decodable {
+            struct Snapshot: Decodable {
+                let state: String
+            }
+            let number: Int
+            let snapshot: Snapshot
+        }
+
         let id: String
         let projectId: String
         let title: String
@@ -432,9 +448,17 @@ enum T3Wire {
         let pendingRuntimeRequest: PendingRequest?
         /// Shells and the like it left running when its turn ended. Only how many matters.
         let pendingBackgroundTasks: [Lossy<Ignored>]?
+        let latestRunId: String?
+        let latestRunCompletedAt: Date?
         let updatedAt: Date
         let archivedAt: Date?
         let deletedAt: Date?
+        let settledAt: Date?
+        let pullRequests: [Lossy<PullRequest>]?
+
+        var latestPullRequest: ThreadPullRequest? {
+            (pullRequests ?? []).compactMap(\.value).last.map { ThreadPullRequest(number: $0.number, state: $0.snapshot.state) }
+        }
 
         /// Subagents and side chats live inside their parent, never in a thread list.
         var isListed: Bool {
@@ -622,24 +646,58 @@ enum T3Wire {
         let failure: Failure?
         /// Questions for the user.
         let questions: [Question]?
+        /// User messages: who sent it. Agents' messages name the thread they came from.
+        let createdBy: String?
+        let senderThreadId: String?
+        /// T3 writes these itself, some of them marked as coming from the user.
+        let idleCompaction: Lossy<Ignored>?
+        let workflowScript: Lossy<Ignored>?
 
+        var isUserMessage: Bool { type == "user_message" }
         var isAssistantMessage: Bool { type == "assistant_message" }
         var isError: Bool { type == "error" }
+        /// Claude's thinking comes through as assistant messages too, so it doesn't count as speech.
+        var isSpoken: Bool {
+            isAssistantMessage && !id.contains("thinking") && text?.contains(where: { !$0.isWhitespace }) == true
+        }
+        var isWrittenByT3: Bool { idleCompaction != nil || workflowScript != nil }
+        /// Anything but these two is never put in a person's mouth.
+        var isFromPerson: Bool { createdBy == nil || createdBy == "user" }
+        var agentSenderThreadID: String? { createdBy == "agent" ? senderThreadId : nil }
+        var when: Date { startedAt ?? updatedAt ?? .distantPast }
         var isCommandOrFileChange: Bool { type == "command_execution" || type == "file_change" }
         var isOpenApproval: Bool {
             type == "approval_request" && !["completed", "failed", "cancelled"].contains(status)
         }
     }
 
-    /// What the agent last said in a thread, with any error it ended on first. Claude's thinking comes
-    /// through as assistant messages too, and subagents' messages have a parent, so neither counts.
-    static func finalReport(in items: [TurnItem]) -> String? {
-        let own = items.filter { $0.parentItemId == nil }
-        let ordered = own.sorted { ($0.startedAt ?? $0.updatedAt ?? .distantPast) < ($1.startedAt ?? $1.updatedAt ?? .distantPast) }
-        let message = ordered.last { item in
-            guard item.isAssistantMessage, !item.id.contains("thinking") else { return false }
-            return item.text?.contains(where: { !$0.isWhitespace }) == true
-        }
+    /// T3 leaves this on the front of some of a person's messages.
+    static let ultrathinkPrefix = "Ultrathink:"
+    /// What T3 sends for a message that's only attachments.
+    static let attachmentsOnly = "[User attached one or more files without additional text. Respond using the conversation context and the attached files.]"
+
+    /// What the coding tool behind an imported thread wrote, which T3 marks as the user's. These are
+    /// the tags found in real threads. Any hyphenated tag would do, but people write those too.
+    static let toolTags = [
+        "system-reminder", "task-notification", "scheduled-task", "ci-monitor-event", "side-sessions-event",
+        "bash-input", "bash-stdout", "bash-stderr", "command-name", "command-message", "command-args",
+        "local-command-[a-z]+", "artifact-view-context", "cross-session-message", "sandbox_violations",
+    ].joined(separator: "|")
+
+    static func withoutToolBlocks(_ text: String) -> String {
+        Prompts.withoutBlocks(named: toolTags, in: text)
+    }
+
+    /// A thread's own items in time order. Subagents' items have a parent, so they're left out.
+    static func ownItems(_ items: [TurnItem]) -> [TurnItem] {
+        items.filter { $0.parentItemId == nil }.sorted { $0.when < $1.when }
+    }
+
+    /// What the agent last said in a thread, with any error it ended on first. Given a run, a run that
+    /// said nothing has nothing to say, rather than the words of the one before it.
+    static func finalReport(in items: [TurnItem], run: String? = nil) -> String? {
+        let ordered = ownItems(items).filter { run == nil || $0.runId == run }
+        let message = ordered.last(where: \.isSpoken)
         let lastRun = ordered.last { $0.runId != nil }?.runId
         let error = ordered.last { $0.isError && $0.runId == lastRun }?.failure?.message
         let parts = [error.map { "Error: \($0)" }, message?.text].compactMap { $0 }

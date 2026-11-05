@@ -100,7 +100,7 @@ final class DashboardPanel {
     }
 }
 
-private final class FlippedView: NSView {
+final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
 
@@ -144,7 +144,7 @@ private final class ThreadRow: NSView {
         }
         // A square dot, to match the cat's pixels.
         let dot = NSRect(x: 10, y: 11, width: 8, height: 8)
-        Self.color(for: thread).setFill()
+        thread.dotColor.setFill()
         NSBezierPath(rect: dot).fill()
 
         let width = bounds.width - 38
@@ -161,17 +161,5 @@ private final class ThreadRow: NSView {
             .foregroundColor: Ink.soft,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: 28, y: 24, width: width, height: 14))
-    }
-
-    /// The same colours as the glint, so a status always looks the same.
-    private static func color(for thread: AgentThread) -> NSColor {
-        if !thread.pendingApprovals.isEmpty { return Ink.hex(CatGlint.attention(bright: true).color!) }
-        switch thread.status {
-        case .waitingForApproval, .waitingForAnswer: return Ink.hex(CatGlint.attention(bright: true).color!)
-        case .starting, .running: return Ink.hex(CatGlint.thinking(bright: true).color!)
-        case .completed: return Ink.hex(CatGlint.listening(loudness: 1).color!)
-        case .failed: return Ink.hex(0xff3b30)
-        case .idle, .interrupted: return Ink.soft
-        }
     }
 }

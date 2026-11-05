@@ -53,6 +53,43 @@ enum CatWords {
         }
     }
 
+    static let issuesTitle = "Issues"
+    static let issuesSubtitle = "What each kitten has open"
+    static let directMessages = "Direct messages"
+    static let betweenKittens = "Between kittens"
+    static let you = "You"
+    static let someoneElse = "Someone else"
+    static let readingMessages = "Reading their messages..."
+    static let nothingOpen = "Nothing open."
+    static let olderMessages = "Older messages are in T3."
+    static let cantReachT3Yet = "I can't reach T3 Code. Open it and I'll catch up."
+    static let stillGoing = "Still working on it..."
+    static func haventTalked(_ names: [String]) -> String { "\(names.joined(separator: " and ")) haven't talked yet." }
+    static func notSetUpYet(_ kitten: Kitten) -> String { "\(kitten.name) isn't set up yet." }
+    static func couldntRead(_ count: Int) -> String { "Couldn't read \(count) \(count == 1 ? "thread" : "threads"). I'll try again." }
+    static func earlierNotes(_ count: Int) -> String { "\(count) earlier \(count == 1 ? "note" : "notes")" }
+    static func issues(_ count: Int) -> String { "\(count) \(count == 1 ? "issue" : "issues")" }
+    static func pullRequest(_ pullRequest: ThreadPullRequest) -> String { "PR #\(pullRequest.number) \(pullRequest.state)" }
+
+    static func day(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
+        if calendar.isDate(date, inSameDayAs: now) { return "Today" }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) {
+            return "Yesterday"
+        }
+        let style = Date.FormatStyle(calendar: calendar).weekday(.wide).month(.abbreviated).day()
+        return date.formatted(calendar.isDate(date, equalTo: now, toGranularity: .year) ? style : style.year())
+    }
+
+    static func age(of date: Date, now: Date) -> String {
+        let minutes = Int(now.timeIntervalSince(date) / 60)
+        switch minutes {
+        case ..<1: return "just now"
+        case ..<60: return "\(minutes)m ago"
+        case ..<1440: return "\(minutes / 60)h ago"
+        default: return "\(minutes / 1440)d ago"
+        }
+    }
+
     static let allGood = "All good. I checked my signature, permissions, T3 Code and the kittens."
     static let selfCheckCaption = "Self-check"
     static func finding(_ finding: HealthFinding) -> String {
@@ -63,7 +100,8 @@ enum CatWords {
         "\(kitten.name) isn't a T3 project yet. Add \(kitten.folder) in T3 and try again."
     }
     static let lostTheSession = "I lost track of which session that was for. Try asking again?"
-    static func sentTo(_ thread: AgentThread) -> String { "Sent that to \(thread.title)." }
+    static func sentTo(_ thread: AgentThread) -> String { sentTo(thread.title) }
+    static func sentTo(_ title: String) -> String { "Sent that to \(title)." }
     static let sendTheLink = "It can't see your screen, so send the link or paste the text."
     static func passedOn(to title: String?) -> String {
         title.map { "Work's started in a new session: \($0)." } ?? "Work's started in a new session."
@@ -85,6 +123,52 @@ enum CatWords {
 
     static let finishedWithoutReport = "It's finished, but didn't leave a report."
     static let failedWithoutReport = "It stopped before it could say why."
+    static func failedRow(_ opening: String) -> String { "Hit a snag: \(opening)" }
+
+    static let inboxCaption = "Inbox"
+    static let inboxEmpty = "All clear. Nothing shipped or waiting on you."
+    static let inboxSent = "Sent. Waiting to hear back."
+    static let replyFirst = "Click Reply on the one you mean, then talk."
+
+    static func replyPlaceholder(talkKey: HoldKey) -> String {
+        talkKey == .off ? "Type your reply" : "Type your reply, or say it"
+    }
+
+    static func inboxHeadline(_ entries: [InboxEntry]) -> String {
+        let decisions = entries.filter(\.needsYou).count
+        let shipped = entries.filter { $0.kind == .shipped }.count
+        var parts: [String] = []
+        if decisions > 0 { parts.append(decisions == 1 ? "1 decision" : "\(decisions) decisions") }
+        if shipped > 0 { parts.append("\(shipped) shipped") }
+        return parts.joined(separator: ", ")
+    }
+
+    /// Notes don't count toward the headline, so this only says one's there when it's brought up the bubble
+    /// by itself, which takes it being the answer to something you asked.
+    static func inboxBubble(_ entries: [InboxEntry]) -> String {
+        let headline = inboxHeadline(entries)
+        if !headline.isEmpty { return headline }
+        let notes = entries.filter { $0.kind == .note }.count
+        return notes == 0 ? "" : notes == 1 ? "1 note" : "\(notes) notes"
+    }
+
+    /// What the menu says next to Inbox. What needs you comes first, since that's what it's for.
+    static func inboxSummary(_ entries: [InboxEntry]) -> String? {
+        let decisions = entries.filter(\.needsYou).count
+        if decisions > 0 { return decisions == 1 ? "1 needs you" : "\(decisions) need you" }
+        let shipped = entries.filter { $0.kind == .shipped }.count
+        return shipped > 0 ? "\(shipped) shipped" : nil
+    }
+
+    static func ago(_ date: Date, now: Date) -> String {
+        let minutes = Int(now.timeIntervalSince(date) / 60)
+        switch minutes {
+        case ..<1: return "just now"
+        case ..<60: return "\(minutes)m ago"
+        case ..<(24 * 60): return "\(minutes / 60)h ago"
+        default: return "\(minutes / (24 * 60))d ago"
+        }
+    }
 
     /// The question and what you can say to it. Answering happens in T3.
     static func question(_ question: AgentQuestion) -> String {
