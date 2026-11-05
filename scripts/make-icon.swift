@@ -5,6 +5,9 @@
 //
 // Writes AppIcon.icns, for the app, and cat.png, which is just the cat on nothing,
 // for places like T3 Code's sidebar. The output is checked in under assets/.
+//
+// The tile is off-white because macOS's Tinted and Clear icon styles recolor plain icons
+// by brightness. Colors wash out, but the cat's dark outline on a light tile survives.
 import AppKit
 
 let frame = [
@@ -25,12 +28,18 @@ let frame = [
     "....kkkkkkkkkk..",
     "................",
 ]
-let palette: [Character: UInt32] = [
+let lightPalette: [Character: UInt32] = [
     "k": 0x111113, "w": 0xfbfaf6, "j": 0x2a2a2e, "z": 0xc9ccd2, "s": 0x0a0a0b, "g": 0xffffff, "p": 0xff5fa2,
+]
+// On something dark the outline has to be the light thing, or there's no cat.
+let darkPalette: [Character: UInt32] = [
+    "k": 0x8f8f95, "w": 0xfbfaf6, "j": 0x232327, "z": 0xc9ccd2, "s": 0x0a0a0b, "g": 0xffffff, "p": 0xff5fa2,
 ]
 
 let output = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "assets", isDirectory: true)
-let background = CommandLine.arguments.count > 2 ? UInt32(CommandLine.arguments[2], radix: 16)! : 0xff5a14
+let background = CommandLine.arguments.count > 2 ? UInt32(CommandLine.arguments[2], radix: 16)! : 0xfbfaf6
+let tileIsDark = (background >> 16 & 0xff) + (background >> 8 & 0xff) + (background & 0xff) < 200
+let palette = tileIsDark ? darkPalette : lightPalette
 
 func color(_ hex: UInt32) -> NSColor {
     NSColor(
