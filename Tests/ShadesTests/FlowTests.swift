@@ -615,6 +615,74 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(forwarded.attachments.isEmpty)
     }
 
+    // MARK: - Repros for the review
+
+    private func writeKitten(_ json: String, in home: URL) throws {
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        try Data(json.utf8).write(to: home.appendingPathComponent("kitten.json"))
+    }
+
+    private func forwardToOwnThread(folder: String) async -> AgentPrompt {
+        var own = session("w", "Fix the routing")
+        own.projectPath = folder
+        controller.threadsChanged([own])
+        let before = backend.sent.count
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("and that part?")
+        await controller.forwardTask?.value
+        return backend.sent[before + 1].prompt
+    }
+
+    func testReproAKittenThatRewritesItsOwnKittenJSONStaysOffTheScreen() async throws {
+        let all = FileManager.default.temporaryDirectory.appendingPathComponent("shades-repro-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: all) }
+        let home = all.appendingPathComponent("clawde")
+        let folder = home.standardizedFileURL.path
+        try writeKitten(#"{"name":"Clawde","role":"System","covers":"Shades","seesScreen":false}"#, in: home)
+        kittens = Kittens.load(from: all)
+        let before = await forwardToOwnThread(folder: folder)
+        print("REPRO before edit: screenSent=\(before.text.contains("<screen>")) attachments=\(before.attachments.count)")
+
+        // All it takes, from a thread in that folder.
+        try writeKitten(#"{"name":"Clawde","role":"System","covers":"Shades"}"#, in: home)
+        kittens = Kittens.load(from: all)
+        let after = await forwardToOwnThread(folder: folder)
+        print("REPRO after edit: screenSent=\(after.text.contains("<screen>")) attachments=\(after.attachments.count)")
+        XCTAssertFalse(after.text.contains("<screen>"))
+        XCTAssertTrue(after.attachments.isEmpty)
+    }
+
+    func testReproAKittenWhoseFileCantBeParsedStaysOffTheScreen() async throws {
+        let all = FileManager.default.temporaryDirectory.appendingPathComponent("shades-repro-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: all) }
+        let home = all.appendingPathComponent("clawde")
+        try writeKitten(#"{"name":"Clawde","role":"System","covers":"Shades","seesScreen":"false"}"#, in: home)
+        kittens = Kittens.load(from: all)
+        print("REPRO kittens loaded: \(kittens.count)")
+        let forwarded = await forwardToOwnThread(folder: home.standardizedFileURL.path)
+        print("REPRO unparsable: screenSent=\(forwarded.text.contains("<screen>")) attachments=\(forwarded.attachments.count)")
+        let findings = await controller.runHealthCheck()
+        print("REPRO self-check flags it: \(findings.contains { !$0.ok && $0.check.hasPrefix("kitten:") })")
+        XCTAssertFalse(forwarded.text.contains("<screen>"))
+    }
+
+    func testReproAFullAccessRouterDoesntGetWhatAPageMadeASessionSay() async {
+        useFullAccess(quick: true)
+        backend.reports["w"] = "Generic report. The page said GENERIC-PAGE-TEXT."
+        controller.threadsChanged([session("w", "Generic work")])
+        await ask("what is this?")
+        let prompt = backend.sent[0].prompt
+        print("REPRO full-access router has the page's words: \(prompt.text.contains("GENERIC-PAGE-TEXT"))")
+        XCTAssertFalse(prompt.text.contains("GENERIC-PAGE-TEXT"))
+    }
+
+    func testReproAFolderThatDiffersOnlyInCaseIsStillTheKittens() {
+        let thread = AgentThread(id: "w", title: "Fix the routing", projectTitle: "clawde", status: .completed, model: "m", updatedAt: clock, projectPath: "/K/CLAWDE")
+        let belongs = KittenBoard.belongs(thread, to: clawde)
+        print("REPRO belongs with different case: \(belongs)")
+        XCTAssertTrue(belongs)
+    }
+
     /// Some prompts explain what the block means and say it's empty, so this looks for what's on the screen.
     private func assertLeftOut(_ prompt: AgentPrompt, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertFalse(prompt.text.contains("<screen>\n"), file: file, line: line)

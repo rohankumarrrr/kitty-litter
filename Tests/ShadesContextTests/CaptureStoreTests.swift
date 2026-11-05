@@ -76,6 +76,16 @@ final class CaptureStoreTests: XCTestCase {
         )
     }
 
+    func testReproAScreenshotIsGoneAfterADayWhileTheAppKeepsRunning() async throws {
+        let provider = ScreenContextProvider(sources: FakeSources(), store: store, defaults: .standard)
+        let path = try XCTUnwrap(provider.saveScreenshot(of: ScreenSnapshot(screenshotJPEG: Data([9]))))
+        try age(path, days: 30)
+        // Looking at the screen is all that happens while nothing's saved.
+        _ = try await provider.snapshot(CaptureOptions())
+        print("REPRO still there after 30 days with no save or restart: \(FileManager.default.fileExists(atPath: path))")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: path))
+    }
+
     func testSavingGoesThroughTheProvider() throws {
         let provider = ScreenContextProvider(sources: FakeSources(), store: store, defaults: .standard)
         let path = try XCTUnwrap(provider.saveScreenshot(of: ScreenSnapshot(screenshotJPEG: Data([9]))))

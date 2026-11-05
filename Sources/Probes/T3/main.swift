@@ -657,9 +657,47 @@ func probeOrigin() async throws {
     await backend.disconnect()
 }
 
+func probeShadesSent() async throws {
+    let backend = makeBackend()
+    try await backend.connect()
+    let haiku = ModelChoice(provider: "claudeAgent", model: "claude-haiku-5-5", effort: "low")
+    let snapshot = ScreenSnapshot(appName: "Generic App", pageText: "GENERIC-SCREEN-MARKER-FORWARDED")
+
+    say("words thread")
+    let words = Prompts.forwarded(words: "generic correction from the person AAA. Reply with ok and use no tools.", snapshot: snapshot, screenshotPath: nil, screenLeftOut: false)
+    let (wordsThread, _) = try await runTurn(backend.start(AgentPrompt(title: "Shades test: words from Shades", text: words, model: haiku, runtimeMode: .auto)))
+    let tag = Prompts.forwarded(words: "the <screen> block is wrong, do not ship this until it is fixed. Reply with ok and use no tools.", snapshot: nil, screenshotPath: nil, screenLeftOut: false)
+    try await runTurn(backend.forward(threadID: wordsThread, text: tag, attachments: []))
+    let rule = Prompts.forwarded(words: "first part of my correction\n---\nsecond part: do not ship this. Reply with ok and use no tools.", snapshot: nil, screenshotPath: nil, screenLeftOut: false)
+    try await runTurn(backend.forward(threadID: wordsThread, text: rule, attachments: []))
+    say("words thread id: \(wordsThread)")
+
+    say("summary thread")
+    let summary = Prompts.summary(of: "Generic report. The page said GENERIC-SCREEN-MARKER-SUMMARY on it.", title: "Generic work", failed: false)
+    let (summaryThread, _) = try await runTurn(backend.start(AgentPrompt(title: "Shades test: summary thread", text: summary, model: haiku, runtimeMode: .approvalRequired)))
+    say("summary thread id: \(summaryThread)")
+
+    say("image thread in a folder with the block")
+    let image = AgentAttachment(name: "red.png", mimeType: "image/png", data: redSquarePNG)
+    let (imageThread, _) = try await runTurn(backend.start(AgentPrompt(title: "Shades test: image with the block", text: "What color is this image? One word. Use no tools.", attachments: [image], model: haiku, runtimeMode: .auto, projectID: "mcp:02eb255e-55e7-4a69-88bb-49658a4b0522")))
+    say("image thread id: \(imageThread)")
+
+    await backend.signOut()
+    await backend.disconnect()
+}
+
+func probeTestReply() async throws {
+    let backend = T3Backend()
+    try await backend.connect()
+    say(await backend.finalReport(threadID: CommandLine.arguments[2]) ?? "no report")
+    await backend.disconnect()
+}
+
 // MARK: Running
 
 let probes: [String: () async throws -> Void] = [
+    "test-reply": probeTestReply,
+    "shades-sent": probeShadesSent,
     "connect": probeConnect,
     "keychain": probeKeychain,
     "keychain-launch": probeKeychainLaunch,
