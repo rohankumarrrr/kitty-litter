@@ -28,7 +28,7 @@ enum Corpus {
     /// Names a person would add to Settings.vocabulary, plus their T3 projects.
     static let vocabulary = [
         "T3", "Opus", "Pepper", "Swift", "GitHub", "Parakeet", "FluidAudio", "Haiku",
-        "Kubernetes", "Postgres", "Sentry", "JSON", "worktree", "Copilot Money", "Shades",
+        "Kubernetes", "Postgres", "Sentry", "JSON", "worktree", "Copper Money", "Shades",
     ]
 
     static let utterances: [Utterance] = [
@@ -172,12 +172,12 @@ enum Corpus {
               clean: ["The Swift package depends on FluidAudio and runs Parakeet on the Neural Engine."],
               mustKeep: ["swift", "fluidaudio", "parakeet"]),
         .init(id: "tech-pepper", kind: .technical,
-              spoken: "Pepper pulls my balances from Copilot Money every thirty minutes.",
-              verbatim: "pepper pulls my balances from copilot money every thirty minutes",
-              written: "pepper pulls my balances from copilot money every 30 minutes",
-              clean: ["Pepper pulls my balances from Copilot Money every 30 minutes.",
-                      "Pepper pulls my balances from Copilot Money every thirty minutes."],
-              mustKeep: ["pepper", "copilot money"]),
+              spoken: "Pepper pulls my notes from Copper Money every thirty minutes.",
+              verbatim: "pepper pulls my notes from copper money every thirty minutes",
+              written: "pepper pulls my notes from copper money every 30 minutes",
+              clean: ["Pepper pulls my notes from Copper Money every 30 minutes.",
+                      "Pepper pulls my notes from Copper Money every thirty minutes."],
+              mustKeep: ["pepper", "copper money"]),
         .init(id: "tech-push", kind: .technical,
               spoken: "Push the branch to GitHub and then run the tests with swift test.",
               verbatim: "push the branch to github and then run the tests with swift test",

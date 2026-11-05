@@ -21,7 +21,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     init() {
         threads = [
-            AgentThread(id: "demo-tidy", title: "Tidy up the pricing page", projectTitle: "personal-website", status: .running, model: "claude-opus-5-5", updatedAt: Date()),
+            AgentThread(id: "demo-tidy", title: "Tidy up the pricing page", projectTitle: "site", status: .running, model: "claude-opus-5-5", updatedAt: Date()),
             AgentThread(id: "demo-research", title: "Compare pixel fonts", projectTitle: nil, status: .running, model: "gpt-6.1-sol", updatedAt: Date()),
         ]
     }

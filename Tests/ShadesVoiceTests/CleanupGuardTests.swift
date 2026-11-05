@@ -143,7 +143,7 @@ final class VocabularySpellingTests: XCTestCase {
         let spelling = VocabularySpelling(words: ["Pepper", "Swift"])
         XCTAssertEqual(spelling.apply(to: "add salt and pepper"), "add salt and pepper")
         XCTAssertEqual(spelling.apply(to: "a swift reply"), "a swift reply")
-        XCTAssertEqual(spelling.apply(to: "Pepper pulls my balances"), "Pepper pulls my balances")
+        XCTAssertEqual(spelling.apply(to: "Pepper pulls my notes"), "Pepper pulls my notes")
     }
 
     func testOnlyMatchesWholeWords() {
@@ -165,7 +165,7 @@ final class VocabularyGateTests: XCTestCase {
     func testAllowsSpellingFixes() {
         XCTAssertTrue(VocabularyGate.allows(heard: "fluid audio", term: "FluidAudio", isEveryday: everyday))
         XCTAssertTrue(VocabularyGate.allows(heard: "work tree", term: "worktree", isEveryday: everyday))
-        XCTAssertTrue(VocabularyGate.allows(heard: "copulet money", term: "Copilot Money", isEveryday: everyday))
+        XCTAssertTrue(VocabularyGate.allows(heard: "copulet money", term: "Copper Money", isEveryday: everyday))
         XCTAssertTrue(VocabularyGate.allows(heard: "post-GAS", term: "Postgres", isEveryday: everyday))
     }
 
