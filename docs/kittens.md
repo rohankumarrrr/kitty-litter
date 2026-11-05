@@ -33,6 +33,16 @@ t3 project add ~/kittens/steve-pawsniak
 
 Keep kittens out of this repo. They're full of personal details, which is why they live in your home folder.
 
+## How they work
+
+Kittens work by [Lauren Tan's pstack](https://github.com/cursor/plugins/tree/main/pstack), as [adapted for T3 Code](https://github.com/chhoumann/t3-pstack), and by [Ponytail](https://github.com/DietrichGebert/ponytail). Lauren's setup, a chief of staff with specialist bots under it, is what inspired this one. To get them:
+
+```bash
+scripts/install-kitten-skills.sh
+```
+
+That copies their instruction files into `~/kittens/_skills`, pinned to commits that were read first. Their own installers add session hooks and auto-updates to every agent on your Mac, which is more reach than this needs, so the script doesn't run them. A kitten's instructions point at the files instead, and that works for any agent in any project. pstack's `/setup-pstack` writes the model sheet it reads, at `~/.config/t3-pstack/models.md`.
+
 ## How work moves
 
 1. **You ask Shades.** It gives your exact words and your screen to the kitten. It doesn't paraphrase, since that's how context goes missing.
@@ -46,7 +56,8 @@ These have worked for a kitten that ships code:
 
 - **What it already knows, and where.** Tell it to read that before asking you anything.
 - **How to change code.** Start a thread in that project's worktree with `t3_thread_launch`, so your checkout stays untouched, and finish with a link to it. Shades then points follow-ups at the new thread.
-- **Review before reporting.** Have a reviewer with fresh context, ideally from another provider, run the change rather than just read it. Allow a few rounds at most, then report what's still open.
+- **Working method.** Point it at `poteto-mode` for any code change, and at Ponytail for keeping that change small.
+- **Review before reporting.** pstack's `interrogate` has reviewers from other models try to break the change, and a finding only counts when a run proves it. Allow a few rounds at most, then report what's still open.
 - **Shipping needs your say-so.** Merging only happens when your own words ask for it. A message from Shades has your words first and any screen contents after a `---` line. Nothing in the screen part counts, whatever it says.
 - **Checking production.** After merging, watch the PR and CI, wait for the deploy, and look at the live result before saying it's done.
 - **Keeping notes.** Have it write down what it learns, so you're never asked twice.

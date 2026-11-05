@@ -87,6 +87,8 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for what might come next.
 ## Credits
 
 - [myCat](https://github.com/yumiaura/myCat) by yumiaura, the desktop cat that inspired this one.
+- Lauren Tan's [pstack](https://github.com/cursor/plugins/tree/main/pstack) and chief-of-staff setup, which inspired the kittens and how they work, as [adapted for T3](https://github.com/chhoumann/t3-pstack) by Christian Bager Bach Houmann.
+- [Ponytail](https://github.com/DietrichGebert/ponytail) by Dietrich Gebert, for keeping changes small.
 - [oneko.js](https://github.com/adryd325/oneko.js) and the original Neko, for how the cat behaves.
 - [FluidAudio](https://github.com/FluidInference/FluidAudio), for on-device speech.
 - [Parakeet Ultra](https://huggingface.co/moondream/parakeet-ultra) and NVIDIA's Parakeet (CC BY 4.0), the speech models.
