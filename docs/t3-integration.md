@@ -1,0 +1,188 @@
+# Talking to T3 Code
+
+Shades runs every agent through [T3 Code](https://t3.codes), a local app with a server inside. There's no public API for this. Everything below was read from the app's own bundle and checked against the running server, version 0.1.6, orchestration protocol 2.
+
+All wire formats live in `Sources/ShadesT3/T3Wire.swift`, so a T3 update should only ever mean changing that one file. When T3 updates, run the probes in `Sources/Probes/T3`.
+
+## How it connects
+
+One WebSocket does nearly everything, because approvals and live streaming need it anyway. Uploads and two startup checks use plain HTTP.
+
+1. **Find the server.** Read `<home>/userdata/server-runtime.json` for `origin`. `<home>` is `$T3CODE_HOME` or `~/.t3`. The port is never assumed, and the file is read again on every reconnect, because T3 can come back on another port.
+2. **Check the version.** `GET /.well-known/t3/environment` needs no sign-in and gives `orchestrationProtocolVersion`, `serverVersion` and `environmentId`. Anything but protocol 2 stops here with a clear message.
+3. **Sign in.** See below.
+4. **Open the socket.** `GET /ws?orchestrationProtocol=2` with `Authorization: Bearer <token>`. Without the query item the server answers 426.
+
+If T3 goes away, the client keeps trying, and backs off to one try every 5 seconds. A call made while T3 is down tries straight away and fails fast with "T3 Code isn't running." When T3 returns, subscriptions are sent again: the thread list takes a fresh snapshot, and a running turn resumes after the last event it saw.
+
+## Sign-in
+
+```
+t3 auth session issue --scope orchestration:read --scope orchestration:operate --ttl 30d --label Shades --json
+```
+
+This is T3's documented way to sign in a headless client. It needs no clicks, because anyone who can run it as this user already has this access. It takes about 0.8 s, and only happens on the first run and when renewing.
+
+- The token goes in the login Keychain under service `dev.shades.t3-session`, with the session ID as the account. It's never logged or written anywhere else.
+- A saved token is checked with `GET /api/auth/session` on each connect.
+- With 7 days left, the client signs in again and revokes the old session. If the server answers 401 on reconnect, it does the same.
+- The session shows up as "Shades" in T3's list of connections.
+
+### Why not MCP?
+
+MCP's OAuth flow needs a person to approve it on the `/connect-agent` page, its sessions are only good for `/mcp`, and MCP deliberately can't answer permission requests. Shades has to answer them, so it needs this surface anyway. A session with a subject of `mcp-client` is refused everywhere except `/mcp`, and pretending to be one would dodge that approval step, so Shades doesn't.
+
+### The Keychain and rebuilds
+
+Keychain items belong to the exact signed code that made them. A rebuilt app with an ad hoc signature counts as a different app, so it can't read the old item.
+
+macOS would normally ask about that with a dialog on every rebuild, so the store turns prompts off. An unreadable item means signing in again, about 0.8 s and no dialog, and the last build's session gets revoked. The old item can't be deleted or changed by the new build, so it stays behind, harmless, until something signed like the old build removes it, or you delete it in Keychain Access.
+
+A few things learned the hard way:
+
+- **Never call `SecItemUpdate` on these items.** Changing an attribute on another build's item shows a dialog even with `SecKeychainSetUserInteractionAllowed(false)`. Reading, deleting and listing attributes don't.
+- **Keychain failures aren't fatal.** Sign-in then only lasts until the app quits, and each launch leaves a session behind until it expires. This was seen once, with error -25293, just after a process was killed in the middle of a dialog. It cleared up by itself within minutes.
+- The data protection Keychain isn't an option: it needs an entitlement an open-source build can't have (error -34018).
+
+## The RPC
+
+It's [Effect RPC](https://effect.website) with its JSON serialization. Each WebSocket message is one JSON frame, or in principle a list of them.
+
+| Direction | Frame |
+| --- | --- |
+| Out | `{"_tag":"Request","id":"1","tag":"<method>","payload":{…},"headers":[]}` |
+| Out | `{"_tag":"Ack","requestId":"1"}` after every chunk, or the stream stalls |
+| Out | `{"_tag":"Interrupt","requestId":"1"}` to end a stream |
+| Out / in | `{"_tag":"Ping"}` / `{"_tag":"Pong"}` |
+| In | `{"_tag":"Chunk","requestId":"1","values":[…]}` |
+| In | `{"_tag":"Exit","requestId":"1","exit":{"_tag":"Success","value":…}}` |
+| In | `{"_tag":"Exit","requestId":"1","exit":{"_tag":"Failure","cause":[…]}}` |
+
+A `cause` entry is `Fail` with an `error` (`detail` and `message` are for people), `Die` with a `defect`, or `Interrupt`. A `Die` starting `Unknown request tag` or `Expected ` means the server didn't recognize the method or payload, which the client reports as a version mismatch.
+
+### Calls used
+
+| Method | Used for |
+| --- | --- |
+| `orchestration.launchThread` | New thread. Answers `threadId`, `projection` and `sequence`. |
+| `orchestration.dispatchCommand` | Follow-ups, approvals, archiving, mode changes. Answers `sequence`. |
+| `orchestration.subscribeThread` | One thread's events. |
+| `orchestration.subscribeShell` | Every thread, for the dashboard. |
+| `orchestration.getTurnItem` | The words of an approval. |
+| `orchestration.getThreadProjection` | Fallback for those words, and a settled thread's runtime mode. |
+| `projects.ensureScratch` | The "No project" project. The client remembers it. |
+| `attachments.createUploadUrl` | A signed URL for one upload. |
+
+### Starting and following up
+
+A new thread needs a project, so a thread with no project uses the one from `projects.ensureScratch`, with `workspaceStrategy {"type":"root"}`. T3 gives each one its own scratch folder.
+
+```json
+{
+  "commandId": "<uuid>", "threadId": "<uuid>", "projectId": "<id>",
+  "title": "…", "generateTitle": false,
+  "modelSelection": {"instanceId": "codex", "model": "gpt-6.1-sol", "options": [{"id": "reasoningEffort", "value": "low"}]},
+  "runtimeMode": "auto", "interactionMode": "default",
+  "workspaceStrategy": {"type": "root"},
+  "initialMessage": {"messageId": "<uuid>", "text": "…", "attachments": []}
+}
+```
+
+The effort option is `reasoningEffort` for Codex and `effort` for Claude and the rest. `generateTitle: true` has T3 write a title in the background.
+
+A follow-up is a `message.dispatch` command with `dispatchMode {"type":"start_immediately"}` and no `deliveryIntent`. That always gives the message its own run: it starts now on an idle thread and queues behind an active one. Adding `deliveryIntent: "auto"`, as T3's own composer does, can steer a run that's already going, and then there's no separate turn to report on.
+
+Only send `thread.runtime-mode.set` when the mode really changes. For providers that can't switch mode inside a session, it ends the session, and the next turn pays to start a new one.
+
+### Following a turn
+
+Subscribe with `{"threadId":…, "afterSequence":…, "acceptBoundedSnapshot":true}`. Sequences are global across threads, so gaps are normal. Without `afterSequence` you get a snapshot first, then live events.
+
+- **Text** arrives as `turn-item.updated` with `type: "assistant_message"`. `text` is the whole message so far, not a delta, which makes replays harmless. Short replies often arrive whole, with `streaming: false`. Items with a `parentItemId` belong to subagents.
+- **The turn's run** is found by `userMessageId` in `run.created` / `run.updated`. It's over at `completed`, `failed`, `interrupted`, `cancelled` or `rolled_back`. `waiting` isn't an ending: it comes just before `completed` while the checkpoint is saved.
+- **Errors** arrive as a turn item with `type: "error"` and `failure.message`.
+
+A new thread can subscribe with `afterSequence` set to what the launch answered. A follow-up subscribes without it, at the same moment it sends the message, because the event that names its run can land inside the commit the answer's `sequence` points to.
+
+### The thread list
+
+The shell stream sends a `snapshot`, then `thread.updated`, `thread.removed`, `project.updated` and `project.removed`.
+
+- A snapshot with `resolvedRepositoryIdentityRoots` only refreshes projects and has an empty `threads`. Treat it as a full snapshot and the dashboard goes blank, as it would about 100 ms after every connect.
+- `omitOlderSettled` and `omitIdleSubagents` took a real list from 179 threads to 35. Servers that don't know these flags ignore them.
+- `lineage.relationshipToParent == "subagent"` and `lineage.sideChat` threads don't get listed. A subagent's approval shows on its nearest listed parent, but answering it must name the subagent's own thread.
+
+| Shell `status` | `AgentStatus` |
+| --- | --- |
+| `preparing`, `queued`, `starting` | `starting` |
+| `running`, `waiting` | `running` |
+| `completed`, `failed` | same |
+| `interrupted`, `cancelled`, `rolled_back` | `interrupted` |
+| `idle`, anything new | `idle` |
+
+A blocking `pendingRuntimeRequest` overrides this: `user_input` is `waitingForAnswer`, and the approval kinds are `waitingForApproval`.
+
+### Approvals
+
+The shell only gives `pendingRuntimeRequest {id, kind, createdAt, blocking}`. The words are on a turn item with `type: "approval_request"`, whose ID is `turn-item:runtime-request:<encodeURIComponent(requestId)>`.
+
+The `prompt` there isn't what you'd expect. Claude puts the command or path in it, but Codex puts its *reason for asking*, such as "May I run this exact command?". The actual command is on the `command_execution` item with the same `nativeItemRef.nativeId`, as `input`, wrapped like `/bin/zsh -lc '…'`. A file change works the same way, with `fileName` on a `file_change` item.
+
+To answer:
+
+```json
+{"type": "runtime-request.respond", "commandId": "<uuid>", "threadId": "…", "requestId": "…", "decision": "accept"}
+```
+
+Decisions are `accept`, `acceptForSession`, `acceptAlways`, `decline` and `cancel`. Some requests only allow a subset, listed in the item's `options`.
+
+Testing tip: under `approval-required`, Codex runs with its `untrusted` policy, which runs commands it knows are safe without asking. A plain `echo` won't prompt, but `echo x > /tmp/file` will.
+
+### Attachments
+
+1. `attachments.createUploadUrl` with `{"type":"image","name":…,"mimeType":…,"sizeBytes":…}` gives `attachmentId` and `relativeUrl`. The URL is signed, lasts 10 minutes and needs no sign-in.
+2. `POST` the exact bytes to it. The server answers 204, and checks the size.
+3. Send `{"type":"image","id":<attachmentId>,"name":…,"mimeType":…,"sizeBytes":…}` in the message.
+
+Images can be GIF, JPEG, PNG or WebP, up to 10 MB each and 80 MB per message. Nothing here checks that the bytes really are an image, so a corrupt one reaches the model.
+
+### Opening a thread
+
+`t3code://threads/<environmentId>/<threadId>`, with both parts percent-encoded. The app comes to the front and navigates there. The thread's `lastVisitedAt` updating is a good way to check it worked.
+
+## What's stable and what isn't
+
+None of this is promised by T3. Roughly, from most to least likely to last:
+
+| Likely stable | Could change any release |
+| --- | --- |
+| `t3 auth session issue`, documented for headless clients | Every RPC method name and payload |
+| `server-runtime.json` and `/.well-known/t3/environment` | Event and turn item shapes |
+| `orchestrationProtocolVersion`, which exists to flag breaks | The turn item ID conventions used for approvals |
+| The `t3code://threads/…` link | How each provider fills in `prompt` |
+
+The client is built to notice rather than misbehave. Unknown stream items and fields are skipped, a thread row it can't read is dropped alone, a bad protocol version stops it at connect, and unknown methods or payloads report a version mismatch. If the approval item IDs stop working, it reads the whole thread, and failing that shows a generic summary.
+
+## Other things worth knowing
+
+- Revoking a session with the CLI doesn't hang up a socket that's already open, at least not within 20 s, since the CLI is a separate process. It takes effect at the next connect.
+- There's also a `t3 thread` CLI for starting and messaging threads, which wasn't needed here.
+- `~/.t3/userdata/statev2.sqlite` is handy for seeing real shapes, opened with `mode=ro`, but the app must never read it.
+
+## Measured
+
+On an Apple Silicon Mac, against server 0.1.6, with `gpt-6.1-sol` at low effort:
+
+| What | Time |
+| --- | --- |
+| First connect, including sign-in | 0.8 to 0.95 s |
+| Connect with a saved sign-in | 10 to 30 ms |
+| First thread list | 120 to 170 ms |
+| Calling `start` to `.started` | 15 to 50 ms |
+| The same, with a 361 KB image | 26 ms |
+| Calling `start` to the server's `requestedAt` | 7 to 16 ms |
+| Server's `completedAt` to `.finished` | 17 to 26 ms |
+| Answering an approval | 7 to 11 ms |
+| Back up after a server restart, with a new sign-in | 0.8 s |
+
+So the client adds about 40 ms to a turn. The rest is the model: replying "ok" usually took 4 to 8 s, but once took 84 s, with the server's own timestamps showing the run had started 83 s before the first message.
