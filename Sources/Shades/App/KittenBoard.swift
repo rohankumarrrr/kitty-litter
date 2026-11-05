@@ -40,6 +40,15 @@ enum KittenBoard {
         thread.projectTitle == kitten.name || thread.title.hasPrefix("\(kitten.name):")
     }
 
+    /// Who a thread counts as, when more than one could. Carrying a kitten's name beats being in its project.
+    static func owner(of thread: AgentThread, among kittens: [Kitten]) -> Kitten? {
+        kittens.first { thread.title.hasPrefix("\($0.name):") } ?? kittens.first { belongs(thread, to: $0) }
+    }
+
+    static func needsYou(_ thread: AgentThread) -> Bool {
+        !thread.pendingApprovals.isEmpty || thread.status == .waitingForApproval || thread.status == .waitingForAnswer
+    }
+
     /// Kittens that are taking work come first, and otherwise they stay put, so you can find one at a glance.
     static func statuses(kittens: [Kitten], threads: [AgentThread]) -> [KittenStatus] {
         let working = kittens.filter { !$0.planned }.map { status(of: $0, threads: threads) }
@@ -51,7 +60,7 @@ enum KittenBoard {
         let own = threads
             .filter { belongs($0, to: kitten) }
             .sorted { $0.updatedAt > $1.updatedAt }
-        let waiting = own.filter { !$0.pendingApprovals.isEmpty || $0.status == .waitingForApproval || $0.status == .waitingForAnswer }
+        let waiting = own.filter(needsYou)
         let active = own.filter(\.status.isActive)
 
         if let first = waiting.first {

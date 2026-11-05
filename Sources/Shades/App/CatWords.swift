@@ -52,6 +52,39 @@ enum CatWords {
         }
     }
 
+    static let you = "You"
+    static let someoneElse = "Someone else"
+    static let readingMessages = "Reading their messages..."
+    static let nothingOpen = "Nothing open."
+    static let olderMessages = "Older messages are in T3."
+    static let cantReachT3Yet = "I can't reach T3 Code. Open it and I'll catch up."
+    static let stillGoing = "Still working on it..."
+    static func haventTalked(_ names: [String]) -> String { "\(names.joined(separator: " and ")) haven't talked yet." }
+    static func notSetUpYet(_ kitten: Kitten) -> String { "\(kitten.name) isn't set up yet." }
+    static func couldntRead(_ count: Int) -> String { "Couldn't read \(count) \(count == 1 ? "thread" : "threads"). I'll try again." }
+    static func earlierNotes(_ count: Int) -> String { "\(count) earlier \(count == 1 ? "note" : "notes")" }
+    static func issues(_ count: Int) -> String { "\(count) \(count == 1 ? "issue" : "issues")" }
+    static func pullRequest(_ pullRequest: ThreadPullRequest) -> String { "PR #\(pullRequest.number) \(pullRequest.state)" }
+
+    static func day(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
+        if calendar.isDate(date, inSameDayAs: now) { return "Today" }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) {
+            return "Yesterday"
+        }
+        let style = Date.FormatStyle(calendar: calendar).weekday(.wide).month(.abbreviated).day()
+        return date.formatted(calendar.isDate(date, equalTo: now, toGranularity: .year) ? style : style.year())
+    }
+
+    static func age(of date: Date, now: Date) -> String {
+        let minutes = Int(now.timeIntervalSince(date) / 60)
+        switch minutes {
+        case ..<1: return "just now"
+        case ..<60: return "\(minutes)m ago"
+        case ..<1440: return "\(minutes / 60)h ago"
+        default: return "\(minutes / 1440)d ago"
+        }
+    }
+
     static let allGood = "All good. I checked my signature, permissions, T3 Code and the kittens."
     static let selfCheckCaption = "Self-check"
     static func finding(_ finding: HealthFinding) -> String {
