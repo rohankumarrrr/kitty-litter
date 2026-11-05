@@ -86,6 +86,13 @@ extension AppController {
         guard generation == replyGeneration else { return }
         roster = sessions
         kittens = loadKittens().filter { !$0.planned }
+        let projectID = await routerProjectID()
+        guard generation == replyGeneration else { return }
+        guard let projectID else {
+            reply = nil
+            say(CatWords.frontDoorNotReady)
+            return
+        }
 
         // Whoever it's passed to gets their own say on the snapshot, so this only holds it back from here.
         let shared = settings.quickMode == .fullAccess ? nil : snapshot
@@ -95,7 +102,8 @@ extension AppController {
             text: Prompts.quick(question: question, snapshot: shared, sessions: briefs, kittens: kittens),
             attachments: attachments(for: shared),
             model: settings.quickModel,
-            runtimeMode: settings.quickMode
+            runtimeMode: settings.quickMode,
+            projectID: projectID
         )
 
         let start: () -> AsyncThrowingStream<AgentReplyEvent, Error> = { [backend] in backend.start(prompt) }

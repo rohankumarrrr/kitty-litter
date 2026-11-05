@@ -61,6 +61,16 @@ extension AppController {
         }
     }
 
+    /// The router's own project, where it can't pass on what it's seen. Asked before every turn, since a follow-up
+    /// runs on whatever its folder says by then. `nil` if it can't be had, and then the router doesn't run.
+    func routerProjectID() async -> String? {
+        guard let folder = routerFolder() else { return nil }
+        if let id = await backend.projectID(atPath: folder) { return id }
+        // T3 turns away a second project at the same folder, which another question may have just added.
+        if let id = try? await backend.addProject(atPath: folder, title: "Shades router") { return id }
+        return await backend.projectID(atPath: folder)
+    }
+
     /// Gives your words to a kitten, in a new thread in its workspace. T3 writes the title.
     /// `onStarted` hears the new thread, or `nil` if there isn't one.
     func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, onStarted: ((String?) -> Void)? = nil) {

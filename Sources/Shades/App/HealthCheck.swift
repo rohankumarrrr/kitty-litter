@@ -39,6 +39,9 @@ struct HealthFacts: Equatable {
     var kittensWithoutInstructions: [String] = []
     /// Kittens that aren't meant to see your screen, with nothing to stop them.
     var kittensOffScreenInNameOnly: [String] = []
+    /// What keeps the router from passing your screen on is in its folder, and the model it runs on reads it.
+    var routerFolderReady = true
+    var routerModelReadsItsFolder = true
     var inboxSaves = true
     /// Whether finished threads say which run they last finished, which is how the inbox tells reports apart.
     var t3GivesRunIDs = true
@@ -118,6 +121,23 @@ enum HealthCheck {
                 problem: "\(name) isn't meant to see your screen, but nothing stops them.",
                 fix: "Put the screen block from docs/kittens.md in their folder, and run them on a Claude model."
             ))
+        }
+        if !facts.routerFolderReady {
+            results.append(HealthFinding(
+                check: "front door",
+                ok: false,
+                problem: "I can't get the folder I answer from ready, so I won't take questions.",
+                fix: "Check that I can write to my folder in Application Support."
+            ))
+        } else if !facts.routerModelReadsItsFolder {
+            results.append(HealthFinding(
+                check: "front door",
+                ok: false,
+                problem: "My front door model doesn't read Claude's settings, so nothing stops it passing your screen to another thread.",
+                fix: "Choose a Claude model for Front door model in my settings."
+            ))
+        } else {
+            results.append(.good("front door"))
         }
         results.append(facts.skillsInstalled ? .good("kitten skills") : HealthFinding(
             check: "kitten skills",

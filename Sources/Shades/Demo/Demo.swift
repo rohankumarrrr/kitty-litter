@@ -405,7 +405,8 @@ enum Demo {
             keys: keys,
             settings: Settings(),
             saveSettings: { _ in print("[demo] settings aren't saved in demo mode") },
-            kittens: { Demo.kittens }
+            kittens: { Demo.kittens },
+            routerFolder: { "demo-router" }
         )
         return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys)
     }

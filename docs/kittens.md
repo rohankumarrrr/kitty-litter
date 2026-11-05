@@ -158,6 +158,8 @@ Telling an agent not to look isn't enough. Agents run as you, so they can open w
 
 Shades leaves your screen out of everything it sends to a kitten with `seesScreen: false`. That covers threads in its project, whatever the project is called, including ones another kitten starts there, and any thread traced back to one through whoever started it, whatever that thread is called. A thread an agent started that can't be traced gets no screen either.
 
+The router can't pass your screen on by itself. Its only job is to reply with one line, and Shades does the sending. But every thread T3 runs has T3's tools already allowed, whatever its mode, and a router once used `t3_thread_send` to put text from your screen into a kitten's thread, written as if it were your words. So the router runs in a folder of Shades' own, `~/Library/Application Support/shades/router`, which is a T3 project called Shades router. Its `.claude/settings.json` denies T3's tools, the shell, which can reach T3 without them, and writing files, which could undo the settings. Shades puts them back before every question, and if it can't, the router doesn't run. The self-check says so, and says if the front door model isn't Claude, since only Claude Code reads them.
+
 The screen block is `.claude/settings.json` in the kitten's folder. Claude Code enforces it, and the self-check says so if it's missing:
 
 | Way in | What stops it |
@@ -213,7 +215,7 @@ These are still open, and most can only be fixed in T3:
 
 - **Other models.** Only Claude Code reads these settings. A Codex thread in the same folder read a saved screenshot straight through them, so a kitten that's kept off the screen has to run on Claude. Reviewers on other models aren't covered either.
 - **Folders with no block.** It belongs to the folder, not the agent. A kitten's thread in a project without one can still look.
-- **Asking someone else.** A kitten can start or message any thread, and that thread can look for it. It would have to mean to. Clawde's folder also turns away a message with a screen block in it, but a paraphrase gets through.
+- **Asking someone else.** A kitten, or the frontier agent, can start or message any thread, and that thread can look for it. These need T3's tools, and T3's only rule about where they go is that a thread can't reach one running with more permissions than its own. The router can't, since it has no way to send. Clawde's folder also turns away a message with a screen block in it, but a paraphrase gets through.
 - **Earlier setups.** Shades goes by what each `kitten.json` says now. If a kitten that works in a `project` stops seeing your screen, leave that `project` in its file until you've archived its threads there, or they'll count as nobody's.
 - **Commands let out of the sandbox.** `swift run` can run code an agent wrote.
 - **Thread titles.** The thread list still shows them, and a handoff's title is the router's reading of what you asked.

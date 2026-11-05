@@ -2776,8 +2776,16 @@ final class FlowTests: XCTestCase {
         await settle()
         await controller.frontierTask?.value
 
-        let given = backend.sent.filter { $0.prompt.projectID != nil }.map(\.prompt.projectID)
+        let given = backend.sent.compactMap(\.prompt.projectID).filter { $0 != "project-router" }
         XCTAssertEqual(given, ["project-steve", "project-penny"])
+    }
+
+    func testWithoutItsFolderTheRouterInMessagesDoesntRun() async {
+        routerFolder = nil
+        controller.channelsPressed()
+        await messages("What day is it?", to: .router)
+        XCTAssertTrue(backend.sent.isEmpty)
+        XCTAssertEqual(everyoneSaid, ["What day is it?", CatWords.frontDoorNotReady])
     }
 
     func testAQuestionIsAnsweredFromMessagesWithAnOptionOrYourWords() async {

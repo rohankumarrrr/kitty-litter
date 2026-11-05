@@ -71,6 +71,7 @@ A `cause` entry is `Fail` with an `error` (`detail` and `message` are for people
 | `orchestration.getTurnItem` | The words of an approval or a question. |
 | `orchestration.getThreadProjection` | A thread's final report, a fallback for those words, and a settled thread's runtime mode. |
 | `projects.ensureScratch` | The "No project" project. The client remembers it. |
+| `projects.mutate` | Registers the router's own folder as a project, the first time. |
 | `attachments.createUploadUrl` | A signed URL for one upload. |
 
 ### Starting and following up
@@ -87,6 +88,8 @@ A new thread needs a project, so a thread with no project uses the one from `pro
   "initialMessage": {"messageId": "<uuid>", "text": "…", "attachments": []}
 }
 ```
+
+The router doesn't start in scratch. A scratch folder is made new for each thread, so there's nowhere to put settings for it in advance, and the router needs some (see [kittens.md](kittens.md#whats-enforced)). Its folder is registered once with `projects.mutate` and `{"type": "project.create", "commandId", "projectId", "title", "workspaceRoot"}`, which answers with the project. T3 turns away a second project at the same folder.
 
 The effort option is `reasoningEffort` for Codex and `effort` for Claude and the rest. `generateTitle: true` has T3 write a title in the background.
 
@@ -203,6 +206,7 @@ The client is built to notice rather than misbehave. Unknown stream items and fi
 
 ## Other things worth knowing
 
+- Every Claude thread gets T3's MCP server, with `mcp__t3-code__*` passed as allowed tools, in every runtime mode. There's no setting per thread or project to leave them out. A deny rule in the folder's `.claude/settings.json` still wins, because T3 loads the user, project and local settings. T3's own check on sending is that a thread can't message or start one with a broader runtime or interaction mode than its own, which says nothing about whether it's seen your screen.
 - Revoking a session with the CLI doesn't hang up a socket that's already open, at least not within 20 s, since the CLI is a separate process. It takes effect at the next connect.
 - There's also a `t3 thread` CLI for starting and messaging threads, which wasn't needed here.
 - `~/.t3/userdata/statev2.sqlite` is handy for seeing real shapes, opened with `mode=ro`, but the app must never read it.

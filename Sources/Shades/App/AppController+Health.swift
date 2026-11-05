@@ -33,6 +33,8 @@ extension AppController {
         facts.reachedT3 = threadListArrived
         facts.inboxSaves = !inboxSaveFailed
         facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
+        facts.routerFolderReady = routerFolder() != nil
+        facts.routerModelReadsItsFolder = settings.quickModel.provider == "claudeAgent"
 
         for kitten in loadKittens() where !kitten.planned {
             if !fileExists(kitten.folder + "/CLAUDE.md") { facts.kittensWithoutInstructions.append(kitten.name) }
