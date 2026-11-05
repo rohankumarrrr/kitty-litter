@@ -156,13 +156,7 @@ struct T3ThreadList {
             pendingQuestions.map { ($0.requestID, QuestionWords(text: "", options: [], moreCount: 0)) },
             uniquingKeysWith: { first, _ in first }
         )
-        return agentThreads(summaries: summaries, questions: questions).map { thread in
-            guard thread.pendingQuestion != nil else { return thread }
-            // A subagent's question holds up the thread above it, even if that one's turn has ended.
-            var waiting = thread
-            waiting.status = .waitingForAnswer
-            return waiting
-        }
+        return agentThreads(summaries: summaries, questions: questions)
     }
 
     /// The thread a person knows this one by: itself, or the nearest one above a subagent.

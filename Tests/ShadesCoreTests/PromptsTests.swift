@@ -160,6 +160,14 @@ final class PromptsTests: XCTestCase {
         XCTAssertEqual(Prompts.withoutScreenBlocks("a <screen>SENTINEL</screen> b <screen>SENTINEL</screen> c"), "a  b  c")
         XCTAssertEqual(Prompts.withoutScreenBlocks("`<screen>SENTINEL</screen>`"), "``")
         XCTAssertEqual(Prompts.withoutScreenBlocks("see `<screen>SENTINEL with no end"), "see `")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("See `foo`\n<screen>\n`SENTINEL` rest\n</screen>\nEnd."), "See `foo`\n\nEnd.")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("see `foo` <screen> `x` SENTINEL </screen> end"), "see `foo`  end")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("<screen title=\"a<b\">SENTINEL</screen> End."), "End.")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("<screen SENTINEL <b>bold</b> SENTINEL"), "")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("<screen>A</screen> SENTINEL</screen> End."), "End.")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("<screen>A `<screen>` B</screen> SENTINEL</screen> End."), "End.")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("a stray </screen> stays"), "a stray </screen> stays")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("<screens> and <screen-reader>stay</screen-reader>"), "<screens> and <screen-reader>stay</screen-reader>")
         XCTAssertEqual(
             Prompts.withoutScreenBlocks("The fix keeps it inside `</screen>` so it can't escape. PR #5 is ready."),
             "The fix keeps it inside `</screen>` so it can't escape. PR #5 is ready."
@@ -177,6 +185,9 @@ final class PromptsTests: XCTestCase {
         XCTAssertNil(Prompts.ownWords(in: "my words < screen >SENTINEL</ screen >"))
         XCTAssertEqual(Prompts.ownWords(in: "what does the `<screen>` tag do?"), "what does the `<screen>` tag do?")
         XCTAssertNil(Prompts.ownWords(in: "`<screen>SENTINEL</screen>`"))
+        XCTAssertNil(Prompts.ownWords(in: "my `x`\n<screen>\n`SENTINEL`\n</screen>"))
+        XCTAssertNil(Prompts.ownWords(in: "my words <screen a<b>SENTINEL</screen>"))
+        XCTAssertNil(Prompts.ownWords(in: "my words <screen SENTINEL"))
         XCTAssertEqual(Prompts.ownWords(in: "my config:\n    ---\n    name: x\nand please fix it"), "my config:\n    ---\n    name: x\nand please fix it")
     }
 
@@ -184,6 +195,7 @@ final class PromptsTests: XCTestCase {
         let started = Date()
         _ = Prompts.withoutScreenBlocks(String(repeating: "<screen>", count: 32_000))
         _ = Prompts.withoutScreenBlocks(String(repeating: "<screen ", count: 32_000))
+        _ = Prompts.withoutScreenBlocks("<" + String(repeating: " ", count: 80_000))
         XCTAssertLessThan(Date().timeIntervalSince(started), 2)
     }
 

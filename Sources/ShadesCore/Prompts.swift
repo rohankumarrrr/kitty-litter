@@ -124,9 +124,12 @@ public enum Prompts {
     /// Takes out each block with one of these tag names, nested or not, whatever its case or spacing,
     /// and through the end if it never closes. A tag alone in backticks is someone writing about it,
     /// so it stays. Tags have to be counted to balance them, which is why this isn't one regex.
+    /// A closing tag with nothing left to close means the block ran on, so what came before it goes too.
     public static func withoutBlocks(named names: String, in text: String) -> String {
-        let mention = "`\\s*<\\s*/?\\s*(?:\(names))\\b[^<>`]*>\\s*`"
-        let tag = "<\\s*(/?)\\s*(\(names))\\b[^<>]*>"
+        // The limits keep it fast on crafted text, and a hyphen after the name makes it someone else's tag.
+        let ending = "(?![\\w-])"
+        let mention = "`<\\s{0,8}/?\\s{0,8}(?:\(names))\(ending)[^<>`\\n]{0,200}>`"
+        let tag = "<\\s{0,8}(/?)\\s{0,8}(\(names))\(ending)(?:[^<>]{0,200}>)?"
         guard let scanner = try? NSRegularExpression(pattern: "\(mention)|\(tag)", options: .caseInsensitive) else { return text }
 
         let whole = text as NSString
@@ -145,6 +148,8 @@ public enum Prompts {
             } else if !closes {
                 kept += whole.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
                 inside = (name, 1)
+            } else if cursor > 0 {
+                cursor = NSMaxRange(match.range)
             }
         }
         if inside == nil { kept += whole.substring(from: cursor) }

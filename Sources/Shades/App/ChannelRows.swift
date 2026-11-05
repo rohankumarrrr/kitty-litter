@@ -59,14 +59,15 @@ enum ChannelRows {
     }
 
     private static func emptyNote(_ id: ChannelID, in book: ChannelBook) -> ChannelRow {
-        if book.channel(id)?.isCut == true { return .note(CatWords.olderMessages) }
         let others = book.others(in: id)
-        if let planned = others.lazy.compactMap({ book.status(of: $0) }).first(where: { $0.state == .notSetUp }) {
+        let isCut = book.channel(id)?.isCut == true
+        if !isCut, let planned = others.lazy.compactMap({ book.status(of: $0) }).first(where: { $0.state == .notSetUp }) {
             return .note(CatWords.notSetUpYet(planned.kitten))
         }
         if book.cantReachT3 { return .note(CatWords.cantReachT3Yet) }
         if book.isReading { return .note(CatWords.readingMessages) }
         if book.unreadable > 0 { return .note(CatWords.couldntRead(book.unreadable)) }
+        if isCut { return .note(CatWords.olderMessages) }
         let names = id.members.contains(.you) ? [CatWords.you] + others.map(book.name) : others.map(book.name)
         return .note(CatWords.haventTalked(names))
     }

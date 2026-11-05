@@ -162,7 +162,13 @@ final class T3TranscriptTests: XCTestCase {
     }
 
     func testYourOwnHyphenatedTagsStay() throws {
-        for words in ["Why does <my-card>Save</my-card> not render in Safari?", "Rename `<my-button>Save</my-button>` too, then run the tests."] {
+        for words in [
+            "Why does <my-card>Save</my-card> not render in Safari?",
+            "Rename `<my-button>Save</my-button>` too, then run the tests.",
+            "Why does <command-name-input>Save</command-name-input> not render?",
+            "Why is <task-notification-badge> so wide? Please fix it.",
+            "Why does <screen-reader>Save</screen-reader> break?",
+        ] {
             XCTAssertEqual(fold([try user(words, at: 0)])[0].ask, words)
         }
     }

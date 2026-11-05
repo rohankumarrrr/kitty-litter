@@ -288,10 +288,10 @@ final class T3ThreadListTests: XCTestCase {
             thread(id: "approves-child", pending: #"{"id":"a","kind":"command","createdAt":"2026-11-05T04:00:00.000Z","blocking":true}"#, parent: "approves", relationship: "subagent"),
             thread(id: "quiet", title: "Quiet"),
         ]))
-        let listed = Dictionary(uniqueKeysWithValues: list.threadsWithoutWords.map { ($0.id, $0.status) })
-        XCTAssertEqual(listed["asks"], .waitingForAnswer)
-        XCTAssertEqual(listed["approves"], .waitingForApproval)
-        XCTAssertNotEqual(listed["quiet"], .waitingForAnswer)
+        let listed = Dictionary(uniqueKeysWithValues: list.threadsWithoutWords.map { ($0.id, $0) })
+        XCTAssertNotNil(listed["asks"]?.pendingQuestion)
+        XCTAssertEqual(listed["approves"]?.status, .waitingForApproval)
+        XCTAssertNil(listed["quiet"]?.pendingQuestion)
     }
 
     func testSettledAndPullRequestsComeThrough() throws {

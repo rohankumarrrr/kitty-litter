@@ -137,6 +137,14 @@ final class ChannelBookTests: XCTestCase {
         let built = book(threads: [asking], transcripts: ["t": [exchange("e")]])
         XCTAssertEqual(direct(steve, in: built)?.messages.last?.isStillGoing, false)
         XCTAssertEqual(built.statuses.first?.state, .needsYou)
+        XCTAssertEqual(built.issues.first?.threads.first?.status, .waitingForAnswer, "its row says so too, however the thread was listed")
+    }
+
+    func testWhatsWrongNowComesBeforeOlderMessages() {
+        let lost = ChannelBook.build(kittens: [steve], threads: [thread("t")], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: true)
+        XCTAssertEqual(ChannelRows.rows(.channel(.direct(steve)), in: lost), [.note(CatWords.cantReachT3Yet)])
+        let failed = ChannelBook.build(kittens: [steve], threads: [thread("t")], transcripts: [:], isReading: false, unreadable: 1, cantReachT3: false)
+        XCTAssertEqual(ChannelRows.rows(.channel(.direct(steve)), in: failed), [.note(CatWords.couldntRead(1))])
     }
 
     func testALaterAskInAThreadNeverSitsAboveAnEarlierOne() {

@@ -89,6 +89,13 @@ struct ChannelBook: Equatable {
         unreadable: Int,
         cantReachT3: Bool
     ) -> ChannelBook {
+        // A subagent's question holds up the thread above it, even if that one's turn has ended.
+        let threads = threads.map { thread -> AgentThread in
+            guard thread.pendingQuestion != nil else { return thread }
+            var waiting = thread
+            waiting.status = .waitingForAnswer
+            return waiting
+        }
         let threadsByID = Dictionary(threads.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var placed: [ChannelID: [Placed]] = [:]
         var leftOut: Set<String> = []
@@ -184,7 +191,7 @@ struct ChannelBook: Equatable {
     /// that's a pull request waiting on "ship it". What needs you comes first, then what's working.
     private static func openThreads(of kitten: Kitten, among kittens: [Kitten], in threads: [AgentThread]) -> [AgentThread] {
         threads
-            .filter { KittenBoard.owner(of: $0, among: kittens) == kitten && (!$0.isSettled || $0.status.isActive || KittenBoard.needsYou($0)) }
+            .filter { KittenBoard.owner(of: $0, among: kittens) == kitten && (!$0.isSettled || $0.status.isActive) }
             .map { thread in
                 var thread = thread
                 thread.title = title(of: thread, owner: kitten)
