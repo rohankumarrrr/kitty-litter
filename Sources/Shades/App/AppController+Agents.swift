@@ -24,6 +24,7 @@ extension AppController {
         stage.catAgentsBusy(watch.isBusy)
         stage.showThreads(watch.rows(at: now()), status: watch.summary)
         if stage.isKittensVisible { stage.showKittens(kittenStatuses) }
+        channels.threadsChanged(threads)
         updateVocabulary(threads)
 
         for event in events {

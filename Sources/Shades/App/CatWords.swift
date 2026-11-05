@@ -52,6 +52,10 @@ enum CatWords {
         }
     }
 
+    static let issuesTitle = "Issues"
+    static let issuesSubtitle = "What each kitten has open"
+    static let directMessages = "Direct messages"
+    static let betweenKittens = "Between kittens"
     static let you = "You"
     static let someoneElse = "Someone else"
     static let readingMessages = "Reading their messages..."

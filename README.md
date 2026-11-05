@@ -16,6 +16,10 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 **Watch your agents.** The cat sleeps when nothing's running, and is up and about when agents are working. When a session ends, it tells you how it went in two or three sentences. When an agent has a question, it shows you the question and your options. When one needs permission, the cat comes over with the exact command, so you can allow or deny it without leaving what you're doing. Shift-click the cat to see all your kittens and which are working, need you or are idle.
 
+Choose **Channels** from the cat's menu for a window with all of it written down: your DMs with each kitten, what the kittens say to each other, and what each one has open. It sits beside your work, never takes the keyboard from the app you're in, and forgets every word when you close it. You reply through the cat or in T3.
+
+![The Channels window, with two kittens talking to each other](docs/images/channels.png)
+
 ## How the work gets routed
 
 There's no list of projects to maintain. Shades acts as one router in front of your agents. Everything you say goes to one model that can see your kittens and your recent T3 sessions, and it does one of four things:
@@ -67,7 +71,7 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 
 ## Kittens
 
-A kitten is a specialist with a folder of its own: its instructions and what it knows about you, so you don't have to explain yourself each time. Add a folder to `~/kittens`, add it to T3 as a project, and Shades starts sending it things. Normally you just see Shades, and Shift-clicking him shows the rest. See [docs/kittens.md](docs/kittens.md).
+A kitten is a specialist with a folder of its own: its instructions and what it knows about you, so you don't have to explain yourself each time. Add a folder to `~/kittens`, add it to T3 as a project, and Shades starts sending it things. Normally you just see Shades, and Shift-clicking him shows the rest. Channels shows what they've said to you and to each other, and what each one is on. See [docs/kittens.md](docs/kittens.md).
 
 ## Changing Shades by asking Shades
 

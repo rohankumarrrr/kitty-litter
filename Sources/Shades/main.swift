@@ -9,6 +9,12 @@ MainActor.assumeIsolated {
     app.setActivationPolicy(.accessory)
 
     let wantsDemo = CommandLine.arguments.contains("--demo")
+    if DevFlags.wantsChannelsCheck { DevFlags.checkChannels() }
+    // Only with --demo, so real messages can't reach an image.
+    if wantsDemo, let folder = DevFlags.channelsImageFolder {
+        ChannelImages.draw(to: folder)
+        exit(0)
+    }
     let stage = AppStage()
     let controller: AppController
     var driver: DemoDriver?
@@ -68,6 +74,7 @@ MainActor.assumeIsolated {
     stage.start()
     controller.start()
     driver?.start(script: !CommandLine.arguments.contains("--no-script"))
+    if DevFlags.wantsChannels { controller.channelsPressed() }
     if !wantsDemo {
         if DevFlags.wantsFlow {
             DevFlags.run(on: controller)

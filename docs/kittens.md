@@ -52,6 +52,22 @@ Normally you only see Shades. Shift-click him, or choose Kittens from his menu, 
 
 Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the kitten's project, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
 
+### Channels
+
+Choose Channels from the cat's menu to read what's being said, without opening T3:
+
+![The Channels window, with two kittens talking to each other](images/channels.png)
+
+- **Issues** is what each kitten has open. There's no tracker yet, so an issue is one of a kitten's threads that's still working or isn't settled. A finished thread stays until it's settled, because that's a pull request waiting on your "ship it".
+- **Direct messages** has one row per kitten, whether or not you've talked. Your words and its replies are there, and so are the reports of work it started itself. Forwarded messages only show your own words, never the note or the screen below them.
+- **Between kittens** has one row per pair that's talked. A kitten's messages show up here by themselves when it sends them with T3's tools, such as `t3_thread_send`, because T3 records which thread sent each one. If that thread can't be named, such as one that's been archived, it's listed as "someone else".
+
+One answer is one message. A kitten's narration on the way to its answer shows as "2 earlier notes", and the rest is in T3. Hover over a message to copy it or open its thread, or click the line above it, which is the thread's title.
+
+The title rule above decides whose work a thread is. If a thread's title starts with a kitten's name and a colon, it's that kitten's wherever it runs, which beats being in another kitten's project.
+
+The window only reads. It can't send anything, and it never takes the keyboard, so the app you're in keeps its selection and the cat still sees what you're looking at. That also means no selecting text and no arrow keys. Nothing is read until you open it, every word is forgotten when you close it with the red button, and nothing goes to disk except where the window was.
+
 ## How they work
 
 Kittens work by [Lauren Tan's pstack](https://github.com/cursor/plugins/tree/main/pstack), as [adapted for T3 Code](https://github.com/chhoumann/t3-pstack), and by [Ponytail](https://github.com/DietrichGebert/ponytail). Lauren's setup, a chief of staff with specialist bots under it, is what inspired this one. To get them:

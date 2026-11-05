@@ -13,6 +13,7 @@ final class AppStage: CatStage {
     let pill = SayPill()
     let dashboard = DashboardPanel()
     let kittens = KittenPanel()
+    let channels = ChannelsWindow()
     let settingsPanel = SettingsPanel()
     let menuBar = MenuBar()
     weak var controller: AppController?
@@ -66,6 +67,10 @@ final class AppStage: CatStage {
             self?.updateEscape()
         }
 
+        channels.onClose = { [weak self] in self?.controller?.channelsClosed() }
+        channels.view.pane.onOpenThread = { [weak self] id in self?.controller?.openThread(id) }
+        channels.view.pane.onCopy = { [weak self] text in self?.copyToPasteboard(text) }
+
         dashboard.anchor = { [weak self] in self?.menuBar.corner ?? .zero }
         dashboard.onHide = { [weak self] in self?.updateEscape() }
         dashboard.onOpen = { [weak self] id in self?.controller?.openThread(id) }
@@ -74,6 +79,7 @@ final class AppStage: CatStage {
         menuBar.onFix = { [weak self] in self?.controller?.fixPressed() }
         menuBar.onDashboard = { [weak self] in self?.toggleDashboard() }
         menuBar.onKittens = { [weak self] in self?.controller?.kittensPressed() }
+        menuBar.onChannels = { [weak self] in self?.controller?.channelsPressed() }
         menuBar.onSettings = { [weak self] in self?.controller?.settingsPressed() }
         menuBar.onOpenThread = { [weak self] id in self?.controller?.openThread(id) }
     }
@@ -176,6 +182,16 @@ final class AppStage: CatStage {
 
     func hideKittens() {
         kittens.hide()
+    }
+
+    // MARK: - Channels
+
+    func showChannels(_ book: ChannelBook) {
+        channels.show(book, centeredIn: cat.visibleFrame)
+    }
+
+    func updateChannels(_ book: ChannelBook) {
+        channels.update(book)
     }
 
     // MARK: - Everything else

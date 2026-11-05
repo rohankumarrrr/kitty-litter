@@ -65,6 +65,11 @@ protocol CatStage: AnyObject {
     func showKittens(_ statuses: [KittenStatus])
     func hideKittens()
 
+    // Channels
+    /// Opens the window, or brings it to the front if it's open. It never closes it.
+    func showChannels(_ book: ChannelBook)
+    func updateChannels(_ book: ChannelBook)
+
     // Everything else
     func showThreads(_ threads: [AgentThread], status: String)
     func toggleDashboard()

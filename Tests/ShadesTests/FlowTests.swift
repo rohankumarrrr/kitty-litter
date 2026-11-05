@@ -39,6 +39,8 @@ private final class FakeStage: CatStage {
     var statusText = ""
     var kittens: [KittenStatus]?
     var isKittensVisible: Bool { kittens != nil }
+    var channelsShown: [ChannelBook] = []
+    var channelsUpdated: [ChannelBook] = []
     var copied: String?
     var arriveImmediately = true
     var pendingArrival: (() -> Void)?
@@ -89,6 +91,8 @@ private final class FakeStage: CatStage {
     func toggleDashboard() {}
     func showKittens(_ statuses: [KittenStatus]) { kittens = statuses }
     func hideKittens() { kittens = nil }
+    func showChannels(_ book: ChannelBook) { channelsShown.append(book) }
+    func updateChannels(_ book: ChannelBook) { channelsUpdated.append(book) }
     func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {}
     func copyToPasteboard(_ text: String) { copied = text }
 
@@ -676,6 +680,24 @@ final class FlowTests: XCTestCase {
 
         controller.kittensPressed()
         XCTAssertNil(stage.kittens)
+    }
+
+    func testChannelsOpenWithoutLookingAtTheScreen() async {
+        kittens = [steve]
+        controller.threadsChanged([AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .running, model: "m", updatedAt: clock)])
+        controller.channelsPressed()
+        XCTAssertEqual(stage.channelsShown.count, 1)
+        XCTAssertEqual(stage.channelsShown.first?.issueCount, 1, "what's open shows at once, from the list it already has")
+        await settle()
+        XCTAssertEqual(stage.channelsUpdated.last?.cantReachT3, true, "and it hears how the read went")
+
+        controller.channelsPressed()
+        XCTAssertEqual(stage.channelsShown.count, 2, "choosing it again shows it again, and never closes it")
+        XCTAssertTrue(context.options.isEmpty)
+        XCTAssertFalse(log.all.contains("snapshot"))
+        XCTAssertTrue(backend.sent.isEmpty)
+        controller.channelsClosed()
+        XCTAssertEqual(controller.channels.threadsHeld, 0)
     }
 
     func testAKittenThatIsntInT3SaysSo() async {

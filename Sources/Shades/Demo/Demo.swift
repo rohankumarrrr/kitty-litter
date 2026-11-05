@@ -83,6 +83,15 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         """
     }
 
+    func allThreads() async -> [AgentThread]? {
+        if connectFails { return nil }
+        return lock.withLock { threads } + DemoChannels.threads
+    }
+
+    func exchanges(threadID: String) async -> [Exchange]? {
+        DemoChannels.transcripts[threadID] ?? []
+    }
+
     /// An agent stops to ask you something, which then shows on the dashboard too.
     func askQuestion(threadID: String) {
         update { threads in
@@ -345,6 +354,7 @@ enum Demo {
     static let kittens = [
         Kitten(name: "Steve Pawsniak", role: "Professional", covers: "Their career, resume and interviews.", folder: "/demo/steve"),
         Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: 0xb3261e),
+        Kitten(name: "Clawde", role: "The system", covers: "Shades and the other kittens.", folder: "/demo/clawde", color: 0xd9730d, seesScreen: false),
         Kitten(name: "Cali", role: "Scheduling", covers: "Their time.", folder: "/demo/cali", planned: true, color: 0x1e7fb3),
         Kitten(name: "Furbit", role: "Health", covers: "Their health.", folder: "/demo/furbit", planned: true, color: 0x2e9e4f),
     ]
