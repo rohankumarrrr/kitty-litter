@@ -31,7 +31,7 @@ There's no list of projects to maintain. Shades acts as one router in front of y
 
 Agents with full access get your words but not your screen, so text on a page can't reach an agent that's allowed to do anything.
 
-The router only replies, and Shades does the rest. It runs in a folder of its own where it can't message or start threads, run commands or write files, so it can't pass your screen on by itself. That needs a Claude model for the front door, and the self-check says if it isn't one.
+The router only replies, and Shades does the rest. It runs in a folder of its own where it can only read files and search the web, so it can't message or start threads, run commands or write files, and can't pass your screen on by itself. That needs a Claude model for the front door, and the self-check says if it isn't one.
 
 The frontier agent starts with no project, and finds the right one from what you said and what's on your screen, reading READMEs when a project's name isn't its folder name. For code changes it starts a new thread in that project's worktree. Research and questions it just answers.
 
