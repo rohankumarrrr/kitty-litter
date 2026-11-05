@@ -906,6 +906,48 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("Steve Pawsniak isn't a T3 project yet. Add /k/steve in T3 and try again.", threadID: nil))
     }
 
+    private let pepper = Kitten(name: "Pepper", role: "Finance", covers: "the app", folder: "/k/pepper", project: "/code/app")
+
+    func testAKittenWorksInTheProjectItNames() async {
+        kittens = [pepper]
+        backend.projects["/code/app"] = "project-app"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("how's the app doing?")
+        await controller.frontierTask?.value
+
+        let given = backend.sent[1].prompt
+        XCTAssertEqual(given.projectID, "project-app")
+        XCTAssertTrue(given.text.hasPrefix("how's the app doing?\n"))
+        XCTAssertTrue(given.text.contains("/k/pepper. Read its CLAUDE.md"))
+
+        let findings = await controller.runHealthCheck()
+        XCTAssertTrue(findings.filter { $0.check.hasPrefix("kitten:") }.allSatisfy(\.ok))
+    }
+
+    func testAKittenWhoseProjectIsntInT3SaysWhichFolderToAdd() async {
+        kittens = [pepper]
+        backend.projects["/k/pepper"] = "project-pepper"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")]]
+        await ask("how's the app doing?")
+        await controller.flow?.value
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertEqual(stage.bubble, .line("Pepper isn't a T3 project yet. Add /code/app in T3 and try again.", threadID: nil))
+
+        controller.threadListArrived = true
+        let findings = await controller.runHealthCheck()
+        XCTAssertNotNil(findings.first { !$0.ok && $0.check == "kitten: Pepper" })
+    }
+
+    func testAKittensScreenBlockIsLookedForWhereItsThreadsStart() async {
+        var away = pepper
+        away.seesScreen = false
+        kittens = [away]
+        backend.projects["/code/app"] = "project-app"
+        screenBlockGaps = ["/code/app": ["sandbox.enabled"]]
+        let findings = await controller.runHealthCheck()
+        XCTAssertEqual(findings.first { !$0.ok && $0.check == "kitten: Pepper" }?.problem, "Pepper isn't meant to see your screen, but nothing stops them.")
+    }
+
     func testAKittensNumberThatIsntOnTheListGoesNowhere() async {
         kittens = [steve]
         backend.replies = [[.finished(fullText: "KITTEN: 4")]]

@@ -100,7 +100,7 @@ enum HealthCheck {
                 check: "kitten: \(name)",
                 ok: false,
                 problem: "\(name) isn't a T3 project, so nothing can reach them.",
-                fix: "Add their folder as a project in T3."
+                fix: "Add the folder they work in as a project in T3."
             ))
         }
         for name in facts.kittensWithoutInstructions {

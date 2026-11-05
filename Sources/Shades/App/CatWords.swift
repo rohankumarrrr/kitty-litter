@@ -97,7 +97,7 @@ enum CatWords {
     }
 
     static func notSetUp(_ kitten: Kitten) -> String {
-        "\(kitten.name) isn't a T3 project yet. Add \(kitten.folder) in T3 and try again."
+        "\(kitten.name) isn't a T3 project yet. Add \(kitten.project) in T3 and try again."
     }
     static let lostTheSession = "I lost track of which session that was for. Try asking again?"
     static func sentTo(_ thread: AgentThread) -> String { sentTo(thread.title) }

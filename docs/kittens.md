@@ -25,8 +25,9 @@ A kitten is a folder in `~/kittens`, registered as a T3 project:
 }
 ```
 
-Four more fields are optional:
+Five more fields are optional:
 
+- `project` is the folder of a T3 project the kitten works in, for a kitten that looks after an app that already has one. It's an absolute path, and `~` works, like `"~/code/my-app"`. Its threads start there, and Shades tells it where its own folder is, since its `CLAUDE.md` won't load by itself from another folder. Without it, the kitten's own folder is its project.
 - `color` is its jacket in the kitten view, like `"#b3261e"`.
 - `planned: true` means it shows up with the others but isn't taking work yet, which is handy for a kitten you've named but haven't written instructions for.
 - `seesScreen: false` means Shades never sends it your screen. Stopping it from finding a copy by itself takes [the screen block](#keeping-a-kitten-off-your-screen) as well.
@@ -37,6 +38,8 @@ Shades reads `covers` to decide what goes to a kitten, so write it the way you'd
 ```bash
 t3 project add ~/kittens/steve-pawsniak
 ```
+
+A kitten with a `project` skips that step, since the project's already there.
 
 Keep kittens out of this repo. They're full of personal details, which is why they live in your home folder.
 
@@ -51,7 +54,7 @@ Normally you only see Shades. Shift-click him, or choose Kittens from his menu, 
 - **Idle**, asleep
 - **Not set up yet**, for a `planned` kitten
 
-Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the folder of the kitten's project, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
+Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the kitten's folder or its `project`, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
 
 ### Channels
 
@@ -148,7 +151,7 @@ Telling an agent not to look isn't enough. Agents run as you, so they can open w
 
 Shades leaves your screen out of everything it sends to a kitten with `seesScreen: false`. That covers threads in its project, whatever the project is called, and any thread traced back to one through whoever started it, whatever that thread is called. A thread an agent started that can't be traced gets no screen either.
 
-The screen block is `.claude/settings.json` in the kitten's folder. Claude Code enforces it, and the self-check says so if it's missing:
+The screen block is `.claude/settings.json` in the folder the kitten's threads start in: its `project` if it has one, and otherwise its own. Claude Code enforces it, and the self-check says so if it's missing:
 
 | Way in | What stops it |
 |---|---|

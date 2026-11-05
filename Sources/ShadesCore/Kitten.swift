@@ -9,6 +9,9 @@ public struct Kitten: Sendable, Equatable, Identifiable {
     /// What it looks after, in the words Shades reads to decide what goes to it.
     public var covers: String
     public var folder: String
+    /// The folder of the T3 project it works in. That's its own folder, unless it looks after an
+    /// app that already has a project.
+    public var project: String
     /// Not taking work yet. It shows up with the others, but nothing gets sent to it.
     public var planned: Bool
     /// The colour of its jacket, as 0xRRGGBB, or `nil` for the black one Shades wears.
@@ -26,6 +29,7 @@ public struct Kitten: Sendable, Equatable, Identifiable {
         role: String,
         covers: String,
         folder: String,
+        project: String? = nil,
         planned: Bool = false,
         color: UInt32? = nil,
         seesScreen: Bool = true,
@@ -35,6 +39,7 @@ public struct Kitten: Sendable, Equatable, Identifiable {
         self.role = role
         self.covers = covers
         self.folder = folder
+        self.project = project ?? folder
         self.planned = planned
         self.color = color
         self.seesScreen = seesScreen
@@ -47,6 +52,8 @@ public enum Kittens {
         let name: String
         let role: String
         let covers: String
+        /// Like "~/code/app". A relative path starts from the kitten's folder.
+        var project: String?
         var planned: Bool?
         /// Like "#b3261e".
         var color: String?
@@ -72,6 +79,9 @@ public enum Kittens {
                 role: profile.role,
                 covers: profile.covers,
                 folder: home.standardizedFileURL.path,
+                project: profile.project.map {
+                    URL(fileURLWithPath: NSString(string: $0).expandingTildeInPath, relativeTo: home).standardizedFileURL.path
+                },
                 planned: profile.planned ?? false,
                 color: profile.color.flatMap { UInt32($0.replacingOccurrences(of: "#", with: ""), radix: 16) },
                 seesScreen: profile.seesScreen ?? true,

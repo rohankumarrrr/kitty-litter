@@ -82,10 +82,14 @@ public enum Prompts {
     }
 
     /// Their own words go first and unchanged, because paraphrasing is how a router loses things.
-    public static func forKitten(words: String, snapshot: ScreenSnapshot?, screenshotPath: String?, screenLeftOut: Bool) -> String {
-        passedOn(
+    public static func forKitten(_ kitten: Kitten, words: String, snapshot: ScreenSnapshot?, screenshotPath: String?, screenLeftOut: Bool) -> String {
+        // A thread in another project's folder doesn't load the kitten's instructions by itself.
+        let instructions = kitten.project == kitten.folder
+            ? "Your instructions and what you know about them are in your folder."
+            : "Your instructions and what you know about them are in \(kitten.folder). Read its CLAUDE.md before anything else."
+        return passedOn(
             words: words,
-            intro: "Shades, the user's desktop cat, gave you this because it's your area. Your instructions and what you know about them are in your folder. Reply here as usual, and Shades will let them know.",
+            intro: "Shades, the user's desktop cat, gave you this because it's your area. \(instructions) Reply here as usual, and Shades will let them know.",
             snapshot: snapshot,
             screenshotPath: screenshotPath,
             screenLeftOut: screenLeftOut
