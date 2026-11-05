@@ -25,14 +25,13 @@ enum ScreenWords {
     ]
 
     static func pointAtScreen(_ words: String) -> Bool {
-        guard words.count <= pastedLength, !hasLink(words), !hasQuotedText(words) else { return false }
+        guard words.count <= pastedLength, !hasLink(words) else { return false }
         let oneLine = words.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        return pointing.contains { oneLine.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }
-    }
-
-    /// Text after a colon or a quote mark is what they mean, so asking for it again would be silly.
-    private static func hasQuotedText(_ words: String) -> Bool {
-        words.range(of: #"[:"“]\s*\S"#, options: .regularExpression) != nil
+        return pointing.contains { pattern in
+            guard let match = oneLine.range(of: pattern, options: [.regularExpression, .caseInsensitive]) else { return false }
+            // Text after a colon or a quote mark is what they're pointing at, so they've sent it.
+            return oneLine[match.upperBound...].range(of: #"[:"“]\s*\S"#, options: .regularExpression) == nil
+        }
     }
 
     private static func hasLink(_ words: String) -> Bool {

@@ -53,6 +53,8 @@ final class ScreenWordsTests: XCTestCase {
             "what's on my screen?",
             "what I'm looking at",
             "the article I\u{2019}m reading",
+            "Quick one: read this x thread",
+            "He said \"wow\" about this article",
         ] {
             XCTAssertTrue(ScreenWords.pointAtScreen(words), words)
         }
