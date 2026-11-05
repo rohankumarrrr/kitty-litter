@@ -46,7 +46,8 @@ MainActor.assumeIsolated {
                 inbox: DevFlags.wantsFlow ? Inbox(since: .distantFuture) : Inbox.load(from: inboxFile, now: Date()),
                 saveInbox: { inbox in
                     if !DevFlags.wantsFlow { try inbox.save(to: inboxFile) }
-                }
+                },
+                hidesTestThreads: !DevFlags.wantsFlow
             ),
             stage: stage
         )

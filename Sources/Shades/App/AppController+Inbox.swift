@@ -8,7 +8,7 @@ extension AppController {
 
     /// A thread whose reports go in the inbox. Without a run ID there's no telling reports apart, so it keeps to the bubble.
     func goesToInbox(_ thread: AgentThread) -> Bool {
-        thread.lastRunID != nil && loadKittens().contains { $0.usesInbox && KittenBoard.belongs(thread, to: $0) }
+        thread.lastRunID != nil && !hiddenThreads.contains(thread.id) && loadKittens().contains { $0.usesInbox && KittenBoard.belongs(thread, to: $0) }
     }
 
     /// Anything an inbox kitten finished that isn't filed yet, however long ago. Runs on every list, so a finish while
@@ -63,12 +63,10 @@ extension AppController {
             keepInbox()
             return
         }
-        let before = inbox.entries
         // A reply can say it passed work on and name nowhere it went, and that doesn't get to lose a report.
         let lines = sorted.flatMap { $0.hasLines ? $0 : nil } ?? unsorted(report)
-        inbox.file(lines, from: thread, at: now(), id: { UUID().uuidString })
+        if inbox.file(lines, from: thread, at: now(), id: { UUID().uuidString }) { nudgeInbox() }
         keepInbox()
-        if inbox.entries != before { nudgeInbox() }
         inboxChanged()
     }
 
@@ -156,8 +154,8 @@ extension AppController {
             inbox.remove(id)
             keepInbox()
             inboxChanged()
-        case .clearShipped:
-            inbox.clearShipped()
+        case .clear(let kind):
+            inbox.clear(kind)
             keepInbox()
             inboxChanged()
         }

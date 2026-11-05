@@ -14,6 +14,7 @@ extension AppController {
 
     func threadsChanged(_ threads: [AgentThread]) {
         tidyLeftoverSummaries(threads)
+        hideTestThreads(threads)
         latestThreads = threads
         threadListArrived = true
         let events = watch.update(threads)
@@ -40,6 +41,16 @@ extension AppController {
             }
         }
         fileOwedReports()
+    }
+
+    /// A live test isn't for you, so nothing about it reaches the inbox or the bubble. Probes follow their own
+    /// streams, and a copy trying a flow out keeps seeing them, so a test can still see its own result.
+    private func hideTestThreads(_ threads: [AgentThread]) {
+        guard hidesTestThreads else { return }
+        for thread in threads where thread.isLiveTest {
+            hiddenThreads.insert(thread.id)
+            watch.markQuick(thread.id)
+        }
     }
 
     var kittenStatuses: [KittenStatus] {

@@ -334,7 +334,7 @@ final class FlowTests: XCTestCase {
     }
 
     /// The app as it comes up: a new one of these, with what the last one saved, is a restart.
-    private func makeController(inbox: Inbox = Inbox(since: .distantPast)) -> AppController {
+    private func makeController(inbox: Inbox = Inbox(since: .distantPast), hidesTestThreads: Bool = true) -> AppController {
         let controller = AppController(
             dependencies: AppDependencies(
                 backend: backend,
@@ -353,7 +353,8 @@ final class FlowTests: XCTestCase {
                 saveInbox: { [unowned self] in
                     if let error = self.inboxSaveError { throw error }
                     self.savedInbox = $0
-                }
+                },
+                hidesTestThreads: hidesTestThreads
             ),
             stage: stage,
             now: { [unowned self] in self.clock }
@@ -1433,7 +1434,7 @@ final class FlowTests: XCTestCase {
         controller.inboxPressed()
         controller.inboxAction(.done(id: decision.id))
         XCTAssertEqual(stage.inboxRows?.map(\.text), ["The icon is live."])
-        controller.inboxAction(.clearShipped)
+        controller.inboxAction(.clear(.shipped))
         XCTAssertEqual(stage.inboxRows, [])
 
         XCTAssertEqual(backend.sent.count, sends)
@@ -1505,13 +1506,97 @@ final class FlowTests: XCTestCase {
 
     func testAReportTheSorterCallsANoteStaysInTheInbox() async {
         kittens = [inboxKitten]
-        // Word for word what a real model sent back for "The icon is live", which a restart would have lost as a bubble.
-        await finish(work(), sorted: "SHIPPED: none\n\nDECISION: none\n\nNOTE: The icon is live.")
-        XCTAssertEqual(rows.map(\.kind), [.shipped])
-        XCTAssertEqual(rows.map(\.text), ["The icon is live."])
-        XCTAssertEqual(savedInbox?.entries, rows)
+        await finish(work(), sorted: "SHIPPED: none\n\nDECISION: none\n\nNOTE: Nothing else to say.")
+        XCTAssertEqual(rows.map(\.kind), [.note])
+        XCTAssertEqual(rows.map(\.text), ["Nothing else to say."])
+        XCTAssertEqual(savedInbox?.entries, rows, "so a restart can't lose it")
         XCTAssertTrue(controller.notices.isEmpty)
+        XCTAssertNil(stage.bubble, "it doesn't count as shipped, so there's nothing to say")
+        XCTAssertEqual(CatWords.inboxHeadline(rows), "")
+        XCTAssertNil(CatWords.inboxSummary(rows))
+
+        controller.inboxPressed()
+        XCTAssertEqual(stage.inboxRows?.map(\.text), ["Nothing else to say."], "it's still there if you go looking")
+    }
+
+    func testANoteDoesntBringBackABubbleYouDismissed() async {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+        controller.bubbleDismissed(byClick: false)
+        await finish(work("o", title: "Clawde: Other"), sorted: "NOTE: Nothing else to say.")
+        XCTAssertNil(stage.bubble)
+        await finish(work(run: "run-2"), sorted: "NOTE: It's on a branch.")
+        XCTAssertNil(stage.bubble, "not one under a row either")
+    }
+
+    func testAnAnswerToWhatYouAskedStillSaysSo() async throws {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "SHIPPED: The fix is live.")
+        controller.bubbleDismissed(byClick: false)
+        controller.inboxAction(.reply(rows[0]))
+        stage.type("Did you check the rollback?")
+        await settle()
+        controller.line = nil
+        await finish(work(run: "run-2"), sorted: "NOTE: Yes, it rolled back cleanly.")
+        XCTAssertEqual(rows[0].answer, "Yes, it rolled back cleanly.")
         XCTAssertEqual(stage.bubble, .inbox("1 shipped"))
+    }
+
+    private func liveTest(_ status: AgentStatus, asking: ApprovalRequest? = nil, question: AgentQuestion? = nil) -> AgentThread {
+        var thread = work("t", title: "Shades test: routing", status: status)
+        thread.projectPath = inboxKitten.folder
+        thread.pendingApprovals = asking.map { [$0] } ?? []
+        thread.pendingQuestion = question
+        return thread
+    }
+
+    func testALiveTestsThreadNeverReachesYou() async {
+        kittens = [inboxKitten]
+        backend.reports["t"] = "The test passed."
+        controller.threadsChanged([liveTest(.running)])
+        controller.threadsChanged([liveTest(.completed)])
+        await settleFiling()
+        await controller.reportTask?.value
+        for _ in 0..<20 { await Task.yield() }
+
+        XCTAssertTrue(rows.isEmpty)
+        XCTAssertTrue(controller.notices.isEmpty)
+        XCTAssertNil(stage.bubble)
+        XCTAssertTrue(backend.sent.isEmpty, "no model is asked to sort it")
+        XCTAssertEqual(stage.celebrated, 0)
+        XCTAssertTrue(stage.threads.isEmpty)
+    }
+
+    func testALiveTestsThreadCantAskYouAnythingEither() async {
+        kittens = [inboxKitten]
+        let asking = ApprovalRequest(id: "r", threadID: "t", threadTitle: "Shades test: routing", kind: .command, summary: "Run: echo hi", createdAt: clock)
+        controller.threadsChanged([liveTest(.waitingForApproval, asking: asking)])
+        await settle()
+        XCTAssertNil(stage.bubble)
+        XCTAssertEqual(stage.status, .none)
+
+        let question = AgentQuestion(id: "q", threadID: "t", threadTitle: "Shades test: routing", text: "Which one?")
+        controller.threadsChanged([liveTest(.waitingForAnswer, question: question)])
+        await settle()
+        XCTAssertNil(stage.bubble)
+        controller.inboxPressed()
+        XCTAssertEqual(stage.inboxRows?.count, 0)
+    }
+
+    func testACopyTryingAFlowOutStillSeesItsOwnTestThread() async {
+        kittens = []
+        controller = makeController(hidesTestThreads: false)
+        backend.reports["t"] = "The test passed."
+        var running = liveTest(.running)
+        running.projectPath = nil
+        var done = liveTest(.completed)
+        done.projectPath = nil
+        controller.threadsChanged([running])
+        controller.threadsChanged([done])
+        await controller.reportTask?.value
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(stage.bubble, .notice(caption: "Done: Shades test: routing", text: "The test passed.", threadID: "t"))
     }
 
     func testANewReportReplacesItsThreadsOldDecision() async {

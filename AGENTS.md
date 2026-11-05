@@ -47,7 +47,7 @@ This is open source, and people learn it from the docs, so they change in the sa
 
 - Never send synthetic clicks or keystrokes while testing. They land on whatever's really on the desktop, which has already meant stray clicks in someone's calendar. Use `--demo`, the flags above, the probes, or a person.
 - Don't send a real screenshot to a model in a test. Use `--image` with a picture you made.
-- Name live test threads "Shades test: ..." and archive them afterwards.
+- Name live test threads "Shades test: ..." and archive them afterwards. The app keeps those out of your inbox and bubble, unless it's a copy trying a flow out.
 
 ## Style
 

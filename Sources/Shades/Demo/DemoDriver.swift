@@ -122,7 +122,7 @@ final class DemoDriver {
             case "done":
                 if let first { controller.inboxAction(.done(id: first.id)) }
             case "clear":
-                controller.inboxAction(.clearShipped)
+                controller.inboxAction(.clear(.shipped))
             default:
                 controller.inboxPressed()
             }

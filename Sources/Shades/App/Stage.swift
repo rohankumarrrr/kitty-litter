@@ -26,7 +26,7 @@ enum InboxAction: Equatable {
     case reply(InboxEntry)
     case open(threadID: String)
     case done(id: String)
-    case clearShipped
+    case clear(InboxEntry.Kind)
 }
 
 /// One question for the user, typed into the small panel over the cat.

@@ -153,6 +153,8 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var pendingQuestion: AgentQuestion?
     /// How much this thread is allowed to do. `nil` if the backend doesn't say.
     public var runtimeMode: RuntimeMode?
+    /// A live test of Shades itself, which is how those are named. Not work anyone's waiting on.
+    public var isLiveTest: Bool { title.hasPrefix("Shades test:") }
     /// The thread's latest run, which tells one report from the next. `nil` if the backend doesn't say.
     public var lastRunID: String?
     public var lastRunEndedAt: Date?

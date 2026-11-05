@@ -25,4 +25,6 @@ struct AppDependencies {
     /// What was in the inbox when the app last stopped.
     var inbox = Inbox(since: .distantPast)
     var saveInbox: (Inbox) throws -> Void = { _ in }
+    /// Off for a copy trying a flow out, which may be testing with one of these itself.
+    var hidesTestThreads = true
 }

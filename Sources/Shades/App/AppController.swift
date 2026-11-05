@@ -32,6 +32,7 @@ final class AppController {
     let fileExists: (String) -> Bool
     let reportHealth: ([HealthFinding]) -> Void
     let saveInbox: (Inbox) throws -> Void
+    let hidesTestThreads: Bool
     let stage: CatStage
     let now: () -> Date
     private(set) var settings: Settings
@@ -148,6 +149,7 @@ final class AppController {
         reportHealth = dependencies.reportHealth
         inbox = dependencies.inbox
         saveInbox = dependencies.saveInbox
+        hidesTestThreads = dependencies.hidesTestThreads
         self.stage = stage
         self.now = now
     }

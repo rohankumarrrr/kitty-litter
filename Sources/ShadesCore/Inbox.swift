@@ -3,7 +3,8 @@ import Foundation
 /// One line in the inbox. It's something an agent said, so it can only be read.
 public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
     public enum Kind: String, Codable, Sendable {
-        case decision, shipped
+        /// `note` is anything else a thread had to say. It waits in the panel, and doesn't count as having shipped.
+        case decision, shipped, note
     }
 
     public var id: String
@@ -69,24 +70,27 @@ public struct Inbox: Codable, Equatable, Sendable {
 
     /// Records the run and files the lines in one change, so a save can't separate them. Does nothing if that
     /// run is already handled. Whatever a report turns out to be, it ends up here, where a restart can't lose it.
-    public mutating func file(_ sorted: SortedReport, from thread: AgentThread, at: Date, id: () -> String) {
-        guard let run = thread.lastRunID, handled[thread.id] != run else { return }
+    /// Says whether that's worth telling you about, which a note you didn't ask for isn't.
+    @discardableResult
+    public mutating func file(_ sorted: SortedReport, from thread: AgentThread, at: Date, id: () -> String) -> Bool {
+        guard let run = thread.lastRunID, handled[thread.id] != run else { return false }
         handled[thread.id] = run
 
         func add(_ kind: InboxEntry.Kind, _ text: String) {
             entries.append(InboxEntry(id: id(), kind: kind, text: text, threadID: thread.id, threadTitle: thread.title, at: at))
         }
         guard sorted.decision != nil || sorted.shipped != nil else {
-            guard let note = sorted.note else { return }
+            guard let note = sorted.note else { return false }
             guard let row = rowForNote(from: thread.id) else {
-                add(.shipped, note)
-                return
+                add(.note, note)
+                return false
             }
             // An answer to what you just asked replaces the last one, which you've seen. Anything else waits with it.
-            let earlier = entries[row].repliedAt == nil ? entries[row].answer : nil
+            let asked = entries[row].repliedAt != nil
+            let earlier = asked ? nil : entries[row].answer
             entries[row].answer = [earlier, note].compactMap { $0 }.joined(separator: "\n\n")
             entries[row].repliedAt = nil
-            return
+            return asked
         }
 
         entries.removeAll { $0.threadID == thread.id && $0.kind == .decision }
@@ -96,6 +100,7 @@ public struct Inbox: Codable, Equatable, Sendable {
         // Only one row takes the note, so it isn't said twice.
         if let decision = sorted.decision { add(.decision, [decision, sorted.note].compactMap { $0 }.joined(separator: " ")) }
         if let shipped = sorted.shipped { add(.shipped, [shipped, sorted.decision == nil ? sorted.note : nil].compactMap { $0 }.joined(separator: " ")) }
+        return true
     }
 
     /// The row you asked on, or failing that the thread's open decision, or its latest row.
@@ -121,13 +126,19 @@ public struct Inbox: Codable, Equatable, Sendable {
         entries.removeAll { $0.id == id }
     }
 
-    public mutating func clearShipped() {
-        entries.removeAll { $0.kind == .shipped }
+    public mutating func clear(_ kind: InboxEntry.Kind) {
+        entries.removeAll { $0.kind == kind }
     }
 
-    /// Needs you, then replied decisions, then shipped, newest first within each. Later in the list counts as newer.
+    /// Needs you, then replied decisions, then shipped, then notes, newest first within each. Later in the list counts as newer.
     public static func panelOrder(_ entries: [InboxEntry]) -> [InboxEntry] {
-        func rank(_ entry: InboxEntry) -> Int { entry.needsYou ? 0 : entry.kind == .decision ? 1 : 2 }
+        func rank(_ entry: InboxEntry) -> Int {
+            switch entry.kind {
+            case .decision: return entry.needsYou ? 0 : 1
+            case .shipped: return 2
+            case .note: return 3
+            }
+        }
         return entries.enumerated()
             .sorted { (rank($0.element), $1.element.at, $1.offset) < (rank($1.element), $0.element.at, $0.offset) }
             .map(\.element)

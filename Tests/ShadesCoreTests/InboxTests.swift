@@ -156,11 +156,36 @@ final class InboxTests: XCTestCase {
         XCTAssertEqual(inbox.entries.map(\.answer), ["Because."])
     }
 
-    func testANoteWithNoRowIsKeptUnderShipped() {
+    func testANoteWithNoRowIsKeptWithoutBeingCalledShipped() {
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(note: "It's live."), from: thread(), at: start, id: counter())
-        XCTAssertEqual(inbox.entries.map(\.kind), [.shipped])
-        XCTAssertEqual(inbox.entries.map(\.text), ["It's live."])
+        inbox.file(SortedReport(note: "Nothing to report."), from: thread(), at: start, id: counter())
+        XCTAssertEqual(inbox.entries.map(\.kind), [.note])
+        XCTAssertEqual(inbox.entries.map(\.text), ["Nothing to report."])
+        XCTAssertFalse(inbox.entries[0].needsYou)
+    }
+
+    func testFilingSaysWhetherItsWorthTellingYou() {
+        var inbox = Inbox(since: start)
+        let ids = counter()
+        XCTAssertFalse(inbox.file(SortedReport(note: "A."), from: thread("n"), at: start, id: ids), "a note can wait")
+        XCTAssertTrue(inbox.file(SortedReport(shipped: "B."), from: thread("s"), at: start, id: ids))
+        XCTAssertFalse(inbox.file(SortedReport(note: "C."), from: thread("s", run: "r2"), at: start, id: ids), "nor one under a row")
+        XCTAssertTrue(inbox.file(SortedReport(decision: "D?"), from: thread("d"), at: start, id: ids))
+        XCTAssertFalse(inbox.file(SortedReport(decision: "D?"), from: thread("d"), at: start, id: ids), "already filed")
+
+        let shipped = inbox.entries.first { $0.threadID == "s" }!
+        inbox.markReplied(shipped.id, at: start)
+        XCTAssertTrue(inbox.file(SortedReport(note: "E."), from: thread("s", run: "r3"), at: start, id: ids), "you asked, so you hear")
+    }
+
+    func testClearingOneKindLeavesTheOthers() {
+        var inbox = Inbox(since: start)
+        inbox.file(SortedReport(shipped: "A."), from: thread("s"), at: start, id: counter())
+        inbox.file(SortedReport(note: "B."), from: thread("n"), at: start, id: counter())
+        inbox.clear(.shipped)
+        XCTAssertEqual(inbox.entries.map(\.kind), [.note])
+        inbox.clear(.note)
+        XCTAssertTrue(inbox.entries.isEmpty)
     }
 
     func testANoteAlongsideRowsIsntLostOrSaidTwice() {
@@ -187,7 +212,7 @@ final class InboxTests: XCTestCase {
         inbox.file(SortedReport(decision: "C?"), from: thread("o"), at: start, id: { "other" })
         inbox.remove("other")
         XCTAssertEqual(inbox.entries.map(\.text), ["B?", "A."])
-        inbox.clearShipped()
+        inbox.clear(.shipped)
         XCTAssertEqual(inbox.entries.map(\.text), ["B?"])
     }
 
@@ -211,9 +236,10 @@ final class InboxTests: XCTestCase {
             row("replied new", .decision, at: 5, replied: true),
             row("needs new", .decision, at: 6),
             row("shipped replied", .shipped, at: 7, replied: true),
+            row("note", .note, at: 8),
         ]
         XCTAssertEqual(Inbox.panelOrder(rows).map(\.id), [
-            "needs new", "needs old", "replied new", "replied old", "shipped replied", "shipped new", "shipped old",
+            "needs new", "needs old", "replied new", "replied old", "shipped replied", "shipped new", "shipped old", "note",
         ])
     }
 

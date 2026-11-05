@@ -92,8 +92,10 @@ final class InboxPanel {
         var y: CGFloat = 0
         if entries.first?.needsYou == true { addHeader("Needs you", y: &y) }
         let firstShipped = entries.firstIndex { $0.kind == .shipped }
+        let firstNote = entries.firstIndex { $0.kind == .note }
         for (index, entry) in entries.enumerated() {
-            if index == firstShipped { addHeader("Shipped", y: &y, clear: true) }
+            if index == firstShipped { addHeader("Shipped", y: &y, clearing: .shipped) }
+            if index == firstNote { addHeader("Also", y: &y, clearing: .note) }
             addRow(entry, y: &y)
         }
         contentHeight = entries.isEmpty ? ceil(empty.intrinsicContentSize.height) : y - Self.rowGap
@@ -101,14 +103,14 @@ final class InboxPanel {
 
     private var inner: CGFloat { Self.width - Self.padding * 2 }
 
-    private func addHeader(_ title: String, y: inout CGFloat, clear: Bool = false) {
+    private func addHeader(_ title: String, y: inout CGFloat, clearing kind: InboxEntry.Kind? = nil) {
         let label = Self.label(title, font: .systemFont(ofSize: 11, weight: .semibold), color: Ink.soft)
         label.sizeToFit()
         // Labels carry 2 points of their own padding, so they sit that much further out.
         label.frame.origin = NSPoint(x: -2, y: y + (Self.headerHeight - label.frame.height) / 2)
         list.addSubview(label)
-        if clear {
-            let button = addButton("Clear", .clearShipped)
+        if let kind {
+            let button = addButton("Clear", .clear(kind))
             button.setFrameOrigin(NSPoint(x: inner + 6 - button.frame.width, y: y))
         }
         y += Self.headerHeight
