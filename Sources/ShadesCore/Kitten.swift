@@ -10,10 +10,8 @@ public struct Kitten: Sendable, Equatable, Identifiable {
     public var covers: String
     public var folder: String
     /// The folder of the T3 project it works in. That's its own folder, unless it looks after an
-    /// app that already has a project. One that isn't meant to see your screen always stays in its
-    /// own, so a change to `kitten.json` can't make its earlier threads stop counting as its own.
-    public var project: String { seesScreen ? (appProject ?? folder) : folder }
-    private var appProject: String?
+    /// app that already has a project. Threads in either count as its own.
+    public var project: String
     /// Not taking work yet. It shows up with the others, but nothing gets sent to it.
     public var planned: Bool
     /// The colour of its jacket, as 0xRRGGBB, or `nil` for the black one Shades wears.
@@ -25,6 +23,10 @@ public struct Kitten: Sendable, Equatable, Identifiable {
     public var usesInbox: Bool
 
     public var id: String { folder }
+
+    /// Where its new threads start. One that isn't meant to see your screen keeps them in its own
+    /// folder, so a change to its `project` can't leave them counting as nobody's.
+    public var workspace: String { seesScreen ? project : folder }
 
     public init(
         name: String,
@@ -41,7 +43,7 @@ public struct Kitten: Sendable, Equatable, Identifiable {
         self.role = role
         self.covers = covers
         self.folder = folder
-        self.appProject = project
+        self.project = project ?? folder
         self.planned = planned
         self.color = color
         self.seesScreen = seesScreen

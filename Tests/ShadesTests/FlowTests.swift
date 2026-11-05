@@ -953,7 +953,7 @@ final class FlowTests: XCTestCase {
     /// Otherwise moving it to another project would leave its earlier threads seeing the screen.
     func testAKittenThatDoesntSeeTheScreenStaysInItsOwnFolder() async {
         let screenless = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", project: "/code/app", seesScreen: false)
-        XCTAssertEqual(screenless.project, "/k/clawde")
+        XCTAssertEqual(screenless.workspace, "/k/clawde")
         kittens = [screenless]
         backend.projects["/k/clawde"] = "project-clawde"
         backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
@@ -961,6 +961,31 @@ final class FlowTests: XCTestCase {
         await controller.frontierTask?.value
         XCTAssertEqual(backend.sent[1].prompt.projectID, "project-clawde")
         XCTAssertFalse(backend.sent[1].prompt.text.contains("CLAUDE.md"))
+    }
+
+    func testTurningOffTheScreenKeepsAKittensEarlierThreadsInItsProjectOffIt() async {
+        kittens = [pepper]
+        backend.projects["/code/app"] = "project-app"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("how's the app doing?")
+        await controller.frontierTask?.value
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-app")
+
+        var flipped = pepper
+        flipped.seesScreen = false
+        kittens = [flipped]
+        var earlier = session("thread-2", "Fix the chart")
+        earlier.projectPath = "/code/app"
+        backend.origins["thread-2"] = ThreadOrigin(title: "Fix the chart", projectPath: "/code/app", startedBy: .person)
+        controller.threadsChanged([earlier])
+        context.saved = 0
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("and that part?")
+        await controller.forwardTask?.value
+        let forwarded = backend.sent[3]
+        XCTAssertEqual(forwarded.mode, .forward)
+        XCTAssertEqual(forwarded.threadID, "thread-2")
+        assertLeftOut(forwarded.prompt)
     }
 
     func testAKittensNumberThatIsntOnTheListGoesNowhere() async {
