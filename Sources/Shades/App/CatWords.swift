@@ -143,7 +143,6 @@ enum CatWords {
 
     static func status(_ thread: AgentThread) -> String {
         if !thread.pendingApprovals.isEmpty { return "Needs you" }
-        if thread.pendingQuestion != nil { return "Has a question" }
         switch thread.status {
         case .idle: return "Idle"
         case .starting: return "Starting"

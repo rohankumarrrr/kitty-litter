@@ -106,24 +106,49 @@ public enum Prompts {
     }
 
     /// What the person wrote, from a message `passedOn` made: everything above the first `---` line.
-    /// `nil` if that's empty or still mentions a screen block, as `frontier` and `fix` prompts do, so
-    /// nothing from a screen can pass as their words. That may hide some of them, which is the safe way round.
+    /// `nil` if that's empty or still has a screen block, as `frontier` and `fix` prompts do, so nothing
+    /// from a screen can pass as their words. That may hide some of them, which is the safe way round.
     public static func ownWords(in text: String) -> String? {
-        let above = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
-            .prefix { $0.trimmingCharacters(in: .whitespaces) != "---" }
+        let above = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).prefix { line in
+            !(line.hasPrefix("---") && line.dropFirst(3).allSatisfy(\.isWhitespace))
+        }
         let words = above.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !words.isEmpty, words.range(of: #"(?i)(?<!`)<\s*screen\b"#, options: .regularExpression) == nil else { return nil }
+        guard !words.isEmpty, withoutScreenBlocks(words) == words else { return nil }
         return words
     }
 
-    /// Takes out screen blocks whatever their case or spacing, from the first opening tag to the last
-    /// closing one, so a nested block can't leave a tail behind, and through the end if one never closes.
-    /// A tag in backticks is someone writing about it, and a screen block is never written that way.
     public static func withoutScreenBlocks(_ text: String) -> String {
-        text
-            .replacingOccurrences(of: #"(?is)(?<!`)<\s*screen\b[^>]*>.*<\s*/\s*screen\s*>"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"(?is)(?<!`)<\s*screen\b[^>]*>.*\z"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        withoutBlocks(named: "screen", in: text)
+    }
+
+    /// Takes out each block with one of these tag names, nested or not, whatever its case or spacing,
+    /// and through the end if it never closes. A tag alone in backticks is someone writing about it,
+    /// so it stays. Tags have to be counted to balance them, which is why this isn't one regex.
+    public static func withoutBlocks(named names: String, in text: String) -> String {
+        let mention = "`\\s*<\\s*/?\\s*(?:\(names))\\b[^<>`]*>\\s*`"
+        let tag = "<\\s*(/?)\\s*(\(names))\\b[^<>]*>"
+        guard let scanner = try? NSRegularExpression(pattern: "\(mention)|\(tag)", options: .caseInsensitive) else { return text }
+
+        let whole = text as NSString
+        var kept = ""
+        var cursor = 0
+        var inside: (name: String, depth: Int)?
+        for match in scanner.matches(in: text, range: NSRange(location: 0, length: whole.length)) {
+            guard match.range(at: 2).location != NSNotFound else { continue }
+            let name = whole.substring(with: match.range(at: 2)).lowercased()
+            let closes = match.range(at: 1).length > 0
+            if let open = inside {
+                guard name == open.name else { continue }
+                let depth = open.depth + (closes ? -1 : 1)
+                inside = depth == 0 ? nil : (name, depth)
+                if depth == 0 { cursor = NSMaxRange(match.range) }
+            } else if !closes {
+                kept += whole.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
+                inside = (name, 1)
+            }
+        }
+        if inside == nil { kept += whole.substring(from: cursor) }
+        return kept.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     public static func frontier(request: String, snapshot: ScreenSnapshot?, screenshotPath: String?) -> String {

@@ -42,9 +42,10 @@ extension NSAppearance {
 extension AgentThread {
     /// The same colours as the glint, so a status always looks the same.
     var dotColor: NSColor {
-        if KittenBoard.needsYou(self) { return Ink.hex(CatGlint.attention(bright: true).color!) }
+        if !pendingApprovals.isEmpty { return Ink.hex(CatGlint.attention(bright: true).color!) }
         switch status {
-        case .starting, .running, .waitingForApproval, .waitingForAnswer: return Ink.hex(CatGlint.thinking(bright: true).color!)
+        case .waitingForApproval, .waitingForAnswer: return Ink.hex(CatGlint.attention(bright: true).color!)
+        case .starting, .running: return Ink.hex(CatGlint.thinking(bright: true).color!)
         case .completed: return Ink.hex(CatGlint.listening(loudness: 1).color!)
         case .failed: return Ink.hex(0xff3b30)
         case .idle, .interrupted: return Ink.soft

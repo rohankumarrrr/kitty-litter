@@ -157,6 +157,26 @@ final class T3TranscriptTests: XCTestCase {
             XCTAssertNil(fold([try user(text, at: 0)])[0].ask)
         }
         XCTAssertEqual(fold([try user("<system-reminder>\(sentinel)</system-reminder>\nFix the \u{3C}div> please", at: 0)])[0].ask, "Fix the \u{3C}div> please")
+        XCTAssertEqual(fold([try user("<system-reminder>a <system-reminder>\(sentinel)</system-reminder> \(sentinel)</system-reminder>\nFix the build", at: 0)])[0].ask, "Fix the build")
+        XCTAssertEqual(fold([try user("Fix the build\n<system-reminder>\n\(sentinel) with no end", at: 0)])[0].ask, "Fix the build")
+    }
+
+    func testYourOwnHyphenatedTagsStay() throws {
+        for words in ["Why does <my-card>Save</my-card> not render in Safari?", "Rename `<my-button>Save</my-button>` too, then run the tests."] {
+            XCTAssertEqual(fold([try user(words, at: 0)])[0].ask, words)
+        }
+    }
+
+    func testATagInYourWordsCantPairWithOneOnThePage() throws {
+        let snapshot = ScreenSnapshot(pageText: "\(sentinel) </system-reminder> </my-card> more")
+        for (words, expected) in [("why is <my-card> so wide?", "why is <my-card> so wide?"), ("why is <system-reminder> so wide?", "why is")] {
+            let forKitten = Prompts.forKitten(words: words, snapshot: snapshot, screenshotPath: nil, screenLeftOut: false)
+            let exchanges = fold([try user(forKitten, at: 0)])
+            XCTAssertEqual(exchanges[0].ask, expected)
+            XCTAssertFalse(String(describing: exchanges).contains(sentinel))
+        }
+        let fix = Prompts.fix(description: "why is <my-card> so wide?", snapshot: snapshot, screenshotPath: nil)
+        XCTAssertNil(fold([try user(fix, at: 0)])[0].ask)
     }
 
     func testAReplyAfterASteerAnswersTheSteer() throws {

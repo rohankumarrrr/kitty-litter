@@ -86,10 +86,9 @@ final class ChannelFeed {
                     session.isDirty = false
                     quiet = 0
                     await self?.pass(session)
-                } else {
-                    quiet += 1
                 }
                 try? await Task.sleep(for: gap)
+                quiet += 1
             }
         }
     }

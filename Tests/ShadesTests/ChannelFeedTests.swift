@@ -193,6 +193,7 @@ final class ChannelFeedTests: XCTestCase {
     }
 
     func testOpeningTwiceChangesNothing() async {
+        makeFeed(gap: .seconds(60))
         backend.threads = [thread("a")]
         backend.say("Hello", in: "a")
         await openAndRead()

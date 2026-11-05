@@ -184,7 +184,7 @@ struct ChannelBook: Equatable {
     /// that's a pull request waiting on "ship it". What needs you comes first, then what's working.
     private static func openThreads(of kitten: Kitten, among kittens: [Kitten], in threads: [AgentThread]) -> [AgentThread] {
         threads
-            .filter { KittenBoard.owner(of: $0, among: kittens) == kitten && (!$0.isSettled || $0.status.isActive) }
+            .filter { KittenBoard.owner(of: $0, among: kittens) == kitten && (!$0.isSettled || $0.status.isActive || KittenBoard.needsYou($0)) }
             .map { thread in
                 var thread = thread
                 thread.title = title(of: thread, owner: kitten)

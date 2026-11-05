@@ -47,7 +47,8 @@ enum T3Transcript {
     }
 
     private static func ownWords(_ text: String?) -> String? {
-        guard let words = text.map(T3Wire.withoutToolBlocks).flatMap(Prompts.ownWords), words != T3Wire.attachmentsOnly else { return nil }
+        // In this order, or a tag above the line could pair with one on the page and take the line out.
+        guard let words = text.flatMap(Prompts.ownWords).map(T3Wire.withoutToolBlocks), !words.isEmpty, words != T3Wire.attachmentsOnly else { return nil }
         guard words.hasPrefix(T3Wire.ultrathinkPrefix) else { return capped(words) }
         let rest = words.dropFirst(T3Wire.ultrathinkPrefix.count).trimmingCharacters(in: .whitespacesAndNewlines)
         return rest.isEmpty ? nil : capped(rest)

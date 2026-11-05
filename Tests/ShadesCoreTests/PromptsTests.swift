@@ -156,6 +156,14 @@ final class PromptsTests: XCTestCase {
         XCTAssertEqual(Prompts.withoutScreenBlocks("kept\n<screen>\nSENTINEL with no end"), "kept")
         XCTAssertEqual(Prompts.withoutScreenBlocks("kept <screen>SENTINEL with no end"), "kept")
         XCTAssertEqual(Prompts.withoutScreenBlocks("a <screen>SENTINEL <screen>SENTINEL</screen> SENTINEL</screen> b"), "a  b")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("a <screen>SENTINEL <screen>SENTINEL</screen> SENTINEL"), "a")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("a <screen>SENTINEL</screen> b <screen>SENTINEL</screen> c"), "a  b  c")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("`<screen>SENTINEL</screen>`"), "``")
+        XCTAssertEqual(Prompts.withoutScreenBlocks("see `<screen>SENTINEL with no end"), "see `")
+        XCTAssertEqual(
+            Prompts.withoutScreenBlocks("The fix keeps it inside `</screen>` so it can't escape. PR #5 is ready."),
+            "The fix keeps it inside `</screen>` so it can't escape. PR #5 is ready."
+        )
         XCTAssertEqual(
             Prompts.withoutScreenBlocks("Page text now stays inside `<screen>`. PR #5 is ready."),
             "Page text now stays inside `<screen>`. PR #5 is ready."
@@ -168,6 +176,15 @@ final class PromptsTests: XCTestCase {
         XCTAssertEqual(Prompts.ownWords(in: "my words\n\n--- \nSENTINEL"), "my words")
         XCTAssertNil(Prompts.ownWords(in: "my words < screen >SENTINEL</ screen >"))
         XCTAssertEqual(Prompts.ownWords(in: "what does the `<screen>` tag do?"), "what does the `<screen>` tag do?")
+        XCTAssertNil(Prompts.ownWords(in: "`<screen>SENTINEL</screen>`"))
+        XCTAssertEqual(Prompts.ownWords(in: "my config:\n    ---\n    name: x\nand please fix it"), "my config:\n    ---\n    name: x\nand please fix it")
+    }
+
+    func testPilesOfOpeningTagsDontTakeLong() {
+        let started = Date()
+        _ = Prompts.withoutScreenBlocks(String(repeating: "<screen>", count: 32_000))
+        _ = Prompts.withoutScreenBlocks(String(repeating: "<screen ", count: 32_000))
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
     }
 
     func testScreenTextIsMarkedAsData() {

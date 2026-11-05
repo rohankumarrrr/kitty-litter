@@ -655,10 +655,16 @@ enum T3Wire {
     /// What T3 sends for a message that's only attachments.
     static let attachmentsOnly = "[User attached one or more files without additional text. Respond using the conversation context and the attached files.]"
 
-    /// Takes out what the coding tool behind an imported thread wrote, which T3 marks as the user's.
-    /// Its tags are hyphenated, like `<system-reminder>`, which nobody types into a message.
+    /// What the coding tool behind an imported thread wrote, which T3 marks as the user's. These are
+    /// the tags found in real threads. Any hyphenated tag would do, but people write those too.
+    static let toolTags = [
+        "system-reminder", "task-notification", "scheduled-task", "ci-monitor-event", "side-sessions-event",
+        "bash-input", "bash-stdout", "bash-stderr", "command-name", "command-message", "command-args",
+        "local-command-[a-z]+", "artifact-view-context", "cross-session-message", "sandbox_violations",
+    ].joined(separator: "|")
+
     static func withoutToolBlocks(_ text: String) -> String {
-        text.replacingOccurrences(of: #"(?is)<([a-z]+(?:-[a-z]+)+)\b[^>]*>.*?</\1\s*>"#, with: "", options: .regularExpression)
+        Prompts.withoutBlocks(named: toolTags, in: text)
     }
 
     /// A thread's own items in time order. Subagents' items have a parent, so they're left out.

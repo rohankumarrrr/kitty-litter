@@ -279,6 +279,21 @@ final class T3ThreadListTests: XCTestCase {
         XCTAssertNil(list.listedThreadID(of: "unknown"))
     }
 
+    func testASubagentWaitingOnYouShowsOnTheThreadAbove() throws {
+        var list = T3ThreadList()
+        list.apply(try snapshot(threads: [
+            thread(id: "asks", title: "Asks"),
+            thread(id: "asks-child", pending: #"{"id":"q","kind":"user_input","createdAt":"2026-11-05T04:00:00.000Z","blocking":true}"#, parent: "asks", relationship: "subagent"),
+            thread(id: "approves", title: "Approves"),
+            thread(id: "approves-child", pending: #"{"id":"a","kind":"command","createdAt":"2026-11-05T04:00:00.000Z","blocking":true}"#, parent: "approves", relationship: "subagent"),
+            thread(id: "quiet", title: "Quiet"),
+        ]))
+        let listed = Dictionary(uniqueKeysWithValues: list.threadsWithoutWords.map { ($0.id, $0.status) })
+        XCTAssertEqual(listed["asks"], .waitingForAnswer)
+        XCTAssertEqual(listed["approves"], .waitingForApproval)
+        XCTAssertNotEqual(listed["quiet"], .waitingForAnswer)
+    }
+
     func testSettledAndPullRequestsComeThrough() throws {
         let open = thread(id: "open")
             .replacingOccurrences(of: #""settledAt":"2026-11-02T19:16:42.734Z""#, with: #""settledAt":null"#)

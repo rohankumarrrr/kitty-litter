@@ -178,6 +178,17 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(built.issues.map(\.threads.count), [0, 1])
     }
 
+    func testASettledThreadThatNeedsYouIsAnIssue() {
+        var waiting = thread("t", settled: true)
+        waiting.pendingQuestion = AgentQuestion(id: "q", threadID: "child", threadTitle: "Work", text: "")
+        XCTAssertEqual(book(threads: [waiting]).issueCount, 1)
+    }
+
+    func testAPlannedKittensDMWithUnreadThreadsPointsAtT3() {
+        let built = book(kittens: [steve, cali], threads: [thread("t", project: "Cali", status: .completed)])
+        XCTAssertEqual(ChannelRows.rows(.channel(.direct(cali)), in: built), [.note(CatWords.olderMessages)])
+    }
+
     func testAPlannedKittensOpenThreadIsAnIssue() {
         let built = book(kittens: [steve, cali], threads: [thread("t", project: "Cali", status: .running)])
         XCTAssertEqual(built.issues.map(\.kitten), [steve, cali])
