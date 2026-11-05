@@ -65,7 +65,7 @@ Choose Channels from the cat's menu to read what's being said, without opening T
 
 One answer is one message. A kitten's narration on the way to its answer shows as "2 earlier notes", and the rest is in T3. Hover over a message to copy it or open its thread, or click the line above it, which is the thread's title.
 
-The title rule above decides whose work a thread is. If a thread's title starts with a kitten's name and a colon, it's that kitten's wherever it runs, which beats being in another kitten's project.
+In Channels, a thread whose title starts with a kitten's name and a colon is listed as that kitten's wherever it runs, even in another kitten's project.
 
 The window only reads. It can't send anything, and it never takes the keyboard, so the app you're in keeps its selection and the cat still sees what you're looking at. That also means no selecting text and no arrow keys. Nothing is read until you open it. While it's open it reads again when a thread changes, and looks every 15 seconds anyway, so it can tell you if T3 has gone away. It reads each kitten's newest 30 threads, and anything older is in T3. Every word is forgotten when you close it with the red button, and nothing goes to disk except where the window was.
 
@@ -96,7 +96,7 @@ A kitten that reports a lot, especially while you're away, can leave you working
 
 Reply and Ask open the text box, where you can type or hold the talk key and say it. What you send is your own words and nothing else, with no look at your screen, and it goes straight to that thread. The row dims until the thread answers. A new decision or shipped line from that thread replaces its old decision, and an answer goes under the row you asked on. No button ever says anything for you, and Done and Clear tell no agent anything.
 
-A thread titled `Shades test:` is a live test, so it stays out of the inbox and the bubble altogether, whichever kitten it belongs to. A copy of the app trying a flow out with `--ask`, `--hand-off` or `--fix` still sees them, so a test can see its own result.
+A thread's reports go here if it counts as the work of any kitten with `inbox: true`, by its folder or its title. A thread titled `Shades test:` is a live test, so it stays out of the inbox and the bubble altogether, whichever kitten it belongs to. A copy of the app trying a flow out with `--ask`, `--hand-off` or `--fix` still sees them, so a test can see its own result.
 
 A question an agent has stopped to ask shows there too, but only opens in T3, because a message would just queue behind it. Approvals still come as the approval bubble, since they block the work.
 
