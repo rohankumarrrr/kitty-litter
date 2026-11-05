@@ -1,0 +1,48 @@
+import AppKit
+
+/// A window that floats over everything, on every Space and over full-screen apps,
+/// without ever making Shades the active app. Most never take the keyboard either.
+class QuietPanel: NSPanel {
+    private let allowsKey: Bool
+
+    init(allowsKey: Bool = false, shadow: Bool = true) {
+        self.allowsKey = allowsKey
+        super.init(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: true
+        )
+        isFloatingPanel = true
+        level = .statusBar
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        hidesOnDeactivate = false
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = shadow
+        isMovable = false
+        animationBehavior = .none
+        isReleasedWhenClosed = false
+        becomesKeyOnlyIfNeeded = true
+    }
+
+    override var canBecomeKey: Bool { allowsKey }
+    override var canBecomeMain: Bool { false }
+
+    // There's no menu bar of ours while another app is active, so the editing keys come through here.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+              let key = event.charactersIgnoringModifiers?.lowercased(),
+              let action = Self.editActions[key]
+        else { return super.performKeyEquivalent(with: event) }
+        return NSApp.sendAction(action, to: nil, from: self)
+    }
+
+    private static let editActions: [String: Selector] = [
+        "x": #selector(NSText.cut(_:)),
+        "c": #selector(NSText.copy(_:)),
+        "v": #selector(NSText.paste(_:)),
+        "a": #selector(NSText.selectAll(_:)),
+        "z": Selector(("undo:")),
+    ]
+}
