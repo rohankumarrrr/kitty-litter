@@ -26,6 +26,7 @@ final class AppController {
     let keys: KeyHoldMonitoring
     let saveSettings: (Settings) -> Void
     let screenTip: () -> String?
+    let loadKittens: () -> [Kitten]
     let stage: CatStage
     let now: () -> Date
     private(set) var settings: Settings
@@ -76,6 +77,8 @@ final class AppController {
     var threadListWait: TimeInterval = 2
     /// The sessions the router was shown for the question it's on, in the order it saw them.
     var roster: [AgentThread] = []
+    /// The kittens it was shown, in the same way.
+    var kittens: [Kitten] = []
     /// Whether the quick thread is on its first turn, with no conversation worth keeping yet.
     var quickIsFresh = false
     var lineCounter = 0
@@ -112,6 +115,7 @@ final class AppController {
         settings = dependencies.settings
         saveSettings = dependencies.saveSettings
         screenTip = dependencies.screenTip
+        loadKittens = dependencies.kittens
         self.stage = stage
         self.now = now
     }

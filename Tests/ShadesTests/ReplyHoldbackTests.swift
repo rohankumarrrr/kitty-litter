@@ -3,6 +3,14 @@ import ShadesCore
 import XCTest
 
 final class ReplyHoldbackTests: XCTestCase {
+    func testAKittenIsHeldBackAndReadAtTheEnd() {
+        var holdback = ReplyHoldback()
+        XCTAssertNil(holdback.add("KIT"))
+        XCTAssertNil(holdback.add("TEN: 1"))
+        XCTAssertEqual(holdback.finish(fullText: "KITTEN: 1"), .kitten(number: 1))
+        XCTAssertEqual(ReplyHoldback().finish(fullText: "KITTEN: Steve"), .answer(""))
+    }
+
     func testARouteIsHeldBackAndReadAtTheEnd() {
         var holdback = ReplyHoldback()
         XCTAssertNil(holdback.add("SE"))

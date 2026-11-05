@@ -190,6 +190,8 @@ public protocol AgentBackend: AnyObject, Sendable {
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws
     /// Shows the thread in T3 Code.
     func open(threadID: String)
+    /// The project registered at this folder, if any.
+    func projectID(atPath path: String) async -> String?
     /// Takes a thread out of T3 Code's lists. It can still be read there.
     func archive(threadID: String) async throws
     /// Marks a finished thread as dealt with, without hiding it.
@@ -202,6 +204,7 @@ public extension AgentBackend {
     func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         AsyncThrowingStream { $0.finish() }
     }
+    func projectID(atPath path: String) async -> String? { nil }
     func archive(threadID: String) async throws {}
     func settle(threadID: String) async throws {}
     func finalReport(threadID: String) async -> String? { nil }

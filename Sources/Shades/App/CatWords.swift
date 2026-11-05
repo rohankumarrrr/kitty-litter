@@ -35,10 +35,17 @@ enum CatWords {
 
     static func fixCaption(modelName: String) -> String { "\(modelName) will take a look." }
     static func handingOff(modelName: String) -> String { "Passing it to \(modelName)..." }
-    static func onIt(modelName: String) -> String { "On it. \(modelName) has this." }
-    static func finishedCaption(_ thread: AgentThread) -> String { "Done: \(thread.title)" }
+    static func onIt(modelName: String) -> String { "\(modelName) has this." }
+    static func finishedCaption(_ thread: AgentThread, kitten: Kitten? = nil) -> String {
+        guard let kitten else { return "Done: \(thread.title)" }
+        let prefix = "\(kitten.name):"
+        return thread.title.hasPrefix(prefix) ? thread.title : "\(prefix) \(thread.title)"
+    }
     static func failedCaption(_ thread: AgentThread) -> String { "Hit a snag: \(thread.title)" }
     static func questionCaption(_ question: AgentQuestion) -> String { "Asking: \(question.threadTitle)" }
+    static func notSetUp(_ kitten: Kitten) -> String {
+        "\(kitten.name) isn't a T3 project yet. Add \(kitten.folder) in T3 and try again."
+    }
     static let lostTheSession = "I lost track of which session that was for. Try asking again?"
     static func sentTo(_ thread: AgentThread) -> String { "Sent that to \(thread.title)." }
     static func passedOn(to title: String?) -> String {

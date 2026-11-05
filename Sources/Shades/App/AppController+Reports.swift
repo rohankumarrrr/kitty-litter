@@ -15,10 +15,17 @@ extension AppController {
             }
             let words = await words(for: report, of: thread, failed: failed)
             post(
-                caption: failed ? CatWords.failedCaption(thread) : CatWords.finishedCaption(thread),
+                caption: failed ? CatWords.failedCaption(thread) : CatWords.finishedCaption(thread, kitten: kitten(of: thread)),
                 text: words,
                 threadID: thread.id
             )
+        }
+    }
+
+    /// Which kitten a thread belongs to, by the project it's in or the name it starts with.
+    private func kitten(of thread: AgentThread) -> Kitten? {
+        loadKittens().first { kitten in
+            thread.projectTitle == kitten.name || thread.title.hasPrefix("\(kitten.name):")
         }
     }
 

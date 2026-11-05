@@ -31,7 +31,8 @@ MainActor.assumeIsolated {
                 keys: keys,
                 settings: Settings.load(),
                 saveSettings: { try? $0.save() },
-                screenTip: { context.takeJavaScriptTip() }
+                screenTip: { context.takeJavaScriptTip() },
+                kittens: { Kittens.load() }
             ),
             stage: stage
         )

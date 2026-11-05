@@ -12,7 +12,7 @@ Shades as a conductor with a kitten for each area of your life or work. Shades d
 - **Working together.** Something like a trip touches several kittens. Shades asks each one and combines the answers, so they don't need to talk among themselves and private data stays where it belongs.
 - **The right model for the job.** Shades and its kittens use Opus for judgment, and something cheaper and faster for simple tasks.
 
-One kitten gets built end to end before any others.
+Kittens themselves now exist, as described in [kittens.md](kittens.md). Review, shipping and working across several kittens are the parts still being proven, one kitten end to end before any others.
 
 ## Next ideas
 

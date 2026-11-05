@@ -73,6 +73,8 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
+    func projectID(atPath path: String) async -> String? { "demo-project" }
+
     func finalReport(threadID: String) async -> String? {
         try? await Task.sleep(nanoseconds: 800_000_000)
         return """
@@ -200,6 +202,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     private static func reply(to question: String) -> String {
         let lower = question.lowercased()
         if lower.contains("follow") || lower.contains("what you") { return "\(Prompts.routeMarker) 1" }
+        if lower.contains("interview") || lower.contains("resume") { return "\(Prompts.kittenMarker) 1" }
         if ["fix", "change", "refactor", "build", "rewrite"].contains(where: lower.contains) {
             return "\(Prompts.handoffMarker) Fix the Buy button on the pricing page so it opens checkout."
         }

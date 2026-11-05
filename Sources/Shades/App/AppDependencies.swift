@@ -13,4 +13,6 @@ struct AppDependencies {
     var saveSettings: (Settings) -> Void
     /// A one-time tip for seeing more of the screen, such as a browser setting to turn on.
     var screenTip: () -> String? = { nil }
+    /// The kittens there are right now. Read for every question, so a new one just needs its folder.
+    var kittens: () -> [Kitten] = { [] }
 }

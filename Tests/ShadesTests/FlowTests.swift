@@ -109,6 +109,7 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     private var watcher: AsyncStream<[AgentThread]>.Continuation?
     var replies: [[AgentReplyEvent]] = []
     var reports: [String: String] = [:]
+    var projects: [String: String] = [:]
     var settled: [String] = []
     var archived: [String] = []
     var failFollowUps = false
@@ -169,6 +170,10 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws {
         if failResponses { throw URLError(.notConnectedToInternet) }
         lock.withLock { _responses.append((request.id, decision)) }
+    }
+
+    func projectID(atPath path: String) async -> String? {
+        projects[path]
     }
 
     func archive(threadID: String) async throws {
@@ -266,6 +271,7 @@ final class FlowTests: XCTestCase {
     private var inserter: FakeInserter!
     private var keys: FakeKeys!
     private var clock = Date(timeIntervalSince1970: 100_000)
+    private var kittens: [Kitten] = []
     private var controller: AppController!
     private var settings: Settings {
         var settings = Settings()
@@ -292,7 +298,8 @@ final class FlowTests: XCTestCase {
                 inserter: inserter,
                 keys: keys,
                 settings: settings,
-                saveSettings: { _ in }
+                saveSettings: { _ in },
+                kittens: { [unowned self] in self.kittens }
             ),
             stage: stage,
             now: { [unowned self] in self.clock }
@@ -407,7 +414,7 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(sent.prompt.text.contains("please fix it"))
         XCTAssertEqual(sent.prompt.attachments.count, 1)
         XCTAssertTrue(stage.bubbles.contains(.line("Passing it to Fable...", threadID: nil)))
-        XCTAssertEqual(stage.bubble, .line("On it. Fable has this.", threadID: "thread-2"))
+        XCTAssertEqual(stage.bubble, .line("Fable has this.", threadID: "thread-2"))
     }
 
     func testCancellingBeforeTheReplyStopsAHandoff() async {
@@ -528,6 +535,66 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(router.contains("1. Running work"))
         XCTAssertTrue(router.contains("2. Finished work"))
         XCTAssertFalse(router.contains("Old work"))
+    }
+
+    private let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "resumes and interviews", folder: "/k/steve")
+
+    func testTheRouterKnowsTheKittens() async {
+        kittens = [steve]
+        await ask("hello")
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("1. Steve Pawsniak, Professional: resumes and interviews"))
+    }
+
+    func testAKittensAreaGoesToItWithYourWordsAndYourScreen() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("I need a tailored resume for this job")
+        await controller.frontierTask?.value
+
+        XCTAssertEqual(backend.sent.count, 2)
+        let given = backend.sent[1]
+        XCTAssertEqual(given.mode, .start)
+        XCTAssertEqual(given.prompt.projectID, "project-steve")
+        XCTAssertNil(given.prompt.title, "T3 writes a better one")
+        XCTAssertEqual(given.prompt.model, settings.frontierModel)
+        XCTAssertTrue(given.prompt.text.hasPrefix("I need a tailored resume for this job\n"))
+        XCTAssertTrue(given.prompt.text.contains("<screen>"))
+        XCTAssertEqual(given.prompt.attachments.count, 1)
+        XCTAssertTrue(stage.bubbles.contains(.line("Passing it to Steve Pawsniak...", threadID: nil)))
+        XCTAssertEqual(stage.bubble, .line("Steve Pawsniak has this.", threadID: "thread-2"))
+        for bubble in stage.bubbles {
+            if case .reply? = bubble { XCTFail("the routing decision was shown as an answer") }
+        }
+    }
+
+    func testAKittenThatIsntInT3SaysSo() async {
+        kittens = [steve]
+        backend.replies = [[.finished(fullText: "KITTEN: 1")]]
+        await ask("I need a tailored resume")
+        await controller.flow?.value
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertEqual(stage.bubble, .line("Steve Pawsniak isn't a T3 project yet. Add /k/steve in T3 and try again.", threadID: nil))
+    }
+
+    func testAKittensNumberThatIsntOnTheListGoesNowhere() async {
+        kittens = [steve]
+        backend.replies = [[.finished(fullText: "KITTEN: 4")]]
+        await ask("I need a tailored resume")
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertEqual(stage.bubble, .line("I lost track of which session that was for. Try asking again?", threadID: nil))
+    }
+
+    func testAKittensReportSaysWhoItsFrom() async {
+        kittens = [steve]
+        backend.reports["w"] = "Your resume is ready."
+        var work = AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .running, model: "m", updatedAt: clock)
+        controller.threadsChanged([work])
+        work.status = .completed
+        controller.threadsChanged([work])
+        await controller.reportTask?.value
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(stage.bubble, .notice(caption: "Steve Pawsniak: Tailor resume", text: "Your resume is ready.", threadID: "w"))
     }
 
     func testAQuestionRightAfterLaunchWaitsForTheSessions() async {

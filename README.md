@@ -18,10 +18,11 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 ## How the work gets routed
 
-There's no list of projects to maintain. Shades acts as one router in front of your agents. Everything you say goes to one model that can see your recent T3 sessions, and it does one of three things:
+There's no list of projects to maintain. Shades acts as one router in front of your agents. Everything you say goes to one model that can see your kittens and your recent T3 sessions, and it does one of four things:
 
 - **Answers** if it can.
 - **Sends it to a session** if it carries on from one, such as a follow-up to what Opus just reported. Your exact words go there, never a paraphrase, and that session keeps its own model and permissions.
+- **Gives it to a kitten** if it's in a specialist's area.
 - **Starts new work** if nothing has the context, saying so as it does. Fix always starts new work.
 
 Sessions with full access get your words but not your screen, so text on a page can't reach an agent that's allowed to do anything.
@@ -65,11 +66,15 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 - **Screen text is treated as data:** the agents are told it's never instructions, and they run in T3's `auto` mode rather than with full access. That lowers the risk of a page steering an agent, but doesn't remove it. For that reason, Allow is never a default in the cat's approval requests.
 - **Saved screenshots:** agents get a copy to open, kept in `~/Library/Application Support/shades/captures` for 7 days.
 
+## Kittens
+
+A kitten is a specialist with a folder of its own: its instructions and what it knows about you, so you don't have to explain yourself each time. Add a folder to `~/kittens`, add it to T3 as a project, and Shades starts sending it things. See [docs/kittens.md](docs/kittens.md).
+
 ## How it's built
 
 | Module | What it does |
 |---|---|
-| `ShadesCore` | Shared types, contracts and prompts |
+| `ShadesCore` | Shared types, contracts, prompts and kittens |
 | `Shades` | The cat, its windows and the flows |
 | `ShadesContext` | Screen capture, selected text, browser pages, the region picker |
 | `ShadesT3` | The T3 Code client. See [docs/t3-integration.md](docs/t3-integration.md) |

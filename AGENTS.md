@@ -9,6 +9,7 @@ A desktop cat for macOS. It sees your screen when you ask, answers quick questio
 - `Sources/ShadesContext`: screen capture, selected text and browser pages, behind `ScreenContextProviding`.
 - `Sources/ShadesVoice`: hold-to-talk and dictation, behind `VoiceEngine` and `TextInserting`.
 - `Sources/Shades`: the cat, its windows and the app that wires it all together.
+- `docs/kittens.md`: how specialist agents are set up. Real kittens are personal and live outside this repo.
 - `docs/ROADMAP.md`: ideas saved for later. Version one stays small, so new ideas go there first.
 
 ## Commands

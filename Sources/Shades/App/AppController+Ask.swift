@@ -84,11 +84,12 @@ extension AppController {
         let briefs = await briefs(for: sessions)
         guard generation == replyGeneration else { return }
         roster = sessions
+        kittens = loadKittens()
 
         let prompt = AgentPrompt(
             // A question can run over several lines, and a title can't.
             title: String(question.prefix { !$0.isNewline }.prefix(60)),
-            text: Prompts.quick(question: question, snapshot: snapshot, sessions: briefs),
+            text: Prompts.quick(question: question, snapshot: snapshot, sessions: briefs, kittens: kittens),
             attachments: attachments(for: snapshot),
             model: settings.quickModel,
             runtimeMode: settings.quickMode
@@ -181,6 +182,13 @@ extension AppController {
                 return
             }
             forward(question, to: roster[session - 1], snapshot: snapshot)
+        case .kitten(let number):
+            reply = nil
+            guard kittens.indices.contains(number - 1) else {
+                say(CatWords.lostTheSession)
+                return
+            }
+            give(question, to: kittens[number - 1], snapshot: snapshot)
         }
     }
 
@@ -191,7 +199,7 @@ extension AppController {
         switch outcome {
         case .answer(let text):
             if text.isEmpty { return }
-        case .handoff, .route:
+        case .handoff, .route, .kitten:
             passedOn = true
         }
         if passedOn && quickIsFresh {
@@ -229,16 +237,17 @@ extension AppController {
         return [AgentAttachment(name: "screen.jpg", mimeType: "image/jpeg", data: jpeg)]
     }
 
-    func startFrontier(title: String, text: String, snapshot: ScreenSnapshot?) {
+    func startFrontier(title: String?, text: String, snapshot: ScreenSnapshot?, projectID: String? = nil, name: String? = nil) {
+        let name = name ?? frontierName
         let prompt = AgentPrompt(
-            title: String(title.prefix(80)),
+            title: title.map { String($0.prefix(80)) },
             text: text,
             attachments: attachments(for: snapshot),
             model: settings.frontierModel,
             runtimeMode: settings.frontierMode,
-            projectID: nil
+            projectID: projectID
         )
-        say(CatWords.handingOff(modelName: frontierName), seconds: nil)
+        say(CatWords.handingOff(modelName: name), seconds: nil)
         frontierTask = Task {
             var started = false
             do {
@@ -247,7 +256,7 @@ extension AppController {
                     case .started(let threadID):
                         started = true
                         dispatchers.insert(threadID)
-                        say(CatWords.onIt(modelName: frontierName), threadID: threadID)
+                        say(CatWords.onIt(modelName: name), threadID: threadID)
                     case .needsApproval(let request):
                         addApproval(request)
                     case .failed(let message):
