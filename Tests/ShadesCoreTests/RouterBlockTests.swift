@@ -98,6 +98,14 @@ final class RouterBlockTests: XCTestCase {
         _ = try RouterBlock.prepare(folder)
         let type = try FileManager.default.attributesOfItem(atPath: settingsFile.path)[.type] as? FileAttributeType
         XCTAssertEqual(type, .typeRegular, "a link to the right words could be changed later")
+
+        try FileManager.default.removeItem(at: settingsFile)
+        try FileManager.default.linkItem(at: linked, to: settingsFile)
+        _ = try RouterBlock.prepare(folder)
+        let count = try FileManager.default.attributesOfItem(atPath: settingsFile.path)[.referenceCount] as? Int
+        XCTAssertEqual(count, 1, "so is a second name for the same file")
+        try Data("{}".utf8).write(to: linked)
+        XCTAssertEqual(try Data(contentsOf: settingsFile), RouterBlock.settings)
     }
 
     func testAFolderThatCantBeMadeFails() throws {

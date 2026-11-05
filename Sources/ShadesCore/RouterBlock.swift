@@ -29,15 +29,17 @@ public enum RouterBlock {
         try keepOnly(".claude", in: folder)
         try keepOnly("settings.json", in: claude)
         let file = claude.appendingPathComponent("settings.json")
-        // An atomic write replaces a link rather than writing through it.
-        if kind(of: file) != .typeRegular || FileManager.default.contents(atPath: file.path) != settings {
+        let found = try? FileManager.default.attributesOfItem(atPath: file.path)
+        // A link, or a second name for the same file, could change it later from somewhere else. An atomic write
+        // replaces either with a file of its own.
+        let ownFile = found?[.type] as? FileAttributeType == .typeRegular && found?[.referenceCount] as? Int == 1
+        if !ownFile || FileManager.default.contents(atPath: file.path) != settings {
             try settings.write(to: file, options: .atomic)
         }
         return folder.path
     }
 
-    /// Makes this a real folder with nothing in it but `name`. A link is removed rather than followed, so this
-    /// can never empty a folder somewhere else.
+    /// Makes this a real folder with nothing in it but `name`. A link found here is removed, not followed.
     private static func keepOnly(_ name: String, in folder: URL) throws {
         let files = FileManager.default
         if kind(of: folder) != .typeDirectory {
