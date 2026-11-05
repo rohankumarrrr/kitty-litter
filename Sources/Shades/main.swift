@@ -22,6 +22,7 @@ MainActor.assumeIsolated {
         let context = ScreenContextProvider()
         let voice = ParakeetVoiceEngine()
         let keys = KeyHoldMonitor()
+        let inboxFile = Settings.directory.appendingPathComponent("inbox.json")
         let real = AppController(
             dependencies: AppDependencies(
                 backend: backend,
@@ -40,7 +41,13 @@ MainActor.assumeIsolated {
                     let version = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
                     let report = HealthCheck.report(findings, pid: getpid(), version: version, at: Date())
                     SystemHealth.write(report, to: Settings.directory.appendingPathComponent("health.json"))
-                }
+                },
+                // A run that's only trying a flow out has no business filing anything, or touching the real file.
+                inbox: DevFlags.wantsFlow ? Inbox(since: .distantFuture) : Inbox.load(from: inboxFile, now: Date()),
+                saveInbox: { inbox in
+                    if !DevFlags.wantsFlow { try inbox.save(to: inboxFile) }
+                },
+                hidesTestThreads: !DevFlags.wantsFlow
             ),
             stage: stage
         )

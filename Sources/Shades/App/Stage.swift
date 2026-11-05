@@ -10,6 +10,7 @@ enum BubbleContent: Equatable {
     case line(String, threadID: String?)
     case notice(caption: String, text: String, threadID: String?)
     case approval(ApprovalRequest, position: Int, total: Int)
+    case inbox(String)
 }
 
 /// What the buttons in the bubble can ask for.
@@ -17,6 +18,15 @@ enum BubbleAction: Equatable {
     case open(threadID: String)
     case copy(String)
     case approval(ApprovalRequest, ApprovalDecision)
+    case openInbox
+}
+
+/// What the buttons in the inbox can ask for. None of them can say anything for you.
+enum InboxAction: Equatable {
+    case reply(InboxEntry)
+    case open(threadID: String)
+    case done(id: String)
+    case clear(InboxEntry.Kind)
 }
 
 /// One question for the user, typed into the small panel over the cat.
@@ -64,6 +74,12 @@ protocol CatStage: AnyObject {
     /// Opens the view of all the kittens, or brings it up to date if it's open.
     func showKittens(_ statuses: [KittenStatus])
     func hideKittens()
+
+    // The inbox
+    var isInboxVisible: Bool { get }
+    /// Opens the inbox, or brings it up to date if it's open.
+    func showInbox(_ entries: [InboxEntry])
+    func hideInbox()
 
     // Everything else
     func showThreads(_ threads: [AgentThread], status: String)

@@ -13,6 +13,8 @@ extension AppController {
     }
 
     func threadsChanged(_ threads: [AgentThread]) {
+        tidyLeftoverSummaries(threads)
+        hideTestThreads(threads)
         latestThreads = threads
         threadListArrived = true
         let events = watch.update(threads)
@@ -24,18 +26,30 @@ extension AppController {
         stage.catAgentsBusy(watch.isBusy)
         stage.showThreads(watch.rows(at: now()), status: watch.summary)
         if stage.isKittensVisible { stage.showKittens(kittenStatuses) }
+        if stage.isInboxVisible { stage.showInbox(inboxEntries) }
         updateVocabulary(threads)
 
         for event in events {
             switch event {
             case .finished(let thread):
                 stage.catCelebrate()
-                reportOn(thread, failed: false)
+                if !goesToInbox(thread) { reportOn(thread, failed: false) }
             case .failed(let thread):
-                reportOn(thread, failed: true)
+                if !goesToInbox(thread) { reportOn(thread, failed: true) }
             case .hasQuestion(let question):
                 announce(question)
             }
+        }
+        fileOwedReports()
+    }
+
+    /// A live test isn't for you, so nothing about it reaches the inbox or the bubble. Probes follow their own
+    /// streams, and a copy trying a flow out keeps seeing them, so a test can still see its own result.
+    private func hideTestThreads(_ threads: [AgentThread]) {
+        guard hidesTestThreads else { return }
+        for thread in threads where thread.isLiveTest {
+            hiddenThreads.insert(thread.id)
+            watch.markQuick(thread.id)
         }
     }
 
@@ -48,6 +62,7 @@ extension AppController {
         if stage.isKittensVisible {
             stage.hideKittens()
         } else {
+            stage.hideInbox()
             stage.showKittens(kittenStatuses)
         }
     }

@@ -204,6 +204,8 @@ The tail works the same way in reverse. After the key comes up the mic stays on 
 
 `probe-voice keys-selftest` confirmed the tap tells all seven keys apart using synthetic events. The gesture rules above are unit tested, and nothing has been tried with fingers yet.
 
+Hold-to-talk fills the text box instead of going to the router when the box is waiting for your words, as when replying from [the inbox](kittens.md#the-inbox). No look at the screen happens, and saying it counts as pressing Return. Where your words go is decided when the key goes down, so if the box closes before you've finished, they go nowhere rather than to the router, and a question you started before opening the box stays a question. With the inbox open and no box up, the key does nothing but ask you to pick a row, so a reply can't end up somewhere you didn't mean.
+
 Secure Keyboard Entry and password fields can hide key events from taps, which is why that timer exists. It may also mean hold keys don't start there, which is fine, since there's nowhere safe to type.
 
 ### Fn and the Globe key

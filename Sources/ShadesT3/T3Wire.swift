@@ -432,6 +432,8 @@ enum T3Wire {
         let pendingRuntimeRequest: PendingRequest?
         /// Shells and the like it left running when its turn ended. Only how many matters.
         let pendingBackgroundTasks: [Lossy<Ignored>]?
+        let latestRunId: String?
+        let latestRunCompletedAt: Date?
         let updatedAt: Date
         let archivedAt: Date?
         let deletedAt: Date?
@@ -633,8 +635,9 @@ enum T3Wire {
 
     /// What the agent last said in a thread, with any error it ended on first. Claude's thinking comes
     /// through as assistant messages too, and subagents' messages have a parent, so neither counts.
-    static func finalReport(in items: [TurnItem]) -> String? {
-        let own = items.filter { $0.parentItemId == nil }
+    /// Given a run, a run that said nothing has nothing to say, rather than the words of the one before it.
+    static func finalReport(in items: [TurnItem], run: String? = nil) -> String? {
+        let own = items.filter { $0.parentItemId == nil && (run == nil || $0.runId == run) }
         let ordered = own.sorted { ($0.startedAt ?? $0.updatedAt ?? .distantPast) < ($1.startedAt ?? $1.updatedAt ?? .distantPast) }
         let message = ordered.last { item in
             guard item.isAssistantMessage, !item.id.contains("thinking") else { return false }

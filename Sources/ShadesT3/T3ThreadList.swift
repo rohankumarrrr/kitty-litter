@@ -142,7 +142,9 @@ struct T3ThreadList {
                     pendingApprovals: approvals,
                     pendingQuestion: questionsByListedThread[thread.id],
                     runtimeMode: thread.runtimeMode.flatMap(RuntimeMode.init(rawValue:)),
-                    projectPath: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.workspaceRoot }
+                    projectPath: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.workspaceRoot },
+                    lastRunID: thread.latestRunId,
+                    lastRunEndedAt: thread.latestRunCompletedAt
                 )
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }
