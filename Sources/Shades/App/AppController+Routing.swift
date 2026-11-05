@@ -1,6 +1,18 @@
 import Foundation
 import ShadesCore
 
+/// Why the router won't run, other than T3's own errors.
+enum FrontDoorProblem: LocalizedError, Equatable {
+    case notClaude, noFolder
+
+    var errorDescription: String? {
+        switch self {
+        case .notClaude: return CatWords.frontDoorNotClaude
+        case .noFolder: return CatWords.frontDoorNoFolder
+        }
+    }
+}
+
 /// Decides nothing itself: the quick agent picks where a message belongs, from a list this
 /// builds. All it can pick is a number, and your own words are what get sent, so anything
 /// a page manages to say to it can misdirect your message at worst.
@@ -62,13 +74,19 @@ extension AppController {
     }
 
     /// The router's own project, where it can't pass on what it's seen. Asked before every turn, since a follow-up
-    /// runs on whatever its folder says by then. `nil` if it can't be had, and then the router doesn't run.
-    func routerProjectID() async -> String? {
-        guard let folder = routerFolder() else { return nil }
+    /// runs on whatever its folder says by then. Only Claude Code reads that folder, so no other model gets to be
+    /// the router. If this throws, the router doesn't run.
+    func routerProjectID() async throws -> String {
+        guard settings.quickModel.provider == "claudeAgent" else { throw FrontDoorProblem.notClaude }
+        guard let folder = routerFolder() else { throw FrontDoorProblem.noFolder }
         if let id = await backend.projectID(atPath: folder) { return id }
-        // T3 turns away a second project at the same folder, which another question may have just added.
-        if let id = try? await backend.addProject(atPath: folder, title: "Shades router") { return id }
-        return await backend.projectID(atPath: folder)
+        do {
+            return try await backend.addProject(atPath: folder, title: "Shades router")
+        } catch {
+            // T3 turns away a second project at the same folder, which another question may have just added.
+            if let id = await backend.projectID(atPath: folder) { return id }
+            throw error
+        }
     }
 
     /// Gives your words to a kitten, in a new thread in its workspace. T3 writes the title.

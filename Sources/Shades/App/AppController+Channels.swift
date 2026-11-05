@@ -102,7 +102,12 @@ extension AppController {
         }
         let briefs = await briefs(for: sessions)
         let kittens = owners.filter { !$0.planned }
-        guard let projectID = await routerProjectID() else { return catSays(CatWords.frontDoorNotReady) }
+        let projectID: String
+        do {
+            projectID = try await routerProjectID()
+        } catch {
+            return catSays(CatWords.problem(error, while: .agents))
+        }
         let prompt = AgentPrompt(
             title: String(words.prefix { !$0.isNewline }.prefix(60)),
             text: Prompts.quick(question: words, snapshot: nil, sessions: briefs, kittens: kittens),

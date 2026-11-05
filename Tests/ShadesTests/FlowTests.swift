@@ -140,7 +140,7 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     var silentRuns: Set<String> = []
     var readFails = false
     var addedProjects: [String] = []
-    var addProjectFails = false
+    var addProjectError: Error?
     private var count = 0
 
     var sent: [Sent] { lock.withLock { _sent } }
@@ -246,7 +246,7 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     }
 
     func addProject(atPath path: String, title: String) async throws -> String {
-        if addProjectFails { throw URLError(.cannotConnectToHost) }
+        if let addProjectError { throw addProjectError }
         addedProjects.append(path)
         projects[path] = "project-router"
         return "project-router"
@@ -482,7 +482,18 @@ final class FlowTests: XCTestCase {
         await ask("what's this?")
         XCTAssertTrue(backend.sent.isEmpty)
         guard case .line(let said, _)? = stage.bubble else { return XCTFail("nothing said") }
-        XCTAssertEqual(said, CatWords.frontDoorNotReady)
+        XCTAssertEqual(said, CatWords.frontDoorNoFolder)
+    }
+
+    /// Only Claude Code reads the folder, and T3 gives other models its tools too.
+    func testTheFrontDoorDoesntRunOnAModelThatIgnoresItsFolder() async {
+        var changed = settings
+        changed.quickModel = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "medium")
+        controller.apply(changed)
+        await ask("what's this?")
+        XCTAssertTrue(backend.sent.isEmpty)
+        guard case .line(let said, _)? = stage.bubble else { return XCTFail("nothing said") }
+        XCTAssertEqual(said, CatWords.frontDoorNotClaude)
     }
 
     /// A follow-up runs on whatever its folder says by then, so that has to be put right first too.
@@ -493,10 +504,13 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.sent.map(\.mode), [.start])
     }
 
-    func testIfT3WontTakeItsFolderTheFrontDoorDoesntRun() async {
-        backend.addProjectFails = true
+    /// T3 not running is said as it always was, rather than blamed on the folder.
+    func testIfT3WontTakeItsFolderTheFrontDoorDoesntRunAndSaysWhy() async {
+        backend.addProjectError = Friendly(errorDescription: "T3 Code isn't running. Open it and try again.")
         await ask("what's this?")
         XCTAssertTrue(backend.sent.isEmpty)
+        guard case .line(let said, _)? = stage.bubble else { return XCTFail("nothing said") }
+        XCTAssertEqual(said, "T3 Code isn't running. Open it and try again.")
     }
 
     func testShowsThinkingStraightAway() async {
@@ -905,6 +919,20 @@ final class FlowTests: XCTestCase {
         let finding = await controller.runHealthCheck().first { $0.check == "front door" }
         XCTAssertEqual(finding?.ok, false)
         XCTAssertEqual(finding?.fix, "Check that I can write to my folder in Application Support.")
+    }
+
+    func testAFrontDoorT3WontGiveAProjectIsFound() async {
+        controller.threadListArrived = true
+        backend.addProjectError = Friendly(errorDescription: "That folder is taken.")
+        let finding = await controller.runHealthCheck().first { $0.check == "front door" }
+        XCTAssertEqual(finding?.ok, false)
+        XCTAssertTrue(finding?.problem?.hasSuffix("That folder is taken.") == true)
+    }
+
+    func testAFrontDoorThatCanRunIsFine() async {
+        controller.threadListArrived = true
+        let finding = await controller.runHealthCheck().first { $0.check == "front door" }
+        XCTAssertEqual(finding?.ok, true)
     }
 
     func testAKittenThatSeesTheScreenNeedsNoBlock() async {
@@ -2785,7 +2813,7 @@ final class FlowTests: XCTestCase {
         controller.channelsPressed()
         await messages("What day is it?", to: .router)
         XCTAssertTrue(backend.sent.isEmpty)
-        XCTAssertEqual(everyoneSaid, ["What day is it?", CatWords.frontDoorNotReady])
+        XCTAssertEqual(everyoneSaid, ["What day is it?", CatWords.frontDoorNoFolder])
     }
 
     func testAQuestionIsAnsweredFromMessagesWithAnOptionOrYourWords() async {
