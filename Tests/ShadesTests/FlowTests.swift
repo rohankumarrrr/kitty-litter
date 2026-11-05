@@ -701,7 +701,7 @@ final class FlowTests: XCTestCase {
         await ask("I need a tailored resume")
         await controller.flow?.value
         XCTAssertEqual(backend.sent.count, 1)
-        XCTAssertEqual(stage.bubble, .line("Steve Pawsniak isn't a T3 project yet. Add /k/steve in T3 and try again.", threadID: nil))
+        XCTAssertEqual(stage.bubble, .line("Steve Pawsniak isn't a T3 project yet. Add /k/steve in T3, and I'll start it then.", threadID: nil))
     }
 
     func testAKittensNumberThatIsntOnTheListGoesNowhere() async {
@@ -1592,6 +1592,230 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(list.items[0].text, "Tidy the career notes", "the record matches what you said yes to")
     }
 
+    /// The kitten's work moved to a thread that doesn't carry its name, as a worktree thread might not.
+    private func moveClawdesWorkToAWorker(snapshot: ScreenSnapshot? = nil) async {
+        kittens = [clawde]
+        backend.projects[clawde.folder] = "project-clawde"
+        await give("fix routing", to: clawde, snapshot: snapshot)
+        backend.reports["thread-1"] = "It went to a new thread, <t3-thread://v2/env/worker>, in a worktree."
+        let worker = session("worker", "Fix routing", status: .running)
+        controller.threadsChanged([thread("thread-1", of: clawde), worker])
+        controller.threadsChanged([thread("thread-1", .completed, of: clawde), worker])
+        await reported()
+        await settle()
+        XCTAssertEqual(lists.load(for: clawde).items.map(\.threadID), ["worker"])
+    }
+
+    func testAKittenThatCantSeeTheScreenDoesntGetItAfterItsMovedWorkFinishes() async {
+        await moveClawdesWorkToAWorker()
+        context.snapshotValue = ScreenSnapshot(appName: "Safari", pageText: "A secret page", screenshotJPEG: Data([1, 2, 3]))
+        backend.reports["worker"] = "Fixed."
+        controller.threadsChanged([thread("thread-1", .completed, of: clawde), session("worker", "Fix routing")])
+        await reported()
+        await settle()
+        XCTAssertTrue(lists.load(for: clawde).items.isEmpty, "the list has forgotten it")
+        controller.bubbleDismissed(byClick: false)
+
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("that's wrong, look at this")
+        let forwarded = backend.sent.last { $0.mode == .forward }
+        XCTAssertEqual(forwarded?.threadID, "worker")
+        XCTAssertEqual(forwarded?.prompt.text.contains("A secret page"), false)
+        XCTAssertEqual(forwarded?.prompt.attachments.count, 0)
+        XCTAssertEqual(forwarded?.prompt.text.contains("left out"), true)
+    }
+
+    func testAKittenDeletingItsLineDoesntOpenTheScreen() async {
+        await moveClawdesWorkToAWorker()
+        lists.lists[clawde.id] = WorkList()
+        let screen = ScreenSnapshot(appName: "Safari", pageText: "A secret page", screenshotJPEG: Data([1, 2, 3]))
+        controller.forward("and this part", to: session("worker", "Fix routing", status: .running), snapshot: screen)
+        await settle()
+        let forwarded = backend.sent.last { $0.mode == .forward }
+        XCTAssertEqual(forwarded?.prompt.text.contains("A secret page"), false)
+        XCTAssertEqual(lists.load(for: clawde).items.map(\.threadID), ["worker"], "and it's back on the list")
+    }
+
+    func testAClaimOnAThreadCanStillKeepTheScreenBack() async {
+        kittens = [clawde]
+        lists.lists[clawde.id] = WorkList(items: [WorkItem(id: "a", text: "x", state: .working, threadID: "other", at: clock)])
+        let screen = ScreenSnapshot(appName: "Safari", pageText: "A secret page")
+        controller.forward("and this part", to: session("other", "Something else", status: .running), snapshot: screen)
+        await settle()
+        XCTAssertEqual(backend.sent.last?.prompt.text.contains("A secret page"), false)
+    }
+
+    func testAForgedLineCantReadWhatYouTellAnotherSession() async {
+        takeWork()
+        lists.lists[steve.id] = WorkList(items: [WorkItem(id: "f", text: "x", state: .working, threadID: "private", at: clock)])
+        controller.forward("here's something private", to: session("private", "Budget"), snapshot: nil)
+        await settle()
+        XCTAssertEqual(list.items.map(\.text), ["x"], "those words were for someone else")
+        XCTAssertEqual(backend.sent.count, 1, "and they still got there")
+    }
+
+    func testAForgedLineCantTakeTheRealOwnersWork() async {
+        let aaron = Kitten(name: "Aaron", role: "r", covers: "", folder: "/k/aaron")
+        let pepper = Kitten(name: "Pepper", role: "Money", covers: "", folder: "/k/pepper")
+        kittens = [aaron, pepper]
+        lists.lists[pepper.id] = WorkList(items: [WorkItem(id: "real", text: "Rework the budget", state: .working, threadID: "w", at: clock)])
+        lists.lists[aaron.id] = WorkList(items: [WorkItem(id: "forged", text: "x", state: .working, threadID: "w", at: clock)])
+        controller.forward("here's something private", to: thread("w", of: pepper), snapshot: nil)
+        await settle()
+        XCTAssertEqual(lists.load(for: aaron).items.map(\.text), ["x"])
+        XCTAssertEqual(lists.load(for: pepper).items.map(\.text), ["Rework the budget\n\nhere's something private"])
+
+        backend.reports["w"] = "It's done."
+        controller.threadsChanged([thread("w", of: pepper)])
+        controller.threadsChanged([thread("w", .completed, of: pepper)])
+        await reported()
+        await settle()
+        XCTAssertTrue(lists.load(for: pepper).items.isEmpty, "the claim didn't leave the real one stranded")
+    }
+
+    func testABareYesThatMissesAnOfferDoesntReachTheKitten() async {
+        offer("Delete the old notes")
+        controller.say("Sent that to Work.")
+        XCTAssertNil(controller.offerShowing, "a line is covering it")
+        backend.replies = [[.finished(fullText: "KITTEN: 1")]]
+        await answer("yes")
+        XCTAssertTrue(kittenPrompts.isEmpty)
+        XCTAssertEqual(list.items.map(\.state), [.proposed])
+        XCTAssertEqual(stage.bubble, .line(CatWords.answerToWhat, threadID: nil))
+    }
+
+    func testAYesCanStillAnswerASession() async {
+        takeWork()
+        controller.threadsChanged([thread("w", .completed)])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("yes")
+        XCTAssertEqual(backend.sent.last?.mode, .forward)
+        XCTAssertEqual(backend.sent.last?.prompt.text.hasPrefix("yes\n"), true)
+    }
+
+    func testAskingAgainWhileItCantStartDoesntRunItTwice() async {
+        kittens = [steve]
+        controller.threadsChanged([])
+        await give("tailor my resume")
+        XCTAssertEqual(stage.bubble, .line(CatWords.notSetUp(steve), threadID: nil))
+        XCTAssertEqual(list.items.count, 1)
+
+        backend.projects[steve.folder] = "project-steve"
+        await give("tailor my resume")
+        controller.tendWork()
+        await settle()
+        XCTAssertEqual(kittenPrompts.count, 1)
+        XCTAssertEqual(list.items.map(\.state), [.working])
+        XCTAssertEqual(stage.bubble, .line("Steve Pawsniak has this.", threadID: "thread-1"))
+    }
+
+    func testAskingAgainAfterAnOutageDoesntRunItTwice() async {
+        takeWork()
+        controller.threadsChanged([])
+        backend.streamError = Friendly(errorDescription: "Lost the connection to T3 Code.")
+        await give("tailor my resume")
+        XCTAssertEqual(stage.bubble, .line(CatWords.stillOnTheList(steve), threadID: nil))
+        backend.streamError = nil
+        await give("tailor my resume")
+        controller.tendWork()
+        await settle()
+        XCTAssertEqual(kittenPrompts.count, 2, "one that failed and one that started")
+        XCTAssertEqual(list.items.map(\.state), [.working])
+    }
+
+    func testARequestThatWaitedThenCantStartSaysSoOnceAndSavesOneScreenshot() async {
+        takeWork()
+        await give("one")
+        await give("two")
+        await give("three", snapshot: ScreenSnapshot(appName: "Safari", pageText: "page", screenshotJPEG: Data([1, 2, 3])))
+        backend.reports["thread-1"] = "Done."
+        controller.threadsChanged([thread("thread-1"), thread("thread-2")])
+        backend.streamError = Friendly(errorDescription: "Lost the connection to T3 Code.")
+        let saved = context.saved
+        let said = await saidSince {
+            self.controller.threadsChanged([self.thread("thread-1", .completed), self.thread("thread-2")])
+            await self.reported()
+            await self.settle()
+            for _ in 0..<5 {
+                self.controller.tendWork()
+                await self.settle()
+            }
+        }
+        XCTAssertEqual(said.filter { $0 == CatWords.stillOnTheList(steve) }.count, 1)
+        XCTAssertEqual(context.saved - saved, 1)
+        XCTAssertEqual(controller.ready.count, 1, "and it's still going to go")
+    }
+
+    func testAReportThatOnlyCitesAnOlderThreadIsStillTheReport() async {
+        takeWork()
+        await give("one")
+        backend.reports["thread-1"] = "All done, the bug is fixed. Same cause as <t3-thread://v2/env/old>."
+        backend.reports["old"] = "A report from last week."
+        let old = session("old", "Old work", status: .completed, age: 3600)
+        controller.threadsChanged([thread("thread-1"), old])
+        controller.threadsChanged([thread("thread-1", .completed), old])
+        await reported()
+        await settle()
+        XCTAssertTrue(list.items.isEmpty)
+        XCTAssertEqual(controller.notices.map(\.caption), ["Steve Pawsniak: Work"], "not the older thread's")
+        XCTAssertEqual(backend.sent.last?.prompt.text.contains("the bug is fixed"), true, "that's what gets summed up")
+    }
+
+    func testReportsThatLinkToEachOtherEnd() async {
+        takeWork()
+        await give("one")
+        backend.reports["thread-1"] = "It went to a new thread, <t3-thread://v2/env/worker>, in a worktree."
+        backend.reports["worker"] = "All done. This carried on from <t3-thread://v2/env/thread-1>."
+        controller.threadsChanged([thread("thread-1"), session("worker", "Worker", status: .running)])
+        controller.threadsChanged([thread("thread-1", .completed), session("worker", "Worker", status: .running)])
+        await reported()
+        await settle()
+        XCTAssertEqual(list.items.map(\.threadID), ["worker"])
+
+        controller.threadsChanged([thread("thread-1", .completed), session("worker", "Worker")])
+        await reported()
+        await settle()
+        XCTAssertTrue(list.items.isEmpty)
+        XCTAssertEqual(controller.notices.map(\.caption), ["Done: Worker"])
+    }
+
+    func testAStoppedItemWhoseThreadWentOnToFinishComesOff() async {
+        takeWork()
+        lists.lists[steve.id] = WorkList(items: [WorkItem(id: "a", text: "Tailor my resume", state: .stopped, threadID: "w", at: clock.addingTimeInterval(-3600))])
+        backend.reports["w"] = "Your resume is ready."
+        controller.threadsChanged([thread("w", .completed)])
+        XCTAssertTrue(controller.notices.isEmpty, "not offered while it's being worked out")
+        await reported()
+        await settle()
+        XCTAssertTrue(list.items.isEmpty)
+        XCTAssertEqual(controller.notices.map(\.text), ["Your resume is ready."])
+    }
+
+    func testAStoppedItemWhoseThreadFinishedBeforeItStoppedIsStillOffered() async {
+        takeWork()
+        lists.lists[steve.id] = WorkList(items: [WorkItem(id: "a", text: "Tailor my resume", state: .stopped, threadID: "w", at: clock.addingTimeInterval(60))])
+        controller.threadsChanged([thread("w", .completed)])
+        await reported()
+        await settle()
+        XCTAssertEqual(controller.offerShowing?.text, "Tailor my resume")
+    }
+
+    func testAReportIsntRepeatedWhenTheListCantBeSaved() async {
+        takeWork()
+        lists.lists[steve.id] = WorkList(items: [WorkItem(id: "a", text: "Tailor my resume", state: .working, threadID: "w", at: clock.addingTimeInterval(-300))])
+        backend.reports["w"] = "Your resume is ready."
+        lists.saveError = URLError(.cannotWriteToFile)
+        controller.threadsChanged([thread("w", .completed)])
+        await reported()
+        await settle()
+        for _ in 0..<3 {
+            controller.tendWork()
+            await reported()
+            await settle()
+        }
+        XCTAssertEqual(controller.notices.map(\.text), ["Your resume is ready."])
+    }
+
     func testAnOfferDoesntHoldUpWhatComesAfterIt() async {
         offer("Tidy the career notes")
         XCTAssertEqual(controller.offerShowing?.text, "Tidy the career notes")
@@ -1673,7 +1897,7 @@ final class FlowTests: XCTestCase {
         backend.reports["thread-1"] = "It went to a new thread, <t3-thread://v2/env/worker>, in a worktree."
         let other = thread("thread-2")
         controller.threadsChanged([thread("thread-1"), other])
-        controller.threadsChanged([thread("thread-1", .completed), other])
+        controller.threadsChanged([thread("thread-1", .completed), other, thread("worker")])
         controller.tendWork()
         await settle()
         XCTAssertEqual(kittenPrompts.count, 2, "it may yet carry on elsewhere")
@@ -1738,9 +1962,9 @@ final class FlowTests: XCTestCase {
         takeWork()
         lists.lists[steve.id] = WorkList(items: [WorkItem(id: "a", text: "Tailor my resume", state: .working, threadID: "w", at: clock.addingTimeInterval(-300))])
         backend.reports["w"] = "It's in a new thread, <t3-thread://v2/env/worker>."
-        controller.threadsChanged([thread("w", .completed)])
+        controller.threadsChanged([thread("w", .completed), thread("worker")])
         await reported()
-        XCTAssertEqual(list.items[0].threadID, "worker", "a restart forgets who started what, but the list doesn't")
+        XCTAssertEqual(list.items.first?.threadID, "worker", "a restart forgets who started what, but the list doesn't")
         XCTAssertTrue(controller.notices.isEmpty)
     }
 
@@ -1749,7 +1973,7 @@ final class FlowTests: XCTestCase {
         controller.threadsChanged([])
         backend.streamError = Friendly(errorDescription: "Lost the connection to T3 Code.")
         let firstTry = await saidSince { await self.give("tailor my resume") }
-        XCTAssertEqual(firstTry, ["Passing it to Steve Pawsniak...", "Lost the connection to T3 Code."])
+        XCTAssertEqual(firstTry, ["Passing it to Steve Pawsniak...", "Lost the connection to T3 Code.", CatWords.stillOnTheList(steve)])
         XCTAssertEqual(list.items.map(\.state), [.waiting])
         XCTAssertTrue(controller.notices.isEmpty, "you asked for it, so it doesn't need a yes")
 
@@ -1925,16 +2149,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(list.items.map(\.state), [.working])
         XCTAssertTrue(controller.notices.isEmpty)
         XCTAssertEqual(stage.bubble, .line("Lost the connection to T3 Code.", threadID: nil))
-    }
-
-    func testAFollowUpToAThreadOnlyAListKnowsAboutFindsItsKitten() async {
-        kittens = [clawde]
-        let elsewhere = session("w", "Fix routing")
-        lists.lists[clawde.id] = WorkList(items: [WorkItem(text: "Fix routing", state: .working, threadID: "w", at: clock)])
-        controller.forward("and that part?", to: elsewhere, snapshot: ScreenSnapshot(appName: "Safari", pageText: "Secret page text"))
-        await settle()
-        XCTAssertEqual(lists.load(for: clawde).items[0].text, "Fix routing\n\nand that part?")
-        XCTAssertFalse(backend.sent[0].prompt.text.contains("Secret page text"), "it still can't see the screen")
     }
 
     func testAForgedListCantOpenTheScreenToAnotherKittensThread() async {

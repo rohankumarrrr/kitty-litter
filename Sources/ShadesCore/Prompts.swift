@@ -130,8 +130,11 @@ public enum Prompts {
 
     /// A note must not be able to close its block, or fake the line that says whose words are whose.
     private static func quoted(_ note: String) -> String {
-        withoutTag("note", in: note).replacingOccurrences(
-            of: #"(?m)^[ \t]*[-–—][-–— \t]*$"#,
+        // Invisible characters and full-width lookalikes would otherwise get past both of these.
+        let plain = (note.applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? note)
+            .replacingOccurrences(of: #"\p{Cf}"#, with: "", options: .regularExpression)
+        return withoutTag("note", in: plain).replacingOccurrences(
+            of: #"(?m)^[>\h]*[\p{Pd}\x{2212}\x{2500}\x{2501}][\p{Pd}\x{2212}\x{2500}\x{2501}\h]*$"#,
             with: "(a line of dashes)",
             options: .regularExpression
         )

@@ -82,6 +82,24 @@ final class WorkListTests: XCTestCase {
 }
 
 final class FileWorkListsTests: XCTestCase {
+    func testAListThatCantBeWrittenIsAProblem() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("worklist-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let items = folder.appendingPathComponent("worklist/items.json")
+        defer {
+            try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: items.path)
+            try? FileManager.default.removeItem(at: folder)
+        }
+        let kitten = Kitten(name: "Steve", role: "r", covers: "c", folder: folder.path)
+        let lists = FileWorkLists(settle: 0)
+        try lists.save(WorkList(), for: kitten)
+        XCTAssertFalse(lists.hasProblem(for: kitten))
+
+        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: items.path)
+        XCTAssertThrowsError(try lists.save(WorkList(), for: kitten))
+        XCTAssertTrue(lists.hasProblem(for: kitten))
+    }
+
     private var root: URL!
     private var kitten: Kitten!
     private var worklist: URL { root.appendingPathComponent("worklist") }

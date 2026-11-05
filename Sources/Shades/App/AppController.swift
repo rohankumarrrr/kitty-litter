@@ -102,6 +102,11 @@ final class AppController {
     var reporting: Set<String> = []
     /// Offers you pressed Esc on, which stay quiet until you ask about that kitten.
     var putOff: Set<String> = []
+    /// Which kitten each thread was started for, as seen by the app itself. A list can't say,
+    /// since a kitten can write anything on its own, and this outlasts the item.
+    var threadOwners: [String: String] = [:]
+    /// When a thread last was as of its report, so the same ending isn't reported twice.
+    var reportedAt: [String: Date] = [:]
     var offerWhenAsked: Offer?
     var lastStatuses: [String: AgentStatus]?
     /// Things that finish this close together get told in one go.

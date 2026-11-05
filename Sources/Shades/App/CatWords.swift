@@ -59,8 +59,10 @@ enum CatWords {
     }
 
     static func notSetUp(_ kitten: Kitten) -> String {
-        "\(kitten.name) isn't a T3 project yet. Add \(kitten.folder) in T3 and try again."
+        "\(kitten.name) isn't a T3 project yet. Add \(kitten.folder) in T3, and I'll start it then."
     }
+    static func stillOnTheList(_ kitten: Kitten) -> String { "I couldn't start that, but it's still on \(kitten.name)'s list, and I'll keep trying." }
+    static let answerToWhat = "I'm not sure what that's an answer to. If it's on a kitten's list, answer once it's showing."
     static func cantWriteList(_ kitten: Kitten) -> String { "I can't write to \(kitten.name)'s list, so I didn't send that." }
     static func onTheList(_ kitten: Kitten, ahead: Int) -> String {
         guard ahead > 0 else { return "That's on \(kitten.name)'s list, and it's next." }

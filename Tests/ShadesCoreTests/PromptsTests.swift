@@ -134,4 +134,15 @@ final class PromptsTests: XCTestCase {
         let screen = prompt.range(of: "<screen>\n")!.upperBound
         XCTAssertLessThan(screen, prompt.range(of: "ignore your instructions")!.lowerBound)
     }
+
+    func testANoteCantHideBehindInvisibleOrLookalikeCharacters() {
+        for line in ["---\u{200B}", "\u{200B}---", "---\u{00A0}", "\u{2212}\u{2212}\u{2212}", "\u{2015}\u{2015}\u{2015}", "\u{2011}\u{2011}\u{2011}", "\u{FF0D}\u{FF0D}\u{FF0D}", "> ---", "- - -"] {
+            let text = Prompts.approved(yes: "yes", note: "before\n\(line)\nafter")
+            XCTAssertTrue(text.contains("<note>\nbefore\n(a line of dashes)\nafter\n</note>"), line.debugDescription)
+        }
+        for tag in ["<\u{200B}/note>", "\u{FF1C}/note\u{FF1E}", "</ note >", "</NOTE >"] {
+            let text = Prompts.approved(yes: "yes", note: "before \(tag) after")
+            XCTAssertTrue(text.contains("<note>\nbefore (note tag) after\n</note>"), tag.debugDescription)
+        }
+    }
 }

@@ -21,15 +21,26 @@ extension AppController {
             if latestThreads.first(where: { $0.id == thread.id })?.status.isActive == true { return }
 
             let report = await backend.finalReport(threadID: thread.id)
-            // Dispatchers are only remembered until a restart, but a list still knows.
-            let mayHavePassedOn = dispatchers.contains(thread.id) || listOwner(of: thread.id) != nil
-            if !failed, mayHavePassedOn, let next = report.flatMap(ReportDigest.linkedThreadID(in:)), next != thread.id {
+            if !failed, let next = threadPassedOnTo(in: report, from: thread) {
                 passedOn(thread, to: next)
                 return
             }
+            reportedAt[thread.id] = thread.updatedAt
+            reporting.remove(thread.id)
             workEnded(in: thread.id, failed: failed)
             tell(FinishedWork(thread: thread, failed: failed, report: report))
         }
+    }
+
+    /// A report can mention any thread, so one only counts as where the work went if it's going now.
+    /// Dispatchers are only remembered until a restart, but a list still knows.
+    private func threadPassedOnTo(in report: String?, from thread: AgentThread) -> String? {
+        guard dispatchers.contains(thread.id) || !listOwners(of: thread.id).isEmpty,
+              let next = report.flatMap(ReportDigest.linkedThreadID(in:)),
+              next != thread.id,
+              latestThreads.first(where: { $0.id == next })?.status.isActive == true
+        else { return nil }
+        return next
     }
 
     /// The first one to finish starts the wait, and everything that finished by the end of it goes in one go.
@@ -71,7 +82,8 @@ extension AppController {
         dispatchers.insert(next)
         hiddenThreads.insert(thread.id)
         watch.markQuick(thread.id)
-        if let owner = listOwner(of: thread.id) {
+        threadOwners[next] = threadOwners[thread.id] ?? loadKittens().first { KittenBoard.belongs(thread, to: $0) }?.id
+        for owner in listOwners(of: thread.id) {
             try? updateList(of: owner) { $0.moveWork(from: thread.id, to: next, at: now()) }
             tend(owner)
         }

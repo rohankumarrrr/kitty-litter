@@ -22,6 +22,8 @@ struct ReadyWork {
     let listText: String
     let words: Words
     var tried = false
+    /// Saved the first time it tries to go, so another try doesn't leave another copy behind.
+    var screenshotPath: String?
 }
 
 /// A copy of something on a list, fixed when it's shown, so changing the file later changes nothing.
@@ -85,12 +87,14 @@ extension AppController {
 
     private func followEndings(in list: inout WorkList, at: Date) {
         for var item in list.items {
+            let thread = latestThreads.first { $0.id == item.threadID }
             switch item.state {
             case .working:
                 if let id = item.threadID, reporting.contains(id) { continue }
                 switch KittenBoard.ending(of: item, threads: latestThreads, now: at) {
                 case .report(let thread, let failed):
-                    reportOn(thread, failed: failed)
+                    // Once is enough, even if the list couldn't be saved to say it's been done.
+                    if reportedAt[thread.id] != thread.updatedAt { reportOn(thread, failed: failed) }
                 case .stopped:
                     item.state = .stopped
                     item.changedAt = at
@@ -99,10 +103,15 @@ extension AppController {
                     break
                 }
             case .stopped:
-                guard latestThreads.first(where: { $0.id == item.threadID })?.status.isActive == true else { continue }
-                item.state = .working
-                item.changedAt = at
-                list.put(item)
+                guard let thread else { continue }
+                if thread.status.isActive {
+                    item.state = .working
+                    item.changedAt = at
+                    list.put(item)
+                } else if thread.status == .completed, thread.updatedAt > item.changedAt, reportedAt[thread.id] != thread.updatedAt {
+                    // Someone picked it up again and finished it, perhaps while the app was closed.
+                    reportOn(thread, failed: false)
+                }
             case .proposed, .waiting, .dropped:
                 break
             }
@@ -111,7 +120,9 @@ extension AppController {
 
     private func tendOffers(from kitten: Kitten, list: WorkList) {
         let needsYes: (WorkItem) -> Bool = { item in
-            [.proposed, .waiting, .stopped].contains(item.state) && !self.ready.contains { $0.itemID == item.id }
+            [.proposed, .waiting, .stopped].contains(item.state)
+                && !self.ready.contains { $0.itemID == item.id }
+                && item.threadID.map(self.reporting.contains) != true
         }
         let before = notices.count
         notices.removeAll { notice in
@@ -144,8 +155,12 @@ extension AppController {
             return
         }
         ready.append(ReadyWork(itemID: item.id, kittenID: kitten.id, listText: item.text, words: words))
-        guard !tend(kitten, announcing: item.id) else { return }
-        let ahead = ready.prefix { $0.itemID != item.id }.filter { $0.kittenID == kitten.id }.count
+        startOrSayItsWaiting(item.id, for: kitten)
+    }
+
+    func startOrSayItsWaiting(_ itemID: String, for kitten: Kitten) {
+        guard !tend(kitten, announcing: itemID) else { return }
+        let ahead = ready.prefix { $0.itemID != itemID }.filter { $0.kittenID == kitten.id }.count
         say(CatWords.onTheList(kitten, ahead: ahead))
     }
 
@@ -160,8 +175,7 @@ extension AppController {
         sending.insert(work.itemID)
         flow = Task {
             guard let projectID = await backend.projectID(atPath: kitten.folder) else {
-                if announcing { say(CatWords.notSetUp(kitten)) }
-                gaveUp(on: work.itemID)
+                gaveUp(on: work.itemID, saying: CatWords.notSetUp(kitten))
                 return
             }
             let text: String
@@ -171,10 +185,12 @@ extension AppController {
                 // It may have waited a while, and what this kitten can see may have changed since.
                 let current = sharedScreen(with: loadKittens().first { $0.id == kitten.id } ?? kitten, from: screen.snapshot)
                 shared = current.snapshot
+                let path = shared == nil ? nil : work.screenshotPath ?? saveScreenshot(of: shared)
+                if let index = ready.firstIndex(where: { $0.itemID == work.itemID }) { ready[index].screenshotPath = path }
                 text = Prompts.forKitten(
                     words: words,
                     snapshot: shared,
-                    screenshotPath: saveScreenshot(of: shared),
+                    screenshotPath: path,
                     screenLeftOut: screen.leftOut || current.leftOut
                 )
             case .yes(let words, let note):
@@ -188,7 +204,7 @@ extension AppController {
                 name: kitten.name,
                 announce: announcing,
                 onStarted: { [weak self] threadID in self?.started(work, in: threadID, for: kitten) },
-                onGaveUp: { [weak self] in self?.gaveUp(on: work.itemID) }
+                onGaveUp: { [weak self] in self?.gaveUp(on: work.itemID, saying: CatWords.stillOnTheList(kitten)) }
             )
         }
     }
@@ -196,28 +212,34 @@ extension AppController {
     private func started(_ work: ReadyWork, in threadID: String, for kitten: Kitten) {
         ready.removeAll { $0.itemID == work.itemID }
         sending.remove(work.itemID)
+        threadOwners[threadID] = kitten.id
         // A put rather than a change, so a kitten that deleted the line can't lose it.
         let item = WorkItem(id: work.itemID, text: work.listText, state: .working, threadID: threadID, at: now())
         try? updateList(of: kitten) { $0.put(item) }
     }
 
-    /// It stays in `ready`, and goes when the next look at the list finds it can.
-    private func gaveUp(on itemID: String) {
+    /// It stays in `ready`, and goes when the next look at the list finds it can. You hear about
+    /// the first try that fails, whether or not it waited its turn, but not every one after.
+    private func gaveUp(on itemID: String, saying line: String) {
         sending.remove(itemID)
-        if let index = ready.firstIndex(where: { $0.itemID == itemID }) { ready[index].tried = true }
+        guard let index = ready.firstIndex(where: { $0.itemID == itemID }), !ready[index].tried else { return }
+        ready[index].tried = true
+        say(line)
     }
 
     // MARK: - Ending
 
-    /// The kitten whose list says this thread is its work.
-    func listOwner(of thread: String) -> Kitten? {
-        loadKittens().first { !$0.planned && workLists.load(for: $0).holds(thread: thread) }
+    /// Every kitten whose list says this thread is its work. It's every one because a kitten can
+    /// write anything on its own list, and a false claim mustn't leave the real item stranded.
+    func listOwners(of thread: String) -> [Kitten] {
+        loadKittens().filter { !$0.planned && workLists.load(for: $0).holds(thread: thread) }
     }
 
     func workEnded(in thread: String, failed: Bool) {
-        guard let owner = listOwner(of: thread) else { return }
-        try? updateList(of: owner) { $0.endWork(in: thread, as: failed ? .stopped : nil, at: now()) }
-        tend(owner)
+        for owner in listOwners(of: thread) {
+            try? updateList(of: owner) { $0.endWork(in: thread, as: failed ? .stopped : nil, at: now()) }
+            tend(owner)
+        }
     }
 
     // MARK: - Your answer

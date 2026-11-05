@@ -87,6 +87,7 @@ public final class FileWorkLists: WorkListStoring {
     public func hasProblem(for kitten: Kitten) -> Bool {
         let paths = Paths(kitten)
         if isBlocked(paths) || kind(of: paths.broken) != nil { return true }
+        if kind(of: paths.items) != nil, !files.isWritableFile(atPath: paths.items.path) { return true }
         let writesTo = kind(of: paths.folder) == nil ? kitten.folder : paths.folder.path
         return !files.isWritableFile(atPath: writesTo) || settledProposals(paths).contains { proposalText(at: $0) == nil }
     }

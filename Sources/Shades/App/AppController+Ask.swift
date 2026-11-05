@@ -189,6 +189,12 @@ extension AppController {
                 say(CatWords.lostTheSession)
                 return
             }
+            // A bare yes only means something as an answer. A new thread has nothing it could be
+            // answering, and a kitten mustn't take it for your answer to something on its list.
+            guard OfferAnswer(question) == nil else {
+                say(CatWords.answerToWhat)
+                return
+            }
             give(question, to: kittens[number - 1], snapshot: snapshot)
         case .list(let number):
             reply = nil

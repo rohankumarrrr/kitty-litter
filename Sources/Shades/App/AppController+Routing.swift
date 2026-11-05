@@ -63,6 +63,12 @@ extension AppController {
     /// Gives your words to a kitten, by way of its list. A new thread in its folder already knows
     /// what it needs to, and T3 writes the title, so nothing here has to explain anything to it.
     func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?) {
+        // Asking again while it's still waiting to go shouldn't run it twice.
+        if let index = ready.firstIndex(where: { $0.kittenID == kitten.id && $0.listText == words }) {
+            ready[index].tried = false
+            startOrSayItsWaiting(ready[index].itemID, for: kitten)
+            return
+        }
         takeOn(
             WorkItem(text: words, state: .waiting, at: now()),
             words: .yours(words, sharedScreen(with: kitten, from: snapshot)),
@@ -73,9 +79,11 @@ extension AppController {
     /// Passes your words to a session that already has the context. The session's reply comes
     /// back the usual way, as a notice when it finishes.
     func forward(_ words: String, to thread: AgentThread, snapshot: ScreenSnapshot?) {
-        // A kitten's work may have moved to a thread that doesn't carry its name, and then only its list knows.
+        // Only what the app saw for itself can put your words on a list, because a kitten can claim
+        // any thread on its own. A claim can still keep your screen back, since that only narrows.
         let everyone = loadKittens()
-        let owners = everyone.filter { KittenBoard.belongs(thread, to: $0) } + everyone.filter { workLists.load(for: $0).holds(thread: thread.id) }
+        let owners = everyone.filter { KittenBoard.belongs(thread, to: $0) || threadOwners[thread.id] == $0.id }
+        let claiming = everyone.filter { workLists.load(for: $0).holds(thread: thread.id) }
         if let owner = owners.first(where: { !$0.planned }) {
             do {
                 try updateList(of: owner) { $0.addFollowUp(words, in: thread.id, at: now()) }
@@ -88,7 +96,7 @@ extension AppController {
 
         // A session with full access can do anything, so text from a page doesn't get to reach it.
         // Neither does one belonging to a kitten that isn't meant to see it.
-        let seesScreen = thread.runtimeMode != .fullAccess && owners.allSatisfy(\.seesScreen)
+        let seesScreen = thread.runtimeMode != .fullAccess && (owners + claiming).allSatisfy(\.seesScreen)
         let shared = seesScreen ? snapshot : nil
         let text = Prompts.forwarded(
             words: words,
