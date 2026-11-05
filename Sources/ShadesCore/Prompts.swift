@@ -110,6 +110,57 @@ public enum Prompts {
         return "\(words)\n\n---\n\(intro)\n\n\(untrusted)\n\n\(screenBlock(snapshot, screenshotPath: screenshotPath))"
     }
 
+    /// What the person wrote, from a message `passedOn` made: everything above the first `---` line.
+    /// `nil` if that's empty or still has a screen block, as `frontier` and `fix` prompts do, so nothing
+    /// from a screen can pass as their words. That may hide some of them, which is the safe way round.
+    public static func ownWords(in text: String) -> String? {
+        let above = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).prefix { line in
+            !(line.hasPrefix("---") && line.dropFirst(3).allSatisfy(\.isWhitespace))
+        }
+        let words = above.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !words.isEmpty, withoutScreenBlocks(words) == words else { return nil }
+        return words
+    }
+
+    public static func withoutScreenBlocks(_ text: String) -> String {
+        withoutBlocks(named: "screen", in: text)
+    }
+
+    /// Takes out each block with one of these tag names, nested or not, whatever its case or spacing,
+    /// and through the end if it never closes. A tag alone in backticks is someone writing about it,
+    /// so it stays. Tags have to be counted to balance them, which is why this isn't one regex.
+    /// A closing tag with nothing left to close means the block ran on, so what came before it goes too.
+    public static func withoutBlocks(named names: String, in text: String) -> String {
+        // The limits keep it fast on crafted text, and a hyphen after the name makes it someone else's tag.
+        let ending = "(?![\\w-])"
+        let mention = "`<\\s{0,8}/?\\s{0,8}(?:\(names))\(ending)[^<>`\\n]{0,200}>`"
+        let tag = "<\\s{0,8}(/?)\\s{0,8}(\(names))\(ending)(?:[^<>]{0,200}>)?"
+        guard let scanner = try? NSRegularExpression(pattern: "\(mention)|\(tag)", options: .caseInsensitive) else { return text }
+
+        let whole = text as NSString
+        var kept = ""
+        var cursor = 0
+        var inside: (name: String, depth: Int)?
+        for match in scanner.matches(in: text, range: NSRange(location: 0, length: whole.length)) {
+            guard match.range(at: 2).location != NSNotFound else { continue }
+            let name = whole.substring(with: match.range(at: 2)).lowercased()
+            let closes = match.range(at: 1).length > 0
+            if let open = inside {
+                guard name == open.name else { continue }
+                let depth = open.depth + (closes ? -1 : 1)
+                inside = depth == 0 ? nil : (name, depth)
+                if depth == 0 { cursor = NSMaxRange(match.range) }
+            } else if !closes {
+                kept += whole.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
+                inside = (name, 1)
+            } else if cursor > 0 {
+                cursor = NSMaxRange(match.range)
+            }
+        }
+        if inside == nil { kept += whole.substring(from: cursor) }
+        return kept.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     public static func frontier(request: String, snapshot: ScreenSnapshot?, screenshotPath: String?) -> String {
         """
         \(dispatchPreamble)

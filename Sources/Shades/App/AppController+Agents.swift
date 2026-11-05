@@ -27,6 +27,7 @@ extension AppController {
         stage.showThreads(watch.rows(at: now()), status: watch.summary)
         if stage.isKittensVisible { stage.showKittens(kittenStatuses) }
         if stage.isInboxVisible { stage.showInbox(inboxEntries) }
+        channels.threadsChanged(threads)
         updateVocabulary(threads)
 
         for event in events {

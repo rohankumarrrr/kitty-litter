@@ -75,6 +75,11 @@ protocol CatStage: AnyObject {
     func showKittens(_ statuses: [KittenStatus])
     func hideKittens()
 
+    // Channels
+    /// Opens the window, or brings it to the front if it's open. It never closes it.
+    func showChannels(_ book: ChannelBook)
+    func updateChannels(_ book: ChannelBook)
+
     // The inbox
     var isInboxVisible: Bool { get }
     /// Opens the inbox, or brings it up to date if it's open.

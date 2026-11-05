@@ -53,6 +53,22 @@ Normally you only see Shades. Shift-click him, or choose Kittens from his menu, 
 
 Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the folder of the kitten's project, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
 
+### Channels
+
+Choose Channels from the cat's menu to read what's being said, without opening T3:
+
+![The Channels window, with two kittens talking to each other](images/channels.png)
+
+- **Issues** is what each kitten has open. There's no tracker yet, so an issue is one of a kitten's threads that's still working or isn't settled. A finished thread stays until it's settled, because that's a pull request waiting on your "ship it".
+- **Direct messages** has one row per kitten, whether or not you've talked. Your words and its replies are there, and so are the reports of work it started itself. Forwarded messages only show your own words, never the note or the screen below them.
+- **Between kittens** has one row per pair that's talked. A kitten's messages show up here by themselves when it sends them with T3's tools, such as `t3_thread_send`, because T3 records which thread sent each one. If that thread can't be named, such as one that's been archived, it's listed as "someone else".
+
+One answer is one message. A kitten's narration on the way to its answer shows as "2 earlier notes", and the rest is in T3. Hover over a message to copy it or open its thread, or click the line above it, which is the thread's title.
+
+In Channels, a thread whose title starts with a kitten's name and a colon is listed as that kitten's wherever it runs, even in another kitten's project.
+
+The window only reads. It can't send anything, and it never takes the keyboard, so the app you're in keeps its selection and the cat still sees what you're looking at. That also means no selecting text and no arrow keys. Nothing is read until you open it. While it's open it reads again when a thread changes, and looks every 15 seconds anyway, so it can tell you if T3 has gone away. It reads each kitten's newest 30 threads, and anything older is in T3. Every word is forgotten when you close it with the red button, and nothing goes to disk except where the window was.
+
 ## How they work
 
 Kittens work by [Lauren Tan's pstack](https://github.com/cursor/plugins/tree/main/pstack), as [adapted for T3 Code](https://github.com/chhoumann/t3-pstack), and by [Ponytail](https://github.com/DietrichGebert/ponytail). Lauren's setup, a chief of staff with specialist bots under it, is what inspired this one. To get them:
@@ -80,7 +96,7 @@ A kitten that reports a lot, especially while you're away, can leave you working
 
 Reply and Ask open the text box, where you can type or hold the talk key and say it. What you send is your own words and nothing else, with no look at your screen, and it goes straight to that thread. The row dims until the thread answers. A new decision or shipped line from that thread replaces its old decision, and an answer goes under the row you asked on. No button ever says anything for you, and Done and Clear tell no agent anything.
 
-A thread titled `Shades test:` is a live test, so it stays out of the inbox and the bubble altogether, whichever kitten it belongs to. A copy of the app trying a flow out with `--ask`, `--hand-off` or `--fix` still sees them, so a test can see its own result.
+A thread's reports go here if it counts as the work of any kitten with `inbox: true`, by its folder or its title. A thread titled `Shades test:` is a live test, so it stays out of the inbox and the bubble altogether, whichever kitten it belongs to. A copy of the app trying a flow out with `--ask`, `--hand-off` or `--fix` still sees them, so a test can see its own result.
 
 A question an agent has stopped to ask shows there too, but only opens in T3, because a message would just queue behind it. Approvals still come as the approval bubble, since they block the work.
 

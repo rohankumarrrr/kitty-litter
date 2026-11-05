@@ -267,6 +267,64 @@ final class T3ThreadListTests: XCTestCase {
         XCTAssertNil(list.runtimeMode(of: "unknown"))
     }
 
+    // MARK: Everything, for reading who said what
+
+    func testAskingForEverythingLeavesTheDefaultsAlone() throws {
+        let everything = try JSONSerialization.jsonObject(with: T3Wire.encode(T3Wire.SubscribeShell.everything)) as? [String: Bool]
+        XCTAssertEqual(everything, ["requestCompletionMarker": true, "omitIdleSubagents": false, "omitOlderSettled": false])
+        let live = try JSONSerialization.jsonObject(with: T3Wire.encode(T3Wire.SubscribeShell())) as? [String: Bool]
+        XCTAssertEqual(live, ["requestCompletionMarker": true, "omitIdleSubagents": true, "omitOlderSettled": true])
+    }
+
+    func testAskingForAWholeThreadTurnsOffTheWindow() throws {
+        let whole = try JSONSerialization.jsonObject(with: T3Wire.encode(T3Wire.SubscribeThread.whole(threadID: "t"))) as? [String: Any]
+        XCTAssertEqual(whole?["threadId"] as? String, "t")
+        XCTAssertEqual(whole?["acceptBoundedSnapshot"] as? Bool, false)
+        XCTAssertNil(whole?["afterSequence"], "or it would replay events instead")
+    }
+
+    func testASubagentIsKnownByTheThreadAPersonCanSee() throws {
+        var list = T3ThreadList()
+        list.apply(try snapshot(threads: [
+            thread(id: "parent", title: "The parent"),
+            thread(id: "child", parent: "parent", relationship: "subagent"),
+            thread(id: "grandchild", parent: "child", relationship: "subagent"),
+            thread(id: "orphan", parent: "archived", relationship: "subagent"),
+        ]))
+        XCTAssertEqual(list.listedThreadID(of: "parent"), "parent")
+        XCTAssertEqual(list.listedThreadID(of: "grandchild"), "parent")
+        XCTAssertNil(list.listedThreadID(of: "orphan"), "its parent was archived, so T3 can't say")
+        XCTAssertNil(list.listedThreadID(of: "unknown"))
+    }
+
+    func testASubagentWaitingOnYouShowsOnTheThreadAbove() throws {
+        var list = T3ThreadList()
+        list.apply(try snapshot(threads: [
+            thread(id: "asks", title: "Asks"),
+            thread(id: "asks-child", pending: #"{"id":"q","kind":"user_input","createdAt":"2026-11-05T04:00:00.000Z","blocking":true}"#, parent: "asks", relationship: "subagent"),
+            thread(id: "approves", title: "Approves"),
+            thread(id: "approves-child", pending: #"{"id":"a","kind":"command","createdAt":"2026-11-05T04:00:00.000Z","blocking":true}"#, parent: "approves", relationship: "subagent"),
+            thread(id: "quiet", title: "Quiet"),
+        ]))
+        let listed = Dictionary(uniqueKeysWithValues: list.threadsWithoutWords.map { ($0.id, $0) })
+        XCTAssertNotNil(listed["asks"]?.pendingQuestion)
+        XCTAssertEqual(listed["approves"]?.status, .waitingForApproval)
+        XCTAssertNil(listed["quiet"]?.pendingQuestion)
+    }
+
+    func testSettledAndPullRequestsComeThrough() throws {
+        let open = thread(id: "open")
+            .replacingOccurrences(of: #""settledAt":"2026-11-02T19:16:42.734Z""#, with: #""settledAt":null"#)
+            .replacingOccurrences(of: #""pullRequests":[]"#, with: #""pullRequests":[{"number":7,"url":"https://example.com/7","snapshot":{"state":"merged","title":"First"}},{"number":12,"url":"https://example.com/12","snapshot":{"state":"open","title":"Second"}},{"number":99}]"#)
+        var list = T3ThreadList()
+        list.apply(try snapshot(threads: [open, thread(id: "settled")]))
+        let threads = Dictionary(uniqueKeysWithValues: list.agentThreads(summaries: [:]).map { ($0.id, $0) })
+        XCTAssertEqual(threads["open"]?.isSettled, false)
+        XCTAssertEqual(threads["open"]?.pullRequest, ThreadPullRequest(number: 12, state: "open"), "the last one it can read")
+        XCTAssertEqual(threads["settled"]?.isSettled, true)
+        XCTAssertNil(threads["settled"]?.pullRequest)
+    }
+
     func testABadThreadDoesNotLoseTheRest() throws {
         var list = T3ThreadList()
         list.apply(try snapshot(threads: [#"{"id":"broken"}"#, thread(id: "fine")]))

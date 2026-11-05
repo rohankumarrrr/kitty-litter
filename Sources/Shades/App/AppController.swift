@@ -35,6 +35,7 @@ final class AppController {
     let hidesTestThreads: Bool
     let stage: CatStage
     let now: () -> Date
+    let channels: ChannelFeed
     private(set) var settings: Settings
 
     var quick = QuickSession()
@@ -152,6 +153,8 @@ final class AppController {
         hidesTestThreads = dependencies.hidesTestThreads
         self.stage = stage
         self.now = now
+        channels = ChannelFeed(backend: dependencies.backend, kittens: dependencies.kittens)
+        channels.onChange = { [weak self] in self?.stage.updateChannels($0) }
     }
 
     func start() {

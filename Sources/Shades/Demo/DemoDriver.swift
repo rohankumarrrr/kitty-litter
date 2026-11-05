@@ -68,7 +68,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | fix | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | buttons | typed | front | quit")
+            print("ask [question] | fix | kittens | channels | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -95,6 +95,8 @@ final class DemoDriver {
             hold(.dictate)
         case "kittens":
             controller.kittensPressed()
+        case "channels":
+            controller.channelsPressed()
         case "dash":
             stage.toggleDashboard()
         case "settings":
@@ -157,6 +159,7 @@ final class DemoDriver {
                 ("bubble", stage.bubble.panel),
                 ("input", stage.input.panel),
                 ("dashboard", stage.dashboard.panel),
+                ("channels", stage.channels.panel),
                 ("inbox", stage.inbox.panel),
             ] {
                 print("window \(name) id=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) frame=\(NSStringFromRect(window.frame)) clicks=\(!window.ignoresMouseEvents)")
