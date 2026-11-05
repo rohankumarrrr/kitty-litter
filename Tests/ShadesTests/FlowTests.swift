@@ -2891,3 +2891,102 @@ extension FlowTests {
         XCTAssertEqual(book.everyone.messages.compactMap(\.text), ["The project is fixed."], "Everyone must follow work the frontier dispatcher moves into another thread")
     }
 }
+
+
+
+// MARK: - Review round 3 repros
+
+extension FlowTests {
+    /// Fix 6: passing on moves Everyone's record off the frontier thread, even when its report just mentions another thread.
+    func testEveryoneKeepsTheFrontiersAnswerWhenItsReportLinksAThread() async throws {
+        backend.routerSays = ["Fix the login bug": "HANDOFF: Fix the login bug"]
+        controller.channelsPressed()
+        await messages("Fix the login bug", to: .router)
+        controller.channelsClosed()
+        let workID = try XCTUnwrap(controller.messagesThreads.keys.first)
+        let answer = "Fixed the login bug in Auth.swift. A reviewer in <t3-thread://v2/env/reviewer> found nothing else."
+        let work = AgentThread(id: workID, title: "Fix the login bug", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
+        let reviewer = AgentThread(id: "reviewer", title: "Review the login fix", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
+        backend.reports[workID] = answer
+        backend.listed = [work, reviewer]
+        backend.said = [
+            workID: [Exchange(id: "fix", asker: .you, askedAt: clock, ask: "Fix the login bug", reply: answer, repliedAt: clock.addingTimeInterval(20))],
+            "reviewer": [Exchange(id: "review", asker: .agent(threadID: workID), askedAt: clock.addingTimeInterval(5), ask: "Review the diff", reply: "No issues.", repliedAt: clock.addingTimeInterval(10))],
+        ]
+        controller.threadsChanged([work, reviewer])
+        controller.reportOn(work, failed: false)
+        await controller.reportTask?.value
+
+        controller.channelsPressed()
+        await until { stage.channelsUpdated.last?.isReading == false }
+        XCTAssertTrue(everyoneSaid.contains(answer), "the frontier's own answer to what you asked in Everyone is gone from Everyone")
+    }
+
+    /// Fix 6 again: a routed follow-up keeps its first time, but a link in the follow-up's report then throws the whole thread out of Everyone.
+    func testEveryoneKeepsEarlierRepliesWhenAFollowUpsReportLinksAThread() async throws {
+        let firstSent = clock
+        backend.routerSays = ["Find a flight": "HANDOFF: Find a flight", "Check that flight's baggage": "SEND TO: 1"]
+        await messages("Find a flight", to: .router)
+        let workID = try XCTUnwrap(controller.messagesThreads.keys.first)
+        clock.addTimeInterval(180)
+        let work = AgentThread(id: workID, title: "Flights", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
+        controller.threadsChanged([work])
+        await messages("Check that flight's baggage", to: .router)
+        XCTAssertEqual(backend.sent.last?.threadID, workID)
+
+        let second = "One bag included, per <t3-thread://v2/env/airline-notes>."
+        backend.reports[workID] = second
+        controller.reportOn(work, failed: false)
+        await controller.reportTask?.value
+        let notes = AgentThread(id: "airline-notes", title: "Airline notes", projectTitle: nil, status: .completed, model: "m", updatedAt: clock.addingTimeInterval(-3600))
+        backend.listed = [work, notes]
+        backend.said = [workID: [
+            Exchange(id: "first", asker: .you, askedAt: firstSent, ask: "Find a flight", reply: "Flight A costs $212.", repliedAt: firstSent.addingTimeInterval(20)),
+            Exchange(id: "second", asker: .you, askedAt: clock, ask: "Check that flight's baggage", reply: second, repliedAt: clock.addingTimeInterval(20)),
+        ]]
+        controller.channelsPressed()
+        await until { stage.channelsUpdated.last?.isReading == false }
+        XCTAssertTrue(everyoneSaid.contains("Flight A costs $212."), "earlier replies hidden after a follow-up")
+        XCTAssertTrue(everyoneSaid.contains(second), "the follow-up's own answer is gone too")
+    }
+
+    /// Fix 1: which threads are the Ask box's is only remembered while the app runs.
+    func testAfterARestartEveryoneStillNeverReachesTheAskChat() async throws {
+        let answer = "That's Acme's pricing page, and the card on it ends 4242."
+        backend.replies = [[.finished(fullText: answer)]]
+        await ask("what's this?")
+        XCTAssertFalse(backend.sent[0].prompt.attachments.isEmpty, "the Ask chat has your screen")
+        let askChat = try XCTUnwrap(controller.quick.thread(at: clock))
+        backend.reports[askChat] = answer
+
+        // The app restarts, as scripts/install.sh does, and the Ask chat is still in T3's list.
+        controller = makeController()
+        controller.threadsChanged([AgentThread(id: askChat, title: "what's this?", projectTitle: nil, status: .completed, model: "m", updatedAt: clock.addingTimeInterval(-60), runtimeMode: .approvalRequired, isSettled: true)])
+        backend.routerSays = ["What was that card again?": "SEND TO: 1"]
+        controller.channelsPressed()
+        await messages("What was that card again?", to: .router)
+
+        let routed = try XCTUnwrap(backend.sent.last { $0.prompt.text.contains("Their question: What was that card again?") })
+        XCTAssertFalse(routed.prompt.text.contains("4242"), "the Everyone router read what the Ask box said about your screen")
+        XCTAssertFalse(backend.sent.contains { $0.mode == .forward && $0.threadID == askChat }, "your Everyone words went to the chat that holds your screen")
+    }
+}
+
+extension FlowTests {
+    /// Fix 1: the thread the Ask box hands your screen to isn't a quick one, so Everyone's router still lists it.
+    func testEveryoneNeverListsWorkTheAskBoxHandedYourScreenTo() async throws {
+        backend.replies = [[.finished(fullText: "HANDOFF: Summarise this page")]]
+        await ask("summarise this")
+        let handed = try XCTUnwrap(backend.sent.first { $0.mode == .start && $0.prompt.model == settings.frontierModel })
+        XCTAssertFalse(handed.prompt.attachments.isEmpty, "the frontier thread has your screen")
+        let work = try XCTUnwrap(controller.dispatchers.first)
+        backend.reports[work] = "Summarised Acme's pricing page. The card on it ends 4242."
+        controller.threadsChanged([session(work, "Summarise this page", mode: .autoAcceptEdits)])
+
+        backend.routerSays = ["What was that card again?": "SEND TO: 1"]
+        controller.channelsPressed()
+        await messages("What was that card again?", to: .router)
+        let routed = try XCTUnwrap(backend.sent.last { $0.prompt.text.contains("Their question: What was that card again?") })
+        XCTAssertFalse(routed.prompt.text.contains("4242"), "the Everyone router read what was said about your screen")
+    }
+}

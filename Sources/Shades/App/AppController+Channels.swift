@@ -94,9 +94,14 @@ extension AppController {
     private func route(_ words: String, sentAt: Date) async {
         await waitForThreadList()
         let current = messagesQuick.thread(at: now())
-        let sessions = rosterThreads(excluding: current)
+        // Only Messages' own world: the kittens' threads, and work it passed your words to. Anything the Ask box
+        // started can hold your screen, and that has to hold after a restart too.
+        let owners = loadKittens()
+        let sessions = rosterThreads(excluding: current) { [messagesThreads] thread in
+            messagesThreads[thread.id] != nil || KittenBoard.owner(of: thread, among: owners) != nil
+        }
         let briefs = await briefs(for: sessions)
-        let kittens = loadKittens().filter { !$0.planned }
+        let kittens = owners.filter { !$0.planned }
         let prompt = AgentPrompt(
             title: String(words.prefix { !$0.isNewline }.prefix(60)),
             text: Prompts.quick(question: words, snapshot: nil, sessions: briefs, kittens: kittens),
@@ -128,7 +133,7 @@ extension AppController {
             guard sessions.indices.contains(session - 1) else { return catSays(CatWords.lostTheSession) }
             let thread = sessions[session - 1]
             // From the first time, so what it said before stays in Everyone too.
-            if KittenBoard.owner(of: thread, among: loadKittens()) == nil { messagesThreads[thread.id] = messagesThreads[thread.id] ?? sentAt }
+            if KittenBoard.owner(of: thread, among: owners) == nil { messagesThreads[thread.id] = messagesThreads[thread.id] ?? sentAt }
             forward(words, to: thread, snapshot: nil)
         case .kitten(let number):
             guard kittens.indices.contains(number - 1) else { return catSays(CatWords.lostTheSession) }

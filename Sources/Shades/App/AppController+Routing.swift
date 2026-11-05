@@ -18,11 +18,11 @@ extension AppController {
         }
     }
 
-    func rosterThreads(excluding current: String?) -> [AgentThread] {
+    func rosterThreads(excluding current: String?, only isOffered: (AgentThread) -> Bool = { _ in true }) -> [AgentThread] {
         let at = now()
         // Neither router conversation lists the other, since the Ask box's can hold your screen and Messages' never may.
         return latestThreads
-            .filter { $0.id != current && !hiddenThreads.contains($0.id) && !watch.isQuick($0.id) }
+            .filter { $0.id != current && !hiddenThreads.contains($0.id) && !watch.isQuick($0.id) && isOffered($0) }
             .filter { $0.status.isActive || at.timeIntervalSince($0.updatedAt) < Self.rosterWindow }
             .sorted { a, b in
                 if a.status.isActive != b.status.isActive { return a.status.isActive }
