@@ -18,8 +18,6 @@ struct AppDependencies {
     /// What the cat can find out about its own situation, for its self-check.
     var systemFacts: () -> HealthFacts = { HealthFacts() }
     var fileExists: (String) -> Bool = { _ in true }
-    /// What's missing from what keeps a kitten in this folder off your screen.
-    var screenBlockGaps: (String) -> [String] = { _ in [] }
     /// Where each self-check's findings go.
     var reportHealth: ([HealthFinding]) -> Void = { _ in }
 }

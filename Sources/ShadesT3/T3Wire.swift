@@ -532,30 +532,11 @@ enum T3Wire {
         struct Thread: Decodable {
             let title: String
             let runtimeMode: String?
-            let projectId: String?
-            let createdBy: String?
-        }
-
-        struct Message: Decodable {
-            let role: String
-            let createdAt: Date?
-            let senderThreadId: String?
         }
 
         let thread: Thread
         let runs: [Lossy<Run>]
         let turnItems: [Lossy<TurnItem>]
-        let messages: [Lossy<Message>]?
-
-        /// A person, or the thread whose agent wrote the first message. T3 keeps no other link
-        /// between a thread and the one that launched it.
-        var startedBy: ThreadOrigin.Starter {
-            if thread.createdBy == "user" { return .person }
-            let first = messages?.compactMap(\.value)
-                .filter { $0.role == "user" }
-                .min { ($0.createdAt ?? .distantFuture) < ($1.createdAt ?? .distantFuture) }
-            return first?.senderThreadId.map(ThreadOrigin.Starter.thread) ?? .unknown
-        }
     }
 
     struct Run: Decodable {

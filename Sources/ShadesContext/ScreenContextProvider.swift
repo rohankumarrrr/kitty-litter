@@ -17,10 +17,7 @@ public final class ScreenContextProvider: ScreenContextProviding, @unchecked Sen
     private static let tipsKey = "shades.javaScriptTipsShown"
 
     public convenience init() {
-        let store = CaptureStore()
-        // Otherwise they'd wait for the next save, however long that took.
-        store.removeOld()
-        self.init(sources: LiveSources(), store: store, defaults: .standard)
+        self.init(sources: LiveSources(), store: CaptureStore(), defaults: .standard)
     }
 
     init(sources: ContextSources, store: CaptureStore, defaults: UserDefaults) {

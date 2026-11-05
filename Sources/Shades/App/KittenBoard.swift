@@ -37,14 +37,7 @@ enum KittenBoard {
     /// A thread belongs to a kitten if it's in the kitten's project, or carries its name from
     /// working in another project, the way a code change does.
     static func belongs(_ thread: AgentThread, to kitten: Kitten) -> Bool {
-        belongs(title: thread.title, projectPath: thread.projectPath, to: kitten)
-    }
-
-    static func belongs(title: String, projectPath: String?, to kitten: Kitten) -> Bool {
-        let inFolder = projectPath.map {
-            URL(fileURLWithPath: $0).standardizedFileURL.path == URL(fileURLWithPath: kitten.folder).standardizedFileURL.path
-        }
-        return inFolder == true || title.hasPrefix("\(kitten.name):")
+        thread.projectTitle == kitten.name || thread.title.hasPrefix("\(kitten.name):")
     }
 
     /// Kittens that are taking work come first, and otherwise they stay put, so you can find one at a glance.

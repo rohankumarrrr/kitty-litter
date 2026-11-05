@@ -47,10 +47,11 @@ final class CaptureStoreTests: XCTestCase {
         XCTAssertNotEqual(first, second)
     }
 
-    func testDeletesCapturesOlderThanADayAndNothingElse() throws {
+    func testDeletesCapturesOlderThanAWeekAndNothingElse() throws {
         let old = try store.save(Data([1]))
         let recent = try store.save(Data([2]))
-        try age(old, days: 2)
+        try age(old, days: 8)
+        try age(recent, days: 6)
         let notOurs = directory.appendingPathComponent("keep-me.jpg")
         try Data([3]).write(to: notOurs)
         try age(notOurs.path, days: 30)
@@ -62,28 +63,11 @@ final class CaptureStoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: notOurs.path))
     }
 
-    func testAnOldCaptureDoesntWaitForTheNextOneToBeCleanedUp() throws {
-        let old = try store.save(Data([1]))
-        try age(old, days: 2)
-        store.removeOld()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: old))
-    }
-
     func testTheRealStoreLivesInTheSettingsDirectory() {
         XCTAssertEqual(
             CaptureStore().directory.path,
             Settings.directory.appendingPathComponent("captures").path
         )
-    }
-
-    func testReproAScreenshotIsGoneAfterADayWhileTheAppKeepsRunning() async throws {
-        let provider = ScreenContextProvider(sources: FakeSources(), store: store, defaults: .standard)
-        let path = try XCTUnwrap(provider.saveScreenshot(of: ScreenSnapshot(screenshotJPEG: Data([9]))))
-        try age(path, days: 30)
-        // Looking at the screen is all that happens while nothing's saved.
-        _ = try await provider.snapshot(CaptureOptions())
-        print("REPRO still there after 30 days with no save or restart: \(FileManager.default.fileExists(atPath: path))")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: path))
     }
 
     func testSavingGoesThroughTheProvider() throws {

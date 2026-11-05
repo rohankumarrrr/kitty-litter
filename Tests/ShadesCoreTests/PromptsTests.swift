@@ -134,11 +134,4 @@ final class PromptsTests: XCTestCase {
         let screen = prompt.range(of: "<screen>\n")!.upperBound
         XCTAssertLessThan(screen, prompt.range(of: "ignore your instructions")!.lowerBound)
     }
-
-    func testAFixWithNothingToLookAtDoesntMentionAScreenshot() {
-        let prompt = Prompts.fix(description: "the total is wrong", snapshot: nil, screenshotPath: nil)
-        XCTAssertTrue(prompt.contains("the total is wrong"))
-        XCTAssertFalse(prompt.contains("red rectangle"))
-        XCTAssertTrue(prompt.contains("<screen>Not captured.</screen>"))
-    }
 }

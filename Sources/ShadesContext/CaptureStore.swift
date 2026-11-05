@@ -3,8 +3,7 @@ import ShadesCore
 
 /// Screenshots saved for agents to open. Only you can read them, and they don't stay around.
 struct CaptureStore: Sendable {
-    /// Long enough for an agent to pass one on and open it. Follow-ups get a fresh look.
-    static let maxAge: TimeInterval = 24 * 60 * 60
+    static let maxAge: TimeInterval = 7 * 24 * 60 * 60
     private static let prefix = "capture-"
     private static let suffix = ".jpg"
 

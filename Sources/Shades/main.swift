@@ -35,7 +35,6 @@ MainActor.assumeIsolated {
                 kittens: { Kittens.load() },
                 systemFacts: { SystemHealth.facts() },
                 fileExists: { FileManager.default.fileExists(atPath: $0) },
-                screenBlockGaps: { ScreenBlock.gaps(in: FileManager.default.contents(atPath: $0 + "/.claude/settings.json")) },
                 reportHealth: { findings in
                     let version = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
                     let report = HealthCheck.report(findings, pid: getpid(), version: version, at: Date())
