@@ -2830,3 +2830,64 @@ extension FlowTests {
         XCTAssertTrue(stage.bubbles.contains(.notice(caption: "Everyone", text: "It's Tuesday.", threadID: nil)), "with Messages closed, it comes over the cat")
     }
 }
+
+extension FlowTests {
+
+    func testEveryoneNeverReadsWhatTheAskBoxSaidAboutYourScreen() async throws {
+        let secret = "The screen says PRIVATE-SCREEN-CODE-9472."
+        backend.replies = [[.finished(fullText: secret)]]
+        await ask("What code is on my screen?")
+        XCTAssertFalse(backend.sent[0].prompt.attachments.isEmpty)
+        let privateThread = try XCTUnwrap(controller.quick.thread(at: clock))
+        backend.reports[privateThread] = secret
+        controller.threadsChanged([AgentThread(id: privateThread, title: "What code is on my screen?", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)])
+        backend.routerSays["What day is it?"] = "SEND TO: 1"
+
+        controller.channelsPressed()
+        await messages("What day is it?", to: .router)
+
+        let routed = try XCTUnwrap(backend.sent.last { $0.prompt.text.contains("Their question: What day is it?") })
+        XCTAssertFalse(routed.prompt.text.contains("PRIVATE-SCREEN-CODE-9472"), "Everyone's new router prompt includes Last said: \(secret)")
+        XCTAssertFalse(backend.sent.contains { $0.mode == .forward && $0.threadID == privateThread }, "Everyone forwarded the new message back into the Ask conversation holding the screen")
+    }
+
+    func testEveryoneKeepsEarlierRepliesAfterAFollowUp() async throws {
+        let firstSent = clock
+        backend.routerSays = ["Find a flight": "HANDOFF: Find a flight"]
+        controller.channelsPressed()
+        await messages("Find a flight", to: .router)
+        let workID = try XCTUnwrap(controller.messagesThreads.keys.first)
+        let first = Exchange(id: "first", asker: .you, askedAt: firstSent, ask: "Find a flight", reply: "Flight A costs $212.", repliedAt: firstSent.addingTimeInterval(20))
+        clock.addTimeInterval(180)
+        let work = AgentThread(id: workID, title: "Flights", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
+        controller.threadsChanged([work])
+        backend.routerSays["Check that flight's baggage"] = "SEND TO: 1"
+        await messages("Check that flight's baggage", to: .router)
+        XCTAssertEqual(backend.sent.last?.mode, .forward)
+        XCTAssertEqual(backend.sent.last?.threadID, workID)
+
+        let second = Exchange(id: "second", asker: .you, askedAt: clock, ask: "Check that flight's baggage", reply: "One bag included.", repliedAt: clock.addingTimeInterval(20))
+        let book = ChannelBook.build(kittens: [], threads: [work], transcripts: [workID: [first, second]], isReading: false, unreadable: 0, cantReachT3: false, inEveryone: controller.messagesThreads)
+        XCTAssertEqual(book.everyone.messages.compactMap(\.text), ["Flight A costs $212.", "One bag included."], "Earlier frontier replies must not disappear when the same thread receives another message")
+    }
+
+    func testEveryoneFollowsWorkTheFrontierAgentPassesOn() async throws {
+        backend.routerSays = ["Fix the project": "HANDOFF: Fix the project"]
+        controller.channelsPressed()
+        await messages("Fix the project", to: .router)
+        let dispatcherID = try XCTUnwrap(controller.messagesThreads.keys.first)
+        let dispatcher = AgentThread(id: dispatcherID, title: "Fix the project", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
+        let worker = AgentThread(id: "project-worker", title: "Implement fix", projectTitle: "An ordinary project", status: .completed, model: "m", updatedAt: clock)
+        let handoff = "Started <t3-thread://v2/env/project-worker>"
+        backend.reports[dispatcherID] = handoff
+        controller.threadsChanged([dispatcher, worker])
+        controller.reportOn(dispatcher, failed: false)
+        await controller.reportTask?.value
+        XCTAssertTrue(controller.hiddenThreads.contains(dispatcherID), "the normal dispatcher handoff ran")
+        XCTAssertTrue(controller.dispatchers.contains(worker.id))
+
+        let said = Exchange(id: "result", asker: .agent(threadID: dispatcherID), askedAt: clock, ask: "Fix the project", reply: "The project is fixed.", repliedAt: clock.addingTimeInterval(20))
+        let book = ChannelBook.build(kittens: [], threads: [dispatcher, worker], transcripts: [worker.id: [said]], isReading: false, unreadable: 0, cantReachT3: false, inEveryone: controller.messagesThreads)
+        XCTAssertEqual(book.everyone.messages.compactMap(\.text), ["The project is fixed."], "Everyone must follow work the frontier dispatcher moves into another thread")
+    }
+}

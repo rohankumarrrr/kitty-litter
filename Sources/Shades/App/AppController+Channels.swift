@@ -127,7 +127,8 @@ extension AppController {
         case .route(let session):
             guard sessions.indices.contains(session - 1) else { return catSays(CatWords.lostTheSession) }
             let thread = sessions[session - 1]
-            if KittenBoard.owner(of: thread, among: loadKittens()) == nil { messagesThreads[thread.id] = sentAt }
+            // From the first time, so what it said before stays in Everyone too.
+            if KittenBoard.owner(of: thread, among: loadKittens()) == nil { messagesThreads[thread.id] = messagesThreads[thread.id] ?? sentAt }
             forward(words, to: thread, snapshot: nil)
         case .kitten(let number):
             guard kittens.indices.contains(number - 1) else { return catSays(CatWords.lostTheSession) }

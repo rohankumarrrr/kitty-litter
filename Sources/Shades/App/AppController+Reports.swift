@@ -56,6 +56,8 @@ extension AppController {
     /// All this thread did was start another one, so that's where the work is now.
     func passedOn(_ thread: AgentThread, to next: String) {
         dispatchers.insert(next)
+        // Work that came from Everyone keeps answering there from wherever it moves.
+        if let since = messagesThreads.removeValue(forKey: thread.id) { messagesThreads[next] = min(since, messagesThreads[next] ?? since) }
         hiddenThreads.insert(thread.id)
         watch.markQuick(thread.id)
         Task { [backend] in try? await backend.settle(threadID: thread.id) }

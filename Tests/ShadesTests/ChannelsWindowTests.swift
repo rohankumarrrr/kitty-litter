@@ -451,3 +451,27 @@ extension ChannelsWindowTests {
         XCTAssertEqual(sent, [], "the follow-up to the new topic went to the old thread")
     }
 }
+
+extension ChannelsWindowTests {
+    func testANewTopicKeepsTheBoxWhenAnOldThreadAnswersLate() {
+        let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: 820, height: 560))
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        let echo = SentMessage(channel: .direct(steve), message: ChannelMessage(exchangeID: "new-topic", kind: .ask, speaker: .you, text: "Write a new cover letter", at: at.addingTimeInterval(60), threadID: "", threadTitle: ""))
+        let old = AgentThread(id: "old-resume", title: "Old resume", projectTitle: "Steve", status: .running, model: "m", updatedAt: at, projectPath: "/k/steve")
+        let initial = Exchange(id: "resume", asker: .you, askedAt: at, ask: "Tidy my old resume")
+        view.show(ChannelBook.build(kittens: [steve], threads: [old], transcripts: [old.id: [initial]], isReading: false, unreadable: 0, cantReachT3: false, sent: [echo]))
+        view.select(.channel(.direct(steve)))
+        XCTAssertEqual(view.pane.composer.target, .starting(steve))
+        view.pane.composer.textView.string = "Keep the new letter to one page"
+
+        var finished = old
+        finished.status = .completed
+        finished.updatedAt = at.addingTimeInterval(90)
+        let lateReply = Exchange(id: "resume", asker: .you, askedAt: at, ask: "Tidy my old resume", reply: "The old resume is ready.", repliedAt: at.addingTimeInterval(90))
+        view.show(ChannelBook.build(kittens: [steve], threads: [finished], transcripts: [old.id: [lateReply]], isReading: false, unreadable: 0, cantReachT3: false, sent: [echo]))
+        XCTAssertEqual(view.pane.composer.target, .starting(steve), "The pending new topic must hold its target even when the old thread answers later")
+        view.pane.composer.send(view.pane.composer.textView.string)
+        XCTAssertEqual(sent, [], "A follow-up for the new topic must not go to the old resume thread")
+    }
+}
