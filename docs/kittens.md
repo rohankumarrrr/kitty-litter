@@ -29,7 +29,7 @@ Three more fields are optional:
 
 - `color` is its jacket in the kitten view, like `"#b3261e"`.
 - `planned: true` means it shows up with the others but isn't taking work yet, which is handy for a kitten you've named but haven't written instructions for.
-- `seesScreen: false` keeps text from your screen away from it, including in follow-ups to its work in other projects. If your words point at your screen, like "read this thread" with no link, the cat tells you as it passes them on, so you can send the link or paste the text. That goes by a short list of phrases in `ScreenWords.swift`, which only reads your words, so it can miss one or warn when it didn't need to. Your words go through either way.
+- `seesScreen: false` keeps text from your screen away from it, including in follow-ups to its work in other projects. If your words point at your screen, like "read this thread" with no link, the cat tells you as it passes them on, so you can send the link or paste the text. That goes by a short list of phrases in `ScreenWords.swift`, which only reads your words, so it can miss one or warn when it didn't need to. A follow-up only warns if your words name something like a thread or an article, because "this" there usually means the session's own work. Your words go through either way.
 
 Shades reads `covers` to decide what goes to a kitten, so write it the way you'd brief someone new. The folder is read fresh for every question, so adding a kitten only takes the folder and this:
 

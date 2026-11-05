@@ -57,10 +57,8 @@ extension AppController {
         replyGeneration += 1
         let generation = replyGeneration
         line = nil
-        // You've moved on, and may well be sending what it asked for.
-        notices.removeAll { $0.text == CatWords.sendTheLink }
         reply = Reply()
-        renderBubble()
+        dropScreenWarning()
         replyTask = Task {
             let snapshot = await capture?.value.snapshot
             if generation == replyGeneration {
@@ -262,6 +260,7 @@ extension AppController {
                     case .needsApproval(let request):
                         addApproval(request)
                     case .failed(let message):
+                        dropScreenWarning()
                         say(message)
                     case .text, .finished:
                         break
@@ -269,6 +268,7 @@ extension AppController {
                 }
                 if !started { say(CatWords.noReply) }
             } catch {
+                dropScreenWarning()
                 say(CatWords.problem(error, while: .agents))
             }
         }

@@ -86,13 +86,40 @@ final class ScreenWordsTests: XCTestCase {
             "What's this month's budget?",
             "What's this week looking like?",
             "What does this month look like for rent?",
+            "What does this Friday mean for the release?",
             "What's this Friday look like?",
             "Look at this month's spending and tell me if I'm over",
             "Summarize this week",
+            "Summarize this past week",
+            "Check out this coming week's schedule",
+            "Thoughts on this week's plan?",
+            "What do you think of this week's release?",
             "Read this week's notes and tell me what's due",
             "Check out this weekend's schedule",
             "Write this week's blog post",
             "Send this week's email to the team",
+            "What do people read these days?",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    func testThisAloneIsntEnough() {
+        for words in [
+            "What does this change do?",
+            "Explain this function",
+            "What is this test for?",
+            "Is this error fixed now?",
+            "Is this doc up to date?",
+            "Is this page up to date?",
+            "What are these warnings in the build?",
+            "Did this comment get pushed?",
+            "What does this PR do?",
+            "See this through to the end",
+            "Is this thread-safe?",
+            "Does this window take focus?",
+            "Make this page load faster",
+            "Export this to PDF",
         ] {
             XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
         }
@@ -100,17 +127,28 @@ final class ScreenWordsTests: XCTestCase {
 
     func testAFollowUpsThisIsUsuallyTheSessionsOwnWork() {
         for words in [
-            "What does this change do?",
-            "Explain this function",
-            "What is this test for?",
-            "Is this error fixed now?",
-            "Is this doc up to date?",
-            "What are these warnings in the build?",
-            "Did this comment get pushed?",
-            "What does this PR do?",
-            "See this through to the end",
+            "Look at this error",
+            "Look at this function and fix it",
+            "Read this file and tell me what it does",
+            "Check out this branch and run the tests",
+            "Summarize this PR",
+            "Translate this function to Swift",
+            "what does this say?",
+            "What's this?",
         ] {
-            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+            XCTAssertFalse(ScreenWords.pointAtScreen(words, isFollowUp: true), words)
+            XCTAssertTrue(ScreenWords.pointAtScreen(words), "a new thread has nothing else it could mean: \(words)")
+        }
+    }
+
+    func testAFollowUpStillWarnsWhenItNamesSomethingOutsideTheConversation() {
+        for words in [
+            "Read this x thread, and see what lessons we can take from it to improve our kitten litter.",
+            "Is this tweet right?",
+            "what's on my screen?",
+            "the article I'm reading",
+        ] {
+            XCTAssertTrue(ScreenWords.pointAtScreen(words, isFollowUp: true), words)
         }
     }
 
@@ -121,7 +159,7 @@ final class ScreenWordsTests: XCTestCase {
     }
 
     /// Doing what the cat says mustn't get the same advice again.
-    func testTextAfterAColonOrQuoteMeansTheyPastedIt() {
+    func testPastedTextDoesntGetAskedForAgain() {
         for words in [
             "Summarize this: the build failed because the signing key expired.",
             "Read this: Shades is a desktop cat.",
@@ -129,8 +167,26 @@ final class ScreenWordsTests: XCTestCase {
             "Thoughts on this tweet: \"ship small, ship often\"",
             "Read this \"ship small, ship often\"",
             "Read this \u{201C}ship small, ship often\u{201D}",
+            "The build failed because the signing key expired. Summarize this.",
+            "Build failed: errSecInternalComponent on codesign. What does this mean?",
+            "ship small, ship often. Thoughts on this?",
+            "\"ship small, ship often\" what do you think of this?",
+            "\"ship small, ship often\"\n\nRead this and tell me what lessons we can take from it",
         ] {
             XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    func testPunctuationAloneIsntPastedText() {
+        for words in [
+            "Read this x thread, and see what lessons we can take from it to improve our kitten litter :)",
+            "Read this x thread before my 3:30 call",
+            "Read this:",
+            "Read this :)",
+            "Read this \"",
+            "Hey there: read this x thread",
+        ] {
+            XCTAssertTrue(ScreenWords.pointAtScreen(words), words)
         }
     }
 

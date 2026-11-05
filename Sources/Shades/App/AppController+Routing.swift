@@ -71,6 +71,12 @@ extension AppController {
         post(caption: said, text: CatWords.sendTheLink, threadID: threadID, first: true)
     }
 
+    /// You've moved on, or your words never got there, so there's nothing left to warn about.
+    func dropScreenWarning() {
+        notices.removeAll { $0.text == CatWords.sendTheLink }
+        renderBubble()
+    }
+
     /// Gives your words to a kitten. A new thread in its folder already knows what it needs to,
     /// and T3 writes the title, so nothing here has to explain anything to it.
     func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?) {
@@ -113,7 +119,7 @@ extension AppController {
             screenshotPath: saveScreenshot(of: shared),
             screenLeftOut: !seesScreen && snapshot != nil
         )
-        sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: !seesScreen && ScreenWords.pointAtScreen(words))
+        sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: !seesScreen && ScreenWords.pointAtScreen(words, isFollowUp: true))
 
         // Quick chats are left out of the thread list's news, so their replies are picked up here.
         let isQuick = watch.isQuick(thread.id)
@@ -123,13 +129,15 @@ extension AppController {
                     switch event {
                     case .finished where isQuick:
                         reportOn(thread, failed: false)
-                    case .failed(let message) where isQuick:
-                        say(message)
+                    case .failed(let message):
+                        dropScreenWarning()
+                        if isQuick { say(message) }
                     default:
                         break
                     }
                 }
             } catch {
+                dropScreenWarning()
                 say(CatWords.problem(error, while: .agents))
             }
         }

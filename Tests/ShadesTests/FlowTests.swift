@@ -121,6 +121,8 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     var failResponses = false
     var connectError: Error?
     var streamError: Error?
+    var forwardError: Error?
+    var errorAfterStarting: Error?
     private var count = 0
 
     var sent: [Sent] { lock.withLock { _sent } }
@@ -151,6 +153,7 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
     private func play(threadID: String) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         let events = lock.withLock { replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst() }
         let error = streamError
+        let laterError = errorAfterStarting
         return AsyncThrowingStream { continuation in
             if let error {
                 continuation.finish(throwing: error)
@@ -158,11 +161,14 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
             }
             continuation.yield(.started(threadID: threadID))
             events.forEach { continuation.yield($0) }
-            continuation.finish()
+            continuation.finish(throwing: laterError)
         }
     }
 
     func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        if let forwardError {
+            return AsyncThrowingStream { $0.finish(throwing: forwardError) }
+        }
         let prompt = AgentPrompt(text: text, attachments: attachments, model: .quick, runtimeMode: .auto)
         lock.withLock { _sent.append(Sent(mode: .forward, threadID: threadID, prompt: prompt)) }
         return play(threadID: threadID)
@@ -673,22 +679,67 @@ final class FlowTests: XCTestCase {
         kittens = [clawde]
         controller.threadsChanged([session("w", "Clawde: Fix routing")])
         backend.replies = [[.finished(fullText: "SEND TO: 1")]]
-        await ask("what does this say?")
+        await ask("Read this x thread")
         XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Clawde: Fix routing.", text: sendTheLink, threadID: "w"))
-        XCTAssertTrue(backend.sent[1].prompt.text.hasPrefix("what does this say?"))
+        XCTAssertTrue(backend.sent[1].prompt.text.hasPrefix("Read this x thread"))
 
         kittens = []
         controller.threadsChanged([session("f", "Work", mode: .fullAccess)])
         backend.replies = [[.finished(fullText: "SEND TO: 1")]]
-        await ask("what does this say?")
+        await ask("Read this x thread")
         XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
     }
 
     func testAFollowUpToASessionThatSeesTheScreenGetsNoWarning() async {
         controller.threadsChanged([session("w", "Work")])
         backend.replies = [[.finished(fullText: "SEND TO: 1")]]
-        await ask("what does this say?")
+        await ask("Read this x thread")
         XCTAssertEqual(stage.bubble, .line("Sent that to Work.", threadID: "w"))
+    }
+
+    func testAFollowUpsThisIsItsOwnWorkButANewThreadsIsTheScreen() async {
+        controller.threadsChanged([session("f", "Work", mode: .fullAccess)])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("Read this file and tell me what it does")
+        XCTAssertEqual(stage.bubble, .line("Sent that to Work.", threadID: "f"))
+
+        await askClawde("Read this file and tell me what it does")
+        guard case .notice(_, sendTheLink, _)? = stage.bubble else { return XCTFail("a new thread has nothing else it could mean") }
+    }
+
+    func testASendThatFailsTakesTheWarningBack() async {
+        controller.threadsChanged([session("f", "Work", mode: .fullAccess)])
+        backend.forwardError = URLError(.notConnectedToInternet)
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("Read this x thread")
+        XCTAssertEqual(stage.bubble, .line(CatWords.problem(URLError(.notConnectedToInternet), while: .agents), threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertNil(stage.bubble)
+    }
+
+    func testAFollowUpThatFailsOutOfSightTakesTheWarningBack() async {
+        controller.threadsChanged([session("f", "Work", mode: .fullAccess)])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")], [.failed(message: "It ran into a problem.")]]
+        await ask("Read this x thread")
+        XCTAssertTrue(stage.bubbles.contains(.notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f")))
+        XCTAssertNil(stage.bubble)
+    }
+
+    func testAKittenThatBreaksOffTakesTheWarningBack() async {
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.errorAfterStarting = URLError(.networkConnectionLost)
+        controller.give("Read this x thread", to: clawde, snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .line(CatWords.problem(URLError(.networkConnectionLost), while: .agents), threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertNil(stage.bubble)
+    }
+
+    func testAKittenThatFailsTakesTheWarningBack() async {
+        await askClawde("Read this x thread", thenReply: [.failed(message: "It ran into a problem.")])
+        XCTAssertEqual(stage.bubble, .line("It ran into a problem.", threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertNil(stage.bubble)
     }
 
     func testTheWarningWaitsBehindAnApproval() async {
@@ -735,7 +786,7 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to \(title).", text: sendTheLink, threadID: "w"))
     }
 
-    func testLoadingTheEarsDoesntCoverTheWarning() async {
+    func testLoadingTheEarsDoesntLoseTheWarning() async {
         controller.fetchingEars(0.1)
         clock = clock.addingTimeInterval(5)
         controller.fetchingEars(0.2)
@@ -744,9 +795,9 @@ final class FlowTests: XCTestCase {
         await askClawde("Read this x thread")
         let warning = BubbleContent.notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2")
         XCTAssertEqual(stage.bubble, warning)
-        controller.fetchingEars(0.3)
-        XCTAssertEqual(stage.bubble, warning)
-        controller.fetchingEars(1)
+        controller.fetchingEars(0.5)
+        XCTAssertEqual(stage.bubble, .line(CatWords.fetchingEars(0.5), threadID: nil), "the download keeps saying how it's going")
+        controller.fetchingEars(nil)
         XCTAssertEqual(stage.bubble, warning)
     }
 
