@@ -23,8 +23,16 @@ let package = Package(
         // Hears you: microphone, on-device speech, cleanup, text insertion.
         .target(
             name: "ShadesVoice",
-            dependencies: ["ShadesCore", .product(name: "FluidAudio", package: "FluidAudio")],
-            swiftSettings: settings
+            dependencies: ["ShadesCore", "llama", .product(name: "FluidAudio", package: "FluidAudio")],
+            swiftSettings: settings,
+            // Where llama.framework lives once it's inside Shades.app.
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
+        ),
+        // llama.cpp, prebuilt with its Metal shaders inside, for the cleanup model.
+        .binaryTarget(
+            name: "llama",
+            url: "https://github.com/ggml-org/llama.cpp/releases/download/b12121/llama-b12121-xcframework.zip",
+            checksum: "00bc6fec00beba802a3912a6afb81e1678da5248a6a92548a9ce66724a3e7638"
         ),
         // The cat itself, and the app that wires everything together.
         .executableTarget(
@@ -36,7 +44,7 @@ let package = Package(
         // Small command-line tools for trying one module without the app.
         .executableTarget(name: "probe-t3", dependencies: ["ShadesCore", "ShadesT3"], path: "Sources/Probes/T3", swiftSettings: settings),
         .executableTarget(name: "probe-context", dependencies: ["ShadesCore", "ShadesContext"], path: "Sources/Probes/Context", swiftSettings: settings),
-        .executableTarget(name: "probe-voice", dependencies: ["ShadesCore", "ShadesVoice"], path: "Sources/Probes/Voice", swiftSettings: settings),
+        .executableTarget(name: "probe-voice", dependencies: ["ShadesCore", "ShadesVoice", .product(name: "FluidAudio", package: "FluidAudio")], path: "Sources/Probes/Voice", swiftSettings: settings),
 
         .testTarget(name: "ShadesCoreTests", dependencies: ["ShadesCore"], swiftSettings: settings),
         .testTarget(name: "ShadesT3Tests", dependencies: ["ShadesT3"], swiftSettings: settings),
