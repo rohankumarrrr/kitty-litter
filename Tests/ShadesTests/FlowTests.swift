@@ -305,6 +305,7 @@ final class FlowTests: XCTestCase {
             now: { [unowned self] in self.clock }
         )
         controller.threadListWait = 0
+        controller.reportDelay = 0
     }
 
     private func settle() async {
@@ -674,6 +675,20 @@ final class FlowTests: XCTestCase {
         controller.threadsChanged([work])
         await controller.reportTask?.value
         for _ in 0..<20 { await Task.yield() }
+    }
+
+    func testAThreadThatPicksUpAgainIsntReportedAsDone() async {
+        controller.reportDelay = 0.05
+        backend.reports["w"] = "A reviewer's looking at it."
+        var work = session("w", "Work", status: .running)
+        controller.threadsChanged([work])
+        work.status = .completed
+        controller.threadsChanged([work])
+        work.status = .running
+        controller.threadsChanged([work])
+        await controller.reportTask?.value
+        XCTAssertNil(stage.bubble)
+        XCTAssertEqual(backend.sent.count, 0)
     }
 
     func testAShortReportIsPassedOnAsItIs() async {

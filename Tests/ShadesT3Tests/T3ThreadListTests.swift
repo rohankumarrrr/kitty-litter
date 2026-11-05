@@ -33,6 +33,27 @@ final class T3ThreadListTests: XCTestCase {
             .replacingOccurrences(of: "__ROOT__", with: root)
     }
 
+    func testAThreadWaitingOnASubagentIsStillWorking() throws {
+        var list = T3ThreadList()
+        let parent = thread(id: "parent", status: "completed")
+        list.apply(try snapshot(threads: [parent, thread(id: "reviewer", status: "running", parent: "parent", relationship: "subagent")]))
+        let listed = list.agentThreads(summaries: [:])
+        XCTAssertEqual(listed.map(\.id), ["parent"], "a reviewer never shows up by itself")
+        XCTAssertEqual(listed.first?.status, .running)
+
+        list.apply(try updated(thread(id: "reviewer", status: "completed", parent: "parent", relationship: "subagent")))
+        XCTAssertEqual(list.agentThreads(summaries: [:]).first?.status, .completed)
+    }
+
+    func testAThreadWithSomethingLeftRunningIsStillWorking() throws {
+        var list = T3ThreadList()
+        let running = thread(id: "t", status: "completed")
+            .replacingOccurrences(of: #""pendingBackgroundTasks":[]"#, with: #""pendingBackgroundTasks":[{"id":"task-1"}]"#)
+        XCTAssertTrue(running.contains("task-1"))
+        list.apply(try snapshot(threads: [running]))
+        XCTAssertEqual(list.agentThreads(summaries: [:]).first?.status, .running)
+    }
+
     func testAQuestionGoesOnTheThreadOnceItsWordsAreKnown() throws {
         var list = T3ThreadList()
         let pending = #"{"id":"req-1","kind":"user_input","createdAt":"2026-11-05T04:00:00.000Z","blocking":true}"#

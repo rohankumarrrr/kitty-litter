@@ -8,6 +8,9 @@ extension AppController {
 
     func reportOn(_ thread: AgentThread, failed: Bool) {
         reportTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(reportDelay * 1_000_000_000))
+            if latestThreads.first(where: { $0.id == thread.id })?.status.isActive == true { return }
+
             let report = await backend.finalReport(threadID: thread.id)
             if !failed, dispatchers.contains(thread.id), let next = report.flatMap(ReportDigest.linkedThreadID(in:)), next != thread.id {
                 passedOn(thread, to: next)

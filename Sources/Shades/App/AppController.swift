@@ -73,6 +73,9 @@ final class AppController {
     var dispatchers: Set<String> = []
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
+    /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
+    /// Waiting a little before saying it's finished means that doesn't read as done.
+    var reportDelay: TimeInterval = 5
     /// How long a question waits for the first list of sessions, so one asked right after launch can still be routed.
     var threadListWait: TimeInterval = 2
     /// The sessions the router was shown for the question it's on, in the order it saw them.

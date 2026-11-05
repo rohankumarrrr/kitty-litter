@@ -136,7 +136,7 @@ struct T3ThreadList {
                     id: thread.id,
                     title: thread.title,
                     projectTitle: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.title },
-                    status: approvals.isEmpty ? thread.agentStatus : .waitingForApproval,
+                    status: approvals.isEmpty ? status(of: thread) : .waitingForApproval,
                     model: thread.modelSelection.model,
                     updatedAt: thread.updatedAt,
                     pendingApprovals: approvals,
@@ -145,6 +145,18 @@ struct T3ThreadList {
                 )
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }
+    }
+
+    /// A thread's turn can end while what it started carries on, and then it'll wake up and carry on
+    /// itself. That isn't finished, so it isn't reported as finished.
+    private func status(of thread: T3Wire.ThreadShell) -> AgentStatus {
+        let status = thread.agentStatus
+        guard status == .completed else { return status }
+        let leftRunning = thread.pendingBackgroundTasks?.isEmpty == false
+        let childWorking = threads.values.contains { child in
+            child.lineage.parentThreadId == thread.id && child.agentStatus.isActive
+        }
+        return leftRunning || childWorking ? .running : status
     }
 
     /// The nearest thread a person can see, for a subagent that needs something.

@@ -430,6 +430,8 @@ enum T3Wire {
         let modelSelection: SelectedModel
         let lineage: Lineage
         let pendingRuntimeRequest: PendingRequest?
+        /// Shells and the like it left running when its turn ended. Only how many matters.
+        let pendingBackgroundTasks: [Lossy<Ignored>]?
         let updatedAt: Date
         let archivedAt: Date?
         let deletedAt: Date?
