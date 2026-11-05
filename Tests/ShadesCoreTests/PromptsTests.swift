@@ -192,7 +192,12 @@ final class PromptsTests: XCTestCase {
 
     func testOwnWordsComeBackFromEveryWayOfPassingThemOn() {
         let snapshot = ScreenSnapshot(appName: "Safari", pageText: "SENTINEL from a page")
-        for make in [Prompts.forKitten, Prompts.forwarded] {
+        let away = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper", project: "/code/app")
+        let makers: [(String, ScreenSnapshot?, String?, Bool) -> String] = [
+            { Prompts.forKitten(away, words: $0, snapshot: $1, screenshotPath: $2, screenLeftOut: $3) },
+            Prompts.forwarded,
+        ]
+        for make in makers {
             for (shot, leftOut) in [(snapshot, false), (nil, false), (nil, true)] as [(ScreenSnapshot?, Bool)] {
                 let message = make("and that part?\nsecond line", shot, nil, leftOut)
                 XCTAssertEqual(Prompts.ownWords(in: message), "and that part?\nsecond line")
