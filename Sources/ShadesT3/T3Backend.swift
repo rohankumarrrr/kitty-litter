@@ -12,8 +12,11 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
     private let hub: T3ThreadHub
     private let home: URL
     private let uploads: URLSession
+    private let scratchRoot: String
     private let lock = NSLock()
     private var scratchProjectID: String?
+    /// What `exchanges(threadID:)` names senders from, so whoever asks for those asks `allThreads()` first.
+    private var catalog = T3ThreadList()
 
     /// - Parameters:
     ///   - home: T3 Code's data folder. Defaults to `$T3CODE_HOME`, then `~/.t3`.
@@ -37,6 +40,7 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         self.auth = auth
         self.socket = socket
         let scratchRoot = home.appendingPathComponent("scratch", isDirectory: true).standardizedFileURL.path
+        self.scratchRoot = scratchRoot
         hub = T3ThreadHub(socket: socket, scratchRoot: scratchRoot)
         uploads = URLSession(configuration: .ephemeral)
     }
@@ -181,6 +185,79 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
             T3Wire.GetThreadProjection(threadId: threadID)
         )
         return projection.flatMap { T3Wire.finalReport(in: $0.turnItems.compactMap(\.value)) }
+    }
+
+    public func allThreads() async -> [AgentThread]? {
+        let scratchRoot = scratchRoot
+        let list = await firstSnapshot(
+            T3Wire.Method.subscribeShell,
+            payload: T3Wire.encode(T3Wire.SubscribeShell.everything),
+            of: T3Wire.ShellItem.self
+        ) { items -> T3ThreadList? in
+            var list = T3ThreadList(scratchRoot: scratchRoot)
+            for item in items { list.apply(item) }
+            return list.isLoaded ? list : nil
+        }
+        guard let list else { return nil }
+        lock.withLock { catalog = list }
+        return list.agentThreads(summaries: [:])
+    }
+
+    /// Reads the whole thread, because `getThreadProjection` only answers with its latest 75 or so
+    /// rows, which leaves out what a long thread was asked.
+    /// shortcut: a thread over `T3Socket`'s 64 MB frame limit would drop the connection, and the largest seen is 15 MB. Check its `itemCount` first if they get near that.
+    public func exchanges(threadID: String) async -> [Exchange]? {
+        let projection = await firstSnapshot(
+            T3Wire.Method.subscribeThread,
+            payload: T3Wire.encode(T3Wire.SubscribeThread.whole(threadID: threadID)),
+            of: T3Wire.ThreadItem.self
+        ) { items -> T3Wire.Projection? in
+            for case let .snapshot(projection, _) in items { return projection }
+            return nil
+        }
+        guard let projection else { return nil }
+        let known = lock.withLock { catalog }
+        return T3Transcript.exchanges(
+            in: projection.turnItems.compactMap(\.value),
+            runs: projection.runs.compactMap(\.value),
+            sender: known.listedThread(of:)
+        )
+    }
+
+    /// Subscribes just long enough for a stream's first snapshot. `nil` if the connection drops or it takes too long.
+    private func firstSnapshot<Snapshot, Item: Decodable>(
+        _ method: String,
+        payload: Data,
+        of item: Item.Type,
+        reading snapshot: @escaping @Sendable ([Item]) -> Snapshot?
+    ) async -> Snapshot? {
+        guard (try? await socket.connect()) != nil else { return nil }
+        let found = AsyncStream<Snapshot?>.makeStream()
+        let giveUp = OutageTimer(limit: Self.outageLimit) { found.continuation.yield(nil) }
+        giveUp.start()
+        defer { giveUp.cancel() }
+
+        let subscription = await socket.subscribe(
+            method,
+            payload: { payload },
+            onConnectionChange: { isOpen in
+                if !isOpen { found.continuation.yield(nil) }
+            },
+            onEnd: { _ in found.continuation.yield(nil) },
+            onChunk: { frame in
+                let items = (try? T3Wire.frames(T3Wire.ChunkFrame<Item>.self, in: frame))?.flatMap(\.items) ?? []
+                if let value = snapshot(items) { found.continuation.yield(value) }
+            }
+        )
+
+        // Going away cancels this, which ends the wait.
+        var first: Snapshot?
+        for await next in found.stream {
+            first = next
+            break
+        }
+        await socket.unsubscribe(subscription)
+        return first
     }
 
     public func open(threadID: String) {

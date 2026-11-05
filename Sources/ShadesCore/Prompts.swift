@@ -105,6 +105,25 @@ public enum Prompts {
         return "\(words)\n\n---\n\(intro)\n\n\(untrusted)\n\n\(screenBlock(snapshot, screenshotPath: screenshotPath))"
     }
 
+    /// What the person wrote, from a message `passedOn` made: everything above the first `---` line.
+    /// `nil` if that's empty or still mentions a screen block, as `frontier` and `fix` prompts do, so
+    /// nothing from a screen can pass as their words. That may hide some of them, which is the safe way round.
+    public static func ownWords(in text: String) -> String? {
+        let above = text.split(separator: "\n", omittingEmptySubsequences: false).prefix { $0 != "---" }
+        let words = above.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !words.isEmpty, words.range(of: "<screen", options: .caseInsensitive) == nil else { return nil }
+        return words
+    }
+
+    /// Takes out every screen block, including one that never closes, whatever its case or spacing.
+    public static func withoutScreenBlocks(_ text: String) -> String {
+        text.replacingOccurrences(
+            of: #"(?is)<\s*screen\b[^>]*>.*?(<\s*/\s*screen\s*>|\z)"#,
+            with: "",
+            options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     public static func frontier(request: String, snapshot: ScreenSnapshot?, screenshotPath: String?) -> String {
         """
         \(dispatchPreamble)

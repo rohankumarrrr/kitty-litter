@@ -132,19 +132,30 @@ struct T3ThreadList {
             .filter(\.isListed)
             .map { thread in
                 let approvals = (approvalsByListedThread[thread.id] ?? []).sorted { $0.createdAt < $1.createdAt }
-                return AgentThread(
-                    id: thread.id,
-                    title: thread.title,
-                    projectTitle: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.title },
-                    status: approvals.isEmpty ? status(of: thread) : .waitingForApproval,
-                    model: thread.modelSelection.model,
-                    updatedAt: thread.updatedAt,
-                    pendingApprovals: approvals,
-                    pendingQuestion: questionsByListedThread[thread.id],
-                    runtimeMode: thread.runtimeMode.flatMap(RuntimeMode.init(rawValue:))
-                )
+                return agentThread(thread, approvals: approvals, question: questionsByListedThread[thread.id])
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }
+    }
+
+    /// The thread a person knows this one by: itself, or the nearest one above a subagent.
+    func listedThread(of id: String) -> AgentThread? {
+        threads[id].flatMap(listedOwner).map { agentThread($0) }
+    }
+
+    private func agentThread(_ thread: T3Wire.ThreadShell, approvals: [ApprovalRequest] = [], question: AgentQuestion? = nil) -> AgentThread {
+        AgentThread(
+            id: thread.id,
+            title: thread.title,
+            projectTitle: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.title },
+            status: approvals.isEmpty ? status(of: thread) : .waitingForApproval,
+            model: thread.modelSelection.model,
+            updatedAt: thread.updatedAt,
+            pendingApprovals: approvals,
+            pendingQuestion: question,
+            runtimeMode: thread.runtimeMode.flatMap(RuntimeMode.init(rawValue:)),
+            isSettled: thread.settledAt != nil,
+            pullRequest: thread.latestPullRequest
+        )
     }
 
     /// A thread's turn can end while what it started carries on, and then it'll wake up and carry on
