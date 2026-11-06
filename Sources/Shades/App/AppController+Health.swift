@@ -32,6 +32,7 @@ extension AppController {
         var facts = systemFacts()
         facts.reachedT3 = threadListArrived
         facts.inboxSaves = !inboxSaveFailed
+        facts.shortcutsTaken = takenShortcuts
         facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
         do {
             _ = try await routerProjectID(for: settings.quickModel)

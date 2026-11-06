@@ -13,7 +13,7 @@ A window for everything the kittens are doing: what needs you pinned at the top,
 
 ## How to get to it (user POV)
 
-- Press ⌃⌘M, or choose Messages from the cat's menu.
+- Press ⌃⌘B, or choose Messages from the cat's menu.
 - Click a row in the sidebar, such as Done or a kitten, to change what's showing.
 - Click a thread's title, or hover a message and press Reply, to open that thread. "‹" at the top goes back.
 - Type in the box at the bottom and press Return.
@@ -36,7 +36,7 @@ Journey: `journeys/messages.txt`.
 ## Gotchas
 
 - `channel` takes `needs`, `done`, `everyone` or the start of a kitten's name, such as `steve`. `thread` only works in a conversation, and `back` goes from a thread to its conversation.
-- `messages` is the same as ⌃⌘M, so a second one closes the window. `channels` only opens it.
+- `messages` is the same as ⌃⌘B, so a second one closes the window. `channels` only opens it.
 - The window is live, so a row under the real pointer can draw highlighted. That's where the mouse is, not a bug.
 - `send` is the same as typing in the box and pressing Return, and it never takes the keyboard. The box beeps and sends nothing when there's nowhere to send, such as in Needs you, or in a new topic before T3 has started its thread.
 - Messages reads the canned transcripts when it opens. Draw before `wait 1` and it can still say it's reading.

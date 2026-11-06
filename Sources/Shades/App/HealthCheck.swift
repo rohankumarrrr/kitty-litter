@@ -46,6 +46,8 @@ struct HealthFacts: Equatable {
     var inboxSaves = true
     /// Whether finished threads say which run they last finished, which is how the inbox tells reports apart.
     var t3GivesRunIDs = true
+    /// Shortcuts another app already had when Shades asked for them, such as "⌃⌘B".
+    var shortcutsTaken: [String] = []
 }
 
 enum HealthCheck {
@@ -165,6 +167,12 @@ enum HealthCheck {
             ok: false,
             problem: "T3 Code has stopped saying which run a thread last finished, so reports go to the bubble instead of the inbox, and a restart can lose them.",
             fix: "Run swift run probe-t3 to see what changed."
+        ))
+        results.append(facts.shortcutsTaken.isEmpty ? .good("shortcuts") : HealthFinding(
+            check: "shortcuts",
+            ok: false,
+            problem: "Another app has \(facts.shortcutsTaken.joined(separator: " and ")), so pressing \(facts.shortcutsTaken.count == 1 ? "it" : "them") does nothing here.",
+            fix: "Use my menu for \(facts.shortcutsTaken.count == 1 ? "it" : "them"), or change the other app's shortcut and choose Restart from my menu."
         ))
         return results
     }
