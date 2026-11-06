@@ -30,4 +30,8 @@ struct AppDependencies {
     var saveInbox: (Inbox) throws -> Void = { _ in }
     /// Off for a copy trying a flow out, which may be testing with one of these itself.
     var hidesTestThreads = true
+    /// Where a notification that something needs you goes.
+    var notify: (NeedsYouAlert) -> Void = { _ in }
+    /// Takes notifications back by ID, once what they were about isn't waiting anymore.
+    var withdrawNotifications: ([String]) -> Void = { _ in }
 }

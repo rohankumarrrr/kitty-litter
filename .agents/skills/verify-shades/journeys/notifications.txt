@@ -1,0 +1,18 @@
+channels
+wait 1
+channel everyone
+wait 1
+draw .verify/shades/notifications/0-elsewhere
+approval command npm test
+wait 4
+report decision
+wait 7
+question
+wait 2
+notification
+wait 2
+draw .verify/shades/notifications/1-clicked
+allow
+wait 1
+draw .verify/shades/notifications/2-answered
+windows

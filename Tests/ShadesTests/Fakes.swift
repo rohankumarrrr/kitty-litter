@@ -93,6 +93,8 @@ final class FakeStage: CatStage {
     func hideKittens() { kittens = nil }
     func showChannels(_ book: ChannelBook) { channelsShown.append(book) }
     func updateChannels(_ book: ChannelBook) { channelsUpdated.append(book) }
+    var channelSelected: ChannelSelection?
+    func selectChannel(_ selection: ChannelSelection) { channelSelected = selection }
     var inboxRows: [InboxEntry]?
     var isInboxVisible: Bool { inboxRows != nil }
     func showInbox(_ entries: [InboxEntry]) { inboxRows = entries }

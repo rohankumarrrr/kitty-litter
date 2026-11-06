@@ -216,6 +216,10 @@ final class AppStage: CatStage {
         channels.update(book)
     }
 
+    func selectChannel(_ selection: ChannelSelection) {
+        channels.view.select(selection)
+    }
+
     // MARK: - The inbox
 
     var isInboxVisible: Bool { inbox.isVisible }

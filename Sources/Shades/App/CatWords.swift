@@ -47,6 +47,14 @@ enum CatWords {
     }
     static func failedCaption(_ thread: AgentThread) -> String { "Hit a snag: \(thread.title)" }
     static func questionCaption(_ question: AgentQuestion) -> String { "Asking: \(question.threadTitle)" }
+    static func notification(_ alert: NeedsYouAlert) -> String {
+        let who = alert.who ?? "An agent"
+        switch alert.kind {
+        case .approval: return "\(who) needs an approval"
+        case .question: return "\(who) has a question"
+        case .decision: return "\(who) needs a decision"
+        }
+    }
     static func kittenState(_ state: KittenStatus.State) -> String {
         switch state {
         case .working(let sessions): return sessions == 1 ? "Working" : "Working on \(sessions) things"

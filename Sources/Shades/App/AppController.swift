@@ -34,6 +34,8 @@ final class AppController {
     let reportHealth: ([HealthFinding]) -> Void
     let saveInbox: (Inbox) throws -> Void
     let hidesTestThreads: Bool
+    let notify: (NeedsYouAlert) -> Void
+    let withdrawNotifications: ([String]) -> Void
     let stage: CatStage
     let now: () -> Date
     let channels: ChannelFeed
@@ -113,6 +115,8 @@ final class AppController {
     var messagesThreads: [String: Date] = [:]
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
+    /// What's had a notification and is still waiting. `nil` until the first look after the thread list arrives.
+    var notified: Set<String>?
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
     /// Waiting a little before saying it's finished means that doesn't read as done.
     var reportDelay: TimeInterval = 5
@@ -171,6 +175,8 @@ final class AppController {
         inbox = dependencies.inbox
         saveInbox = dependencies.saveInbox
         hidesTestThreads = dependencies.hidesTestThreads
+        notify = dependencies.notify
+        withdrawNotifications = dependencies.withdrawNotifications
         self.stage = stage
         self.now = now
         channels = ChannelFeed(backend: dependencies.backend, kittens: dependencies.kittens)
