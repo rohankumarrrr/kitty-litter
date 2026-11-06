@@ -11,6 +11,7 @@ A desktop cat for macOS. It sees your screen when you ask, answers quick questio
 - `Sources/Shades`: the cat, its windows and the app that wires it all together.
 - `docs/kittens.md`: how specialist agents are set up. Real kittens are personal and live outside this repo.
 - `docs/ROADMAP.md`: ideas saved for later. Version one stays small, so new ideas go there first.
+- `.agents/skills/`: how to prove a change here. `verify-shades` drives the app in demo mode and has its windows draw themselves to pictures, and `verify-screen-boundary` checks that nothing from your screen reaches a kitten that isn't allowed to see it.
 
 ## Commands
 
@@ -22,6 +23,8 @@ scripts/install.sh --pull  # the same, after stopping for uncommitted work and p
 scripts/bundle.sh   # just builds Shades.app
 swift scripts/make-icon.swift assets   # redraws the app icon from the cat's art
 swift run shades --demo   # everything faked: no T3, permissions or microphone
+swift run shades --demo --no-script --commands steps.txt   # plays demo commands from a file, one a line
+swift test --filter ScreenBoundaryTests   # every route your screen could take to a kitten
 ```
 
 To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-off` or `--fix` with `--image`, as described in `Sources/Shades/App/DevFlags.swift`. The `probe-t3`, `probe-context` and `probe-voice` tools try one module at a time.
@@ -47,6 +50,7 @@ This is open source, and people learn it from the docs, so they change in the sa
 
 ## Testing
 
+- Prove a change by running it. Use `verify-shades` for anything a person sees or does, and `verify-screen-boundary` for anything that decides what Shades sends to T3 and where. Both are in `.agents/skills/`.
 - Never send synthetic clicks or keystrokes while testing. They land on whatever's really on the desktop, which has already meant stray clicks in someone's calendar. Use `--demo`, the flags above, the probes, or a person.
 - Don't send a real screenshot to a model in a test. Use `--image` with a picture you made.
 - Name live test threads "Shades test: ..." and archive them afterwards. The app keeps those out of your inbox and bubble, unless it's a copy trying a flow out.

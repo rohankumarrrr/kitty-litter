@@ -1,0 +1,12 @@
+channels
+wait 1
+draw .verify/shades/messages/0-needs-you
+channel everyone
+send I need help with my resume
+wait 4
+draw .verify/shades/messages/1-everyone
+channel steve
+send How did the interview prep go?
+wait 2
+draw .verify/shades/messages/2-dm
+windows
