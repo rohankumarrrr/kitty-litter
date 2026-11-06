@@ -93,7 +93,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | select [text] | replace | fix | kittens | channels | channel needs|done|everyone|[kitten] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
+            print("ask [question] | select [text] | replace | fix | kittens | channels | channel needs|done|everyone|[kitten] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -171,6 +171,9 @@ final class DemoDriver {
             default:
                 controller.inboxPressed()
             }
+        case "notification":
+            // The same as clicking the last notification.
+            controller.notificationClicked()
         case "finish":
             parts.backend.finish(threadID: rest.isEmpty ? "demo-tidy" : rest)
         case "quiet":

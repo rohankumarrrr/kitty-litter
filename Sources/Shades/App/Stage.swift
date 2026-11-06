@@ -81,6 +81,8 @@ protocol CatStage: AnyObject {
     /// Opens the window, or brings it to the front if it's open. It never closes it.
     func showChannels(_ book: ChannelBook)
     func updateChannels(_ book: ChannelBook)
+    /// The same as clicking it in the sidebar.
+    func selectChannel(_ selection: ChannelSelection)
 
     // The inbox
     var isInboxVisible: Bool { get }

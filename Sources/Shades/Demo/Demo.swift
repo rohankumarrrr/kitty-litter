@@ -426,7 +426,9 @@ enum Demo {
             settings: Settings(),
             saveSettings: { _ in print("[demo] settings aren't saved in demo mode") },
             kittens: { Demo.kittens },
-            routerFolder: { "demo-router" }
+            routerFolder: { "demo-router" },
+            notify: { print("[demo] notified: \(CatWords.notification($0))") },
+            withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") }
         )
         return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys)
     }

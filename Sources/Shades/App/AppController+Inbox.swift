@@ -227,6 +227,7 @@ extension AppController {
     private func inboxChanged() {
         if stage.isInboxVisible { stage.showInbox(inboxEntries) }
         channels.refresh()
+        notifyNeedsYou()
         renderBubble()
     }
 }

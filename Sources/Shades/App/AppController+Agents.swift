@@ -88,6 +88,7 @@ extension AppController {
 
     func approvalsChanged(hadApprovals: Bool) {
         channels.refresh()
+        notifyNeedsYou()
         if approvals.isEmpty {
             approvalsOnShow = false
             approvalsHidden = false

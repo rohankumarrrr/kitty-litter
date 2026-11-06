@@ -24,9 +24,7 @@ A kitten for the system itself, a self-check, rollback and a window for reading 
 - **Drop onto the cat.** Drag a PDF, link or screenshot onto it to summarize it or turn it into an issue.
 - **Local screen memory.** An opt-in, on-device history for "where did I see that article?", plus a summary at the end of the day. It's the riskiest for privacy, so it comes last and never leaves your Mac.
 - **An inbox for everyone.** The inbox started with the kitten that looks after the system, and it works for any kitten that sets `inbox: true`. Next, make it the default for every kitten, and show a kitten's proposals as decision rows, so everything waiting on you is in one place. A digest of several finishes would do the same job, so it should become part of Needs you in Messages rather than sit beside it. The inbox panel over the cat and Needs you show the same reports, and could become one.
-- **Threads that wake themselves.** A kitten's thread picks up again by itself when its own pull request fails CI or gets a review comment, so a fix doesn't wait on you to notice.
 - **Steer or queue from Messages.** Enter steers a kitten that's still working, by joining the run it's on, and Option-Enter queues the next task behind it. Today a message always waits for its own run.
-- **A notification when something needs you.** A macOS notification for a new approval, question or decision, so you don't have to have Messages open to know.
 - **Messages on your phone.** Following along and answering from your phone's browser.
 - **Kittens on a schedule.** A kitten that runs at a set time, such as a weekly check on something it looks after, and reports to Messages.
 - **The cat's eyes as a tool.** Expose "see screen" and "cat say" as an MCP server, so any T3 agent can look at your screen or speak through the cat, and you can ask about your screen from inside T3.

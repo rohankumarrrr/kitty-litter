@@ -25,6 +25,9 @@ final class FlowTests: XCTestCase {
     private var reportedHealth: [[HealthFinding]] = []
     private var savedInbox: Inbox?
     private var inboxSaveError: Error?
+    private var notified: [NeedsYouAlert] = []
+    private var withdrawn: [String] = []
+    private var cleared = 0
     private var controller: AppController!
     private var settings: Settings {
         var settings = Settings()
@@ -68,7 +71,10 @@ final class FlowTests: XCTestCase {
                     if let error = self.inboxSaveError { throw error }
                     self.savedInbox = $0
                 },
-                hidesTestThreads: hidesTestThreads
+                hidesTestThreads: hidesTestThreads,
+                notify: { [unowned self] in self.notified.append($0) },
+                withdrawNotifications: { [unowned self] in self.withdrawn += $0 },
+                clearNotifications: { [unowned self] in self.cleared += 1 }
             ),
             stage: stage,
             now: { [unowned self] in self.clock }
@@ -3034,6 +3040,94 @@ final class FlowTests: XCTestCase {
         for _ in 0..<20 { await Task.yield() }
         XCTAssertEqual(backend.responses.map(\.1), [.decline])
         XCTAssertTrue(controller.waiting.approvals.isEmpty)
+    }
+
+    /// Asked after the app started.
+    private func newRequest(_ id: String = "r1", thread: String = "w") -> ApprovalRequest {
+        var request = request(id, thread: thread)
+        request.createdAt = clock
+        return request
+    }
+
+    func testSomethingNewThatNeedsYouGetsOneNotificationSayingOnlyWhoAndWhatKind() async {
+        kittens = [penny]
+        var asking = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .waitingForApproval, model: "m", updatedAt: clock, pendingApprovals: [newRequest()], projectPath: penny.folder)
+        controller.threadsChanged([asking])
+        controller.threadsChanged([asking])
+        XCTAssertEqual(notified, [NeedsYouAlert(id: "r1", kind: .approval, who: "Penny")], "once, however often the list comes")
+
+        asking.pendingQuestion = AgentQuestion(id: "q", threadID: "w", threadTitle: "Budget", text: "Which month?", askedAt: clock)
+        controller.threadsChanged([asking])
+        XCTAssertEqual(notified.last, NeedsYouAlert(id: "q", kind: .question, who: "Penny"))
+        XCTAssertEqual(notified.map(CatWords.notification), ["Penny needs an approval", "Penny has a question"])
+        XCTAssertTrue(withdrawn.isEmpty)
+    }
+
+    func testANewDecisionGetsANotificationThatGoesOnceItsDone() async {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        let id = rows[0].id
+        XCTAssertEqual(notified, [NeedsYouAlert(id: id, kind: .decision, who: "Clawde")])
+        controller.messagesAction(.inbox(.done(id: id)))
+        XCTAssertEqual(withdrawn, [id])
+    }
+
+    func testAnsweringTakesItsNotificationBack() async {
+        controller.threadsChanged([thread(.waitingForApproval, approvals: [newRequest()])])
+        XCTAssertEqual(notified.map(CatWords.notification), ["An agent needs an approval"])
+        controller.messagesAction(.approval(newRequest(), .accept))
+        XCTAssertEqual(withdrawn, ["r1"])
+    }
+
+    func testWhatsAlreadyWaitingAtLaunchIsLeftToTheCatEvenWhenT3ListsItLate() async {
+        // T3 lists a thread as waiting before the words of what it's asking have been read.
+        controller.threadsChanged([thread(.waitingForApproval)])
+        var asking = thread(.waitingForApproval, approvals: [request()])
+        asking.pendingQuestion = AgentQuestion(id: "q", threadID: "w", threadTitle: "Work", text: "Which month?", askedAt: clock.addingTimeInterval(-60))
+        controller.threadsChanged([asking])
+        XCTAssertTrue(notified.isEmpty)
+        XCTAssertEqual(stage.came, 1, "the cat still comes over")
+    }
+
+    func testARestartTakesBackEveryNotificationFromBefore() async {
+        controller.threadsChanged([thread(.waitingForApproval, approvals: [newRequest()])])
+        XCTAssertEqual(cleared, 0)
+        // Answered in T3 while Shades was down, so nothing will be listed to take back.
+        controller = makeController()
+        controller.start()
+        XCTAssertEqual(cleared, 1)
+    }
+
+    func testAnAnswerThatDidntGoThroughDoesntNotifyAgain() async {
+        controller.threadsChanged([thread(.waitingForApproval, approvals: [newRequest()])])
+        backend.failResponses = true
+        controller.messagesAction(.approval(newRequest(), .accept))
+        await until { !controller.approvals.isEmpty }
+        XCTAssertFalse(controller.approvals.isEmpty, "it's back")
+        XCTAssertEqual(notified.map(\.id), ["r1"])
+    }
+
+    func testAReplyThatDidntGoThroughDoesntNotifyAgain() async {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        backend.streamError = URLError(.notConnectedToInternet)
+        controller.reply("Yes, ship it", to: rows[0])
+        await controller.forwardTask?.value
+        XCTAssertTrue(rows[0].needsYou, "it's back")
+        XCTAssertEqual(notified.count, 1)
+    }
+
+    func testALiveTestNeverPostsANotification() async {
+        controller = makeController(hidesTestThreads: false)
+        controller.threadsChanged([liveTest(.waitingForApproval, asking: newRequest(thread: "t"))])
+        XCTAssertFalse(controller.waiting.approvals.isEmpty, "a copy trying a flow out still sees it")
+        XCTAssertTrue(notified.isEmpty)
+    }
+
+    func testClickingANotificationOpensNeedsYouInMessages() async {
+        controller.notificationClicked()
+        XCTAssertEqual(stage.channelsShown.count, 1)
+        XCTAssertEqual(stage.channelSelected, .needsYou)
     }
 
     func testReplyingInAThreadStopsItsReportAsking() async {

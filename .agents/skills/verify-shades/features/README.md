@@ -26,4 +26,5 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 - [Messages](./messages.md) covers Needs you, Everyone and a kitten's DM.
 - [Inbox](./inbox.md) covers a kitten's report arriving, the inbox and clearing a row.
 - [Approvals](./approvals.md) covers an agent asking to run something, and allowing it.
+- [Notifications](./notifications.md) covers the macOS notification for something new in Needs you, clicking it and taking it back.
 - [Kittens](./kittens.md) covers the view of every kitten and how each is doing.

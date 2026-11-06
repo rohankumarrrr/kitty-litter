@@ -29,6 +29,8 @@ MainActor.assumeIsolated {
         let voice = ParakeetVoiceEngine()
         let keys = KeyHoldMonitor()
         let inboxFile = Settings.directory.appendingPathComponent("inbox.json")
+        // A copy trying a flow out sees your real threads too, and the real app already says.
+        let notifications = DevFlags.wantsFlow ? nil : NeedsYouNotifications()
         let real = AppController(
             dependencies: AppDependencies(
                 backend: backend,
@@ -54,11 +56,15 @@ MainActor.assumeIsolated {
                 saveInbox: { inbox in
                     if !DevFlags.wantsFlow { try inbox.save(to: inboxFile) }
                 },
-                hidesTestThreads: !DevFlags.wantsFlow
+                hidesTestThreads: !DevFlags.wantsFlow,
+                notify: { notifications?.post($0) },
+                withdrawNotifications: { notifications?.withdraw($0) },
+                clearNotifications: { notifications?.clear() }
             ),
             stage: stage
         )
         controller = real
+        notifications?.onClick = { [weak real] in real?.notificationClicked() }
         keys.onCancel = { [weak real] _ in
             MainActor.assumeIsolated { real?.cancelListening() }
         }
