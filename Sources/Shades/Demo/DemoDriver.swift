@@ -132,7 +132,7 @@ final class DemoDriver {
         case "channels":
             controller.channelsPressed()
         case "messages":
-            // The same as pressing ⌃⌘M: it opens Messages, or closes it if it's open.
+            // The same as pressing ⌃⌘B: it opens Messages, or closes it if it's open.
             controller.messagesHotkeyPressed()
         case "channel":
             // channel needs | done | everyone | the start of a kitten's name, the same as clicking it in the sidebar.

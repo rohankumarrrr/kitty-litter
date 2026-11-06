@@ -1,7 +1,8 @@
 import AppKit
 import Carbon.HIToolbox
 
-/// Global shortcuts through Carbon, which is still the one way that needs no permissions.
+/// Global shortcuts through Carbon, which is still the one way that needs no permissions. Each is claimed for Shades
+/// alone, so a shortcut another app already has fails here and the cat says so, instead of both quietly firing.
 @MainActor
 final class Hotkeys {
     static let shared = Hotkeys()
@@ -12,6 +13,9 @@ final class Hotkeys {
     private var installed = false
 
     private static let signature: OSType = 0x5348_4453 // SHDS
+    /// A shared claim on a shortcut another app holds still succeeds, and then only one of them gets the key.
+    /// Only an exclusive claim is refused, which is how Shades can tell you instead.
+    static let options = OptionBits(kEventHotKeyExclusive)
 
     @discardableResult
     func register(keyCode: Int, modifiers: Int, handler: @escaping () -> Void) -> UInt32? {
@@ -24,7 +28,7 @@ final class Hotkeys {
             UInt32(modifiers),
             EventHotKeyID(signature: Self.signature, id: id),
             GetApplicationEventTarget(),
-            0,
+            Self.options,
             &ref
         )
         guard status == noErr, let ref else { return nil }
@@ -64,8 +68,9 @@ final class Hotkeys {
 enum Shortcut {
     static let ask = (keyCode: kVK_Space, modifiers: optionKey)
     static let fix = (keyCode: kVK_ANSI_F, modifiers: controlKey | optionKey)
-    static let messages = (keyCode: kVK_ANSI_M, modifiers: controlKey | cmdKey)
+    /// ⌃⌘ like the shortcuts people often give their apps. M is often Messages, and K is often Lock Screen.
+    static let messages = (keyCode: kVK_ANSI_B, modifiers: controlKey | cmdKey)
     static let askLabel = "⌥Space"
     static let fixLabel = "⌃⌥F"
-    static let messagesLabel = "⌃⌘M"
+    static let messagesLabel = "⌃⌘B"
 }

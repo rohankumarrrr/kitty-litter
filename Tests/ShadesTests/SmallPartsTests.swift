@@ -602,6 +602,12 @@ final class HealthCheckTests: XCTestCase {
         XCTAssertTrue(HealthCheck.findings(from: HealthFacts()).allSatisfy(\.ok))
     }
 
+    func testAShortcutAnotherAppHasIsAProblem() throws {
+        let finding = try XCTUnwrap(HealthCheck.findings(from: HealthFacts(shortcutsTaken: ["⌃⌘B"])).first { $0.check == "shortcuts" })
+        XCTAssertFalse(finding.ok)
+        XCTAssertEqual(finding.problem, "Another app has ⌃⌘B, so pressing it does nothing here.")
+    }
+
     func testABadSignatureHidesThePermissionsItWouldMakeLookOff() {
         let facts = HealthFacts(isSignedWithIdentity: false, hasScreenRecording: false, hasAccessibility: false)
         let problems = HealthCheck.findings(from: facts).filter { !$0.ok }

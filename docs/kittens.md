@@ -58,7 +58,7 @@ Click a kitten to open whatever most needs looking at in T3. A thread counts as 
 
 ### Messages
 
-Press ⌃⌘M from anywhere, or choose Messages from the cat's menu, to see and answer everything without opening T3. Press ⌃⌘M again to close it. It's the one place for all of it: the inbox and the dashboard that used to hang off the cat and the menu bar both live here now.
+Press ⌃⌘B from anywhere, or choose Messages from the cat's menu, to see and answer everything without opening T3. Press ⌃⌘B again to close it. Shades claims its shortcuts for itself, so if another app already has one, the cat says so when it starts, and the menu still works. It's the one place for all of it: the inbox and the dashboard that used to hang off the cat and the menu bar both live here now.
 
 ![Messages, with your kittens in a group chat](images/messages.png)
 

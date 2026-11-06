@@ -11,7 +11,7 @@ A kitten with `inbox: true` keeps its reports in one place instead of a bubble e
 
 ## How to get to it (user POV)
 
-- Click the inbox bubble's Open, press ⌃⌘M, or choose Messages from the cat's menu.
+- Click the inbox bubble's Open, press ⌃⌘B, or choose Messages from the cat's menu.
 - Press a row's buttons.
 
 ## Driving it with the demo
