@@ -164,7 +164,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|[kitten] | thread | back | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|close | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
+            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|shades|[kitten] | thread | back | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|close | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -208,12 +208,13 @@ final class DemoDriver {
             // The same as pressing ⌃⌘M: it opens Messages, or closes it if it's open.
             controller.messagesHotkeyPressed()
         case "channel":
-            // channel needs | done | everyone | the start of a kitten's name, the same as clicking it in the sidebar.
+            // channel needs | done | everyone | shades | the start of a kitten's name, the same as clicking it in the sidebar.
             let kitten = Demo.kittens.first { $0.name.lowercased().hasPrefix(rest.lowercased()) }
             switch rest {
             case "needs": stage.channels.view.select(.needsYou)
             case "done": stage.channels.view.select(.done)
             case "everyone": stage.channels.view.select(.channel(.everyone))
+            case "shades": stage.channels.view.select(.channel(.shades))
             default: if let kitten, !rest.isEmpty { stage.channels.view.select(.channel(.direct(kitten))) }
             }
         case "thread":

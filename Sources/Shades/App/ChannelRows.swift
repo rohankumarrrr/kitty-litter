@@ -172,7 +172,8 @@ enum ChannelRows {
             }
             // What you've just sent, and the cat's own answers, aren't in any thread yet.
             if !message.threadID.isEmpty, message.threadID != lastThread {
-                rows.append(.subject(message.threadTitle, project: book.threads[message.threadID]?.projectTitle, threadID: message.threadID))
+                let project = id == .shades ? nil : book.threads[message.threadID]?.projectTitle
+                rows.append(.subject(message.threadTitle, project: project, threadID: message.threadID))
                 lastThread = message.threadID
             }
             rows.append(.message(message))
@@ -214,6 +215,7 @@ enum ChannelRows {
         if book.unreadable > 0 { return .note(CatWords.couldntRead(book.unreadable)) }
         if isCut { return .note(CatWords.olderMessages) }
         if id == .everyone { return .note(CatWords.everyoneEmpty) }
+        if id == .shades { return .note(CatWords.shadesEmpty) }
         let names = id.members.contains(.you) ? [CatWords.you] + others.map(book.name) : others.map(book.name)
         return .note(CatWords.haventTalked(names))
     }

@@ -32,11 +32,13 @@ struct ChannelSidebarItem: Equatable {
         let needsYou = ChannelSidebarItem(selection: .needsYou, title: CatWords.needsYouTitle, count: book.waiting.count)
         let everyone = ChannelSidebarItem(selection: .channel(.everyone), title: CatWords.everyone, cats: [.shades], isUnread: !book.unread.isEmpty)
         let done = ChannelSidebarItem(selection: .done, title: CatWords.doneTitle)
-        return [(nil, [needsYou, everyone, done]), (CatWords.directMessages, directs)] + (between.isEmpty ? [] : [(CatWords.betweenKittens, between)])
+        // What you've said to the cat itself comes first, the way you'd talk to it before any kitten.
+        let shades = ChannelSidebarItem(selection: .channel(.shades), title: CatWords.shades, cats: [.shades])
+        return [(nil, [needsYou, everyone, done]), (CatWords.directMessages, [shades] + directs)] + (between.isEmpty ? [] : [(CatWords.betweenKittens, between)])
     }
 }
 
-/// The left side of the window: Needs you, Everyone and Done, then a row for each kitten, then each pair that's talked.
+/// The left side of the window: Needs you, Everyone and Done, then Shades and a row for each kitten, then each pair that's talked.
 final class ChannelSidebar: QuietView {
     static let width: CGFloat = 220
     /// Leaves room for the window's buttons.

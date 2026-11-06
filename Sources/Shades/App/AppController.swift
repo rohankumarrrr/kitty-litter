@@ -123,6 +123,8 @@ final class AppController {
     var talkToMessages: Int?
     var messagesClosings = 0
     var inboxSaveFailed = false
+    /// Where the router's threads run, once it's known. Every thread there is a talk with the cat.
+    var knownRouterFolder: String?
     /// Questions answered from Messages, kept out of it until the list catches up.
     var answeredQuestions: Set<String> = []
     /// The router's turn for what you said in Messages, so each waits for the one before.
@@ -221,6 +223,7 @@ final class AppController {
         channels.waiting = { [weak self] in self?.waiting ?? Waiting() }
         channels.isUnread = { [weak self] in self?.inbox.isUnread($0) ?? false }
         channels.alsoInEveryone = { [weak self] in self?.messagesThreads ?? [:] }
+        channels.isWithShades = { [weak self] in self?.isWithShades($0) ?? false }
     }
 
     func start() {

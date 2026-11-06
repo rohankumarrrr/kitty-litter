@@ -26,10 +26,15 @@ final class ChannelHeader: QuietView {
             return (CatWords.doneTitle, CatWords.doneSubtitle)
         case .channel(.everyone):
             return (CatWords.everyone, CatWords.everyoneSubtitle)
+        case .channel(.shades):
+            return (CatWords.shades, CatWords.shadesSubtitle)
         case .channel(let id):
             let others = book.others(in: id)
             let status = others.count == 1 ? book.status(of: others[0]) : nil
             return (book.title(of: id), status.map { "\($0.kitten.role) · \(CatWords.kittenState($0.state))" })
+        case .thread(let id, .shades):
+            // The router's own folder isn't a project you'd know.
+            return (book.title(ofThread: id, in: .shades), nil)
         case .thread(let id, let channel):
             let name = book.title(ofThread: id, in: channel)
             return (name.isEmpty ? CatWords.newTopic : name, book.threads[id].map(CatWords.threadDetails))

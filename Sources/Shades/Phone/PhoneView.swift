@@ -25,7 +25,8 @@ struct PhonePlace: Equatable {
             self.init(selection: .thread(entry.threadID, in: channel), target: target, key: key)
             return
         }
-        guard var selection = Self.selection(key) else {
+        // What you've asked the cat can be about your screen, so it stays on the Mac.
+        guard var selection = Self.selection(key), selection.channelID != .shades else {
             self.init(selection: nil, in: book)
             return
         }
@@ -213,7 +214,7 @@ struct PhoneView: Encodable, Equatable {
 
     private static func places(in book: ChannelBook) -> [Place] {
         ChannelSidebarItem.groups(in: book).flatMap { group in
-            group.items.map { item in
+            group.items.filter { $0.selection.channelID != .shades }.map { item in
                 var color: UInt32?
                 var asleep = false
                 if case .kitten(let status)? = item.cats.first {

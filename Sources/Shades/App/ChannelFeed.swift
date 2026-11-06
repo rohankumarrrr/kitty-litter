@@ -39,6 +39,8 @@ final class ChannelFeed {
     var waiting: () -> Waiting = { Waiting() }
     var isUnread: (AgentThread) -> Bool = { _ in false }
     var alsoInEveryone: () -> [String: Date] = { [:] }
+    /// Whether a thread is a conversation with the cat itself, which is any in the router's folder.
+    var isWithShades: (AgentThread) -> Bool = { _ in false }
 
     private let backend: AgentBackend
     private let kittens: () -> [Kitten]
@@ -156,7 +158,8 @@ final class ChannelFeed {
         let mine = alsoInEveryone()
         let owned = byOwner.filter { $0.key != nil }.values.flatMap { threads in
             threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
-        } + (byOwner[nil] ?? []).filter { mine[$0.id] != nil }
+        } + (byOwner[nil] ?? []).filter { mine[$0.id] != nil && !isWithShades($0) }
+            + listed.filter(isWithShades).sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
         let moved = owned.filter { session.readStamps[$0.id] != $0.updatedAt }
         let read = await read(moved)
         // A read landing after the window closed has nowhere to go, so it's dropped here.
@@ -215,7 +218,8 @@ final class ChannelFeed {
             waiting: waiting(),
             sent: session.sent,
             isUnread: isUnread,
-            inEveryone: alsoInEveryone()
+            inEveryone: alsoInEveryone(),
+            withShades: Set(session.threads.filter(isWithShades).map(\.id))
         )
     }
 }

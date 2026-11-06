@@ -92,6 +92,12 @@ enum CatWords {
     static let everyone = "Everyone"
     static let everyoneSubtitle = "Goes to whoever it's for"
     static let everyoneEmpty = "Say something and it goes to whoever it's for."
+    static let shadesSubtitle = "What you've asked me"
+    static let shadesEmpty = "What you ask me shows up here."
+    static func handedOff(_ task: String) -> String { "I started on that: \(task)" }
+    static let passedOnToSession = "I passed that on to the work it carries on from."
+    static let passedOnToKitten = "I passed that to the kitten it's for."
+    static let passedOnCorrection = "I passed that correction on."
     static let shades = "Shades"
     static let shadesRole = "Work I started for you"
     static let newTopic = "New topic"

@@ -2533,6 +2533,17 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains("syllabus.pdf"), false)
     }
 
+    // MARK: - Talking to the cat
+
+    func testOnlyThreadsInTheRoutersFolderAreTalksWithTheCat() {
+        let talk = AgentThread(id: "r", title: "Which plan?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: clock, projectPath: "/shades/router/")
+        let work = AgentThread(id: "w", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, projectPath: steve.folder)
+        let nowhere = AgentThread(id: "n", title: "Work", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
+        XCTAssertTrue(controller.isWithShades(talk))
+        XCTAssertFalse(controller.isWithShades(work))
+        XCTAssertFalse(controller.isWithShades(nowhere))
+    }
+
     // MARK: - Self-check
 
     func testAKittenWithNothingKeepingItOffTheScreenIsFound() async {

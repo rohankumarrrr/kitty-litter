@@ -7,6 +7,7 @@ A window for everything the kittens are doing: what needs you pinned at the top,
 - `messages-needs-you` lists approvals, questions and inbox reports, then what each kitten has in progress.
 - `messages-done` lists what each kitten has finished, only when you open it.
 - `messages-everyone` sends your words through the router, and whoever takes them answers there.
+- `messages-shades` shows what you've asked the cat itself, from the router's own threads, and has no box.
 - `messages-dm` shows every thread of a kitten's under its title and project, and its box starts a new topic, which opens on its own.
 - `messages-thread` shows one thread on its own, with its project at the top, and its box replies only into that thread.
 - `messages-between` shows what kittens said to each other, for reading only.
@@ -35,7 +36,7 @@ Journey: `journeys/messages.txt`.
 
 ## Gotchas
 
-- `channel` takes `needs`, `done`, `everyone` or the start of a kitten's name, such as `steve`. `thread` only works in a conversation, and `back` goes from a thread to its conversation.
+- `channel` takes `needs`, `done`, `everyone`, `shades` or the start of a kitten's name, such as `steve`. `thread` only works in a conversation, and `back` goes from a thread to its conversation.
 - `messages` is the same as ⌃⌘M, so a second one closes the window. `channels` only opens it.
 - The window is live, so a row under the real pointer can draw highlighted. That's where the mouse is, not a bug.
 - `send` is the same as typing in the box and pressing Return, and it never takes the keyboard. The box beeps and sends nothing when there's nowhere to send, such as in Needs you, or in a new topic before T3 has started its thread.

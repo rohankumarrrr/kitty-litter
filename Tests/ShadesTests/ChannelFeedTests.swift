@@ -473,3 +473,17 @@ extension ChannelFeedTests {
         XCTAssertEqual(feed.threads(in: .thread("work", in: .direct(steve))).map(\.id), [], "but its latest answer isn't, so it isn't read")
     }
 }
+
+// MARK: - Talking to the cat
+
+extension ChannelFeedTests {
+    func testTheCatsOwnThreadsAreReadToo() async {
+        let talk = AgentThread(id: "r", title: "Which plan?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: start, projectPath: "/shades/router")
+        feed.isWithShades = { $0.projectPath == "/shades/router" }
+        backend.threads = [talk, thread("other", project: nil)]
+        backend.say("Which plan?", in: "r")
+        await openAndRead()
+        XCTAssertEqual(backend.reads, ["r"], "and nothing else outside a kitten")
+        XCTAssertEqual(latest?.shades.messages.first?.text, "Which plan?")
+    }
+}

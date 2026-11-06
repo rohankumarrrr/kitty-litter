@@ -20,6 +20,13 @@ enum DemoChannels {
         AgentThread(id: id, title: title, projectTitle: project, status: status, model: "claude-opus-5-5", updatedAt: ago(minutes: minutes), isSettled: settled, pullRequest: pullRequest, projectPath: Demo.kittens.first { $0.name == project }?.folder)
     }
 
+    /// Where the demo's router runs, so these count as talks with the cat.
+    static let routerFolder = "demo-router"
+
+    private static func talk(_ id: String, _ title: String, minutes: Double) -> AgentThread {
+        AgentThread(id: id, title: title, projectTitle: "Shades router", status: .completed, model: "claude-opus-5-5", updatedAt: ago(minutes: minutes), isSettled: true, projectPath: routerFolder)
+    }
+
     private static let clawdeMain = thread("demo-clawde-main", "Tidy the settings panel", project: "Clawde", minutes: 95, pullRequest: ThreadPullRequest(number: 31, state: "merged"))
     private static let steveFonts = thread("demo-steve-fonts", "Choose the heading font", project: "Steve Pawsniak", settled: false, minutes: 200)
     private static let pepperPlans = thread("demo-pepper-plans", "Compare the plan names", project: "Pepper", status: .waitingForAnswer, settled: false, minutes: 18)
@@ -40,7 +47,11 @@ enum DemoChannels {
         thread("demo-clawde-menu", "Clawde: Add a menu item for the new window", project: "site", status: .waitingForApproval, settled: false, minutes: 8),
         thread("demo-clawde-failed", "Clawde: Redraw the app icon", project: "Clawde", status: .failed, settled: false, minutes: 130),
         thread("demo-pepper-unknown", "Sum up the plan comparison", project: "Pepper", minutes: 300),
+        talk("demo-shades-plans", "Which plan is cheapest here?", minutes: 30),
+        talk("demo-shades-fonts", "Can you compare pixel fonts for the site?", minutes: 70),
     ]
+
+    static var talks: Set<String> { Set(threads.filter { $0.projectPath == routerFolder }.map(\.id)) }
 
     /// What's waiting on you in the pictures: one of each kind, all made up.
     static let waiting = Waiting(
@@ -217,6 +228,13 @@ enum DemoChannels {
                 reply: "Spaced it out and lined up the labels. That one's merged.",
                 repliedMinutes: 95
             ),
+        ],
+        "demo-shades-plans": [
+            exchange("plans-1", minutes: 34, ask: "Which plan is cheapest here?", reply: "Starter, at $8 a month. It leaves out the shared projects that Pro has.", repliedMinutes: 34),
+            exchange("plans-2", minutes: 31, ask: "Can the headings on this page use a pixel font?", reply: "\(Prompts.kittenMarker) 1", repliedMinutes: 30),
+        ],
+        "demo-shades-fonts": [
+            exchange("fonts-1", minutes: 72, ask: "Can you compare pixel fonts for the site?", reply: "\(Prompts.handoffMarker) Compare pixel fonts for the site's headings", repliedMinutes: 70),
         ],
         "demo-clawde-failed": [
             exchange(

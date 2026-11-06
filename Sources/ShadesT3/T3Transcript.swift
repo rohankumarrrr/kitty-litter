@@ -48,7 +48,8 @@ enum T3Transcript {
 
     private static func ownWords(_ text: String?) -> String? {
         // In this order, or a tag above the line could pair with one on the page and take the line out.
-        guard let words = text.flatMap(Prompts.ownWords).map(T3Wire.withoutToolBlocks), !words.isEmpty, words != T3Wire.attachmentsOnly else { return nil }
+        // A question to the cat first, since its prompt can have a line like the one that ends someone's own words.
+        guard let words = text.flatMap({ Prompts.question(in: $0) ?? Prompts.ownWords(in: $0) }).map(T3Wire.withoutToolBlocks), !words.isEmpty, words != T3Wire.attachmentsOnly else { return nil }
         guard words.hasPrefix(T3Wire.ultrathinkPrefix) else { return capped(words) }
         let rest = words.dropFirst(T3Wire.ultrathinkPrefix.count).trimmingCharacters(in: .whitespacesAndNewlines)
         return rest.isEmpty ? nil : capped(rest)
