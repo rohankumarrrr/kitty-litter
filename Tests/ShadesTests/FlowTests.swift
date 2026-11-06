@@ -3811,7 +3811,8 @@ extension FlowTests {
         controller.forward("and that part?", to: done, snapshot: nil)
         for _ in 0..<20 { await Task.yield() }
         let earlier = controller.forwardTask
-        let running = done.with(status: .running).with(run: "run-2")
+        // The list names the run a thread last finished, so it still says run-1 while run-2 is going.
+        let running = done.with(status: .running)
         controller.threadsChanged([running])
 
         backend.holdTurn = nil
@@ -3820,8 +3821,30 @@ extension FlowTests {
         await controller.forwardTask?.value
         backend.releaseHeld()
         await earlier?.value
-        controller.threadsChanged([running.with(status: .failed)])
-        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "f" })
+        controller.threadsChanged([running.with(status: .failed).with(run: "run-2")])
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "f" }, "your words wait behind run-2")
+
+        controller.threadsChanged([running.with(status: .failed).with(run: "run-3")])
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink }, "the run for your words failed")
+    }
+
+    /// The same for a new thread still on its first run, and the whole way from the Ask box to a busy session.
+    func testWordsQueuedBehindABusyRunKeepTheirWarningWhenThatRunFails() async {
+        let starting = AgentThread(id: "n", title: "Read the thread", projectTitle: nil, status: .running, model: "m", updatedAt: clock)
+        controller.threadsChanged([starting])
+        backend.replies = [[.text(delta: "Queued.")]]
+        controller.forward("Is this tweet right?", to: starting, snapshot: nil)
+        await controller.forwardTask?.value
+        controller.threadsChanged([starting.with(status: .failed).with(run: "run-1")])
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "n" })
+
+        let busy = AgentThread(id: "f", title: "Work", projectTitle: nil, status: .running, model: "m", updatedAt: clock, runtimeMode: .fullAccess, lastRunID: "run-1")
+        controller.threadsChanged([busy])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")], [.text(delta: "Queued.")]]
+        await ask("Is this tweet right?")
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
+        controller.threadsChanged([busy.with(status: .failed).with(run: "run-2")])
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
     }
 
     func testANewThreadsFirstTurnFailingLeavesAFollowUpsWarning() async {

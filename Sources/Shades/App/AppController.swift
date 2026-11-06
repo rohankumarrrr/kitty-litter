@@ -64,6 +64,8 @@ final class AppController {
         var questionID: String?
         /// For a screen warning, its thread's last run before your words, so a failure from before then can't take it back.
         var after: String?
+        /// The thread was busy when your words went, so they wait behind a run that hasn't finished yet.
+        var behind = false
     }
     struct Line {
         var text: String

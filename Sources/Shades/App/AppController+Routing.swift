@@ -78,14 +78,17 @@ extension AppController {
     /// `asked` is `questionsAsked` when they were sent, since asking another takes the warning back, and `after` is
     /// the thread's last run before them. Says which notice it was.
     @discardableResult
-    func sayPassedOn(_ said: String, threadID: String, missesScreen: Bool, asked: Int, after run: String? = nil) -> Int? {
+    func sayPassedOn(_ said: String, threadID: String, missesScreen: Bool, asked: Int, after run: String? = nil, behind: Bool = false) -> Int? {
         guard missesScreen, asked == questionsAsked else {
             say(said, threadID: threadID)
             return nil
         }
         line = nil
         post(caption: said, text: CatWords.sendTheLink, threadID: threadID, first: true)
-        if let index = notices.firstIndex(where: { $0.id == lineCounter }) { notices[index].after = run }
+        if let index = notices.firstIndex(where: { $0.id == lineCounter }) {
+            notices[index].after = run
+            notices[index].behind = behind
+        }
         return lineCounter
     }
 
@@ -97,8 +100,20 @@ extension AppController {
     /// That thread's work went wrong, so there's nothing left to warn about. Other threads' warnings stand, and so
     /// does one for words sent after `run`, the run that failed, if it's known.
     func dropScreenWarning(for threadID: String?, run: String? = nil) {
-        notices.removeAll { $0.text == CatWords.sendTheLink && $0.threadID == threadID && (run == nil || $0.after != run) }
+        notices.removeAll { $0.text == CatWords.sendTheLink && $0.threadID == threadID && !$0.behind && (run == nil || $0.after != run) }
         renderBubble()
+    }
+
+    /// The list names the run a thread last finished (see t3-integration.md), so for words that waited behind a busy
+    /// thread's run, the first new one it names is that run, not theirs, and the warning goes by it from then on.
+    func catchUpScreenWarnings(_ threads: [AgentThread]) {
+        for index in notices.indices where notices[index].text == CatWords.sendTheLink && notices[index].behind {
+            guard let thread = threads.first(where: { $0.id == notices[index].threadID }),
+                  let run = thread.lastRunID, run != notices[index].after
+            else { continue }
+            notices[index].after = run
+            notices[index].behind = false
+        }
     }
 
     /// The list can show a failure it never saw running, such as one from while the connection was down.
@@ -107,7 +122,7 @@ extension AppController {
         let failed = Dictionary(threads.filter { $0.status == .failed }.map { ($0.id, $0.lastRunID) }, uniquingKeysWith: { first, _ in first })
         let before = notices.count
         notices.removeAll { notice in
-            guard notice.text == CatWords.sendTheLink, let id = notice.threadID, let run = failed[id] else { return false }
+            guard notice.text == CatWords.sendTheLink, !notice.behind, let id = notice.threadID, let run = failed[id] else { return false }
             return notice.after == nil || (run != nil && notice.after != run)
         }
         if notices.count != before { renderBubble() }
@@ -121,6 +136,7 @@ extension AppController {
         for index in notices.indices where notices[index].text == CatWords.sendTheLink && notices[index].threadID == threadID {
             notices[index].threadID = next
             notices[index].after = finishedWell ? known?.lastRunID : nil
+            notices[index].behind = false
         }
         dropScreenWarnings(forFailuresIn: known.map { [$0] } ?? [])
     }
@@ -193,7 +209,9 @@ extension AppController {
         // Quick chats are left out of the thread list's news, so their replies are picked up here.
         let isQuick = watch.isQuick(thread.id)
         let asked = asked ?? questionsAsked
-        let runBefore = (latestThreads.first { $0.id == thread.id } ?? thread).lastRunID
+        let known = latestThreads.first { $0.id == thread.id } ?? thread
+        let runBefore = known.lastRunID
+        let busy = known.status.isActive
         forwardTask = Task {
             // A session with full access can do anything, so text from a page doesn't get to reach it.
             // Neither does one working for a kitten that isn't meant to see it, or one that won't say.
@@ -213,7 +231,9 @@ extension AppController {
                 for try await event in backend.forward(threadID: thread.id, text: text, attachments: attachments(for: shared)) {
                     if case .started = event {
                         if missesScreen {
-                            warning = sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: true, asked: asked, after: runBefore)
+                            warning = sayPassedOn(
+                                CatWords.sentTo(thread), threadID: thread.id, missesScreen: true, asked: asked, after: runBefore, behind: busy
+                            )
                         }
                         continue
                     }
