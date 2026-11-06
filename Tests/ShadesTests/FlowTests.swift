@@ -2615,6 +2615,20 @@ final class FlowTests: XCTestCase {
         }
     }
 
+    func testANewTopicKeepsTheNameMessagesGaveItUntilItHasAThread() async {
+        kittens = [steve, penny]
+        backend.projects["/k/penny"] = "project-penny"
+        controller.channelsPressed()
+        controller.messagesAction(.startTopic("How's December looking?", with: penny, id: "sent-topic"))
+        let shown = stage.channelsUpdated.last?.channel(.direct(penny))?.messages.first { $0.exchangeID == "sent-topic" }
+        XCTAssertEqual(shown?.text, "How's December looking?", "it shows at once, under the name Messages opened it by")
+
+        await settle()
+        let started = backend.sent.first { $0.mode == .start && $0.prompt.projectID == "project-penny" }
+        XCTAssertEqual(started?.prompt.text, Prompts.forKitten(penny, words: "How's December looking?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
+        XCTAssertEqual(stage.channelsUpdated.last?.started["sent-topic"], "thread-1", "so Messages can follow it into its thread")
+    }
+
     func testEveryoneGoesThroughTheRouterAndTheKittenGetsOnlyYourWords() async {
         kittens = [steve, penny]
         backend.projects["/k/penny"] = "project-penny"

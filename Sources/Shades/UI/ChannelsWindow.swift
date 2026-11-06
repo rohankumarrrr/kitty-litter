@@ -78,8 +78,10 @@ final class ChannelsView: QuietView {
     func show(_ book: ChannelBook) {
         let isFresh = self.book == nil
         self.book = book
+        // A new topic carries on in its own thread once T3 has one.
+        if case .thread(let id, let channel) = selection, let started = book.started[id] { selection = .thread(started, in: channel) }
         arrange()
-        sidebar.show(book, selection: selection)
+        sidebar.show(book, selection: selection.place)
         pane.show(selection, in: book, isNewSelection: isFresh)
         onSeen?(selection)
     }
@@ -87,12 +89,14 @@ final class ChannelsView: QuietView {
     func select(_ selection: ChannelSelection) {
         self.selection = selection
         guard let book else { return }
-        sidebar.show(book, selection: selection)
+        sidebar.show(book, selection: selection.place)
         pane.show(selection, in: book, isNewSelection: true)
         onSeen?(selection)
     }
 
     func forget() {
+        // A new topic that's still starting is only known while the window's open.
+        if case .thread(let id, let channel) = selection, book?.threads[id] == nil { selection = .channel(channel) }
         book = nil
         pane.forget()
     }

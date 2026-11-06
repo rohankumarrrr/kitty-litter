@@ -105,10 +105,11 @@ final class ChannelFeed {
 
     /// The threads behind what you're looking at whose words are on the screen as they are now, so they can count as read.
     func threads(in selection: ChannelSelection) -> [AgentThread] {
-        guard let session, case .channel(let id) = selection else { return [] }
+        guard let session, let id = selection.channelID else { return [] }
         let kittens = kittens()
         return session.threads.filter { thread in
             guard let owner = KittenBoard.owner(of: thread, among: kittens), session.readStamps[thread.id] == thread.updatedAt else { return false }
+            if case .thread(let shown, _) = selection { return thread.id == shown }
             return id == .everyone || id == .direct(owner)
         }
     }

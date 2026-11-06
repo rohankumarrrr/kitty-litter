@@ -184,36 +184,44 @@ final class DayRowView: ChannelRowView {
 final class SubjectRowView: ChannelRowView {
     var onPress: (() -> Void)?
     private let title: String
+    private let project: String?
 
-    init(title: String) {
+    init(title: String, project: String?) {
         self.title = title
+        self.project = project
         super.init(frame: .zero)
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
-        setAccessibilityLabel(title)
+        setAccessibilityLabel([title, project].compactMap { $0 }.joined(separator: ", "))
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    override var isPressable: Bool { true }
+    override var isPressable: Bool { onPress != nil }
     override func press() { onPress?() }
     override func fit(width: CGFloat) -> CGFloat { 30 }
 
     override func draw(_ dirtyRect: NSRect) {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
-        let label = NSAttributedString(string: "\(title)  ↗", attributes: [
+        let label = NSMutableAttributedString(string: title, attributes: [
             .font: NSFont.systemFont(ofSize: 12, weight: .medium),
             .foregroundColor: hovering ? Ink.text : Ink.soft,
-            .paragraphStyle: truncating,
         ])
+        if let project, !project.isEmpty {
+            label.append(NSAttributedString(string: "  ·  \(project)", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: Ink.soft]))
+        }
+        if onPress != nil {
+            label.append(NSAttributedString(string: "  ›", attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: Ink.soft]))
+        }
+        label.addAttribute(.paragraphStyle, value: truncating, range: NSRange(location: 0, length: label.length))
         let left = Self.textLeft
         let room = bounds.width - left - Self.margin
         let width = min(ceil(label.size().width), room)
         let height: CGFloat = 16
         let top = bounds.height - height - 3
-        if hovering {
+        if hovering, onPress != nil {
             Ink.hover.setFill()
             NSBezierPath(roundedRect: NSRect(x: left - 6, y: top - 2, width: width + 12, height: height + 4), xRadius: 6, yRadius: 6).fill()
         }

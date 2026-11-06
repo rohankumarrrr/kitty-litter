@@ -249,40 +249,80 @@ final class ChannelsWindowTests: XCTestCase {
 
     // MARK: - The box
 
-    func testTheBoxSendsYourWordsWhereItSays() {
+    private func header(in view: NSView) -> String? {
+        subviews(of: view).compactMap { $0 as? ChannelHeader }.first?.accessibilityLabel()
+    }
+
+    private func pressButton(_ title: String, in view: NSView) throws {
+        let buttons = subviews(of: view).compactMap { $0 as? QuietButton }
+        let button = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == title }, "no \(title) in \(buttons.compactMap { $0.accessibilityLabel() })")
+        XCTAssertTrue(button.accessibilityPerformPress())
+    }
+
+    func testADMsBoxStartsANewTopicAndOpensIt() {
         let view = view()
         var sent: [MessagesAction] = []
         view.pane.onAction = { sent.append($0) }
         view.show(book())
         view.select(.channel(.direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
+        XCTAssertEqual(view.pane.composer.target, .newThread(steve), "the box under the whole conversation never guesses a thread")
 
-        view.pane.composer.send("  Make it shorter  ")
-        XCTAssertEqual(sent, [.send("Make it shorter", to: .thread(id: "t", title: "Work"), shownIn: .direct(steve))])
+        view.pane.composer.send("  Write a cover letter  ")
+        guard case .startTopic("Write a cover letter", steve, let topic)? = sent.last else { return XCTFail("\(sent)") }
+        XCTAssertEqual(view.selection, .thread(topic, in: .direct(steve)), "so what you add next goes into it")
         XCTAssertEqual(view.pane.composer.textView.string, "")
 
         view.pane.composer.send("   ")
         XCTAssertEqual(sent.count, 1, "nothing to send")
     }
 
-    func testANewTopicLastsUntilItsSentOrYouLookElsewhere() throws {
+    func testAThreadsBoxRepliesOnlyIntoItAndStaysThere() {
         let view = view()
         var sent: [MessagesAction] = []
         view.pane.onAction = { sent.append($0) }
         view.show(book())
-        view.select(.channel(.direct(steve)))
-        view.pane.pick(.newThread(steve))
-        view.pane.composer.send("Something else")
-        XCTAssertEqual(sent.last, .send("Something else", to: .newThread(steve), shownIn: .direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"), "back to carrying on")
+        view.select(.thread("t", in: .direct(steve)))
+        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
 
-        view.pane.pick(.newThread(steve))
-        view.select(.channel(.direct(pepper)))
-        view.select(.channel(.direct(steve)))
+        view.pane.composer.send("Make it shorter")
+        XCTAssertEqual(sent, [.send("Make it shorter", to: .thread(id: "t", title: "Work"), shownIn: .direct(steve))])
+        XCTAssertEqual(view.selection, .thread("t", in: .direct(steve)))
         XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
     }
 
-    func testNeedsYouHasNoBoxUntilYouReplyToSomething() throws {
+    func testEachTopicSaysWhichThreadAndProjectAndOpensOnItsOwn() throws {
+        let view = view()
+        var opened: [String] = []
+        view.pane.onOpenThread = { opened.append($0) }
+        view.show(book())
+        view.select(.channel(.direct(steve)))
+        let subject = try XCTUnwrap(subviews(of: view).compactMap { $0 as? SubjectRowView }.first)
+        XCTAssertEqual(subject.accessibilityLabel(), "Work, Steve")
+
+        subject.press()
+        XCTAssertEqual(view.selection, .thread("t", in: .direct(steve)))
+        XCTAssertEqual(header(in: view), "Work, Steve · Done")
+        XCTAssertTrue(view.sidebar.row(for: .channel(.direct(steve)))?.isSelected == true, "its channel stays selected")
+        XCTAssertFalse(view.pane.shown.contains { if case .subject = $0 { true } else { false } })
+
+        try pressButton(CatWords.openInT3, in: view)
+        XCTAssertEqual(opened, ["t"])
+        try pressButton("‹ Steve", in: view)
+        XCTAssertEqual(view.selection, .channel(.direct(steve)))
+    }
+
+    func testReplyOnAMessageOpensItsThreadReadyToType() throws {
+        let view = view()
+        view.show(book())
+        view.select(.channel(.direct(steve)))
+        let reply = try XCTUnwrap(view.pane.shownMessageRows.last?.onReply)
+        reply()
+        XCTAssertEqual(view.selection, .thread("t", in: .direct(steve)))
+        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
+        XCTAssertNil(view.pane.shownMessageRows.last?.onReply, "in the thread, the box already replies")
+    }
+
+    func testReplyingToAReportOpensItsThread() throws {
         let report = InboxEntry(id: "r", kind: .decision, text: "Merged. Say ship it.", threadID: "t", threadTitle: "Work", at: at)
         let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
         let built = ChannelBook.build(kittens: [steve, pepper], threads: [thread], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(reports: [report]))
@@ -293,6 +333,7 @@ final class ChannelsWindowTests: XCTestCase {
 
         let card = try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first)
         XCTAssertTrue(try XCTUnwrap(card.buttons.first).accessibilityPerformPress())
+        XCTAssertEqual(view.selection, .thread("t", in: .direct(steve)))
         XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
         XCTAssertFalse(view.pane.composer.isHidden)
     }
@@ -314,24 +355,21 @@ final class ChannelsWindowTests: XCTestCase {
         Exchange(id: id, asker: .you, askedAt: at.addingTimeInterval(offset), ask: ask, reply: reply, repliedAt: at.addingTimeInterval(offset + 1))
     }
 
-    func testTheBoxDoesntMoveToAnotherThreadWhileYoureTyping() {
-        var threads = [work("t", title: "Resume", updated: 61), work("c", title: "Cover letter", updated: 1)]
-        var transcripts = ["t": [said("e1", ask: "Tidy my resume", reply: "Done.", at: 60)], "c": [said("e2", ask: "Draft a cover letter", reply: "On it.", at: 0)]]
+    func testTheBoxDoesntChangeWhileYoureTyping() {
+        let threads = [work("t", title: "Resume")]
+        let transcripts = ["t": [said("e1", ask: "Tidy my resume", reply: "Done.", at: 0)]]
         let view = view()
         var sent: [MessagesAction] = []
         view.pane.onAction = { sent.append($0) }
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false))
-        view.select(.channel(.direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Resume"))
+        view.select(.thread("t", in: .direct(steve)))
         view.pane.composer.textView.string = "Make the summary shorter"
 
-        threads[1] = work("c", title: "Cover letter", updated: 121)
-        transcripts["c"] = [said("e2", ask: "Draft a cover letter", reply: "Here's the draft.", at: 120)]
-        let question = AgentQuestion(id: "q", threadID: "c", threadTitle: "Cover letter", text: "Which company?", form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which company?", options: [], values: [], takesOwnWords: true)]))
+        let question = AgentQuestion(id: "q", threadID: "t", threadTitle: "Resume", text: "Which font?", form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which font?", options: [], values: [], takesOwnWords: true)]))
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id])))
         view.pane.composer.send(view.pane.composer.textView.string)
         XCTAssertEqual(sent, [.send("Make the summary shorter", to: .thread(id: "t", title: "Resume"), shownIn: .direct(steve))])
-        XCTAssertEqual(view.pane.composer.target, .question(question), "with nothing typed, it goes back to what needs answering")
+        XCTAssertEqual(view.pane.composer.target, .question(question), "with nothing typed, it goes on to what needs answering")
     }
 
     func testANewTopicHoldsTheBoxUntilItsThreadExistsAndThenCarriesOnThere() {
@@ -342,18 +380,72 @@ final class ChannelsWindowTests: XCTestCase {
         view.pane.onAction = { sent.append($0) }
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false))
         view.select(.channel(.direct(steve)))
+        view.pane.composer.send("Write a cover letter")
+        guard case .startTopic(_, _, let topic)? = sent.last else { return XCTFail("\(sent)") }
 
-        var echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Write a cover letter", at: at.addingTimeInterval(60), threadID: "", threadTitle: "")
+        var echo = ChannelMessage(exchangeID: topic, kind: .ask, speaker: .you, text: "Write a cover letter", at: at.addingTimeInterval(60), threadID: "", threadTitle: "")
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .direct(steve), message: echo)]))
         XCTAssertEqual(view.pane.composer.target, .starting(steve))
+        let said = view.pane.shown.compactMap { row -> String? in
+            if case .message(let message) = row { return message.text }
+            return nil
+        }
+        XCTAssertEqual(said, ["Write a cover letter"], "only the new topic, not the resume")
         view.pane.composer.send("Keep it to one page")
-        XCTAssertEqual(sent, [], "nothing goes to the old thread while the new one starts")
+        XCTAssertEqual(sent.count, 1, "nothing goes anywhere while it starts")
 
         echo.threadID = "n"
         echo.threadTitle = "Write a cover letter"
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .direct(steve), message: echo)]))
-        view.pane.composer.send("Keep it to one page")
-        XCTAssertEqual(sent, [.send("Keep it to one page", to: .thread(id: "n", title: "Write a cover letter"), shownIn: .direct(steve))])
+        XCTAssertEqual(view.selection, .thread("n", in: .direct(steve)))
+        view.pane.composer.send(view.pane.composer.textView.string)
+        XCTAssertEqual(sent.last, .send("Keep it to one page", to: .thread(id: "n", title: "Write a cover letter"), shownIn: .direct(steve)))
+    }
+
+    func testANewTopicHoldsTheBoxEvenIfAnotherThreadAnswersFirst() {
+        var threads = [AgentThread(id: "t", title: "Resume", projectTitle: "Steve", status: .running, model: "m", updatedAt: at, projectPath: "/k/steve")]
+        var transcripts = ["t": [Exchange(id: "e", asker: .you, askedAt: at, ask: "Tidy my resume", reply: nil, repliedAt: nil)]]
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        let echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Write a cover letter", at: at.addingTimeInterval(60), threadID: "", threadTitle: "")
+        let pending = [SentMessage(channel: .direct(steve), message: echo)]
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: pending))
+        view.select(.thread("sent-1", in: .direct(steve)))
+        XCTAssertEqual(view.pane.composer.target, .starting(steve))
+        view.pane.composer.textView.string = "Keep it to one page"
+
+        // Meanwhile the resume thread finishes.
+        threads[0].status = .completed
+        threads[0].updatedAt = at.addingTimeInterval(61)
+        transcripts["t"] = [Exchange(id: "e", asker: .you, askedAt: at, ask: "Tidy my resume", reply: "Done.", repliedAt: at.addingTimeInterval(61))]
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: pending))
+        XCTAssertEqual(view.pane.composer.target, .starting(steve))
+        view.pane.composer.send(view.pane.composer.textView.string)
+        XCTAssertEqual(sent, [], "the follow-up to the new topic went to the old thread")
+    }
+
+    func testANewTopicThatDidntStartOffersToStartAgain() {
+        var echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Write a cover letter", at: at, threadID: "", threadTitle: "")
+        echo.failure = CatWords.didntStart
+        let view = view()
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .direct(steve), message: echo)]))
+        view.select(.thread("sent-1", in: .direct(steve)))
+        XCTAssertEqual(view.pane.composer.target, .newThread(steve))
+    }
+
+    func testClosingWhileANewTopicStartsGoesBackToItsChannel() {
+        let window = ChannelsWindow()
+        let echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Write a cover letter", at: at, threadID: "", threadTitle: "")
+        window.update(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .direct(steve), message: echo)]))
+        window.view.select(.thread("sent-1", in: .direct(steve)))
+        window.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+        XCTAssertEqual(window.view.selection, .channel(.direct(steve)), "what you sent is forgotten, so there's nothing to come back to")
+
+        window.update(book())
+        window.view.select(.thread("t", in: .direct(steve)))
+        window.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+        XCTAssertEqual(window.view.selection, .thread("t", in: .direct(steve)), "a real thread is still there next time")
     }
 
     private func twoPartQuestion() -> AgentQuestion {
@@ -384,30 +476,13 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertNil(try card(in: view).buttons.first { $0.accessibilityLabel() == "January" })
 
         try press(CatWords.answerInWords, in: view)
+        XCTAssertEqual(view.selection, .thread("t", in: .direct(steve)), "answering in words opens the thread it's in")
         XCTAssertEqual(view.pane.composer.target, .question(question))
         view.pane.composer.send("Pounds, please")
         XCTAssertEqual(sent, [.answer(question, ["jan", "Pounds, please"])])
     }
 
-    func testADMCarriesOnInANewerThreadEvenBeforeItsWordsAreRead() {
-        let older = AgentThread(id: "old", title: "Old budget", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
-        let newer = AgentThread(id: "new", title: "New budget", projectTitle: "Steve", status: .running, model: "m", updatedAt: at.addingTimeInterval(60), projectPath: "/k/steve")
-        let built = ChannelBook.build(kittens: [steve, pepper], threads: [older, newer], transcripts: ["old": [said("e", ask: "Old question", reply: "Old answer", at: 0)], "new": []], isReading: false, unreadable: 0, cantReachT3: false)
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: built), .thread(id: "new", title: "New budget"))
-
-        let between = AgentThread(id: "asked", title: "From Pepper", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at.addingTimeInterval(120), projectPath: "/k/steve")
-        let pepperThread = AgentThread(id: "p", title: "Plans", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at, projectPath: "/k/pepper")
-        let asked = Exchange(id: "x", asker: .agent(threadID: "p"), askedAt: at.addingTimeInterval(100), ask: "Which font?", reply: "Silkscreen.", repliedAt: at.addingTimeInterval(101))
-        let withBetween = ChannelBook.build(kittens: [steve, pepper], threads: [older, between, pepperThread], transcripts: ["old": [said("e", ask: "Old question", reply: "Old answer", at: 0)], "asked": [asked], "p": []], isReading: false, unreadable: 0, cantReachT3: false)
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: withBetween), .thread(id: "old", title: "Old budget"), "a thread only another kitten talks in isn't yours to carry on")
-    }
-}
-
-
-// MARK: - Messages, review round 2
-
-extension ChannelsWindowTests {
-    func testADraftNeverStaysOnAThreadOnlyAnotherKittenTalksIn() {
+    func testAThreadOnlyAnotherKittenTalksInHasNoBox() {
         let older = AgentThread(id: "old", title: "Old budget", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
         let between = AgentThread(id: "asked", title: "From Pepper", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at.addingTimeInterval(120), projectPath: "/k/steve")
         let pepperThread = AgentThread(id: "p", title: "Plans", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at, projectPath: "/k/pepper")
@@ -416,63 +491,15 @@ extension ChannelsWindowTests {
         var sent: [MessagesAction] = []
         view.pane.onAction = { sent.append($0) }
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: [:], isReading: true, unreadable: 0, cantReachT3: false))
-        view.select(.channel(.direct(steve)))
+        view.select(.thread("asked", in: .direct(steve)))
         view.pane.composer.textView.string = "Make the summary shorter"
 
         let asked = Exchange(id: "x", asker: .agent(threadID: "p"), askedAt: at.addingTimeInterval(100), ask: "Which font?", reply: "Silkscreen.", repliedAt: at.addingTimeInterval(101))
         let mine = Exchange(id: "e", asker: .you, askedAt: at, ask: "Old question", reply: "Old answer", repliedAt: at.addingTimeInterval(1))
-        let read = ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: ["old": [mine], "asked": [asked], "p": []], isReading: false, unreadable: 0, cantReachT3: false)
-        view.show(read)
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: ["old": [mine], "asked": [asked], "p": []], isReading: false, unreadable: 0, cantReachT3: false))
+        XCTAssertNil(view.pane.composer.target)
         view.pane.composer.send(view.pane.composer.textView.string)
-        XCTAssertEqual(sent, [.send("Make the summary shorter", to: .thread(id: "old", title: "Old budget"), shownIn: .direct(steve))], "your DM went into the thread where Pepper was asking Steve")
-    }
-
-    func testANewTopicHoldsTheBoxEvenIfAnotherThreadAnswersFirst() {
-        var threads = [AgentThread(id: "t", title: "Resume", projectTitle: "Steve", status: .running, model: "m", updatedAt: at, projectPath: "/k/steve")]
-        var transcripts = ["t": [Exchange(id: "e", asker: .you, askedAt: at, ask: "Tidy my resume", reply: nil, repliedAt: nil)]]
-        let view = view()
-        var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
-        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false))
-        view.select(.channel(.direct(steve)))
-
-        // New topic sent at +60, and T3 hasn't said what its thread is yet.
-        let echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Write a cover letter", at: at.addingTimeInterval(60), threadID: "", threadTitle: "")
-        let pending = [SentMessage(channel: .direct(steve), message: echo)]
-        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: pending))
-        XCTAssertEqual(view.pane.composer.target, .starting(steve))
-
-        // Meanwhile the resume thread finishes.
-        threads[0].status = .completed
-        threads[0].updatedAt = at.addingTimeInterval(61)
-        transcripts["t"] = [Exchange(id: "e", asker: .you, askedAt: at, ask: "Tidy my resume", reply: "Done.", repliedAt: at.addingTimeInterval(61))]
-        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: pending))
-        view.pane.composer.send("Keep it to one page")
-        XCTAssertEqual(sent, [], "the follow-up to the new topic went to the old thread")
-    }
-}
-
-extension ChannelsWindowTests {
-    func testANewTopicKeepsTheBoxWhenAnOldThreadAnswersLate() {
-        let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: 820, height: 560))
-        var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
-        let echo = SentMessage(channel: .direct(steve), message: ChannelMessage(exchangeID: "new-topic", kind: .ask, speaker: .you, text: "Write a new cover letter", at: at.addingTimeInterval(60), threadID: "", threadTitle: ""))
-        let old = AgentThread(id: "old-resume", title: "Old resume", projectTitle: "Steve", status: .running, model: "m", updatedAt: at, projectPath: "/k/steve")
-        let initial = Exchange(id: "resume", asker: .you, askedAt: at, ask: "Tidy my old resume")
-        view.show(ChannelBook.build(kittens: [steve], threads: [old], transcripts: [old.id: [initial]], isReading: false, unreadable: 0, cantReachT3: false, sent: [echo]))
-        view.select(.channel(.direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .starting(steve))
-        view.pane.composer.textView.string = "Keep the new letter to one page"
-
-        var finished = old
-        finished.status = .completed
-        finished.updatedAt = at.addingTimeInterval(90)
-        let lateReply = Exchange(id: "resume", asker: .you, askedAt: at, ask: "Tidy my old resume", reply: "The old resume is ready.", repliedAt: at.addingTimeInterval(90))
-        view.show(ChannelBook.build(kittens: [steve], threads: [finished], transcripts: [old.id: [lateReply]], isReading: false, unreadable: 0, cantReachT3: false, sent: [echo]))
-        XCTAssertEqual(view.pane.composer.target, .starting(steve), "The pending new topic must hold its target even when the old thread answers later")
-        view.pane.composer.send(view.pane.composer.textView.string)
-        XCTAssertEqual(sent, [], "A follow-up for the new topic must not go to the old resume thread")
+        XCTAssertEqual(sent, [], "your words went into the thread where Pepper was asking Steve")
     }
 }
 

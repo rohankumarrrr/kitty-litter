@@ -66,6 +66,14 @@ enum CatWords {
     static let shades = "Shades"
     static let shadesRole = "Work I started for you"
     static let newTopic = "New topic"
+    static let openInT3 = "Open in T3"
+    static let quietThread = "Its messages are in T3."
+    /// Short, so a long name can't crowd out the thread's own title.
+    static func back(to title: String) -> String { "‹ \(title.count > 18 ? title.prefix(17) + "…" : title)" }
+    /// Under a thread's title: where it is and how it's going.
+    static func threadDetails(_ thread: AgentThread) -> String {
+        [thread.projectTitle, status(thread), thread.pullRequest.map(pullRequest)].compactMap { $0 }.joined(separator: " · ")
+    }
     static let answerInWords = "Type an answer"
     static let didntStart = "That didn't start. Try again?"
     static let answerInT3 = "This one's answered in T3."
@@ -103,7 +111,8 @@ enum CatWords {
     static func placeholder(_ target: MessageTarget) -> String {
         switch target {
         case .router: return "Message everyone"
-        case .newThread, .thread, .starting: return "Message"
+        case .newThread: return "Start a new topic"
+        case .thread, .starting: return "Reply"
         case .question: return "Your answer"
         }
     }

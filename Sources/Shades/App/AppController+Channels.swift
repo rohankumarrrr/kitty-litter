@@ -4,6 +4,8 @@ import ShadesCore
 /// What Messages can ask for. Nothing in it can say anything for you: sending takes words you typed.
 enum MessagesAction: Equatable {
     case send(String, to: MessageTarget, shownIn: ChannelID?)
+    /// A new thread in the kitten's folder. `id` is what Messages calls it until T3 has its thread.
+    case startTopic(String, with: Kitten, id: String)
     case approval(ApprovalRequest, ApprovalDecision)
     /// Every part of a question's answer, in order.
     case answer(AgentQuestion, [String])
@@ -42,10 +44,14 @@ extension AppController {
         waiting.shadesWork = watch.rows(at: now()).filter { !hiddenThreads.contains($0.id) && KittenBoard.owner(of: $0, among: kittens) == nil }
         for thread in latestThreads where !hiddenThreads.contains(thread.id) {
             let owner = KittenBoard.owner(of: thread, among: kittens)?.id
-            for request in thread.pendingApprovals { waiting.owners[request.id] = owner }
+            for request in thread.pendingApprovals {
+                waiting.owners[request.id] = owner
+                waiting.listed[request.id] = thread.id
+            }
             if let question = thread.pendingQuestion, !answeredQuestions.contains(question.id) {
                 waiting.questions.append(question)
                 waiting.owners[question.id] = owner
+                waiting.listed[question.id] = thread.id
             }
         }
         return waiting
@@ -55,6 +61,8 @@ extension AppController {
         switch action {
         case .send(let words, let target, let channel):
             send(words, to: target, shownIn: channel)
+        case .startTopic(let words, let kitten, let id):
+            send(words, to: .newThread(kitten), shownIn: .direct(kitten), echoID: id)
         case .approval(let request, let decision):
             answer(request, decision)
         case .answer(let question, let answers):
@@ -70,8 +78,7 @@ extension AppController {
     }
 
     /// Each way of sending passes on your words and nothing else: no screen, and nothing anyone else said.
-    func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?) {
-        let echoID = "sent-\(UUID().uuidString)"
+    func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, echoID: String = "sent-\(UUID().uuidString)") {
         func echo(threadID: String = "", title: String = "") {
             guard let channel else { return }
             channels.sent(ChannelMessage(exchangeID: echoID, kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: title), in: channel)
