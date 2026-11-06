@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ShadesContext
 import ShadesCore
 import ShadesT3
 
@@ -9,6 +10,7 @@ import ShadesT3
 ///     shades --ask "What's on my screen?" --image page.jpg
 ///     shades --hand-off "Which of my projects is the budget app?" --image page.jpg
 ///     shades --fix "The total is wrong" --image page.jpg
+///     shades --ask "Summarize this." --drop syllabus.pdf   # a file or link dropped onto the cat, with no look at the screen
 ///     shades --ask "Research this" --then "And that part?" --image page.jpg   # waits for the agents first
 ///     shades --ask "Make this friendlier" --selection "Send it by Friday." --image page.jpg   # as if that were selected
 ///
@@ -103,6 +105,10 @@ enum DevFlags {
     }
 
     private static func look(_ controller: AppController, focusRegion: CGRect? = nil) -> Task<AppController.Capture, Never> {
+        if let dropped = value(after: "--drop") {
+            let drop = dropped.hasPrefix("http") ? URL(string: dropped).map(Drop.link) : .file(URL(fileURLWithPath: dropped))
+            return Task.detached { AppController.Capture(snapshot: drop?.snapshot(), error: nil) }
+        }
         guard let path = value(after: "--image") else {
             return controller.startLook(CaptureOptions(focusRegion: focusRegion))
         }

@@ -1067,6 +1067,119 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(backend.sent[0].prompt.text.contains("what is this?"))
     }
 
+    // MARK: - Dropping onto the cat
+
+    private let syllabus = ScreenSnapshot(
+        url: URL(fileURLWithPath: "/files/syllabus.pdf"),
+        pageText: "Week 1: Describing data",
+        droppedName: "syllabus.pdf"
+    )
+
+    private func drop(_ question: String) async {
+        controller.dropped(syllabus)
+        await controller.flow?.value
+        stage.type(question)
+        await settle()
+    }
+
+    func testADropOpensTheAskBoxWithoutLookingAtTheScreen() async {
+        controller.dropped(syllabus)
+        await controller.flow?.value
+        XCTAssertEqual(log.all, ["showInput"])
+        XCTAssertEqual(stage.input?.caption, "Looking at syllabus.pdf")
+        XCTAssertEqual(stage.input?.allowsEmpty, true)
+    }
+
+    func testReturnOnADropSummarizesOnlyWhatWasDropped() async {
+        await drop("")
+        let sent = backend.sent[0].prompt.text
+        XCTAssertTrue(sent.contains("Their question: Summarize this."))
+        XCTAssertTrue(sent.contains("Dropped onto the cat instead of a look at the screen: syllabus.pdf"))
+        XCTAssertTrue(sent.contains("Week 1: Describing data"))
+        XCTAssertFalse(sent.contains("Safari"))
+        XCTAssertTrue(context.options.isEmpty)
+    }
+
+    func testADropCanGoToAKittenThatSeesTheScreen() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await drop("is this for me?")
+        let given = backend.sent[1].prompt.text
+        XCTAssertTrue(given.hasPrefix("is this for me?\n"))
+        XCTAssertTrue(given.contains("Week 1: Describing data"))
+    }
+
+    /// A screenshot is a copy of the screen, and there's no telling which files are, so a kitten that can't see the
+    /// screen can't take any. Your words alone would be about nothing, so they don't go either.
+    func testAKittenThatDoesntSeeTheScreenCantTakeADrop() async {
+        kittens = [clawde]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")]]
+        await drop("Clawde should keep this")
+        XCTAssertEqual(backend.sent.count, 1, "only the router's turn")
+        XCTAssertEqual(stage.bubble, .line("Clawde can't take files. Put a link or the text in your message instead.", threadID: nil))
+    }
+
+    func testAThreadThatMightBeAScreenlessKittensCantTakeADrop() async {
+        kittens = [clawde]
+        controller.threadsChanged([session("w", "Clawde: Fix routing")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await drop("and this?")
+        await controller.forwardTask?.value
+        XCTAssertEqual(backend.sent.count, 1, "only the router's turn")
+        XCTAssertEqual(stage.bubble, .line("Clawde: Fix routing can't take files. Put a link or the text in your message instead.", threadID: nil))
+    }
+
+    func testAHandoffWithFullAccessCantTakeADrop() async {
+        useFullAccess(frontier: true)
+        backend.replies = [[.finished(fullText: "HANDOFF: Summarize the syllabus")]]
+        await drop("")
+        await controller.frontierTask?.value
+        XCTAssertEqual(backend.sent.count, 1, "only the router's turn")
+        XCTAssertEqual(stage.bubble, .line("Fable can't take files. Put a link or the text in your message instead.", threadID: nil))
+    }
+
+    func testAFrontDoorWithFullAccessCantTakeADrop() async {
+        useFullAccess(quick: true)
+        await drop("")
+        XCTAssertTrue(backend.sent.isEmpty)
+        XCTAssertEqual(stage.bubble, .line("Haiku can't take files. Put a link or the text in your message instead.", threadID: nil))
+    }
+
+    /// Saying it while the drop's box is up is the same as typing it there, so there's still no look at the screen.
+    func testTalkingIntoADropsBoxAsksAboutTheDrop() async {
+        voice.transcript = Transcript(raw: "when is the final", cleaned: "When is the final?", audioSeconds: 1, latencySeconds: 0.1)
+        controller.dropped(syllabus)
+        await controller.flow?.value
+        controller.keyPressed(settings.talkKey)
+        controller.keyReleased(settings.talkKey)
+        await settle()
+        XCTAssertTrue(context.options.isEmpty)
+        let sent = backend.sent[0].prompt.text
+        XCTAssertTrue(sent.contains("Their question: When is the final?"))
+        XCTAssertTrue(sent.contains("syllabus.pdf"))
+        XCTAssertFalse(sent.contains("Safari"))
+    }
+
+    /// The drop is read off the main thread, so it can land while an Ask you started is still looking at the screen.
+    func testADropWhileAnAskIsOpeningReplacesItsBox() async {
+        controller.askPressed()
+        let asking = controller.flow
+        await Task.yield()
+        controller.dropped(syllabus)
+        await asking?.value
+        await controller.flow?.value
+        XCTAssertEqual(stage.input?.caption, "Looking at syllabus.pdf")
+    }
+
+    func testADropThatCantBeReadSaysSo() async {
+        controller.dropped(nil)
+        await settle()
+        XCTAssertNil(stage.input)
+        XCTAssertEqual(stage.bubble, .line("I can only read PDFs, pictures and links.", threadID: nil))
+    }
+
     // MARK: - Self-check
 
     func testAKittenWithNothingKeepingItOffTheScreenIsFound() async {

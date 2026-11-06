@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import ShadesContext
 import ShadesCore
 
 /// All the windows, behind the `CatStage` the flows talk to.
@@ -57,6 +58,18 @@ final class AppStage: CatStage {
         cat.onClick = { [weak self] in self?.controller?.catClicked() }
         cat.onShiftClick = { [weak self] in self?.controller?.kittensPressed() }
         cat.onStroke = { [weak self] in self?.catPet() }
+        cat.view.registerForDraggedTypes(Drop.types)
+        cat.view.onDrop = { [weak self] pasteboard in
+            guard let drop = Drop(pasteboard) else {
+                self?.controller?.dropped(nil)
+                return false
+            }
+            Task { [weak self] in
+                let snapshot = await Task.detached { drop.snapshot() }.value
+                self?.controller?.dropped(snapshot)
+            }
+            return true
+        }
         cat.onRightClick = { [weak self] event in
             guard let self else { return }
             self.menuBar.popUpMenu(at: event.locationInWindow, in: self.cat.view)

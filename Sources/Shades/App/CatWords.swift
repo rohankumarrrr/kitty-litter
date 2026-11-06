@@ -29,8 +29,15 @@ enum CatWords {
     static func shortcutTaken(_ label: String) -> String { "Another app has \(label), so use the menu bar for that one." }
 
     static func looking(at snapshot: ScreenSnapshot) -> String? {
-        guard let app = snapshot.appName else { return nil }
+        guard let app = snapshot.droppedName ?? snapshot.appName else { return nil }
         return "Looking at \(app)"
+    }
+
+    static let askAboutDrop = "Ask about it, or just press Return"
+    static let summarize = "Summarize this."
+    static let cantReadThat = "I can only read PDFs, pictures and links."
+    static func cantTakeFiles(_ name: String) -> String {
+        "\(name) can't take files. Put a link or the text in your message instead."
     }
 
     static func fixPlaceholder(talkKey: HoldKey) -> String {

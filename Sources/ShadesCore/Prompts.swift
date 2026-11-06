@@ -299,6 +299,7 @@ public enum Prompts {
         if snapshot.isPrivate { return "<screen>Hidden: the user keeps this app private.</screen>" }
 
         var lines: [String] = []
+        if let name = snapshot.droppedName { lines.append("Dropped onto the cat instead of a look at the screen: \(name)") }
         if let app = snapshot.appName { lines.append("App: \(app)") }
         if let title = snapshot.windowTitle { lines.append("Window: \(title)") }
         if let url = snapshot.url { lines.append("URL: \(url.absoluteString)") }
