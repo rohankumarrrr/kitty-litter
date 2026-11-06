@@ -92,7 +92,7 @@ final class BubbleView: BalloonView {
         case .listening(let text):
             body = text.isEmpty ? "Listening..." : text
             soft = text.isEmpty
-        case .reply(let text, _, _, let note):
+        case .reply(let text, _, _, let note, _):
             captionText = note
             body = text
         case .line(let text, _):
@@ -247,8 +247,9 @@ final class BubbleView: BalloonView {
         switch content {
         case .thinking, .listening:
             break
-        case .reply(let text, let done, let threadID, _):
+        case .reply(let text, let done, let threadID, _, let canReplace):
             guard done else { break }
+            if canReplace { add("Replace", .plain, .replace(text)) }
             if let threadID { add("Open in T3", .text, .open(threadID: threadID)) }
             let copy = add("Copy", .text, .copy(text))
             let copied = copy.onPress
@@ -303,7 +304,7 @@ extension BubbleContent {
     fileprivate var buttonKey: String {
         switch self {
         case .thinking, .listening: return ""
-        case .reply(let text, let done, let thread, _): return done ? "reply|\(thread ?? "")|\(text)" : ""
+        case .reply(let text, let done, let thread, _, let canReplace): return done ? "reply|\(thread ?? "")|\(canReplace)|\(text)" : ""
         case .line(_, let thread): return "line|\(thread ?? "")"
         case .notice(_, _, let thread): return "notice|\(thread ?? "")"
         case .approval(let request, _, _): return "approval|\(request.id)"
@@ -319,7 +320,7 @@ extension BubbleContent {
     }
 
     fileprivate var isStreaming: Bool {
-        if case .reply(_, let done, _, _) = self { return !done }
+        if case .reply(_, let done, _, _, _) = self { return !done }
         return false
     }
 

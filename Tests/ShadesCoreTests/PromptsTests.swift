@@ -12,6 +12,13 @@ final class PromptsTests: XCTestCase {
         XCTAssertNil(Prompts.handoffTask(in: "HANDOFF:"))
     }
 
+    func testReadsARewriteWithItsOwnLines() {
+        XCTAssertEqual(Prompts.rewrite(in: "\nREWRITE:\nFirst line.\n\nSecond line.\n"), "First line.\n\nSecond line.")
+        XCTAssertNil(Prompts.rewrite(in: "REWRITE:"))
+        XCTAssertNil(Prompts.rewrite(in: "Here it is. REWRITE: shorter"))
+        XCTAssertTrue(Prompts.quick(question: "tighten this", snapshot: nil).contains("reply with \(Prompts.rewriteMarker)"))
+    }
+
     func testPrivateAppsStayHidden() {
         let snapshot = ScreenSnapshot(appName: "Passwords", windowTitle: "secret", isPrivate: true)
         let prompt = Prompts.quick(question: "what's this?", snapshot: snapshot)

@@ -343,7 +343,13 @@ final class FakeVoice: VoiceEngine {
 
 final class FakeInserter: TextInserting {
     var inserted: [String] = []
+    var replaced: [(original: String, bundleID: String?, text: String)] = []
+    var replaces = true
     func insert(_ text: String) async throws { inserted.append(text) }
+    func replaceSelection(_ original: String, in bundleID: String?, with text: String) async -> Bool {
+        replaced.append((original, bundleID, text))
+        return replaces
+    }
 }
 
 final class FakeKeys: KeyHoldMonitoring {

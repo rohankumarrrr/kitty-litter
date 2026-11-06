@@ -14,6 +14,7 @@ enum CatWords {
     static let fullAccessLeavesScreenOut = "Agents with full access don't get your screen, so tell me what's wrong."
     static let needsScreenRecording = "I can't see your screen. Turn on Screen Recording for me in System Settings."
     static let noReply = "Hm, nothing came back. Try again?"
+    static let rewriteCopied = "I couldn't swap it in, so it's copied. Paste it where you want it."
     static let didntCatch = "I didn't catch that."
     static let tellMeWhatsWrong = "I can't see this one, so tell me what's wrong."
     static let cantSeeScreen = "I can't see your screen just now, but ask away."

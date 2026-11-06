@@ -10,6 +10,7 @@ import ShadesT3
 ///     shades --hand-off "Which of my projects is the budget app?" --image page.jpg
 ///     shades --fix "The total is wrong" --image page.jpg
 ///     shades --ask "Research this" --then "And that part?" --image page.jpg   # waits for the agents first
+///     shades --ask "Make this friendlier" --selection "Send it by Friday." --image page.jpg   # as if that were selected
 ///
 /// And for the Channels window, none of which sends anything:
 ///
@@ -108,6 +109,7 @@ enum DevFlags {
         let picture = try? Data(contentsOf: URL(fileURLWithPath: path))
         let snapshot = ScreenSnapshot(
             appName: "Test picture",
+            selectedText: value(after: "--selection"),
             screenshotJPEG: picture,
             focusRegion: focusRegion
         )

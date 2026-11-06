@@ -28,6 +28,13 @@ enum TextFit {
         return result
     }
 
+    /// A rewrite keeps whatever spacing the selection had at each end, so a paragraph keeps its line break.
+    static func inPlace(of original: String, _ text: String) -> String {
+        let leading = String(original.prefix(while: \.isWhitespace))
+        let trailing = String(original.reversed().prefix(while: \.isWhitespace).reversed())
+        return leading + text.trimmingCharacters(in: .whitespacesAndNewlines) + trailing
+    }
+
     private static func hasNewlineTail(_ text: String) -> Bool {
         text.last(where: { !($0 == " " || $0 == "\t") })?.isNewline ?? true
     }

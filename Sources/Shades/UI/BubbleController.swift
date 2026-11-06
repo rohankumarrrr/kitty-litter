@@ -108,11 +108,11 @@ final class BubbleController {
         }
     }
 
-    /// Buttons that start or allow things wait a moment, so a click meant for something
+    /// Buttons that start, allow or change things wait a moment, so a click meant for something
     /// else can't land on them as they appear under the pointer.
     private func armIfNeeded(_ content: BubbleContent) {
         switch content {
-        case .approval: break
+        case .approval, .reply(_, _, _, _, true): break
         default: return
         }
         view.setButtonsArmed(false)

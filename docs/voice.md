@@ -238,6 +238,8 @@ Web views, terminals and Electron apps go straight to paste (`pasteOnlyPrefixes`
 
 Tested in a real TextEdit window with `probe-voice insert-test`: Accessibility insert in 6 to 59 ms, spacing between sentences, replacing a selection, Command-Z undoing both an Accessibility insert and a paste, and the clipboard coming back intact.
 
+A rewrite from the cat goes in the same way, through `replaceSelection`, with three differences. It only goes in if the field in front is in the same app and still has exactly the text that was selected when you asked. It never pastes, because a paste can't be read back to prove it landed, so apps on the paste-only list say no. And it doesn't fit the text to what's around it, only keeps the spaces and line breaks the selection had at each end. When it says no, the app copies the rewrite and says so. Undo takes it back in Cocoa text views. The insert test above saw that in TextEdit, and a script setting a Cocoa text view's selected text through `setAccessibilitySelectedText` saw one Undo put the original back, line break and all.
+
 Two things to know from that test:
 
 - **Undo can take back more than the last insert.** TextEdit sometimes merged inserts made close together, so one Command-Z removed two of them. It varied between runs.

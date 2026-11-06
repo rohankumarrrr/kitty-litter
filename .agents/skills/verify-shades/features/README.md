@@ -5,8 +5,8 @@ The maintained list of what a person can do with Shades, and how to prove each i
 ## Baseline
 
 - Every journey starts a fresh demo with `--no-script`, so it begins from the same state: four threads, five kittens (Cali and Furbit not set up yet), Clawde with an inbox and no screen, and nothing waiting on you.
-- The demo's screen is Safari showing a pricing page. `ask <question>` uses a screen with no picture, so it sends 0 attachments.
-- The demo router picks by words in the question (`reply(to:)` in `Sources/Shades/Demo/Demo.swift`): "resume" or "interview" goes to Steve Pawsniak, "fix", "change", "build", "refactor" or "rewrite" goes to the frontier agent, "follow" or "what you" carries on in the first session, "hello" gets a greeting, "long" gets a long answer, and anything else gets an answer about the pricing page.
+- The demo's screen is Safari showing a pricing page. `ask <question>` uses a screen with no picture, so it sends 0 attachments, and with whatever `select <text>` last set as the selected text.
+- The demo router picks by words in the question (`reply(to:)` in `Sources/Shades/Demo/Demo.swift`): "resume" or "interview" goes to Steve Pawsniak, "fix", "change", "build", "refactor" or "rewrite" goes to the frontier agent, "tighten" rewrites the selected text, "follow" or "what you" carries on in the first session, "hello" gets a greeting, "long" gets a long answer, and anything else gets an answer about the pricing page.
 
 ## Proof
 
