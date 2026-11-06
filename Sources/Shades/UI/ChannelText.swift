@@ -120,6 +120,12 @@ final class ChannelTextView: NSTextView {
         importsGraphics = false
         isAutomaticLinkDetectionEnabled = false
         isAutomaticDataDetectionEnabled = false
+        // Nothing to check in words you can't change, and a window full of them shouldn't wake the spelling service.
+        isContinuousSpellCheckingEnabled = false
+        isGrammarCheckingEnabled = false
+        isAutomaticSpellingCorrectionEnabled = false
+        isAutomaticTextReplacementEnabled = false
+        isAutomaticTextCompletionEnabled = false
         linkTextAttributes = [:]
     }
 
