@@ -62,7 +62,8 @@ enum MessageTarget: Equatable {
         case .channel(let id):
             return book.writableKitten(in: id).map(MessageTarget.newThread)
         case .thread(let id, let channel):
-            guard channel == .everyone || book.writableKitten(in: channel) != nil else { return nil }
+            // The router answers in lines the app acts on, so nothing goes straight into one of its threads.
+            guard !book.talks.contains(id), channel == .everyone || book.writableKitten(in: channel) != nil else { return nil }
             if let topic = book.channel(channel)?.messages.first(where: { $0.exchangeID == id && $0.threadID.isEmpty }),
                let kitten = book.writableKitten(in: channel) {
                 return topic.failure == nil ? .starting(kitten) : .newThread(kitten)

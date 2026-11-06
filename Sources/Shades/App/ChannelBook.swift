@@ -112,6 +112,8 @@ struct ChannelBook: Equatable {
     var started: [String: String]
     /// Threads only ever heard between kittens, which aren't yours to carry on.
     var elsewhere: Set<String>
+    /// The router's own threads, which are only for reading.
+    var talks: Set<String>
     var isReading: Bool
     var unreadable: Int
     var cantReachT3: Bool
@@ -136,8 +138,11 @@ struct ChannelBook: Equatable {
         inEveryone: [String: Date] = [:],
         withShades: Set<String> = []
     ) -> ChannelBook {
+        // A talk with the cat is titled with your question, which can start with a kitten's name, so it's kept apart
+        // from everything worked out about kittens.
+        let talkThreads = threads.filter { withShades.contains($0.id) }
         // A subagent's question holds up the thread above it, even if that one's turn has ended.
-        let threads = threads.map { thread -> AgentThread in
+        let threads = threads.filter { !withShades.contains($0.id) }.map { thread -> AgentThread in
             guard thread.pendingQuestion != nil else { return thread }
             var waiting = thread
             waiting.status = .waitingForAnswer
@@ -147,11 +152,10 @@ struct ChannelBook: Equatable {
         var placed: [ChannelID: [Placed]] = [:]
         var leftOut: Set<String> = []
         var heardIn: [String: Set<ChannelID>] = [:]
+        for thread in talkThreads where !thread.isLiveTest {
+            if let exchanges = transcripts[thread.id] { placed[.shades, default: []] += talk(in: thread, exchanges) }
+        }
         for thread in threads {
-            if withShades.contains(thread.id) {
-                if !thread.isLiveTest, let exchanges = transcripts[thread.id] { placed[.shades, default: []] += talk(in: thread, exchanges) }
-                continue
-            }
             guard let owner = KittenBoard.owner(of: thread, among: kittens) else {
                 if let since = inEveryone[thread.id], let exchanges = transcripts[thread.id] {
                     placed[.everyone, default: []] += answers(in: thread, exchanges, since: since)
@@ -217,6 +221,7 @@ struct ChannelBook: Equatable {
         let unread = Set(threads.filter(isUnread).compactMap { KittenBoard.owner(of: $0, among: kittens)?.id })
         var named: [String: AgentThread] = [:]
         var elsewhere: Set<String> = []
+        for thread in talkThreads where named[thread.id] == nil { named[thread.id] = thread }
         for thread in threads where named[thread.id] == nil {
             named[thread.id] = thread
             guard let owner = KittenBoard.owner(of: thread, among: kittens) else { continue }
@@ -236,6 +241,7 @@ struct ChannelBook: Equatable {
             threads: named,
             started: started,
             elsewhere: elsewhere,
+            talks: Set(talkThreads.map(\.id)),
             isReading: isReading,
             unreadable: unreadable,
             cantReachT3: cantReachT3
@@ -312,7 +318,8 @@ struct ChannelBook: Equatable {
             if exchange.asker == .you, let ask = exchange.ask {
                 messages.append(ChannelMessage(exchangeID: exchange.id, kind: .ask, speaker: .you, text: ask, at: exchange.askedAt, threadID: thread.id, threadTitle: thread.title))
             }
-            let reply = exchange.reply.flatMap(said)
+            // A reply still being written is read the way the bubble reads it, so a half-written marker never shows.
+            let reply = exchange.reply.flatMap { isStillGoing ? saidSoFar($0) : said($0) }
             if reply != nil || exchange.failure != nil || isStillGoing {
                 messages.append(ChannelMessage(
                     exchangeID: exchange.id,
@@ -329,6 +336,11 @@ struct ChannelBook: Equatable {
             guard !messages.isEmpty else { return nil }
             return Placed(position: isStillGoing ? exchange.askedAt : exchange.repliedAt ?? exchange.askedAt, sequence: index, messages: messages)
         }
+    }
+
+    static func saidSoFar(_ reply: String) -> String? {
+        var holdback = ReplyHoldback()
+        return holdback.add(reply).flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// What the router's reply came to, in words. `nil` for nothing worth reading.

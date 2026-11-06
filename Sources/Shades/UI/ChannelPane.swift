@@ -271,7 +271,7 @@ final class ChannelPane: QuietView {
     private func updateComposer(keepingDraft: Bool = false) {
         var target = book.flatMap { MessageTarget.standard(for: selection, in: $0, answered: partAnswers.mapValues(\.count)) }
         // Words already typed go where the box said when you started, so a refresh can't send them somewhere else.
-        if let replyingTo, case .thread(let id, _) = selection, replyingTo.threadID == id {
+        if let replyingTo, case .thread(let id, _) = selection, replyingTo.threadID == id, book?.talks.contains(id) != true {
             // Even a thread T3 no longer lists, such as an archived one, takes a reply to its report.
             // A question waiting in the same thread doesn't take words meant for the report. Type an answer is for that.
             let title = book?.title(ofThread: id, in: selection.channelID ?? .everyone) ?? ""

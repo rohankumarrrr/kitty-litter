@@ -14,7 +14,7 @@ struct PhonePlace: Equatable {
     /// An unknown key is the list of places, and a key for an inbox row that's gone is Needs you.
     init(_ key: String, in book: ChannelBook) {
         if key.hasPrefix("r:") {
-            guard let id = Self.unescape(key.dropFirst(2)), let entry = book.waiting.reports.first(where: { $0.id == id }) else {
+            guard let id = Self.unescape(key.dropFirst(2)), let entry = book.waiting.reports.first(where: { $0.id == id }), !book.talks.contains(entry.threadID) else {
                 self.init(selection: .needsYou, in: book)
                 return
             }
@@ -26,7 +26,7 @@ struct PhonePlace: Equatable {
             return
         }
         // What you've asked the cat can be about your screen, so it stays on the Mac.
-        guard var selection = Self.selection(key), selection.channelID != .shades else {
+        guard var selection = Self.selection(key), selection.channelID != .shades, !Self.isTalk(selection, in: book) else {
             self.init(selection: nil, in: book)
             return
         }
@@ -39,6 +39,11 @@ struct PhonePlace: Equatable {
             return
         }
         self.init(selection: selection, in: book)
+    }
+
+    private static func isTalk(_ selection: ChannelSelection, in book: ChannelBook) -> Bool {
+        if case .thread(let id, _) = selection { return book.talks.contains(id) }
+        return false
     }
 
     /// Whether anything the window shows for this channel opens this thread: what's been said in it, the kitten's
