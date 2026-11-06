@@ -70,9 +70,10 @@ extension AppController {
         inboxChanged()
     }
 
-    /// The model's call. With no answer from it, a thread the cat started whose report is one sentence and a link,
+    /// Never for a thread given a correction. Otherwise the model's call, and with no answer from it, a thread the cat started whose report is one sentence and a link,
     /// because anything more may be asking you something, and a false alarm beats a lost report.
     private func onlyPassedOn(_ sorted: SortedReport?, report: String?, of thread: AgentThread) -> Bool {
+        if inbox.wasCorrected(thread.id) { return false }
         guard let sorted else {
             return dispatchers.contains(thread.id) && report.map(ReportDigest.isOneSentence) == true && report?.contains("?") == false
         }
@@ -188,6 +189,17 @@ extension AppController {
         }
     }
 
+    /// Kept with the inbox, so a report about it can't be taken for only passing work on, even after a restart.
+    func noteCorrection(in threadID: String) {
+        inbox.noteCorrection(in: threadID)
+        keepInbox()
+    }
+
+    func forgetCorrection(in threadID: String) {
+        inbox.forgetCorrection(in: threadID)
+        keepInbox()
+    }
+
     func keepInbox() {
         do {
             try saveInbox(inbox)
@@ -199,6 +211,7 @@ extension AppController {
 
     private func inboxChanged() {
         channels.refresh()
+        notifyNeedsYou()
         renderBubble()
     }
 }

@@ -14,19 +14,18 @@ Shades as a conductor with a kitten for each area of your life or work. Shades d
 
 Kittens themselves now exist, as described in [kittens.md](kittens.md). Review, shipping and working across several kittens are the parts still being proven, one kitten end to end before any others.
 
-A kitten for the system itself, a self-check, rollback and a window for reading what kittens say now exist. Work lists, proposals from kittens and a defined way of taking corrections are next.
+Your own data in context exists too, through kittens, the router and a kitten's `project`, and so does dropping a file onto the cat.
+
+A kitten for the system itself, a self-check, rollback, a window for reading what kittens say and a defined way of taking corrections now exist. Work lists and proposals from kittens are next.
 
 ## Next ideas
 
-- **Pointing at things.** Ask "where do I change this?" and the cat runs to the button and sits on it. The agent returns screen coordinates, and the cat's perching does the rest. This also suits step-by-step homework hints, where it shows you the next step without doing it for you.
+- **Step-by-step hints.** The cat can already point at what you ask about. For homework, it could point at the next step each time you ask, without doing it for you.
 - **Kittens out on the desktop.** Shift-clicking Shades already shows every kitten and how it's doing. Next, each working kitten could walk around the screen as its own small cat. Click one to open its thread.
-- **Your own data in context.** Bring in the connectors your agents already have. "Can I afford this?" on a checkout page checks your budget app, and a job posting goes to your resume project. The no-project agent already finds projects on its own, so much of the routing exists.
-- **Drop onto the cat.** Drag a PDF, link or screenshot onto it to summarize it or turn it into an issue.
 - **Local screen memory.** An opt-in, on-device history for "where did I see that article?", plus a summary at the end of the day. It's the riskiest for privacy, so it comes last and never leaves your Mac.
 - **An inbox for everyone.** The inbox started with the kitten that looks after the system, and it works for any kitten that sets `inbox: true`. Next, make it the default for every kitten, and show a kitten's proposals as decision rows, so everything waiting on you is in one place. A digest of several finishes would do the same job, so it should become part of Needs you in Messages rather than sit beside it.
 - **Threads that wake themselves.** A kitten's thread picks up again by itself when its own pull request fails CI or gets a review comment, so a fix doesn't wait on you to notice.
 - **Steer or queue from Messages.** Enter steers a kitten that's still working, by joining the run it's on, and Option-Enter queues the next task behind it. Today a message always waits for its own run.
-- **A notification when something needs you.** A macOS notification for a new approval, question or decision, so you don't have to have Messages open to know.
 - **Messages on your phone.** Following along and answering from your phone's browser.
 - **Kittens on a schedule.** A kitten that runs at a set time, such as a weekly check on something it looks after, and reports to Messages.
 - **The cat's eyes as a tool.** Expose "see screen" and "cat say" as an MCP server, so any T3 agent can look at your screen or speak through the cat, and you can ask about your screen from inside T3.
@@ -42,5 +41,5 @@ A kitten for the system itself, a self-check, rollback and a window for reading 
 - Several choices at once for a question that takes them, from Messages. It takes one choice or your own words for now.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
 - Remember project nicknames, so the frontier agent can skip the search next time.
-- Replace text in place after a rewrite, starting with apps that expose selected text well.
+- Replace a rewrite in place in apps that only take paste, such as browsers, Slack and VS Code. Today the rewrite is copied there, since a paste can't be read back to prove it landed.
 - Windows and Linux. Version one is macOS only because capture, the non-activating window and on-device speech are all native.

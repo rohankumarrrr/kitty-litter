@@ -27,7 +27,7 @@ swift run shades --demo --no-script --commands steps.txt   # plays demo commands
 swift test --filter ScreenBoundaryTests   # every route your screen could take to a kitten
 ```
 
-To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-off` or `--fix` with `--image`, as described in `Sources/Shades/App/DevFlags.swift`. The `probe-t3`, `probe-context` and `probe-voice` tools try one module at a time.
+To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-off` or `--fix` with `--image`, or `--ask` with `--drop` for a file or link dropped onto the cat, as described in `Sources/Shades/App/DevFlags.swift`. The `probe-t3`, `probe-context` and `probe-voice` tools try one module at a time.
 
 ## Rules
 
@@ -40,6 +40,7 @@ To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-
 - The router only replies, and the app acts on its one line. It runs in its own folder, where `RouterBlock` leaves it only tools that read, so whatever starts a router thread gets its project from `routerProjectID(for:)`.
 - Claude threads in this repo run in a sandbox set by `.claude/settings.json`, which also keeps them out of saved copies of the screen. Run `swift` commands on their own, with no pipe or `cd`, since only that form is let out. A refused read means it's working, so don't look for a way around it.
 - An inbox row is data, and a reply is only what you typed or said. It goes straight to the thread, with no capture and no canned answer.
+- The router only picks numbers, only your own words get passed on, and an extra copy of a correction never carries screen text.
 - When the self-check could have caught a problem, teach it to, in `HealthCheck.swift`, with a test.
 - Never log or store tokens, transcripts, screenshots or page text beyond what a feature needs.
 - Keep dependencies few, and permissively licensed only. Don't copy from GPL projects.
@@ -54,6 +55,7 @@ This is open source, and people learn it from the docs, so they change in the sa
 - Never send synthetic clicks or keystrokes while testing. They land on whatever's really on the desktop, which has already meant stray clicks in someone's calendar. Use `--demo`, the flags above, the probes, or a person.
 - Don't send a real screenshot to a model in a test. Use `--image` with a picture you made.
 - Name live test threads "Shades test: ..." and archive them afterwards. The app keeps those out of your inbox and bubble, unless it's a copy trying a flow out.
+- A correction can't be told from a real one, so never send a test correction to a real kitten. `probe-t3 router` stops at the router's decision.
 
 ## Style
 

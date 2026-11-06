@@ -8,7 +8,11 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 ## What it does
 
-**Ask.** Press ⌥Space or click the cat, and ask anything. It looks at your screen at that moment and answers in a bubble, usually in about 10 seconds, though a model can occasionally take much longer. Good for "how do I start problem 3?" or "what does this error mean?"
+**Ask.** Press ⌥Space or click the cat, and ask anything. It looks at your screen at that moment and answers in a bubble, usually in about 10 seconds, though a model can occasionally take much longer. Good for "how do I start problem 3?" or "what does this error mean?" Ask where something is, like "where's the export button?", and the cat runs over and sits on it. It only points, and never clicks. If it can't find the spot, it says so.
+
+**Rewrite what you've selected.** Select some text, ask the cat to "tighten this" or "make it friendlier", and the rewrite shows in the bubble with **Replace**. Nothing in your app changes until you press it. Then it goes in place of your selection, as long as the same text is still selected, and Command-Z takes it back. That works in apps whose text fields allow it, such as Notes, Mail and TextEdit. Anywhere else, or if the selection has moved, the rewrite is copied for you to paste instead.
+
+**Drop onto the cat.** Drag a PDF, a picture or a link onto the cat, and the Ask box opens with it. Ask about it, or just press Return for a summary. It goes through the router like any question, so a syllabus can go to one kitten and a job posting to another. Only what you dropped goes with your words, with no look at your screen.
 
 **Fix what I'm looking at.** Press ⌃⌥F and drag a box around whatever's wrong. Say what's wrong, or just press Return. A frontier agent works out which of your projects it is, and fixes it in its own worktree, so your checkout stays untouched.
 
@@ -16,7 +20,7 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 **Watch your agents.** The cat sleeps when nothing's running, and is up and about when agents are working. When a session ends, it tells you how it went in two or three sentences. When an agent has a question, it shows you the question and your options. When one needs permission, the cat comes over with the exact command, so you can allow or deny it without leaving what you're doing. Shift-click the cat to see all your kittens and which are working, need you or are idle. A kitten can send its reports to Messages instead, where they wait under Needs you: what shipped, what you need to decide, and a way to reply to any of it.
 
-**Messages.** Press ⌃⌘M from anywhere, or choose Messages from the cat's menu, for one window with everything your kittens need from you, so you rarely have to open T3. It reads like iMessage: your messages on the right in blue, and each kitten's on the left in its own colour. **Needs you** is pinned at the top: approvals, questions, reports waiting on a decision, what shipped, and what each kitten is on. Once a thread's finished it moves to **Done**, out of the way until you go looking. **Everyone** is a group chat with all your kittens. What you type there goes through the router, the same as the Ask box, and whoever takes it answers as itself. Each kitten has a conversation of its own, with all its threads together, each under its title and project, and a dot when it's finished something you haven't read. Like threads in Slack, click a title or Reply on a message to open that thread on its own, where what you type goes only into it. The box under the whole conversation starts a new topic. Nothing typed in Messages looks at your screen, and the window never shows up in a screenshot.
+**Messages.** Press ⌃⌘M from anywhere, or choose Messages from the cat's menu, for one window with everything your kittens need from you, so you rarely have to open T3. It reads like iMessage: your messages on the right in blue, and each kitten's on the left in its own colour. **Needs you** is pinned at the top: approvals, questions, reports waiting on a decision, what shipped, and what each kitten is on. When something new needs you, a macOS notification says who and what kind, and clicking it opens Needs you. Once a thread's finished it moves to **Done**, out of the way until you go looking. **Everyone** is a group chat with all your kittens. What you type there goes through the router, the same as the Ask box, and whoever takes it answers as itself. Each kitten has a conversation of its own, with all its threads together, each under its title and project, and a dot when it's finished something you haven't read. Like threads in Slack, click a title or Reply on a message to open that thread on its own, where what you type goes only into it. The box under the whole conversation starts a new topic. Nothing typed in Messages looks at your screen, and the window never shows up in a screenshot.
 
 ![Messages, with your kittens in a group chat](docs/images/messages.png)
 
@@ -29,7 +33,9 @@ There's no list of projects to maintain. Shades acts as one router in front of y
 - **Gives it to a kitten** if it's in a specialist's area.
 - **Starts new work** if nothing has the context, saying so as it does. Fix always starts new work.
 
-Agents with full access get your words but not your screen, so text on a page can't reach an agent that's allowed to do anything.
+A correction you make along the way also reaches the kitten that owns the fact, as [docs/kittens.md](docs/kittens.md#corrections) explains.
+
+Agents with full access get your words but not your screen, so text on a page can't reach an agent that's allowed to do anything. When your words point at your screen, like "read this thread" with no link, and the screen isn't going with them, the cat says so as it passes them on, so you can send the link or paste the text. That's when a kitten or session doesn't get your screen, when nothing could be captured or the app is private, and when Messages starts a thread or passes your words on, since it never sends your screen. A reply straight to a thread is only what you typed, so it doesn't warn. In a follow-up it only says so if your words name something like a thread or an article, because "this" there usually means the session's own work. Something you drop onto the cat counts as your screen, since a picture of it is a screenshot, so it goes only where your screen may. Where it can't, the cat says so and sends nothing, except that a correction in your words still reaches the kitten that owns it, without the file. Only when the front door itself can't take the file does nothing go at all.
 
 The router only replies, and Shades does the rest. It runs in a folder of its own where it can only read files and search the web, so it can't message or start threads, run commands or write files, and can't pass your screen on by itself. Only Claude reads that folder, so the front door has to be a Claude model, and on any other the cat won't take questions.
 
@@ -66,11 +72,13 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 ## Privacy
 
 - **It looks only when you ask:** pressing a key or clicking the cat takes one snapshot. Nothing runs in the background.
-- **What leaves your Mac:** your question, a screenshot, the app and window names, the address, and any selected or page text go to the model you've chosen, through T3 Code. T3 Code keeps them with the thread. Your voice stays on your Mac, and only the resulting text is sent. When a session ends, its final report goes to the summary model, which may be a different provider from the one that ran the session.
+- **What leaves your Mac:** your question, a screenshot, the app and window names, the address, and any selected or page text go to the model you've chosen, through T3 Code. The router also gets the labels and places of the buttons, fields and text in the front window and the menu bar, so it can point at one, but never what's typed into a field. T3 Code keeps them with the thread. Your voice stays on your Mac, and only the resulting text is sent. When a session ends, its final report goes to the summary model, which may be a different provider from the one that ran the session.
 - **Private apps stay private:** password managers are on a list you can edit, and incognito windows in Chromium browsers are skipped. Nothing is captured while they're in front. Background windows can still show up in a screenshot, and Safari's private windows mostly can't be detected.
 - **Screen text is treated as data:** the agents are told it's never instructions, and they run in T3's `auto` mode rather than with full access. That lowers the risk of a page steering an agent, but doesn't remove it. For that reason, Allow is never a default in the cat's approval requests.
+- **What you drop:** a PDF's text, a picture or a link, plus the file's name and where it is on your Mac, go to the router and whoever it picks. A kitten that doesn't see your screen gets nothing you drop, with the same exception as your screen: a new thread titled with its name.
 - **Saved screenshots:** agents get a copy to open, kept in `~/Library/Application Support/shades/captures` for a day.
 - **Agents run as you:** they can open anything you can, including the copies of your screen that T3 Code, Claude and Codex keep. If T3 Code has Screen Recording or Accessibility, so does every agent it runs, whatever the privacy list says. Shades has its own permissions and doesn't need T3 Code to have them. [Keeping a kitten off your screen](docs/kittens.md#keeping-a-kitten-off-your-screen) says what can be enforced and what can't.
+- **Notifications:** they say only who needs you and for what, such as "Pepper needs an approval", and never what was asked, since Notification Center keeps its own copy and can show it on the lock screen.
 - **The inbox:** what's in it is saved only on your Mac, in `~/Library/Application Support/shades/inbox.json`, which only you can read. A reply is your words and nothing else. It never looks at your screen.
 
 ## Kittens
@@ -93,7 +101,7 @@ Choose **Check Myself** from the cat's menu, and it goes through its signature, 
 |---|---|
 | `ShadesCore` | Shared types, contracts, prompts and kittens |
 | `Shades` | The cat, its windows and the flows |
-| `ShadesContext` | Screen capture, selected text, browser pages, the region picker |
+| `ShadesContext` | Screen capture, selected text, browser pages, what the cat can point at, the region picker |
 | `ShadesT3` | The T3 Code client. See [docs/t3-integration.md](docs/t3-integration.md) |
 | `ShadesVoice` | Hold keys, the microphone, speech and cleanup. See [docs/voice.md](docs/voice.md) |
 

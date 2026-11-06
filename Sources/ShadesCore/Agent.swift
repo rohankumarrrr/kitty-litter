@@ -130,6 +130,8 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
     public var moreCount: Int
     /// What an answer from Shades needs, or `nil` if it can only be answered in T3.
     public var form: AnswerForm?
+    /// `nil` if the backend doesn't say.
+    public var askedAt: Date?
 
     public init(
         id: String,
@@ -138,7 +140,8 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
         text: String,
         options: [String] = [],
         moreCount: Int = 0,
-        form: AnswerForm? = nil
+        form: AnswerForm? = nil,
+        askedAt: Date? = nil
     ) {
         self.id = id
         self.threadID = threadID
@@ -147,6 +150,7 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
         self.options = options
         self.moreCount = moreCount
         self.form = form
+        self.askedAt = askedAt
     }
 }
 
@@ -209,7 +213,8 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var isSettled: Bool
     public var pullRequest: ThreadPullRequest?
     /// A live test of Shades itself, which is how those are named. Not work anyone's waiting on.
-    public var isLiveTest: Bool { title.hasPrefix("Shades test:") }
+    public var isLiveTest: Bool { Self.isLiveTest(title: title) }
+    public static func isLiveTest(title: String) -> Bool { title.hasPrefix("Shades test:") }
     /// The thread's latest run, which tells one report from the next. `nil` if the backend doesn't say.
     public var lastRunID: String?
     public var lastRunEndedAt: Date?

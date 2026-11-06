@@ -250,6 +250,18 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         let lower = question.lowercased()
         if lower.contains("follow") || lower.contains("what you") { return "\(Prompts.routeMarker) 1" }
         if lower.contains("interview") || lower.contains("resume") { return "\(Prompts.kittenMarker) 1" }
+        if lower.contains("budget") { return "\(Prompts.kittenMarker) 2" }
+        if lower.contains("tighten") { return "\(Prompts.rewriteMarker) The new pricing page is live, with three plans to pick from." }
+        if lower.contains("clawde") { return "\(Prompts.kittenMarker) 3" }
+        if lower.hasPrefix("summarize") {
+            return "It's a one-page syllabus for Intro to Statistics. Week 1 covers describing data, week 2 is probability, and the final is on December 12."
+        }
+        // Before the hand-off words, since "where do I change this?" is a question about the screen.
+        if lower.contains("where") {
+            if lower.contains("logo") { return "It's at the top left.\n\(Prompts.pointMarker) 9" }
+            if lower.contains("share") { return "It's in Safari's toolbar, top right.\n\(Prompts.pointMarker) 4" }
+            return "It's the Start free trial button, on the right under the Pro plan.\n\(Prompts.pointMarker) 2"
+        }
         if ["fix", "change", "refactor", "build", "rewrite"].contains(where: lower.contains) {
             return "\(Prompts.handoffMarker) Fix the Buy button on the pricing page so it opens checkout."
         }
@@ -278,6 +290,7 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
         if isPrivate {
             return ScreenSnapshot(isPrivate: true)
         }
+        let screen = await MainActor.run { NSScreen.screens.first?.frame ?? CGRect(x: 0, y: 0, width: 1440, height: 900) }
         return ScreenSnapshot(
             appName: "Safari",
             bundleID: "com.apple.Safari",
@@ -285,8 +298,24 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
             url: URL(string: "https://example.com/pricing"),
             pageText: "Pro plan, $12 a month.",
             screenshotJPEG: Self.fakeJPEG,
-            focusRegion: options.focusRegion
+            focusRegion: options.focusRegion,
+            screenshotArea: screen,
+            elements: options.includeElements ? Self.elements(on: screen) : []
         )
+    }
+
+    /// The pricing page's heading, its trial button and its plan, and Safari's Share button just under
+    /// the menu bar, where they'd sit on the main display.
+    private static func elements(on screen: CGRect) -> [ScreenElement] {
+        func at(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> CGRect {
+            CGRect(x: screen.minX + screen.width * x, y: screen.maxY - screen.height * y - height, width: width, height: height)
+        }
+        return [
+            ScreenElement(role: "heading", label: "Pricing", frame: at(0.2, 0.18, 160, 40)),
+            ScreenElement(role: "button", label: "Start free trial", frame: at(0.62, 0.55, 180, 44)),
+            ScreenElement(role: "text", label: "Pro plan, $12 a month", frame: at(0.6, 0.45, 220, 24)),
+            ScreenElement(role: "button", label: "Share", frame: at(0.9, 0.035, 28, 28)),
+        ]
     }
 
     func pickRegion() async -> CGRect? {
@@ -364,10 +393,22 @@ final class DemoVoice: VoiceEngine {
 
 final class DemoInserter: TextInserting {
     var onInsert: ((String) -> Void)?
+    /// What's selected in the pretend app right now.
+    var selection: String?
 
     func insert(_ text: String) async throws {
         print("[demo] would type: \(text)")
         onInsert?(text)
+    }
+
+    func replaceSelection(_ original: String, in bundleID: String?, with text: String) async -> Bool {
+        guard original == selection else {
+            print("[demo] the selection moved, so nothing was replaced")
+            return false
+        }
+        print("[demo] would replace the selection with: \(text)")
+        selection = nil
+        return true
     }
 }
 
@@ -388,10 +429,29 @@ enum Demo {
         var keys: DemoKeys
     }
 
+    /// A made-up one-page syllabus in a temporary file, for dropping onto the cat.
+    static func samplePDF() -> URL? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("syllabus.pdf")
+        var page = CGRect(x: 0, y: 0, width: 612, height: 792)
+        guard let pdf = CGContext(url as CFURL, mediaBox: &page, nil) else { return nil }
+        let text = NSAttributedString(
+            string: "Intro to Statistics\nWeek 1: Describing data\nWeek 2: Probability\nFinal exam: December 12",
+            attributes: [.font: NSFont.systemFont(ofSize: 18)]
+        )
+        let frame = CTFramesetterCreateFrame(
+            CTFramesetterCreateWithAttributedString(text), CFRange(), CGPath(rect: page.insetBy(dx: 72, dy: 72), transform: nil), nil
+        )
+        pdf.beginPDFPage(nil)
+        CTFrameDraw(frame, pdf)
+        pdf.endPDFPage()
+        pdf.closePDF()
+        return url
+    }
+
     /// Enough of a team to show every state in the kitten view.
     static let kittens = [
         Kitten(name: "Steve Pawsniak", role: "Professional", covers: "Their career, resume and interviews.", folder: "/demo/steve"),
-        Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: 0xb3261e),
+        Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: 0xb3261e, seesScreen: false),
         Kitten(name: "Clawde", role: "The system", covers: "Shades and the other kittens.", folder: "/demo/clawde", color: 0xd9730d, seesScreen: false, usesInbox: true),
         Kitten(name: "Cali", role: "Scheduling", covers: "Their time.", folder: "/demo/cali", planned: true, color: 0x1e7fb3),
         Kitten(name: "Furbit", role: "Health", covers: "Their health.", folder: "/demo/furbit", planned: true, color: 0x2e9e4f),
@@ -412,7 +472,9 @@ enum Demo {
             settings: Settings(),
             saveSettings: { _ in print("[demo] settings aren't saved in demo mode") },
             kittens: { Demo.kittens },
-            routerFolder: { "demo-router" }
+            routerFolder: { "demo-router" },
+            notify: { print("[demo] notified: \(CatWords.notification($0))") },
+            withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") }
         )
         return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys)
     }

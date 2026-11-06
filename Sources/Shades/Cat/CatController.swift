@@ -52,6 +52,7 @@ final class CatController {
         view.onMouseDragged = { [weak self] _ in self?.mouseDragged() }
         view.onMouseUp = { [weak self] event in self?.mouseUp(event) }
         view.onRightMouseDown = { [weak self] event in self?.onRightClick?(event) }
+        view.onDragEnter = { [weak self] in self?.wake() }
 
         // These events don't need any permission, and only wake us while the mouse moves.
         let events: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]

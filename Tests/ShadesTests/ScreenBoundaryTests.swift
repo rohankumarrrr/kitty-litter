@@ -15,7 +15,16 @@ final class ScreenBoundaryTests: XCTestCase {
         url: URL(string: "https://page-5ad1.example"),
         selectedText: "Selected-5ad1",
         pageText: "Page-5ad1",
-        screenshotJPEG: Data("Picture-5ad1".utf8)
+        screenshotJPEG: Data("Picture-5ad1".utf8),
+        screenshotArea: CGRect(x: 0, y: 0, width: 1440, height: 900),
+        elements: [ScreenElement(role: "button", label: "Element-5ad1", frame: CGRect(x: 10, y: 10, width: 80, height: 24))]
+    )
+    /// A file dropped onto the cat, which could as well be a screenshot, so it's held to the same promise.
+    static let dropped = ScreenSnapshot(
+        url: URL(fileURLWithPath: "/files/statement-5ad1.pdf"),
+        pageText: "Statement-5ad1",
+        screenshotJPEG: Data("Picture-5ad1".utf8),
+        droppedName: "statement-5ad1.pdf"
     )
 
     // MARK: - Your words, wherever they go
@@ -174,8 +183,12 @@ private enum Give: CaseIterable {
     case handOff
     /// Point at something broken.
     case fix
+    /// Drop a file onto the cat, and the router picks a kitten.
+    case dropKitten
+    /// Drop a file onto the cat, and the router hands it to the frontier agent.
+    case dropHandOff
 
-    var picksAKitten: Bool { self != .handOff && self != .fix }
+    var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff].contains(self) }
 }
 
 /// Ways your words reach a thread that's already there.
@@ -190,6 +203,8 @@ private enum Pass: CaseIterable {
     case inboxReply
     /// Answering a question that thread asked, in Messages.
     case answerQuestion
+    /// Drop a file onto the cat, and the router says it carries on from that thread.
+    case dropThread
 }
 
 /// A thread your words can be passed to, described by what decides whose it is.
@@ -338,6 +353,10 @@ private final class World {
         case .fix:
             controller.sendFix("the total is wrong", snapshot: ScreenBoundaryTests.screen)
             await settle()
+        case .dropKitten:
+            await drop("this one", routerSays: "KITTEN: \(number)")
+        case .dropHandOff:
+            await drop("this one", routerSays: "HANDOFF: Do what Statement-5ad1 says")
         }
     }
 
@@ -358,6 +377,8 @@ private final class World {
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             askedIn["q"] = "w"
             await messages("The first one", to: .question(AgentQuestion(id: "q", threadID: "w", threadTitle: "Fix routing", text: "Page-5ad1 says to pick one. Which?")))
+        case .dropThread:
+            await drop("and that part?", routerSays: "SEND TO: 1")
         }
     }
 
@@ -371,6 +392,15 @@ private final class World {
             await controller.reportTask?.value
             await Task.yield()
         }
+        await settle()
+    }
+
+    /// A drop takes no look at the screen, so it isn't counted as an ask.
+    func drop(_ question: String, routerSays: String) async {
+        backend.routerSays[question] = routerSays
+        controller.dropped(ScreenBoundaryTests.dropped)
+        await controller.flow?.value
+        stage.type(question)
         await settle()
     }
 

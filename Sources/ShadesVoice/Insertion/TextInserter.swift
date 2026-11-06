@@ -66,6 +66,14 @@ public final class TextInserter: TextInserting {
         lastSeconds = Date().timeIntervalSince(started)
     }
 
+    /// Never pastes, since a paste can't be checked, so apps that only take paste say no.
+    public func replaceSelection(_ original: String, in bundleID: String?, with text: String) async -> Bool {
+        guard AXIsProcessTrusted(), let target = FocusedField.current(), target.bundleID == bundleID,
+              !target.isSecure, target.canSetSelection, !Self.isPasteOnly(bundleID), target.selectedText == original
+        else { return false }
+        return target.insert(TextFit.inPlace(of: original, text))
+    }
+
     static func isPasteOnly(_ bundleID: String?) -> Bool {
         // No bundle ID means something unusual, and paste is the choice that always works.
         guard let bundleID else { return true }
@@ -193,6 +201,7 @@ struct FocusedField {
     let canSetSelection: Bool
     let textBefore: String?
     let textAfter: String?
+    let selectedText: String?
 
     private static let editableRoles: Set<String> = ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"]
 
@@ -239,9 +248,11 @@ struct FocusedField {
             let contextLength = 200
             textBefore = value.substring(with: NSRange(location: max(0, start - contextLength), length: start - max(0, start - contextLength)))
             textAfter = value.substring(with: NSRange(location: end, length: min(contextLength, value.length - end)))
+            selectedText = value.substring(with: NSRange(location: start, length: end - start))
         } else {
             textBefore = nil
             textAfter = nil
+            selectedText = nil
         }
     }
 

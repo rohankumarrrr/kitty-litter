@@ -6,7 +6,8 @@ import ShadesCore
 enum BubbleContent: Equatable {
     case thinking(note: String?)
     case listening(String)
-    case reply(text: String, done: Bool, threadID: String?, note: String?)
+    /// `canReplace` offers a finished rewrite in place of what you'd selected.
+    case reply(text: String, done: Bool, threadID: String?, note: String?, canReplace: Bool = false)
     case line(String, threadID: String?)
     case notice(caption: String, text: String, threadID: String?)
     case approval(ApprovalRequest, position: Int, total: Int)
@@ -17,6 +18,7 @@ enum BubbleContent: Equatable {
 enum BubbleAction: Equatable {
     case open(threadID: String)
     case copy(String)
+    case replace(String)
     case approval(ApprovalRequest, ApprovalDecision)
     /// Messages, at what needs you.
     case openMessages

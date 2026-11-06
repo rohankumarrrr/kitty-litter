@@ -97,6 +97,12 @@ A follow-up is a `message.dispatch` command with `dispatchMode {"type":"start_im
 
 Only send `thread.runtime-mode.set` when the mode really changes. For providers that can't switch mode inside a session, it ends the session, and the next turn pays to start a new one.
 
+#### Who a message is from
+
+`message.dispatch` sends `createdBy: "user"`. A launch sends none, and T3 records the user, which we measured on real threads Shades started. Agents using T3's tools show `createdBy: "agent"`.
+
+Kittens rely on this to believe a correction, as [kittens.md](kittens.md#corrections) describes. It has a limit: it stops an agent using T3's tools from speaking as the user, but not a process holding the user's T3 credentials.
+
 ### Following a turn
 
 Subscribe with `{"threadId":…, "afterSequence":…, "acceptBoundedSnapshot":true}`. Sequences are global across threads, so gaps are normal. Without `afterSequence` you get a snapshot first, then live events.

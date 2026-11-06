@@ -33,6 +33,8 @@ public enum ScreenCapture {
         public var pixelSize: CGSize
         /// In screenshot pixels, with the origin at the top left.
         public var focusRegion: CGRect?
+        /// The part of the screen it shows, in AppKit global points.
+        public var area: CGRect
         public var listSeconds: Double
         public var grabSeconds: Double
         public var encodeSeconds: Double
@@ -93,6 +95,7 @@ public enum ScreenCapture {
             jpeg: jpeg,
             pixelSize: CGSize(width: image.width, height: image.height),
             focusRegion: region,
+            area: ScreenGeometry.flipped(display.frame, primaryHeight: primaryHeight),
             listSeconds: seconds(listed - started),
             grabSeconds: seconds(grabbed - listed),
             encodeSeconds: seconds(encoded - grabbed)

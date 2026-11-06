@@ -56,6 +56,13 @@ enum KittenBoard {
         return inFolder == true || title.hasPrefix("\(kitten.name):")
     }
 
+    /// Only a thread in a kitten's own folder keeps its notes, so "Name: ..." or the app project it works in doesn't count.
+    static func isInFolder(_ projectPath: String?, of kitten: Kitten) -> Bool {
+        projectPath.map {
+            URL(fileURLWithPath: $0).standardizedFileURL.path == URL(fileURLWithPath: kitten.folder).standardizedFileURL.path
+        } == true
+    }
+
     /// Who a thread counts as, when more than one could. Carrying a kitten's name beats being in its project.
     static func owner(of thread: AgentThread, among kittens: [Kitten]) -> Kitten? {
         kittens.first { thread.title.hasPrefix("\($0.name):") } ?? kittens.first { belongs(thread, to: $0) }

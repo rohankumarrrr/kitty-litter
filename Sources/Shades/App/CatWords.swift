@@ -14,9 +14,12 @@ enum CatWords {
     static let fullAccessLeavesScreenOut = "Agents with full access don't get your screen, so tell me what's wrong."
     static let needsScreenRecording = "I can't see your screen. Turn on Screen Recording for me in System Settings."
     static let noReply = "Hm, nothing came back. Try again?"
+    static let rewriteCopied = "I couldn't swap it in, so it's copied. Paste it where you want it."
     static let didntCatch = "I didn't catch that."
     static let tellMeWhatsWrong = "I can't see this one, so tell me what's wrong."
     static let cantSeeScreen = "I can't see your screen just now, but ask away."
+    static let overHere = "Over here."
+    static let cantPoint = "I couldn't find it on screen to point at."
     static let approvalFailed = "That answer didn't go through. It's still waiting."
     static let frontDoorNoFolder = "I can't get the folder I answer from ready, so I can't take questions. Choose Check Myself from my menu."
     static let frontDoorNotClaude = "My front door model isn't Claude, so nothing would stop it passing your screen on. Pick a Claude one in my settings."
@@ -28,8 +31,15 @@ enum CatWords {
     static func shortcutTaken(_ label: String) -> String { "Another app has \(label), so use the menu bar for that one." }
 
     static func looking(at snapshot: ScreenSnapshot) -> String? {
-        guard let app = snapshot.appName else { return nil }
+        guard let app = snapshot.droppedName ?? snapshot.appName else { return nil }
         return "Looking at \(app)"
+    }
+
+    static let askAboutDrop = "Ask about it, or just press Return"
+    static let summarize = "Summarize this."
+    static let cantReadThat = "I can only read PDFs, pictures and links."
+    static func cantTakeFiles(_ name: String) -> String {
+        "\(name) can't take files. Put a link or the text in your message instead."
     }
 
     static func fixPlaceholder(talkKey: HoldKey) -> String {
@@ -46,6 +56,14 @@ enum CatWords {
     }
     static func failedCaption(_ thread: AgentThread) -> String { "Hit a snag: \(thread.title)" }
     static func questionCaption(_ question: AgentQuestion) -> String { "Asking: \(question.threadTitle)" }
+    static func notification(_ alert: NeedsYouAlert) -> String {
+        let who = alert.who ?? "An agent"
+        switch alert.kind {
+        case .approval: return "\(who) needs an approval"
+        case .question: return "\(who) has a question"
+        case .decision: return "\(who) needs a decision"
+        }
+    }
     static func kittenState(_ state: KittenStatus.State) -> String {
         switch state {
         case .working(let sessions): return sessions == 1 ? "Working" : "Working on \(sessions) things"
@@ -150,8 +168,14 @@ enum CatWords {
         "\(kitten.name) isn't a T3 project yet. Add \(kitten.workspace) in T3 and try again."
     }
     static let lostTheSession = "I lost track of which session that was for. Try asking again?"
+    static let correctionCaption = "Your correction"
+    static func correctionSent(to name: String) -> String { "\(name) has it." }
+    static let lostTheCorrection = "I spotted a correction, but lost track of whose it was. Mind saying it again?"
+    static let earlierMessageCaption = "An earlier message"
+    static let earlierMessageFailed = "It didn't get through. Mind saying it again?"
     static func sentTo(_ thread: AgentThread) -> String { sentTo(thread.title) }
     static func sentTo(_ title: String) -> String { "Sent that to \(title)." }
+    static let sendTheLink = "It can't see your screen, so send the link or paste the text."
     static func passedOn(to title: String?) -> String {
         title.map { "Work's started in a new session: \($0)." } ?? "Work's started in a new session."
     }

@@ -41,6 +41,15 @@ enum BubbleLayout {
 
 /// Keeps the cat on the screens you actually have.
 enum ScreenBounds {
+    /// Where the cat sits to show you a part of the screen: on top of it, the way it sits on bubbles on
+    /// the site. With no room above, as for a toolbar under the menu bar, it sits underneath instead
+    /// of covering what it means.
+    static func perch(on region: CGRect, size: CGSize, screens: [CGRect]) -> CGPoint {
+        let above = CGPoint(x: region.midX - size.width / 2, y: region.maxY - 3)
+        guard clamp(above, size: size, to: screens).y < above.y else { return above }
+        return CGPoint(x: above.x, y: region.minY - size.height + 3)
+    }
+
     static func clamp(_ origin: CGPoint, size: CGSize, to screens: [CGRect]) -> CGPoint {
         guard !screens.isEmpty else { return origin }
         let rect = CGRect(origin: origin, size: size)

@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import ShadesContext
 import ShadesCore
 
 /// All the windows, behind the `CatStage` the flows talk to.
@@ -53,6 +54,18 @@ final class AppStage: CatStage {
         cat.onClick = { [weak self] in self?.controller?.catClicked() }
         cat.onShiftClick = { [weak self] in self?.controller?.kittensPressed() }
         cat.onStroke = { [weak self] in self?.catPet() }
+        cat.view.registerForDraggedTypes(Drop.types)
+        cat.view.onDrop = { [weak self] pasteboard in
+            guard let drop = Drop(pasteboard) else {
+                self?.controller?.dropped(nil)
+                return false
+            }
+            Task { [weak self] in
+                let snapshot = await Task.detached { drop.snapshot() }.value
+                self?.controller?.dropped(snapshot)
+            }
+            return true
+        }
         cat.onRightClick = { [weak self] event in
             guard let self else { return }
             self.menuBar.popUpMenu(at: event.locationInWindow, in: self.cat.view)
@@ -135,9 +148,8 @@ final class AppStage: CatStage {
     }
 
     func catRun(toRegion region: CGRect, arrived: @escaping () -> Void) {
-        // Perches on top of it, the way it sits on bubbles on the site.
-        let spot = CGPoint(x: region.midX - CGFloat(CatArt.points) / 2, y: region.maxY - 3)
-        cat.run(to: spot, arrived: arrived)
+        let size = CGSize(width: CatArt.points, height: CatArt.points)
+        cat.run(to: ScreenBounds.perch(on: region, size: size, screens: NSScreen.screens.map(\.visibleFrame)), arrived: arrived)
         input.reposition()
         bubble.reposition()
     }

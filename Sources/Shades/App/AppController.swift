@@ -34,8 +34,12 @@ final class AppController {
     let reportHealth: ([HealthFinding]) -> Void
     let saveInbox: (Inbox) throws -> Void
     let hidesTestThreads: Bool
+    let notify: (NeedsYouAlert) -> Void
+    let withdrawNotifications: ([String]) -> Void
+    let clearNotifications: () -> Void
     let stage: CatStage
     let now: () -> Date
+    let launchedAt: Date
     let channels: ChannelFeed
     private(set) var settings: Settings
 
@@ -53,6 +57,10 @@ final class AppController {
         var done = false
         var threadID: String?
         var note: String?
+        /// What a finished rewrite would go in place of: the selection as it was read, and its app.
+        var replacing: (text: String, bundleID: String?)?
+        /// Where the answer points, which the cat sits by for as long as the answer's up.
+        var pointingAt: CGRect?
     }
     /// Something an agent has to tell you, which stays until you've had a chance to read it.
     struct Notice {
@@ -62,6 +70,11 @@ final class AppController {
         var threadID: String?
         /// Set for a question, which goes away by itself once it's answered.
         var questionID: String?
+        /// For a screen warning on work handed to a thread that had already finished a run, that run, which isn't the work.
+        var after: String?
+        /// A follow-up's warning. The list only names the run a thread last finished, so it can't say which run is
+        /// carrying your words, and only the send's own turn failing takes the warning back.
+        var followUp = false
     }
     struct Line {
         var text: String
@@ -72,13 +85,19 @@ final class AppController {
     var approvalsOnShow = false
     var approvalsHidden = false
     var catIsAway = false
-    var reply: Reply?
+    var reply: Reply? {
+        didSet {
+            if reply?.pointingAt != oldValue?.pointingAt { catFollowsReply() }
+        }
+    }
     var line: Line?
     var notices: [Notice] = []
     /// Threads that are the cat's own plumbing, like writing a summary.
     var hiddenThreads: Set<String> = []
     /// Threads the cat started to do real work, which may pass it on to another thread.
     var dispatchers: Set<String> = []
+    /// Corrections still on their way to a session, so one that fails can only take back a mark none of the others earned.
+    var correctionSends = CorrectionSends()
     var inbox: Inbox
     /// Threads whose report is being read and sorted, so each is only filed once.
     var filing: Set<String> = []
@@ -111,19 +130,23 @@ final class AppController {
     var messagesThreads: [String: Date] = [:]
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
+    /// Everything that's had a notification since the app started, so an answer that didn't go through can't bring a second.
+    var notified: Set<String> = []
+    /// Those that haven't been taken back.
+    var showing: Set<String> = []
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
     /// Waiting a little before saying it's finished means that doesn't read as done.
     var reportDelay: TimeInterval = 5
     /// How long a question waits for the first list of sessions, so one asked right after launch can still be routed.
     var threadListWait: TimeInterval = 2
-    /// The sessions the router was shown for the question it's on, in the order it saw them.
-    var roster: [AgentThread] = []
-    /// The kittens it was shown, in the same way.
-    var kittens: [Kitten] = []
     /// Whether the quick thread is on its first turn, with no conversation worth keeping yet.
     var quickIsFresh = false
     var lineCounter = 0
     var replyGeneration = 0
+    /// Only goes up when you ask something, unlike `replyGeneration`, which closing a reply moves on too.
+    var questionsAsked = 0
+    /// Generations cancelled with Esc before the reply finished. Being overtaken isn't taking something back.
+    var takenBack: Set<Int> = []
 
     enum VoiceMode {
         case talk, dictate
@@ -135,6 +158,7 @@ final class AppController {
     var openingAsk = false
     var picking = false
     var fixIsOpen = false
+    var dropIsOpen = false
     var fetchingEarsSince: Date?
     var fetchingEarsLine = false
 
@@ -167,8 +191,12 @@ final class AppController {
         inbox = dependencies.inbox
         saveInbox = dependencies.saveInbox
         hidesTestThreads = dependencies.hidesTestThreads
+        notify = dependencies.notify
+        withdrawNotifications = dependencies.withdrawNotifications
+        clearNotifications = dependencies.clearNotifications
         self.stage = stage
         self.now = now
+        launchedAt = now()
         channels = ChannelFeed(backend: dependencies.backend, kittens: dependencies.kittens)
         channels.onChange = { [weak self] in self?.stage.updateChannels($0) }
         channels.waiting = { [weak self] in self?.waiting ?? Waiting() }
@@ -206,6 +234,8 @@ final class AppController {
         }
         startKeys()
         startInbox()
+        // Anything from before may have been answered since, and the cat says again whatever's still waiting.
+        clearNotifications()
     }
 
     func startKeys() {
@@ -240,6 +270,8 @@ final class AppController {
             backend.open(threadID: threadID)
         case .copy(let text):
             stage.copyToPasteboard(text)
+        case .replace(let text):
+            replaceSelection(with: text)
         case .approval(let request, let decision):
             answer(request, decision)
         case .openMessages:
@@ -265,8 +297,10 @@ final class AppController {
         case .thinking:
             guard !byClick else { return }
             reply = nil
+            takenBack.insert(replyGeneration)
             replyGeneration += 1
         case .reply:
+            if !byClick && reply?.done == false { takenBack.insert(replyGeneration) }
             reply = nil
             replyGeneration += 1
         case .line:
@@ -286,7 +320,7 @@ final class AppController {
         }
         if let reply {
             if reply.text.isEmpty { return .thinking(note: reply.note) }
-            return .reply(text: reply.text, done: reply.done, threadID: reply.threadID, note: reply.note)
+            return .reply(text: reply.text, done: reply.done, threadID: reply.threadID, note: reply.note, canReplace: reply.replacing != nil)
         }
         if let line { return .line(line.text, threadID: line.threadID) }
         if let notice = notices.first {

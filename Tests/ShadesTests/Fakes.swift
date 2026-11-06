@@ -133,10 +133,24 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     var replies: [[AgentReplyEvent]] = []
     /// The router's reply to a question, whatever order things start in.
     var routerSays: [String: String] = [:]
+    /// Chooses by what was sent, for turns that overlap. Falls back on `replies`.
+    var replyTo: ((AgentPrompt) -> [AgentReplyEvent]?)?
+    /// Holds a reply open partway, until this ends, then plays `afterHeld`.
+    var held: Task<Void, Never>?
+    var afterHeld: [AgentReplyEvent] = []
+    /// Holds back `.started` until this ends, the way a real follow-up does while it uploads the screenshot.
+    var heldBeforeStarted: Task<Void, Never>?
+    /// A follow-up that fails only once this ends, as a thread that's gone does after the upload.
+    var failFollowUpsAfter: Task<Void, Never>?
+    /// Holds back finding a kitten's project, the way a real lookup takes a trip to T3. Kittens' folders are all
+    /// in /k, and the router's own lookup isn't held, since the router has to run first.
+    var heldProject: Task<Void, Never>?
     var reports: [String: String] = [:]
     var projects: [String: String] = [:]
-    var settled: [String] = []
-    var archived: [String] = []
+    private var _settled: [String] = []
+    private var _archived: [String] = []
+    var settled: [String] { lock.withLock { _settled } }
+    var archived: [String] { lock.withLock { _archived } }
     var failFollowUps = false
     var failResponses = false
     var origins: [String: ThreadOrigin] = [:]
@@ -147,6 +161,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     var whileFindingAProject: (() async -> Void)?
     var connectError: Error?
     var streamError: Error?
+    var forwardError: Error?
     var droppedAfterReply: Error?
     var runReports: [String: String] = [:]
     var silentRuns: Set<String> = []
@@ -172,6 +187,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
             return count
         }
         if holdStarts { return AsyncThrowingStream { $0.yield(.started(threadID: "thread-\(id)")) } }
+        if let holdTurn, prompt.text.hasPrefix(holdTurn) { return heldTurn(threadID: "thread-\(id)") }
         return play(threadID: "thread-\(id)", prompt: prompt)
     }
 
@@ -180,18 +196,41 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         if failFollowUps {
             return AsyncThrowingStream { $0.finish(throwing: URLError(.badServerResponse)) }
         }
+        if let failFollowUpsAfter {
+            return AsyncThrowingStream { continuation in
+                Task {
+                    await failFollowUpsAfter.value
+                    continuation.finish(throwing: URLError(.badServerResponse))
+                }
+            }
+        }
         return play(threadID: threadID, prompt: prompt)
     }
 
     /// The router's turn for this question starts, then waits for `releaseHeld()`.
     var holdQuestion: String?
-    private var held: [() -> Void] = []
+    /// A new thread's first turn, or a follow-up, whose text starts with this starts, then waits for `releaseHeld()`.
+    var holdTurn: String?
+    private var heldTurns: [() -> Void] = []
     func releaseHeld() {
         let waiting = lock.withLock { () -> [() -> Void] in
-            defer { held = [] }
-            return held
+            defer { heldTurns = [] }
+            return heldTurns
         }
         waiting.forEach { $0() }
+    }
+
+    private func heldTurn(threadID: String) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        let events = lock.withLock { replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst() }
+        return AsyncThrowingStream { continuation in
+            continuation.yield(.started(threadID: threadID))
+            lock.withLock {
+                heldTurns.append {
+                    events.forEach { continuation.yield($0) }
+                    continuation.finish()
+                }
+            }
+        }
     }
 
     /// What Messages reads: every thread, and what was said in each.
@@ -200,17 +239,15 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     func allThreads() async -> [AgentThread]? { listed }
     func exchanges(threadID: String) async -> [Exchange]? { said[threadID] }
 
-    private func play(threadID: String, prompt: AgentPrompt? = nil) -> AsyncThrowingStream<AgentReplyEvent, Error> {
-        let routed = prompt.flatMap { prompt in routerSays.first { prompt.text.contains("Their question: \($0.key)") }?.value }
-        let events = lock.withLock {
-            if let routed { return [AgentReplyEvent.finished(fullText: routed)] }
-            return replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst()
-        }
-        if let holdQuestion, prompt?.text.contains("Their question: \(holdQuestion)") == true {
+    private func play(threadID: String, prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        let routed = routerSays.first { prompt.text.contains("Their question: \($0.key)") }?.value
+        let chosen = routed.map { [AgentReplyEvent.finished(fullText: $0)] } ?? replyTo?(prompt)
+        let events = chosen ?? lock.withLock { replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst() }
+        if let holdQuestion, prompt.text.contains("Their question: \(holdQuestion)") {
             return AsyncThrowingStream { continuation in
                 continuation.yield(.started(threadID: threadID))
                 lock.withLock {
-                    held.append {
+                    heldTurns.append {
                         events.forEach { continuation.yield($0) }
                         continuation.finish()
                     }
@@ -219,21 +256,49 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         }
         let error = streamError
         let dropped = droppedAfterReply
+        let held = self.held
+        let afterHeld = self.afterHeld
+        let heldBeforeStarted = self.heldBeforeStarted
         return AsyncThrowingStream { continuation in
             if let error {
                 continuation.finish(throwing: error)
                 return
             }
+            if let heldBeforeStarted {
+                Task {
+                    await heldBeforeStarted.value
+                    continuation.yield(.started(threadID: threadID))
+                    events.forEach { continuation.yield($0) }
+                    if let held {
+                        await held.value
+                        afterHeld.forEach { continuation.yield($0) }
+                    }
+                    continuation.finish()
+                }
+                return
+            }
             continuation.yield(.started(threadID: threadID))
             events.forEach { continuation.yield($0) }
-            continuation.finish(throwing: dropped)
+            guard let held else {
+                continuation.finish(throwing: dropped)
+                return
+            }
+            Task {
+                await held.value
+                afterHeld.forEach { continuation.yield($0) }
+                continuation.finish(throwing: dropped)
+            }
         }
     }
 
     func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        if let forwardError {
+            return AsyncThrowingStream { $0.finish(throwing: forwardError) }
+        }
         let prompt = AgentPrompt(text: text, attachments: attachments, model: .quick, runtimeMode: .auto)
         lock.withLock { _sent.append(Sent(mode: .forward, threadID: threadID, prompt: prompt)) }
-        return play(threadID: threadID)
+        if let holdTurn, text.hasPrefix(holdTurn) { return heldTurn(threadID: threadID) }
+        return play(threadID: threadID, prompt: prompt)
     }
 
     func watchThreads() -> AsyncStream<[AgentThread]> {
@@ -253,36 +318,48 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         lock.withLock { _answers.append((question.id, answers)) }
     }
 
+    // These run off the main actor, and more than one at once when turns overlap, so what they share is locked.
     func projectID(atPath path: String) async -> String? {
-        let happening = whileFindingAProject
-        whileFindingAProject = nil
+        let happening = lock.withLock { () -> (() async -> Void)? in
+            defer { whileFindingAProject = nil }
+            return whileFindingAProject
+        }
         await happening?()
-        return projects[path]
+        if let held = lock.withLock({ heldProject }), path.hasPrefix("/k/") { await held.value }
+        return lock.withLock { projects[path] }
     }
 
     func addProject(atPath path: String, title: String) async throws -> String {
         if let addProjectError { throw addProjectError }
-        addedProjects.append(path)
-        projects[path] = "project-router"
+        lock.withLock {
+            addedProjects.append(path)
+            projects[path] = "project-router"
+        }
         return "project-router"
     }
 
     func archive(threadID: String) async throws {
-        archived.append(threadID)
+        lock.withLock { _archived.append(threadID) }
     }
 
     func settle(threadID: String) async throws {
-        settled.append(threadID)
+        lock.withLock { _settled.append(threadID) }
     }
 
     func report(threadID: String, run: String?) async throws -> String? {
-        let happening = whileReadingAReport
-        whileReadingAReport = nil
+        let happening = lock.withLock { () -> (() async -> Void)? in
+            defer { whileReadingAReport = nil }
+            return whileReadingAReport
+        }
         await happening?()
-        if readFails { throw URLError(.networkConnectionLost) }
-        if let run, silentRuns.contains(run) { return nil }
-        if let run, let said = runReports[run] { return said }
-        return reports[threadID]
+        let found = lock.withLock { () -> (fails: Bool, report: String?) in
+            if readFails { return (true, nil) }
+            if let run, silentRuns.contains(run) { return (false, nil) }
+            if let run, let said = runReports[run] { return (false, said) }
+            return (false, reports[threadID])
+        }
+        if found.fails { throw URLError(.networkConnectionLost) }
+        return found.report
     }
 
     func origin(of threadID: String) async -> ThreadOrigin? {
@@ -354,7 +431,13 @@ final class FakeVoice: VoiceEngine {
 
 final class FakeInserter: TextInserting {
     var inserted: [String] = []
+    var replaced: [(original: String, bundleID: String?, text: String)] = []
+    var replaces = true
     func insert(_ text: String) async throws { inserted.append(text) }
+    func replaceSelection(_ original: String, in bundleID: String?, with text: String) async -> Bool {
+        replaced.append((original, bundleID, text))
+        return replaces
+    }
 }
 
 final class FakeKeys: KeyHoldMonitoring {
