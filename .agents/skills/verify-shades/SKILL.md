@@ -40,6 +40,7 @@ Find the feature in [features/README.md](features/README.md), run its journey fr
 - `draw <folder>` has each window that's showing draw itself to `<folder>/<name>.png`, and prints `drew <name> <path>`. `input` is the Ask box and `channels` is Messages.
 - `windows` prints each window's frame, whether it's showing and whether it has the keyboard, then the cat's state and `active=`.
 - `front` prints the app in front.
+- `record <file.gif> <window>...` records those windows, or `phone`, as a looping GIF until `record stop`, and keeps each frame as a picture in `.verify/shades/record/<name>/`. See [Recordings](#recordings).
 - The rest, such as `ask`, `channels`, `channel`, `send`, `report`, `inbox`, `approval` and `allow`, are listed by `help` and defined in `handle` in `Sources/Shades/Demo/DemoDriver.swift`. Each calls the same controller method as the button it stands for.
 
 ## Evidence
@@ -51,6 +52,18 @@ A proof has three parts, and goes on the pull request as the command, the output
 - The `front` and `windows` lines at the end, with your own app still in front.
 
 Drive the path a person takes, which is what the demo commands do. The demo's T3 is fake and every kitten's folder looks the same to it, so it can't show which folder a thread started in. Where that matters, such as your screen staying away from a kitten, use the `verify-screen-boundary` skill. To try a flow against real agents, use `--ask`, `--hand-off` or `--fix` with `--image`, as `Sources/Shades/App/DevFlags.swift` describes. Those talk to real T3, so name test threads `Shades test: ...` and archive them afterwards.
+
+## Recordings
+
+The README's GIFs are recorded the same way, with no screen capture. Each frame is the chosen windows drawing themselves, laid where they are on the screen over a drawn stand-in for the demo's pricing page, or over a plain ground when the cat isn't in it. The phone's page draws itself in its web view. Remake one with its journey, which writes `docs/images/<name>.gif`:
+
+```bash
+swift run shades --demo --no-script --commands .agents/skills/verify-shades/journeys/record/<name>.txt
+```
+
+There's one journey for each of `ask`, `point`, `drop`, `talk`, `approval`, `kittens`, `messages` and `phone`. The output ends `recorded docs/images/<name>.gif <frames> frames <size> KB`. Read a few of the pictures in `.verify/shades/record/<name>/` before keeping one, the last especially, since it's the frame the GIF holds before it loops.
+
+While it records, clicks and typing elsewhere don't close the bubble, the Ask box or the kittens view, and the cat comes to a fixed spot instead of the real pointer. Otherwise the person using the Mac would close or move what's being recorded. Message rows can still show their hover buttons if the real pointer is over Messages.
 
 ## Cleanup
 

@@ -1,0 +1,11 @@
+theme light
+wait 1
+record docs/images/point.gif cat bubble input
+wait 0.5
+ask
+wait 1
+type Where do I start a free trial?
+wait 2.5
+submit Where do I start a free trial?
+wait 6
+record stop

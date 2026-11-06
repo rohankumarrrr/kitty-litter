@@ -144,7 +144,7 @@ final class BubbleController {
         guard clickMonitor == nil else { return }
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self else { return }
+                guard let self, !ClickAway.isPaused else { return }
                 var grace = Self.clickAwayGrace
                 switch self.content {
                 case .notice, .inbox: grace = Self.noticeClickAwayGrace

@@ -1,0 +1,11 @@
+theme light
+wait 1
+record docs/images/drop.gif cat bubble input
+wait 0.5
+drop pdf
+wait 1.5
+type Summarize this
+wait 2
+submit Summarize this
+wait 5
+record stop

@@ -143,8 +143,12 @@ final class AppStage: CatStage {
         catSay(cat.pet())
     }
 
+    /// Where you are, for the cat to come to. The demo fixes it while it records, so a recording doesn't depend on the
+    /// real pointer.
+    var pointer: () -> CGPoint = { NSEvent.mouseLocation }
+
     func catComeToYou(arrived: @escaping () -> Void) {
-        let mouse = NSEvent.mouseLocation
+        let mouse = pointer()
         // Beside the pointer rather than under it, so it isn't in your way.
         let spot = CGPoint(x: mouse.x + 28, y: mouse.y - CGFloat(CatArt.points) - 12)
         let close = hypot(spot.x - cat.frame.minX, spot.y - cat.frame.minY) < 120

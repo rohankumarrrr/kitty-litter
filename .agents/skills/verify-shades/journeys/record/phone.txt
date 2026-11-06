@@ -1,0 +1,21 @@
+theme light
+wait 1
+phone on
+wait 3
+phone pair
+wait 1
+phone open
+wait 4
+record docs/images/phone.gif phone
+wait 1.5
+approval command npm run build && npm test
+wait 2
+phone go needs
+wait 3
+phone press Allow
+wait 2.5
+phone go everyone
+wait 3
+phone send Hello from my phone
+wait 4
+record stop
