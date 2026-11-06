@@ -36,6 +36,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         let id = nextID()
+        print("[demo] started \(id) with \(prompt.attachments.count) attachments: \(Self.oneLine(prompt.text))")
         if prompt.text.contains("<report>") {
             let reply = sortedReplies.first { prompt.text.contains("Task: \($0.key)") }?.value ?? ""
             return AsyncThrowingStream { continuation in
@@ -51,11 +52,12 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     }
 
     func followUp(threadID: String, _ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
-        quickTurn(threadID: threadID, prompt: prompt)
+        print("[demo] carried on in \(threadID) with \(prompt.attachments.count) attachments: \(Self.oneLine(prompt.text))")
+        return quickTurn(threadID: threadID, prompt: prompt)
     }
 
     func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
-        print("[demo] forwarded to \(threadID): \(text.prefix(60))")
+        print("[demo] forwarded to \(threadID) with \(attachments.count) attachments: \(Self.oneLine(text))")
         update { threads in
             guard let index = threads.firstIndex(where: { $0.id == threadID }) else { return }
             threads[index].status = .running
@@ -175,6 +177,10 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         thread.lastRunID = UUID().uuidString
         thread.lastRunEndedAt = thread.updatedAt
         thread.pendingQuestion = nil
+    }
+
+    private static func oneLine(_ text: String) -> String {
+        String(text.split(whereSeparator: \.isNewline).joined(separator: " / ").prefix(90))
     }
 
     private func nextID() -> String {

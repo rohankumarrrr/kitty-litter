@@ -16,12 +16,17 @@ import ShadesT3
 ///     shades --channels                     # opens Messages at launch, with --demo or for real
 ///     shades --demo --channels-image out    # draws it to PNGs from canned data, then quits
 ///     shades --channels-check               # reads real T3 once, prints only counts, then signs out
+///
+/// And for driving the demo from a file of its commands, one a line, such as `wait 2` or `draw out`:
+///
+///     shades --demo --no-script --commands steps.txt
 @MainActor
 enum DevFlags {
     static var wantsFlow: Bool { ["--ask", "--hand-off", "--fix"].contains { value(after: $0) != nil } }
     static var wantsChannels: Bool { CommandLine.arguments.contains("--channels") }
     static var wantsChannelsCheck: Bool { CommandLine.arguments.contains("--channels-check") }
     static var channelsImageFolder: String? { value(after: "--channels-image") }
+    static var commandsFile: String? { value(after: "--commands") }
 
     static func run(on controller: AppController) {
         if let question = value(after: "--ask") {
