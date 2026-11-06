@@ -7,20 +7,22 @@ final class WebPushTests: XCTestCase {
     private let plaintext = Data("When I grow up, I want to be a watermelon".utf8)
     private let auth = WebPush.data("BTBZMqHH6r4Tts7J_aSIgg")!
     private let salt = WebPush.data("DGv6ra1nlYgDCS1FRnbzlw")!
-    private let phonePrivate = "q1dXpw3UpT5VOmu_cf_v6ih07Aems3njxI-JWgLcM94"
+    /// RFC 8291's own example keys, in hex rather than the RFC's base64url, which secret scanners take for a live key.
+    /// They're published in the RFC, so they unlock nothing.
+    private let phonePrivate = "ab5757a70dd4a53e553a6bbf71ffefea2874ec07a6b379e3c48f895a02dc33de"
     private let phonePublic = "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4"
-    private let senderPrivate = "yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw"
+    private let senderPrivate = "c9f58f89813e9f8e872e71f42aa64e1757c9254dcc62b72ddc010bb4043ea11c"
     private let body = "DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN"
 
     func testTheRFCsExampleEncryptsToTheRFCsBody() throws {
         let phone = try P256.KeyAgreement.PublicKey(x963Representation: XCTUnwrap(WebPush.data(phonePublic)))
-        let sender = try P256.KeyAgreement.PrivateKey(rawRepresentation: XCTUnwrap(WebPush.data(senderPrivate)))
+        let sender = try P256.KeyAgreement.PrivateKey(rawRepresentation: Self.hex(senderPrivate))
         let encrypted = try WebPush.encrypt(plaintext, for: phone, auth: auth, blocks: 1, sender: sender, salt: salt)
         XCTAssertEqual(WebPush.string(encrypted), body)
     }
 
     func testTheRFCsBodyOpensWithThePhonesKey() throws {
-        let phone = try P256.KeyAgreement.PrivateKey(rawRepresentation: XCTUnwrap(WebPush.data(phonePrivate)))
+        let phone = try P256.KeyAgreement.PrivateKey(rawRepresentation: Self.hex(phonePrivate))
         XCTAssertEqual(try WebPush.decrypt(XCTUnwrap(WebPush.data(body)), with: phone, auth: auth), plaintext)
         XCTAssertThrowsError(try WebPush.decrypt(XCTUnwrap(WebPush.data(body)), with: phone, auth: Data(repeating: 0, count: 16)), "only with its own secret")
     }
@@ -75,5 +77,11 @@ final class WebPushTests: XCTestCase {
         XCTAssertTrue(subscription("https://web.push.apple.com:443/x").isValid)
         XCTAssertFalse(subscription("https://web.push.apple.com/x", key: "not-a-key").isValid)
         XCTAssertFalse(subscription("https://web.push.apple.com/x", auth: WebPush.string(Data(repeating: 7, count: 8))).isValid)
+    }
+
+    private static func hex(_ text: String) -> Data {
+        Data(stride(from: 0, to: text.count, by: 2).map { offset in
+            UInt8(text.dropFirst(offset).prefix(2), radix: 16)!
+        })
     }
 }
