@@ -68,7 +68,7 @@ final class Hotkeys {
 enum Shortcut {
     static let ask = (keyCode: kVK_Space, modifiers: optionKey)
     static let fix = (keyCode: kVK_ANSI_F, modifiers: controlKey | optionKey)
-    /// ⌃⌘ like the shortcuts people often give their apps. M is often Messages, and K is often Lock Screen.
+    /// ⌃⌘ like the shortcuts people often give their apps, on a letter they rarely take. M is often Messages.
     static let messages = (keyCode: kVK_ANSI_B, modifiers: controlKey | cmdKey)
     static let askLabel = "⌥Space"
     static let fixLabel = "⌃⌥F"
