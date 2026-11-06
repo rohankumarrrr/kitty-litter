@@ -146,7 +146,9 @@ enum PhonePage {
         };
 
         let key = new URLSearchParams(location.search).get('key') || 'home';
-        let source = null;
+        // Kept for this address and port only, and sent only by this page. A cookie would go to every port on the name.
+        let pass = localStorage.getItem('shades.key');
+        let stream = null;
         let view = null;
         let retry = null;
         const expanded = new Set();
@@ -164,11 +166,15 @@ enum PhonePage {
           $('banner').hidden = !text;
         }
 
+        function headers(extra) {
+          return Object.assign({ Authorization: 'Bearer ' + pass }, extra);
+        }
+
         async function post(path, body) {
           try {
             return await fetch(path, {
-              method: 'POST', credentials: 'same-origin', cache: 'no-store',
-              headers: { 'Content-Type': 'application/json', 'X-Shades': '1' },
+              method: 'POST', cache: 'no-store',
+              headers: headers({ 'Content-Type': 'application/json', 'X-Shades': '1' }),
               body: JSON.stringify(body),
             });
           } catch (error) {
@@ -191,17 +197,21 @@ enum PhonePage {
             history.replaceState(history.state, '', location.pathname + location.search);
             if (!(await pair(code))) return;
           }
+          if (!pass) return pairing();
           let hello = null;
-          try { hello = await fetch('/hello', { credentials: 'same-origin', cache: 'no-store' }); } catch (error) {}
+          try { hello = await fetch('/hello', { headers: headers(), cache: 'no-store' }); } catch (error) {}
           if (hello && hello.status === 401) return pairing();
           if (!hello || !hello.ok) { banner(words.unreachable); retry = setTimeout(start, 5000); return; }
           $('pair').hidden = true;
+          for (const id of ['top', 'rows']) $(id).hidden = false;
           listen();
         }
 
         function pairing() {
-          if (source) source.close();
-          source = null;
+          if (stream) stream.abort();
+          stream = null;
+          pass = null;
+          localStorage.removeItem('shades.key');
           for (const id of ['top', 'rows', 'box', 'banner']) $(id).hidden = true;
           $('pair').hidden = false;
         }
@@ -209,8 +219,9 @@ enum PhonePage {
         async function pair(code) {
           const response = await post('/pair', { code });
           if (response && response.ok) {
+            pass = (await response.json()).key;
+            localStorage.setItem('shades.key', pass);
             $('pairnote').textContent = '';
-            for (const id of ['top', 'rows']) $(id).hidden = false;
             return true;
           }
           pairing();
@@ -218,15 +229,34 @@ enum PhonePage {
           return false;
         }
 
-        function listen() {
-          if (source) source.close();
-          source = new EventSource('/events?key=' + encodeURIComponent(key));
-          source.onmessage = (event) => { banner(''); show(JSON.parse(event.data)); };
-          source.onerror = () => {
-            banner(words.unreachable);
-            // A refusal closes it for good, and only a fresh look says whether this phone is still paired.
-            if (source.readyState === EventSource.CLOSED) retry = setTimeout(start, 3000);
-          };
+        // Server-sent events, read by hand, since EventSource can't send the key.
+        async function listen() {
+          if (stream) stream.abort();
+          const mine = new AbortController();
+          stream = mine;
+          try {
+            const response = await fetch('/events?key=' + encodeURIComponent(key), { headers: headers(), cache: 'no-store', signal: mine.signal });
+            if (response.status === 401) return pairing();
+            if (!response.ok || !response.body) throw new Error(String(response.status));
+            const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+            let buffer = '';
+            for (;;) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buffer += value;
+              let end;
+              while ((end = buffer.indexOf('\n\n')) >= 0) {
+                const event = buffer.slice(0, end);
+                buffer = buffer.slice(end + 2);
+                for (const line of event.split('\n')) {
+                  if (line.startsWith('data: ')) { banner(''); show(JSON.parse(line.slice(6))); }
+                }
+              }
+            }
+          } catch (error) {}
+          if (mine.signal.aborted || stream !== mine) return;
+          banner(words.unreachable);
+          retry = setTimeout(start, 3000);
         }
 
         function go(next, push = true) {

@@ -27,24 +27,6 @@ final class DemoPhone {
         view.load(URLRequest(url: url))
     }
 
-    /// Pairs the way the page does, with the code that's showing. A browser keeps the server's cookie only over HTTPS,
-    /// which a phone has and the demo doesn't, so the web view is handed the same token as a plain cookie.
-    func pair(at address: URL, code: String) async -> Bool {
-        var request = URLRequest(url: address.appendingPathComponent("pair"))
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("1", forHTTPHeaderField: "X-Shades")
-        request.httpBody = Data("{\"code\":\(Self.quoted(code))}".utf8)
-        guard let (_, response) = try? await URLSession(configuration: .ephemeral).data(for: request),
-              let set = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Set-Cookie"),
-              let token = set.split(separator: ";").first?.split(separator: "=", maxSplits: 1).last,
-              let host = address.host,
-              let cookie = HTTPCookie(properties: [.name: PhoneDoor.cookie, .value: String(token), .domain: host, .path: "/"])
-        else { return false }
-        await view.configuration.websiteDataStore.httpCookieStore.setCookie(cookie)
-        return true
-    }
-
     /// Runs a line of the page's own script and says what came back. The async form can't come back with nothing.
     func run(_ script: String) async -> String {
         await withCheckedContinuation { continuation in

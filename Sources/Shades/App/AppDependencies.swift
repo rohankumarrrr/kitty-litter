@@ -38,9 +38,8 @@ struct AppDependencies {
     var clearNotifications: () -> Void = {}
     /// Where the hashes of paired phones' tokens are kept.
     var phoneKeys: PhoneKeyStoring = MemoryPhoneKeys()
-    /// Where the phone page listens on loopback. 0 is any free port.
-    var phonePort: UInt16 = 0
-    /// Puts the phone page on your tailnet, and returns the address to open.
-    var servePhone: (UInt16) async throws -> String = { _ in throw Tailscale.Problem(errorDescription: "Tailscale isn't set up here.") }
-    var stopServingPhone: (UInt16) async -> Void = { _ in }
+    /// Puts the phone page, on this loopback port, on your tailnet, and returns the address to open.
+    var servePhone: (UInt16) async throws -> String = { _ in throw TailscaleServe.Problem(errorDescription: "Tailscale isn't set up here.") }
+    /// Takes it off your tailnet.
+    var stopServingPhone: () async -> Void = {}
 }

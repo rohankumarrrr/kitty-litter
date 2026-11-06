@@ -31,7 +31,21 @@ struct PhonePlace: Equatable {
         }
         // A new topic carries on in its own thread once T3 has one.
         if case .thread(let id, let channel) = selection, let started = book.started[id] { selection = .thread(started, in: channel) }
+        // T3 lists every thread, and the window's own rules would let you write in any of them. What keeps it to the
+        // ones it shows is that it only leads to those, so a phone gets only those too.
+        if case .thread(let id, let channel) = selection, !Self.leadsTo(id, from: channel, in: book) {
+            self.init(selection: .channel(channel), target: nil, key: Self.key(.channel(channel)))
+            return
+        }
         self.init(selection: selection, in: book)
+    }
+
+    /// Whether anything the window shows for this channel opens this thread: what's been said in it, the kitten's
+    /// list of what it's on and what it's done, or Shades' own work in Everyone.
+    private static func leadsTo(_ id: String, from channel: ChannelID, in book: ChannelBook) -> Bool {
+        book.channel(channel)?.messages.contains { $0.threadID == id || ($0.threadID.isEmpty && $0.exchangeID == id) } == true
+            || book.issues.contains { channel == .direct($0.kitten) && ($0.threads + $0.done).contains { $0.id == id } }
+            || (channel == .everyone && book.waiting.shadesWork.contains { $0.id == id })
     }
 
     init(selection: ChannelSelection?, in book: ChannelBook) {

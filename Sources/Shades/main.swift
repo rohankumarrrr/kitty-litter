@@ -33,6 +33,7 @@ MainActor.assumeIsolated {
         let notifications = DevFlags.wantsFlow ? nil : NeedsYouNotifications()
         var settings = Settings.load()
         if DevFlags.wantsFlow { settings.phone = false }
+        let tailscale = DevFlags.wantsFlow ? nil : TailscaleServe(port: PhoneLink.port)
         let real = AppController(
             dependencies: AppDependencies(
                 backend: backend,
@@ -64,9 +65,11 @@ MainActor.assumeIsolated {
                 clearNotifications: { notifications?.clear() },
                 // A copy trying a flow out stays off your phone, and out of the real app's way.
                 phoneKeys: DevFlags.wantsFlow ? MemoryPhoneKeys() : KeychainPhoneKeys(),
-                phonePort: DevFlags.wantsFlow ? 0 : PhoneLink.port,
-                servePhone: { try await Tailscale.serve($0) },
-                stopServingPhone: { await Tailscale.stopServing($0) }
+                servePhone: { port in
+                    guard let tailscale else { throw TailscaleServe.Problem(errorDescription: "A copy trying a flow out stays off your tailnet.") }
+                    return try await tailscale.serve(to: port)
+                },
+                stopServingPhone: { await tailscale?.stop() }
             ),
             stage: stage
         )

@@ -493,7 +493,7 @@ enum Demo {
             withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") },
             // The page stays on loopback, on a free port, so it's never on your tailnet or in the real app's way.
             servePhone: { "http://127.0.0.1:\($0)" },
-            stopServingPhone: { print("[demo] phone page off \($0)") }
+            stopServingPhone: { print("[demo] phone page off") }
         )
         return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys)
     }

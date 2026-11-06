@@ -86,7 +86,7 @@ One answer is one message. A kitten's narration on the way to its answer shows a
 
 #### On your phone
 
-Turn on **Messages on my phone, over Tailscale** in Settings, and Messages is in your phone's browser too: Needs you, Everyone, Done, each DM and each thread on its own, with the same buttons. It needs Tailscale on your Mac and your phone, and your Mac awake with Shades running, the same as T3 Code on your phone. Shades serves the page itself on `127.0.0.1:4797`, and Tailscale Serve puts it on your tailnet over HTTPS on the same port, with a certificate for your Mac's tailnet name. Add it to your Home Screen to open it like an app. When it can't reach your Mac, the page says so, and it picks up again by itself.
+Turn on **Messages on my phone, over Tailscale** in Settings, and Messages is in your phone's browser too: Needs you, Everyone, Done, each DM and each thread on its own, with the same buttons. It needs Tailscale on your Mac and your phone, and your Mac awake with Shades running, the same as T3 Code on your phone. Shades serves the page itself on a free port on `127.0.0.1`, and Tailscale Serve puts it on your tailnet over HTTPS on port 4797, with a certificate for your Mac's tailnet name. If you'd like it on your Home Screen, add it there before you pair, since a Home Screen app keeps its own storage apart from Safari's. When it can't reach your Mac, the page says so, and it picks up again by itself.
 
 Turning it on shows a code and a picture of it. Scan the picture with your phone's camera, or open the address it gives and type the code. A code works once, for ten minutes, and five wrong tries use it up. **Pair a phone...** in the cat's menu shows a new one. Turning the switch off takes the page off your tailnet and unpairs every phone.
 
@@ -95,12 +95,12 @@ The page draws what the Mac sends, which is what Messages shows for the place yo
 **Who can use it.** What the page sends reaches T3 as your own words, the way kittens tell your "ship it" apart from anyone else's. Anything on your Mac can reach `127.0.0.1`, kittens' shells included, and can send Tailscale's `Tailscale-User-Login` header too, so that header counts for nothing. The only way past the page is a paired phone's key:
 
 - The code is only ever in that window, which is left out of every capture, Shades' own and other apps', like Messages.
-- Pairing gives the phone a random key in a cookie that's only sent over HTTPS, can't be read by the page's own scripts, and isn't sent with requests another site starts.
+- Pairing gives the page a random key, which it keeps in its own storage and sends in a header with each request. A browser keeps that storage apart for each address and port, and sends a cookie to every port on a name, so a cookie would reach whatever else is served on your Mac's tailnet name, T3 Code's page included.
 - Shades keeps only a hash of each key, in your login Keychain, rather than in a file a kitten could rewrite to let itself in.
-- The page's own requests carry a header that another site's page can't add without asking first, and nothing here says yes.
-- What a phone asks for names a place and an ID, never where words go. Where they go, what's being answered and what choices there are all come from what Messages shows, so a phone can't send anywhere, or answer anything, that the window couldn't.
+- The page is only on your tailnet while Shades is listening. Serve keeps forwarding after an app stops, so whatever took Shades' port then would get what your phone sends, its key included. While the page is on, a small helper waits on a pipe from Shades, and takes the page off once the pipe closes, which happens however Shades stops, a crash included. Shades listens on a free port each time, so the page only ever points at one it holds.
+- What a phone asks for names a place and an ID, never where words go. Where they go, what's being answered and what choices there are all come from what Messages shows, so a phone can't send anywhere, or answer anything, that the window couldn't. T3 lists every thread you have, but a phone only gets into one that something in Messages leads to, as the window does.
 
-What isn't enforced: something running as you can delete Shades' Keychain item and put its own there, as it could drive your Mac in other ways. A phone that's paired can speak as you until you turn the switch off, so turn it off if you lose one. Which devices can reach the page at all is up to your tailnet's own access rules.
+What isn't enforced: something running as you can stop that helper, or put its own item in your Keychain where Shades looks, as it could drive your Mac in other ways. It could also keep a phone from connecting by holding the server's connections open. A phone that's paired can speak as you until you turn the switch off, so turn it off if you lose one. Safari can clear the key after a week of not opening the page, which means pairing again, and a Home Screen app keeps it. Which devices can reach the page at all is up to your tailnet's own access rules.
 
 ## How they work
 

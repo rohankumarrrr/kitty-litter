@@ -5,7 +5,7 @@ import ShadesCore
 /// through the same `messagesAction` as the window. Only a paired phone gets past the page itself.
 @MainActor
 final class PhoneLink {
-    /// Beside T3's own, on loopback and on your tailnet.
+    /// Where the page is on your tailnet, beside T3's own. On loopback it's a free port, whichever Shades has this time.
     static let port: UInt16 = 4797
 
     private final class Watcher {
@@ -101,6 +101,7 @@ final class PhoneLink {
     }
 
     /// Only the page sends this header, and another site's page can't without asking first, which nothing here allows.
+    /// That keeps another site from using up a pairing code by guessing.
     private static func isFromPage(_ request: PhoneServer.Request) -> Bool {
         request.headers["x-shades"] == "1" && request.headers["content-type"]?.hasPrefix("application/json") == true
     }
@@ -109,11 +110,15 @@ final class PhoneLink {
         var code: String
     }
 
+    private struct Paired: Encodable {
+        var key: String
+    }
+
     private func pair(_ request: PhoneServer.Request) -> PhoneServer.Response {
         guard Self.isFromPage(request), let code = try? JSONDecoder().decode(Code.self, from: request.body) else { return .status(400) }
-        guard let token = door.pair(code.code, now: now()) else { return .status(403) }
+        guard let key = door.pair(code.code, now: now()) else { return .status(403) }
         onPaired?()
-        return .full(status: 204, type: "text/plain; charset=utf-8", body: Data(), cookie: PhoneDoor.setCookie(token))
+        return .json(Paired(key: key))
     }
 
     private func watch(_ key: String) -> PhoneServer.Response {

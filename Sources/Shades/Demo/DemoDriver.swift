@@ -96,13 +96,11 @@ final class DemoDriver {
         case "open":
             guard let address = controller.phoneAddress else { return print("The phone page isn't on. Try: phone on") }
             let key = rest.isEmpty ? PhonePlace.home : phoneKey(rest)
-            let code = controller.phone?.door.pairing?.code
+            // As scanning the picture does: the page pairs with the code that's showing.
+            let code = controller.phone?.door.pairing.map { "#pair=\($0.code)" } ?? ""
             let phone = self.phone ?? DemoPhone()
             self.phone = phone
-            Task {
-                if let code { print("[phone] paired: \(await phone.pair(at: URL(string: address)!, code: code))") }
-                phone.open(URL(string: "\(address)/?key=\(key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")")!)
-            }
+            phone.open(URL(string: "\(address)/?key=\(key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")\(code)")!)
         case "go":
             runOnPhone("go(\(DemoPhone.quoted(phoneKey(rest))))")
         case "send":

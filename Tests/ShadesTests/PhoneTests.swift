@@ -14,13 +14,13 @@ final class PhoneTests: XCTestCase {
         AgentThread(id: id, title: "Work", projectTitle: kitten.name, status: .completed, model: "m", updatedAt: noon, projectPath: kitten.folder)
     }
 
-    private func book(waiting: Waiting = Waiting(), sentBetween: Bool = false) -> ChannelBook {
+    private func book(waiting: Waiting = Waiting(), sentBetween: Bool = false, also: [AgentThread] = []) -> ChannelBook {
         var transcripts = ["a": [Exchange(id: "e1", asker: .you, askedAt: noon, ask: "How's it going?", reply: "Fine.", repliedAt: noon)]]
         // A thread of Pepper's that only Steve has talked in, which isn't yours to carry on.
         if sentBetween { transcripts["p"] = [Exchange(id: "e2", asker: .agent(threadID: "a"), askedAt: noon, ask: "Numbers?", reply: "Here.", repliedAt: noon)] }
         return ChannelBook.build(
             kittens: [steve, pepper],
-            threads: [thread("a", of: steve), thread("p", of: pepper)],
+            threads: [thread("a", of: steve), thread("p", of: pepper)] + also,
             transcripts: transcripts,
             isReading: false,
             unreadable: 0,
@@ -36,13 +36,13 @@ final class PhoneTests: XCTestCase {
     // MARK: - Places
 
     func testEveryPlaceComesBackFromItsKey() {
-        let book = book(sentBetween: true)
+        let book = book(sentBetween: true, also: [thread("a/b@c", of: pepper)])
         let places: [ChannelSelection] = [
             .needsYou, .done, .channel(.everyone), .channel(.direct(pepper)),
             .channel(ChannelID(.kitten(steve.id), .kitten(pepper.id))!),
             .channel(ChannelID(.kitten(pepper.id), .someoneElse)!),
             .thread("a/b@c", in: .direct(pepper)),
-            .thread("x", in: .everyone),
+            .thread("a", in: .everyone),
         ]
         for selection in places {
             let key = PhonePlace.key(selection)
@@ -51,6 +51,7 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(PhonePlace("home", in: book).selection)
         XCTAssertNil(PhonePlace("c:k.nobody", in: book).selection, "an unknown key is the list of places")
         XCTAssertNil(PhonePlace("t:@everyone", in: book).selection)
+        XCTAssertEqual(PhonePlace(PhonePlace.key(.thread("made-up", in: .everyone)), in: book).selection, .channel(.everyone), "a thread nothing leads to is its channel")
     }
 
     func testANewTopicCarriesOnInItsThreadOnceItHasOne() {
@@ -92,6 +93,26 @@ final class PhoneTests: XCTestCase {
         for ask in refused {
             XCTAssertNil(ask.action(in: book) { "x" }, "\(ask.act) \(ask.key ?? "nil") \(ask.text ?? "nil")")
         }
+    }
+
+    func testAPhoneCantOpenAThreadNothingInTheWindowLeadsTo() {
+        // Some other project of yours: no kitten's, not Shades' work, and never in Everyone. T3 lists it all the same.
+        let other = AgentThread(id: "other", title: "Deploy billing", projectTitle: "billing", status: .completed, model: "m", updatedAt: noon, projectPath: "/elsewhere/billing")
+        let book = ChannelBook.build(
+            kittens: [steve, pepper],
+            threads: [thread("a", of: steve), thread("p", of: pepper), other],
+            transcripts: ["a": [Exchange(id: "e1", asker: .you, askedAt: noon, ask: "How's it going?", reply: "Fine.", repliedAt: noon)]],
+            isReading: false,
+            unreadable: 0,
+            cantReachT3: false
+        )
+        for selection in [ChannelSelection.thread("other", in: .everyone), .thread("p", in: .direct(steve))] {
+            let key = PhonePlace.key(selection)
+            XCTAssertNil(ask("send", key: key, text: "ship it").action(in: book) { "x" }, key)
+            XCTAssertNotEqual(PhonePlace(key, in: book).selection, selection, "and it isn't shown there either")
+        }
+        XCTAssertNotNil(ask("send", key: PhonePlace.key(.thread("a", in: .everyone)), text: "And?").action(in: book) { "x" }, "a thread Everyone shows is still yours to carry on")
+        XCTAssertNotNil(ask("send", key: PhonePlace.key(.thread("p", in: .direct(pepper))), text: "And?").action(in: book) { "x" }, "and so is one on a kitten's list of what it's on")
     }
 
     func testAReplyToAReportGoesUnderItEvenFromElsewhere() throws {
@@ -155,14 +176,14 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(pairing.code.count, 8)
         let token = try XCTUnwrap(door.pair(pairing.shown.lowercased(), now: noon.addingTimeInterval(30)), "typed as shown, in any case")
         XCTAssertNil(door.pair(pairing.code, now: noon), "it works once")
-        XCTAssertTrue(door.admits(request(cookie: "a=b; shades_phone=\(token)")))
-        XCTAssertFalse(door.admits(request(cookie: "shades_phone=\(token)x")))
-        XCTAssertFalse(door.admits(request(cookie: nil)))
+        XCTAssertTrue(door.admits(request(key: "Bearer \(token)")))
+        XCTAssertFalse(door.admits(request(key: "Bearer \(token)x")))
+        XCTAssertFalse(door.admits(request(key: token)))
         XCTAssertEqual(keys.hashes.count, 1)
         XCTAssertFalse(keys.hashes[0].contains(token), "only a hash of it is kept")
-        XCTAssertTrue(PhoneDoor(keys: keys).admits(request(cookie: "shades_phone=\(token)")), "and it still works after a restart")
+        XCTAssertTrue(PhoneDoor(keys: keys).admits(request(key: "Bearer \(token)")), "and it still works after a restart")
         door.forgetPhones()
-        XCTAssertFalse(door.admits(request(cookie: "shades_phone=\(token)")))
+        XCTAssertFalse(door.admits(request(key: "Bearer \(token)")))
         XCTAssertEqual(keys.hashes, [])
     }
 
@@ -175,8 +196,8 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(door.pair(pairing.code, now: noon.addingTimeInterval(601)), "and ten minutes on it's gone too")
     }
 
-    private func request(cookie: String?) -> PhoneServer.Request {
-        PhoneServer.Request(method: "GET", path: "/events", query: [:], headers: cookie.map { ["cookie": $0] } ?? [:], body: Data())
+    private func request(key: String) -> PhoneServer.Request {
+        PhoneServer.Request(method: "GET", path: "/events", query: [:], headers: ["authorization": key], body: Data())
     }
 
     // MARK: - What it shows

@@ -16,7 +16,7 @@ final class PhoneServer {
     }
 
     enum Response {
-        case full(status: Int, type: String, body: Data, cookie: String? = nil)
+        case full(status: Int, type: String, body: Data)
         /// Stays open, and gets each event sent to the stream.
         case stream(PhoneStream)
 
@@ -24,8 +24,8 @@ final class PhoneServer {
             .full(status: status, type: "text/plain; charset=utf-8", body: Data())
         }
 
-        static func json(_ value: some Encodable, status: Int = 200, cookie: String? = nil) -> Response {
-            .full(status: status, type: "application/json", body: (try? JSONEncoder().encode(value)) ?? Data(), cookie: cookie)
+        static func json(_ value: some Encodable, status: Int = 200) -> Response {
+            .full(status: status, type: "application/json", body: (try? JSONEncoder().encode(value)) ?? Data())
         }
     }
 
@@ -45,6 +45,7 @@ final class PhoneServer {
     private var connections: [ObjectIdentifier: NWConnection] = [:]
     /// Connections that have become a stream, which the request timeout leaves alone.
     private var streaming: Set<ObjectIdentifier> = []
+    private var starting: CheckedContinuation<UInt16, Error>?
 
     /// Listens on loopback only, and returns the port, which is a free one for 0.
     func start(port: UInt16) async throws -> UInt16 {
@@ -57,21 +58,22 @@ final class PhoneServer {
             MainActor.assumeIsolated { self?.accept(connection) }
         }
         return try await withCheckedThrowingContinuation { continuation in
-            var waiting: CheckedContinuation<UInt16, Error>? = continuation
-            listener.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    waiting?.resume(returning: listener.port?.rawValue ?? port)
-                    waiting = nil
-                case .failed(let error), .waiting(let error):
-                    listener.cancel()
-                    waiting?.resume(throwing: error)
-                    waiting = nil
-                case .cancelled:
-                    waiting?.resume(throwing: CancellationError())
-                    waiting = nil
-                default:
-                    break
+            starting = continuation
+            listener.stateUpdateHandler = { [weak self] state in
+                MainActor.assumeIsolated {
+                    guard let self, let starting = self.starting else { return }
+                    switch state {
+                    case .ready:
+                        starting.resume(returning: listener.port?.rawValue ?? port)
+                    case .failed(let error), .waiting(let error):
+                        listener.cancel()
+                        starting.resume(throwing: error)
+                    case .cancelled:
+                        starting.resume(throwing: CancellationError())
+                    default:
+                        return
+                    }
+                    self.starting = nil
                 }
             }
             listener.start(queue: .main)
@@ -142,10 +144,9 @@ final class PhoneServer {
     }
 
     private func send(_ response: Response, on connection: NWConnection) {
-        guard case .full(let status, let type, let body, let cookie) = response else { return }
+        guard case .full(let status, let type, let body) = response else { return }
         var head = "HTTP/1.1 \(status) \(Self.reason(status))\r\n"
         head += "Content-Type: \(type)\r\nContent-Length: \(body.count)\r\n"
-        if let cookie { head += "Set-Cookie: \(cookie)\r\n" }
         head += Self.commonHeaders + "Connection: close\r\n\r\n"
         connection.send(content: Data(head.utf8) + body, completion: .contentProcessed { _ in connection.cancel() })
     }

@@ -33,7 +33,8 @@ extension AppController {
         phone = link
         phoneTask = Task { [weak self] in
             do {
-                let port = try await link.start(port: self?.phonePort ?? 0)
+                // A free port, so the page only ever points at one Shades holds.
+                let port = try await link.start(port: 0)
                 guard let self, self.phone === link else { return link.stop() }
                 self.phoneListening = port
                 if await self.reachPhone(), !link.door.hasPhones { self.pairPhone() }
@@ -41,22 +42,23 @@ extension AppController {
                 guard let self, self.phone === link else { return }
                 self.phone = nil
                 self.say(CatWords.phoneProblem(error))
+                // Whatever the last run left on your tailnet points at a port Shades doesn't hold now.
+                self.onTailscale { [stopServingPhone] in await stopServingPhone() }
             }
         }
     }
 
-    /// Off means off: the page goes from your tailnet, and every phone has to pair again.
+    /// Off means off: the page goes from your tailnet, and every phone has to pair again. That holds even if it
+    /// never started, since the last run may have left the page on.
     func stopPhone() {
+        phoneAddress = nil
+        phoneListening = nil
+        onTailscale { [stopServingPhone] in await stopServingPhone() }
         guard let link = phone else { return }
         phone = nil
-        phoneAddress = nil
         link.stop()
         link.door.forgetPhones()
         stage.showPairing(nil)
-        if let port = phoneListening {
-            phoneListening = nil
-            Task { [stopServingPhone] in await stopServingPhone(port) }
-        }
     }
 
     /// Shows a new one-time code, and the address to open, which means asking Tailscale again if it hasn't said yet.
@@ -81,13 +83,38 @@ extension AppController {
 
     /// Whether the page is on your tailnet now. If it isn't, the cat says why.
     private func reachPhone() async -> Bool {
-        guard let port = phoneListening else { return false }
-        do {
-            phoneAddress = try await servePhone(port)
+        guard let port = phoneListening, let link = phone else { return false }
+        let result: Result<String, Error>? = await onTailscale { [weak self, servePhone] in
+            // Turned off, or on again, while it waited its turn.
+            guard self?.phone === link else { return nil }
+            do {
+                return .success(try await servePhone(port))
+            } catch {
+                return .failure(error)
+            }
+        }.value
+        guard phone === link else { return false }
+        switch result {
+        case .success(let address)?:
+            phoneAddress = address
             return true
-        } catch {
+        case .failure(let error)?:
             say(CatWords.phoneProblem(error))
             return false
+        case nil:
+            return false
         }
+    }
+
+    /// One at a time, in the order asked, so the last thing Tailscale hears is what you last chose.
+    @discardableResult
+    private func onTailscale<Value>(_ ask: @escaping () async -> Value) -> Task<Value, Never> {
+        let previous = phoneTailscale
+        let turn = Task { () -> Value in
+            await previous?.value
+            return await ask()
+        }
+        phoneTailscale = Task { _ = await turn.value }
+        return turn
     }
 }

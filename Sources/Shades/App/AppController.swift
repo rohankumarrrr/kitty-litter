@@ -38,9 +38,8 @@ final class AppController {
     let withdrawNotifications: ([String]) -> Void
     let clearNotifications: () -> Void
     let phoneKeys: PhoneKeyStoring
-    let phonePort: UInt16
     let servePhone: (UInt16) async throws -> String
-    let stopServingPhone: (UInt16) async -> Void
+    let stopServingPhone: () async -> Void
     let stage: CatStage
     let now: () -> Date
     let launchedAt: Date
@@ -142,9 +141,11 @@ final class AppController {
     var phone: PhoneLink?
     /// Where the phone page is on your tailnet, once Tailscale has said.
     var phoneAddress: String?
-    /// The port it's listening on.
+    /// The loopback port it's listening on.
     var phoneListening: UInt16?
     var phoneTask: Task<Void, Never>?
+    /// What was last asked of Tailscale, so each ask waits for the one before, and turning it off always comes last.
+    var phoneTailscale: Task<Void, Never>?
     /// How long Messages stays open after a phone stops looking, so going from place to place on it doesn't close it.
     var phoneGrace: TimeInterval = 20
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
@@ -208,7 +209,6 @@ final class AppController {
         withdrawNotifications = dependencies.withdrawNotifications
         clearNotifications = dependencies.clearNotifications
         phoneKeys = dependencies.phoneKeys
-        phonePort = dependencies.phonePort
         servePhone = dependencies.servePhone
         stopServingPhone = dependencies.stopServingPhone
         self.stage = stage

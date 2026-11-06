@@ -25,7 +25,7 @@ Preconditions:
 Journey: `journeys/phone.txt`.
 
 - **Pair.** `phone on`, `phone pair` and `draw`. The output says `[demo] phone page on http://127.0.0.1:<port>`, and `pairing.png` in `1-pairing` shows the code and its picture.
-- **Places.** `phone open`. The output says `[phone] paired: true`, and `phone.png` in `2-home` lists the places, each kitten in its colour.
+- **Places.** `phone open`, which opens the page with the code that's showing, as scanning its picture does. `phone.png` in `2-home` lists the places, each kitten in its colour.
 - **Approve.** `approval command ...`, `report decision`, `phone go needs`, then `phone press Allow`. The output says `[demo] accept: npm run build && npm test` and `[demo] took back 1 notification`, and `4-allowed` shows only Clawde's decision left.
 - **Everyone.** `phone go everyone` and `phone send Hello from my phone`. The output says `[demo] started demo-3`, the router's turn, and `phone text` ends with Shades' answer.
 - **New topic.** `phone go steve` and `phone send ...`. The output says `[demo] started demo-4` with your words, and `7-topic` shows them in the new topic's own thread.
@@ -39,6 +39,5 @@ End both with `front` and `windows`. The app in front stays whatever it was, and
 
 ## Gotchas
 
-- A browser keeps the page's cookie only over HTTPS, which a real phone has through Tailscale and the demo doesn't. So `phone open` pairs through the page's own `/pair` request with the code that's showing, and gives the web view the same key as a plain cookie.
 - Each place is a stream of its own, so moving between them reconnects. Give `phone go` and `phone send` two or three seconds before drawing.
-- Tailscale itself isn't in the demo. `swift test --filter PhoneServerTests` runs the server on a free port and checks pairing and what it turns away over HTTP.
+- Tailscale itself isn't in the demo. `swift test --filter PhoneServerTests` runs the server on a free port and checks pairing and what it turns away over HTTP, and checks the helper that takes the page off with a stand-in for the `tailscale` tool.

@@ -3,9 +3,9 @@ import Foundation
 import Security
 
 /// Who may use Messages from a phone. What the server takes reaches T3 as your own words, and anything on this Mac can
-/// reach it on loopback, kittens' shells included, so a token is the only way in. A phone gets one by typing or
-/// scanning a code that only a Shades window shows, which captures leave out. The phone keeps its token in a cookie,
-/// and Shades keeps only a hash of it.
+/// reach it on loopback, kittens' shells included, so a key is the only way in. A phone gets one by typing or
+/// scanning a code that only a Shades window shows, which captures leave out. The page keeps its key in its own
+/// storage and sends it in a header, since a cookie would go to every port on the Mac's name. Shades keeps only a hash.
 @MainActor
 final class PhoneDoor {
     struct Pairing: Equatable {
@@ -16,13 +16,11 @@ final class PhoneDoor {
         var shown: String { "\(code.prefix(4))-\(code.suffix(4))" }
     }
 
-    static let cookie = "shades_phone"
     private static let letters = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
     private static let codeLength = 8
     private static let pairingSeconds: TimeInterval = 600
     /// A wrong code this many times uses the code up, so guessing gets nowhere.
     private static let tries = 5
-    private static let cookieSeconds = 400 * 24 * 60 * 60
 
     private let keys: PhoneKeyStoring
     private var hashes: Set<String>
@@ -70,26 +68,14 @@ final class PhoneDoor {
         return token
     }
 
-    /// Only over HTTPS, never to script on the page, and never on a request another site starts.
-    static func setCookie(_ token: String) -> String {
-        "\(cookie)=\(token); Path=/; Max-Age=\(cookieSeconds); Secure; HttpOnly; SameSite=Strict"
-    }
-
     func admits(_ request: PhoneServer.Request) -> Bool {
-        guard let token = Self.token(in: request.headers["cookie"]) else { return false }
-        return hashes.contains(Self.hash(token))
+        guard let header = request.headers["authorization"], header.hasPrefix("Bearer ") else { return false }
+        return hashes.contains(Self.hash(String(header.dropFirst(7))))
     }
 
     func forgetPhones() {
         hashes = []
         keys.save([])
-    }
-
-    private static func token(in header: String?) -> String? {
-        header?.split(separator: ";").lazy
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .first { $0.hasPrefix("\(cookie)=") }
-            .map { String($0.dropFirst(cookie.count + 1)) }
     }
 
     private static func hash(_ token: String) -> String {
