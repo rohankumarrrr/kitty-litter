@@ -1,0 +1,9 @@
+theme light
+wait 1
+record docs/images/approval.gif cat bubble
+wait 0.5
+approval command npm run build && npm test
+wait 4
+allow
+wait 3
+record stop

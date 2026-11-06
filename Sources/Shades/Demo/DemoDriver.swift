@@ -8,6 +8,8 @@ final class DemoDriver {
     private let parts: Demo.Parts
     private let controller: AppController
     private let stage: AppStage
+    private var phone: DemoPhone?
+    private var recorder: DemoRecorder?
 
     init(parts: Demo.Parts, controller: AppController, stage: AppStage) {
         self.parts = parts
@@ -75,6 +77,117 @@ final class DemoDriver {
         }
     }
 
+    /// Messages on your phone, on loopback only: `on` and `off` are the switch in Settings, `pair` shows a code, and
+    /// `open` loads the page at a phone's size, pairing with the code that's showing. The rest go through the page.
+    private func phone(_ line: String) {
+        let word = line.split(separator: " ").first.map(String.init) ?? ""
+        let rest = String(line.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
+        switch word {
+        case "on", "off":
+            var settings = controller.settings
+            settings.phone = word == "on"
+            controller.apply(settings)
+            Task {
+                await controller.phoneTask?.value
+                print("[demo] phone page \(word) \(controller.phoneAddress ?? "")")
+                fflush(stdout)
+            }
+        case "pair":
+            controller.pairPhone()
+        case "open":
+            guard let address = controller.phoneAddress else { return print("The phone page isn't on. Try: phone on") }
+            let key = rest.isEmpty ? PhonePlace.home : phoneKey(rest)
+            // As scanning the picture does: the page pairs with the code that's showing.
+            let code = controller.phone?.door.pairing.map { "#pair=\($0.code)" } ?? ""
+            let phone = self.phone ?? DemoPhone()
+            self.phone = phone
+            phone.open(URL(string: "\(address)/?key=\(key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")\(code)")!)
+        case "go":
+            runOnPhone("go(\(DemoPhone.quoted(phoneKey(rest))))")
+        case "send":
+            // The same as typing into the page's box and pressing Send.
+            runOnPhone("$('words').value = \(DemoPhone.quoted(rest)); $('box').requestSubmit(); 'sent'")
+        case "press":
+            // The same as tapping the first button that says this.
+            runOnPhone("(() => { const b = [...document.querySelectorAll('button')].find((b) => !b.disabled && !b.closest('[hidden]') && b.textContent.trim() === \(DemoPhone.quoted(rest))); if (!b) return 'no button'; b.click(); return 'pressed' })()")
+        case "answer":
+            // The same as typing into a question card's box.
+            runOnPhone("(() => { const i = document.querySelector('.card input'); if (!i) return 'no box'; i.value = \(DemoPhone.quoted(rest)); i.dispatchEvent(new Event('input')); return 'typed' })()")
+        case "subscribe":
+            // What turning notifications on does, with a stand-in for the phone's push service.
+            guard let phone else { return print("The page isn't open. Try: phone open") }
+            let subscription = String(decoding: (try? JSONEncoder().encode(Demo.phoneSubscription)) ?? Data(), as: UTF8.self)
+            Task {
+                print("[phone] subscribed: \(await phone.runAsync("const r = await post('/push', \(subscription)); return r ? String(r.status) : 'unreachable'"))")
+                fflush(stdout)
+            }
+        case "text":
+            runOnPhone("document.body.innerText.split('\\n').filter((l) => l.trim()).join(' | ')")
+        case "close":
+            phone?.close()
+            phone = nil
+        default:
+            print("phone on | off | pair | open [place] | go [place] | send [words] | press [button] | answer [words] | subscribe | text | close")
+        }
+    }
+
+    /// `record <file.gif> <window>...` records those windows, or `phone`, until `record stop` writes the GIF.
+    private func record(_ line: String) {
+        if line == "stop" {
+            print(recorder?.stop() ?? "Nothing's recording. Try: record <file.gif> cat bubble")
+            recorder = nil
+            ClickAway.isPaused = false
+            stage.pointer = { NSEvent.mouseLocation }
+            return
+        }
+        let words = line.split(separator: " ").map(String.init)
+        guard let file = words.first, words.count > 1 else { return print("record <file.gif> cat | bubble | input | kittens | channels | pairing | phone ... | stop") }
+        let names = Set(words.dropFirst())
+        let recorder = DemoRecorder(
+            file: URL(fileURLWithPath: file),
+            windows: { [weak self] in
+                guard let self else { return [] }
+                return self.windows.compactMap { name, window in
+                    guard names.contains(name), window.isVisible else { return nil }
+                    // The cat is pixel art on a layer, which a drawn copy would smooth, so its own picture goes in.
+                    if name == "cat", let sprite = self.stage.cat.view.layer?.contents {
+                        let view = self.stage.cat.view
+                        return ((sprite as! CGImage), window.convertToScreen(view.convert(view.bounds, to: nil)))
+                    }
+                    guard let view = window.contentView?.superview ?? window.contentView,
+                          let image = ChannelImages.bitmap(of: view, scale: DemoRecorder.scale)?.cgImage
+                    else { return nil }
+                    return (image, window.frame)
+                }
+            },
+            onPage: names.contains("cat"),
+            phone: names.contains("phone") ? phone : nil
+        )
+        self.recorder = recorder
+        // The person's own clicks and typing go on around the demo, and mustn't close what's being recorded.
+        ClickAway.isPaused = true
+        let screen = NSScreen.screens.first?.frame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+        stage.pointer = { CGPoint(x: screen.minX + screen.width * 0.55, y: screen.minY + screen.height * 0.3) }
+        recorder.start()
+    }
+
+    private func runOnPhone(_ script: String) {
+        guard let phone else { return print("The page isn't open. Try: phone open") }
+        Task {
+            print("[phone] \(await phone.run(script))")
+            fflush(stdout)
+        }
+    }
+
+    /// needs, done, everyone, home, the start of a kitten's name for its DM, or a key as it is.
+    private func phoneKey(_ place: String) -> String {
+        if ["needs", "done", "everyone", "home"].contains(place) { return place }
+        if let kitten = Demo.kittens.first(where: { $0.name.lowercased().hasPrefix(place.lowercased()) }) {
+            return PhonePlace.key(.channel(.direct(kitten)))
+        }
+        return place
+    }
+
     private var windows: [(String, NSWindow)] {
         [
             ("cat", stage.cat.panel),
@@ -82,6 +195,7 @@ final class DemoDriver {
             ("input", stage.input.panel),
             ("kittens", stage.kittens.panel),
             ("channels", stage.channels.panel),
+            ("pairing", stage.pairing.panel),
         ]
     }
 
@@ -91,7 +205,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|[kitten] | thread | back | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
+            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|[kitten] | thread | back | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -157,6 +271,18 @@ final class DemoDriver {
             stage.channels.view.pane.composer.send(rest)
         case "settings":
             controller.settingsPressed()
+        case "phone":
+            phone(rest)
+        case "type":
+            // Fills the Ask box a letter at a time, the way typing looks. `submit` with the same words sends it.
+            Task {
+                for count in 1...max(rest.count, 1) {
+                    stage.input.setText(String(rest.prefix(count)))
+                    try? await Task.sleep(nanoseconds: 45_000_000)
+                }
+            }
+        case "record":
+            record(rest)
         case "allow", "deny", "session":
             if case .approval(let request, _, _)? = stage.bubble.content {
                 let decision: ApprovalDecision = word == "allow" ? .accept : word == "deny" ? .decline : .acceptForSession
@@ -227,6 +353,13 @@ final class DemoDriver {
                 let file = folder.appendingPathComponent("\(name).png")
                 let drawn = (window.contentView?.superview ?? window.contentView).flatMap { ChannelImages.png(of: $0) }
                 print((try? drawn?.write(to: file)) == nil ? "couldn't draw \(name)" : "drew \(name) \(file.path)")
+            }
+            if let phone {
+                let file = folder.appendingPathComponent("phone.png")
+                Task {
+                    print(await phone.draw(to: file) ? "drew phone \(file.path)" : "couldn't draw phone")
+                    fflush(stdout)
+                }
             }
         case "buttons":
             for case let button as QuietButton in stage.bubble.view.subviews {

@@ -1,0 +1,633 @@
+/// The page a phone opens. It only draws what the Mac sends and says what you did, and every word on it is put there
+/// as text, never as markup, since it's what kittens said.
+enum PhonePage {
+    static let html = """
+        <!doctype html>
+        <html lang="en">
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="color-scheme" content="light dark">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-title" content="Shades">
+        <title>Shades</title>
+        <link rel="manifest" href="/manifest.json">
+        <link rel="apple-touch-icon" href="/icon.png">
+        <link rel="stylesheet" href="/app.css">
+        <script src="/app.js" defer></script>
+        </head>
+        <body>
+        <header id="top">
+          <button id="back" type="button" hidden></button>
+          <h1 id="title">Shades</h1>
+          <p id="subtitle"></p>
+        </header>
+        <div id="banner" role="status" hidden></div>
+        <div id="notify" hidden>
+          <p id="notifytext"></p>
+          <button id="notifybutton" type="button" hidden>Turn on</button>
+        </div>
+        <main id="rows"></main>
+        <form id="box" hidden>
+          <label id="label" for="words"></label>
+          <div class="field">
+            <textarea id="words" rows="1" enterkeyhint="send"></textarea>
+            <button id="send" type="submit">Send</button>
+          </div>
+        </form>
+        <section id="pair" hidden>
+          <h1>Pair this phone</h1>
+          <p>Turn on Messages on your phone in Shades' Settings on your Mac, and it shows a code. Scan it with your camera, or type it here.</p>
+          <form id="pairform">
+            <input id="code" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="ABCD-EFGH" aria-label="Code">
+            <button type="submit">Pair</button>
+          </form>
+          <p id="pairnote" role="status"></p>
+        </section>
+        </body>
+        </html>
+        """
+
+    static let style = """
+        :root {
+          --paper: #f9f9f9; --text: #1d1d1f; --soft: #6e6e73; --line: #d2d2d7; --grey: #e9e9eb;
+          --you: #0071e3; --card: #ffffff; --warn: #c9341c;
+          font: 17px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+          -webkit-text-size-adjust: 100%;
+        }
+        @media (prefers-color-scheme: dark) {
+          :root { --paper: #1d1d1f; --text: #f5f5f7; --soft: #98989d; --line: #3a3a3c; --grey: #3a3a3c; --card: #2c2c2e; --warn: #ff6b55; }
+        }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; background: var(--paper); color: var(--text); }
+        body { min-height: 100dvh; display: flex; flex-direction: column; }
+        button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+        [hidden] { display: none !important; }
+
+        #top { position: sticky; top: 0; z-index: 2; background: var(--paper); border-bottom: 1px solid var(--line);
+          padding: calc(env(safe-area-inset-top) + 10px) 16px 10px; }
+        #back { color: var(--you); font-size: 15px; margin-bottom: 4px; display: block; max-width: 100%;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+        #title { font-size: 20px; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+        #subtitle { margin: 2px 0 0; color: var(--soft); font-size: 13px; }
+        #subtitle:empty { display: none; }
+        #banner { background: var(--warn); color: #fff; padding: 8px 16px; font-size: 14px; }
+        #notify { display: flex; align-items: center; gap: 12px; margin: 12px 12px 0; padding: 10px 14px; border-radius: 14px;
+          background: var(--card); border: 1px solid var(--line); }
+        #notifytext { flex: 1; margin: 0; color: var(--soft); font-size: 14px; }
+        #notifybutton { background: var(--you); color: #fff; border-radius: 999px; padding: 6px 14px; font-size: 15px; }
+
+        main { flex: 1; padding: 8px 12px 16px; }
+        .group { color: var(--soft); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 22px 4px 6px; }
+        .place { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 8px; border-radius: 12px; text-align: left; }
+        .place:active, .issue:active, .subject:active { background: var(--grey); }
+        .place .name { flex: 1; font-size: 17px; }
+        .place.unread .name { font-weight: 600; }
+        .place.asleep { opacity: .45; }
+        .count { color: var(--soft); font-variant-numeric: tabular-nums; }
+        .dot { width: 9px; height: 9px; border-radius: 50%; background: #ff5f1f; flex: none; }
+        .cat { width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center;
+          font-size: 14px; font-weight: 700; color: #fff; background: #8e8e93; }
+        .cat.small { width: 22px; height: 22px; font-size: 11px; }
+
+        .day { text-align: center; color: var(--soft); font-size: 12px; margin: 18px 0 6px; }
+        .subject { display: block; width: 100%; text-align: left; color: var(--soft); font-size: 14px; padding: 10px 4px 2px; }
+        .subject b { color: var(--text); font-weight: 600; }
+        .msg { margin: 6px 0; display: flex; flex-direction: column; align-items: flex-start; }
+        .msg.mine { align-items: flex-end; }
+        .meta { color: var(--soft); font-size: 12px; margin: 4px 12px 3px; }
+        .bubble { max-width: 86%; padding: 9px 14px; border-radius: 18px; background: var(--grey); color: var(--text);
+          white-space: pre-wrap; overflow-wrap: anywhere; }
+        .bubble.going { opacity: .55; }
+        .bubble code { font: .9em ui-monospace, Menlo, monospace; }
+        .bubble a { color: inherit; }
+        .bubble.cut { max-height: 16.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); }
+        .more { color: var(--soft); font-size: 14px; margin: 4px 12px 0; }
+        .failure { color: var(--warn); font-size: 13px; margin: 3px 12px 0; }
+        .section { display: flex; justify-content: space-between; align-items: baseline; margin: 22px 4px 6px; }
+        .section span { color: var(--soft); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+        .section button { color: var(--you); font-size: 14px; }
+        .heading { display: flex; align-items: center; gap: 10px; margin: 16px 4px 4px; }
+        .heading p { margin: 0; color: var(--soft); font-size: 13px; }
+        .issue { display: block; width: 100%; text-align: left; padding: 8px 4px 8px 36px; border-radius: 10px; }
+        .issue small { display: block; color: var(--soft); font-size: 13px; }
+        .note { color: var(--soft); text-align: center; font-size: 15px; margin: 24px 16px; }
+
+        .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 10px 0; }
+        .card header { display: flex; align-items: center; gap: 8px; color: var(--soft); font-size: 13px; }
+        .card header .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .card .text { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .card.approval .text { font: 14px/1.4 ui-monospace, Menlo, monospace; }
+        .card .answer { margin: 8px 0 0; padding-left: 10px; border-left: 3px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
+        .card .footer { margin: 8px 0 0; color: var(--soft); font-size: 13px; }
+        .card .part { margin: 12px 0 0; }
+        .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .buttons button, #pairform button { background: var(--grey); border-radius: 999px; padding: 8px 16px; font-size: 15px; }
+        .buttons button.picked { background: var(--you); color: #fff; }
+        .buttons button.go { background: var(--you); color: #fff; }
+        .buttons button:disabled, #send:disabled { opacity: .4; }
+        .card input, #pairform input { width: 100%; font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line);
+          border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
+
+        #box { position: sticky; bottom: 0; background: var(--paper); border-top: 1px solid var(--line);
+          padding: 8px 12px calc(env(safe-area-inset-bottom) + 8px); }
+        #label { display: block; color: var(--soft); font-size: 12px; margin: 0 4px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .field { display: flex; align-items: flex-end; gap: 8px; }
+        #words { flex: 1; resize: none; font: inherit; color: inherit; background: var(--grey); border: 0; border-radius: 18px;
+          padding: 8px 14px; max-height: 40vh; }
+        #send { background: var(--you); color: #fff; border-radius: 18px; padding: 8px 14px; font-weight: 600; }
+
+        #pair { padding: calc(env(safe-area-inset-top) + 40px) 24px 24px; }
+        #pair h1 { font-size: 24px; margin: 0 0 8px; }
+        #pair p { color: var(--soft); }
+        #pairform { display: flex; gap: 8px; align-items: center; }
+        #pairform input { margin: 0; font-size: 22px; letter-spacing: .1em; text-transform: uppercase; }
+        """
+
+    static let script = #"""
+        'use strict';
+        const $ = (id) => document.getElementById(id);
+        const conversation = (key) => key === 'everyone' || /^(c|t|r):/.test(key);
+        const words = {
+          unreachable: "Can't reach your Mac. Shades has to be running, and your Mac awake.",
+          gone: "That's changed since. Have another look.",
+          wrongCode: "That code didn't work. Turn pairing on again in Shades on your Mac for a new one.",
+          answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear',
+          notifyAsk: 'Get a notification when something needs you.',
+          homeScreen: 'For notifications on an iPhone, add this page to your Home Screen with Share, then pair it there.',
+        };
+
+        let key = new URLSearchParams(location.search).get('key') || 'home';
+        // Kept for this address and port only, and sent only by this page. A cookie would go to every port on the name.
+        let pass = localStorage.getItem('shades.key');
+        let stream = null;
+        let view = null;
+        let retry = null;
+        const expanded = new Set();
+        const answers = new Map();
+
+        function el(tag, className, text) {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text != null) node.textContent = text;
+          return node;
+        }
+
+        function banner(text) {
+          $('banner').textContent = text || '';
+          $('banner').hidden = !text;
+        }
+
+        function headers(extra) {
+          return Object.assign({ Authorization: 'Bearer ' + pass }, extra);
+        }
+
+        async function post(path, body) {
+          try {
+            return await fetch(path, {
+              method: 'POST', cache: 'no-store',
+              headers: headers({ 'Content-Type': 'application/json', 'X-Shades': '1' }),
+              body: JSON.stringify(body),
+            });
+          } catch (error) {
+            return null;
+          }
+        }
+
+        async function act(body, quiet) {
+          const response = await post('/act', body);
+          if (response && response.ok) { banner(''); return response.json(); }
+          if (response && response.status === 401) { pairing(); return null; }
+          if (!quiet) banner(response && response.status === 409 ? words.gone : words.unreachable);
+          return null;
+        }
+
+        async function start() {
+          clearTimeout(retry);
+          const code = new URLSearchParams(location.hash.slice(1)).get('pair');
+          if (code) {
+            history.replaceState(history.state, '', location.pathname + location.search);
+            if (!(await pair(code))) return;
+          }
+          if (!pass) return pairing();
+          let hello = null;
+          try { hello = await fetch('/hello', { headers: headers(), cache: 'no-store' }); } catch (error) {}
+          if (hello && hello.status === 401) return pairing();
+          if (!hello || !hello.ok) { banner(words.unreachable); retry = setTimeout(start, 5000); return; }
+          $('pair').hidden = true;
+          for (const id of ['top', 'rows']) $(id).hidden = false;
+          listen();
+          notifications().catch(() => {});
+        }
+
+        // Only who and what kind, as on the Mac. An iPhone only offers this to a page on its Home Screen.
+        let pushKey = null;
+        async function notifications() {
+          if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+            return offer(words.homeScreen, false);
+          }
+          const registration = await navigator.serviceWorker.register('/sw.js');
+          // Opening the page is looking at what they were about.
+          for (const shown of await registration.getNotifications()) shown.close();
+          if (Notification.permission === 'denied') return offer(null);
+          const response = await fetch('/push', { headers: headers(), cache: 'no-store' });
+          if (!response.ok) return offer(null);
+          pushKey = (await response.json()).key;
+          let subscription = await registration.pushManager.getSubscription();
+          // Shades has a new signing key, such as after it was set up again, so this subscription goes nowhere now.
+          if (subscription && encode(subscription.options.applicationServerKey) !== pushKey) {
+            await subscription.unsubscribe();
+            subscription = null;
+          }
+          if (subscription && Notification.permission === 'granted') {
+            await keep(subscription);
+            return offer(null);
+          }
+          offer(words.notifyAsk, true);
+        }
+
+        function offer(text, asks) {
+          $('notifytext').textContent = text || '';
+          $('notifybutton').hidden = !asks;
+          $('notify').hidden = !text || key !== 'home';
+        }
+
+        $('notifybutton').onclick = async () => {
+          $('notifybutton').disabled = true;
+          try {
+            if (await Notification.requestPermission() !== 'granted') return offer(null);
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decode(pushKey) });
+            await keep(subscription);
+            offer(null);
+          } catch (error) {
+            banner(words.unreachable);
+          } finally {
+            $('notifybutton').disabled = false;
+          }
+        };
+
+        function keep(subscription) {
+          const json = subscription.toJSON();
+          return post('/push', { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
+        }
+
+        function encode(buffer) {
+          return btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        function decode(text) {
+          const base64 = text.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((text.length + 3) % 4);
+          return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+        }
+
+        function pairing() {
+          if (stream) stream.abort();
+          stream = null;
+          pass = null;
+          localStorage.removeItem('shades.key');
+          for (const id of ['top', 'rows', 'box', 'banner']) $(id).hidden = true;
+          $('pair').hidden = false;
+        }
+
+        async function pair(code) {
+          const response = await post('/pair', { code });
+          if (response && response.ok) {
+            pass = (await response.json()).key;
+            localStorage.setItem('shades.key', pass);
+            $('pairnote').textContent = '';
+            return true;
+          }
+          pairing();
+          $('pairnote').textContent = response ? words.wrongCode : words.unreachable;
+          return false;
+        }
+
+        // Server-sent events, read by hand, since EventSource can't send the key.
+        async function listen() {
+          if (stream) stream.abort();
+          const mine = new AbortController();
+          stream = mine;
+          try {
+            const response = await fetch('/events?key=' + encodeURIComponent(key), { headers: headers(), cache: 'no-store', signal: mine.signal });
+            if (response.status === 401) return pairing();
+            if (!response.ok || !response.body) throw new Error(String(response.status));
+            const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+            let buffer = '';
+            for (;;) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buffer += value;
+              let end;
+              while ((end = buffer.indexOf('\n\n')) >= 0) {
+                const event = buffer.slice(0, end);
+                buffer = buffer.slice(end + 2);
+                for (const line of event.split('\n')) {
+                  if (line.startsWith('data: ')) { banner(''); show(JSON.parse(line.slice(6))); }
+                }
+              }
+            }
+          } catch (error) {}
+          if (mine.signal.aborted || stream !== mine) return;
+          banner(words.unreachable);
+          retry = setTimeout(start, 3000);
+        }
+
+        function go(next, push = true) {
+          if (!next || next === key) return;
+          key = next;
+          view = null;
+          if (push) history.pushState({ key }, '', '?key=' + encodeURIComponent(key));
+          $('rows').replaceChildren();
+          listen();
+        }
+
+        window.addEventListener('popstate', (event) => go((event.state && event.state.key) || 'home', false));
+
+        function show(next) {
+          const fresh = !view || view.key !== next.key;
+          const nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 60;
+          if (next.key !== key) {
+            key = next.key;
+            history.replaceState({ key }, '', '?key=' + encodeURIComponent(key));
+          }
+          view = next;
+          $('title').textContent = next.title;
+          $('subtitle').textContent = next.subtitle || '';
+          $('back').hidden = !next.back;
+          $('back').textContent = next.back ? '‹ ' + next.backTitle : '';
+          $('box').hidden = !next.box;
+          if (next.box) {
+            $('label').textContent = next.box.label;
+            $('words').placeholder = next.box.placeholder;
+            $('send').disabled = !next.box.ready;
+          }
+          $('rows').replaceChildren(...(key === 'home' ? places(next.places) : next.rows.map(row)));
+          $('notify').hidden = key !== 'home' || !$('notifytext').textContent;
+          if (conversation(key) && (fresh || nearBottom)) window.scrollTo(0, document.body.scrollHeight);
+          else if (fresh) window.scrollTo(0, 0);
+          if (conversation(key) && document.visibilityState === 'visible') act({ act: 'seen', key }, true);
+        }
+
+        function cat(color, name, small) {
+          const node = el('span', small ? 'cat small' : 'cat', (name || '?').slice(0, 1).toUpperCase());
+          if (color) node.style.background = color;
+          return node;
+        }
+
+        function places(list) {
+          const nodes = [];
+          let group;
+          for (const place of list) {
+            if (place.group && place.group !== group) nodes.push(el('h2', 'group', place.group));
+            group = place.group;
+            const button = el('button', 'place' + (place.unread ? ' unread' : '') + (place.asleep ? ' asleep' : ''));
+            button.type = 'button';
+            if (place.group) button.append(cat(place.color, place.title));
+            button.append(el('span', 'name', place.title));
+            if (place.unread) button.append(el('span', 'dot'));
+            if (place.count) button.append(el('span', 'count', String(place.count)));
+            button.onclick = () => go(place.key);
+            nodes.push(button);
+          }
+          return nodes;
+        }
+
+        const time = (at) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+        function row(item) {
+          switch (item.kind) {
+            case 'day': return el('div', 'day', item.text);
+            case 'note': return el('p', 'note', item.text);
+            case 'subject': {
+              const node = el('button', 'subject');
+              node.type = 'button';
+              node.append(el('b', null, item.title), item.detail ? ' · ' + item.detail : '', item.open ? ' ›' : '');
+              if (item.open) node.onclick = () => go(item.open);
+              return node;
+            }
+            case 'message': return message(item);
+            case 'section': {
+              const node = el('div', 'section');
+              node.append(el('span', null, item.title));
+              if (item.clear) {
+                const clear = el('button', null, words.clear);
+                clear.type = 'button';
+                clear.onclick = () => act({ act: 'clear', kind: item.clear });
+                node.append(clear);
+              }
+              return node;
+            }
+            case 'heading': {
+              const node = el('div', 'heading');
+              const name = el('div');
+              name.append(el('b', null, item.name), el('p', null, item.detail));
+              node.append(cat(item.color, item.name), name);
+              return node;
+            }
+            case 'issue': {
+              const node = el('button', 'issue');
+              node.type = 'button';
+              node.append(el('span', null, item.title), el('small', null, item.detail));
+              node.onclick = () => go(item.open);
+              return node;
+            }
+            default: return card(item);
+          }
+        }
+
+        function message(item) {
+          const node = el('div', 'msg' + (item.mine ? ' mine' : ''));
+          const meta = item.mine ? [time(item.at)] : [item.name, item.detail, time(item.at)];
+          node.append(el('div', 'meta', meta.filter(Boolean).join(' · ')));
+          if (item.text) {
+            const bubble = el('div', 'bubble' + (item.going ? ' going' : ''));
+            bubble.append(...marked(item.text));
+            if (item.color) { bubble.style.background = item.color; bubble.style.color = item.ink; }
+            node.append(bubble);
+            if (item.text.length > 600) {
+              const open = expanded.has(item.id);
+              bubble.classList.toggle('cut', !open);
+              const more = el('button', 'more', open ? words.less : words.more);
+              more.type = 'button';
+              more.onclick = () => {
+                if (expanded.has(item.id)) expanded.delete(item.id); else expanded.add(item.id);
+                const cut = bubble.classList.toggle('cut');
+                more.textContent = cut ? words.more : words.less;
+              };
+              node.append(more);
+            }
+          }
+          if (item.failure) node.append(el('div', 'failure', item.failure));
+          return node;
+        }
+
+        // The little markdown kittens write, as nodes and never markup: bold, italics, code and web links.
+        function marked(text) {
+          const nodes = [];
+          const pattern = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\*([^*\s][^*]*)\*/g;
+          let at = 0;
+          for (const found of text.matchAll(pattern)) {
+            nodes.push(text.slice(at, found.index));
+            if (found[1]) nodes.push(el('strong', null, found[1]));
+            else if (found[2]) nodes.push(el('code', null, found[2]));
+            else if (found[3]) {
+              const link = el('a', null, found[3]);
+              link.href = found[4];
+              link.rel = 'noopener noreferrer';
+              link.target = '_blank';
+              nodes.push(link);
+            } else nodes.push(el('em', null, found[5]));
+            at = found.index + found[0].length;
+          }
+          nodes.push(text.slice(at));
+          return nodes;
+        }
+
+        function button(label, onclick, className) {
+          const node = el('button', className, label);
+          node.type = 'button';
+          node.onclick = onclick;
+          return node;
+        }
+
+        function card(item) {
+          const node = el('article', 'card ' + item.kind);
+          const header = el('header');
+          header.append(cat(item.color, item.name, true), el('span', 'title', item.title));
+          if (item.at) header.append(el('time', null, time(item.at)));
+          node.append(header, el('p', 'text', item.text));
+          if (item.answer) node.append(el('p', 'answer', item.answer));
+          if (item.kind === 'question') question(item, node);
+          const buttons = el('div', 'buttons');
+          if (item.kind === 'approval') {
+            for (const choice of item.choices) {
+              buttons.append(button(choice.label, (event) => {
+                buttons.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+                act({ act: 'approval', id: item.id, value: choice.value });
+              }));
+            }
+          }
+          if (item.kind === 'report') {
+            buttons.append(button(item.choices[0].label, () => go(item.open)));
+            if (item.done) buttons.append(button(words.done, () => act({ act: 'done', id: item.id })));
+          }
+          if (buttons.childElementCount) node.append(buttons);
+          if (item.footer) node.append(el('p', 'footer', item.footer));
+          return node;
+        }
+
+        // Every part at once, since T3 takes them together. A single choice with nothing to type goes on the tap.
+        function question(item, node) {
+          const parts = item.parts || [];
+          if (!parts.length) return;
+          const picked = answers.get(item.id) || parts.map(() => '');
+          answers.set(item.id, picked);
+          const send = button(words.answer, () => {
+            send.disabled = true;
+            act({ act: 'answer', id: item.id, answers: picked }).then((done) => { if (done) answers.delete(item.id); else send.disabled = false; });
+          }, 'go');
+          const ready = () => { send.disabled = picked.some((answer) => !answer.trim()); };
+          const instant = parts.length === 1 && !parts[0].words;
+          parts.forEach((part, index) => {
+            const box = el('div', 'part');
+            if (parts.length > 1 || part.text !== item.text) box.append(el('p', 'text', (parts.length > 1 ? (index + 1) + ' of ' + parts.length + ': ' : '') + part.text));
+            const choices = el('div', 'buttons');
+            for (const choice of part.choices) {
+              const pick = button(choice.label, () => {
+                if (instant) {
+                  choices.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+                  act({ act: 'answer', id: item.id, answers: [choice.value] });
+                  return;
+                }
+                picked[index] = choice.value;
+                choices.querySelectorAll('button').forEach((b) => b.classList.toggle('picked', b === pick));
+                if (input) input.value = '';
+                ready();
+              });
+              if (picked[index] === choice.value) pick.classList.add('picked');
+              choices.append(pick);
+            }
+            let input = null;
+            if (part.words) {
+              input = el('input');
+              input.placeholder = 'Your answer';
+              if (!part.choices.some((choice) => choice.value === picked[index])) input.value = picked[index];
+              input.oninput = () => {
+                picked[index] = input.value;
+                choices.querySelectorAll('button').forEach((b) => b.classList.remove('picked'));
+                ready();
+              };
+            }
+            if (choices.childElementCount) box.append(choices);
+            if (input) box.append(input);
+            node.append(box);
+          });
+          if (!instant) {
+            ready();
+            const row = el('div', 'buttons');
+            row.append(send);
+            node.append(row);
+          }
+        }
+
+        $('back').onclick = () => { if (view && view.back) go(view.back); };
+
+        $('box').onsubmit = async (event) => {
+          event.preventDefault();
+          const text = $('words').value.trim();
+          if (!text) return;
+          $('send').disabled = true;
+          const done = await act({ act: 'send', key, text });
+          $('send').disabled = false;
+          if (!done) return;
+          $('words').value = '';
+          fit();
+          if (done.open) go(done.open);
+        };
+
+        function fit() {
+          const words = $('words');
+          words.style.height = 'auto';
+          words.style.height = words.scrollHeight + 'px';
+        }
+        $('words').addEventListener('input', fit);
+
+        $('pairform').onsubmit = async (event) => {
+          event.preventDefault();
+          if (await pair($('code').value)) start();
+        };
+
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible' && view && conversation(key)) act({ act: 'seen', key }, true);
+        });
+
+        start();
+        """#
+
+    static let manifest = """
+        {"name": "Shades", "short_name": "Shades", "start_url": "/?key=home", "scope": "/", "display": "standalone",
+         "background_color": "#1d1d1f", "theme_color": "#1d1d1f", "icons": [{"src": "/icon.png", "sizes": "180x180", "type": "image/png"}]}
+        """
+
+    /// Runs on the phone even with the page closed. Each push says only who and what kind, and tapping it opens
+    /// Needs you, where it is.
+    static let worker = #"""
+        'use strict';
+        self.addEventListener('push', (event) => {
+          let message = {};
+          try { message = event.data ? event.data.json() : {}; } catch (error) {}
+          event.waitUntil(self.registration.showNotification(message.title || 'Shades', { tag: message.tag, icon: '/icon.png' }));
+        });
+        self.addEventListener('notificationclick', (event) => {
+          event.notification.close();
+          event.waitUntil((async () => {
+            for (const client of await clients.matchAll({ type: 'window', includeUncontrolled: true })) {
+              await client.navigate('/?key=needs');
+              return client.focus();
+            }
+            return clients.openWindow('/?key=needs');
+          })());
+        });
+        """#
+}

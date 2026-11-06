@@ -37,6 +37,10 @@ final class AppController {
     let notify: (NeedsYouAlert) -> Void
     let withdrawNotifications: ([String]) -> Void
     let clearNotifications: () -> Void
+    let phoneKeys: PhoneKeyStoring
+    let servePhone: (UInt16) async throws -> String
+    let stopServingPhone: () async -> Void
+    let sendPush: (URLRequest) async -> Int?
     let stage: CatStage
     let now: () -> Date
     let launchedAt: Date
@@ -136,6 +140,17 @@ final class AppController {
     var notified: Set<String> = []
     /// Those that haven't been taken back.
     var showing: Set<String> = []
+    /// Messages on your phone, while it's on.
+    var phone: PhoneLink?
+    /// Where the phone page is on your tailnet, once Tailscale has said.
+    var phoneAddress: String?
+    /// The loopback port it's listening on.
+    var phoneListening: UInt16?
+    var phoneTask: Task<Void, Never>?
+    /// What was last asked of Tailscale, so each ask waits for the one before, and turning it off always comes last.
+    var phoneTailscale: Task<Void, Never>?
+    /// How long Messages stays open after a phone stops looking, so going from place to place on it doesn't close it.
+    var phoneGrace: TimeInterval = 20
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
     /// Waiting a little before saying it's finished means that doesn't read as done.
     var reportDelay: TimeInterval = 5
@@ -196,11 +211,15 @@ final class AppController {
         notify = dependencies.notify
         withdrawNotifications = dependencies.withdrawNotifications
         clearNotifications = dependencies.clearNotifications
+        phoneKeys = dependencies.phoneKeys
+        servePhone = dependencies.servePhone
+        stopServingPhone = dependencies.stopServingPhone
+        sendPush = dependencies.sendPush
         self.stage = stage
         self.now = now
         launchedAt = now()
         channels = ChannelFeed(backend: dependencies.backend, kittens: dependencies.kittens)
-        channels.onChange = { [weak self] in self?.stage.updateChannels($0) }
+        channels.onChange = { [weak self] in self?.channelsChanged($0) }
         channels.waiting = { [weak self] in self?.waiting ?? Waiting() }
         channels.isUnread = { [weak self] in self?.inbox.isUnread($0) ?? false }
         channels.alsoInEveryone = { [weak self] in self?.messagesThreads ?? [:] }
@@ -238,6 +257,7 @@ final class AppController {
         startInbox()
         // Anything from before may have been answered since, and the cat says again whatever's still waiting.
         clearNotifications()
+        if settings.phone { startPhone() }
     }
 
     func startKeys() {
@@ -386,6 +406,7 @@ final class AppController {
 
     func apply(_ updated: Settings) {
         let keysChanged = updated.talkKey != settings.talkKey || updated.dictateKey != settings.dictateKey
+        let phoneChanged = updated.phone != settings.phone
         settings = updated
         saveSettings(updated)
         updateVocabulary(watch.threads)
@@ -393,5 +414,6 @@ final class AppController {
             keys.stop()
             startKeys()
         }
+        if phoneChanged { updated.phone ? startPhone() : stopPhone() }
     }
 }

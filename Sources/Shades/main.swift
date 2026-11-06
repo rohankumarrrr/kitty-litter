@@ -31,6 +31,9 @@ MainActor.assumeIsolated {
         let inboxFile = Settings.directory.appendingPathComponent("inbox.json")
         // A copy trying a flow out sees your real threads too, and the real app already says.
         let notifications = DevFlags.wantsFlow ? nil : NeedsYouNotifications()
+        var settings = Settings.load()
+        if DevFlags.wantsFlow { settings.phone = false }
+        let tailscale = DevFlags.wantsFlow ? nil : TailscaleServe(port: PhoneLink.port)
         let real = AppController(
             dependencies: AppDependencies(
                 backend: backend,
@@ -38,7 +41,7 @@ MainActor.assumeIsolated {
                 voice: voice,
                 inserter: TextInserter(),
                 keys: keys,
-                settings: Settings.load(),
+                settings: settings,
                 saveSettings: { try? $0.save() },
                 screenTip: { context.takeJavaScriptTip() },
                 kittens: { Kittens.load() },
@@ -59,7 +62,17 @@ MainActor.assumeIsolated {
                 hidesTestThreads: !DevFlags.wantsFlow,
                 notify: { notifications?.post($0) },
                 withdrawNotifications: { notifications?.withdraw($0) },
-                clearNotifications: { notifications?.clear() }
+                clearNotifications: { notifications?.clear() },
+                // A copy trying a flow out stays off your phone, and out of the real app's way.
+                phoneKeys: DevFlags.wantsFlow ? MemoryPhoneKeys() : KeychainPhoneKeys(),
+                servePhone: { port in
+                    guard let tailscale else { throw TailscaleServe.Problem(errorDescription: "A copy trying a flow out stays off your tailnet.") }
+                    return try await tailscale.serve(to: port)
+                },
+                stopServingPhone: { await tailscale?.stop() },
+                sendPush: { request in
+                    (try? await URLSession(configuration: .ephemeral).data(for: request)).flatMap { ($0.1 as? HTTPURLResponse)?.statusCode }
+                }
             ),
             stage: stage
         )

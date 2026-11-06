@@ -51,7 +51,7 @@ final class KittenPanel {
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            MainActor.assumeIsolated { self?.hide() }
+            MainActor.assumeIsolated { if !ClickAway.isPaused { self?.hide() } }
         }
         onChange?()
     }

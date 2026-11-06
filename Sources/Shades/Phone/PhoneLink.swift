@@ -1,0 +1,202 @@
+import AppKit
+import ShadesCore
+
+/// Messages on your phone: the page, a stream of what one place in Messages shows, and what you do there, which goes
+/// through the same `messagesAction` as the window. Only a paired phone gets past the page itself.
+@MainActor
+final class PhoneLink {
+    /// Where the page is on your tailnet, beside T3's own. On loopback it's a free port, whichever Shades has this time.
+    static let port: UInt16 = 4797
+
+    private final class Watcher {
+        let stream: PhoneStream
+        var key: String
+        var shown: PhoneView?
+
+        init(stream: PhoneStream, key: String) {
+            self.stream = stream
+            self.key = key
+        }
+    }
+
+    let door: PhoneDoor
+    let pushes: PhonePushes
+    var onPaired: (() -> Void)?
+    private let server = PhoneServer()
+    /// Holds Messages open, and returns what it shows.
+    private let hold: () -> ChannelBook?
+    /// Lets it go once nobody's looking.
+    private let release: () -> Void
+    private let act: (MessagesAction) -> Void
+    private let now: () -> Date
+    /// How long Messages stays open after the last phone stops looking. Each place on the page is a stream of its
+    /// own, so moving from one to the next would otherwise close it in between, and forget what you'd just sent.
+    private let grace: TimeInterval
+    private var watchers: [Watcher] = []
+    private var book: ChannelBook?
+    private var letting: Task<Void, Never>?
+
+    init(
+        keys: PhoneKeyStoring,
+        grace: TimeInterval,
+        hold: @escaping () -> ChannelBook?,
+        release: @escaping () -> Void,
+        act: @escaping (MessagesAction) -> Void,
+        sendPush: @escaping (URLRequest) async -> Int?,
+        now: @escaping () -> Date
+    ) {
+        door = PhoneDoor(keys: keys)
+        pushes = PhonePushes(keys: keys, send: sendPush)
+        self.grace = grace
+        self.hold = hold
+        self.release = release
+        self.act = act
+        self.now = now
+        server.respond = { [weak self] in self?.respond(to: $0) ?? .status(404) }
+    }
+
+    /// Returns the port it's listening on.
+    func start(port: UInt16) async throws -> UInt16 {
+        try await server.start(port: port)
+    }
+
+    func stop() {
+        server.stop()
+        watchers.forEach { $0.stream.close() }
+        letting?.cancel()
+        forget()
+    }
+
+    var isWatched: Bool { !watchers.isEmpty }
+
+    /// Whether a phone is holding Messages open, because it's looking or has only just stopped.
+    var isHolding: Bool { book != nil }
+
+    /// Messages changed, so each phone gets what its place shows now, if that's different.
+    func publish(_ book: ChannelBook) {
+        guard self.book != nil else { return }
+        self.book = book
+        watchers.forEach { show(book, to: $0) }
+    }
+
+    private func show(_ book: ChannelBook, to watcher: Watcher) {
+        let view = PhoneView(PhonePlace(watcher.key, in: book), in: book, now: now())
+        watcher.key = view.key
+        guard view != watcher.shown, let json = try? JSONEncoder().encode(view) else { return }
+        watcher.shown = view
+        watcher.stream.send(json)
+    }
+
+    private func respond(to request: PhoneServer.Request) -> PhoneServer.Response {
+        switch (request.method, request.path) {
+        case ("GET", "/"):
+            return .full(status: 200, type: "text/html; charset=utf-8", body: Data(PhonePage.html.utf8))
+        case ("GET", "/app.js"):
+            return .full(status: 200, type: "text/javascript; charset=utf-8", body: Data(PhonePage.script.utf8))
+        case ("GET", "/app.css"):
+            return .full(status: 200, type: "text/css; charset=utf-8", body: Data(PhonePage.style.utf8))
+        // What a phone needs to keep the page on its Home Screen, and to show notifications while it's closed.
+        case ("GET", "/manifest.json"):
+            return .full(status: 200, type: "application/manifest+json", body: Data(PhonePage.manifest.utf8))
+        case ("GET", "/sw.js"):
+            return .full(status: 200, type: "text/javascript; charset=utf-8", body: Data(PhonePage.worker.utf8))
+        case ("GET", "/icon.png"):
+            return .full(status: 200, type: "image/png", body: Self.icon)
+        case ("GET", "/hello"):
+            return door.admits(request) ? .status(204) : .status(401)
+        case ("POST", "/pair"):
+            return pair(request)
+        case ("GET", "/events"):
+            return door.admits(request) ? watch(request.query["key"] ?? PhonePlace.home) : .status(401)
+        case ("POST", "/act"):
+            return door.admits(request) ? perform(request) : .status(401)
+        case ("GET", "/push"):
+            return door.admits(request) ? .json(["key": pushes.publicKey]) : .status(401)
+        case ("POST", "/push"):
+            return door.admits(request) ? subscribe(request) : .status(401)
+        case (_, "/"), (_, "/hello"), (_, "/pair"), (_, "/events"), (_, "/act"), (_, "/push"):
+            return .status(405)
+        default:
+            return .status(404)
+        }
+    }
+
+    /// Only the page sends this header, and another site's page can't without asking first, which nothing here allows.
+    /// That keeps another site from using up a pairing code by guessing.
+    private static func isFromPage(_ request: PhoneServer.Request) -> Bool {
+        request.headers["x-shades"] == "1" && request.headers["content-type"]?.hasPrefix("application/json") == true
+    }
+
+    private struct Code: Decodable {
+        var code: String
+    }
+
+    private struct Paired: Encodable {
+        var key: String
+    }
+
+    private func pair(_ request: PhoneServer.Request) -> PhoneServer.Response {
+        guard Self.isFromPage(request), let code = try? JSONDecoder().decode(Code.self, from: request.body) else { return .status(400) }
+        guard let key = door.pair(code.code, now: now()) else { return .status(403) }
+        onPaired?()
+        return .json(Paired(key: key))
+    }
+
+    private func watch(_ key: String) -> PhoneServer.Response {
+        let stream = PhoneStream()
+        let watcher = Watcher(stream: stream, key: key)
+        letting?.cancel()
+        letting = nil
+        book = hold()
+        watchers.append(watcher)
+        stream.onClose = { [weak self, weak watcher] in
+            guard let self else { return }
+            self.watchers.removeAll { $0 === watcher }
+            guard self.watchers.isEmpty else { return }
+            self.letting = Task { [weak self, grace] in
+                try? await Task.sleep(nanoseconds: UInt64(grace * 1_000_000_000))
+                guard !Task.isCancelled, let self, self.watchers.isEmpty else { return }
+                self.forget()
+            }
+        }
+        if let book { show(book, to: watcher) }
+        return .stream(stream)
+    }
+
+    /// As when the window closes, nothing that was said is kept once nobody's looking.
+    private func forget() {
+        guard book != nil else { return }
+        book = nil
+        release()
+    }
+
+    private func subscribe(_ request: PhoneServer.Request) -> PhoneServer.Response {
+        guard Self.isFromPage(request), let subscription = try? JSONDecoder().decode(WebPush.Subscription.self, from: request.body) else { return .status(400) }
+        return pushes.subscribe(subscription) ? .status(204) : .status(400)
+    }
+
+    /// The app's own icon, at the size a Home Screen wants.
+    private static let icon: Data = {
+        let side = 180
+        let image = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return Data() }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+        NSGraphicsContext.restoreGraphicsState()
+        return bitmap.representation(using: .png, properties: [:]) ?? Data()
+    }()
+
+    private struct Opened: Encodable {
+        var open: String?
+    }
+
+    private func perform(_ request: PhoneServer.Request) -> PhoneServer.Response {
+        guard Self.isFromPage(request), let ask = try? JSONDecoder().decode(PhoneAsk.self, from: request.body) else { return .status(400) }
+        // Messages is only open while a phone is looking, and what's done is checked against what it shows.
+        guard let book, let (action, opens) = ask.action(in: book, newTopic: { "sent-\(UUID().uuidString)" }) else { return .status(409) }
+        act(action)
+        return .json(Opened(open: opens))
+    }
+}

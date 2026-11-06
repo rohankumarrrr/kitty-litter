@@ -35,7 +35,8 @@ extension AppController {
     }
 
     func channelsClosed() {
-        channels.close()
+        // A phone that's looking keeps what's been said. Once it stops too, it's forgotten.
+        if phone?.isHolding != true { channels.close() }
         messagesClosings += 1
         guard nudgeOnClose else { return }
         nudgeOnClose = false

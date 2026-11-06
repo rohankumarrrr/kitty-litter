@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import CryptoKit
 import Foundation
 import ShadesCore
 
@@ -87,6 +88,15 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
+    func answer(_ question: AgentQuestion, with answers: [String]) async throws {
+        print("[demo] answered: \(answers.joined(separator: " | "))")
+        update { threads in
+            guard let index = threads.firstIndex(where: { $0.id == question.threadID }) else { return }
+            threads[index].pendingQuestion = nil
+            threads[index].status = .running
+        }
+    }
+
     func projectID(atPath path: String) async -> String? { "demo-project" }
 
     func report(threadID: String, run: String?) async throws -> String? {
@@ -116,7 +126,14 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
                 threadID: threadID,
                 threadTitle: threads[index].title,
                 text: "Which pixel font should the headings use?",
-                options: ["Silkscreen (Recommended)", "Press Start 2P", "Keep the system font"]
+                options: ["Silkscreen (Recommended)", "Press Start 2P", "Keep the system font"],
+                form: AnswerForm(parts: [AnswerForm.Part(
+                    key: "font",
+                    text: "Which pixel font should the headings use?",
+                    options: ["Silkscreen (Recommended)", "Press Start 2P", "Keep the system font"],
+                    values: ["Silkscreen", "Press Start 2P", "Keep the system font"],
+                    takesOwnWords: true
+                )])
             )
         }
     }
@@ -306,7 +323,7 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
 
     /// The pricing page's heading, its trial button and its plan, and Safari's Share button just under
     /// the menu bar, where they'd sit on the main display.
-    private static func elements(on screen: CGRect) -> [ScreenElement] {
+    static func elements(on screen: CGRect) -> [ScreenElement] {
         func at(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> CGRect {
             CGRect(x: screen.minX + screen.width * x, y: screen.maxY - screen.height * y - height, width: width, height: height)
         }
@@ -449,6 +466,13 @@ enum Demo {
     }
 
     /// Enough of a team to show every state in the kitten view.
+    /// A phone's half of a push subscription, which `phone subscribe` hands the page.
+    static let phone = P256.KeyAgreement.PrivateKey()
+    static let phoneAuth = Data((0..<16).map { _ in UInt8.random(in: .min ... .max) })
+    static var phoneSubscription: WebPush.Subscription {
+        WebPush.Subscription(endpoint: "https://web.push.apple.com/demo-phone", p256dh: WebPush.string(phone.publicKey.x963Representation), auth: WebPush.string(phoneAuth))
+    }
+
     static let kittens = [
         Kitten(name: "Steve Pawsniak", role: "Professional", covers: "Their career, resume and interviews.", folder: "/demo/steve"),
         Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: 0xb3261e, seesScreen: false),
@@ -474,7 +498,16 @@ enum Demo {
             kittens: { Demo.kittens },
             routerFolder: { "demo-router" },
             notify: { print("[demo] notified: \(CatWords.notification($0))") },
-            withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") }
+            withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") },
+            // The page stays on loopback, on a free port, so it's never on your tailnet or in the real app's way.
+            servePhone: { "http://127.0.0.1:\($0)" },
+            stopServingPhone: { print("[demo] phone page off") },
+            // Nothing leaves the Mac. The stand-in phone opens what it's sent, to show what a real one would get.
+            sendPush: { request in
+                let opened = request.httpBody.flatMap { try? WebPush.decrypt($0, with: Demo.phone, auth: Demo.phoneAuth) }
+                print("[demo] pushed to \(request.url?.host ?? "?"): \(opened.map { String(decoding: $0, as: UTF8.self) } ?? "nothing it could open")")
+                return 201
+            }
         )
         return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys)
     }

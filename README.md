@@ -8,21 +8,35 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 ## What it does
 
+The recordings here come from demo mode, with made-up kittens and a pretend pricing page, and Shades draws each frame from its own windows.
+
 **Ask.** Press ⌥Space or click the cat, and ask anything. It looks at your screen at that moment and answers in a bubble, usually in about 10 seconds, though a model can occasionally take much longer. Good for "how do I start problem 3?" or "what does this error mean?" Ask where something is, like "where's the export button?", and the cat runs over and sits on it. It only points, and never clicks. If it can't find the spot, it says so.
+
+<p><img src="docs/images/ask.gif" width="372" alt="Typing a question into the Ask box over a pricing page, and the cat answering in a bubble"> <img src="docs/images/point.gif" width="409" alt="Asking where to start a free trial, and the cat running over to sit on the Start free trial button"></p>
 
 **Rewrite what you've selected.** Select some text, ask the cat to "tighten this" or "make it friendlier", and the rewrite shows in the bubble with **Replace**. Nothing in your app changes until you press it. Then it goes in place of your selection, as long as the same text is still selected, and Command-Z takes it back. That works in apps whose text fields allow it, such as Notes, Mail and TextEdit. Anywhere else, or if the selection has moved, the rewrite is copied for you to paste instead.
 
 **Drop onto the cat.** Drag a PDF, a picture or a link onto the cat, and the Ask box opens with it. Ask about it, or just press Return for a summary. It goes through the router like any question, so a syllabus can go to one kitten and a job posting to another. Only what you dropped goes with your words, with no look at your screen.
 
+<img src="docs/images/drop.gif" width="372" alt="A dropped syllabus opening the Ask box, and the cat summarizing it">
+
 **Fix what I'm looking at.** Press ⌃⌥F and drag a box around whatever's wrong. Say what's wrong, or just press Return. A frontier agent works out which of your projects it is, and fixes it in its own worktree, so your checkout stays untouched.
 
 **Talk and dictate.** Hold right Option to talk to the cat. Hold Fn to dictate into any app, and your rambling comes out as clean text: fillers gone, self-corrections applied. Speech recognition and cleanup both run on your Mac.
 
+<img src="docs/images/talk.gif" width="372" alt="Holding the talk key, the cat showing what it heard, then answering">
+
 **Watch your agents.** The cat sleeps when nothing's running, and is up and about when agents are working. When a session ends, it tells you how it went in two or three sentences. When an agent has a question, it shows you the question and your options. When one needs permission, the cat comes over with the exact command, so you can allow or deny it without leaving what you're doing. Shift-click the cat to see all your kittens and which are working, need you or are idle. A kitten can send its reports to Messages instead, where they wait under Needs you: what shipped, what you need to decide, and a way to reply to any of it.
 
-**Messages.** Press ⌃⌘B from anywhere, or choose Messages from the cat's menu, for one window with everything your kittens need from you, so you rarely have to open T3. It reads like iMessage: your messages on the right in blue, and each kitten's on the left in its own colour. **Needs you** is pinned at the top: approvals, questions, reports waiting on a decision, what shipped, and what each kitten is on. When something new needs you, a macOS notification says who and what kind, and clicking it opens Needs you. Once a thread's finished it moves to **Done**, out of the way until you go looking. **Everyone** is a group chat with all your kittens. What you type there goes through the router, the same as the Ask box, and whoever takes it answers as itself. Each kitten has a conversation of its own, with all its threads together, each under its title and project, and a dot when it's finished something you haven't read. Like threads in Slack, click a title or Reply on a message to open that thread on its own, where what you type goes only into it. The box under the whole conversation starts a new topic. Nothing typed in Messages looks at your screen, and the window never shows up in a screenshot.
+<p><img src="docs/images/approval.gif" width="477" alt="The cat coming over with a command an agent wants to run, and Allow being pressed"> <img src="docs/images/kittens.gif" width="312" alt="The view of every kitten, with what each is doing"></p>
 
-![Messages, with your kittens in a group chat](docs/images/messages.png)
+**Messages.** Press ⌃⌘B from anywhere, or choose Messages from the cat's menu, for one window with everything your kittens need from you, so you rarely have to open T3. It reads like iMessage: your messages on the right in blue, and each kitten's on the left in its own colour. **Needs you** is pinned at the top: approvals, questions, reports waiting on a decision, what shipped, and what each kitten is on. When something new needs you, a macOS notification says who and what kind, and clicking it opens Needs you. Once a thread's finished it moves to **Done**, out of the way until you go looking. **Everyone** is a group chat with all your kittens. What you type there goes through the router, the same as the Ask box, and whoever takes it answers as itself. Each kitten has a conversation of its own, with all its threads together, each under its title and project, and a dot when it's finished something you haven't read. Like threads in Slack, click a title or Reply on a message to open that thread on its own, where what you type goes only into it. The box under the whole conversation starts a new topic. Nothing typed in Messages looks at your screen, and the window never shows up in a screenshot. Turn on **Messages on my phone** in Settings, and it's in your phone's browser too, over your Tailscale network, with the same buttons and the same notifications. See [On your phone](docs/kittens.md#on-your-phone).
+
+<img src="docs/images/messages.gif" width="700" alt="Messages: Everyone, a message sent to whoever it's for, then a kitten's conversation and one of its threads on its own">
+
+On your phone, the same Messages over your tailnet:
+
+<img src="docs/images/phone.gif" width="300" alt="Messages on a phone: allowing an approval in Needs you, then sending in Everyone and getting an answer">
 
 ## How the work gets routed
 
@@ -78,7 +92,8 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 - **What you drop:** a PDF's text, a picture or a link, plus the file's name and where it is on your Mac, go to the router and whoever it picks. A kitten that doesn't see your screen gets nothing you drop, with the same exception as your screen: a new thread titled with its name.
 - **Saved screenshots:** agents get a copy to open, kept in `~/Library/Application Support/shades/captures` for a day.
 - **Agents run as you:** they can open anything you can, including the copies of your screen that T3 Code, Claude and Codex keep. If T3 Code has Screen Recording or Accessibility, so does every agent it runs, whatever the privacy list says. Shades has its own permissions and doesn't need T3 Code to have them. [Keeping a kitten off your screen](docs/kittens.md#keeping-a-kitten-off-your-screen) says what can be enforced and what can't.
-- **Notifications:** they say only who needs you and for what, such as "Pepper needs an approval", and never what was asked, since Notification Center keeps its own copy and can show it on the lock screen.
+- **Notifications:** they say only who needs you and for what, such as "Pepper needs an approval", and never what was asked, since Notification Center keeps its own copy and can show it on the lock screen. On a paired phone they're encrypted for that phone alone, so its push service sees only that Shades sent something.
+- **Your phone:** Messages on your phone is off until you turn it on. Then the page is on your Tailscale network, and only a phone you've paired with a code from your Mac gets past it. What it shows goes to your phone's browser, and Shades keeps only a hash of each phone's key, in your Keychain. Turning it off unpairs every phone.
 - **The inbox:** what's in it is saved only on your Mac, in `~/Library/Application Support/shades/inbox.json`, which only you can read. A reply is your words and nothing else. It never looks at your screen.
 
 ## Kittens

@@ -23,6 +23,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         var dictateKey: NSPopUpButton
         var privateApps: NSTextField
         var vocabulary: NSTextField
+        var phone: NSButton
     }
 
     func show(_ settings: Settings, near corner: NSPoint, onSave: @escaping (Settings) -> Void) {
@@ -96,8 +97,11 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             talkKey: popup(HoldKey.allCases, settings.talkKey, title: Self.keyName),
             dictateKey: popup(HoldKey.allCases, settings.dictateKey, title: Self.keyName),
             privateApps: field(settings.privateApps.joined(separator: ", "), "Bundle IDs, comma separated"),
-            vocabulary: field(settings.vocabulary.joined(separator: ", "), "Words I should know")
+            vocabulary: field(settings.vocabulary.joined(separator: ", "), "Words I should know"),
+            phone: NSButton(checkboxWithTitle: "Messages on my phone, over Tailscale", target: nil, action: nil)
         )
+        form.phone.font = .systemFont(ofSize: 12)
+        form.phone.state = settings.phone ? .on : .off
         fields = form
 
         for view in [
@@ -110,6 +114,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             row("Hold to dictate", form.dictateKey),
             row("Private apps", form.privateApps),
             row("Extra words", form.vocabulary),
+            row("Phone", form.phone),
         ] { stack.addArrangedSubview(view) }
 
         let save = QuietButton("Save", style: .filled) { [weak self] in self?.save() }
@@ -151,6 +156,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         settings.dictateKey = Self.selected(form.dictateKey) ?? current.dictateKey
         settings.privateApps = Self.list(form.privateApps.stringValue)
         settings.vocabulary = Self.list(form.vocabulary.stringValue)
+        settings.phone = form.phone.state == .on
         onSave?(settings)
         hide()
     }
