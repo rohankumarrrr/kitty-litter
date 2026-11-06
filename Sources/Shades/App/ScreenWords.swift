@@ -59,7 +59,7 @@ enum ScreenWords {
                   let range = Range(match.range, in: words)
             else { return false }
             let typed = words[range].lowercased()
-            return typed.hasPrefix("http") || typed.hasPrefix("www.") || url.path.count > 1 || url.query != nil
+            return ["http://", "https://", "www."].contains { typed.hasPrefix($0) } || url.path.count > 1 || url.query != nil
         }
     }
 }

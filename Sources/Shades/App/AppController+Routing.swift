@@ -113,13 +113,16 @@ extension AppController {
         if notices.count != before { renderBubble() }
     }
 
-    /// The warning goes with the work, so it's taken back if that fails. A run the thread had already finished isn't it.
+    /// The warning goes with the work, so it's taken back if that fails, even if it already has. A run the thread
+    /// had already finished well isn't the work.
     func moveScreenWarnings(from threadID: String, to next: String) {
         let known = latestThreads.first { $0.id == next }
+        let finishedWell = known.map { !$0.status.isActive && $0.status != .failed } == true
         for index in notices.indices where notices[index].text == CatWords.sendTheLink && notices[index].threadID == threadID {
             notices[index].threadID = next
-            notices[index].after = known?.status.isActive == false ? known?.lastRunID : nil
+            notices[index].after = finishedWell ? known?.lastRunID : nil
         }
+        dropScreenWarnings(forFailuresIn: known.map { [$0] } ?? [])
     }
 
     /// Only that one, since another send's warning for the same thread can still stand.
@@ -219,7 +222,7 @@ extension AppController {
                     case .finished where isQuick:
                         reportOn(thread, failed: false)
                     case .failed(let message):
-                        dropScreenWarning(for: thread.id)
+                        if let warning { takeBackNotice(warning) }
                         if isQuick { say(message) }
                     default:
                         break

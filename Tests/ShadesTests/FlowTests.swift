@@ -162,6 +162,18 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
             return count
         }
         if holdStarts { return AsyncThrowingStream { $0.yield(.started(threadID: "thread-\(id)")) } }
+        if let holdTurn, prompt.text.hasPrefix(holdTurn) {
+            let events = lock.withLock { replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst() }
+            return AsyncThrowingStream { continuation in
+                continuation.yield(.started(threadID: "thread-\(id)"))
+                lock.withLock {
+                    held.append {
+                        events.forEach { continuation.yield($0) }
+                        continuation.finish()
+                    }
+                }
+            }
+        }
         return play(threadID: "thread-\(id)", prompt: prompt)
     }
 
@@ -175,6 +187,8 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
 
     /// The router's turn for this question starts, then waits for `releaseHeld()`.
     var holdQuestion: String?
+    /// A new thread's first turn, or a follow-up, whose text starts with this starts, then waits for `releaseHeld()`.
+    var holdTurn: String?
     private var held: [() -> Void] = []
     func releaseHeld() {
         let waiting = lock.withLock { () -> [() -> Void] in
@@ -226,6 +240,18 @@ private final class FakeBackend: AgentBackend, @unchecked Sendable {
         }
         let prompt = AgentPrompt(text: text, attachments: attachments, model: .quick, runtimeMode: .auto)
         lock.withLock { _sent.append(Sent(mode: .forward, threadID: threadID, prompt: prompt)) }
+        if let holdTurn, text.hasPrefix(holdTurn) {
+            let events = lock.withLock { replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst() }
+            return AsyncThrowingStream { continuation in
+                continuation.yield(.started(threadID: threadID))
+                lock.withLock {
+                    held.append {
+                        events.forEach { continuation.yield($0) }
+                        continuation.finish()
+                    }
+                }
+            }
+        }
         return play(threadID: threadID)
     }
 
@@ -3757,3 +3783,76 @@ extension FlowTests {
     }
 }
 
+
+
+extension FlowTests {
+    /// The kitten's thread hands the reading to another, which fails before the kitten's report is read.
+    func testHandedOnWorkThatHasAlreadyFailedTakesTheWarningBack() async {
+        await askClawde("Read this x thread")
+        var kitten = work("thread-2", title: "Clawde: Read the thread", run: "k-run-1", status: .running)
+        let worker = work("worker", title: "Read the x thread", run: "w-run-1", status: .running)
+        controller.threadsChanged([kitten, worker])
+        backend.reports["thread-2"] = "The reading went to a new thread, <t3-thread://v2/env/worker>."
+        kitten.status = .completed
+        backend.whileReadingAReport = { [unowned self] in
+            self.controller.threadsChanged([kitten, worker.with(status: .failed)])
+        }
+        controller.threadsChanged([kitten, worker])
+        await controller.reportTask?.value
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    /// Words sent while an earlier turn is going still go without your screen, whatever happens to that turn.
+    func testAnEarlierTurnFailingLeavesALaterWarning() async {
+        let done = AgentThread(id: "f", title: "Work", projectTitle: nil, status: .completed, model: "m", updatedAt: clock, lastRunID: "run-1")
+        controller.threadsChanged([done])
+        backend.holdTurn = "and that part?"
+        backend.replies = [[.text(delta: "Working."), .failed(message: "It ran into a problem.")]]
+        controller.forward("and that part?", to: done, snapshot: nil)
+        for _ in 0..<20 { await Task.yield() }
+        let earlier = controller.forwardTask
+        let running = done.with(status: .running).with(run: "run-2")
+        controller.threadsChanged([running])
+
+        backend.holdTurn = nil
+        backend.replies = [[.text(delta: "Looking.")]]
+        controller.forward("Is this tweet right?", to: running, snapshot: nil)
+        await controller.forwardTask?.value
+        backend.releaseHeld()
+        await earlier?.value
+        controller.threadsChanged([running.with(status: .failed)])
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "f" })
+    }
+
+    func testANewThreadsFirstTurnFailingLeavesAFollowUpsWarning() async {
+        backend.holdTurn = "Fix the login page"
+        backend.replies = [[.failed(message: "It ran into a problem.")]]
+        controller.startFrontier(title: "Fix the login page", text: "Fix the login page", snapshot: nil)
+        for _ in 0..<20 { await Task.yield() }
+        let first = controller.frontierTask
+        let running = AgentThread(id: "thread-1", title: "Fix the login page", projectTitle: nil, status: .running, model: "m", updatedAt: clock, lastRunID: "run-1")
+        controller.threadsChanged([running])
+
+        backend.holdTurn = nil
+        backend.replies = [[.text(delta: "Looking.")]]
+        controller.forward("Is this tweet right?", to: running, snapshot: nil)
+        await controller.forwardTask?.value
+        backend.releaseHeld()
+        await first?.value
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "thread-1" })
+    }
+}
+
+private extension AgentThread {
+    func with(status: AgentStatus) -> AgentThread {
+        var copy = self
+        copy.status = status
+        return copy
+    }
+
+    func with(run: String) -> AgentThread {
+        var copy = self
+        copy.lastRunID = run
+        return copy
+    }
+}

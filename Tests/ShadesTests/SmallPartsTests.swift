@@ -162,7 +162,7 @@ final class ScreenWordsTests: XCTestCase {
     }
 
     func testASitesNameIsntTheLink() {
-        for words in ["Read this thread on x.com", "Summarize this article from nytimes.com", "Read this email from sam@example.com"] {
+        for words in ["Read this thread on x.com", "Summarize this article from nytimes.com", "Read this email from sam@example.com", "Read this thread on httpbin.org"] {
             XCTAssertTrue(ScreenWords.pointAtScreen(words), words)
         }
     }

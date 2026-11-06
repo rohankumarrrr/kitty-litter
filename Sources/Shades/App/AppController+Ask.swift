@@ -295,6 +295,7 @@ extension AppController {
         say(CatWords.handingOff(modelName: name), seconds: nil)
         frontierTask = Task {
             var startedThread: String?
+            var warning: Int?
             do {
                 for try await event in backend.start(prompt) {
                     switch event {
@@ -302,11 +303,12 @@ extension AppController {
                         startedThread = threadID
                         dispatchers.insert(threadID)
                         onStarted?(threadID)
-                        sayPassedOn(CatWords.onIt(modelName: name), threadID: threadID, missesScreen: missesScreen, asked: asked)
+                        warning = sayPassedOn(CatWords.onIt(modelName: name), threadID: threadID, missesScreen: missesScreen, asked: asked)
                     case .needsApproval(let request):
                         addApproval(request)
                     case .failed(let message):
-                        dropScreenWarning(for: startedThread)
+                        // Only this turn's, since words sent to the thread after it started still went without your screen.
+                        if let warning { takeBackNotice(warning) }
                         say(message)
                     case .text, .finished:
                         break
