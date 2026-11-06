@@ -246,3 +246,14 @@ final class PhoneTests: XCTestCase {
         }
     }
 }
+
+// MARK: - Talking to the cat
+
+extension PhoneTests {
+    func testWhatYouAskedTheCatStaysOnTheMac() {
+        let book = book()
+        XCTAssertFalse(PhoneView(PhonePlace("home", in: book), in: book, now: Date()).places.contains { $0.key == PhonePlace.key(.channel(.shades)) }, "it can be about your screen")
+        XCTAssertNil(PhonePlace(PhonePlace.key(.channel(.shades)), in: book).selection, "and a link to it is the list of places")
+        XCTAssertNil(PhonePlace(PhonePlace.key(.thread("r", in: .shades)), in: book).selection)
+    }
+}

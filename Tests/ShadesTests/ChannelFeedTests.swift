@@ -473,3 +473,42 @@ extension ChannelFeedTests {
         XCTAssertEqual(feed.threads(in: .thread("work", in: .direct(steve))).map(\.id), [], "but its latest answer isn't, so it isn't read")
     }
 }
+
+// MARK: - Talking to the cat
+
+extension ChannelFeedTests {
+    func testTheCatsOwnThreadsAreReadToo() async {
+        let talk = AgentThread(id: "r", title: "Which plan?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: start, projectPath: "/shades/router")
+        feed.isWithShades = { $0.projectPath == "/shades/router" }
+        backend.threads = [talk, thread("other", project: nil)]
+        backend.say("Which plan?", in: "r")
+        await openAndRead()
+        XCTAssertEqual(backend.reads, ["r"], "and nothing else outside a kitten")
+        XCTAssertEqual(latest?.shades.messages.first?.text, "Which plan?")
+    }
+}
+
+extension ChannelFeedTests {
+    func testLiveTestsOfTheCatDontUseUpWhatsReadOfIt() async {
+        let real = AgentThread(id: "real-router", title: "A real question", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: start, projectPath: "/shades/router")
+        let tests = (1...30).map { index in
+            AgentThread(id: "test-\(index)", title: "Shades test: \(index)", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: start.addingTimeInterval(TimeInterval(index)), projectPath: "/shades/router")
+        }
+        feed.isWithShades = { $0.projectPath == "/shades/router" }
+        backend.threads = tests + [real]
+        backend.say("A real question", in: real.id)
+        await openAndRead()
+        XCTAssertTrue(backend.reads.contains(real.id), "30 newer live tests crowded out the real talk")
+        XCTAssertEqual(latest?.shades.messages.compactMap(\.text), ["A real question"])
+    }
+
+    func testATalkWithTheCatNeverCountsAsReadAnywhereElse() async {
+        let router = AgentThread(id: "router", title: "Steve: What's here?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: start, projectPath: "/shades/router")
+        feed.isWithShades = { $0.projectPath == "/shades/router" }
+        backend.threads = [router]
+        backend.say("What's here?", in: router.id)
+        await openAndRead()
+        XCTAssertEqual(feed.threads(in: .channel(.everyone)).map(\.id), [], "Everyone doesn't show it")
+        XCTAssertEqual(feed.threads(in: .channel(.direct(steve))).map(\.id), [], "nor does Steve's DM, whatever its title says")
+    }
+}

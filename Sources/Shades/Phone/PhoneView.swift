@@ -14,7 +14,7 @@ struct PhonePlace: Equatable {
     /// An unknown key is the list of places, and a key for an inbox row that's gone is Needs you.
     init(_ key: String, in book: ChannelBook) {
         if key.hasPrefix("r:") {
-            guard let id = Self.unescape(key.dropFirst(2)), let entry = book.waiting.reports.first(where: { $0.id == id }) else {
+            guard let id = Self.unescape(key.dropFirst(2)), let entry = book.waiting.reports.first(where: { $0.id == id }), !book.talks.contains(entry.threadID) else {
                 self.init(selection: .needsYou, in: book)
                 return
             }
@@ -25,7 +25,8 @@ struct PhonePlace: Equatable {
             self.init(selection: .thread(entry.threadID, in: channel), target: target, key: key)
             return
         }
-        guard var selection = Self.selection(key) else {
+        // What you've asked the cat can be about your screen, so it stays on the Mac.
+        guard var selection = Self.selection(key), selection.channelID != .shades, !Self.isTalk(selection, in: book) else {
             self.init(selection: nil, in: book)
             return
         }
@@ -38,6 +39,11 @@ struct PhonePlace: Equatable {
             return
         }
         self.init(selection: selection, in: book)
+    }
+
+    private static func isTalk(_ selection: ChannelSelection, in book: ChannelBook) -> Bool {
+        if case .thread(let id, _) = selection { return book.talks.contains(id) }
+        return false
     }
 
     /// Whether anything the window shows for this channel opens this thread: what's been said in it, the kitten's
@@ -213,7 +219,7 @@ struct PhoneView: Encodable, Equatable {
 
     private static func places(in book: ChannelBook) -> [Place] {
         ChannelSidebarItem.groups(in: book).flatMap { group in
-            group.items.map { item in
+            group.items.filter { $0.selection.channelID != .shades }.map { item in
                 var color: UInt32?
                 var asleep = false
                 if case .kitten(let status)? = item.cats.first {

@@ -34,6 +34,17 @@ extension AppController {
         }
     }
 
+    /// Only the Ask box and Messages start threads in the router's folder, so each one there is a talk with the cat.
+    func isWithShades(_ thread: AgentThread) -> Bool {
+        if knownRouterFolder == nil { knownRouterFolder = routerFolder().map(Self.standardized) }
+        guard let folder = knownRouterFolder, let path = thread.projectPath else { return false }
+        return Self.standardized(path) == folder
+    }
+
+    private static func standardized(_ path: String) -> String {
+        URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL.path
+    }
+
     func channelsClosed() {
         // A phone that's looking keeps what's been said. Once it stops too, it's forgotten.
         if phone?.isHolding != true { channels.close() }

@@ -30,6 +30,8 @@ struct ChannelID: Hashable {
 
     /// The group chat: every DM at once, and what you say there goes through the router.
     static let everyone = ChannelID(members: [.you])
+    /// What you've said to the cat itself, from the Ask box, out loud or in Everyone. Only for reading.
+    static let shades = ChannelID(members: [.you, .cat])
 }
 
 struct ChannelMessage: Equatable, Identifiable {
@@ -100,6 +102,7 @@ struct ChannelBook: Equatable {
     var between: [Channel]
     var issues: [KittenIssues]
     var everyone: Channel
+    var shades: Channel
     var waiting: Waiting
     /// Kittens with a finished run you haven't looked at.
     var unread: Set<String>
@@ -109,6 +112,8 @@ struct ChannelBook: Equatable {
     var started: [String: String]
     /// Threads only ever heard between kittens, which aren't yours to carry on.
     var elsewhere: Set<String>
+    /// The router's own threads, which are only for reading.
+    var talks: Set<String>
     var isReading: Bool
     var unreadable: Int
     var cantReachT3: Bool
@@ -130,10 +135,14 @@ struct ChannelBook: Equatable {
         waiting: Waiting = Waiting(),
         sent: [SentMessage] = [],
         isUnread: (AgentThread) -> Bool = { _ in false },
-        inEveryone: [String: Date] = [:]
+        inEveryone: [String: Date] = [:],
+        withShades: Set<String> = []
     ) -> ChannelBook {
+        // A talk with the cat is titled with your question, which can start with a kitten's name, so it's kept apart
+        // from everything worked out about kittens.
+        let talkThreads = threads.filter { withShades.contains($0.id) }
         // A subagent's question holds up the thread above it, even if that one's turn has ended.
-        let threads = threads.map { thread -> AgentThread in
+        let threads = threads.filter { !withShades.contains($0.id) }.map { thread -> AgentThread in
             guard thread.pendingQuestion != nil else { return thread }
             var waiting = thread
             waiting.status = .waitingForAnswer
@@ -143,6 +152,9 @@ struct ChannelBook: Equatable {
         var placed: [ChannelID: [Placed]] = [:]
         var leftOut: Set<String> = []
         var heardIn: [String: Set<ChannelID>] = [:]
+        for thread in talkThreads where !thread.isLiveTest {
+            if let exchanges = transcripts[thread.id] { placed[.shades, default: []] += talk(in: thread, exchanges) }
+        }
         for thread in threads {
             guard let owner = KittenBoard.owner(of: thread, among: kittens) else {
                 if let since = inEveryone[thread.id], let exchanges = transcripts[thread.id] {
@@ -179,7 +191,8 @@ struct ChannelBook: Equatable {
         // What you just sent waits where you sent it until T3 has it.
         let heard = placed
         for (order, sent) in sent.enumerated() {
-            let there = sent.channel == .everyone ? Array(heard.values.joined()) : heard[sent.channel] ?? []
+            // Everyone is every DM, and not what you said to the cat, which is in the router's own threads.
+            let there = sent.channel == .everyone ? Array(heard.filter { $0.key != .shades }.values.joined()) : heard[sent.channel] ?? []
             guard !isEchoed(sent.message, in: there) else { continue }
             placed[sent.channel, default: []].append(Placed(position: sent.message.at, sequence: order, messages: [sent.message]))
         }
@@ -191,7 +204,7 @@ struct ChannelBook: Equatable {
         }
         let directIDs = Set(directs.map(\.id))
         let between = placed
-            .filter { !directIDs.contains($0.key) && $0.key != .everyone }
+            .filter { !directIDs.contains($0.key) && $0.key != .everyone && $0.key != .shades }
             .map { channel($0.key, $0.value) }
             .sorted { (latest($0), latestID($0)) > (latest($1), latestID($1)) }
         let issues = statuses.compactMap { status -> KittenIssues? in
@@ -208,6 +221,7 @@ struct ChannelBook: Equatable {
         let unread = Set(threads.filter(isUnread).compactMap { KittenBoard.owner(of: $0, among: kittens)?.id })
         var named: [String: AgentThread] = [:]
         var elsewhere: Set<String> = []
+        for thread in talkThreads where named[thread.id] == nil { named[thread.id] = thread }
         for thread in threads where named[thread.id] == nil {
             named[thread.id] = thread
             guard let owner = KittenBoard.owner(of: thread, among: kittens) else { continue }
@@ -221,11 +235,13 @@ struct ChannelBook: Equatable {
             between: between,
             issues: issues,
             everyone: everyone,
+            shades: channel(.shades, placed[.shades] ?? []),
             waiting: waiting,
             unread: unread,
             threads: named,
             started: started,
             elsewhere: elsewhere,
+            talks: Set(talkThreads.map(\.id)),
             isReading: isReading,
             unreadable: unreadable,
             cantReachT3: cantReachT3
@@ -293,6 +309,61 @@ struct ChannelBook: Equatable {
         }
     }
 
+    /// A conversation with the cat: what you asked, and what it said or did about it, since the router answers in
+    /// lines the app acts on. Only your words come out of what was asked, never the screen that went with them.
+    private static func talk(in thread: AgentThread, _ exchanges: [Exchange]) -> [Placed] {
+        // As in a kitten's thread, a later ask never sits above an earlier one.
+        var latest = Date.distantPast
+        return exchanges.enumerated().compactMap { index, exchange in
+            let isStillGoing = thread.status.isActive && index == exchanges.count - 1
+            var messages: [ChannelMessage] = []
+            if exchange.asker == .you, let ask = exchange.ask {
+                messages.append(ChannelMessage(exchangeID: exchange.id, kind: .ask, speaker: .you, text: ask, at: exchange.askedAt, threadID: thread.id, threadTitle: thread.title))
+            }
+            // A reply still being written is read the way the bubble reads it, so a half-written marker never shows.
+            let reply = exchange.reply.flatMap { isStillGoing ? saidSoFar($0) : said($0) }
+            if reply != nil || exchange.failure != nil || isStillGoing {
+                messages.append(ChannelMessage(
+                    exchangeID: exchange.id,
+                    kind: .reply,
+                    speaker: .cat,
+                    text: reply,
+                    at: exchange.repliedAt ?? exchange.askedAt,
+                    threadID: thread.id,
+                    threadTitle: thread.title,
+                    isStillGoing: isStillGoing && reply == nil,
+                    failure: exchange.failure
+                ))
+            }
+            guard !messages.isEmpty else { return nil }
+            latest = max(latest, isStillGoing ? exchange.askedAt : exchange.repliedAt ?? exchange.askedAt)
+            return Placed(position: latest, sequence: index, messages: messages)
+        }
+    }
+
+    static func saidSoFar(_ reply: String) -> String? {
+        var holdback = ReplyHoldback()
+        return holdback.add(withoutPromptBlocks(reply)).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// A reply that quotes what the router was given can't bring along its lists of sessions and kittens, or the screen.
+    private static func withoutPromptBlocks(_ reply: String) -> String {
+        Prompts.withoutBlocks(named: "screen|sessions|kittens", in: reply)
+    }
+
+    /// What the router's reply came to, in words. `nil` for nothing worth reading.
+    static func said(_ reply: String) -> String? {
+        let reply = withoutPromptBlocks(reply)
+        let corrected = !Prompts.corrections(in: reply).owners.isEmpty
+        switch ReplyHoldback().finish(fullText: reply) {
+        case .answer(let text, _): return text.isEmpty ? (corrected ? CatWords.passedOnCorrection : nil) : text
+        case .rewrite(let text): return text
+        case .handoff(let task): return CatWords.handedOff(task)
+        case .route: return CatWords.passedOnToSession
+        case .kitten: return CatWords.passedOnToKitten
+        }
+    }
+
     /// T3 has it once you're the one asking the same thing there, since a minute before it was sent.
     private static func isEchoed(_ message: ChannelMessage, in placed: [Placed]) -> Bool {
         guard message.speaker == .you else { return false }
@@ -340,7 +411,9 @@ extension ChannelBook {
     var issueCount: Int { issues.reduce(0) { $0 + $1.threads.count } }
 
     func channel(_ id: ChannelID) -> Channel? {
-        id == .everyone ? everyone : directs.first { $0.id == id } ?? between.first { $0.id == id }
+        if id == .everyone { return everyone }
+        if id == .shades { return shades }
+        return directs.first { $0.id == id } ?? between.first { $0.id == id }
     }
 
     /// The thread an approval or question is shown in: the listed one it holds up.

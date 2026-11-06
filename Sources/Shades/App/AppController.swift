@@ -123,6 +123,8 @@ final class AppController {
     var talkToMessages: Int?
     var messagesClosings = 0
     var inboxSaveFailed = false
+    /// Where the router's threads run, once it's known. Every thread there is a talk with the cat.
+    var knownRouterFolder: String?
     /// Shortcuts another app already had, for the self-check.
     var takenShortcuts: [String] = []
     /// Questions answered from Messages, kept out of it until the list catches up.
@@ -223,6 +225,7 @@ final class AppController {
         channels.waiting = { [weak self] in self?.waiting ?? Waiting() }
         channels.isUnread = { [weak self] in self?.inbox.isUnread($0) ?? false }
         channels.alsoInEveryone = { [weak self] in self?.messagesThreads ?? [:] }
+        channels.isWithShades = { [weak self] in self?.isWithShades($0) ?? false }
     }
 
     func start() {

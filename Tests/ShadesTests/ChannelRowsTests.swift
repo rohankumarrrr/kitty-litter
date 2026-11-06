@@ -307,3 +307,17 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(progress[1], .issue(own))
     }
 }
+
+// MARK: - Talking to the cat
+
+extension ChannelRowsTests {
+    func testTheCatsConversationIsOnlyForReading() {
+        let talk = AgentThread(id: "r", title: "Which plan?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: noon, projectPath: "/shades/router")
+        let built = ChannelBook.build(kittens: [steve], threads: [talk], transcripts: ["r": [exchange("1")]], isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r"])
+        XCTAssertNil(MessageTarget.standard(for: .channel(.shades), in: built), "the router answers in lines the app acts on, so nothing goes straight to it")
+        XCTAssertNil(MessageTarget.standard(for: .thread("r", in: .shades), in: built))
+        XCTAssertTrue(ChannelRows.rows(.channel(.shades), in: built).contains(.subject("Which plan?", project: nil, threadID: "r")), "the router's folder isn't a project you'd know")
+        let empty = ChannelBook.build(kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        XCTAssertEqual(ChannelRows.rows(.channel(.shades), in: empty), [.note(CatWords.shadesEmpty)])
+    }
+}

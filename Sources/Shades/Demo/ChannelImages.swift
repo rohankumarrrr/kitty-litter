@@ -44,7 +44,8 @@ enum ChannelImages {
             unreadable: unreadable,
             cantReachT3: cantReachT3,
             waiting: DemoChannels.waiting,
-            isUnread: { $0.id == "demo-steve-yesterday" }
+            isUnread: { $0.id == "demo-steve-yesterday" },
+            withShades: DemoChannels.talks
         )
     }
 
@@ -68,6 +69,8 @@ enum ChannelImages {
             Shot(name: "needs-you", selection: .needsYou, book: full),
             Shot(name: "done", selection: .done, book: full),
             Shot(name: "everyone", selection: .channel(.everyone), book: full),
+            Shot(name: "shades", selection: .channel(.shades), book: full),
+            Shot(name: "shades-thread", selection: .thread("demo-shades-plans", in: .shades), book: full),
         ]
         for status in full.statuses {
             shots.append(Shot(name: "dm-\(slug(status.kitten.name))", selection: .channel(.direct(status.kitten)), book: full))

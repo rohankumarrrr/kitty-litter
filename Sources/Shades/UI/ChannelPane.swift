@@ -26,10 +26,15 @@ final class ChannelHeader: QuietView {
             return (CatWords.doneTitle, CatWords.doneSubtitle)
         case .channel(.everyone):
             return (CatWords.everyone, CatWords.everyoneSubtitle)
+        case .channel(.shades):
+            return (CatWords.shades, CatWords.shadesSubtitle)
         case .channel(let id):
             let others = book.others(in: id)
             let status = others.count == 1 ? book.status(of: others[0]) : nil
             return (book.title(of: id), status.map { "\($0.kitten.role) · \(CatWords.kittenState($0.state))" })
+        case .thread(let id, .shades):
+            // The router's own folder isn't a project you'd know.
+            return (book.title(ofThread: id, in: .shades), nil)
         case .thread(let id, let channel):
             let name = book.title(ofThread: id, in: channel)
             return (name.isEmpty ? CatWords.newTopic : name, book.threads[id].map(CatWords.threadDetails))
@@ -266,7 +271,7 @@ final class ChannelPane: QuietView {
     private func updateComposer(keepingDraft: Bool = false) {
         var target = book.flatMap { MessageTarget.standard(for: selection, in: $0, answered: partAnswers.mapValues(\.count)) }
         // Words already typed go where the box said when you started, so a refresh can't send them somewhere else.
-        if let replyingTo, case .thread(let id, _) = selection, replyingTo.threadID == id {
+        if let replyingTo, case .thread(let id, _) = selection, replyingTo.threadID == id, book?.talks.contains(id) != true {
             // Even a thread T3 no longer lists, such as an archived one, takes a reply to its report.
             // A question waiting in the same thread doesn't take words meant for the report. Type an answer is for that.
             let title = book?.title(ofThread: id, in: selection.channelID ?? .everyone) ?? ""

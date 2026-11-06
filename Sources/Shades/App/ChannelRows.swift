@@ -62,7 +62,8 @@ enum MessageTarget: Equatable {
         case .channel(let id):
             return book.writableKitten(in: id).map(MessageTarget.newThread)
         case .thread(let id, let channel):
-            guard channel == .everyone || book.writableKitten(in: channel) != nil else { return nil }
+            // The router answers in lines the app acts on, so nothing goes straight into one of its threads.
+            guard !book.talks.contains(id), channel == .everyone || book.writableKitten(in: channel) != nil else { return nil }
             if let topic = book.channel(channel)?.messages.first(where: { $0.exchangeID == id && $0.threadID.isEmpty }),
                let kitten = book.writableKitten(in: channel) {
                 return topic.failure == nil ? .starting(kitten) : .newThread(kitten)
@@ -172,7 +173,8 @@ enum ChannelRows {
             }
             // What you've just sent, and the cat's own answers, aren't in any thread yet.
             if !message.threadID.isEmpty, message.threadID != lastThread {
-                rows.append(.subject(message.threadTitle, project: book.threads[message.threadID]?.projectTitle, threadID: message.threadID))
+                let project = id == .shades ? nil : book.threads[message.threadID]?.projectTitle
+                rows.append(.subject(message.threadTitle, project: project, threadID: message.threadID))
                 lastThread = message.threadID
             }
             rows.append(.message(message))
@@ -214,6 +216,7 @@ enum ChannelRows {
         if book.unreadable > 0 { return .note(CatWords.couldntRead(book.unreadable)) }
         if isCut { return .note(CatWords.olderMessages) }
         if id == .everyone { return .note(CatWords.everyoneEmpty) }
+        if id == .shades { return .note(CatWords.shadesEmpty) }
         let names = id.members.contains(.you) ? [CatWords.you] + others.map(book.name) : others.map(book.name)
         return .note(CatWords.haventTalked(names))
     }

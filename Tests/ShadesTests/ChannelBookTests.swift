@@ -378,3 +378,55 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(built.waiting.count, 2)
     }
 }
+
+// MARK: - Talking to the cat
+
+extension ChannelBookTests {
+    private func talk(_ id: String, title: String = "Which plan is cheapest here?", status: AgentStatus = .completed) -> AgentThread {
+        AgentThread(id: id, title: title, projectTitle: "Shades router", status: status, model: "m", updatedAt: at, projectPath: "/shades/router")
+    }
+
+    func testWhatYouAskedTheCatIsAConversationOfItsOwn() throws {
+        let built = ChannelBook.build(
+            kittens: [steve, pepper],
+            threads: [talk("r"), thread("t")],
+            transcripts: [
+                "r": [
+                    exchange("1", ask: "Which plan is cheapest here?", reply: "Starter, at $8 a month."),
+                    exchange("2", ask: "And the fonts?", reply: "\(Prompts.kittenMarker) 1", asked: 10),
+                    exchange("3", ask: "Compare the fonts", reply: "\(Prompts.handoffMarker) Compare pixel fonts", asked: 20),
+                    exchange("4", ask: "It's 12 people, not 20", reply: "\(Prompts.correctionMarker) 2", asked: 30),
+                    exchange("5", ask: "Hello?", reply: "\(Prompts.routeMarker) 3", asked: 40),
+                ],
+                "t": [exchange("e")],
+            ],
+            isReading: false, unreadable: 0, cantReachT3: false,
+            withShades: ["r"]
+        )
+        let said = built.shades.messages.map { "\($0.speaker == .you ? "you" : "cat"): \($0.text ?? "-")" }
+        XCTAssertEqual(said, [
+            "you: Which plan is cheapest here?", "cat: Starter, at $8 a month.",
+            "you: And the fonts?", "cat: \(CatWords.passedOnToKitten)",
+            "you: Compare the fonts", "cat: \(CatWords.handedOff("Compare pixel fonts"))",
+            "you: It's 12 people, not 20", "cat: \(CatWords.passedOnCorrection)",
+            "you: Hello?", "cat: \(CatWords.passedOnToSession)",
+        ])
+        XCTAssertFalse(built.everyone.messages.contains { $0.threadID == "r" }, "Everyone is the kittens, not the cat's own threads")
+        XCTAssertEqual(built.between, [], "and it isn't a pair of kittens")
+        XCTAssertEqual(built.channel(.shades)?.id, .shades)
+    }
+
+    func testALiveTestOfTheCatIsntShown() {
+        let built = ChannelBook.build(kittens: [steve], threads: [talk("r", title: "Shades test: ask")], transcripts: ["r": [exchange("1")]], isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r"])
+        XCTAssertEqual(built.shades.messages, [])
+    }
+
+    func testWhatYouSaidInEveryoneStaysThereWhenTheRouterHasIt() {
+        let sent = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "What day is it?", at: at, threadID: "", threadTitle: "")
+        let built = ChannelBook.build(
+            kittens: [steve], threads: [talk("r")], transcripts: ["r": [exchange("1", ask: "What day is it?", reply: "Friday.")]],
+            isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .everyone, message: sent)], withShades: ["r"]
+        )
+        XCTAssertTrue(built.everyone.messages.contains { $0.id == sent.id }, "the router's copy is in the cat's conversation, not Everyone's")
+    }
+}

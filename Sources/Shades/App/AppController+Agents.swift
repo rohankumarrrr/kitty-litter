@@ -17,6 +17,9 @@ extension AppController {
         hideTestThreads(threads)
         latestThreads = threads
         threadListArrived = true
+        // Being the router's is only remembered while the app runs, and its folder says so after a restart too, so a
+        // talk with the cat never counts as work, a session to pass words to, or a kitten's.
+        for thread in threads where isWithShades(thread) { watch.markQuick(thread.id) }
         let asked = Set(threads.compactMap(\.pendingQuestion?.id))
         answeredQuestions.formIntersection(asked)
         let events = watch.update(threads)
@@ -58,7 +61,7 @@ extension AppController {
     }
 
     var kittenStatuses: [KittenStatus] {
-        KittenBoard.statuses(kittens: loadKittens(), threads: latestThreads)
+        KittenBoard.statuses(kittens: loadKittens(), threads: latestThreads.filter { !isWithShades($0) })
     }
 
     /// Normally there's just Shades. This shows everyone else, and how they're doing.
