@@ -1,0 +1,7 @@
+theme light
+wait 1
+record docs/images/talk.gif cat bubble
+wait 0.5
+talk
+wait 9
+record stop

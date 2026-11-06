@@ -323,7 +323,7 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
 
     /// The pricing page's heading, its trial button and its plan, and Safari's Share button just under
     /// the menu bar, where they'd sit on the main display.
-    private static func elements(on screen: CGRect) -> [ScreenElement] {
+    static func elements(on screen: CGRect) -> [ScreenElement] {
         func at(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> CGRect {
             CGRect(x: screen.minX + screen.width * x, y: screen.maxY - screen.height * y - height, width: width, height: height)
         }

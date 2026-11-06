@@ -48,6 +48,19 @@ final class DemoPhone {
         }
     }
 
+    /// The page as it looks now, at a phone's size in points times `scale`.
+    func image(scale: CGFloat) async -> CGImage? {
+        guard let snapshot = try? await view.takeSnapshot(configuration: nil),
+              let page = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(Self.size.width * scale), pixelsHigh: Int(Self.size.height * scale), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return nil }
+        page.size = Self.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: page)
+        snapshot.draw(in: NSRect(origin: .zero, size: Self.size))
+        NSGraphicsContext.restoreGraphicsState()
+        return page.cgImage
+    }
+
     func draw(to file: URL) async -> Bool {
         guard let image = try? await view.takeSnapshot(configuration: nil),
               let tiff = image.tiffRepresentation,

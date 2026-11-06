@@ -1,0 +1,7 @@
+theme light
+wait 1
+record docs/images/kittens.gif cat kittens
+wait 0.5
+kittens
+wait 4
+record stop
