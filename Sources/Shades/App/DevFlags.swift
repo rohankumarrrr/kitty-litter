@@ -91,6 +91,7 @@ enum DevFlags {
             "asked by someone else: \(asked { $0 == .someoneElse })",
             "replies with no ask: \(unasked.count)",
             "issues: \(book.issueCount)",
+            "done: \(book.issues.reduce(0) { $0 + $1.done.count })",
             "milliseconds: \(milliseconds)",
         ].joined(separator: "\n")
     }
