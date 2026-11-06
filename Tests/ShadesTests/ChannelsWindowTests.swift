@@ -80,6 +80,16 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(row.accessibilityPerformPress())
     }
 
+    func testAFinishedThreadIsOnlyShownWhenYouOpenDone() throws {
+        let view = view()
+        view.show(book())
+        let issues = { view.pane.shown.compactMap { row -> String? in if case .issue(let thread) = row { thread.id } else { nil } } }
+        XCTAssertEqual(issues(), [])
+        try XCTUnwrap(view.sidebar.row(for: .done)).press()
+        XCTAssertEqual(view.selection, .done)
+        XCTAssertEqual(issues(), ["t"])
+    }
+
     func testAnEmptyBetweenSectionIsntDrawnAndAPairGetsARowOnceTheyTalk() throws {
         XCTAssertFalse(ChannelSidebarItem.groups(in: book()).contains { $0.heading == CatWords.betweenKittens })
 
@@ -242,7 +252,7 @@ final class ChannelsWindowTests: XCTestCase {
         )
         let line = DevFlags.checkLine(built, threadsRead: 7, milliseconds: 9)
         XCTAssertFalse(line.contains(secret))
-        for expected in ["threads read: 7", "unreadable: 1", "DMs with messages: 1", "between channels: 1", "messages: 4", "asked by you: 1", "asked by a kitten: 0", "asked by someone else: 1", "replies with no ask: 0", "issues: 1", "milliseconds: 9"] {
+        for expected in ["threads read: 7", "unreadable: 1", "DMs with messages: 1", "between channels: 1", "messages: 4", "asked by you: 1", "asked by a kitten: 0", "asked by someone else: 1", "replies with no ask: 0", "issues: 1", "done: 0", "milliseconds: 9"] {
             XCTAssertTrue(line.contains(expected), expected)
         }
     }

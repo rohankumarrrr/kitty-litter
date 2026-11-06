@@ -53,6 +53,8 @@ final class AppController {
         var done = false
         var threadID: String?
         var note: String?
+        /// What a finished rewrite would go in place of: the selection as it was read, and its app.
+        var replacing: (text: String, bundleID: String?)?
     }
     /// Something an agent has to tell you, which stays until you've had a chance to read it.
     struct Notice {
@@ -242,6 +244,8 @@ final class AppController {
             backend.open(threadID: threadID)
         case .copy(let text):
             stage.copyToPasteboard(text)
+        case .replace(let text):
+            replaceSelection(with: text)
         case .approval(let request, let decision):
             answer(request, decision)
         case .openInbox:
@@ -288,7 +292,7 @@ final class AppController {
         }
         if let reply {
             if reply.text.isEmpty { return .thinking(note: reply.note) }
-            return .reply(text: reply.text, done: reply.done, threadID: reply.threadID, note: reply.note)
+            return .reply(text: reply.text, done: reply.done, threadID: reply.threadID, note: reply.note, canReplace: reply.replacing != nil)
         }
         if let line { return .line(line.text, threadID: line.threadID) }
         if let notice = notices.first {

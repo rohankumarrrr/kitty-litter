@@ -10,18 +10,24 @@ import ShadesT3
 ///     shades --hand-off "Which of my projects is the budget app?" --image page.jpg
 ///     shades --fix "The total is wrong" --image page.jpg
 ///     shades --ask "Research this" --then "And that part?" --image page.jpg   # waits for the agents first
+///     shades --ask "Make this friendlier" --selection "Send it by Friday." --image page.jpg   # as if that were selected
 ///
 /// And for the Channels window, none of which sends anything:
 ///
 ///     shades --channels                     # opens Messages at launch, with --demo or for real
 ///     shades --demo --channels-image out    # draws it to PNGs from canned data, then quits
 ///     shades --channels-check               # reads real T3 once, prints only counts, then signs out
+///
+/// And for driving the demo from a file of its commands, one a line, such as `wait 2` or `draw out`:
+///
+///     shades --demo --no-script --commands steps.txt
 @MainActor
 enum DevFlags {
     static var wantsFlow: Bool { ["--ask", "--hand-off", "--fix"].contains { value(after: $0) != nil } }
     static var wantsChannels: Bool { CommandLine.arguments.contains("--channels") }
     static var wantsChannelsCheck: Bool { CommandLine.arguments.contains("--channels-check") }
     static var channelsImageFolder: String? { value(after: "--channels-image") }
+    static var commandsFile: String? { value(after: "--commands") }
 
     static func run(on controller: AppController) {
         if let question = value(after: "--ask") {
@@ -91,6 +97,7 @@ enum DevFlags {
             "asked by someone else: \(asked { $0 == .someoneElse })",
             "replies with no ask: \(unasked.count)",
             "issues: \(book.issueCount)",
+            "done: \(book.issues.reduce(0) { $0 + $1.done.count })",
             "milliseconds: \(milliseconds)",
         ].joined(separator: "\n")
     }
@@ -102,6 +109,7 @@ enum DevFlags {
         let picture = try? Data(contentsOf: URL(fileURLWithPath: path))
         let snapshot = ScreenSnapshot(
             appName: "Test picture",
+            selectedText: value(after: "--selection"),
             screenshotJPEG: picture,
             focusRegion: focusRegion
         )

@@ -7,12 +7,14 @@ import ShadesCore
 struct ReplyHoldback {
     enum Outcome: Equatable {
         case answer(String)
+        /// New text for what's selected, which waits for you to say where it goes.
+        case rewrite(String)
         case handoff(task: String)
         case route(session: Int)
         case kitten(number: Int)
     }
 
-    private static let markers = [Prompts.handoffMarker, Prompts.routeMarker, Prompts.kittenMarker]
+    private static let markers = [Prompts.handoffMarker, Prompts.routeMarker, Prompts.kittenMarker, Prompts.rewriteMarker]
 
     private(set) var text = ""
     private(set) var released = false
@@ -35,9 +37,10 @@ struct ReplyHoldback {
         if let session = Prompts.routeTarget(in: full) { return .route(session: session) }
         if let kitten = Prompts.kittenTarget(in: full) { return .kitten(number: kitten) }
         if let task = Prompts.handoffTask(in: full) { return .handoff(task: task) }
+        if let text = Prompts.rewrite(in: full) { return .rewrite(text) }
         let visible = Self.visible(full)
         // A marker that goes nowhere is nothing worth reading.
-        if visible.hasPrefix(Prompts.routeMarker) || visible.hasPrefix(Prompts.kittenMarker) { return .answer("") }
+        if [Prompts.routeMarker, Prompts.kittenMarker, Prompts.rewriteMarker].contains(where: visible.hasPrefix) { return .answer("") }
         // The marker with nothing after it is nothing worth reading.
         return .answer(visible.trimmingCharacters(in: .whitespacesAndNewlines) == Prompts.handoffMarker ? "" : visible)
     }

@@ -1,0 +1,12 @@
+wait 1
+draw .verify/shades/ask/0-before
+ask What's on this page?
+wait 4
+draw .verify/shades/ask/1-answered
+ask I need help with my resume
+wait 3
+draw .verify/shades/ask/2-to-a-kitten
+ask Fix the buy button
+wait 3
+draw .verify/shades/ask/3-handed-off
+windows

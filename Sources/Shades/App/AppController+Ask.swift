@@ -191,6 +191,11 @@ extension AppController {
                 reply?.done = true
                 renderBubble()
             }
+        case .rewrite(let text):
+            reply?.text = text
+            reply?.done = true
+            if let selected = snapshot?.selectedText { reply?.replacing = (selected, snapshot?.bundleID) }
+            renderBubble()
         case .handoff(let task):
             reply = nil
             handOff(task: task, question: question, snapshot: snapshot)
@@ -211,6 +216,20 @@ extension AppController {
         }
     }
 
+    /// Replace was pressed on a rewrite. It only goes in while what you'd selected is still selected,
+    /// and is copied otherwise, so it never lands somewhere you didn't mean.
+    func replaceSelection(with text: String) {
+        guard let selection = reply?.replacing else { return }
+        reply = nil
+        replyGeneration += 1
+        renderBubble()
+        flow = Task {
+            guard await !inserter.replaceSelection(selection.text, in: selection.bundleID, with: text) else { return }
+            stage.copyToPasteboard(text)
+            say(CatWords.rewriteCopied)
+        }
+    }
+
     /// Its job is done, whether that was answering or passing the work on. A new thread that
     /// only passed something on has nothing worth keeping, so it goes rather than cluttering T3.
     private func wrapUpQuickThread(_ threadID: String, after outcome: ReplyHoldback.Outcome) {
@@ -218,6 +237,8 @@ extension AppController {
         switch outcome {
         case .answer(let text):
             if text.isEmpty { return }
+        case .rewrite:
+            break
         case .handoff, .route, .kitten:
             passedOn = true
         }

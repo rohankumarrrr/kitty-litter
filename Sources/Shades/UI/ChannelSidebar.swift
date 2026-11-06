@@ -31,11 +31,12 @@ struct ChannelSidebarItem: Equatable {
         }
         let needsYou = ChannelSidebarItem(selection: .needsYou, title: CatWords.needsYouTitle, count: book.waiting.count)
         let everyone = ChannelSidebarItem(selection: .channel(.everyone), title: CatWords.everyone, cats: [.shades], isUnread: !book.unread.isEmpty)
-        return [(nil, [needsYou, everyone]), (CatWords.directMessages, directs)] + (between.isEmpty ? [] : [(CatWords.betweenKittens, between)])
+        let done = ChannelSidebarItem(selection: .done, title: CatWords.doneTitle)
+        return [(nil, [needsYou, everyone, done]), (CatWords.directMessages, directs)] + (between.isEmpty ? [] : [(CatWords.betweenKittens, between)])
     }
 }
 
-/// The left side of the window: Needs you and Everyone, then a row for each kitten, then each pair that's talked.
+/// The left side of the window: Needs you, Everyone and Done, then a row for each kitten, then each pair that's talked.
 final class ChannelSidebar: QuietView {
     static let width: CGFloat = 220
     /// Leaves room for the window's buttons.

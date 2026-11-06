@@ -10,13 +10,15 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 **Ask.** Press ⌥Space or click the cat, and ask anything. It looks at your screen at that moment and answers in a bubble, usually in about 10 seconds, though a model can occasionally take much longer. Good for "how do I start problem 3?" or "what does this error mean?"
 
+**Rewrite what you've selected.** Select some text, ask the cat to "tighten this" or "make it friendlier", and the rewrite shows in the bubble with **Replace**. Nothing in your app changes until you press it. Then it goes in place of your selection, as long as the same text is still selected, and Command-Z takes it back. That works in apps whose text fields allow it, such as Notes, Mail and TextEdit. Anywhere else, or if the selection has moved, the rewrite is copied for you to paste instead.
+
 **Fix what I'm looking at.** Press ⌃⌥F and drag a box around whatever's wrong. Say what's wrong, or just press Return. A frontier agent works out which of your projects it is, and fixes it in its own worktree, so your checkout stays untouched.
 
 **Talk and dictate.** Hold right Option to talk to the cat. Hold Fn to dictate into any app, and your rambling comes out as clean text: fillers gone, self-corrections applied. Speech recognition and cleanup both run on your Mac.
 
 **Watch your agents.** The cat sleeps when nothing's running, and is up and about when agents are working. When a session ends, it tells you how it went in two or three sentences. When an agent has a question, it shows you the question and your options. When one needs permission, the cat comes over with the exact command, so you can allow or deny it without leaving what you're doing. Shift-click the cat to see all your kittens and which are working, need you or are idle. A kitten can keep its reports in one inbox instead: what shipped, what you need to decide, and a way to reply to any of it.
 
-**Messages.** Choose Messages from the cat's menu for one window with everything your kittens need from you, so you rarely have to open T3. **Needs you** is pinned at the top: approvals, questions, reports waiting on a decision, what shipped, and what each kitten is on. **Everyone** is a group chat with all your kittens. What you type there goes through the router, the same as the Ask box, and whoever takes it answers as itself. Each kitten has a conversation of its own, where you carry on its latest thread or start a new topic, answer what it's asking, and see a dot when it's finished something you haven't read. Nothing typed in Messages looks at your screen, and the window never shows up in a screenshot.
+**Messages.** Choose Messages from the cat's menu for one window with everything your kittens need from you, so you rarely have to open T3. **Needs you** is pinned at the top: approvals, questions, reports waiting on a decision, what shipped, and what each kitten is on. Once a thread's finished it moves to **Done**, out of the way until you go looking. **Everyone** is a group chat with all your kittens. What you type there goes through the router, the same as the Ask box, and whoever takes it answers as itself. Each kitten has a conversation of its own, where you carry on its latest thread or start a new topic, answer what it's asking, and see a dot when it's finished something you haven't read. Nothing typed in Messages looks at your screen, and the window never shows up in a screenshot.
 
 ![Messages, with what needs you at the top](docs/images/messages.png)
 
@@ -79,7 +81,7 @@ A kitten is a specialist with a folder of its own: its instructions and what it 
 
 ## Changing Shades by asking Shades
 
-You can set up a kitten called Clawde whose area is the system itself, so "Steve should stop doing that" or "the bubble's too wide" goes through Shades like anything else. Changes to a kitten's instructions apply straight away, and changes to the app come back as a reviewed pull request that waits for you to say "ship it". See [docs/kittens.md](docs/kittens.md#a-kitten-for-the-system-itself).
+You can set up a kitten called Clawde whose area is the system itself, so "Steve should stop doing that" or "the bubble's too wide" goes through Shades like anything else. Changes to a kitten's instructions apply straight away, and changes to the app come back as a pull request with its proof, which merges once it's proven and installs when you say "ship it". See [docs/kittens.md](docs/kittens.md#a-kitten-for-the-system-itself).
 
 ## When something goes wrong
 

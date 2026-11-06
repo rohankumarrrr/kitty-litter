@@ -53,13 +53,38 @@ final class DemoDriver {
 
     private func readCommands() {
         let driver = self
+        // A file stands in for typing, since an agent can only start the app with a plain `swift run`.
+        // It quits when the file runs out, since a run left going can't be found from the agent's sandbox.
+        let file = DevFlags.commandsFile
+        if let file, freopen(file, "r", stdin) == nil {
+            print("Couldn't read \(file)")
+        }
         Thread.detachNewThread {
             while let line = readLine() {
+                if line.hasPrefix("wait "), let seconds = Double(line.dropFirst(5).trimmingCharacters(in: .whitespaces)) {
+                    Thread.sleep(forTimeInterval: seconds)
+                    continue
+                }
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated { driver.handle(line) }
                 }
             }
+            if file != nil {
+                DispatchQueue.main.async { NSApp.terminate(nil) }
+            }
         }
+    }
+
+    private var windows: [(String, NSWindow)] {
+        [
+            ("cat", stage.cat.panel),
+            ("bubble", stage.bubble.panel),
+            ("input", stage.input.panel),
+            ("dashboard", stage.dashboard.panel),
+            ("kittens", stage.kittens.panel),
+            ("channels", stage.channels.panel),
+            ("inbox", stage.inbox.panel),
+        ]
     }
 
     private func handle(_ line: String) {
@@ -68,13 +93,19 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | fix | kittens | channels | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | buttons | typed | front | quit")
+            print("ask [question] | select [text] | replace | fix | kittens | channels | channel needs|done|everyone|[kitten] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
             } else {
-                controller.ask(rest, snapshot: ScreenSnapshot(appName: "Safari", windowTitle: "Pricing"))
+                controller.ask(rest, snapshot: ScreenSnapshot(appName: "Safari", windowTitle: "Pricing", selectedText: parts.inserter.selection))
             }
+        case "select":
+            // What's selected in the pretend app, for the next ask to read. Alone, it's a click somewhere else.
+            parts.inserter.selection = rest.isEmpty ? nil : rest
+        case "replace":
+            // The same as pressing Replace under a rewrite.
+            if case .reply(let text, true, _, _, true)? = stage.bubble.content { controller.bubbleAction(.replace(text)) }
         case "fix":
             controller.fixPressed()
         case "submit":
@@ -97,6 +128,18 @@ final class DemoDriver {
             controller.kittensPressed()
         case "channels":
             controller.channelsPressed()
+        case "channel":
+            // channel needs | done | everyone | the start of a kitten's name, the same as clicking it in the sidebar.
+            let kitten = Demo.kittens.first { $0.name.lowercased().hasPrefix(rest.lowercased()) }
+            switch rest {
+            case "needs": stage.channels.view.select(.needsYou)
+            case "done": stage.channels.view.select(.done)
+            case "everyone": stage.channels.view.select(.channel(.everyone))
+            default: if let kitten, !rest.isEmpty { stage.channels.view.select(.channel(.direct(kitten))) }
+            }
+        case "send":
+            // The same as typing into Messages' box and pressing Return.
+            stage.channels.view.pane.composer.send(rest)
         case "dash":
             stage.toggleDashboard()
         case "settings":
@@ -154,17 +197,19 @@ final class DemoDriver {
         case "ears":
             parts.voice.downloading = rest == "off"
         case "windows":
-            for (name, window) in [
-                ("cat", stage.cat.panel as NSWindow),
-                ("bubble", stage.bubble.panel),
-                ("input", stage.input.panel),
-                ("dashboard", stage.dashboard.panel),
-                ("channels", stage.channels.panel),
-                ("inbox", stage.inbox.panel),
-            ] {
+            for (name, window) in windows {
                 print("window \(name) id=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) frame=\(NSStringFromRect(window.frame)) clicks=\(!window.ignoresMouseEvents)")
             }
             print("state \(stage.cat.brain.state) pose=\(stage.cat.brain.pose.frame.rawValue) active=\(NSApp.isActive)")
+        case "draw":
+            // Each window draws itself into a picture, so nothing reads the screen.
+            let folder = URL(fileURLWithPath: rest.isEmpty ? ".verify/shades/windows" : rest, isDirectory: true)
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            for (name, window) in windows where window.isVisible {
+                let file = folder.appendingPathComponent("\(name).png")
+                let drawn = (window.contentView?.superview ?? window.contentView).flatMap { ChannelImages.png(of: $0) }
+                print((try? drawn?.write(to: file)) == nil ? "couldn't draw \(name)" : "drew \(name) \(file.path)")
+            }
         case "buttons":
             for case let button as QuietButton in stage.bubble.view.subviews {
                 let frame = stage.bubble.panel.convertToScreen(button.convert(button.bounds, to: nil))

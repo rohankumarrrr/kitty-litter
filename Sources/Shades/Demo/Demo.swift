@@ -36,6 +36,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         let id = nextID()
+        print("[demo] started \(id) with \(prompt.attachments.count) attachments: \(Self.oneLine(prompt.text))")
         if prompt.text.contains("<report>") {
             let reply = sortedReplies.first { prompt.text.contains("Task: \($0.key)") }?.value ?? ""
             return AsyncThrowingStream { continuation in
@@ -51,11 +52,12 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     }
 
     func followUp(threadID: String, _ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
-        quickTurn(threadID: threadID, prompt: prompt)
+        print("[demo] carried on in \(threadID) with \(prompt.attachments.count) attachments: \(Self.oneLine(prompt.text))")
+        return quickTurn(threadID: threadID, prompt: prompt)
     }
 
     func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
-        print("[demo] forwarded to \(threadID): \(text.prefix(60))")
+        print("[demo] forwarded to \(threadID) with \(attachments.count) attachments: \(Self.oneLine(text))")
         update { threads in
             guard let index = threads.firstIndex(where: { $0.id == threadID }) else { return }
             threads[index].status = .running
@@ -177,6 +179,10 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         thread.pendingQuestion = nil
     }
 
+    private static func oneLine(_ text: String) -> String {
+        String(text.split(whereSeparator: \.isNewline).joined(separator: " / ").prefix(90))
+    }
+
     private func nextID() -> String {
         lock.lock()
         defer { lock.unlock() }
@@ -245,6 +251,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         if lower.contains("follow") || lower.contains("what you") { return "\(Prompts.routeMarker) 1" }
         if lower.contains("interview") || lower.contains("resume") { return "\(Prompts.kittenMarker) 1" }
         if lower.contains("budget") { return "\(Prompts.kittenMarker) 2" }
+        if lower.contains("tighten") { return "\(Prompts.rewriteMarker) The new pricing page is live, with three plans to pick from." }
         if ["fix", "change", "refactor", "build", "rewrite"].contains(where: lower.contains) {
             return "\(Prompts.handoffMarker) Fix the Buy button on the pricing page so it opens checkout."
         }
@@ -359,10 +366,22 @@ final class DemoVoice: VoiceEngine {
 
 final class DemoInserter: TextInserting {
     var onInsert: ((String) -> Void)?
+    /// What's selected in the pretend app right now.
+    var selection: String?
 
     func insert(_ text: String) async throws {
         print("[demo] would type: \(text)")
         onInsert?(text)
+    }
+
+    func replaceSelection(_ original: String, in bundleID: String?, with text: String) async -> Bool {
+        guard original == selection else {
+            print("[demo] the selection moved, so nothing was replaced")
+            return false
+        }
+        print("[demo] would replace the selection with: \(text)")
+        selection = nil
+        return true
     }
 }
 
