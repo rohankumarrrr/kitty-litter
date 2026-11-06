@@ -122,7 +122,8 @@ extension AppController {
 
     /// Gives your words to a kitten, in a new thread in its workspace. T3 writes the title.
     /// `onStarted` hears the new thread, or `nil` if there isn't one.
-    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, onStarted: ((String?) -> Void)? = nil) {
+    /// `asked` is `questionsAsked` when you sent them, if that was before now.
+    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil) {
         // As with a session, a kitten with full access doesn't get to see text from a page. Nor does
         // one whose thread would count as a kitten's that isn't meant to see it, in a project they share.
         let sharesWithScreenless = loadKittens().contains {
@@ -131,7 +132,7 @@ extension AppController {
         let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
         let shared = seesScreen ? snapshot : nil
         let missesScreen = !carriesScreen(shared) && ScreenWords.pointAtScreen(words)
-        let asked = questionsAsked
+        let asked = asked ?? questionsAsked
         flow = Task {
             guard let projectID = await backend.projectID(atPath: kitten.workspace) else {
                 onStarted?(nil)
@@ -159,12 +160,12 @@ extension AppController {
 
     /// Passes your words to a session that already has the context. The session's reply comes
     /// back the usual way, as a notice when it finishes.
-    func forward(_ words: String, to thread: AgentThread, snapshot: ScreenSnapshot?) {
+    func forward(_ words: String, to thread: AgentThread, snapshot: ScreenSnapshot?, asked: Int? = nil) {
         say(CatWords.sentTo(thread), threadID: thread.id)
 
         // Quick chats are left out of the thread list's news, so their replies are picked up here.
         let isQuick = watch.isQuick(thread.id)
-        let asked = questionsAsked
+        let asked = asked ?? questionsAsked
         forwardTask = Task {
             // A session with full access can do anything, so text from a page doesn't get to reach it.
             // Neither does one working for a kitten that isn't meant to see it, or one that won't say.

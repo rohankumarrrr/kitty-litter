@@ -161,6 +161,27 @@ final class ScreenWordsTests: XCTestCase {
         XCTAssertFalse(ScreenWords.pointAtScreen("Read this www.example.com"))
     }
 
+    func testASitesNameIsntTheLink() {
+        for words in ["Read this thread on x.com", "Summarize this article from nytimes.com", "Read this email from sam@example.com"] {
+            XCTAssertTrue(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    /// Code is where follow-ups usually go, and plenty of it is named after things on a page.
+    func testCodeNamedAfterAThingIsntTheThing() {
+        for words in [
+            "Why is this thread pool deadlocking?",
+            "Why does this post request return 404?",
+            "Fix this video player so it autoplays",
+            "Make this photo upload faster",
+            "Add a test for this image picker",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words, isFollowUp: true), words)
+            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+        XCTAssertTrue(ScreenWords.pointAtScreen("Is this tweet right?", isFollowUp: true))
+    }
+
     /// Doing what the cat says mustn't get the same advice again.
     func testPastedTextDoesntGetAskedForAgain() {
         for words in [

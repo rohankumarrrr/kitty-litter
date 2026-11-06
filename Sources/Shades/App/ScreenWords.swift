@@ -14,9 +14,12 @@ enum ScreenWords {
     /// Things that live on a page, and that people don't usually build themselves.
     private static let things = "thread|tweet|post|article|blog|video|screenshot|picture|photo|paper"
 
+    /// The thing used to describe something in code, like "this thread pool" or "this video player", isn't the thing.
+    private static let notThe = #"(?!-)\b(?! (pool|safe|safety|local|id|ids|count|request|requests|response|handler|player|upload|uploads|uploader|picker|viewer|editor|component|model|controller|service|endpoint|route|router|queue|table|card|button|form|field|type|schema|url|urls|cache|manager|view|layout|template|parser|class|struct|function|method|module|metadata|thumbnail|preview|feed|list)s?\b)"#
+
     /// These name something outside the conversation, so they hold for a session that has context too.
     private static let naming = [
-        #"\#(this) (\S+ )?(\#(things))s?(?!-)\b"#,
+        #"\#(this) (\S+ )?(\#(things))s?\#(notThe)"#,
         #"\b(on|at) my screen\b"#,
         #"\b(what|the \w+) i.?m (looking at|reading|watching)\b"#,
     ]
@@ -24,7 +27,7 @@ enum ScreenWords {
     /// These only point. A new thread has nothing else they could mean, but in a follow-up "this"
     /// is usually the session's own work.
     private static let pointing = [
-        #"\#(this) (\S+ )?(page|site|website|link|email|image)s?(?!-)\b"#,
+        #"\#(this) (\S+ )?(page|site|website|link|email|image)s?\#(notThe)"#,
         #"\b(read|look at|watch|check out|summari[sz]e|translate) \#(this)"#,
         #"\b(see|what.?s|what is|what are) (this|these) ?([?.!]|$)"#,
         #"\bwhat does \#(this) (\S+ )?(say|mean)\b"#,
@@ -47,8 +50,15 @@ enum ScreenWords {
             || after.range(of: #"(:\s+\S|["“]\s*\w)"#, options: .regularExpression) != nil
     }
 
+    /// A web address they typed, or one to a page. A site's name on its own, like "on x.com", isn't the thing.
     private static func hasLink(_ words: String) -> Bool {
-        let links = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
-        return links?.firstMatch(in: words, range: NSRange(words.startIndex..., in: words)) != nil
+        guard let links = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return false }
+        return links.matches(in: words, range: NSRange(words.startIndex..., in: words)).contains { match in
+            guard let url = match.url, ["http", "https"].contains(url.scheme?.lowercased()),
+                  let range = Range(match.range, in: words)
+            else { return false }
+            let typed = words[range].lowercased()
+            return typed.hasPrefix("http") || typed.hasPrefix("www.") || url.path.count > 1 || url.query != nil
+        }
     }
 }

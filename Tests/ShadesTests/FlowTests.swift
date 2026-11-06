@@ -1117,6 +1117,46 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
     }
 
+    /// The connection dropped after it started, and the first list after that already says it failed.
+    func testAFailureFiledWithoutBeingSeenRunningTakesTheWarningBack() async {
+        kittens = [inboxKitten]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.give("Read this x thread", to: inboxKitten, snapshot: nil)
+        await settle()
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink })
+
+        controller.threadsChanged([work("thread-1", title: "Clawde: Read the thread", status: .failed)])
+        await settleFiling()
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    /// You asked the cat something, maybe with the link, while the router in Messages was still deciding.
+    func testAMessagesSendRoutedAfterYourNextQuestionDoesntWarn() async {
+        kittens = [steve, clawde]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.threadsChanged([session("w", "Clawde: Fix routing")])
+        controller.channelsPressed()
+        for (words, routed, mode) in [("Read this x thread", "KITTEN: 1", FakeBackend.Mode.start), ("Read this tweet", "SEND TO: 1", .forward)] {
+            backend.routerSays = [words: routed]
+            backend.holdQuestion = words
+            controller.messagesAction(.send(words, to: .router, shownIn: .everyone))
+            for _ in 0..<50 { await Task.yield() }
+
+            backend.replies = [[.finished(fullText: "Got the link.")]]
+            controller.ask("https://x.com/example/status/1", snapshot: nil)
+            await controller.replyTask?.value
+            backend.releaseHeld()
+            await controller.messagesTurn?.value
+            await settle()
+            await controller.frontierTask?.value
+            XCTAssertEqual(backend.sent.last?.mode, mode, "your words still went")
+            XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink }, words)
+        }
+    }
+
     /// Its folder took a while to find, and by then you'd asked something else, maybe with the link.
     func testAnOlderSendCantBringTheWarningBackAfterYourNextQuestion() async {
         backend.projects["/k/clawde"] = "project-clawde"

@@ -235,7 +235,7 @@ extension AppController {
     var frontierName: String { ModelNames.friendly(settings.frontierModel) }
 
     /// The quick agent decided this needs more, so it goes straight to the frontier agent, which says so.
-    func handOff(task: String, question: String, snapshot: ScreenSnapshot?, onStarted: ((String?) -> Void)? = nil) {
+    func handOff(task: String, question: String, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil) {
         // With full access, neither the page nor the quick agent's reading of it gets to reach it.
         guard settings.frontierMode != .fullAccess else {
             startFrontier(
@@ -243,6 +243,7 @@ extension AppController {
                 text: Prompts.frontier(request: question, snapshot: nil, screenshotPath: nil),
                 snapshot: nil,
                 missesScreen: ScreenWords.pointAtScreen(question),
+                asked: asked,
                 onStarted: onStarted
             )
             return
@@ -255,6 +256,7 @@ extension AppController {
             text: Prompts.frontier(request: request, snapshot: snapshot, screenshotPath: path),
             snapshot: snapshot,
             missesScreen: !carriesScreen(snapshot) && ScreenWords.pointAtScreen(question),
+            asked: asked,
             onStarted: onStarted
         )
     }
