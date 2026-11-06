@@ -196,7 +196,7 @@ final class DemoDriver {
             print("state \(stage.cat.brain.state) pose=\(stage.cat.brain.pose.frame.rawValue) active=\(NSApp.isActive)")
         case "draw":
             // Each window draws itself into a picture, so nothing reads the screen.
-            let folder = URL(fileURLWithPath: rest.isEmpty ? "shades-windows" : rest, isDirectory: true)
+            let folder = URL(fileURLWithPath: rest.isEmpty ? ".verify/shades/windows" : rest, isDirectory: true)
             try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             for (name, window) in windows where window.isVisible {
                 let file = folder.appendingPathComponent("\(name).png")

@@ -79,7 +79,7 @@ A kitten is a specialist with a folder of its own: its instructions and what it 
 
 ## Changing Shades by asking Shades
 
-You can set up a kitten called Clawde whose area is the system itself, so "Steve should stop doing that" or "the bubble's too wide" goes through Shades like anything else. Changes to a kitten's instructions apply straight away, and changes to the app come back as a reviewed pull request that waits for you to say "ship it". See [docs/kittens.md](docs/kittens.md#a-kitten-for-the-system-itself).
+You can set up a kitten called Clawde whose area is the system itself, so "Steve should stop doing that" or "the bubble's too wide" goes through Shades like anything else. Changes to a kitten's instructions apply straight away, and changes to the app come back as a pull request with its proof, which merges once it's proven and installs when you say "ship it". See [docs/kittens.md](docs/kittens.md#a-kitten-for-the-system-itself).
 
 ## When something goes wrong
 
