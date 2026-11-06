@@ -160,7 +160,7 @@ final class ChannelFeed {
         let owned = byOwner.filter { $0.key != nil }.values.flatMap { threads in
             threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
         } + (byOwner[nil] ?? []).filter { mine[$0.id] != nil }
-            + talks.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
+            + talks.filter { !$0.isLiveTest }.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
         let moved = owned.filter { session.readStamps[$0.id] != $0.updatedAt }
         let read = await read(moved)
         // A read landing after the window closed has nowhere to go, so it's dropped here.

@@ -312,7 +312,9 @@ struct ChannelBook: Equatable {
     /// A conversation with the cat: what you asked, and what it said or did about it, since the router answers in
     /// lines the app acts on. Only your words come out of what was asked, never the screen that went with them.
     private static func talk(in thread: AgentThread, _ exchanges: [Exchange]) -> [Placed] {
-        exchanges.enumerated().compactMap { index, exchange in
+        // As in a kitten's thread, a later ask never sits above an earlier one.
+        var latest = Date.distantPast
+        return exchanges.enumerated().compactMap { index, exchange in
             let isStillGoing = thread.status.isActive && index == exchanges.count - 1
             var messages: [ChannelMessage] = []
             if exchange.asker == .you, let ask = exchange.ask {
@@ -334,17 +336,24 @@ struct ChannelBook: Equatable {
                 ))
             }
             guard !messages.isEmpty else { return nil }
-            return Placed(position: isStillGoing ? exchange.askedAt : exchange.repliedAt ?? exchange.askedAt, sequence: index, messages: messages)
+            latest = max(latest, isStillGoing ? exchange.askedAt : exchange.repliedAt ?? exchange.askedAt)
+            return Placed(position: latest, sequence: index, messages: messages)
         }
     }
 
     static func saidSoFar(_ reply: String) -> String? {
         var holdback = ReplyHoldback()
-        return holdback.add(reply).flatMap { $0.isEmpty ? nil : $0 }
+        return holdback.add(withoutPromptBlocks(reply)).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// A reply that quotes what the router was given can't bring along its lists of sessions and kittens, or the screen.
+    private static func withoutPromptBlocks(_ reply: String) -> String {
+        Prompts.withoutBlocks(named: "screen|sessions|kittens", in: reply)
     }
 
     /// What the router's reply came to, in words. `nil` for nothing worth reading.
     static func said(_ reply: String) -> String? {
+        let reply = withoutPromptBlocks(reply)
         let corrected = !Prompts.corrections(in: reply).owners.isEmpty
         switch ReplyHoldback().finish(fullText: reply) {
         case .answer(let text, _): return text.isEmpty ? (corrected ? CatWords.passedOnCorrection : nil) : text
