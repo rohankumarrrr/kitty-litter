@@ -64,15 +64,48 @@ extension KittenStatus.State {
 
 struct ChannelSpeakerLook {
     static let otherJacket: UInt32 = 0x8f8f95
+    /// Yours, as in iMessage.
+    static let yours: UInt32 = 0x0a84ff
+    /// For a kitten with no colour of its own. Blue is left for you.
+    static let palette: [UInt32] = [0x34c759, 0xff9500, 0xaf52de, 0xff2d55, 0x30b0c7, 0xa2845e, 0x5856d6, 0xffcc00]
 
     var name: String
     var hasCat: Bool
+    var isYou: Bool
     var jacket: UInt32?
+    /// `nil` is the grey that the cat and anyone unknown get.
+    var bubble: UInt32?
 
     init(_ speaker: Speaker, in book: ChannelBook) {
         name = book.name(of: speaker)
-        hasCat = speaker != .you
-        jacket = book.status(of: speaker)?.kitten.color ?? (speaker == .someoneElse ? Self.otherJacket : nil)
+        isYou = speaker == .you
+        hasCat = !isYou
+        let own = book.status(of: speaker).flatMap { Self.color(of: $0.kitten) }
+        jacket = own ?? (speaker == .someoneElse ? Self.otherJacket : nil)
+        bubble = isYou ? Self.yours : own
+    }
+
+    /// Its colour from kitten.json, or one picked from its folder so it's the same every time. The cat keeps its black jacket.
+    static func color(of kitten: Kitten) -> UInt32? {
+        if let color = kitten.color { return color }
+        guard kitten != KittenBoard.shades else { return nil }
+        let seed = kitten.id.unicodeScalars.reduce(UInt32(0)) { $0 &* 31 &+ $1.value }
+        return palette[Int(seed % UInt32(palette.count))]
+    }
+
+    static let grey = NSColor(name: nil) { $0.isDark ? Ink.hex(0x3a3a3c) : Ink.hex(0xe9e9eb) }
+
+    var bubbleFill: NSColor { bubble.map(Ink.hex) ?? Self.grey }
+
+    /// Black or white, whichever reads better on the bubble.
+    var bubbleText: NSColor {
+        guard let bubble else { return Ink.text }
+        let channel = { (shift: UInt32) -> Double in
+            let value = Double((bubble >> shift) & 0xff) / 255
+            return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+        return luminance > 0.4 ? .black : .white
     }
 }
 
@@ -188,11 +221,16 @@ final class SubjectRowView: ChannelRowView {
     }
 }
 
+/// One message as a bubble: yours on the right in blue, everyone else's on the left in their own colour.
 final class MessageRowView: ChannelRowView {
     private static let clampedLines = 12
-    private static let catSide: CGFloat = 32
-    private static let pad: CGFloat = 8
-    private static let wordsTop: CGFloat = 28
+    private static let catSide: CGFloat = 28
+    private static let pad: CGFloat = 5
+    private static let headHeight: CGFloat = 18
+    private static let insetX: CGFloat = 12
+    private static let insetY: CGFloat = 7
+    /// Of the pane's width, so a long message still reads as a bubble.
+    private static let widest: CGFloat = 0.7
 
     var onOpen: (() -> Void)? { didSet { setActions() } }
     var onReply: (() -> Void)? { didSet { setActions() } }
@@ -208,14 +246,14 @@ final class MessageRowView: ChannelRowView {
     private let copyButton = QuietButton("Copy", style: .text)
     private let openButton = QuietButton("Open", style: .text)
     private let replyButton = QuietButton("Reply", style: .text)
+    private(set) var bubble = NSRect.zero
     private var failureTop: CGFloat = 0
 
     init(message: ChannelMessage, look: ChannelSpeakerLook) {
         self.message = message
         self.look = look
-        let color = message.isStillGoing ? Ink.soft : Ink.text
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
-        words = said.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: color)) }
+        words = said.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: look.bubbleText)) }
         failure = message.failure.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Ink.hex(0xff3b30))) }
         super.init(frame: .zero)
 
@@ -233,6 +271,9 @@ final class MessageRowView: ChannelRowView {
         setAccessibilityLabel([look.name, time, said, message.failure].compactMap { $0 }.joined(separator: ", "))
         setActions()
     }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
 
     private func setActions() {
         var actions: [NSAccessibilityCustomAction] = []
@@ -257,10 +298,9 @@ final class MessageRowView: ChannelRowView {
         setAccessibilityCustomActions(actions)
     }
 
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
     var isCut: Bool { words?.isCut ?? false }
+    var isYours: Bool { look.isYou }
+    var fill: NSColor { look.bubbleFill }
 
     func pressShowMore() { onShowMore?() }
 
@@ -280,61 +320,70 @@ final class MessageRowView: ChannelRowView {
     }
 
     override func fit(width: CGFloat) -> CGFloat {
-        let room = max(width - Self.textLeft - Self.margin, 60)
-        var bottom = Self.wordsTop
-        bottom += words?.fit(width: room, maxLines: isExpanded ? nil : Self.clampedLines) ?? 0
-        if let failure {
-            bottom += words == nil ? 0 : 4
-            failureTop = bottom
-            bottom += failure.fit(width: room)
+        let room = max(min(width * Self.widest, width - Self.textLeft - Self.margin) - Self.insetX * 2, 60)
+        var bottom = Self.pad + Self.headHeight
+        if let words {
+            words.fit(width: room, maxLines: isExpanded ? nil : Self.clampedLines)
+            let size = NSSize(width: words.width + Self.insetX * 2, height: words.height + Self.insetY * 2)
+            let left = look.isYou ? width - Self.margin - size.width : Self.textLeft
+            bubble = NSRect(origin: NSPoint(x: left, y: bottom), size: size)
+            bottom = bubble.maxY
+        } else {
+            bubble = NSRect(x: look.isYou ? width - Self.margin : Self.textLeft, y: bottom, width: 0, height: 0)
         }
-
+        if let failure {
+            failure.fit(width: room + Self.insetX * 2)
+            failureTop = bottom + (words == nil ? 0 : 4)
+            bottom = failureTop + failure.height
+        }
         showMore.isHidden = !isCut
         if isCut {
-            showMore.frame.origin = NSPoint(x: Self.textLeft - 6, y: bottom + 1)
+            showMore.frame.origin = NSPoint(x: look.isYou ? bubble.maxX - showMore.frame.width + 6 : bubble.minX - 6, y: bottom + 1)
             bottom += showMore.frame.height + 2
         }
         var right = width - Self.margin + 6
         for button in [openButton, copyButton, replyButton] {
             right -= button.frame.width
-            button.frame.origin = NSPoint(x: right, y: 4)
+            button.frame.origin = NSPoint(x: right, y: 0)
         }
-        return max(bottom + Self.pad, Self.pad * 2 + Self.catSide)
+        return max(bottom + Self.pad, look.hasCat ? Self.pad * 2 + Self.headHeight + Self.catSide : 0)
     }
 
     override func draw(_ dirtyRect: NSRect) {
         if look.hasCat {
-            let cat = NSRect(x: Self.catLeft, y: Self.pad + 1, width: Self.catSide, height: Self.catSide)
-            CatStamp.draw(CatPose(frame: .sit), jacket: look.jacket, in: cat, on: self)
+            let top = max(Self.pad + Self.headHeight, bubble.maxY - Self.catSide)
+            CatStamp.draw(CatPose(frame: .sit), jacket: look.jacket, in: NSRect(x: Self.catLeft, y: top, width: Self.catSide, height: Self.catSide), on: self)
         }
+        drawHead()
+        if bubble.height > 0 {
+            let radius = min(16, bubble.height / 2)
+            fill.withAlphaComponent(message.isStillGoing ? 0.55 : 1).setFill()
+            NSBezierPath(roundedRect: bubble, xRadius: radius, yRadius: radius).fill()
+            words?.draw(at: NSPoint(x: bubble.minX + Self.insetX, y: bubble.minY + Self.insetY))
+        }
+        failure?.draw(at: NSPoint(x: look.isYou ? bubble.maxX - (failure?.width ?? 0) : bubble.minX, y: failureTop))
+    }
 
-        let left = Self.textLeft
-        let timeLabel = NSAttributedString(string: time, attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: Ink.soft])
+    /// Who said it and when, over the bubble. Yours only needs the time.
+    private func drawHead() {
+        let small = NSFont.systemFont(ofSize: 11)
+        let timeLabel = NSAttributedString(string: time, attributes: [.font: small, .foregroundColor: Ink.soft])
         let timeWidth = ceil(timeLabel.size().width)
-        if !hovering { timeLabel.draw(at: NSPoint(x: bounds.width - Self.margin - timeWidth, y: Self.pad + 2)) }
-
+        let baseline = Self.pad + 1
+        guard !look.isYou else {
+            if !hovering { timeLabel.draw(at: NSPoint(x: bounds.width - Self.margin - timeWidth, y: baseline)) }
+            return
+        }
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
-        let name = NSAttributedString(string: look.name, attributes: [
-            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: Ink.text,
+        var head = look.name
+        if message.earlierNotes > 0 { head += "  ·  \(CatWords.earlierNotes(message.earlierNotes))" }
+        if !hovering { head += "  ·  \(time)" }
+        NSAttributedString(string: head, attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+            .foregroundColor: Ink.soft,
             .paragraphStyle: truncating,
-        ])
-        let nameRoom = bounds.width - left - Self.margin - max(timeWidth, 96) - 8
-        let nameWidth = min(ceil(name.size().width), nameRoom)
-        name.draw(in: NSRect(x: left, y: Self.pad, width: nameWidth, height: 18))
-        if message.earlierNotes > 0 {
-            let notes = NSAttributedString(string: CatWords.earlierNotes(message.earlierNotes), attributes: [
-                .font: NSFont.systemFont(ofSize: 11),
-                .foregroundColor: Ink.soft,
-                .paragraphStyle: truncating,
-            ])
-            let notesLeft = left + nameWidth + 8
-            notes.draw(in: NSRect(x: notesLeft, y: Self.pad + 2, width: max(left + nameRoom - notesLeft, 0), height: 14))
-        }
-
-        words?.draw(at: NSPoint(x: left, y: Self.wordsTop))
-        failure?.draw(at: NSPoint(x: left, y: failureTop))
+        ]).draw(in: NSRect(x: Self.textLeft + 2, y: baseline, width: max(bounds.width - Self.textLeft - Self.margin - 150, 60), height: 15))
     }
 }
 
@@ -355,7 +404,7 @@ final class HeadingRowView: ChannelRowView {
     override func fit(width: CGFloat) -> CGFloat { 52 }
 
     override func draw(_ dirtyRect: NSRect) {
-        CatStamp.draw(status.pose(tick: 0), jacket: status.kitten.color, in: NSRect(x: Self.catLeft, y: 14, width: 32, height: 32), on: self)
+        CatStamp.draw(status.pose(tick: 0), jacket: ChannelSpeakerLook.color(of: status.kitten), in: NSRect(x: Self.catLeft, y: 14, width: 32, height: 32), on: self)
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         let width = bounds.width - Self.textLeft - Self.margin

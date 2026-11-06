@@ -227,4 +227,15 @@ final class ChannelRowsTests: XCTestCase {
     func testEveryoneWithNothingSaidSaysWhereItGoes() {
         XCTAssertEqual(ChannelRows.rows(.channel(.everyone), in: book()), [.note("Say something and it goes to whoever it's for.")])
     }
+
+    func testShadesOwnWorkComesFirstInProgress() {
+        let own = AgentThread(id: "own", title: "Find a cheaper flight", projectTitle: nil, status: .running, model: "m", updatedAt: noon)
+        let built = ChannelBook.build(kittens: [steve, pepper, cali], threads: [thread("a")], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(shadesWork: [own]))
+        let rows = ChannelRows.rows(.needsYou, in: built)
+        let progress = Array(rows.drop { $0 != .section("In progress", clearing: nil) }.dropFirst())
+        guard case .heading(let shades) = progress.first else { return XCTFail("\(rows)") }
+        XCTAssertEqual(shades.kitten, KittenBoard.shades)
+        XCTAssertEqual(shades.state, .working(sessions: 1))
+        XCTAssertEqual(progress[1], .issue(own))
+    }
 }

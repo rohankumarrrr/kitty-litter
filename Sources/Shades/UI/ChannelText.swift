@@ -39,6 +39,8 @@ final class ChannelTextBlock {
     private let storage: NSTextStorage
     private var fitted: (width: CGFloat, maxLines: Int?)?
     private(set) var height: CGFloat = 0
+    /// The widest line, so a bubble can be no wider than its words.
+    private(set) var width: CGFloat = 0
     private(set) var isCut = false
 
     init(_ text: NSAttributedString) {
@@ -65,7 +67,9 @@ final class ChannelTextBlock {
             isCut = true
         }
         layoutManager.ensureLayout(for: container)
-        height = ceil(layoutManager.usedRect(for: container).height)
+        let used = layoutManager.usedRect(for: container)
+        height = ceil(used.height)
+        self.width = ceil(used.width)
         return height
     }
 

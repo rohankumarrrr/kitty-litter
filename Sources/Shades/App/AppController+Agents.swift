@@ -7,7 +7,7 @@ extension AppController {
         do {
             try await backend.connect()
         } catch {
-            stage.showThreads(watch.rows(at: now()), status: CatWords.cantReachT3)
+            stage.showStatus(CatWords.cantReachT3, needsYou: false)
             say(CatWords.problem(error, while: .agents))
         }
     }
@@ -26,9 +26,8 @@ extension AppController {
         dropAnsweredQuestions(threads)
 
         stage.catAgentsBusy(watch.isBusy)
-        stage.showThreads(watch.rows(at: now()), status: watch.summary)
+        stage.showStatus(watch.summary, needsYou: watch.needsYouCount > 0)
         if stage.isKittensVisible { stage.showKittens(kittenStatuses) }
-        if stage.isInboxVisible { stage.showInbox(inboxEntries) }
         channels.threadsChanged(threads)
         updateVocabulary(threads)
 
@@ -65,7 +64,6 @@ extension AppController {
         if stage.isKittensVisible {
             stage.hideKittens()
         } else {
-            stage.hideInbox()
             stage.showKittens(kittenStatuses)
         }
     }

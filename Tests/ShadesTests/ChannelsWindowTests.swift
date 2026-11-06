@@ -475,3 +475,41 @@ extension ChannelsWindowTests {
         XCTAssertEqual(sent, [], "A follow-up for the new topic must not go to the old resume thread")
     }
 }
+
+// MARK: - Bubbles
+
+extension ChannelsWindowTests {
+    private func bubbles(in view: NSView) -> [MessageRowView] {
+        subviews(of: view).compactMap { $0 as? MessageRowView }
+    }
+
+    func testYourBubblesAreOnTheRightInBlueAndAKittensOnTheLeftInItsColour() throws {
+        let red = Kitten(name: "Ruby", role: "Finance", covers: "", folder: "/k/ruby", color: 0xb3261e)
+        let thread = AgentThread(id: "t", title: "Work", projectTitle: "Ruby", status: .completed, model: "m", updatedAt: at, projectPath: "/k/ruby")
+        let said = Exchange(id: "e", asker: .you, askedAt: at, ask: "Hi", reply: "Hello there, this is a longer answer.", repliedAt: at.addingTimeInterval(1))
+        let view = view()
+        view.show(ChannelBook.build(kittens: [red], threads: [thread], transcripts: ["t": [said]], isReading: false, unreadable: 0, cantReachT3: false))
+        view.select(.channel(.direct(red)))
+        let rows = bubbles(in: view)
+        let yours = try XCTUnwrap(rows.first(where: \.isYours))
+        let theirs = try XCTUnwrap(rows.first { !$0.isYours })
+
+        XCTAssertEqual(yours.bubble.maxX, yours.bounds.width - ChannelRowView.margin, accuracy: 1)
+        XCTAssertEqual(theirs.bubble.minX, ChannelRowView.textLeft, accuracy: 1)
+        XCTAssertLessThan(yours.bubble.width, yours.bounds.width / 2, "a short message makes a short bubble")
+        XCTAssertEqual(yours.fill, Ink.hex(ChannelSpeakerLook.yours))
+        XCTAssertEqual(theirs.fill, Ink.hex(0xb3261e))
+    }
+
+    func testAKittenWithoutAColourStillGetsItsOwnEveryTimeAndTheTextReads() {
+        let plain = Kitten(name: "Sam", role: "", covers: "", folder: "/k/sam")
+        XCTAssertEqual(ChannelSpeakerLook.color(of: plain), ChannelSpeakerLook.color(of: plain))
+        XCTAssertNotNil(ChannelSpeakerLook.color(of: plain))
+        XCTAssertNotEqual(ChannelSpeakerLook.color(of: plain), ChannelSpeakerLook.yours, "blue is yours")
+        XCTAssertNil(ChannelSpeakerLook.color(of: KittenBoard.shades), "the cat keeps its black jacket")
+
+        let book = ChannelBook.build(kittens: [plain, Kitten(name: "Sunny", role: "", covers: "", folder: "/k/sunny", color: 0xffcc00)], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        XCTAssertEqual(ChannelSpeakerLook(.kitten("/k/sunny"), in: book).bubbleText, .black, "dark words on a light bubble")
+        XCTAssertEqual(ChannelSpeakerLook(.you, in: book).bubbleText, .white)
+    }
+}

@@ -64,6 +64,7 @@ enum CatWords {
     static let everyoneSubtitle = "Goes to whoever it's for"
     static let everyoneEmpty = "Say something and it goes to whoever it's for."
     static let shades = "Shades"
+    static let shadesRole = "Work I started for you"
     static let newTopic = "New topic"
     static let answerInWords = "Type an answer"
     static let didntStart = "That didn't start. Try again?"
@@ -161,14 +162,8 @@ enum CatWords {
     static let failedWithoutReport = "It stopped before it could say why."
     static func failedRow(_ opening: String) -> String { "Hit a snag: \(opening)" }
 
-    static let inboxCaption = "Inbox"
-    static let inboxEmpty = "All clear. Nothing shipped or waiting on you."
+    static let inboxCaption = "Messages"
     static let inboxSent = "Sent. Waiting to hear back."
-    static let replyFirst = "Click Reply on the one you mean, then talk."
-
-    static func replyPlaceholder(talkKey: HoldKey) -> String {
-        talkKey == .off ? "Type your reply" : "Type your reply, or say it"
-    }
 
     static func inboxHeadline(_ entries: [InboxEntry]) -> String {
         let decisions = entries.filter(\.needsYou).count
@@ -188,7 +183,6 @@ enum CatWords {
         return notes == 0 ? "" : notes == 1 ? "1 note" : "\(notes) notes"
     }
 
-    /// What the menu says next to Inbox. What needs you comes first, since that's what it's for.
     static func inboxSummary(_ entries: [InboxEntry]) -> String? {
         let decisions = entries.filter(\.needsYou).count
         if decisions > 0 { return decisions == 1 ? "1 needs you" : "\(decisions) need you" }
@@ -196,15 +190,6 @@ enum CatWords {
         return shipped > 0 ? "\(shipped) shipped" : nil
     }
 
-    static func ago(_ date: Date, now: Date) -> String {
-        let minutes = Int(now.timeIntervalSince(date) / 60)
-        switch minutes {
-        case ..<1: return "just now"
-        case ..<60: return "\(minutes)m ago"
-        case ..<(24 * 60): return "\(minutes / 60)h ago"
-        default: return "\(minutes / (24 * 60))d ago"
-        }
-    }
 
     /// The question and what you can say to it. Answering happens in T3.
     static func question(_ question: AgentQuestion) -> String {

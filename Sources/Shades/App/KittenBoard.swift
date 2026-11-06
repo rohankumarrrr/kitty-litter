@@ -34,6 +34,16 @@ struct KittenStatus: Equatable, Identifiable {
 }
 
 enum KittenBoard {
+    /// The cat itself, for its own work in Messages. It has no folder, so no thread is ever counted as its by that.
+    static let shades = Kitten(name: CatWords.shades, role: CatWords.shadesRole, covers: "", folder: "")
+
+    static func shadesStatus(_ work: [AgentThread]) -> KittenStatus {
+        let active = work.filter(\.status.isActive)
+        if let waiting = work.first(where: needsYou) { return KittenStatus(kitten: shades, state: .needsYou, threadID: waiting.id) }
+        if let first = active.first { return KittenStatus(kitten: shades, state: .working(sessions: active.count), threadID: first.id) }
+        return KittenStatus(kitten: shades, state: .idle, threadID: work.first?.id)
+    }
+
     /// A thread belongs to a kitten if it's in the kitten's folder or project, or carries its
     /// name from working in another project, the way a code change does.
     static func belongs(_ thread: AgentThread, to kitten: Kitten) -> Bool {

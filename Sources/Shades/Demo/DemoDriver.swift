@@ -68,7 +68,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | fix | kittens | channels | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | buttons | typed | front | quit")
+            print("ask [question] | fix | kittens | messages | pose [frame] | submit [text] | esc | talk | dictate | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [done|clear] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -82,8 +82,6 @@ final class DemoDriver {
         case "esc":
             if stage.input.isVisible {
                 stage.input.cancel()
-            } else if stage.inbox.isVisible {
-                stage.inbox.hide()
             } else {
                 controller.bubbleDismissed(byClick: false)
             }
@@ -95,10 +93,8 @@ final class DemoDriver {
             hold(.dictate)
         case "kittens":
             controller.kittensPressed()
-        case "channels":
-            controller.channelsPressed()
-        case "dash":
-            stage.toggleDashboard()
+        case "channels", "messages":
+            controller.messagesHotkeyPressed()
         case "settings":
             controller.settingsPressed()
         case "allow", "deny", "session":
@@ -116,17 +112,15 @@ final class DemoDriver {
         case "report":
             parts.backend.report(rest)
         case "inbox":
-            // The same as pressing the first row's buttons, so nothing has to click.
+            // The same as pressing a report's buttons in Messages, so nothing has to click.
             let first = controller.inboxEntries.first { $0.questionID == nil }
             switch rest {
-            case "reply":
-                if let first { controller.inboxAction(.reply(first)) }
             case "done":
                 if let first { controller.inboxAction(.done(id: first.id)) }
             case "clear":
                 controller.inboxAction(.clear(.shipped))
             default:
-                controller.inboxPressed()
+                controller.channelsPressed(selecting: .needsYou)
             }
         case "finish":
             parts.backend.finish(threadID: rest.isEmpty ? "demo-tidy" : rest)
@@ -158,9 +152,7 @@ final class DemoDriver {
                 ("cat", stage.cat.panel as NSWindow),
                 ("bubble", stage.bubble.panel),
                 ("input", stage.input.panel),
-                ("dashboard", stage.dashboard.panel),
-                ("channels", stage.channels.panel),
-                ("inbox", stage.inbox.panel),
+                ("messages", stage.channels.panel),
             ] {
                 print("window \(name) id=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) frame=\(NSStringFromRect(window.frame)) clicks=\(!window.ignoresMouseEvents)")
             }

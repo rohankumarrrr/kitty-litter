@@ -4,7 +4,7 @@ import ShadesCore
 /// Talk goes through the Ask flow. Dictate only ever goes to the cursor.
 extension AppController {
     /// A box is up that what you say belongs in, so nothing needs a look at the screen.
-    var boxTakesVoice: Bool { fixIsOpen || inboxReplyIsOpen }
+    var boxTakesVoice: Bool { fixIsOpen }
     private var talkBoxIsStillUp: Bool { boxTakesVoice && talkBox == boxesOpened }
 
     func keyPressed(_ key: HoldKey) {
@@ -25,10 +25,6 @@ extension AppController {
 
     func talkDown() {
         guard voiceMode == nil else { return }
-        if stage.isInboxVisible && !stage.isInputVisible {
-            say(CatWords.replyFirst)
-            return
-        }
         talkBox = boxTakesVoice ? boxesOpened : nil
         // The look happens as the key goes down: that's the moment you mean.
         if talkBox == nil { talkLook = startLook(CaptureOptions()) }

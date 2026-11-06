@@ -14,8 +14,20 @@ enum MessagesAction: Equatable {
 /// Messages: what needs you, a group chat with every kitten, and a DM with each. Opening it captures nothing,
 /// and nothing typed in it takes your screen, since you're looking at Messages and not your work.
 extension AppController {
-    func channelsPressed() {
-        stage.showChannels(channels.open(threads: latestThreads))
+    /// Opens it, at `selection` if it's given. Looking at it covers whatever the cat was nudging you about.
+    func channelsPressed(selecting selection: ChannelSelection? = nil) {
+        inboxNudge = false
+        stage.showChannels(channels.open(threads: latestThreads), selecting: selection)
+        renderBubble()
+    }
+
+    /// The hotkey opens it from anywhere, and closes it if it's already open.
+    func messagesHotkeyPressed() {
+        if stage.isChannelsVisible {
+            stage.hideChannels()
+        } else {
+            channelsPressed()
+        }
     }
 
     func channelsClosed() {
@@ -26,6 +38,8 @@ extension AppController {
     var waiting: Waiting {
         let kittens = loadKittens()
         var waiting = Waiting(approvals: approvals.pending, reports: inbox.entries)
+        // What used to be the dashboard: work the cat started outside any kitten, while it's going or just finished.
+        waiting.shadesWork = watch.rows(at: now()).filter { !hiddenThreads.contains($0.id) && KittenBoard.owner(of: $0, among: kittens) == nil }
         for thread in latestThreads where !hiddenThreads.contains(thread.id) {
             let owner = KittenBoard.owner(of: thread, among: kittens)?.id
             for request in thread.pendingApprovals { waiting.owners[request.id] = owner }

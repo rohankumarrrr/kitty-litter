@@ -178,7 +178,7 @@ private final class KittenRow: NSView {
     private func drawKitten() {
         let side = CGFloat(CatArt.grid) * Self.scale
         let theme: CatTheme = effectiveAppearance.isDark ? .dark : .light
-        let cgImage = renderer.image(for: status.pose(tick: tick), theme: theme, jacket: status.kitten.color)
+        let cgImage = renderer.image(for: status.pose(tick: tick), theme: theme, jacket: ChannelSpeakerLook.color(of: status.kitten))
         let image = NSImage(cgImage: cgImage, size: NSSize(width: side, height: side))
         image.draw(
             in: NSRect(x: 10, y: (bounds.height - side) / 2, width: side, height: side),

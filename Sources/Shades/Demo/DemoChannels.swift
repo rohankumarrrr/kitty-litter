@@ -57,7 +57,8 @@ enum DemoChannels {
         reports: [
             InboxEntry(id: "demo-decision", kind: .decision, text: "The settings panel change is merged. Say ship it to install it.", threadID: clawdeMain.id, threadTitle: clawdeMain.title, at: ago(minutes: 90)),
             InboxEntry(id: "demo-shipped", kind: .shipped, text: "Shipped the smaller logo on small screens.", threadID: "demo-steve-yesterday", threadTitle: "Shrink the logo on small screens", at: ago(minutes: 1_400)),
-        ]
+        ],
+        shadesWork: [thread("demo-shades-font", "Find a free pixel font for the logo", project: nil, status: .running, settled: false, minutes: 4)]
     )
 
     private static func exchange(

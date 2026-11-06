@@ -58,11 +58,13 @@ Click a kitten to open whatever most needs looking at in T3. A thread counts as 
 
 ### Messages
 
-Choose Messages from the cat's menu to see and answer everything without opening T3:
+Press ⌃⌘M from anywhere, or choose Messages from the cat's menu, to see and answer everything without opening T3. Press ⌃⌘M again to close it. It's the one place for all of it: the inbox and the dashboard that used to hang off the cat and the menu bar both live here now.
 
-![Messages, with what needs you at the top](images/messages.png)
+![Messages, with your kittens in a group chat](images/messages.png)
 
-- **Needs you** is pinned at the top. Approvals and questions come first, then the inbox's reports: what needs a decision, what shipped, and anything else. Under them, **In progress** is what each kitten has open. There's no tracker yet, so that's one of a kitten's threads that's still working or isn't settled. A finished thread stays until it's settled, because that's a pull request waiting on your "ship it".
+It reads like iMessage. Your messages are bubbles on the right, in blue. Each kitten's are on the left in its own colour, the `color` from its `kitten.json`, next to its cat in a jacket of the same colour. A kitten without a `color` gets one of its own, picked from its folder so it's the same every time and never your blue. Shades' own answers are grey.
+
+- **Needs you** is pinned at the top. Approvals and questions come first, then the inbox's reports: what needs a decision, what shipped, and anything else. Under them, **In progress** is what each kitten has open. There's no tracker yet, so that's one of a kitten's threads that's still working or isn't settled. A finished thread stays until it's settled, because that's a pull request waiting on your "ship it". Work the cat started that no kitten owns, such as a fix or a hand-off to the frontier agent, comes first under Shades, while it's going and for a while after it finishes.
 - **Everyone** is a group chat with every kitten, which is all your DMs in one place. What you type there goes to the router with the same prompt and model as the Ask box, and whoever takes it answers in the chat as itself, with its name and jacket. The router keeps a conversation for Messages apart from the Ask box's, so your screen is never in it, and asking the cat something meanwhile can't cut it short. It only offers the kittens' threads and work Messages itself passed your words to, never anything the Ask box started, since that can hold your screen. When the router answers itself, or passes the work to the frontier agent, Shades answers. If you've closed Messages by then, the router's answer comes over the cat instead.
 - **Direct messages** has one row per kitten, whether or not you've talked, with a dot when it has finished something you haven't seen. Your words and its replies are there, and so are the reports of work it started itself. Forwarded messages only show your own words, never the note or the screen below them. Whatever it's waiting on you for sits at the bottom, to answer right there.
 - **Between kittens** has one row per pair that's talked. A kitten's messages show up here by themselves when it sends them with T3's tools, such as `t3_thread_send`, because T3 records which thread sent each one. If that thread can't be named, such as one that's been archived, it's listed as "someone else". These are only for reading.
@@ -98,19 +100,17 @@ That copies their instruction files into `~/kittens/_skills`, pinned to commits 
 
 ## The inbox
 
-A kitten that reports a lot, especially while you're away, can leave you working through a run of messages with no idea which matters. With `inbox: true`, its reports wait in one place instead. There's one bubble, which it keeps up to date (`1 decision, 2 shipped`), and opening it or choosing Inbox from the menu shows them:
+A kitten that reports a lot, especially while you're away, can leave you working through a run of messages with no idea which matters. With `inbox: true`, its reports wait in [Messages](#messages), under Needs you, instead. The cat keeps one bubble up to date (`1 decision, 2 shipped`) while Messages is closed, and its Open button takes you there:
 
 - **Needs you:** what you have to decide, with the least you need to decide it. Reply, open it in T3, or say you're done with it.
 - **Shipped:** what's now done and live. Ask about it, open it in T3, or clear the list.
 - **Also:** anything else a thread had to say. It's there if you go looking, and it doesn't count as shipped or bring up the bubble, unless it's the answer to something you asked.
 
-Reply and Ask open the text box, where you can type or hold the talk key and say it. What you send is your own words and nothing else, with no look at your screen, and it goes straight to that thread. The row dims until the thread answers. A new decision or shipped line from that thread replaces its old decision, and an answer goes under the row you asked on. No button ever says anything for you, and Done and Clear tell no agent anything.
+Reply and Ask point the box at the bottom of Messages at that thread. What you send is your own words and nothing else, with no look at your screen, and it goes straight to that thread. The row dims until the thread answers. A new decision or shipped line from that thread replaces its old decision, and an answer goes under the row you asked on. No button ever says anything for you, and Done and Clear tell no agent anything.
 
 A thread's reports go here if it counts as the work of any kitten with `inbox: true`, by its folder or its title. A thread titled `Shades test:` is a live test, so it stays out of the inbox and the bubble altogether, whichever kitten it belongs to. A copy of the app trying a flow out with `--ask`, `--hand-off` or `--fix` still sees them, so a test can see its own result.
 
-A question an agent has stopped to ask shows there too. Answer it in Messages or T3, since a reply would just queue behind it. Approvals still come as the approval bubble, since they block the work, and you can answer them in Messages too.
-
-![The inbox, with one decision and one thing shipped](images/inbox.png)
+A question an agent has stopped to ask shows there too, with its options, since a reply would just queue behind it. Approvals still come as the approval bubble, since they block the work, and you can answer them in Messages too.
 
 **How it's sorted.** A finished thread's report goes to the summary model, as with any other kitten, and comes back as `SHIPPED:`, `DECISION:`, `PASSED:` or `NOTE:` lines. The report is data to that model, and it isn't allowed to do anything but write them. If the lines can't be read, it becomes a decision showing the report's opening, because a false alarm beats a lost report. A failed run skips the model and is always a decision, marked as having hit a snag, so no report can call a failure shipped. Only what a thread said in that run counts, so a run that says nothing leaves what's waiting as it is, and a report that can't be read stays owed until it can. A thread that only started another one stays out of the inbox, which is the model's call, or with no answer from it, a report of one sentence and a link. A long report keeps its start and its end for the model, since that's usually where the result and the question are. A summary still running when the app stops is treated the same after the restart: its requests are declined, and it's archived when it's done. Anything else goes under that thread's row, or gets a row of its own under Also if it has none, so whatever a report turns out to be, it stays in the inbox and a restart can't lose it.
 

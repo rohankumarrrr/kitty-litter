@@ -64,6 +64,8 @@ final class Hotkeys {
 enum Shortcut {
     static let ask = (keyCode: kVK_Space, modifiers: optionKey)
     static let fix = (keyCode: kVK_ANSI_F, modifiers: controlKey | optionKey)
+    static let messages = (keyCode: kVK_ANSI_M, modifiers: controlKey | cmdKey)
     static let askLabel = "⌥Space"
     static let fixLabel = "⌃⌥F"
+    static let messagesLabel = "⌃⌘M"
 }

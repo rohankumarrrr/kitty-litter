@@ -89,7 +89,6 @@ final class AppController {
     var notForInboxSince = Date.distantPast
     /// Whether the bubble should mention the inbox.
     var inboxNudge = false
-    var inboxReplyIsOpen = false
     /// Counts the boxes that take what you say, so words meant for one can't land in the next.
     var boxesOpened = 0
     /// The box what's being said belongs in, fixed when the key goes down.
@@ -237,8 +236,8 @@ final class AppController {
             stage.copyToPasteboard(text)
         case .approval(let request, let decision):
             answer(request, decision)
-        case .openInbox:
-            inboxPressed()
+        case .openMessages:
+            channelsPressed(selecting: .needsYou)
         }
     }
 

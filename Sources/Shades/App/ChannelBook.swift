@@ -75,6 +75,8 @@ struct Waiting: Equatable {
     /// The kitten each approval, question or report is for, by its ID.
     var owners: [String: String] = [:]
     var reports: [InboxEntry] = []
+    /// Work the cat started outside any kitten, while it's going or just finished. It's what each kitten is on, for Shades.
+    var shadesWork: [AgentThread] = []
 
     var count: Int { approvals.count + questions.count + reports.filter(\.needsYou).count }
 }

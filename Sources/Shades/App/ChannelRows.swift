@@ -97,12 +97,14 @@ enum ChannelRows {
     }
 
     private static func inProgress(in book: ChannelBook) -> [ChannelRow] {
+        let shades = book.waiting.shadesWork
         // Threads are known before any words are, so reading only matters if there's nothing to show yet.
-        if book.issueCount == 0 {
+        if book.issueCount == 0, shades.isEmpty {
             if book.cantReachT3 { return [] }
             if book.isReading { return [.note(CatWords.readingMessages)] }
         }
-        return book.issues.flatMap { issues -> [ChannelRow] in
+        let own: [ChannelRow] = shades.isEmpty ? [] : [.heading(KittenBoard.shadesStatus(shades))] + shades.map(ChannelRow.issue)
+        return own + book.issues.flatMap { issues -> [ChannelRow] in
             guard let status = book.status(of: .kitten(issues.kitten.id)) else { return [] }
             let open: [ChannelRow] = issues.threads.isEmpty ? [.note(CatWords.nothingOpen)] : issues.threads.map(ChannelRow.issue)
             return [.heading(status)] + open

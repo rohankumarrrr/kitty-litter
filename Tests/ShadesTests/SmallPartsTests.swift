@@ -339,7 +339,7 @@ final class KittenBoardTests: XCTestCase {
 final class InboxWordsTests: XCTestCase {
     func testHowLongAgoIsShort() {
         let now = Date(timeIntervalSince1970: 1_000_000)
-        func ago(_ seconds: TimeInterval) -> String { CatWords.ago(now.addingTimeInterval(-seconds), now: now) }
+        func ago(_ seconds: TimeInterval) -> String { CatWords.age(of: now.addingTimeInterval(-seconds), now: now) }
         XCTAssertEqual(ago(30), "just now")
         XCTAssertEqual(ago(-5), "just now", "a clock that's a little off isn't news")
         XCTAssertEqual(ago(5 * 60), "5m ago")
