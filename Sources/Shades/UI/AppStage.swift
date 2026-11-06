@@ -15,6 +15,7 @@ final class AppStage: CatStage {
     let kittens = KittenPanel()
     let channels = ChannelsWindow()
     let settingsPanel = SettingsPanel()
+    let themeMenu = ThemeMenu()
     let pairing = PairingPanel()
     let menuBar = MenuBar()
     weak var controller: AppController?
@@ -87,6 +88,8 @@ final class AppStage: CatStage {
         channels.view.pane.onCopy = { [weak self] text in self?.copyToPasteboard(text) }
         channels.view.pane.onAction = { [weak self] action in self?.controller?.messagesAction(action) }
         channels.view.onSeen = { [weak self] selection in self?.controller?.messagesAction(.seen(selection)) }
+        channels.view.sidebar.onTheme = { [weak self] anchor in self?.showThemeMenu(under: anchor) }
+        channels.view.onDropTheme = { [weak self] file in self?.controller?.themeChosen(.file(file)) }
 
         menuBar.onAsk = { [weak self] in self?.controller?.askPressed() }
         menuBar.onFix = { [weak self] in self?.controller?.fixPressed() }
@@ -221,6 +224,18 @@ final class AppStage: CatStage {
 
     func hideChannels() {
         channels.panel.close()
+    }
+
+    func showTheme(_ theme: ColorTheme?) {
+        channels.apply(theme)
+    }
+
+    /// Only looks for themes when you open it.
+    private func showThemeMenu(under anchor: NSView) {
+        guard let controller else { return }
+        themeMenu.show(controller.installedThemes(), current: controller.theme, under: anchor) { [weak controller] choice in
+            controller?.themeChosen(choice)
+        }
     }
 
     var isMessagesBoxTyping: Bool {

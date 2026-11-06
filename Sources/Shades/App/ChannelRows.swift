@@ -39,7 +39,7 @@ enum ChannelRow: Equatable {
 
 /// Where what you type in Messages goes. None of them carry your screen, and each carries only your words.
 enum MessageTarget: Equatable {
-    /// Everyone: through the router, as the Ask box sends it.
+    /// Everyone and Shades: through the router, as the Ask box sends it, on Messages' own conversation with it.
     case router
     /// A new thread in the kitten's folder.
     case newThread(Kitten)
@@ -57,7 +57,7 @@ enum MessageTarget: Equatable {
         switch selection {
         case .needsYou, .done:
             return nil
-        case .channel(.everyone):
+        case .channel(.everyone), .channel(.shades):
             return .router
         case .channel(let id):
             return book.writableKitten(in: id).map(MessageTarget.newThread)

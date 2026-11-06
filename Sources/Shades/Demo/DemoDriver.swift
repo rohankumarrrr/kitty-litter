@@ -123,11 +123,17 @@ final class DemoDriver {
             }
         case "text":
             runOnPhone("document.body.innerText.split('\\n').filter((l) => l.trim()).join(' | ')")
+        case "select":
+            // The same as pressing and dragging over those words on the page.
+            runOnPhone("(() => { const words = \(DemoPhone.quoted(rest)); const walk = document.createTreeWalker($('rows'), NodeFilter.SHOW_TEXT); for (let node = walk.nextNode(); node; node = walk.nextNode()) { const at = node.data.indexOf(words); if (at < 0) continue; const range = document.createRange(); range.setStart(node, at); range.setEnd(node, at + words.length); getSelection().removeAllRanges(); getSelection().addRange(range); return 'selected [' + getSelection().toString() + ']'; } return 'no such words' })()")
+        case "unselect":
+            // The same as tapping somewhere else on the page.
+            runOnPhone("getSelection().removeAllRanges(); 'unselected'")
         case "close":
             phone?.close()
             phone = nil
         default:
-            print("phone on | off | pair | open [place] | go [place] | send [words] | press [button] | answer [words] | subscribe | text | close")
+            print("phone on | off | pair | open [place] | go [place] | send [words] | press [button] | answer [words] | subscribe | text | select [words] | unselect | close")
         }
     }
 
@@ -171,6 +177,27 @@ final class DemoDriver {
         recorder.start()
     }
 
+    /// The same as dragging over those words in Messages: the first message showing them gets the keyboard, the way
+    /// pressing in it does, and they're selected.
+    private func highlight(_ words: String) {
+        let panel = stage.channels.panel
+        for view in allSubviews(of: panel.contentView) {
+            guard let text = view as? ChannelTextView else { continue }
+            let range = (text.string as NSString).range(of: words)
+            guard range.location != NSNotFound else { continue }
+            panel.makeKey()
+            panel.makeFirstResponder(text)
+            text.setSelectedRange(range)
+            return print("highlighted [\(words)] key=\(panel.isKeyWindow) front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nothing")")
+        }
+        print("no message shows [\(words)]")
+    }
+
+    private func allSubviews(of view: NSView?) -> [NSView] {
+        guard let view else { return [] }
+        return view.subviews + view.subviews.flatMap { allSubviews(of: $0) }
+    }
+
     private func runOnPhone(_ script: String) {
         guard let phone else { return print("The page isn't open. Try: phone open") }
         Task {
@@ -205,7 +232,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|shades|[kitten] | thread | back | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
+            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|shades|[kitten] | thread | back | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -333,6 +360,27 @@ final class DemoDriver {
             stage.catGoHome()
         case "theme":
             NSApp.appearance = rest == "dark" ? NSAppearance(named: .darkAqua) : rest == "light" ? NSAppearance(named: .aqua) : nil
+        case "themes":
+            // What Theme in Messages offers, in the order it does.
+            for item in stage.themeMenu.items(controller.installedThemes(), current: controller.theme) {
+                print(item.isSeparatorItem ? "theme ---" : "theme \(item.state == .on ? "*" : " ") \(item.title)\(item.isEnabled ? "" : " (a note)")")
+                for theme in item.submenu?.items ?? [] {
+                    print("theme   \(theme.state == .on ? "*" : " ") \(theme.title) \((theme.representedObject as? URL)?.path ?? "")")
+                }
+            }
+        case "colors":
+            // The same as picking a theme from that menu, by its app and name such as "Cursor/Opal Horizon", or
+            // dropping a theme file onto Messages.
+            let listed = controller.installedThemes().first { "\($0.app)/\($0.theme.name)" == rest }
+            controller.themeChosen(rest == "shades" ? .plain : .file(listed?.file ?? URL(fileURLWithPath: (rest as NSString).expandingTildeInPath)))
+            print("colors \(controller.theme.map { "\($0.name) paper=\(ColorTheme.hex($0.paper)) text=\(ColorTheme.hex($0.text)) accent=\(ColorTheme.hex($0.accent)) yours=\(ColorTheme.hex($0.yours))" } ?? CatWords.plainTheme)")
+        case "highlight":
+            highlight(rest)
+        case "copy":
+            // Where ⌘C in Messages would go and what it would copy, without copying, so your pasteboard is left alone.
+            let target = NSApp.target(forAction: #selector(NSText.copy(_:)), to: nil, from: stage.channels.panel)
+            let words = (target as? NSTextView).map { ($0.string as NSString).substring(with: $0.selectedRange()) }
+            print("copy goes to \(target.map { String(describing: type(of: $0)) } ?? "nothing") with [\(words ?? "")] types=\((target as? NSTextView)?.writablePasteboardTypes.map(\.rawValue) ?? [])")
         case "private":
             parts.context.isPrivate = rest == "on"
         case "t3":

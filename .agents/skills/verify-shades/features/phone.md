@@ -9,6 +9,7 @@ With **Messages on my phone** on in Settings, the cat shows a code and a picture
 - `phone-answer` allows or denies an approval, answers a question from its card, and replies to a report.
 - `phone-send` sends in Everyone through the router, and starts a new topic from a DM, which opens on its own.
 - `phone-notify` sends each new thing in Needs you to a subscribed phone, encrypted for it, saying only who and what kind.
+- `phone-theme` gives the page Messages' theme, and holds back what's new while you're selecting words.
 
 ## How to get to it (user POV)
 
@@ -40,6 +41,11 @@ Journey: `journeys/phone-notifications.txt`.
 
 - **Subscribe.** `phone open` and `draw`. `1-home` shows the page's note that an iPhone needs it on the Home Screen, since the web view, like Safari on an iPhone, has no push. `phone subscribe` stands in for **Turn on**: the page sends a stand-in phone's subscription with its own `/push` request, and the output says `[phone] subscribed: 204`.
 - **Notify.** `approval command ...` and `question`. The output says `[demo] notified: Steve Pawsniak needs an approval`, then `[demo] pushed to web.push.apple.com: {"title":"Steve Pawsniak needs an approval","tag":"demo-1"}`, which is what the stand-in phone opened from the encrypted push. The same follows for the question, and nothing says what was asked.
+
+Journey: `journeys/phone-theme.txt`.
+
+- **Theme.** `colors Cursor/Opal Horizon` before `phone on`, then `phone open steve`. `1-opal` shows the page dark, your bubbles in the violet tint, a violet Send button, and Steve's still his own colour.
+- **Selecting.** `phone select the new grid` does what dragging over those words does, and prints `[phone] selected [the new grid]`. A new topic sent from the window doesn't reach the page's `phone text` while they're selected, and does after `phone unselect`. The web view's pictures don't show a selection.
 
 End every journey with `front` and `windows`. The app in front stays whatever it was, and `active=false`.
 

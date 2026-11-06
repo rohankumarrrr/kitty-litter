@@ -1,0 +1,26 @@
+front
+colors Cursor/Opal Horizon
+phone on
+wait 3
+phone pair
+wait 1
+phone open steve
+wait 4
+draw .verify/shades/phone-theme/1-opal
+phone select the new grid
+wait 1
+channels
+wait 2
+channel steve
+send How did the interview prep go?
+wait 4
+phone text
+draw .verify/shades/phone-theme/2-held-while-selected
+phone unselect
+wait 2
+phone text
+wait 2
+draw .verify/shades/phone-theme/3-after-unselect
+wait 4
+front
+windows

@@ -45,9 +45,13 @@ final class ChannelSidebar: QuietView {
     private static let top: CGFloat = 38
     private static let rowHeight: CGFloat = 32
     private static let headingHeight: CGFloat = 34
+    private static let footerHeight: CGFloat = 40
 
     var onSelect: ((ChannelSelection) -> Void)?
+    /// Theme was pressed, so its menu can open under it.
+    var onTheme: ((NSView) -> Void)?
     private(set) var rows: [ChannelSidebarRow] = []
+    let themeButton = QuietButton(CatWords.themeButton, style: .text)
 
     private let scroll = QuietScrollView()
     private let list = QuietView()
@@ -58,6 +62,11 @@ final class ChannelSidebar: QuietView {
         super.init(frame: frame)
         scroll.documentView = list
         addSubview(scroll)
+        addSubview(themeButton)
+        themeButton.onPress = { [weak self] in
+            guard let self else { return }
+            self.onTheme?(self.themeButton)
+        }
     }
 
     @available(*, unavailable)
@@ -71,6 +80,12 @@ final class ChannelSidebar: QuietView {
         let groups = ChannelSidebarItem.groups(in: book)
         if groups.map(\.items) != shownGroups { rebuild(groups) }
         rows.forEach { $0.isSelected = $0.item.selection == selection }
+    }
+
+    /// The next `show` makes every row again, in the colours there are now.
+    func restyle() {
+        shownGroups = []
+        needsDisplay = true
     }
 
     func advance(tick: Int) {
@@ -103,7 +118,7 @@ final class ChannelSidebar: QuietView {
     private func addHeading(_ text: String, at y: CGFloat) -> CGFloat {
         let label = NSTextField(labelWithAttributedString: NSAttributedString(string: text.uppercased(), attributes: [
             .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
-            .foregroundColor: Ink.soft,
+            .foregroundColor: MessagesInk.soft,
             .kern: 0.5,
         ]))
         label.sizeToFit()
@@ -114,13 +129,14 @@ final class ChannelSidebar: QuietView {
 
     override func layout() {
         super.layout()
-        scroll.frame = NSRect(x: 0, y: Self.top, width: bounds.width - 1, height: max(bounds.height - Self.top, 0))
+        scroll.frame = NSRect(x: 0, y: Self.top, width: bounds.width - 1, height: max(bounds.height - Self.top - Self.footerHeight, 0))
+        themeButton.frame.origin = NSPoint(x: 10, y: bounds.height - Self.footerHeight + (Self.footerHeight - themeButton.frame.height) / 2)
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        Ink.hover.setFill()
+        MessagesInk.sidebar.setFill()
         bounds.fill(using: .sourceOver)
-        Ink.line.setFill()
+        MessagesInk.line.setFill()
         NSRect(x: bounds.width - 1, y: 0, width: 1, height: bounds.height).fill(using: .sourceOver)
     }
 }
@@ -176,7 +192,7 @@ final class ChannelSidebarRow: ChannelRowView {
 
     override func draw(_ dirtyRect: NSRect) {
         if isSelected || hovering {
-            (isSelected ? Ink.press : Ink.hover).setFill()
+            (isSelected ? MessagesInk.press : MessagesInk.hover).setFill()
             NSBezierPath(roundedRect: bounds, xRadius: 7, yRadius: 7).fill()
         }
 
@@ -206,7 +222,7 @@ final class ChannelSidebarRow: ChannelRowView {
             right -= 16
         }
         if let count = item.count, count > 0 {
-            let total = NSAttributedString(string: "\(count)", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: Ink.soft])
+            let total = NSAttributedString(string: "\(count)", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: MessagesInk.soft])
             let size = total.size()
             total.draw(at: NSPoint(x: right - size.width, y: bounds.midY - size.height / 2))
             right -= size.width + 8
@@ -217,7 +233,7 @@ final class ChannelSidebarRow: ChannelRowView {
         truncating.lineBreakMode = .byTruncatingTail
         NSAttributedString(string: item.title, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: item.isUnread ? .semibold : item.count != nil ? .medium : .regular),
-            .foregroundColor: isFaded ? Ink.soft : Ink.text,
+            .foregroundColor: isFaded ? MessagesInk.soft : MessagesInk.text,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: left, y: (bounds.height - 17) / 2, width: max(right - left, 0), height: 17))
     }

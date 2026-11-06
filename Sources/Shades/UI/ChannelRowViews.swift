@@ -75,6 +75,8 @@ struct ChannelSpeakerLook {
     var jacket: UInt32?
     /// `nil` is the grey that the cat and anyone unknown get.
     var bubble: UInt32?
+    /// The words on `bubble`. `nil` is the window's own text colour.
+    var words: UInt32?
 
     init(_ speaker: Speaker, in book: ChannelBook) {
         name = book.name(of: speaker)
@@ -82,7 +84,14 @@ struct ChannelSpeakerLook {
         hasCat = !isYou
         let own = book.status(of: speaker).flatMap { Self.color(of: $0.kitten) }
         jacket = own ?? (speaker == .someoneElse ? Self.otherJacket : nil)
-        bubble = isYou ? Self.yours : own
+        // A theme tints your bubbles, and never a kitten's, so each kitten still looks like itself.
+        if isYou, let theme = MessagesInk.theme {
+            bubble = theme.yours
+            words = theme.words(on: theme.yours)
+        } else {
+            bubble = isYou ? Self.yours : own
+            words = bubble.map { Self.blackOrWhite(on: $0) }
+        }
     }
 
     /// Its colour from kitten.json, or one picked from its folder so it's the same every time. The cat keeps its black jacket.
@@ -93,54 +102,57 @@ struct ChannelSpeakerLook {
         return palette[Int(seed % UInt32(palette.count))]
     }
 
-    static let grey = NSColor(name: nil) { $0.isDark ? Ink.hex(0x3a3a3c) : Ink.hex(0xe9e9eb) }
+    static var grey: NSColor {
+        if let theme = MessagesInk.theme { return Ink.hex(theme.bubble) }
+        return NSColor(name: nil) { $0.isDark ? Ink.hex(0x3a3a3c) : Ink.hex(0xe9e9eb) }
+    }
 
     var bubbleFill: NSColor { bubble.map(Ink.hex) ?? Self.grey }
 
-    /// Black or white, whichever reads better on the bubble.
+    /// Whichever reads better on the bubble.
     var bubbleText: NSColor {
-        bubble.map { Self.readable(on: $0) } ?? Ink.text
+        guard let bubble else { return MessagesInk.text }
+        if isYou, let theme = MessagesInk.theme { return Ink.hex(theme.words(on: bubble)) }
+        return Self.readable(on: bubble)
     }
 
     /// A reply that's still coming is paler. It's worked out as one solid colour for light and dark, so its words can
     /// be picked to read on it too.
     func fill(fadedTo alpha: Double) -> NSColor {
         let bubble = bubble
-        return NSColor(name: nil) { Ink.hex(Self.faded(bubble, to: alpha, dark: $0.isDark)) }
+        let theme = MessagesInk.theme
+        return NSColor(name: nil) { Ink.hex(Self.faded(bubble, to: alpha, dark: $0.isDark, theme: theme)) }
     }
 
     func text(fadedTo alpha: Double) -> NSColor {
-        guard let bubble else { return Ink.text }
-        return NSColor(name: nil) { Self.readable(on: Self.faded(bubble, to: alpha, dark: $0.isDark)) }
+        guard let bubble else { return MessagesInk.text }
+        let theme = MessagesInk.theme
+        return NSColor(name: nil) { Self.readable(on: Self.faded(bubble, to: alpha, dark: $0.isDark, theme: theme)) }
     }
 
     /// The colour over the window at `alpha`. `nil` is the grey.
-    private static func faded(_ bubble: UInt32?, to alpha: Double, dark: Bool) -> UInt32 {
-        let top = bubble ?? (dark ? 0x3a3a3c : 0xe9e9eb)
-        let under: UInt32 = dark ? 0x1d1d1f : 0xf9f9f9
-        return [16, 8, 0].reduce(UInt32(0)) { mixed, shift in
-            let channel = Double((top >> shift) & 0xff) * alpha + Double((under >> shift) & 0xff) * (1 - alpha)
-            return mixed | UInt32(channel.rounded()) << shift
-        }
+    private static func faded(_ bubble: UInt32?, to alpha: Double, dark: Bool, theme: ColorTheme?) -> UInt32 {
+        let top = bubble ?? theme?.bubble ?? (dark ? 0x3a3a3c : 0xe9e9eb)
+        let under: UInt32 = theme?.paper ?? (dark ? 0x1d1d1f : 0xf9f9f9)
+        return ColorTheme.mix(under, top, alpha)
     }
 
     /// Whichever of black and white has more contrast with it.
     static func readable(on color: UInt32) -> NSColor {
-        contrast(color, 0x000000) >= contrast(color, 0xffffff) ? .black : .white
+        blackOrWhite(on: color) == 0x000000 ? .black : .white
+    }
+
+    static func blackOrWhite(on color: UInt32) -> UInt32 {
+        contrast(color, 0x000000) >= contrast(color, 0xffffff) ? 0x000000 : 0xffffff
     }
 
     /// As WCAG measures it, from 1 to 21.
     static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
-        let (x, y) = (luminance(a), luminance(b))
-        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+        ColorTheme.contrast(a, b)
     }
 
     static func luminance(_ color: UInt32) -> Double {
-        let channel = { (shift: UInt32) -> Double in
-            let value = Double((color >> shift) & 0xff) / 255
-            return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
-        }
-        return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+        ColorTheme.luminance(color)
     }
 }
 
@@ -199,12 +211,12 @@ final class DayRowView: ChannelRowView {
     override func draw(_ dirtyRect: NSRect) {
         let label = NSAttributedString(string: CatWords.day(date, now: now()), attributes: [
             .font: NSFont.systemFont(ofSize: 11, weight: .medium),
-            .foregroundColor: Ink.soft,
+            .foregroundColor: MessagesInk.soft,
         ])
         let size = label.size()
         let middle = bounds.midY.rounded() + 0.5
         let gap: CGFloat = 10
-        Ink.line.setStroke()
+        MessagesInk.line.setStroke()
         for (from, to) in [(Self.margin, bounds.midX - size.width / 2 - gap), (bounds.midX + size.width / 2 + gap, bounds.width - Self.margin)] {
             let line = NSBezierPath()
             line.move(to: NSPoint(x: from, y: middle))
@@ -242,13 +254,13 @@ final class SubjectRowView: ChannelRowView {
         truncating.lineBreakMode = .byTruncatingTail
         let label = NSMutableAttributedString(string: title, attributes: [
             .font: NSFont.systemFont(ofSize: 12, weight: .medium),
-            .foregroundColor: hovering ? Ink.text : Ink.soft,
+            .foregroundColor: hovering ? MessagesInk.text : MessagesInk.soft,
         ])
         if let project, !project.isEmpty {
-            label.append(NSAttributedString(string: "  ·  \(project)", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: Ink.soft]))
+            label.append(NSAttributedString(string: "  ·  \(project)", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: MessagesInk.soft]))
         }
         if onPress != nil {
-            label.append(NSAttributedString(string: "  ›", attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: Ink.soft]))
+            label.append(NSAttributedString(string: "  ›", attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: MessagesInk.soft]))
         }
         label.addAttribute(.paragraphStyle, value: truncating, range: NSRange(location: 0, length: label.length))
         let left = Self.textLeft
@@ -257,7 +269,7 @@ final class SubjectRowView: ChannelRowView {
         let height: CGFloat = 16
         let top = bounds.height - height - 3
         if hovering, onPress != nil {
-            Ink.hover.setFill()
+            MessagesInk.hover.setFill()
             NSBezierPath(roundedRect: NSRect(x: left - 6, y: top - 2, width: width + 12, height: height + 4), xRadius: 6, yRadius: 6).fill()
         }
         label.draw(in: NSRect(x: left, y: top, width: width, height: height))
@@ -372,6 +384,7 @@ final class MessageRowView: ChannelRowView {
             let size = NSSize(width: words.width + Self.insetX * 2, height: words.height + Self.insetY * 2)
             let left = look.isYou ? width - Self.margin - size.width : Self.textLeft
             bubble = NSRect(origin: NSPoint(x: left, y: bottom), size: size)
+            words.place(at: NSPoint(x: bubble.minX + Self.insetX, y: bubble.minY + Self.insetY), in: self)
             bottom = bubble.maxY
         } else {
             bubble = NSRect(x: look.isYou ? width - Self.margin : Self.textLeft, y: bottom, width: 0, height: 0)
@@ -379,6 +392,7 @@ final class MessageRowView: ChannelRowView {
         if let failure {
             failure.fit(width: room + Self.insetX * 2)
             failureTop = bottom + (words == nil ? 0 : 4)
+            failure.place(at: NSPoint(x: look.isYou ? bubble.maxX - failure.width : bubble.minX, y: failureTop), in: self)
             bottom = failureTop + failure.height
         }
         showMore.isHidden = !isCut
@@ -404,15 +418,13 @@ final class MessageRowView: ChannelRowView {
             let radius = min(16, bubble.height / 2)
             (message.isStillGoing ? look.fill(fadedTo: Self.stillGoingAlpha) : fill).setFill()
             NSBezierPath(roundedRect: bubble, xRadius: radius, yRadius: radius).fill()
-            words?.draw(at: NSPoint(x: bubble.minX + Self.insetX, y: bubble.minY + Self.insetY))
         }
-        failure?.draw(at: NSPoint(x: look.isYou ? bubble.maxX - (failure?.width ?? 0) : bubble.minX, y: failureTop))
     }
 
     /// Who said it and when, over the bubble. Yours only needs the time.
     private func drawHead() {
         let small = NSFont.systemFont(ofSize: 11)
-        let timeLabel = NSAttributedString(string: time, attributes: [.font: small, .foregroundColor: Ink.soft])
+        let timeLabel = NSAttributedString(string: time, attributes: [.font: small, .foregroundColor: MessagesInk.soft])
         let timeWidth = ceil(timeLabel.size().width)
         let baseline = Self.pad + 1
         guard !look.isYou else {
@@ -426,7 +438,7 @@ final class MessageRowView: ChannelRowView {
         if !hovering { head += "  ·  \(time)" }
         NSAttributedString(string: head, attributes: [
             .font: NSFont.systemFont(ofSize: 11, weight: .medium),
-            .foregroundColor: Ink.soft,
+            .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: Self.textLeft + 2, y: baseline, width: max(bounds.width - Self.textLeft - Self.margin - 150, 60), height: 15))
     }
@@ -455,12 +467,12 @@ final class HeadingRowView: ChannelRowView {
         let width = bounds.width - Self.textLeft - Self.margin
         NSAttributedString(string: status.kitten.name, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: Ink.text,
+            .foregroundColor: MessagesInk.text,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: Self.textLeft, y: 14, width: width, height: 17))
         NSAttributedString(string: "\(status.kitten.role) · \(CatWords.kittenState(status.state))", attributes: [
             .font: NSFont.systemFont(ofSize: 11),
-            .foregroundColor: Ink.soft,
+            .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: Self.textLeft, y: 32, width: width, height: 14))
     }
@@ -493,7 +505,7 @@ final class IssueRowView: ChannelRowView {
     override func draw(_ dirtyRect: NSRect) {
         let left = Self.textLeft
         if hovering {
-            Ink.hover.setFill()
+            MessagesInk.hover.setFill()
             NSBezierPath(roundedRect: NSRect(x: left - 8, y: 1, width: bounds.width - left - Self.margin + 16, height: bounds.height - 2), xRadius: 7, yRadius: 7).fill()
         }
         thread.dotColor.setFill()
@@ -502,7 +514,7 @@ final class IssueRowView: ChannelRowView {
         var edge = bounds.width - Self.margin
         let details = [CatWords.age(of: thread.updatedAt, now: now()), CatWords.status(thread), thread.pullRequest.map(CatWords.pullRequest)]
         for text in details.compactMap({ $0 }) {
-            let label = NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: Ink.soft])
+            let label = NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: MessagesInk.soft])
             let size = label.size()
             edge -= ceil(size.width)
             label.draw(at: NSPoint(x: edge, y: bounds.midY - size.height / 2))
@@ -513,7 +525,7 @@ final class IssueRowView: ChannelRowView {
         truncating.lineBreakMode = .byTruncatingTail
         NSAttributedString(string: thread.title, attributes: [
             .font: NSFont.systemFont(ofSize: 13),
-            .foregroundColor: Ink.text,
+            .foregroundColor: MessagesInk.text,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: left + 16, y: 6, width: max(edge - left - 16, 40), height: 17))
     }
@@ -529,7 +541,7 @@ final class NoteRowView: ChannelRowView {
         paragraph.alignment = isCentered ? .center : .left
         block = ChannelTextBlock(NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 13),
-            .foregroundColor: Ink.soft,
+            .foregroundColor: MessagesInk.soft,
             .paragraphStyle: paragraph,
         ]))
         super.init(frame: .zero)
@@ -544,11 +556,9 @@ final class NoteRowView: ChannelRowView {
     private var left: CGFloat { isCentered ? Self.margin : Self.textLeft }
 
     override func fit(width: CGFloat) -> CGFloat {
-        block.fit(width: max(width - left - Self.margin, 60)) + 12
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        block.draw(at: NSPoint(x: left, y: 6))
+        let height = block.fit(width: max(width - left - Self.margin, 60))
+        block.place(at: NSPoint(x: left, y: 6), in: self)
+        return height + 12
     }
 }
 
@@ -578,7 +588,7 @@ final class SectionRowView: ChannelRowView {
     override func draw(_ dirtyRect: NSRect) {
         NSAttributedString(string: title.uppercased(), attributes: [
             .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
-            .foregroundColor: Ink.soft,
+            .foregroundColor: MessagesInk.soft,
             .kern: 0.5,
         ]).draw(at: NSPoint(x: Self.catLeft, y: 16))
     }
@@ -613,8 +623,8 @@ final class CardRowView: ChannelRowView {
         self.look = look
         self.heading = heading
         self.at = at
-        words = ChannelTextBlock(ChannelMarkdown.attributed(text, color: Ink.text))
-        self.answer = answer.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Ink.text)) }
+        words = ChannelTextBlock(ChannelMarkdown.attributed(text, color: MessagesInk.text))
+        self.answer = answer.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: MessagesInk.text)) }
         self.footer = footer
         self.buttons = buttons.map { QuietButton($0.title, style: $0.isWayOut ? .text : .plain, onPress: $0.action) }
         super.init(frame: .zero)
@@ -630,9 +640,11 @@ final class CardRowView: ChannelRowView {
     override func fit(width: CGFloat) -> CGFloat {
         let room = max(width - Self.textLeft - Self.margin, 60)
         var bottom = Self.wordsTop + words.fit(width: room)
+        words.place(at: NSPoint(x: Self.textLeft, y: Self.wordsTop), in: self)
         if let answer {
             answerTop = bottom + 6
             bottom = answerTop + answer.fit(width: room - 12)
+            answer.place(at: NSPoint(x: Self.textLeft + 12, y: answerTop), in: self)
         }
         if footer != nil {
             footerTop = bottom + 2
@@ -659,7 +671,7 @@ final class CardRowView: ChannelRowView {
         let left = Self.textLeft
         var right = bounds.width - Self.margin
         if let at {
-            let time = NSAttributedString(string: CatWords.age(of: at, now: Date()), attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: Ink.soft])
+            let time = NSAttributedString(string: CatWords.age(of: at, now: Date()), attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: MessagesInk.soft])
             right -= ceil(time.size().width)
             time.draw(at: NSPoint(x: right, y: Self.pad + 2))
             right -= 8
@@ -668,18 +680,16 @@ final class CardRowView: ChannelRowView {
         truncating.lineBreakMode = .byTruncatingTail
         NSAttributedString(string: heading, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: Ink.text,
+            .foregroundColor: MessagesInk.text,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: left, y: Self.pad, width: max(right - left, 40), height: 18))
 
-        words.draw(at: NSPoint(x: left, y: Self.wordsTop))
         if let answer {
-            Ink.line.setFill()
+            MessagesInk.line.setFill()
             NSRect(x: left, y: answerTop, width: 2, height: answer.height).fill()
-            answer.draw(at: NSPoint(x: left + 12, y: answerTop))
         }
         if let footer {
-            NSAttributedString(string: footer, attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: Ink.soft])
+            NSAttributedString(string: footer, attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: MessagesInk.soft])
                 .draw(at: NSPoint(x: left, y: footerTop))
         }
     }

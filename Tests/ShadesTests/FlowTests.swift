@@ -28,6 +28,7 @@ final class FlowTests: XCTestCase {
     private var notified: [NeedsYouAlert] = []
     private var withdrawn: [String] = []
     private var cleared = 0
+    private var savedThemes: [ColorTheme?] = []
     private var controller: AppController!
     private var settings: Settings {
         var settings = Settings()
@@ -74,7 +75,8 @@ final class FlowTests: XCTestCase {
                 hidesTestThreads: hidesTestThreads,
                 notify: { [unowned self] in self.notified.append($0) },
                 withdrawNotifications: { [unowned self] in self.withdrawn += $0 },
-                clearNotifications: { [unowned self] in self.cleared += 1 }
+                clearNotifications: { [unowned self] in self.cleared += 1 },
+                saveTheme: { [unowned self] in self.savedThemes.append($0) }
             ),
             stage: stage,
             now: { [unowned self] in self.clock }
@@ -4297,6 +4299,62 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.channelsUpdated.last?.everyone.messages.last?.speaker, .cat)
     }
 
+    private var shadesSaid: [String] {
+        (stage.channelsUpdated.last ?? stage.channelsShown.last)?.shades.messages.compactMap(\.text) ?? []
+    }
+
+    func testTalkingToShadesInMessagesGoesThroughTheRouterWithNoScreenAndItAnswersThere() async throws {
+        backend.replies = [[.finished(fullText: "It's Tuesday.")]]
+        controller.channelsPressed()
+        await messages("What day is it?", to: .router, in: .shades)
+
+        XCTAssertFalse(log.all.contains("snapshot"), "nothing was captured")
+        let routed = try XCTUnwrap(backend.sent.first)
+        XCTAssertEqual(routed.prompt.projectID, "project-router", "in the router's own folder")
+        XCTAssertTrue(routed.prompt.text.contains("<screen>Not captured.</screen>"))
+        XCTAssertTrue(routed.prompt.attachments.isEmpty)
+        XCTAssertEqual(shadesSaid, ["What day is it?", "It's Tuesday."])
+        XCTAssertEqual(stage.channelsUpdated.last?.shades.messages.last?.speaker, .cat)
+        XCTAssertEqual(everyoneSaid, [], "the cat answers where you wrote")
+    }
+
+    func testShadesSaysWhereYourWordsWentAndTheKittenGetsOnlyThem() async {
+        kittens = [steve, penny]
+        backend.projects["/k/penny"] = "project-penny"
+        backend.replies = [[.finished(fullText: "KITTEN: 2")], [.finished(fullText: "On it.")]]
+        controller.channelsPressed()
+        await messages("Can I afford a new laptop?", to: .router, in: .shades)
+
+        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-penny")
+        XCTAssertEqual(backend.sent[1].prompt.text, Prompts.forKitten(penny, words: "Can I afford a new laptop?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
+        XCTAssertEqual(shadesSaid, ["Can I afford a new laptop?", CatWords.passedOnToKitten])
+    }
+
+    func testShadesInMessagesNeverCarriesOnTheAskBoxsTalkAboutYourScreen() async throws {
+        await ask("What code is on my screen?")
+        let privateThread = try XCTUnwrap(controller.quick.thread(at: clock))
+        backend.routerSays["And what day is it?"] = "It's Tuesday."
+        controller.channelsPressed()
+        await messages("And what day is it?", to: .router, in: .shades)
+
+        let routed = try XCTUnwrap(backend.sent.last { $0.prompt.text.contains("Their question: And what day is it?") })
+        XCTAssertNotEqual(routed.threadID, privateThread, "Shades went on in the Ask box's conversation, which has your screen")
+        XCTAssertTrue(routed.prompt.attachments.isEmpty)
+    }
+
+    func testShadesAnswerReachesYouOverTheCatIfMessagesClosed() async {
+        backend.routerSays = ["What day is it?": "It's Tuesday."]
+        backend.holdQuestion = "What day is it?"
+        controller.channelsPressed()
+        controller.messagesAction(.send("What day is it?", to: .router, shownIn: .shades))
+        await until { backend.sent.contains { $0.prompt.text.contains("Their question: What day is it?") } }
+        controller.channelsClosed()
+        backend.releaseHeld()
+        await controller.messagesTurn?.value
+        await settle()
+        XCTAssertTrue(stage.bubbles.contains(.notice(caption: "Shades", text: "It's Tuesday.", threadID: nil)))
+    }
+
     func testTwoMessagesInARowBothGetWhereTheyreGoing() async {
         kittens = [steve, penny]
         backend.projects["/k/steve"] = "project-steve"
@@ -5364,5 +5422,37 @@ extension FlowTests {
         await settle()
         XCTAssertFalse(log.all.contains("snapshot"))
         XCTAssertFalse(controller.dropIsOpen)
+    }
+}
+
+// MARK: - Themes
+
+extension FlowTests {
+    func testPickingAThemeShowsItInMessagesKeepsItAndTheNextStartHasIt() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("opal-horizon-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try Data(##"{ "name": "Opal Horizon", "appearance": "dark", "canvas": "#0c0a10", "accent": "#8a6cff" }"##.utf8).write(to: file)
+
+        controller.themeChosen(.file(file))
+        XCTAssertEqual(controller.theme?.name, "Opal Horizon")
+        XCTAssertEqual(stage.themes.last??.paper, 0x0c0a10)
+        XCTAssertEqual(savedThemes.last??.accent, 0x8a6cff)
+        XCTAssertFalse(log.all.contains("snapshot"), "picking colours looks at nothing")
+
+        controller.themeChosen(.plain)
+        XCTAssertNil(controller.theme)
+        XCTAssertEqual(stage.themes.last, .some(nil))
+        XCTAssertEqual(savedThemes.last, .some(nil))
+    }
+
+    func testAFileThatIsntAThemeChangesNothingAndTheCatSaysSo() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("notes-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try Data(#"{ "name": "notes", "version": "1.0.0" }"#.utf8).write(to: file)
+        controller.themeChosen(.file(file))
+        XCTAssertNil(controller.theme)
+        XCTAssertEqual(stage.themes, [])
+        XCTAssertEqual(savedThemes, [])
+        XCTAssertTrue(stage.bubbles.contains { if case .line(CatWords.themeUnreadable, _) = $0 { return true }; return false })
     }
 }

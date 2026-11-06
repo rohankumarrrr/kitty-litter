@@ -22,6 +22,8 @@ final class PhoneLink {
     let door: PhoneDoor
     let pushes: PhonePushes
     var onPaired: (() -> Void)?
+    /// Messages' colours, which the page takes the next time it opens.
+    var theme: ColorTheme?
     private let server = PhoneServer()
     /// Holds Messages open, and returns what it shows.
     private let hold: () -> ChannelBook?
@@ -94,7 +96,7 @@ final class PhoneLink {
         case ("GET", "/app.js"):
             return .full(status: 200, type: "text/javascript; charset=utf-8", body: Data(PhonePage.script.utf8))
         case ("GET", "/app.css"):
-            return .full(status: 200, type: "text/css; charset=utf-8", body: Data(PhonePage.style.utf8))
+            return .full(status: 200, type: "text/css; charset=utf-8", body: Data((PhonePage.style + PhonePage.colors(theme)).utf8))
         // What a phone needs to keep the page on its Home Screen, and to show notifications while it's closed.
         case ("GET", "/manifest.json"):
             return .full(status: 200, type: "application/manifest+json", body: Data(PhonePage.manifest.utf8))

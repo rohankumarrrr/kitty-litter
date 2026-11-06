@@ -1,3 +1,5 @@
+import ShadesCore
+
 /// The page a phone opens. It only draws what the Mac sends and says what you did, and every word on it is put there
 /// as text, never as markup, since it's what kittens said.
 enum PhonePage {
@@ -51,7 +53,7 @@ enum PhonePage {
     static let style = """
         :root {
           --paper: #f9f9f9; --text: #1d1d1f; --soft: #6e6e73; --line: #d2d2d7; --grey: #e9e9eb;
-          --you: #0071e3; --card: #ffffff; --warn: #c9341c;
+          --you: #0071e3; --on-you: #ffffff; --card: #ffffff; --warn: #c9341c;
           font: 17px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
           -webkit-text-size-adjust: 100%;
         }
@@ -75,7 +77,7 @@ enum PhonePage {
         #notify { display: flex; align-items: center; gap: 12px; margin: 12px 12px 0; padding: 10px 14px; border-radius: 14px;
           background: var(--card); border: 1px solid var(--line); }
         #notifytext { flex: 1; margin: 0; color: var(--soft); font-size: 14px; }
-        #notifybutton { background: var(--you); color: #fff; border-radius: 999px; padding: 6px 14px; font-size: 15px; }
+        #notifybutton { background: var(--you); color: var(--on-you); border-radius: 999px; padding: 6px 14px; font-size: 15px; }
 
         main { flex: 1; padding: 8px 12px 16px; }
         .group { color: var(--soft); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 22px 4px 6px; }
@@ -123,8 +125,8 @@ enum PhonePage {
         .card .part { margin: 12px 0 0; }
         .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
         .buttons button, #pairform button { background: var(--grey); border-radius: 999px; padding: 8px 16px; font-size: 15px; }
-        .buttons button.picked { background: var(--you); color: #fff; }
-        .buttons button.go { background: var(--you); color: #fff; }
+        .buttons button.picked { background: var(--you); color: var(--on-you); }
+        .buttons button.go { background: var(--you); color: var(--on-you); }
         .buttons button:disabled, #send:disabled { opacity: .4; }
         .card input, #pairform input { width: 100%; font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line);
           border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
@@ -135,7 +137,7 @@ enum PhonePage {
         .field { display: flex; align-items: flex-end; gap: 8px; }
         #words { flex: 1; resize: none; font: inherit; color: inherit; background: var(--grey); border: 0; border-radius: 18px;
           padding: 8px 14px; max-height: 40vh; }
-        #send { background: var(--you); color: #fff; border-radius: 18px; padding: 8px 14px; font-weight: 600; }
+        #send { background: var(--you); color: var(--on-you); border-radius: 18px; padding: 8px 14px; font-weight: 600; }
 
         #pair { padding: calc(env(safe-area-inset-top) + 40px) 24px 24px; }
         #pair h1 { font-size: 24px; margin: 0 0 8px; }
@@ -143,6 +145,20 @@ enum PhonePage {
         #pairform { display: flex; gap: 8px; align-items: center; }
         #pairform input { margin: 0; font-size: 22px; letter-spacing: .1em; text-transform: uppercase; }
         """
+
+    /// The theme you picked for Messages, over the page's own colours in light and dark alike. Each is a hex colour
+    /// worked out on the Mac, so nothing from the theme's file reaches the page as it was written.
+    static func colors(_ theme: ColorTheme?) -> String {
+        guard let theme else { return "" }
+        let hex = ColorTheme.hex
+        return """
+
+            :root { color-scheme: \(theme.isDark ? "dark" : "light");
+              --paper: \(hex(theme.paper)); --text: \(hex(theme.text)); --soft: \(hex(theme.soft)); --line: \(hex(theme.line));
+              --grey: \(hex(theme.bubble)); --card: \(hex(theme.hover)); --you: \(hex(theme.accent)); --on-you: \(hex(theme.words(on: theme.accent))); }
+
+            """
+    }
 
     static let script = #"""
         'use strict';
@@ -344,7 +360,22 @@ enum PhonePage {
 
         window.addEventListener('popstate', (event) => go((event.state && event.state.key) || 'home', false));
 
+        // Drawing the rows again would take away what you're selecting, so what's new waits until you're done.
+        let held = null;
+        function selecting() {
+          const selection = document.getSelection();
+          return Boolean(selection && !selection.isCollapsed && $('rows').contains(selection.anchorNode));
+        }
+        document.addEventListener('selectionchange', () => {
+          if (!held || selecting()) return;
+          const next = held;
+          held = null;
+          show(next);
+        });
+
         function show(next) {
+          if (view && view.key === next.key && selecting()) { held = next; return; }
+          held = null;
           const fresh = !view || view.key !== next.key;
           const nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 60;
           if (next.key !== key) {

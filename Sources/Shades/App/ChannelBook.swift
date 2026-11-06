@@ -30,7 +30,8 @@ struct ChannelID: Hashable {
 
     /// The group chat: every DM at once, and what you say there goes through the router.
     static let everyone = ChannelID(members: [.you])
-    /// What you've said to the cat itself, from the Ask box, out loud or in Everyone. Only for reading.
+    /// What you've said to the cat itself, from the Ask box, out loud, in Everyone or here. What you say here goes
+    /// through the router, as it does in Everyone, and the cat answers here.
     static let shades = ChannelID(members: [.you, .cat])
 }
 
@@ -112,7 +113,7 @@ struct ChannelBook: Equatable {
     var started: [String: String]
     /// Threads only ever heard between kittens, which aren't yours to carry on.
     var elsewhere: Set<String>
-    /// The router's own threads, which are only for reading.
+    /// The router's own threads. Nothing goes straight into one, since the app acts on what the router says.
     var talks: Set<String>
     var isReading: Bool
     var unreadable: Int
@@ -364,11 +365,12 @@ struct ChannelBook: Equatable {
         }
     }
 
-    /// T3 has it once you're the one asking the same thing there, since a minute before it was sent.
+    /// T3 has it once the same one says the same thing there, since a minute before it was shown. That's you asking,
+    /// or the cat answering you in Shades, where its thread is read too.
     private static func isEchoed(_ message: ChannelMessage, in placed: [Placed]) -> Bool {
-        guard message.speaker == .you else { return false }
+        guard message.speaker == .you || message.speaker == .cat else { return false }
         return placed.lazy.flatMap(\.messages).contains { said in
-            said.speaker == .you && said.text == message.text && said.at >= message.at.addingTimeInterval(-60)
+            said.speaker == message.speaker && said.text == message.text && said.at >= message.at.addingTimeInterval(-60)
         }
     }
 

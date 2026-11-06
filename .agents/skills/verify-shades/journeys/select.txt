@@ -1,0 +1,13 @@
+front
+channels
+wait 1
+channel steve
+wait 1
+draw .verify/shades/select/0-before
+copy
+highlight the new grid
+copy
+wait 1
+draw .verify/shades/select/1-highlighted
+front
+windows

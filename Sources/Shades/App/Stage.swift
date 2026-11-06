@@ -92,6 +92,8 @@ protocol CatStage: AnyObject {
     func sendInMessages(_ text: String)
     /// You said nothing after all.
     func releaseMessagesBox()
+    /// Messages in a theme's colours, or Shades' own with `nil`.
+    func showTheme(_ theme: ColorTheme?)
 
     // Everything else
     /// For the menu bar: how things are going, and whether anything needs you.

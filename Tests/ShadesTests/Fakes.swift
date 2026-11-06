@@ -108,6 +108,8 @@ final class FakeStage: CatStage {
         messagesBoxHeld = false
     }
     func releaseMessagesBox() { messagesBoxHeld = false }
+    var themes: [ColorTheme?] = []
+    func showTheme(_ theme: ColorTheme?) { themes.append(theme) }
     func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {}
     var pairings: [PhonePairingCard?] = []
     func showPairing(_ card: PhonePairingCard?) { pairings.append(card) }

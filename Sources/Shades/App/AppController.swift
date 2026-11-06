@@ -41,11 +41,15 @@ final class AppController {
     let servePhone: (UInt16) async throws -> String
     let stopServingPhone: () async -> Void
     let sendPush: (URLRequest) async -> Int?
+    let saveTheme: (ColorTheme?) throws -> Void
+    let installedThemes: () -> [ColorTheme.Found]
     let stage: CatStage
     let now: () -> Date
     let launchedAt: Date
     let channels: ChannelFeed
     private(set) var settings: Settings
+    /// Messages' colours, or `nil` for Shades' own.
+    var theme: ColorTheme?
 
     var quick = QuickSession()
     var watch = AgentWatch()
@@ -217,6 +221,9 @@ final class AppController {
         servePhone = dependencies.servePhone
         stopServingPhone = dependencies.stopServingPhone
         sendPush = dependencies.sendPush
+        theme = dependencies.theme
+        saveTheme = dependencies.saveTheme
+        installedThemes = dependencies.installedThemes
         self.stage = stage
         self.now = now
         launchedAt = now()
@@ -256,6 +263,7 @@ final class AppController {
         keys.onRelease = { [weak self] key in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.keyReleased(key) } }
         }
+        stage.showTheme(theme)
         startKeys()
         startInbox()
         // Anything from before may have been answered since, and the cat says again whatever's still waiting.

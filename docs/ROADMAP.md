@@ -37,6 +37,7 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - Answer an agent's question from the bubble. It shows the question and options now, and you answer in Messages or T3.
 - Fold a busy conversation in Messages down to one row per thread, with how many replies it has and the latest, the way a Slack channel shows a thread. Today every thread's messages are shown in order, and its title and project mark where each one starts.
 - Read a thread's whole history in Messages when it opens on its own, even past each kitten's newest 30, instead of saying the rest is in T3.
+- A theme for the rest of the cat. Only Messages and its phone page take one now, so the bubble, the Ask box and the kitten view keep Shades' own colours, and a phone that's already open takes a new theme the next time it opens the page.
 - Several choices at once for a question that takes them, from Messages. It takes one choice or your own words for now.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
 - Remember project nicknames, so the frontier agent can skip the search next time.

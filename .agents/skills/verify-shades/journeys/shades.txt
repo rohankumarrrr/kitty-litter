@@ -1,0 +1,17 @@
+front
+channels
+wait 1
+channel shades
+wait 1
+draw .verify/shades/shades/0-before
+send hello
+wait 4
+draw .verify/shades/shades/1-hello
+send I need help with my resume
+wait 4
+draw .verify/shades/shades/2-resume
+channel everyone
+wait 1
+draw .verify/shades/shades/3-everyone
+front
+windows
