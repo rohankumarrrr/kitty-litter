@@ -109,6 +109,8 @@ final class FakeStage: CatStage {
     }
     func releaseMessagesBox() { messagesBoxHeld = false }
     func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {}
+    var pairings: [PhonePairingCard?] = []
+    func showPairing(_ card: PhonePairingCard?) { pairings.append(card) }
     func copyToPasteboard(_ text: String) { copied = text }
 
     /// What a person does: types into the panel and presses Return.

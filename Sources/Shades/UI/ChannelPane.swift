@@ -17,36 +17,41 @@ final class ChannelHeader: QuietView {
     private var rightButton: QuietButton?
     private var backButton: QuietButton?
 
+    /// What the header says for a selection, which a phone shows too.
+    static func words(for selection: ChannelSelection, in book: ChannelBook) -> (title: String, subtitle: String?) {
+        switch selection {
+        case .needsYou:
+            return (CatWords.needsYouTitle, CatWords.needsYouSubtitle)
+        case .done:
+            return (CatWords.doneTitle, CatWords.doneSubtitle)
+        case .channel(.everyone):
+            return (CatWords.everyone, CatWords.everyoneSubtitle)
+        case .channel(let id):
+            let others = book.others(in: id)
+            let status = others.count == 1 ? book.status(of: others[0]) : nil
+            return (book.title(of: id), status.map { "\($0.kitten.role) · \(CatWords.kittenState($0.state))" })
+        case .thread(let id, let channel):
+            let name = book.title(ofThread: id, in: channel)
+            return (name.isEmpty ? CatWords.newTopic : name, book.threads[id].map(CatWords.threadDetails))
+        }
+    }
+
     func show(_ selection: ChannelSelection, in book: ChannelBook) {
         var right: (title: String, action: () -> Void)?
         var back: String?
+        (title, subtitle) = Self.words(for: selection, in: book)
+        cats = []
         switch selection {
-        case .needsYou:
-            title = CatWords.needsYouTitle
-            subtitle = CatWords.needsYouSubtitle
-            cats = []
-        case .done:
-            title = CatWords.doneTitle
-            subtitle = CatWords.doneSubtitle
-            cats = []
-        case .channel(.everyone):
-            title = CatWords.everyone
-            subtitle = CatWords.everyoneSubtitle
-            cats = []
+        case .needsYou, .done, .channel(.everyone):
+            break
         case .channel(let id):
             let others = book.others(in: id)
-            title = book.title(of: id)
             cats = others.map { ChannelSpeakerLook($0, in: book) }
             let status = others.count == 1 ? book.status(of: others[0]) : nil
-            subtitle = status.map { "\($0.kitten.role) · \(CatWords.kittenState($0.state))" }
             if let count = status.flatMap({ status in book.issues.first { $0.kitten == status.kitten }?.threads.count }), count > 0 {
                 right = (CatWords.issues(count), { [weak self] in self?.onIssues?() })
             }
         case .thread(let id, let channel):
-            let name = book.title(ofThread: id, in: channel)
-            title = name.isEmpty ? CatWords.newTopic : name
-            subtitle = book.threads[id].map(CatWords.threadDetails)
-            cats = []
             back = CatWords.back(to: book.title(of: channel))
             if book.knows(thread: id, in: channel) { right = (CatWords.openInT3, { [weak self] in self?.onOpen?() }) }
         }

@@ -36,4 +36,11 @@ struct AppDependencies {
     var withdrawNotifications: ([String]) -> Void = { _ in }
     /// Takes back every notification Shades has posted.
     var clearNotifications: () -> Void = {}
+    /// Where the hashes of paired phones' tokens are kept.
+    var phoneKeys: PhoneKeyStoring = MemoryPhoneKeys()
+    /// Where the phone page listens on loopback. 0 is any free port.
+    var phonePort: UInt16 = 0
+    /// Puts the phone page on your tailnet, and returns the address to open.
+    var servePhone: (UInt16) async throws -> String = { _ in throw Tailscale.Problem(errorDescription: "Tailscale isn't set up here.") }
+    var stopServingPhone: (UInt16) async -> Void = { _ in }
 }

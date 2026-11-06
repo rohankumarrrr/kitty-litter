@@ -17,6 +17,8 @@ public struct Settings: Codable, Sendable, Equatable {
     public var talkKey: HoldKey
     /// Hold to dictate wherever the cursor is.
     public var dictateKey: HoldKey
+    /// Messages on your phone, over your tailnet. Off until you turn it on.
+    public var phone: Bool
 
     public init(
         quickModel: ModelChoice = .quick,
@@ -27,7 +29,8 @@ public struct Settings: Codable, Sendable, Equatable {
         privateApps: [String] = Settings.defaultPrivateApps,
         vocabulary: [String] = [],
         talkKey: HoldKey = .rightOption,
-        dictateKey: HoldKey = .fn
+        dictateKey: HoldKey = .fn,
+        phone: Bool = false
     ) {
         self.quickModel = quickModel
         self.frontierModel = frontierModel
@@ -38,10 +41,11 @@ public struct Settings: Codable, Sendable, Equatable {
         self.vocabulary = vocabulary
         self.talkKey = talkKey
         self.dictateKey = dictateKey
+        self.phone = phone
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey
+        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone
     }
 
     /// Anything missing takes its default, so a settings file from an older version keeps working.
@@ -57,6 +61,7 @@ public struct Settings: Codable, Sendable, Equatable {
         vocabulary = try saved.decodeIfPresent([String].self, forKey: .vocabulary) ?? defaults.vocabulary
         talkKey = try saved.decodeIfPresent(HoldKey.self, forKey: .talkKey) ?? defaults.talkKey
         dictateKey = try saved.decodeIfPresent(HoldKey.self, forKey: .dictateKey) ?? defaults.dictateKey
+        phone = try saved.decodeIfPresent(Bool.self, forKey: .phone) ?? defaults.phone
     }
 
     public static let defaultPrivateApps = [

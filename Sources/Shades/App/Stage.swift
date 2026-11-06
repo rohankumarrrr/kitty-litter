@@ -97,5 +97,7 @@ protocol CatStage: AnyObject {
     /// For the menu bar: how things are going, and whether anything needs you.
     func showStatus(_ status: String, needsYou: Bool)
     func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void)
+    /// The code a phone pairs with, or `nil` to take it away.
+    func showPairing(_ card: PhonePairingCard?)
     func copyToPasteboard(_ text: String)
 }

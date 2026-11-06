@@ -31,6 +31,8 @@ MainActor.assumeIsolated {
         let inboxFile = Settings.directory.appendingPathComponent("inbox.json")
         // A copy trying a flow out sees your real threads too, and the real app already says.
         let notifications = DevFlags.wantsFlow ? nil : NeedsYouNotifications()
+        var settings = Settings.load()
+        if DevFlags.wantsFlow { settings.phone = false }
         let real = AppController(
             dependencies: AppDependencies(
                 backend: backend,
@@ -38,7 +40,7 @@ MainActor.assumeIsolated {
                 voice: voice,
                 inserter: TextInserter(),
                 keys: keys,
-                settings: Settings.load(),
+                settings: settings,
                 saveSettings: { try? $0.save() },
                 screenTip: { context.takeJavaScriptTip() },
                 kittens: { Kittens.load() },
@@ -59,7 +61,12 @@ MainActor.assumeIsolated {
                 hidesTestThreads: !DevFlags.wantsFlow,
                 notify: { notifications?.post($0) },
                 withdrawNotifications: { notifications?.withdraw($0) },
-                clearNotifications: { notifications?.clear() }
+                clearNotifications: { notifications?.clear() },
+                // A copy trying a flow out stays off your phone, and out of the real app's way.
+                phoneKeys: DevFlags.wantsFlow ? MemoryPhoneKeys() : KeychainPhoneKeys(),
+                phonePort: DevFlags.wantsFlow ? 0 : PhoneLink.port,
+                servePhone: { try await Tailscale.serve($0) },
+                stopServingPhone: { await Tailscale.stopServing($0) }
             ),
             stage: stage
         )

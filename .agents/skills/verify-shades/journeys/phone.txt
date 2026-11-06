@@ -1,0 +1,45 @@
+front
+phone on
+wait 3
+phone pair
+wait 1
+draw .verify/shades/phone/1-pairing
+phone open
+wait 4
+draw .verify/shades/phone/2-home
+wait 2
+approval command npm run build && npm test
+report decision
+wait 2
+phone go needs
+wait 3
+phone text
+draw .verify/shades/phone/3-needs
+wait 2
+phone press Allow
+wait 3
+phone text
+draw .verify/shades/phone/4-allowed
+wait 2
+phone go everyone
+wait 3
+phone send Hello from my phone
+wait 5
+phone text
+draw .verify/shades/phone/5-everyone
+wait 2
+phone go steve
+wait 3
+draw .verify/shades/phone/6-dm
+wait 2
+phone send Can you look over my resume?
+wait 5
+phone text
+draw .verify/shades/phone/7-topic
+wait 2
+channels
+wait 2
+draw .verify/shades/phone/8-window
+wait 2
+front
+windows
