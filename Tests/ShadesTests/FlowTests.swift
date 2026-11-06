@@ -5261,3 +5261,89 @@ private extension AgentThread {
         return copy
     }
 }
+
+// MARK: - Messages with notifications, drops and the screen warning
+
+extension FlowTests {
+    /// Messages closed: the click covers the nudge, and closing again says nothing.
+    func testANotificationClickWithMessagesClosedCoversTheNudge() async {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        XCTAssertEqual(notified.map(\.kind), [.decision])
+        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+        controller.notificationClicked()
+        XCTAssertEqual(stage.selections.last ?? nil, .needsYou)
+        controller.messagesHotkeyPressed()
+        controller.channelsClosed()
+        XCTAssertNil(stage.bubble)
+    }
+
+    /// Messages open behind your work: the click brings it up at Needs you, which is looking at it.
+    func testANotificationClickWithMessagesOpenCoversTheNudge() async {
+        kittens = [inboxKitten]
+        controller.channelsPressed()
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        XCTAssertEqual(notified.map(\.kind), [.decision])
+        XCTAssertNil(stage.bubble)
+        controller.notificationClicked()
+        XCTAssertEqual(stage.selections.last ?? nil, .needsYou)
+        controller.messagesHotkeyPressed()
+        controller.channelsClosed()
+        XCTAssertNil(stage.bubble, "you clicked the notification and were shown Needs you")
+    }
+
+    /// #1 for #12's new topic: it warns, and asking the cat before it starts takes that back.
+    func testANewTopicWarnsAndAskingMeanwhileTakesItBack() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.channelsPressed()
+        controller.messagesAction(.startTopic("Read this x thread", with: steve, id: "sent-a"))
+        await settle()
+        await controller.frontierTask?.value
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink })
+
+        controller.notices.removeAll()
+        var open: AsyncStream<Void>.Continuation!
+        let opened = AsyncStream<Void> { open = $0 }
+        backend.heldProject = Task { for await _ in opened { break } }
+        controller.messagesAction(.startTopic("Read this x thread", with: steve, id: "sent-b"))
+        backend.routerSays = ["what's this?": "It's a page."]
+        await controller.beginAsk()
+        stage.type("what's this?")
+        await controller.replyTask?.value
+        open.yield()
+        backend.heldProject = nil
+        await settle()
+        await controller.frontierTask?.value
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    /// A drop's box takes what you say without a look, and Messages' box wins when you're typing in it.
+    func testADropsBoxAndMessagesBoxTakeWhatYouSay() async {
+        controller.start()
+        await drainMainQueue()
+        controller.dropped(syllabus)
+        await controller.flow?.value
+        XCTAssertTrue(controller.dropIsOpen)
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "yes", cleaned: "Yes.", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertEqual(stage.sentInMessages, ["Yes."])
+        XCTAssertFalse(log.all.contains("snapshot"))
+
+        stage.isMessagesBoxTyping = false
+        backend.routerSays = ["What's due?": "Week 1."]
+        voice.transcript = Transcript(raw: "what's due", cleaned: "What's due?", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertFalse(log.all.contains("snapshot"))
+        XCTAssertFalse(controller.dropIsOpen)
+    }
+}

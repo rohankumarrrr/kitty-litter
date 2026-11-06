@@ -1,3 +1,4 @@
+front
 channels
 wait 1
 channel everyone
@@ -15,4 +16,5 @@ draw .verify/shades/notifications/1-clicked
 allow
 wait 1
 draw .verify/shades/notifications/2-answered
+front
 windows

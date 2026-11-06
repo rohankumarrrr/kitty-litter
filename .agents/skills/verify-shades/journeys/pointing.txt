@@ -1,3 +1,4 @@
+front
 wait 1
 windows
 ask
@@ -20,4 +21,5 @@ wait 0.5
 submit Where's the share button?
 wait 6
 draw .verify/shades/pointing/3-under-the-menu-bar
+front
 windows

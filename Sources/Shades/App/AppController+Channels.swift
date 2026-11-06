@@ -19,6 +19,8 @@ extension AppController {
     /// Opens it, at `selection` if it's given. Looking at it covers whatever the cat was nudging you about.
     func channelsPressed(selecting selection: ChannelSelection? = nil) {
         inboxNudge = false
+        // Shown Needs you, you've seen what came in while it was open, so closing it has nothing new to say.
+        if selection == .needsYou { nudgeOnClose = false }
         stage.showChannels(channels.open(threads: latestThreads), selecting: selection)
         renderBubble()
     }

@@ -1,3 +1,4 @@
+front
 wait 1
 draw .verify/shades/drop/0-before
 drop pdf
@@ -28,4 +29,5 @@ wait 1
 drop mailto:someone@example.com
 wait 1
 draw .verify/shades/drop/7-cant-read-link
+front
 windows
