@@ -222,9 +222,8 @@ extension AppController {
             }
             // What it says about a correction has to reach you, even if it starts threads elsewhere. It's marked as it
             // goes, so a restart while it waits behind a busy run can't lose that, and unmarked below if it never got there.
-            let wasDispatcher = dispatchers.contains(thread.id)
-            let wasCorrected = inbox.wasCorrected(thread.id)
             if correction {
+                correctionSends.start(thread.id, wasDispatcher: dispatchers.contains(thread.id), wasCorrected: inbox.wasCorrected(thread.id))
                 dispatchers.remove(thread.id)
                 noteCorrection(in: thread.id)
             }
@@ -240,6 +239,7 @@ extension AppController {
             let missesScreen = !carriesScreen(shared) && ScreenWords.pointAtScreen(words, isFollowUp: true)
             var warning: Int?
             var heardBack = false
+            var reached = true
             do {
                 for try await event in backend.forward(threadID: thread.id, text: text, attachments: attachments(for: shared)) {
                     if case .started = event {
@@ -263,11 +263,12 @@ extension AppController {
                 // T3 says it's started before it sends, so only hearing back means your words got there.
                 // After that, losing the connection doesn't take them back, the same as with a new thread.
                 if !heardBack, let warning { takeBackNotice(warning) }
-                if !heardBack, correction {
-                    if wasDispatcher { dispatchers.insert(thread.id) }
-                    if !wasCorrected { forgetCorrection(in: thread.id) }
-                }
+                reached = heardBack
                 say(CatWords.problem(error, while: .agents))
+            }
+            if correction, let before = correctionSends.end(thread.id, reached: reached) {
+                if before.wasDispatcher { dispatchers.insert(thread.id) }
+                if !before.wasCorrected { forgetCorrection(in: thread.id) }
             }
         }
     }

@@ -2443,6 +2443,96 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.dispatchers.contains("w"))
     }
 
+    /// Two corrections to one session overlap. The first is still waiting when the second gets there, then the
+    /// first loses its connection before anything came back.
+    func testAFailedCorrectionDoesNotUndoOneThatGotThere() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        var work = session("w", "Tailor resume")
+        work.projectPath = steve.folder
+        controller.threadsChanged([work])
+        controller.dispatchers.insert("w")
+        let gate = AsyncStream<Void>.makeStream()
+        backend.replies = [[]]
+        backend.held = Task { for await _ in gate.stream { break } }
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.forward("it was 30 people", to: work, snapshot: nil, correction: true)
+        let first = controller.forwardTask
+        for _ in 0..<500 where backend.sent.count < 1 { await Task.yield() }
+        for _ in 0..<20 { await Task.yield() }
+        backend.held = nil
+        backend.droppedAfterReply = nil
+        backend.replies = [[.finished(fullText: "Fixed.")]]
+        controller.forward(wrong, to: work, snapshot: nil, correction: true)
+        await controller.forwardTask?.value
+        gate.continuation.finish()
+        await first?.value
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(backend.sent.filter { $0.mode == .forward }.count, 2)
+        XCTAssertTrue(controller.inbox.wasCorrected("w"), "the second correction reached the session")
+        XCTAssertEqual(savedInbox?.wasCorrected("w"), true, "and that has to survive a restart")
+        XCTAssertFalse(controller.dispatchers.contains("w"), "its report about the correction has to reach you")
+
+        controller.bubbleDismissed(byClick: true)
+        var running = session("w", "Tailor resume", status: .running)
+        running.projectPath = steve.folder
+        controller.threadsChanged([running])
+        backend.reports["w"] = "The change went to a new thread, <t3-thread://v2/env/worker>, in a worktree."
+        running.status = .completed
+        controller.threadsChanged([running])
+        await controller.reportTask?.value
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertFalse(controller.hiddenThreads.contains("w"), "the session's report about the correction should reach you")
+    }
+
+    /// The same with an inbox kitten and a restart: what the session says about the second correction gets lost.
+    func testAFailedCorrectionDoesNotLoseTheInboxReportOfOneThatGotThere() async throws {
+        kittens = [inboxKitten]
+        backend.projects["/k/clawde"] = "project-clawde"
+        controller.keepInbox()
+        var running = work("w", title: "Clawde: Team size", status: .running)
+        running.projectPath = inboxKitten.folder
+        controller.threadsChanged([running])
+        controller.dispatchers.insert("w")
+        let gate = AsyncStream<Void>.makeStream()
+        backend.replies = [[]]
+        backend.held = Task { for await _ in gate.stream { break } }
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.forward("it was 30 people", to: running, snapshot: nil, correction: true)
+        let first = controller.forwardTask
+        for _ in 0..<500 where backend.sent.count < 1 { await Task.yield() }
+        for _ in 0..<20 { await Task.yield() }
+        backend.held = nil
+        backend.droppedAfterReply = nil
+        backend.replies = [[.text(delta: "On it.")]]
+        controller.forward(wrong, to: running, snapshot: nil, correction: true)
+        await controller.forwardTask?.value
+        gate.continuation.finish()
+        await first?.value
+        for _ in 0..<20 { await Task.yield() }
+        controller = makeController(inbox: try XCTUnwrap(savedInbox))
+        running.status = .completed
+        running.lastRunID = "run-2"
+        await finish(running, report: passedTheFixOn, sorted: "PASSED: yes")
+        XCTAssertEqual(rows.map(\.threadID), ["w"], "its report about the correction should reach the inbox")
+        XCTAssertFalse(controller.hiddenThreads.contains("w"))
+    }
+
+    /// Only the front door turning a drop away sends nothing at all. Past it, the owner gets its copy without the file.
+    func testAHandoffThatCantTakeADropStillSendsTheOwnersCopy() async {
+        useFullAccess(frontier: true)
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nHANDOFF: Summarize the syllabus")]]
+        await drop("Summarize this. By the way, \(wrong)")
+        await waitForSends(2)
+        await controller.flow?.value
+        await settle()
+        XCTAssertTrue(stage.bubbles.contains(.line(CatWords.cantTakeFiles(controller.frontierName), threadID: nil)))
+        XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains(note), true)
+        XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains("syllabus.pdf"), false)
+    }
+
     // MARK: - Self-check
 
     func testAKittenWithNothingKeepingItOffTheScreenIsFound() async {

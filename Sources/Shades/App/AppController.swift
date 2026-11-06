@@ -96,6 +96,8 @@ final class AppController {
     var hiddenThreads: Set<String> = []
     /// Threads the cat started to do real work, which may pass it on to another thread.
     var dispatchers: Set<String> = []
+    /// Corrections still on their way to a session, so one that fails can only take back a mark none of the others earned.
+    var correctionSends = CorrectionSends()
     var inbox: Inbox
     /// Threads whose report is being read and sorted, so each is only filed once.
     var filing: Set<String> = []
