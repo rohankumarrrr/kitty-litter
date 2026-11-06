@@ -53,6 +53,8 @@ public struct Inbox: Codable, Equatable, Sendable {
     private var since: Date
     /// Each thread's last run that's been dealt with. Only IDs.
     private var handled: [String: String] = [:]
+    /// Each thread's last run you've seen in Messages. Only IDs, and files from before Messages don't have it.
+    private var read: [String: String]?
 
     public init(since: Date) {
         self.since = since
@@ -109,6 +111,23 @@ public struct Inbox: Codable, Equatable, Sendable {
         return own.filter { entries[$0].repliedAt != nil }.max { entries[$0].repliedAt! < entries[$1].repliedAt! }
             ?? own.last { entries[$0].kind == .decision }
             ?? own.last
+    }
+
+    /// A run that ended while you weren't looking. One still going isn't news yet.
+    public func isUnread(_ thread: AgentThread) -> Bool {
+        guard !thread.status.isActive, let run = thread.lastRunID, read?[thread.id] != run else { return false }
+        return (thread.lastRunEndedAt ?? thread.updatedAt) >= since
+    }
+
+    /// Says whether that changed anything, so it's only saved when it did.
+    /// shortcut: this grows by a short line per thread, prune it if that ever matters.
+    public mutating func markRead(_ threads: [AgentThread]) -> Bool {
+        let unread = threads.filter(isUnread)
+        guard !unread.isEmpty else { return false }
+        var marks = read ?? [:]
+        for thread in unread { marks[thread.id] = thread.lastRunID }
+        read = marks
+        return true
     }
 
     /// Handled with no rows: it only passed the work on.

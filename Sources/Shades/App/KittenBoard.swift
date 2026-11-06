@@ -34,16 +34,15 @@ struct KittenStatus: Equatable, Identifiable {
 }
 
 enum KittenBoard {
-    /// A thread belongs to a kitten if it's in the kitten's project, or carries its name from
-    /// working in another project, the way a code change does.
+    /// A thread belongs to a kitten if it's in the kitten's folder or project, or carries its
+    /// name from working in another project, the way a code change does.
     static func belongs(_ thread: AgentThread, to kitten: Kitten) -> Bool {
         belongs(title: thread.title, projectPath: thread.projectPath, to: kitten)
     }
 
     static func belongs(title: String, projectPath: String?, to kitten: Kitten) -> Bool {
-        let inFolder = projectPath.map {
-            URL(fileURLWithPath: $0).standardizedFileURL.path == URL(fileURLWithPath: kitten.folder).standardizedFileURL.path
-        }
+        let standard = { URL(fileURLWithPath: $0).standardizedFileURL.path }
+        let inFolder = projectPath.map { [kitten.folder, kitten.project].map(standard).contains(standard($0)) }
         return inFolder == true || title.hasPrefix("\(kitten.name):")
     }
 

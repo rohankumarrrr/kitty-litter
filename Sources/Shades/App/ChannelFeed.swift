@@ -13,6 +13,7 @@ final class ChannelFeed {
     private final class Session {
         var threads: [AgentThread]
         var transcripts: [String: [Exchange]] = [:]
+        var sent: [SentMessage] = []
         var readStamps: [String: Date] = [:]
         var isReading = true
         var unreadable = 0
@@ -29,11 +30,15 @@ final class ChannelFeed {
         func forget() {
             threads = []
             transcripts = [:]
+            sent = []
             published = nil
         }
     }
 
     var onChange: ((ChannelBook) -> Void)?
+    var waiting: () -> Waiting = { Waiting() }
+    var isUnread: (AgentThread) -> Bool = { _ in false }
+    var alsoInEveryone: () -> [String: Date] = { [:] }
 
     private let backend: AgentBackend
     private let kittens: () -> [Kitten]
@@ -71,6 +76,43 @@ final class ChannelFeed {
         session.isDirty = true
     }
 
+    /// Shows a change to what's waiting or what's been read, with no need to read anything again.
+    func refresh() {
+        if let session { publish(session) }
+    }
+
+    var isOpen: Bool { session != nil }
+
+    /// Shows it at once, until T3 has it. Nothing's kept once the window closes.
+    func sent(_ message: ChannelMessage, in channel: ChannelID) {
+        guard let session else { return }
+        session.sent.append(SentMessage(channel: channel, message: message))
+        session.isDirty = true
+        publish(session)
+    }
+
+    /// A new topic you started now has a thread, or `nil` if it never got one.
+    func started(_ exchangeID: String, in threadID: String?, title: String) {
+        guard let session, let index = session.sent.firstIndex(where: { $0.message.exchangeID == exchangeID }) else { return }
+        if let threadID {
+            session.sent[index].message.threadID = threadID
+            session.sent[index].message.threadTitle = title
+        } else {
+            session.sent[index].message.failure = CatWords.didntStart
+        }
+        publish(session)
+    }
+
+    /// The threads behind what you're looking at whose words are on the screen as they are now, so they can count as read.
+    func threads(in selection: ChannelSelection) -> [AgentThread] {
+        guard let session, case .channel(let id) = selection else { return [] }
+        let kittens = kittens()
+        return session.threads.filter { thread in
+            guard let owner = KittenBoard.owner(of: thread, among: kittens), session.readStamps[thread.id] == thread.updatedAt else { return false }
+            return id == .everyone || id == .direct(owner)
+        }
+    }
+
     func close() {
         session?.loop?.cancel()
         session?.forget()
@@ -105,9 +147,10 @@ final class ChannelFeed {
 
         let kittens = kittens()
         let byOwner = Dictionary(grouping: listed) { KittenBoard.owner(of: $0, among: kittens)?.id }
+        let mine = alsoInEveryone()
         let owned = byOwner.filter { $0.key != nil }.values.flatMap { threads in
             threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
-        }
+        } + (byOwner[nil] ?? []).filter { mine[$0.id] != nil }
         let moved = owned.filter { session.readStamps[$0.id] != $0.updatedAt }
         let read = await read(moved)
         // A read landing after the window closed has nowhere to go, so it's dropped here.
@@ -162,7 +205,11 @@ final class ChannelFeed {
             transcripts: session.transcripts,
             isReading: session.isReading,
             unreadable: session.unreadable,
-            cantReachT3: session.cantReachT3
+            cantReachT3: session.cantReachT3,
+            waiting: waiting(),
+            sent: session.sent,
+            isUnread: isUnread,
+            inEveryone: alsoInEveryone()
         )
     }
 }

@@ -17,6 +17,8 @@ extension AppController {
         hideTestThreads(threads)
         latestThreads = threads
         threadListArrived = true
+        let asked = Set(threads.compactMap(\.pendingQuestion?.id))
+        answeredQuestions.formIntersection(asked)
         let events = watch.update(threads)
         let hadApprovals = !approvals.isEmpty
         approvals.sync(with: threads.filter { !hiddenThreads.contains($0.id) })
@@ -83,6 +85,7 @@ extension AppController {
     }
 
     func approvalsChanged(hadApprovals: Bool) {
+        channels.refresh()
         if approvals.isEmpty {
             approvalsOnShow = false
             approvalsHidden = false

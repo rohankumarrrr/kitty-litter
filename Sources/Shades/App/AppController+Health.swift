@@ -33,11 +33,19 @@ extension AppController {
         facts.reachedT3 = threadListArrived
         facts.inboxSaves = !inboxSaveFailed
         facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
+        do {
+            _ = try await routerProjectID(for: settings.quickModel)
+        } catch let problem as FrontDoorProblem {
+            facts.frontDoorProblem = problem
+        } catch {
+            // With T3 out of reach, that's the finding.
+            if facts.reachedT3 { facts.frontDoorProjectTrouble = CatWords.problem(error, while: .agents) }
+        }
 
         for kitten in loadKittens() where !kitten.planned {
             if !fileExists(kitten.folder + "/CLAUDE.md") { facts.kittensWithoutInstructions.append(kitten.name) }
-            if facts.reachedT3, await backend.projectID(atPath: kitten.folder) == nil {
-                facts.kittensNotInT3.append(kitten.name)
+            if facts.reachedT3, await backend.projectID(atPath: kitten.workspace) == nil {
+                facts.kittensNotInT3.append(kitten)
             }
             // Only Claude Code reads the settings that make up the block.
             if !kitten.seesScreen, settings.frontierModel.provider != "claudeAgent" || !screenBlockGaps(kitten.folder).isEmpty {

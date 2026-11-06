@@ -16,9 +16,9 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 **Watch your agents.** The cat sleeps when nothing's running, and is up and about when agents are working. When a session ends, it tells you how it went in two or three sentences. When an agent has a question, it shows you the question and your options. When one needs permission, the cat comes over with the exact command, so you can allow or deny it without leaving what you're doing. Shift-click the cat to see all your kittens and which are working, need you or are idle. A kitten can keep its reports in one inbox instead: what shipped, what you need to decide, and a way to reply to any of it.
 
-Choose **Channels** from the cat's menu for a window with all of it written down: your DMs with each kitten, what the kittens say to each other, and what each one has open. It sits beside your work, never takes the keyboard from the app you're in, and forgets every word when you close it. You reply through the cat or in T3.
+**Messages.** Choose Messages from the cat's menu for one window with everything your kittens need from you, so you rarely have to open T3. **Needs you** is pinned at the top: approvals, questions, reports waiting on a decision, what shipped, and what each kitten is on. **Everyone** is a group chat with all your kittens. What you type there goes through the router, the same as the Ask box, and whoever takes it answers as itself. Each kitten has a conversation of its own, where you carry on its latest thread or start a new topic, answer what it's asking, and see a dot when it's finished something you haven't read. Nothing typed in Messages looks at your screen, and the window never shows up in a screenshot.
 
-![The Channels window, with two kittens talking to each other](docs/images/channels.png)
+![Messages, with what needs you at the top](docs/images/messages.png)
 
 ## How the work gets routed
 
@@ -30,6 +30,8 @@ There's no list of projects to maintain. Shades acts as one router in front of y
 - **Starts new work** if nothing has the context, saying so as it does. Fix always starts new work.
 
 Agents with full access get your words but not your screen, so text on a page can't reach an agent that's allowed to do anything. When a kitten or session won't get your screen and your words point at it, like "read this thread" with no link, the cat says so as it passes them on, so you can send the link or paste the text. In a follow-up it only says so if your words name something like a thread or an article, because "this" there usually means the session's own work.
+
+The router only replies, and Shades does the rest. It runs in a folder of its own where it can only read files and search the web, so it can't message or start threads, run commands or write files, and can't pass your screen on by itself. Only Claude reads that folder, so the front door has to be a Claude model, and on any other the cat won't take questions.
 
 The frontier agent starts with no project, and finds the right one from what you said and what's on your screen, reading READMEs when a project's name isn't its folder name. For code changes it starts a new thread in that project's worktree. Research and questions it just answers.
 
@@ -73,7 +75,7 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 
 ## Kittens
 
-A kitten is a specialist with a folder of its own: its instructions and what it knows about you, so you don't have to explain yourself each time. Add a folder to `~/kittens`, add it to T3 as a project, and Shades starts sending it things. Normally you just see Shades, and Shift-clicking him shows the rest. Channels shows what they've said to you and to each other, and what each one is on. Add `"inbox": true` to a kitten that sends you a lot, and its reports wait in one place, which keeps them across a restart. See [docs/kittens.md](docs/kittens.md).
+A kitten is a specialist with a folder of its own: its instructions and what it knows about you, so you don't have to explain yourself each time. Add a folder to `~/kittens`, add it to T3 as a project, and Shades starts sending it things. A kitten that looks after an app can work in that app's T3 project instead. Normally you just see Shades, and Shift-clicking him shows the rest. Messages shows what they've said to you and to each other, what each one is on, and lets you answer any of it. Add `"inbox": true` to a kitten that sends you a lot, and its reports wait in one place, which keeps them across a restart. See [docs/kittens.md](docs/kittens.md).
 
 ## Changing Shades by asking Shades
 

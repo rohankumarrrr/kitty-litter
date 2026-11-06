@@ -1,6 +1,18 @@
 import Foundation
 import ShadesCore
 
+/// Why the router won't run, other than T3's own errors.
+enum FrontDoorProblem: LocalizedError, Equatable {
+    case notClaude, noFolder
+
+    var errorDescription: String? {
+        switch self {
+        case .notClaude: return CatWords.frontDoorNotClaude
+        case .noFolder: return CatWords.frontDoorNoFolder
+        }
+    }
+}
+
 /// Decides nothing itself: the quick agent picks where a message belongs, from a list this
 /// builds. All it can pick is a number, and your own words are what get sent, so anything
 /// a page manages to say to it can misdirect your message at worst.
@@ -18,10 +30,11 @@ extension AppController {
         }
     }
 
-    func rosterThreads(excluding current: String?) -> [AgentThread] {
+    func rosterThreads(excluding current: String?, only isOffered: (AgentThread) -> Bool = { _ in true }) -> [AgentThread] {
         let at = now()
+        // Neither router conversation lists the other, since the Ask box's can hold your screen and Messages' never may.
         return latestThreads
-            .filter { $0.id != current && !hiddenThreads.contains($0.id) }
+            .filter { $0.id != current && !hiddenThreads.contains($0.id) && !watch.isQuick($0.id) && isOffered($0) }
             .filter { $0.status.isActive || at.timeIntervalSince($0.updatedAt) < Self.rosterWindow }
             .sorted { a, b in
                 if a.status.isActive != b.status.isActive { return a.status.isActive }
@@ -77,21 +90,43 @@ extension AppController {
         renderBubble()
     }
 
-    /// Gives your words to a kitten. A new thread in its folder already knows what it needs to,
-    /// and T3 writes the title, so nothing here has to explain anything to it.
-    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?) {
-        // As with a session, a kitten with full access doesn't get to see text from a page.
-        let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess
+    /// The router's own project, where it can't pass on what it's seen. Asked before every turn, since a follow-up
+    /// runs on whatever its folder says by then. Only Claude Code reads that folder, so no other model gets to be
+    /// the router, and the turn runs on the `model` checked here. If this throws, the router doesn't run.
+    func routerProjectID(for model: ModelChoice) async throws -> String {
+        guard model.provider == "claudeAgent" else { throw FrontDoorProblem.notClaude }
+        guard let folder = routerFolder() else { throw FrontDoorProblem.noFolder }
+        if let id = await backend.projectID(atPath: folder) { return id }
+        do {
+            return try await backend.addProject(atPath: folder, title: "Shades router")
+        } catch {
+            // T3 turns away a second project at the same folder, which another question may have just added.
+            if let id = await backend.projectID(atPath: folder) { return id }
+            throw error
+        }
+    }
+
+    /// Gives your words to a kitten, in a new thread in its workspace. T3 writes the title.
+    /// `onStarted` hears the new thread, or `nil` if there isn't one.
+    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, onStarted: ((String?) -> Void)? = nil) {
+        // As with a session, a kitten with full access doesn't get to see text from a page. Nor does
+        // one whose thread would count as a kitten's that isn't meant to see it, in a project they share.
+        let sharesWithScreenless = loadKittens().contains {
+            !$0.seesScreen && KittenBoard.belongs(title: "", projectPath: kitten.workspace, to: $0)
+        }
+        let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
         let shared = seesScreen ? snapshot : nil
         let missesScreen = !seesScreen && ScreenWords.pointAtScreen(words)
         flow = Task {
-            guard let projectID = await backend.projectID(atPath: kitten.folder) else {
+            guard let projectID = await backend.projectID(atPath: kitten.workspace) else {
+                onStarted?(nil)
                 say(CatWords.notSetUp(kitten))
                 return
             }
             startFrontier(
                 title: nil,
                 text: Prompts.forKitten(
+                    kitten,
                     words: words,
                     snapshot: shared,
                     screenshotPath: saveScreenshot(of: shared),
@@ -100,7 +135,8 @@ extension AppController {
                 snapshot: shared,
                 projectID: projectID,
                 name: kitten.name,
-                missesScreen: missesScreen
+                missesScreen: missesScreen,
+                onStarted: onStarted
             )
         }
     }

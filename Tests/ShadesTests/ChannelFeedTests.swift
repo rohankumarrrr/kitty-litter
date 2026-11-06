@@ -390,4 +390,48 @@ final class ChannelFeedTests: XCTestCase {
         await holdOn()
         XCTAssertEqual(books.count, count)
     }
+
+    // MARK: - Messages
+
+    func testOnlyThreadsWhoseWordsHaveBeenReadCountAsSeen() async {
+        backend.holdsReads = true
+        backend.threads = [thread("a")]
+        _ = feed.open(threads: [thread("a")])
+        await eventually { self.backend.heldReads == 1 }
+        XCTAssertEqual(feed.threads(in: .channel(.direct(steve))), [], "nothing's on the screen while it's still reading")
+
+        backend.releaseReads()
+        await eventually { self.latest?.isReading == false }
+        XCTAssertEqual(feed.threads(in: .channel(.direct(steve))).map(\.id), ["a"])
+        XCTAssertEqual(feed.threads(in: .channel(.everyone)).map(\.id), ["a"])
+        XCTAssertEqual(feed.threads(in: .needsYou), [])
+    }
+
+    func testWorkEveryoneHandedOutsideAnyKittenIsReadToo() async {
+        let work = thread("w", project: nil)
+        backend.threads = [work]
+        backend.say("Find a cheaper flight", in: "w")
+        feed.alsoInEveryone = { ["w": Date(timeIntervalSince1970: 0)] }
+        await openAndRead()
+        XCTAssertEqual(backend.reads, ["w"])
+
+        let other = thread("other", project: nil)
+        backend.threads = [work, other]
+        feed.alsoInEveryone = { [:] }
+        feed.threadsChanged([work, other])
+        await holdOn()
+        XCTAssertFalse(backend.reads.contains("other"), "anything else outside a kitten stays unread")
+    }
+
+    func testANewTopicLearnsItsThreadOrThatItDidntStart() async {
+        await openAndRead()
+        let echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Draft a letter", at: start, threadID: "", threadTitle: "")
+        feed.sent(echo, in: .direct(steve))
+        feed.started("sent-1", in: "new", title: "Draft a letter")
+        XCTAssertEqual(latest?.channel(.direct(steve))?.messages.last?.threadID, "new")
+
+        feed.sent(ChannelMessage(exchangeID: "sent-2", kind: .ask, speaker: .you, text: "Another", at: start, threadID: "", threadTitle: ""), in: .direct(steve))
+        feed.started("sent-2", in: nil, title: "Another")
+        XCTAssertEqual(latest?.channel(.direct(steve))?.messages.last?.failure, "That didn't start. Try again?")
+    }
 }

@@ -28,6 +28,7 @@ final class AppController {
     let screenTip: () -> String?
     let loadKittens: () -> [Kitten]
     let screenBlockGaps: (String) -> [String]
+    let routerFolder: () -> String?
     let systemFacts: () -> HealthFacts
     let fileExists: (String) -> Bool
     let reportHealth: ([HealthFinding]) -> Void
@@ -94,6 +95,15 @@ final class AppController {
     /// The box what's being said belongs in, fixed when the key goes down.
     var talkBox: Int?
     var inboxSaveFailed = false
+    /// Questions answered from Messages, kept out of it until the list catches up.
+    var answeredQuestions: Set<String> = []
+    /// The router's turn for what you said in Messages, so each waits for the one before.
+    var messagesTurn: Task<Void, Never>?
+    /// Messages' own conversation with the router, apart from the Ask box's, which can hold your screen.
+    var messagesQuick = QuickSession()
+    /// Threads no kitten owns that Messages passed your words to, and when, so their answers show in Everyone.
+    /// shortcut: kept only while the app runs, so a restart takes them out of Everyone. Save the IDs with the inbox if that matters.
+    var messagesThreads: [String: Date] = [:]
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
@@ -145,6 +155,7 @@ final class AppController {
         screenTip = dependencies.screenTip
         loadKittens = dependencies.kittens
         screenBlockGaps = dependencies.screenBlockGaps
+        routerFolder = dependencies.routerFolder
         systemFacts = dependencies.systemFacts
         fileExists = dependencies.fileExists
         reportHealth = dependencies.reportHealth
@@ -155,6 +166,9 @@ final class AppController {
         self.now = now
         channels = ChannelFeed(backend: dependencies.backend, kittens: dependencies.kittens)
         channels.onChange = { [weak self] in self?.stage.updateChannels($0) }
+        channels.waiting = { [weak self] in self?.waiting ?? Waiting() }
+        channels.isUnread = { [weak self] in self?.inbox.isUnread($0) ?? false }
+        channels.alsoInEveryone = { [weak self] in self?.messagesThreads ?? [:] }
     }
 
     func start() {

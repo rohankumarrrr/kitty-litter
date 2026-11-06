@@ -488,6 +488,12 @@ final class KittenBoardTests: XCTestCase {
         XCTAssertEqual(working.state, .working(sessions: 1))
     }
 
+    func testAThreadInTheProjectItWorksInCounts() {
+        let pepper = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper", project: "/code/app")
+        let threads = [thread("app", .running, project: "/code/app/"), thread("own", .running, project: "/k/pepper")]
+        XCTAssertEqual(KittenBoard.statuses(kittens: [pepper], threads: threads)[0].state, .working(sessions: 2))
+    }
+
     func testWhatNeedsYouComesBeforeEverythingElse() {
         let asking = status([thread("a", .running, age: 0), thread("q", .waitingForAnswer, age: 50)])
         XCTAssertEqual(asking.state, .needsYou)

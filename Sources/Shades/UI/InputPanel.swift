@@ -189,6 +189,8 @@ final class PlaceholderTextView: NSTextView {
     var placeholder = "" { didSet { needsDisplay = true } }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    /// A click into it is what gives a panel that's only key when needed the keyboard.
+    override var needsPanelToBecomeKey: Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)

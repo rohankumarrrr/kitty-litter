@@ -164,9 +164,27 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, command)
     }
 
+    public func answer(_ question: AgentQuestion, with answers: [String]) async throws {
+        guard let form = question.form, let answers = T3Wire.answers(answers, to: form) else { throw T3Error.rejected("That question can't be answered from here.") }
+        let command = T3Wire.RespondToRequest(
+            commandId: Self.newID(),
+            threadId: question.threadID,
+            requestId: question.id,
+            answers: answers
+        )
+        let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, command)
+    }
+
     public func projectID(atPath path: String) async -> String? {
         let wanted = URL(fileURLWithPath: path).standardizedFileURL.path
         return (try? await projects())?.first { URL(fileURLWithPath: $0.path).standardizedFileURL.path == wanted }?.id
+    }
+
+    public func addProject(atPath path: String, title: String) async throws -> String {
+        try await connect()
+        let command = T3Wire.CreateProject(commandId: Self.newID(), projectId: Self.newID(), title: title, workspaceRoot: path)
+        let project: T3Wire.Project = try await socket.call(T3Wire.Method.mutateProject, command)
+        return project.id
     }
 
     public func archive(threadID: String) async throws {

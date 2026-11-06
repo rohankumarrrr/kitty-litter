@@ -86,6 +86,14 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(json, ["type": "runtime-request.respond", "commandId": "c", "threadId": "t", "requestId": "r", "decision": "acceptForSession"])
     }
 
+    func testAnAnswerIsFiledUnderEachQuestionAndSendsNoDecision() throws {
+        let command = T3Wire.RespondToRequest(commandId: "c", threadId: "t", requestId: "r", answers: ["plan": .one("Starter"), "extras": .several(["Support"])])
+        let json = try decoded(T3Wire.encode(command))
+        XCTAssertEqual(json["type"] as? String, "runtime-request.respond")
+        XCTAssertEqual(json["answers"] as? NSDictionary, ["plan": "Starter", "extras": ["Support"]])
+        XCTAssertNil(json["decision"])
+    }
+
     // MARK: IDs and links
 
     func testApprovalItemIDMatchesWhatTheServerBuilds() {
@@ -132,6 +140,24 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(item.questions?.first?.question, "Which one?")
         XCTAssertEqual(item.questions?.first?.options?.map(\.label), ["A", "B"])
         XCTAssertEqual(item.questions?.count, 2)
+    }
+
+    func testEveryQuestionInARequestCanBeAnsweredFromShades() throws {
+        let item = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"plan","header":"Pick","question":"Which plan?","options":[{"label":"Starter","description":"","value":"starter-v2"},{"label":"Basic","description":""}]},{"id":"extras","header":"More","question":"Which extras?","options":[{"label":"Support","description":""}],"multiSelect":true,"allowCustomAnswer":false}]}"#)
+        let form = try XCTUnwrap(T3Wire.answerForm(item.questions))
+        XCTAssertEqual(form.parts, [
+            AnswerForm.Part(key: "plan", text: "Which plan?", options: ["Starter", "Basic"], values: ["starter-v2", "Basic"], takesOwnWords: true),
+            AnswerForm.Part(key: "extras", text: "Which extras?", options: ["Support"], values: ["Support"], takesOwnWords: false, picksSeveral: true),
+        ], "an option sends its value, or its label without one")
+        XCTAssertEqual(T3Wire.answers(["starter-v2", "Support"], to: form), ["plan": .one("starter-v2"), "extras": .several(["Support"])], "a choice for a question that takes several goes as a list")
+        XCTAssertEqual(T3Wire.answers(["My own words", "Something else"], to: form), ["plan": .one("My own words"), "extras": .one("Something else")])
+        XCTAssertNil(T3Wire.answers(["starter-v2"], to: form), "every part needs an answer")
+    }
+
+    func testAQuestionWithNoIDCanOnlyBeAnsweredInT3() throws {
+        let unnamed = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"1","header":"A","question":"One?","options":[]},{"header":"A","question":"Which?","options":[]}]}"#)
+        XCTAssertNil(T3Wire.answerForm(unnamed.questions), "with no ID there's nothing to file an answer under")
+        XCTAssertNil(T3Wire.answerForm([]))
     }
 
     func testThreadLinkEncodesIDs() {
@@ -262,5 +288,17 @@ final class T3WireTests: XCTestCase {
     func testAnAgentsThreadWithNoSenderCantBeTraced() throws {
         XCTAssertEqual(try projection(createdBy: "agent", messages: #"[{"role":"user"}]"#).startedBy, .unknown)
         XCTAssertEqual(try projection(createdBy: nil, messages: "[]").startedBy, .unknown)
+    }
+}
+
+extension T3WireTests {
+    func testQuestionsSharingAnIDAreAnsweredInT3() throws {
+        let item = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"choice","header":"A","question":"Which colour?","options":[{"label":"Red","description":""}]},{"id":"choice","header":"B","question":"Which size?","options":[{"label":"Large","description":""}]}]}"#)
+        XCTAssertNil(T3Wire.answerForm(item.questions), "one ID can't hold two answers")
+        let shared = AnswerForm(parts: [
+            AnswerForm.Part(key: "choice", text: "Which colour?", options: [], values: [], takesOwnWords: true),
+            AnswerForm.Part(key: "choice", text: "Which size?", options: [], values: [], takesOwnWords: true),
+        ])
+        XCTAssertEqual(T3Wire.answers(["Red", "Large"], to: shared), ["choice": .one("Red")], "and answering one anyway can't crash")
     }
 }
