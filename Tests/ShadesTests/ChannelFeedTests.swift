@@ -165,7 +165,7 @@ final class ChannelFeedTests: XCTestCase {
 
     func testOpeningReturnsAtOnceAndStillReading() {
         backend.holdsReads = true
-        let book = feed.open(threads: [thread("a")])
+        let book = feed.open(threads: [thread("a", status: .running)])
         XCTAssertTrue(book.isReading)
         XCTAssertEqual(book.directs.map(\.messages), [[]])
         XCTAssertEqual(book.issues.first?.threads.map(\.id), ["a"], "what's open is known before any words are")

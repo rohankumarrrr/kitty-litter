@@ -37,7 +37,7 @@ enum DemoChannels {
         pepperAsksSteve,
         thread("demo-steve-copy", "Steve Pawsniak: Rewrite the pricing copy", project: "site", settled: false, minutes: 12, pullRequest: ThreadPullRequest(number: 12, state: "open")),
         thread("demo-steve-yesterday", "Shrink the logo on small screens", project: "Steve Pawsniak", minutes: 1_500, pullRequest: ThreadPullRequest(number: 9, state: "merged")),
-        thread("demo-clawde-menu", "Clawde: Add a menu item for the new window", project: "site", settled: false, minutes: 8),
+        thread("demo-clawde-menu", "Clawde: Add a menu item for the new window", project: "site", status: .waitingForApproval, settled: false, minutes: 8),
         thread("demo-clawde-failed", "Clawde: Redraw the app icon", project: "Clawde", status: .failed, settled: false, minutes: 130),
         thread("demo-pepper-unknown", "Sum up the plan comparison", project: "Pepper", minutes: 300),
     ]

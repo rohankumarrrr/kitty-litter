@@ -20,6 +20,10 @@ final class ChannelHeader: QuietView {
             title = CatWords.needsYouTitle
             subtitle = CatWords.needsYouSubtitle
             cats = []
+        case .done:
+            title = CatWords.doneTitle
+            subtitle = CatWords.doneSubtitle
+            cats = []
         case .channel(.everyone):
             title = CatWords.everyone
             subtitle = CatWords.everyoneSubtitle
@@ -180,7 +184,7 @@ final class ChannelPane: QuietView {
         stack()
 
         if isNewSelection {
-            scrollOffset = selection == .needsYou ? 0 : bottomOffset
+            scrollOffset = if case .channel = selection { bottomOffset } else { 0 }
         } else if wasAtBottom {
             scrollToBottom()
         }
@@ -325,7 +329,8 @@ final class ChannelPane: QuietView {
         case .report(let entry):
             return card(for: entry, in: book)
         case .note(let text):
-            return NoteRowView(text: text, isCentered: selection != .needsYou || rows.count == 1)
+            let isConversation = if case .channel = selection { true } else { false }
+            return NoteRowView(text: text, isCentered: isConversation || rows.count == 1)
         }
     }
 
