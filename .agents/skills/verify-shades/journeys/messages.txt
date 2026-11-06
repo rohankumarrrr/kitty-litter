@@ -9,4 +9,7 @@ channel steve
 send How did the interview prep go?
 wait 2
 draw .verify/shades/messages/2-dm
+channel done
+wait 1
+draw .verify/shades/messages/3-done
 windows

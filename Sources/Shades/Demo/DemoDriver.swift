@@ -93,7 +93,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | fix | kittens | channels | channel needs|everyone|[kitten] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
+            print("ask [question] | fix | kittens | channels | channel needs|done|everyone|[kitten] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -123,10 +123,11 @@ final class DemoDriver {
         case "channels":
             controller.channelsPressed()
         case "channel":
-            // channel needs | everyone | the start of a kitten's name, the same as clicking it in the sidebar.
+            // channel needs | done | everyone | the start of a kitten's name, the same as clicking it in the sidebar.
             let kitten = Demo.kittens.first { $0.name.lowercased().hasPrefix(rest.lowercased()) }
             switch rest {
             case "needs": stage.channels.view.select(.needsYou)
+            case "done": stage.channels.view.select(.done)
             case "everyone": stage.channels.view.select(.channel(.everyone))
             default: if let kitten, !rest.isEmpty { stage.channels.view.select(.channel(.direct(kitten))) }
             }
