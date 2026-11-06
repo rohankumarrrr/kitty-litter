@@ -30,7 +30,7 @@ The cat and its windows show on the real desktop while it runs. They never make 
 swift run shades --demo --no-script --commands .agents/skills/verify-shades/journeys/doctor.txt
 ```
 
-It prints `front <app>`, a `window <name> ...` line for each of `cat`, `bubble`, `input`, `kittens` and `channels`, then `state ... active=`. If it does, the build is worth driving. `front` is the app in front, which must stay whatever was in front before the run, never Shades. If it says Shades, a window made Shades the active app, which breaks a rule in `AGENTS.md` and is a bug in its own right. `active=true` on its own isn't: AppKit says that while one of Shades' panels has the keyboard, such as the Ask box or the box in Messages, even though your app stays in front. A build error means fixing the build first.
+It prints `front <app>`, a `window <name> ...` line for each of `cat`, `bubble`, `input`, `kittens` and `channels`, then `state ... active=`. If it does, the build is worth driving. `front` is the app in front, which must stay whatever was in front before the run, never Shades. If it says Shades, a window made Shades the active app, which breaks a rule in `AGENTS.md` and is a bug in its own right. `active=true` on its own isn't: AppKit says that while one of Shades' panels has the keyboard, such as the Ask box or the box in Messages, even though your app stays in front. If the first `front` of a run already says Shades, macOS put the demo in front as it launched, such as when nothing else was in front, so that run can't show whether a window did it. A build error means fixing the build first.
 
 ## Drive
 

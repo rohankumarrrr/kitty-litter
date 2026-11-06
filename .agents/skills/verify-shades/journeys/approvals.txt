@@ -1,3 +1,4 @@
+front
 approval command npm test
 wait 4
 draw .verify/shades/approvals/0-asked

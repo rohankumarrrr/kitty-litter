@@ -131,7 +131,7 @@ final class ChannelPane: QuietView {
     /// The inbox row whose Reply or Ask opened this thread, until you look elsewhere. All you send here is about it.
     private var replyingTo: InboxEntry?
     /// Where the box pointed when the talk key went down, so nothing arriving meanwhile can move what you say.
-    private var spokenTo: (selection: ChannelSelection, target: MessageTarget)?
+    private var spokenTo: (selection: ChannelSelection, target: MessageTarget, answered: Int)?
     private(set) var shown: [ChannelRow] = []
     private var views: [ChannelRowView] = []
     private var expanded: Set<String> = []
@@ -278,7 +278,10 @@ final class ChannelPane: QuietView {
 
     /// The talk key went down while you were typing here.
     func startSpeaking() {
-        spokenTo = composer.target.map { (selection, $0) }
+        spokenTo = composer.target.map { target in
+            let answered = if case .question(let question) = target { partAnswers[question.id]?.count ?? 0 } else { 0 }
+            return (selection, target, answered)
+        }
     }
 
     /// What you said goes after anything you'd typed, and is sent where the box pointed when you started, as if you'd
@@ -288,7 +291,9 @@ final class ChannelPane: QuietView {
         let words = typed.isEmpty ? text : "\(typed) \(text)"
         let spot = spokenTo
         spokenTo = nil
-        guard let spot, spot.selection == selection, let book, spot.target.isReady, spot.target.isStill(in: book) else {
+        // A question in parts has to be on the same part, or what you said would answer the next one.
+        let samePart = if case .question(let question) = spot?.target { partAnswers[question.id]?.count ?? 0 == spot?.answered } else { true }
+        guard let spot, spot.selection == selection, let book, spot.target.isReady, spot.target.isStill(in: book), samePart else {
             composer.textView.string = words
             updateComposer(keepingDraft: true)
             arrange(force: true)
@@ -303,6 +308,7 @@ final class ChannelPane: QuietView {
     func stopSpeaking() {
         spokenTo = nil
         updateComposer(keepingDraft: true)
+        arrange(force: true)
     }
 
     /// The part of a question that's next to answer.

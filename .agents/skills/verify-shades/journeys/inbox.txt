@@ -1,3 +1,4 @@
+front
 report decision
 wait 7
 draw .verify/shades/inbox/0-bubble

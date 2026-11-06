@@ -45,8 +45,7 @@ extension AppController {
     }
 
     func talkUp() async {
-        let toMessages = talkToMessages
-        talkToMessages = nil
+        let forMessages = talkToMessages != nil
         hearing = false
         stage.catLevel(0)
         heard = nil
@@ -61,9 +60,11 @@ extension AppController {
                 if !text.isEmpty, talkBoxIsStillUp { stage.submitInput(text) }
                 return
             }
-            if let toMessages {
-                // The same goes for Messages: if you've stopped typing there, or closed it, it isn't sent anywhere.
-                if !text.isEmpty, toMessages == messagesClosings, stage.isMessagesBoxTyping {
+            if forMessages {
+                // The same goes for Messages: if you've stopped typing there, closed it or cancelled, it isn't sent anywhere.
+                let held = talkToMessages
+                talkToMessages = nil
+                if !text.isEmpty, let held, held == messagesClosings, stage.isMessagesBoxTyping {
                     stage.sendInMessages(text)
                 } else {
                     stage.releaseMessagesBox()
@@ -80,7 +81,8 @@ extension AppController {
         } catch {
             voiceMode = nil
             talkLook = nil
-            if toMessages != nil { stage.releaseMessagesBox() }
+            if talkToMessages != nil { stage.releaseMessagesBox() }
+            talkToMessages = nil
             refreshStatus()
             say(CatWords.problem(error, while: .listening))
         }

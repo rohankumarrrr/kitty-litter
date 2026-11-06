@@ -1,3 +1,4 @@
+front
 wait 1
 draw .verify/shades/ask/0-before
 ask What's on this page?
