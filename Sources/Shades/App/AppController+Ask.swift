@@ -56,6 +56,7 @@ extension AppController {
 
     func ask(_ question: String, capture: Task<Capture, Never>?) {
         replyGeneration += 1
+        questionsAsked += 1
         let generation = replyGeneration
         line = nil
         // You've moved on, and may well be sending what it asked for.
@@ -280,7 +281,7 @@ extension AppController {
         onStarted: ((String?) -> Void)? = nil
     ) {
         let name = name ?? frontierName
-        let asked = asked ?? replyGeneration
+        let asked = asked ?? questionsAsked
         let prompt = AgentPrompt(
             title: title.map { String($0.prefix(80)) },
             text: text,

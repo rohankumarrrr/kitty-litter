@@ -1007,6 +1007,40 @@ final class FlowTests: XCTestCase {
         await settle()
         controller.bubbleDismissed(byClick: false)
         XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
+
+        backend.forwardError = nil
+        backend.replies = [[]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.forward("Read this x thread", to: session("f", "Work", mode: .fullAccess), snapshot: nil)
+        await settle()
+        XCTAssertEqual(controller.notices.filter { $0.text == sendTheLink }.count, 1, "only its own warning goes")
+    }
+
+    /// T3 says a follow-up has started before it sends it, so failing before anything comes back means it never got there.
+    func testAFollowUpThatFailsBeforeAnythingComesBackTakesTheWarningBack() async {
+        backend.replies = [[]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.forward("Read this x thread", to: session("f", "Work", mode: .fullAccess), snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .line(CatWords.problem(URLError(.networkConnectionLost), while: .agents), threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertNil(stage.bubble)
+    }
+
+    /// Clicking an old answer away isn't asking anything, so it doesn't take back a warning.
+    func testClosingAnOldAnswerKeepsAWarning() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.text(delta: "Four."), .finished(fullText: "Four.")]]
+        await ask("what's 2 + 2?")
+        controller.channelsPressed()
+        backend.routerSays = ["Read this x thread": "KITTEN: 1"]
+        // The router's folder is looked up first, then the kitten's, and the click comes while that's on its way.
+        backend.whileFindingAProject = { [unowned self] in
+            self.backend.whileFindingAProject = { [unowned self] in self.controller.bubbleDismissed(byClick: true) }
+        }
+        await messages("Read this x thread", to: .router)
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.caption == "Steve Pawsniak has this." })
     }
 
     /// Nothing was captured, so wherever your words go, the screen doesn't go with them.

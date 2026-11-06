@@ -119,6 +119,8 @@ final class AppController {
     var quickIsFresh = false
     var lineCounter = 0
     var replyGeneration = 0
+    /// Only goes up when you ask something, unlike `replyGeneration`, which closing a reply moves on too.
+    var questionsAsked = 0
 
     enum VoiceMode {
         case talk, dictate
