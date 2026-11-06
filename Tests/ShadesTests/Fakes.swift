@@ -309,18 +309,23 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         lock.withLock { _answers.append((question.id, answers)) }
     }
 
+    // These run off the main actor, and more than one at once when turns overlap, so what they share is locked.
     func projectID(atPath path: String) async -> String? {
-        let happening = whileFindingAProject
-        whileFindingAProject = nil
+        let happening = lock.withLock { () -> (() async -> Void)? in
+            defer { whileFindingAProject = nil }
+            return whileFindingAProject
+        }
         await happening?()
-        if let heldProject, path.hasPrefix("/k/") { await heldProject.value }
-        return projects[path]
+        if let held = lock.withLock({ heldProject }), path.hasPrefix("/k/") { await held.value }
+        return lock.withLock { projects[path] }
     }
 
     func addProject(atPath path: String, title: String) async throws -> String {
         if let addProjectError { throw addProjectError }
-        addedProjects.append(path)
-        projects[path] = "project-router"
+        lock.withLock {
+            addedProjects.append(path)
+            projects[path] = "project-router"
+        }
         return "project-router"
     }
 
@@ -333,13 +338,19 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     }
 
     func report(threadID: String, run: String?) async throws -> String? {
-        let happening = whileReadingAReport
-        whileReadingAReport = nil
+        let happening = lock.withLock { () -> (() async -> Void)? in
+            defer { whileReadingAReport = nil }
+            return whileReadingAReport
+        }
         await happening?()
-        if readFails { throw URLError(.networkConnectionLost) }
-        if let run, silentRuns.contains(run) { return nil }
-        if let run, let said = runReports[run] { return said }
-        return reports[threadID]
+        let found = lock.withLock { () -> (fails: Bool, report: String?) in
+            if readFails { return (true, nil) }
+            if let run, silentRuns.contains(run) { return (false, nil) }
+            if let run, let said = runReports[run] { return (false, said) }
+            return (false, reports[threadID])
+        }
+        if found.fails { throw URLError(.networkConnectionLost) }
+        return found.report
     }
 
     func origin(of threadID: String) async -> ThreadOrigin? {

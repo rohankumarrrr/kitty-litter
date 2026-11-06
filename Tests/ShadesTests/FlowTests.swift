@@ -2211,6 +2211,128 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.notices.contains { $0.text == CatWords.earlierMessageFailed })
     }
 
+    // MARK: - Corrections beside pointing and dropped files
+
+
+    private var saidCantPoint: Bool {
+        stage.bubbles.contains { bubble in
+            switch bubble {
+            case .line(let text, _)?: return text == CatWords.cantPoint
+            case .reply(_, _, _, let note, _)?: return note == CatWords.cantPoint
+            default: return false
+            }
+        }
+    }
+
+    func testAPointItCantFindBesideACorrectionSaysSoAndOnlyCopiesTheOwner() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        context.snapshotValue.elements = [exportButton]
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nPOINT: 7")]]
+        await ask("where's export? By the way, \(wrong)")
+        await waitForSends(2)
+        XCTAssertTrue(saidCantPoint, "a pointing answer that can't find its spot says so")
+        let given = sentTo("project-steve")
+        XCTAssertNotNil(given)
+        XCTAssertFalse(given?.prompt.text.contains("<screen>") == true, "the owner only gets a copy, with no screen")
+        XCTAssertEqual(given?.prompt.attachments.count, 0, "the owner only gets a copy, with no screenshot")
+    }
+
+    func testAPointItCantFindBesideTwoCorrectionsSaysSo() async {
+        kittens = [clawde, steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.projects["/k/clawde"] = "project-clawde"
+        context.snapshotValue.elements = [exportButton]
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nCORRECTION: 2\nPOINT: 7")]]
+        await ask("where's export? By the way, \(wrong)")
+        await waitForSends(3)
+        XCTAssertTrue(saidCantPoint, "a pointing answer that can't find its spot says so")
+    }
+
+    func testAnOvertakenDropTheRouterCantTakeIsntLostWithoutAWord() async {
+        useFullAccess(quick: true)
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.dropped(syllabus)
+        await controller.flow?.value
+        stage.type("Summarize this. By the way, \(wrong)")
+        let first = controller.replyTask
+        backend.replies = [[.finished(fullText: "Red.")]]
+        controller.ask("what colour?", snapshot: context.snapshotValue)
+        await first?.value
+        await settle()
+        XCTAssertEqual(backend.sent.count, 1, "only the newer question reached the router")
+        XCTAssertFalse(controller.notices.isEmpty, "the earlier message went nowhere, so something should say so")
+    }
+
+    private func dropOntoOwnersSession(inOwnersFolder: Bool) async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        var work = session("w", "Tailor resume", mode: .fullAccess)
+        if inOwnersFolder { work.projectPath = steve.folder }
+        controller.threadsChanged([work])
+        controller.dispatchers.insert("w")
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nSEND TO: 1")]]
+        await drop("Add this to it. By the way, \(wrong)")
+        await controller.forwardTask?.value
+        await waitForSends(2)
+        await controller.flow?.value
+        await settle()
+    }
+
+    func testASessionElsewhereThatRefusesADropStillMeansACopy() async {
+        await dropOntoOwnersSession(inOwnersFolder: false)
+        XCTAssertNotNil(sentTo("project-steve"), "the owner gets its copy")
+    }
+
+    func testTheOwnersOwnSessionRefusingADropStillGetsItsCopy() async {
+        await dropOntoOwnersSession(inOwnersFolder: true)
+        XCTAssertNotNil(sentTo("project-steve"), "nothing reached the session, so the owner should still get its copy")
+        XCTAssertFalse(controller.inbox.wasCorrected("w"), "nothing reached the session, so it wasn't given a correction")
+        XCTAssertTrue(controller.dispatchers.contains("w"), "nothing reached the session, so it still only passes work on")
+
+        await laterPassesWorkOn("C-home-later")
+    }
+
+    func testWithoutACorrectionASessionThatRefusedADropStillStepsAside() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        var work = session("w", "Tailor resume", mode: .fullAccess)
+        work.projectPath = steve.folder
+        controller.threadsChanged([work])
+        controller.dispatchers.insert("w")
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await drop("Add this to it.")
+        await controller.forwardTask?.value
+        await settle()
+        await laterPassesWorkOn("C-control-later")
+    }
+
+    private func laterPassesWorkOn(_ tag: String) async {
+        controller.bubbleDismissed(byClick: true)
+        // Later, the session does what it always did, and passes its work on.
+        var work = session("w", "Tailor resume", status: .running, mode: .fullAccess)
+        work.projectPath = steve.folder
+        controller.threadsChanged([work])
+        backend.reports["w"] = "The change went to a new thread, <t3-thread://v2/env/worker>, in a worktree."
+        work.status = .completed
+        controller.threadsChanged([work])
+        await controller.reportTask?.value
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(stage.bubble, .line("Work's started in a new session.", threadID: "worker"))
+    }
+
+    func testTheOwnerAsTheKittenRefusingADropStillGetsItsCopy() async {
+        kittens = [clawde]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nKITTEN: 1")]]
+        await drop("Clawde should keep this. By the way, \(wrong)")
+        await waitForSends(2)
+        await controller.flow?.value
+        await settle()
+        XCTAssertNotNil(sentTo("project-clawde"), "the owner should still get its copy, without the file")
+    }
+
     // MARK: - Self-check
 
     func testAKittenWithNothingKeepingItOffTheScreenIsFound() async {

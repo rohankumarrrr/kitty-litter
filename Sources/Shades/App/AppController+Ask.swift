@@ -152,9 +152,13 @@ extension AppController {
         // Whoever it's passed to gets their own say on the snapshot, so this only holds it back from here.
         let shared = settings.quickMode == .fullAccess ? nil : snapshot
         guard shared != nil || snapshot?.droppedName == nil else {
-            guard generation == replyGeneration else { return }
+            let refused = CatWords.cantTakeFiles(ModelNames.friendly(model))
+            // It could have held a correction, and nothing else will say it went nowhere.
+            guard generation == replyGeneration else {
+                return post(caption: CatWords.earlierMessageCaption, text: refused, threadID: nil)
+            }
             reply = nil
-            say(CatWords.cantTakeFiles(ModelNames.friendly(model)))
+            say(refused)
             return
         }
         // A message queues behind one already running, so one that's been overtaken keeps out of the way.
@@ -278,7 +282,7 @@ extension AppController {
         case .answer(let text, let point):
             // It only points with what the router was shown, and if it can't find the spot, it says so.
             let region = point.flatMap { turn.seen?.region(for: $0) }
-            if text.isEmpty && region == nil {
+            if text.isEmpty && point == nil {
                 reply = nil
                 // A kitten takes a moment to say anything, and "thinking" shouldn't stay up until it does.
                 renderBubble()
@@ -289,8 +293,12 @@ extension AppController {
                     give(turn.question, to: owners[0], snapshot: turn.snapshot, as: .correction)
                     copies = []
                 } else if reading.corrections.isEmpty {
-                    say(point == nil ? CatWords.noReply : CatWords.cantPoint)
+                    say(CatWords.noReply)
                 }
+            } else if text.isEmpty && region == nil {
+                // It meant to point, so the rest isn't a correction alone, and the owner only gets its copy.
+                reply = nil
+                say(CatWords.cantPoint)
             } else {
                 reply?.text = text.isEmpty ? CatWords.overHere : text
                 reply?.done = true
@@ -314,7 +322,10 @@ extension AppController {
             }
             let thread = turn.sessions[session - 1]
             let home = owners.first { KittenBoard.isInFolder(thread.projectPath, of: $0) }
-            forward(turn.question, to: thread, snapshot: turn.snapshot, correction: home != nil)
+            forward(turn.question, to: thread, snapshot: turn.snapshot, correction: home != nil) { [weak self] in
+                // It couldn't take what you dropped, so the owner gets its correction on its own, without it.
+                if let home { self?.give(turn.question, to: home, snapshot: nil, as: .correctionCopy) }
+            }
             copies.removeAll { $0 == home }
         case .kitten(let number):
             reply = nil

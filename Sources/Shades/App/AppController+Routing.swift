@@ -157,10 +157,12 @@ extension AppController {
             !$0.seesScreen && KittenBoard.belongs(title: "", projectPath: kitten.workspace, to: $0)
         }
         let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
-        // Your words alone would only make sense with the file, so nothing goes.
+        // Your words alone would only make sense with the file, so nothing goes, except a correction in them,
+        // which the owner gets on its own.
         if !seesScreen, snapshot?.droppedName != nil {
             onStarted?(nil)
             say(CatWords.cantTakeFiles(kitten.name))
+            if errand == .correction { give(words, to: kitten, snapshot: nil, as: .correctionCopy) }
             return
         }
         let shared = seesScreen ? snapshot : nil
@@ -196,12 +198,15 @@ extension AppController {
 
     /// Passes your words to a session that already has the context. The session's reply comes
     /// back the usual way, as a notice when it finishes.
-    func forward(_ words: String, to thread: AgentThread, snapshot: ScreenSnapshot?, correction: Bool = false, asked: Int? = nil) {
-        // What it says about a correction has to reach you, even if it starts threads elsewhere.
-        if correction {
-            dispatchers.remove(thread.id)
-            noteCorrection(in: thread.id)
-        }
+    /// `refused` hears if it couldn't take what you dropped, so nothing went.
+    func forward(
+        _ words: String,
+        to thread: AgentThread,
+        snapshot: ScreenSnapshot?,
+        correction: Bool = false,
+        asked: Int? = nil,
+        refused: (() -> Void)? = nil
+    ) {
         // Quick chats are left out of the thread list's news, so their replies are picked up here.
         let isQuick = watch.isQuick(thread.id)
         let asked = asked ?? questionsAsked
@@ -212,7 +217,13 @@ extension AppController {
             if seesScreen, snapshot != nil { seesScreen = await isClearOfScreenlessKittens(thread) }
             guard seesScreen || snapshot?.droppedName == nil else {
                 say(CatWords.cantTakeFiles(thread.title))
+                refused?()
                 return
+            }
+            // What it says about a correction has to reach you, even if it starts threads elsewhere.
+            if correction {
+                dispatchers.remove(thread.id)
+                noteCorrection(in: thread.id)
             }
             say(CatWords.sentTo(thread), threadID: thread.id)
             let shared = seesScreen ? snapshot : nil
