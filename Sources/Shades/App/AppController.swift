@@ -132,16 +132,14 @@ final class AppController {
     var reportDelay: TimeInterval = 5
     /// How long a question waits for the first list of sessions, so one asked right after launch can still be routed.
     var threadListWait: TimeInterval = 2
-    /// The sessions the router was shown for the question it's on, in the order it saw them.
-    var roster: [AgentThread] = []
-    /// The kittens it was shown, in the same way.
-    var kittens: [Kitten] = []
     /// Whether the quick thread is on its first turn, with no conversation worth keeping yet.
     var quickIsFresh = false
     var lineCounter = 0
     var replyGeneration = 0
     /// Only goes up when you ask something, unlike `replyGeneration`, which closing a reply moves on too.
     var questionsAsked = 0
+    /// Generations cancelled with Esc before the reply finished. Being overtaken isn't taking something back.
+    var takenBack: Set<Int> = []
 
     enum VoiceMode {
         case talk, dictate
@@ -292,8 +290,10 @@ final class AppController {
         case .thinking:
             guard !byClick else { return }
             reply = nil
+            takenBack.insert(replyGeneration)
             replyGeneration += 1
         case .reply:
+            if !byClick && reply?.done == false { takenBack.insert(replyGeneration) }
             reply = nil
             replyGeneration += 1
         case .line:

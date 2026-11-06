@@ -15,7 +15,8 @@ enum FrontDoorProblem: LocalizedError, Equatable {
 
 /// Decides nothing itself: the quick agent picks where a message belongs, from a list this
 /// builds. All it can pick is a number, and your own words are what get sent, so anything
-/// a page manages to say to it can misdirect your message at worst.
+/// a page manages to say to it can misdirect your message at worst. A correction is the same:
+/// the router names a kitten, and what goes is your whole message, as you said it.
 extension AppController {
     static let rosterSize = 10
     /// A session this old has probably been forgotten about.
@@ -149,7 +150,7 @@ extension AppController {
     /// Gives your words to a kitten, in a new thread in its workspace. T3 writes the title.
     /// `onStarted` hears the new thread, or `nil` if there isn't one.
     /// `asked` is `questionsAsked` when you sent them, if that was before now.
-    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil) {
+    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, as errand: Errand = .work, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil) {
         // As with a session, a kitten with full access doesn't get to see text from a page. Nor does
         // one whose thread would count as a kitten's that isn't meant to see it, in a project they share.
         let sharesWithScreenless = loadKittens().contains {
@@ -163,12 +164,13 @@ extension AppController {
             return
         }
         let shared = seesScreen ? snapshot : nil
-        let missesScreen = !carriesScreen(shared) && ScreenWords.pointAtScreen(words)
+        // A copy of a correction goes beside your message, which already warns.
+        let missesScreen = errand != .correctionCopy && !carriesScreen(shared) && ScreenWords.pointAtScreen(words)
         let asked = asked ?? questionsAsked
         flow = Task {
             guard let projectID = await backend.projectID(atPath: kitten.workspace) else {
                 onStarted?(nil)
-                say(CatWords.notSetUp(kitten))
+                tell(CatWords.notSetUp(kitten), as: errand)
                 return
             }
             startFrontier(
@@ -178,11 +180,13 @@ extension AppController {
                     words: words,
                     snapshot: shared,
                     screenshotPath: saveScreenshot(of: shared),
-                    screenLeftOut: !seesScreen && snapshot != nil
+                    screenLeftOut: !seesScreen && snapshot != nil,
+                    correction: errand != .work
                 ),
                 snapshot: shared,
                 projectID: projectID,
                 name: kitten.name,
+                as: errand,
                 missesScreen: missesScreen,
                 asked: asked,
                 onStarted: onStarted
@@ -192,7 +196,12 @@ extension AppController {
 
     /// Passes your words to a session that already has the context. The session's reply comes
     /// back the usual way, as a notice when it finishes.
-    func forward(_ words: String, to thread: AgentThread, snapshot: ScreenSnapshot?, asked: Int? = nil) {
+    func forward(_ words: String, to thread: AgentThread, snapshot: ScreenSnapshot?, correction: Bool = false, asked: Int? = nil) {
+        // What it says about a correction has to reach you, even if it starts threads elsewhere.
+        if correction {
+            dispatchers.remove(thread.id)
+            noteCorrection(in: thread.id)
+        }
         // Quick chats are left out of the thread list's news, so their replies are picked up here.
         let isQuick = watch.isQuick(thread.id)
         let asked = asked ?? questionsAsked
@@ -211,7 +220,8 @@ extension AppController {
                 words: words,
                 snapshot: shared,
                 screenshotPath: saveScreenshot(of: shared),
-                screenLeftOut: !seesScreen && snapshot != nil
+                screenLeftOut: !seesScreen && snapshot != nil,
+                correction: correction
             )
             let missesScreen = !carriesScreen(shared) && ScreenWords.pointAtScreen(words, isFollowUp: true)
             var warning: Int?

@@ -48,6 +48,58 @@ final class PromptsTests: XCTestCase {
         XCTAssertNil(Prompts.kittenTarget(in: "KITTEN: Steve"))
     }
 
+    func testReadsCorrectionsAndLeavesTheRest() {
+        let both = Prompts.corrections(in: "CORRECTION: 2\n CORRECTION:1 \nCORRECTION: 2\nSEND TO: 3")
+        XCTAssertEqual(both.owners, [2, 1])
+        XCTAssertEqual(both.rest.trimmingCharacters(in: .whitespacesAndNewlines), "SEND TO: 3")
+    }
+
+    func testOnlyTheLinesAReplyStartsWithCount() {
+        for reply in ["SEND TO: 3\nCORRECTION: 1", "Red.\nCORRECTION: 1", "Sure. CORRECTION: 1", "  \n Fine\r\nthanks\n"] {
+            let read = Prompts.corrections(in: reply)
+            XCTAssertEqual(read.owners, [])
+            XCTAssertEqual(read.rest, reply, "and the reply comes back as it was")
+        }
+        let read = Prompts.corrections(in: "\n CORRECTION: 1\r\nRed.\nCORRECTION: 2")
+        XCTAssertEqual(read.owners, [1])
+        XCTAssertEqual(read.rest, "\r\nRed.\nCORRECTION: 2")
+    }
+
+    func testALeadingLineThatDoesntSayANumberGoesNowhere() {
+        for line in ["CORRECTION: Steve", "CORRECTION: 9 it was 12", "CORRECTION: -1", "CORRECTION: +1", "CORRECTION: -9223372036854775808", "CORRECTION: 99999999999999999999", "CORRECTION:"] {
+            let read = Prompts.corrections(in: "\(line)\nSEND TO: 3")
+            XCTAssertEqual(read.owners, [0], line)
+            XCTAssertEqual(read.rest, "\nSEND TO: 3", "its words never show, and what's below it still runs")
+        }
+        XCTAssertEqual(Prompts.corrections(in: "CORRECTION: Steve\nCORRECTION: 1\nCORRECTION: Rex").owners, [0, 1])
+    }
+
+    func testKittensThatArentSetUpAreListedWithoutANumber() {
+        let steve = Kitten(name: "Steve", role: "Professional", covers: "resumes", folder: "/k/steve")
+        let pepper = Kitten(name: "Pepper", role: "Finance", covers: "money", folder: "/k/pepper", planned: true)
+        let prompt = Prompts.quick(question: "hi", snapshot: nil, kittens: [steve], notSetUp: [pepper])
+        XCTAssertTrue(prompt.contains("1. Steve, Professional: resumes"))
+        XCTAssertTrue(prompt.contains("- Pepper (Finance): money"))
+        XCTAssertFalse(prompt.contains("2. Pepper"))
+        XCTAssertTrue(Prompts.quick(question: "hi", snapshot: nil, notSetUp: [pepper]).contains("<kittens>\nNot set up yet"))
+        XCTAssertTrue(Prompts.quick(question: "hi", snapshot: nil).contains("<kittens>None yet.</kittens>"))
+    }
+
+    func testTheCorrectionNoteGoesBelowTheirWords() {
+        let snapshot = ScreenSnapshot(appName: "Safari", pageText: "a page")
+        let away = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper", project: "/code/app")
+        for text in [
+            Prompts.forKitten(away, words: "it was 12", snapshot: snapshot, screenshotPath: nil, screenLeftOut: false, correction: true),
+            Prompts.forwarded(words: "it was 12", snapshot: snapshot, screenshotPath: nil, screenLeftOut: false, correction: true),
+        ] {
+            XCTAssertTrue(text.hasPrefix("it was 12\n\n---\n"))
+            XCTAssertTrue(text.contains("The rest may not be your work."))
+            XCTAssertLessThan(text.range(of: "---")!.lowerBound, text.range(of: "correct something")!.lowerBound)
+            XCTAssertLessThan(text.range(of: "correct something")!.lowerBound, text.range(of: "<screen>")!.lowerBound)
+        }
+        XCTAssertFalse(Prompts.forKitten(away, words: "hi", snapshot: nil, screenshotPath: nil, screenLeftOut: false).contains("correct something"))
+    }
+
     func testKittensLoadFromTheirFoldersAndABadOneIsSkipped() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("kittens-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
@@ -200,14 +252,16 @@ final class PromptsTests: XCTestCase {
     func testOwnWordsComeBackFromEveryWayOfPassingThemOn() {
         let snapshot = ScreenSnapshot(appName: "Safari", pageText: "SENTINEL from a page")
         let away = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper", project: "/code/app")
-        let makers: [(String, ScreenSnapshot?, String?, Bool) -> String] = [
-            { Prompts.forKitten(away, words: $0, snapshot: $1, screenshotPath: $2, screenLeftOut: $3) },
-            Prompts.forwarded,
+        let makers: [(String, ScreenSnapshot?, String?, Bool, Bool) -> String] = [
+            { Prompts.forKitten(away, words: $0, snapshot: $1, screenshotPath: $2, screenLeftOut: $3, correction: $4) },
+            { Prompts.forwarded(words: $0, snapshot: $1, screenshotPath: $2, screenLeftOut: $3, correction: $4) },
         ]
         for make in makers {
             for (shot, leftOut) in [(snapshot, false), (nil, false), (nil, true)] as [(ScreenSnapshot?, Bool)] {
-                let message = make("and that part?\nsecond line", shot, nil, leftOut)
-                XCTAssertEqual(Prompts.ownWords(in: message), "and that part?\nsecond line")
+                for correction in [false, true] {
+                    let message = make("and that part?\nsecond line", shot, nil, leftOut, correction)
+                    XCTAssertEqual(Prompts.ownWords(in: message), "and that part?\nsecond line")
+                }
             }
         }
     }

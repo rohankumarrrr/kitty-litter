@@ -158,6 +158,11 @@ enum CatWords {
         "\(kitten.name) isn't a T3 project yet. Add \(kitten.workspace) in T3 and try again."
     }
     static let lostTheSession = "I lost track of which session that was for. Try asking again?"
+    static let correctionCaption = "Your correction"
+    static func correctionSent(to name: String) -> String { "\(name) has it." }
+    static let lostTheCorrection = "I spotted a correction, but lost track of whose it was. Mind saying it again?"
+    static let earlierMessageCaption = "An earlier message"
+    static let earlierMessageFailed = "It didn't get through. Mind saying it again?"
     static func sentTo(_ thread: AgentThread) -> String { sentTo(thread.title) }
     static func sentTo(_ title: String) -> String { "Sent that to \(title)." }
     static let sendTheLink = "It can't see your screen, so send the link or paste the text."

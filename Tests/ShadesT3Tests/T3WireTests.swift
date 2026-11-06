@@ -80,6 +80,26 @@ final class T3WireTests: XCTestCase {
         XCTAssertNil(json["deliveryIntent"], "A delivery intent could steer a run already going")
     }
 
+    // Kittens only believe a correction T3 shows as the user's.
+    func testMessagesGoOutAsTheUser() throws {
+        let message = T3Wire.DispatchMessage(commandId: "c", threadId: "t", messageId: "m", text: "hi", attachments: [], modelSelection: nil)
+        XCTAssertEqual(try decoded(T3Wire.encode(message))["createdBy"] as? String, "user")
+
+        let launch = T3Wire.LaunchThread(
+            commandId: "c",
+            threadId: "t",
+            projectId: "p",
+            title: "Title",
+            generateTitle: false,
+            modelSelection: .init(.frontier),
+            runtimeMode: RuntimeMode.approvalRequired.rawValue,
+            initialMessage: .init(messageId: "m", text: "hi", attachments: [])
+        )
+        let json = try decoded(T3Wire.encode(launch))
+        XCTAssertNil(json["createdBy"], "T3 records the user when a launch doesn't say")
+        XCTAssertNil(try XCTUnwrap(json["initialMessage"] as? [String: Any])["createdBy"])
+    }
+
     func testRespondCommand() throws {
         let command = T3Wire.RespondToRequest(commandId: "c", threadId: "t", requestId: "r", decision: ApprovalDecision.acceptForSession.rawValue)
         let json = try decoded(T3Wire.encode(command)) as? [String: String]

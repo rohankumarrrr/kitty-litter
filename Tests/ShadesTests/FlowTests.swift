@@ -1287,6 +1287,930 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("I can only read PDFs, pictures and links.", threadID: nil))
     }
 
+    // MARK: - Corrections
+
+    private let note = "correct something you look after"
+    private let wrong = "it was 12 people, not 20"
+
+    private func waitForSends(_ count: Int) async {
+        for _ in 0..<500 where backend.sent.count < count { await Task.yield() }
+        await settle()
+    }
+
+    /// The last thing started in that kitten's project.
+    private func sentTo(_ project: String) -> FakeBackend.Sent? {
+        backend.sent.last { $0.prompt.projectID == project }
+    }
+
+    private func assertWordsOnly(_ sent: FakeBackend.Sent?, file: StaticString = #filePath, line: UInt = #line) {
+        guard let sent else { return XCTFail("nothing sent", file: file, line: line) }
+        XCTAssertEqual(sent.mode, .start, file: file, line: line)
+        XCTAssertNil(sent.prompt.title, file: file, line: line)
+        XCTAssertTrue(sent.prompt.text.hasPrefix("\(wrong)\n\n---\n"), file: file, line: line)
+        XCTAssertTrue(sent.prompt.text.contains(note), file: file, line: line)
+        XCTAssertFalse(sent.prompt.text.contains("<screen>"), file: file, line: line)
+        XCTAssertFalse(sent.prompt.text.contains("Safari"), file: file, line: line)
+        XCTAssertTrue(sent.prompt.attachments.isEmpty, file: file, line: line)
+    }
+
+    /// Runs a question whose router reply waits until the returned closure is called.
+    private func askAndHold(_ question: String, reply: [AgentReplyEvent] = [], then after: [AgentReplyEvent]) async -> () async -> Void {
+        let (opened, open) = AsyncStream.makeStream(of: Void.self)
+        backend.held = Task { for await _ in opened { break } }
+        backend.replies = [reply]
+        backend.afterHeld = after
+        let sentBefore = backend.sent.count
+        controller.ask(question, snapshot: context.snapshotValue)
+        let task = controller.replyTask
+        for _ in 0..<500 where backend.sent.count == sentBefore { await Task.yield() }
+        for _ in 0..<50 { await Task.yield() }
+        backend.held = nil
+        return {
+            open.yield()
+            open.finish()
+            await task?.value
+        }
+    }
+
+    func testACorrectionInTheMiddleOfOtherWorkAlsoReachesItsOwner() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.threadsChanged([session("w", "Work")])
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nSEND TO: 1")]]
+        await ask(wrong)
+        await waitForSends(3)
+
+        XCTAssertEqual(backend.sent.count, 3)
+        let forwarded = backend.sent.first { $0.mode == .forward }
+        XCTAssertEqual(forwarded?.threadID, "w")
+        XCTAssertTrue(forwarded?.prompt.text.contains("<screen>") == true)
+        XCTAssertFalse(forwarded?.prompt.text.contains(note) == true)
+        assertWordsOnly(sentTo("project-steve"))
+
+        XCTAssertEqual(stage.bubble, .line("Sent that to Work.", threadID: "w"))
+        controller.bubbleDismissed(byClick: true)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Your correction", text: "Steve Pawsniak has it.", threadID: "thread-2"))
+    }
+
+    func testACorrectionIsNeverShownAsAnAnswerEvenWhileStreaming() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.threadsChanged([session("w", "Work")])
+        backend.replies = [[.text(delta: "COR"), .text(delta: "RECTION: 1\nSE"), .text(delta: "ND TO: 1"), .finished(fullText: "CORRECTION: 1\nSEND TO: 1")]]
+        await ask(wrong)
+        await waitForSends(3)
+        for bubble in stage.bubbles {
+            if case .reply? = bubble { XCTFail("the routing decision was shown as an answer") }
+        }
+    }
+
+    func testACorrectionOnItsOwnGoesToItsOwnerTheUsualWay() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1")]]
+        await ask(wrong)
+        await waitForSends(2)
+
+        XCTAssertEqual(backend.sent.count, 2)
+        let given = sentTo("project-steve")?.prompt
+        XCTAssertTrue(given?.text.hasPrefix("\(wrong)\n") == true)
+        XCTAssertTrue(given?.text.contains(note) == true)
+        XCTAssertTrue(given?.text.contains("<screen>") == true, "the owner's the only destination, so it's like any other")
+        XCTAssertEqual(given?.attachments.count, 1)
+        XCTAssertEqual(stage.bubble, .line("Steve Pawsniak has this.", threadID: "thread-2"))
+        XCTAssertFalse(stage.bubbles.contains(.line(CatWords.noReply, threadID: nil)))
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(backend.archived, ["thread-1"], "a new thread that only passed it on goes")
+    }
+
+    func testAKittenThatDoesntSeeTheScreenStaysThatWayForACorrection() async {
+        kittens = [clawde]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1")]]
+        await ask(wrong)
+        await waitForSends(2)
+        let given = sentTo("project-clawde")?.prompt
+        XCTAssertTrue(given?.text.contains(note) == true)
+        XCTAssertTrue(given?.text.contains("left out") == true)
+        XCTAssertFalse(given?.text.contains("<screen>") == true)
+        XCTAssertEqual(context.saved, 0)
+    }
+
+    func testOneMessageWhenTheOwnerIsWhereItsGoingAnyway() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nKITTEN: 1")]]
+        await ask(wrong)
+        await waitForSends(2)
+        XCTAssertEqual(backend.sent.count, 2)
+        XCTAssertTrue(sentTo("project-steve")?.prompt.text.contains(note) == true)
+    }
+
+    func testOneMessageWhenTheSessionIsInTheOwnersFolder() async {
+        kittens = [steve]
+        var work = session("w", "Tailor resume")
+        work.projectPath = steve.folder
+        controller.threadsChanged([work])
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nSEND TO: 1")]]
+        await ask(wrong)
+        await waitForSends(2)
+        XCTAssertEqual(backend.sent.count, 2)
+        XCTAssertEqual(backend.sent[1].mode, .forward)
+        XCTAssertTrue(backend.sent[1].prompt.text.contains(note))
+    }
+
+    func testASessionWorkingInAnotherProjectStillMeansACopy() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        var work = session("w", "Steve Pawsniak: Fix the site")
+        work.projectTitle = "site"
+        controller.threadsChanged([work])
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nSEND TO: 1")]]
+        await ask(wrong)
+        await waitForSends(3)
+        XCTAssertEqual(backend.sent.count, 3)
+        assertWordsOnly(sentTo("project-steve"))
+        XCTAssertFalse(backend.sent.first { $0.mode == .forward }?.prompt.text.contains(note) == true)
+    }
+
+    func testTwoOwnersGetACopyEachAndNotTheScreen() async {
+        kittens = [clawde, steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nCORRECTION: 2")]]
+        await ask(wrong)
+        await waitForSends(3)
+        assertWordsOnly(sentTo("project-steve"))
+        assertWordsOnly(sentTo("project-clawde"))
+        XCTAssertEqual(controller.notices.count, 2)
+    }
+
+    func testAnAnswerAndACorrectionBothHappenAndTheThreadStays() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.text(delta: "CORRECTION: 1\nRed."), .finished(fullText: "CORRECTION: 1\nRed.")]]
+        await ask(wrong)
+        await waitForSends(2)
+        assertWordsOnly(sentTo("project-steve"))
+        XCTAssertEqual(stage.bubble, .reply(text: "Red.", done: true, threadID: "thread-1", note: nil))
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(backend.archived, [])
+        XCTAssertEqual(backend.settled, ["thread-1"])
+    }
+
+    func testAKittenThatIsntSetUpCanBeRecognisedButNotPicked() async {
+        let pepper = Kitten(name: "Pepper", role: "Finance", covers: "money", folder: "/k/pepper", planned: true)
+        kittens = [clawde, pepper]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.projects["/k/pepper"] = "project-pepper"
+        backend.replies = [[.finished(fullText: "CORRECTION: 2\nKITTEN: 2")]]
+        await ask(wrong)
+        let router = backend.sent[0].prompt.text
+        XCTAssertTrue(router.contains("1. Clawde, The system"))
+        XCTAssertTrue(router.contains("- Pepper (Finance): money"))
+        XCTAssertEqual(backend.sent.count, 1, "2 isn't on the list, because it has no number")
+        XCTAssertEqual(controller.notices.first?.text, CatWords.lostTheCorrection)
+    }
+
+    func testANumberNotOnTheListSaysSoAndTheRestCarriesOn() async {
+        kittens = [steve]
+        controller.threadsChanged([session("w", "Work")])
+        backend.replies = [[.finished(fullText: "CORRECTION: 7\nSEND TO: 1")]]
+        await ask(wrong)
+        await waitForSends(2)
+        XCTAssertEqual(backend.sent.last?.mode, .forward)
+        XCTAssertEqual(controller.notices.first?.text, CatWords.lostTheCorrection)
+    }
+
+    func testACorrectionOnItsOwnWithANumberNotOnTheListSaysOneThing() async {
+        kittens = [steve]
+        backend.replies = [[.finished(fullText: "CORRECTION: 7")]]
+        await ask(wrong)
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertEqual(controller.notices.first?.text, CatWords.lostTheCorrection)
+        XCTAssertFalse(stage.bubbles.contains(.line(CatWords.noReply, threadID: nil)))
+    }
+
+    func testACopyStillGoesWhenTheRestOfTheReplyHasANumberNotOnTheList() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nSEND TO: 7")]]
+        await ask(wrong)
+        await waitForSends(2)
+        assertWordsOnly(sentTo("project-steve"))
+        XCTAssertEqual(stage.bubble, .line(CatWords.lostTheSession, threadID: nil))
+    }
+
+    func testACopyForAKittenThatIsntInT3SaysSoAndWaitsToBeRead() async {
+        kittens = [steve]
+        controller.threadsChanged([session("w", "Work")])
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nSEND TO: 1")]]
+        await ask(wrong)
+        await waitForSends(2)
+        await controller.flow?.value
+        XCTAssertEqual(controller.notices.first?.text, CatWords.notSetUp(steve))
+    }
+
+    func testAMessageOvertakenWhileTheRouterThinksStillPassesOnItsCorrection() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        let release = await askAndHold(wrong, then: [.finished(fullText: "CORRECTION: 1\nKITTEN: 1")])
+
+        // Now there's a newer list, where 1 would be someone else.
+        kittens = [clawde, steve]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "Red.")]]
+        await ask("what colour?")
+        await release()
+        await waitForSends(3)
+
+        XCTAssertEqual(backend.sent.count, 3, "the correction, but not the rest of it")
+        assertWordsOnly(sentTo("project-steve"))
+        XCTAssertNil(sentTo("project-clawde"))
+        guard case .reply(let text, _, _, _, _)? = stage.bubble else { return XCTFail("the newer answer should be on show") }
+        XCTAssertEqual(text, "Red.")
+        controller.bubbleDismissed(byClick: true)
+        guard case .notice(let caption, _, _)? = stage.bubble else { return XCTFail("no notice") }
+        XCTAssertEqual(caption, "Your correction")
+    }
+
+    func testAMessageOvertakenBeforeTheRouterSawItStillPassesOnItsCorrection() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replyTo = { prompt in
+            if prompt.text.contains("Their question: \(self.wrong)") { return [.finished(fullText: "CORRECTION: 1")] }
+            if prompt.text.contains("Their question: what colour?") { return [.finished(fullText: "Red.")] }
+            return nil
+        }
+        controller.ask(wrong, snapshot: context.snapshotValue)
+        let first = controller.replyTask
+        controller.ask("what colour?", snapshot: context.snapshotValue)
+        await first?.value
+        await waitForSends(3)
+
+        XCTAssertEqual(backend.sent.count, 3)
+        assertWordsOnly(sentTo("project-steve"))
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        guard case .reply(let text, _, let thread, _, _)? = stage.bubble else { return XCTFail("the newer answer should be on show") }
+        XCTAssertEqual(text, "Red.")
+        XCTAssertEqual(backend.archived.count, 1, "the overtaken one's own thread")
+        XCTAssertFalse(backend.archived.contains(thread ?? ""), "and never the conversation that's still going")
+    }
+
+    func testANewerQuestionCantRouteIntoAnOvertakenMessagesOwnThread() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replyTo = { prompt in
+            [.finished(fullText: prompt.text.contains("Their question: \(self.wrong)") ? "CORRECTION: 1" : "Red.")]
+        }
+        controller.ask(wrong, snapshot: context.snapshotValue)
+        let first = controller.replyTask
+        controller.ask("what colour?", snapshot: context.snapshotValue)
+        await first?.value
+        await waitForSends(3)
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        guard let own = backend.archived.first else { return XCTFail("its own thread should be on the way out") }
+
+        controller.threadsChanged([session(own, "Its own thread"), session("w", "Work")])
+        await ask("and now?")
+        let router = backend.sent.last?.prompt.text ?? ""
+        XCTAssertTrue(router.contains("Work"), "the list is still there")
+        XCTAssertFalse(router.contains("Its own thread"))
+    }
+
+    /// Holds back the next follow-up's `.started`, until the returned closure is called.
+    private func holdStarted() -> () -> Void {
+        let (opened, open) = AsyncStream.makeStream(of: Void.self)
+        backend.heldBeforeStarted = Task { for await _ in opened { break } }
+        return {
+            open.yield()
+            open.finish()
+        }
+    }
+
+    func testOvertakingAFollowUpBeforeItStartsDoesntHideTheConversation() async {
+        await ask("one")
+        let release = holdStarted()
+        controller.ask(wrong, snapshot: context.snapshotValue)
+        let older = controller.replyTask
+        for _ in 0..<500 where backend.sent.count == 1 { await Task.yield() }
+        XCTAssertEqual(backend.sent.last?.mode, .followUp)
+        backend.heldBeforeStarted = nil
+        backend.replies = [[.finished(fullText: "Red.")]]
+        await ask("what colour?")
+        release()
+        await older?.value
+        await settle()
+
+        // Neither router conversation is ever listed, so what matters is it isn't hidden, which would drop what it asks you.
+        XCTAssertFalse(controller.hiddenThreads.contains("thread-1"))
+    }
+
+    func testEscOnAFollowUpBeforeItStartsDoesntHideTheConversation() async {
+        await ask("one")
+        let release = holdStarted()
+        controller.ask(wrong, snapshot: context.snapshotValue)
+        let older = controller.replyTask
+        for _ in 0..<500 where backend.sent.count == 1 { await Task.yield() }
+        backend.heldBeforeStarted = nil
+        controller.bubbleDismissed(byClick: false)
+        release()
+        await older?.value
+        await settle()
+
+        // Neither router conversation is ever listed, so what matters is it isn't hidden, which would drop what it asks you.
+        XCTAssertFalse(controller.hiddenThreads.contains("thread-1"))
+    }
+
+    func testEscOnAFollowUpWhoseThreadHasGoneSendsNothingMore() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        await ask("one")
+        let (opened, open) = AsyncStream.makeStream(of: Void.self)
+        backend.failFollowUpsAfter = Task { for await _ in opened { break } }
+        controller.ask(wrong, snapshot: context.snapshotValue)
+        let task = controller.replyTask
+        for _ in 0..<500 where backend.sent.count == 1 { await Task.yield() }
+        XCTAssertEqual(backend.sent.last?.mode, .followUp)
+        controller.bubbleDismissed(byClick: false)
+        open.yield()
+        open.finish()
+        await task?.value
+        await settle()
+        XCTAssertEqual(backend.sent.count, 2, "the follow-up that was already on its way, and nothing after Esc")
+    }
+
+    /// Runs a question whose router reply waits until the returned closure is called, keeping hold of its task.
+    private func askHeld(_ question: String, reply: [AgentReplyEvent] = [], then after: [AgentReplyEvent]) async -> (Task<Void, Never>?, () -> Void) {
+        let (opened, open) = AsyncStream.makeStream(of: Void.self)
+        backend.held = Task { for await _ in opened { break } }
+        backend.replies = [reply]
+        backend.afterHeld = after
+        let before = backend.sent.count
+        controller.ask(question, snapshot: context.snapshotValue)
+        let task = controller.replyTask
+        for _ in 0..<500 where backend.sent.count == before { await Task.yield() }
+        for _ in 0..<50 { await Task.yield() }
+        backend.held = nil
+        return (task, {
+            open.yield()
+            open.finish()
+        })
+    }
+
+    func testAConversationIsLeftAloneWhenTheTurnThatStartedItEndsAfterTheTenMinuteMark() async {
+        let (first, releaseFirst) = await askHeld("one", reply: [.needsApproval(request("r1", thread: "thread-1"))], then: [.finished(fullText: "One.")])
+        let (follow, releaseFollow) = await askHeld("what colour?", then: [.finished(fullText: "Red.")])
+        XCTAssertEqual(backend.sent.last?.threadID, "thread-1")
+
+        // An approval sat for more than ten minutes, with the follow-up queued behind it.
+        clock.addTimeInterval(QuickSession.lifetime + 1)
+        releaseFirst()
+        await first?.value
+        for _ in 0..<200 { await Task.yield() }
+        XCTAssertFalse(backend.archived.contains("thread-1"), "the follow-up is still in this thread")
+
+        releaseFollow()
+        await follow?.value
+        await settle()
+    }
+
+    func testAFollowUpDoesntCarryOnInAThreadThatGotArchived() async {
+        let (first, releaseFirst) = await askHeld("one", then: [.finished(fullText: "One.")])
+        clock.addTimeInterval(QuickSession.lifetime - 5)
+        let releaseStarted = holdStarted()
+        backend.replies = [[.finished(fullText: "Red.")]]
+        controller.ask("what colour?", snapshot: context.snapshotValue)
+        let follow = controller.replyTask
+        for _ in 0..<500 where backend.sent.count == 1 { await Task.yield() }
+        XCTAssertEqual(backend.sent.last?.mode, .followUp)
+        backend.heldBeforeStarted = nil
+
+        clock.addTimeInterval(10)
+        releaseFirst()
+        await first?.value
+        for _ in 0..<200 { await Task.yield() }
+        releaseStarted()
+        await follow?.value
+        for _ in 0..<200 { await Task.yield() }
+
+        backend.replies = [[.finished(fullText: "Blue.")]]
+        await ask("and now?")
+        XCTAssertFalse(backend.archived.contains(backend.sent.last?.threadID ?? ""), "the next message went into an archived thread")
+    }
+
+    func testAConversationIsLeftAloneWhenItsFollowUpIsTakenBackAcrossTheTenMinuteMark() async {
+        await ask("one")
+        clock.addTimeInterval(QuickSession.lifetime - 5)
+        let release = holdStarted()
+        controller.ask(wrong, snapshot: context.snapshotValue)
+        let older = controller.replyTask
+        for _ in 0..<500 where backend.sent.count == 1 { await Task.yield() }
+        XCTAssertEqual(backend.sent.last?.mode, .followUp)
+        backend.heldBeforeStarted = nil
+        controller.bubbleDismissed(byClick: false)
+        clock.addTimeInterval(10)
+        release()
+        await older?.value
+        await settle()
+        XCTAssertFalse(backend.archived.contains("thread-1"))
+
+        // Neither router conversation is ever listed, so what matters is it isn't hidden, which would drop what it asks you.
+        XCTAssertFalse(controller.hiddenThreads.contains("thread-1"))
+    }
+
+    func testAConversationIsLeftAloneWhenItsFollowUpIsOvertakenAcrossTheTenMinuteMark() async {
+        await ask("one")
+        clock.addTimeInterval(QuickSession.lifetime - 5)
+        let release = holdStarted()
+        controller.ask(wrong, snapshot: context.snapshotValue)
+        let older = controller.replyTask
+        for _ in 0..<500 where backend.sent.count == 1 { await Task.yield() }
+        backend.heldBeforeStarted = nil
+        clock.addTimeInterval(10)
+        backend.replies = [[.finished(fullText: "Red.")]]
+        await ask("what colour?")
+        release()
+        await older?.value
+        await settle()
+        XCTAssertFalse(controller.hiddenThreads.contains("thread-1"))
+        XCTAssertFalse(backend.archived.contains("thread-1"))
+    }
+
+    func testAConversationIsLeftAloneWhenANewerFollowUpStartsAfresh() async {
+        await ask("one")
+        let release = holdStarted()
+        controller.ask(wrong, snapshot: context.snapshotValue)
+        let older = controller.replyTask
+        for _ in 0..<500 where backend.sent.count == 1 { await Task.yield() }
+        backend.heldBeforeStarted = nil
+        backend.failFollowUps = true
+        backend.replies = [[.finished(fullText: "Red.")]]
+        await ask("what colour?")
+        backend.failFollowUps = false
+        release()
+        await older?.value
+        await settle()
+        XCTAssertFalse(controller.hiddenThreads.contains("thread-1"))
+        XCTAssertFalse(backend.archived.contains("thread-1"))
+    }
+
+    func testAConversationIsLeftAloneWhenATakenBackReplyEndsAfterTheTenMinuteMark() async {
+        await ask("one")
+        clock.addTimeInterval(QuickSession.lifetime - 5)
+        let releaseStarted = holdStarted()
+        let (opened, open) = AsyncStream.makeStream(of: Void.self)
+        backend.held = Task { for await _ in opened { break } }
+        backend.afterHeld = [.finished(fullText: "Red.")]
+        backend.replies = [[]]
+        controller.ask(wrong, snapshot: context.snapshotValue)
+        let older = controller.replyTask
+        for _ in 0..<500 where backend.sent.count == 1 { await Task.yield() }
+        backend.heldBeforeStarted = nil
+        backend.held = nil
+        controller.bubbleDismissed(byClick: false)
+        releaseStarted()
+        for _ in 0..<100 { await Task.yield() }
+        clock.addTimeInterval(10)
+        open.yield()
+        open.finish()
+        await older?.value
+        await settle()
+        XCTAssertFalse(backend.archived.contains("thread-1"))
+    }
+
+    /// Holds back finding a kitten's project, until the returned closure is called.
+    private func holdProject() -> () -> Void {
+        let (opened, open) = AsyncStream.makeStream(of: Void.self)
+        backend.heldProject = Task { for await _ in opened { break } }
+        return {
+            open.yield()
+            open.finish()
+        }
+    }
+
+    func testThinkingDoesntStayUpWhileAKittensSendIsOnItsWay() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        let lost = BubbleContent.notice(caption: CatWords.correctionCaption, text: CatWords.lostTheCorrection, threadID: nil)
+        for reply in ["CORRECTION: 1\nCORRECTION: 7", "CORRECTION: 7\nKITTEN: 1"] {
+            let release = holdProject()
+            backend.replies = [[.finished(fullText: reply)]]
+            controller.ask(wrong, snapshot: context.snapshotValue)
+            await controller.replyTask?.value
+            for _ in 0..<50 { await Task.yield() }
+            XCTAssertEqual(stage.bubble, lost, reply)
+            XCTAssertNotEqual(stage.status, .thinking, reply)
+            release()
+            await settle()
+            backend.heldProject = nil
+            controller.notices.removeAll()
+        }
+
+        let release = holdProject()
+        backend.replies = [[.finished(fullText: "CORRECTION: 1")]]
+        controller.ask(wrong, snapshot: context.snapshotValue)
+        await controller.replyTask?.value
+        for _ in 0..<50 { await Task.yield() }
+        if case .thinking? = stage.bubble { XCTFail("a bubble that says thinking, which Esc can't take back") }
+        release()
+        await settle()
+    }
+
+    func testACorrectionThatGoesNowhereSaysSoStraightAway() async {
+        kittens = [steve]
+        for reply in ["CORRECTION: 7", "CORRECTION: it was 12 people"] {
+            backend.replies = [[.finished(fullText: reply)]]
+            await ask(wrong)
+            XCTAssertEqual(stage.bubble, .notice(caption: CatWords.correctionCaption, text: CatWords.lostTheCorrection, threadID: nil), reply)
+            XCTAssertNotEqual(stage.status, .thinking, reply)
+            controller.bubbleDismissed(byClick: false)
+        }
+    }
+
+    func testEscWhileThinkingTakesACorrectionBack() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        let release = await askAndHold(wrong, then: [.finished(fullText: "CORRECTION: 1")])
+        controller.bubbleDismissed(byClick: false)
+        await release()
+        await settle()
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertNil(stage.bubble)
+        XCTAssertTrue(controller.notices.isEmpty)
+    }
+
+    func testEscBeforeTheRouterSawItSendsNothingAtAll() async {
+        kittens = [steve]
+        backend.replies = [[.finished(fullText: "CORRECTION: 1")]]
+        controller.ask(wrong, snapshot: nil)
+        controller.bubbleDismissed(byClick: false)
+        await settle()
+        XCTAssertTrue(backend.sent.isEmpty)
+    }
+
+    func testEscOnANewerQuestionDoesntTakeBackAnOlderOne() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        let release = await askAndHold(wrong, then: [.finished(fullText: "CORRECTION: 1")])
+        controller.ask("what colour?", snapshot: nil)
+        controller.bubbleDismissed(byClick: false)
+        await release()
+        await waitForSends(2)
+        assertWordsOnly(sentTo("project-steve"))
+    }
+
+    func testDismissingAnAnswerWhileItStreamsDoesntLoseACorrection() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        let release = await askAndHold(wrong, reply: [.text(delta: "CORRECTION: 1\nPartly")], then: [.finished(fullText: "CORRECTION: 1\nPartly done.")])
+        guard case .reply(let text, false, _, _, _)? = stage.bubble else { return XCTFail("no streaming answer") }
+        XCTAssertEqual(text, "Partly")
+        controller.bubbleDismissed(byClick: true)
+        await release()
+        await waitForSends(2)
+        assertWordsOnly(sentTo("project-steve"))
+    }
+
+    func testACorrectionsReportReachesYouEvenIfItStartedAnotherThread() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1")], [.finished(fullText: "Started.")]]
+        await ask(wrong)
+        await waitForSends(2)
+        XCTAssertFalse(controller.dispatchers.contains("thread-2"))
+
+        var work = session("thread-2", "Team size", status: .running)
+        work.projectPath = steve.folder
+        controller.threadsChanged([work])
+        backend.reports["thread-2"] = "Fixed. I asked another kitten to check too: <t3-thread://v2/env/other>."
+        work.status = .completed
+        controller.threadsChanged([work])
+        await controller.reportTask?.value
+        for _ in 0..<20 { await Task.yield() }
+
+        XCTAssertEqual(controller.notices.first?.threadID, "thread-2")
+        XCTAssertFalse(controller.hiddenThreads.contains("thread-2"))
+    }
+
+    func testACopysReportReachesYouToo() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nHANDOFF: Fix the bug")], [.finished(fullText: "Started.")], [.finished(fullText: "Started.")]]
+        await ask(wrong)
+        await waitForSends(3)
+        let copy = controller.notices.first?.threadID
+        XCTAssertNotNil(copy)
+        XCTAssertFalse(controller.dispatchers.contains(copy ?? ""))
+    }
+
+    func testAKittensSessionThatGetsACorrectionStopsBeingADispatcher() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("tailor my resume")
+        await waitForSends(2)
+        XCTAssertTrue(controller.dispatchers.contains("thread-2"))
+
+        var work = session("thread-2", "Tailor resume")
+        work.projectPath = steve.folder
+        controller.threadsChanged([work])
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nSEND TO: 1")]]
+        await ask(wrong)
+        await waitForSends(4)
+        XCTAssertEqual(backend.sent.last?.mode, .forward)
+        XCTAssertFalse(controller.dispatchers.contains("thread-2"))
+    }
+
+    func testAnOrdinaryKittenThreadCanStillStepAside() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("change the site")
+        await waitForSends(2)
+
+        var work = session("thread-2", "Change the site", status: .running)
+        work.projectPath = steve.folder
+        controller.threadsChanged([work])
+        backend.reports["thread-2"] = "The change went to a new thread, <t3-thread://v2/env/worker>, in a worktree."
+        work.status = .completed
+        controller.threadsChanged([work])
+        await controller.reportTask?.value
+        for _ in 0..<20 { await Task.yield() }
+
+        XCTAssertTrue(controller.hiddenThreads.contains("thread-2"))
+        XCTAssertEqual(stage.bubble, .line("Work's started in a new session.", threadID: "worker"))
+        XCTAssertTrue(controller.notices.isEmpty)
+    }
+
+    func testACorrectionForOneKittenAlongsideWorkForAnother() async {
+        kittens = [clawde, steve]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nKITTEN: 2")]]
+        await ask(wrong)
+        await waitForSends(3)
+
+        XCTAssertEqual(backend.sent.count, 3)
+        assertWordsOnly(sentTo("project-clawde"))
+        let main = sentTo("project-steve")?.prompt
+        XCTAssertTrue(main?.text.contains("<screen>") == true)
+        XCTAssertFalse(main?.text.contains(note) == true, "the correction isn't this kitten's")
+        guard case .line("Steve Pawsniak has this.", _)? = stage.bubble else { return XCTFail("the main send should be on show") }
+        XCTAssertEqual(controller.notices.map(\.text), ["Clawde has it."])
+    }
+
+    /// Your message already warns if it needs to, so a copy of the correction doesn't add a second one.
+    func testACorrectionCopyDoesntWarnAboutTheScreen() async {
+        kittens = [clawde, steve]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nKITTEN: 2")]]
+        await ask("Read this x thread. By the way, my team was 12 people, not 20.")
+        await waitForSends(3)
+
+        guard case .line("Steve Pawsniak has this.", _)? = stage.bubble else { return XCTFail("the main send sees the screen") }
+        XCTAssertEqual(controller.notices.map(\.text), ["Clawde has it."])
+    }
+
+    func testACorrectionLineAnywhereButTheStartIsJustWords() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.threadsChanged([session("w", "Work")])
+        backend.replies = [[.finished(fullText: "Red.\nCORRECTION: 1")], [.finished(fullText: "SEND TO: 1\nCORRECTION: 1")]]
+
+        await ask(wrong)
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertEqual(stage.bubble, .reply(text: "Red.\nCORRECTION: 1", done: true, threadID: "thread-1", note: nil))
+
+        await ask(wrong)
+        await waitForSends(3)
+        XCTAssertEqual(backend.sent.count, 3, "the router twice, and the session")
+        XCTAssertEqual(backend.sent.last?.mode, .forward)
+        XCTAssertFalse(backend.sent.last?.prompt.text.contains(note) == true)
+        XCTAssertNil(sentTo("project-steve"))
+        XCTAssertTrue(controller.notices.isEmpty)
+    }
+
+    func testANumberThatIsntReallyANumberGoesNowhere() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        for (index, number) in ["-9223372036854775808", "+1", "99999999999999999999"].enumerated() {
+            backend.replies = [[.finished(fullText: "CORRECTION: \(number)")]]
+            await ask(wrong)
+            XCTAssertEqual(backend.sent.count, index + 1, "nothing but the router")
+            XCTAssertEqual(controller.notices.count, index + 1)
+            XCTAssertEqual(controller.notices.last?.text, CatWords.lostTheCorrection)
+        }
+    }
+
+    func testACorrectionLineThatNamesSomeoneStillLetsTheRestRun() async {
+        kittens = [steve]
+        controller.threadsChanged([session("w", "Work")])
+        backend.replies = [[.finished(fullText: "CORRECTION: Steve\nSEND TO: 1")]]
+        await ask(wrong)
+        await waitForSends(2)
+        XCTAssertEqual(backend.sent.last?.mode, .forward)
+        XCTAssertEqual(backend.sent.last?.threadID, "w")
+        XCTAssertEqual(controller.notices.map(\.text), [CatWords.lostTheCorrection])
+        XCTAssertEqual(stage.bubble, .line("Sent that to Work.", threadID: "w"))
+    }
+
+    func testEscWhileAnAnswerStreamsTakesACorrectionBack() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        let release = await askAndHold(wrong, reply: [.text(delta: "CORRECTION: 1\nPartly")], then: [.finished(fullText: "CORRECTION: 1\nPartly done.")])
+        guard case .reply(_, false, _, _, _)? = stage.bubble else { return XCTFail("no streaming answer") }
+        controller.bubbleDismissed(byClick: false)
+        await release()
+        await settle()
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertNil(stage.bubble)
+        XCTAssertTrue(controller.notices.isEmpty)
+    }
+
+    func testEscAfterAnAnswerFinishedTakesNothingBack() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nRed.")]]
+        await ask(wrong)
+        await waitForSends(2)
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertTrue(controller.takenBack.isEmpty)
+        assertWordsOnly(sentTo("project-steve"))
+    }
+
+    func testAnOvertakenMessageWhoseRouterFailsSaysSoOnce() async {
+        await ask("one")
+        let release = await askAndHold(wrong, then: [.failed(message: "gone")])
+        backend.replies = [[.finished(fullText: "Red.")]]
+        await ask("what colour?")
+
+        backend.replies = [[.failed(message: "still gone")]]
+        await release()
+        await settle()
+
+        XCTAssertEqual(controller.notices.map(\.caption), ["An earlier message"])
+        XCTAssertEqual(controller.notices.map(\.text), ["It didn't get through. Mind saying it again?"])
+        guard case .reply("Red.", _, _, _, _)? = stage.bubble else { return XCTFail("the newer answer should stay on show") }
+    }
+
+    func testAMessageTakenBackWhoseRouterFailsSaysNothing() async {
+        let release = await askAndHold(wrong, then: [.failed(message: "gone")])
+        controller.bubbleDismissed(byClick: false)
+        await release()
+        await settle()
+        XCTAssertTrue(controller.notices.isEmpty)
+        XCTAssertNil(stage.bubble)
+    }
+
+    func testAnOvertakenFollowUpThatFailsLeavesTheNewerConversationAlone() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        await ask("one")
+        let older = await askAndHold(wrong, then: [.failed(message: "gone")])
+        let newer = await askAndHold("what colour?", then: [.finished(fullText: "HANDOFF: Paint it")])
+
+        backend.replies = [[.finished(fullText: "CORRECTION: 1")]]
+        await older()
+        await newer()
+        await settle()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertFalse(backend.archived.contains("thread-1"), "the conversation that's still going")
+        await ask("and now?")
+        XCTAssertEqual(backend.sent.last?.mode, .followUp)
+        XCTAssertEqual(backend.sent.last?.threadID, "thread-1")
+    }
+
+    func testAQuickThreadThatAgedOutWhileAnsweringIsLeftAlone() async {
+        let release = await askAndHold("what colour?", then: [.finished(fullText: "Red.")])
+        clock.addTimeInterval(QuickSession.lifetime + 1)
+        await release()
+        await settle()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(stage.bubble, .reply(text: "Red.", done: true, threadID: "thread-1", note: nil))
+        XCTAssertEqual(backend.archived, [])
+    }
+
+    func testANumberNotOnTheListInAnOvertakenMessageStillSaysSo() async {
+        kittens = [steve]
+        let release = await askAndHold(wrong, then: [.finished(fullText: "CORRECTION: 7")])
+        backend.replies = [[.finished(fullText: "Red.")]]
+        await ask("what colour?")
+        await release()
+        await settle()
+        XCTAssertEqual(controller.notices.map(\.text), [CatWords.lostTheCorrection])
+        XCTAssertEqual(backend.sent.count, 2, "only the two router turns")
+    }
+
+    private let passedTheFixOn = "I asked another kitten to fix the plan: <t3-thread://v2/env/worker>."
+
+    private func correctTheInboxKitten() async {
+        kittens = [inboxKitten]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "CORRECTION: 1")]]
+        await ask(wrong)
+        await waitForSends(2)
+        XCTAssertEqual(sentTo("project-clawde")?.prompt.text.contains(note), true)
+    }
+
+    /// Passing the fix on is part of dealing with it, and what it says about that still has to reach you.
+    func testACorrectionsReportReachesTheInboxEvenWhenItPassesWorkOn() async {
+        await correctTheInboxKitten()
+        await finish(work("thread-2", title: "Clawde: Team size"), report: passedTheFixOn, sorted: "PASSED: yes")
+        XCTAssertEqual(rows.map(\.threadID), ["thread-2"])
+        XCTAssertFalse(controller.hiddenThreads.contains("thread-2"))
+    }
+
+    func testACorrectionsReportReachesTheInboxAfterARestart() async throws {
+        controller.keepInbox()
+        await correctTheInboxKitten()
+        controller = makeController(inbox: try XCTUnwrap(savedInbox))
+        await finish(work("thread-2", title: "Clawde: Team size"), report: passedTheFixOn, sorted: "PASSED: yes")
+        XCTAssertEqual(rows.map(\.threadID), ["thread-2"])
+    }
+
+    func testWorkThatOnlyPassedOnIsStillLeftOutOfTheInbox() async {
+        kittens = [inboxKitten]
+        backend.projects["/k/clawde"] = "project-clawde"
+        controller.give("Tidy the plan", to: inboxKitten, snapshot: nil)
+        await settle()
+        await finish(work("thread-1", title: "Clawde: Tidy"), report: passedTheFixOn, sorted: "PASSED: yes")
+        XCTAssertTrue(rows.isEmpty)
+    }
+
+    /// It named where the rest goes instead of numbering it, so that's lost, and the owner's is only a copy.
+    func testACorrectionBesideADestinationThatWasntNumberedIsOnlyACopy() async {
+        kittens = [steve, penny]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.projects["/k/penny"] = "project-penny"
+        controller.threadsChanged([session("w", "Work")])
+        let words = "Can I afford a laptop? And by the way \(wrong)."
+        for reply in ["CORRECTION: 1\nKITTEN: Penny", "CORRECTION: 1\nSEND TO: Work"] {
+            let before = backend.sent.count
+            stage.bubbles.removeAll()
+            backend.replies = [[.finished(fullText: reply)]]
+            await ask(words)
+            await waitForSends(before + 2)
+            let copy = sentTo("project-steve")
+            XCTAssertEqual(copy?.prompt.text.contains(note), true, reply)
+            XCTAssertEqual(copy?.prompt.text.contains("<screen>"), false, reply)
+            XCTAssertEqual(copy?.prompt.attachments.isEmpty, true, reply)
+            XCTAssertNil(sentTo("project-penny"), reply)
+            XCTAssertFalse(backend.sent.contains { $0.mode == .forward }, reply)
+            XCTAssertTrue(stage.bubbles.contains(.line(CatWords.lostTheSession, threadID: nil)), reply)
+        }
+    }
+
+    /// Its kitten's other thread passed it work, but it was given a correction since, so what it says still reaches you.
+    func testACorrectedThreadsReportShowsEvenAfterWorkWasPassedToIt() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("change the site")
+        await waitForSends(2)
+        var dispatcher = session("thread-2", "Change the site", status: .running)
+        dispatcher.projectPath = steve.folder
+        var worker = session("w2", "Site worker", status: .running, age: 10)
+        worker.projectPath = steve.folder
+        controller.threadsChanged([dispatcher, worker])
+
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nSEND TO: 1")]]
+        await ask(wrong)
+        await waitForSends(4)
+        XCTAssertEqual(backend.sent.last?.threadID, "w2")
+
+        backend.reports["thread-2"] = "The change went to <t3-thread://v2/env/w2>."
+        dispatcher.status = .completed
+        controller.threadsChanged([dispatcher, worker])
+        await controller.reportTask?.value
+        controller.notices.removeAll()
+
+        backend.reports["w2"] = "Fixed the team size to 12. I asked <t3-thread://v2/env/resume> to redo the resume."
+        worker.status = .completed
+        controller.threadsChanged([dispatcher, worker])
+        await controller.reportTask?.value
+        XCTAssertEqual(controller.notices.first?.threadID, "w2")
+        XCTAssertFalse(controller.hiddenThreads.contains("w2"))
+    }
+
+    /// Its reply was read and its correction sent before the connection dropped, so it did get through, and saying
+    /// it again would send the kitten a second correction.
+    func testAnOvertakenCorrectionThatGotThroughIsntCalledLost() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        let release = await askAndHold(wrong, then: [.finished(fullText: "CORRECTION: 1")])
+        backend.droppedAfterReply = nil
+        backend.replies = [[.finished(fullText: "Red.")]]
+        await ask("what colour?")
+        await release()
+        await settle()
+        XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains(note), true)
+        XCTAssertFalse(controller.notices.contains { $0.text == CatWords.earlierMessageFailed })
+    }
+
     // MARK: - Self-check
 
     func testAKittenWithNothingKeepingItOffTheScreenIsFound() async {
@@ -3460,6 +4384,77 @@ final class FlowTests: XCTestCase {
         backend.routerSays = ["Read this x thread": "KITTEN: 1"]
         await messages("Read this x thread", to: .router)
         XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.caption == "Steve Pawsniak has this." })
+    }
+
+    func testACorrectionInEveryoneReachesItsOwner() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.routerSays = [wrong: "CORRECTION: 1"]
+        controller.channelsPressed()
+        await messages(wrong, to: .router)
+        assertWordsOnly(sentTo("project-steve"))
+        XCTAssertFalse(everyoneSaid.contains(CatWords.noReply))
+    }
+
+    func testACorrectionAsAnAsideInEveryoneGetsItsOwnCopy() async {
+        kittens = [steve, penny]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.projects["/k/penny"] = "project-penny"
+        let words = "Can I afford a laptop? And by the way \(wrong)."
+        backend.routerSays = [words: "CORRECTION: 1\nKITTEN: 2"]
+        controller.channelsPressed()
+        await messages(words, to: .router)
+        XCTAssertEqual(sentTo("project-penny")?.prompt.text.contains(note), false)
+        XCTAssertEqual(sentTo("project-steve")?.prompt.text.hasPrefix(words), true)
+        XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains(note), true)
+        XCTAssertEqual(sentTo("project-steve")?.prompt.attachments.isEmpty, true)
+    }
+
+    func testACorrectionInEveryoneBesideADestinationThatWasntNumberedIsOnlyACopy() async {
+        kittens = [steve, penny]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.projects["/k/penny"] = "project-penny"
+        let words = "Can I afford a laptop? And by the way \(wrong)."
+        backend.routerSays = [words: "CORRECTION: 1\nKITTEN: Penny"]
+        controller.channelsPressed()
+        await messages(words, to: .router)
+        XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains(note), true)
+        XCTAssertNil(sentTo("project-penny"))
+        XCTAssertTrue(everyoneSaid.contains(CatWords.lostTheSession))
+    }
+
+    /// The router's turn can wait on an approval past the conversation's ten minutes, and what it said still counts.
+    func testACorrectionInEveryoneOutlastingItsConversationStillGoes() async {
+        kittens = [steve, penny]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.projects["/k/penny"] = "project-penny"
+        controller.channelsPressed()
+        let (opened, open) = AsyncStream.makeStream(of: Void.self)
+        backend.held = Task { for await _ in opened { break } }
+        backend.replies = [[]]
+        backend.afterHeld = [.finished(fullText: "CORRECTION: 1\nKITTEN: 2")]
+        controller.messagesAction(.send("Can I afford a laptop? And by the way \(wrong).", to: .router, shownIn: .everyone))
+        for _ in 0..<500 where backend.sent.isEmpty { await Task.yield() }
+        for _ in 0..<50 { await Task.yield() }
+        backend.held = nil
+        clock.addTimeInterval(QuickSession.lifetime + 1)
+        open.yield()
+        open.finish()
+        await controller.messagesTurn?.value
+        await settle()
+        await controller.frontierTask?.value
+        XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains(note), true)
+        XCTAssertNotNil(sentTo("project-penny"))
+        XCTAssertFalse(everyoneSaid.contains(CatWords.noReply))
+    }
+
+    /// A correction in a planned kitten's area goes to whoever takes those, so the router has to see it there too.
+    func testTheRouterInEveryoneSeesPlannedKittens() async {
+        kittens = [clawde, Kitten(name: "Pepper", role: "Finance", covers: "money", folder: "/k/pepper", planned: true)]
+        controller.channelsPressed()
+        await messages("my rent is 900, not 1200", to: .router)
+        let router = backend.sent.last { $0.prompt.text.hasPrefix("You are Shades,") }
+        XCTAssertEqual(router?.prompt.text.contains("- Pepper (Finance): money"), true)
     }
 }
 

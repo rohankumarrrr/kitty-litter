@@ -55,6 +55,8 @@ public struct Inbox: Codable, Equatable, Sendable {
     private var handled: [String: String] = [:]
     /// Each thread's last run you've seen in Messages. Only IDs, and files from before Messages don't have it.
     private var read: [String: String]?
+    /// Threads given a correction. Only IDs, and files from before corrections don't have it.
+    private var corrections: Set<String>?
 
     public init(since: Date) {
         self.since = since
@@ -128,6 +130,16 @@ public struct Inbox: Codable, Equatable, Sendable {
         for thread in unread { marks[thread.id] = thread.lastRunID }
         read = marks
         return true
+    }
+
+    /// What a thread says about a correction has to reach you, even if it passes work on, and after a restart too.
+    /// shortcut: this grows by an ID per correction, prune it if that ever matters.
+    public mutating func noteCorrection(in threadID: String) {
+        corrections = (corrections ?? []).union([threadID])
+    }
+
+    public func wasCorrected(_ threadID: String) -> Bool {
+        corrections?.contains(threadID) == true
     }
 
     /// Handled with no rows: it only passed the work on.

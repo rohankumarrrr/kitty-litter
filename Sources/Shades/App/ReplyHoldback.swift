@@ -14,7 +14,15 @@ struct ReplyHoldback {
         case kitten(number: Int)
     }
 
-    private static let markers = [Prompts.handoffMarker, Prompts.routeMarker, Prompts.kittenMarker, Prompts.rewriteMarker]
+    /// What a finished reply came to: the kittens it says have a correction, and the usual outcome for the rest.
+    struct Reading: Equatable {
+        var corrections: [Int]
+        var outcome: Outcome
+        /// The rest was meant for somewhere it didn't give a number for, so it isn't an answer of nothing.
+        var wentNowhere = false
+    }
+
+    private static let markers = [Prompts.handoffMarker, Prompts.routeMarker, Prompts.kittenMarker, Prompts.rewriteMarker, Prompts.correctionMarker]
 
     private(set) var text = ""
     private(set) var released = false
@@ -32,9 +40,20 @@ struct ReplyHoldback {
         return Self.withoutPointing(start)
     }
 
+    func read(fullText: String?) -> Reading {
+        let outcome = finish(fullText: fullText)
+        let rest = Self.visible(fullText ?? text).trimmingCharacters(in: .whitespacesAndNewlines)
+        let marked = [Prompts.routeMarker, Prompts.kittenMarker, Prompts.handoffMarker, Prompts.rewriteMarker].contains { rest.hasPrefix($0) }
+        return Reading(
+            corrections: Prompts.corrections(in: fullText ?? text).owners,
+            outcome: outcome,
+            wentNowhere: outcome == .answer("") && marked
+        )
+    }
+
     /// The reply is done, so it's clear what it was. Prefers the backend's full text, if any.
     func finish(fullText: String?) -> Outcome {
-        let full = fullText ?? text
+        let full = Prompts.corrections(in: fullText ?? text).rest
         if let session = Prompts.routeTarget(in: full) { return .route(session: session) }
         if let kitten = Prompts.kittenTarget(in: full) { return .kitten(number: kitten) }
         if let task = Prompts.handoffTask(in: full) { return .handoff(task: task) }
@@ -62,6 +81,6 @@ struct ReplyHoldback {
     }
 
     private static func visible(_ text: String) -> String {
-        String(text.drop(while: \.isWhitespace))
+        String(Prompts.corrections(in: text).rest.drop(while: \.isWhitespace))
     }
 }

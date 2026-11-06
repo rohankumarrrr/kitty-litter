@@ -1,6 +1,24 @@
 import Foundation
 import ShadesCore
 
+/// One question and the lists the router was shown for it. A reply's numbers only mean anything
+/// against these, so one that comes back late can't land on a newer list.
+struct QuickTurn {
+    let question: String
+    let snapshot: ScreenSnapshot?
+    /// What the router was shown, which is all it can point at.
+    let seen: ScreenSnapshot?
+    let generation: Int
+    let sessions: [AgentThread]
+    let kittens: [Kitten]
+    /// The conversation it's following up, if any, which is never its own to hide or archive.
+    let following: String?
+
+    func kitten(numbered number: Int) -> Kitten? {
+        kittens.indices.contains(number - 1) ? kittens[number - 1] : nil
+    }
+}
+
 /// Ask: look at the screen, take the question, stream the answer, and hand off real work.
 extension AppController {
     /// The cat was clicked. It always gets a word, and then you get to ask.
@@ -112,39 +130,48 @@ extension AppController {
 
     func runQuickTurn(_ question: String, snapshot: ScreenSnapshot?, generation: Int) async {
         await waitForThreadList()
-        guard generation == replyGeneration else { return }
+        // One that's been overtaken still goes to the router, because there could be a correction in it.
+        guard !takenBack.contains(generation) else { return }
 
         let current = quick.thread(at: now())
-        quickIsFresh = current == nil
+        if generation == replyGeneration { quickIsFresh = current == nil }
         let sessions = rosterThreads(excluding: current)
         let briefs = await briefs(for: sessions)
-        guard generation == replyGeneration else { return }
-        roster = sessions
-        kittens = loadKittens().filter { !$0.planned }
+        guard !takenBack.contains(generation) else { return }
+        let all = loadKittens()
+        let kittens = all.filter { !$0.planned }
         // Settings can change while T3 answers, so the model that's checked is the one that runs.
         let model = settings.quickModel
         let projectID: String
         do {
             projectID = try await routerProjectID(for: model)
         } catch {
-            guard generation == replyGeneration else { return }
-            reply = nil
-            say(CatWords.problem(error, while: .agents))
-            return
+            return quickTurnFailed(.failed(message: nil, error: error, sawText: false), generation: generation)
         }
-        guard generation == replyGeneration else { return }
-
+        guard !takenBack.contains(generation) else { return }
         // Whoever it's passed to gets their own say on the snapshot, so this only holds it back from here.
         let shared = settings.quickMode == .fullAccess ? nil : snapshot
         guard shared != nil || snapshot?.droppedName == nil else {
+            guard generation == replyGeneration else { return }
             reply = nil
             say(CatWords.cantTakeFiles(ModelNames.friendly(model)))
             return
         }
+        // A message queues behind one already running, so one that's been overtaken keeps out of the way.
+        let following = generation == replyGeneration ? quick.thread(at: now()) : nil
+        let turn = QuickTurn(
+            question: question,
+            snapshot: snapshot,
+            seen: shared,
+            generation: generation,
+            sessions: sessions,
+            kittens: kittens,
+            following: following
+        )
         let prompt = AgentPrompt(
             // A question can run over several lines, and a title can't.
             title: String(question.prefix { !$0.isNewline }.prefix(60)),
-            text: Prompts.quick(question: question, snapshot: shared, sessions: briefs, kittens: kittens),
+            text: Prompts.quick(question: question, snapshot: shared, sessions: briefs, kittens: kittens, notSetUp: all.filter(\.planned)),
             attachments: attachments(for: shared),
             model: model,
             runtimeMode: settings.quickMode,
@@ -153,19 +180,32 @@ extension AppController {
 
         let start: () -> AsyncThrowingStream<AgentReplyEvent, Error> = { [backend] in backend.start(prompt) }
         var end: TurnEnd
-        if let thread = quick.thread(at: now()) {
-            end = await consume(backend.followUp(threadID: thread, prompt), question: question, snapshot: snapshot, seen: shared, generation: generation)
+        if let following {
+            end = await consume(backend.followUp(threadID: following, prompt), turn: turn)
             // The old thread might have gone. Nothing was shown yet, so just start fresh.
-            if case .failed(_, _, false) = end {
-                quick.reset()
-                quickIsFresh = true
-                end = await consume(start(), question: question, snapshot: snapshot, seen: shared, generation: generation)
+            if case .failed(_, _, false) = end, !takenBack.contains(generation) {
+                if generation == replyGeneration {
+                    quick.reset()
+                    quickIsFresh = true
+                }
+                end = await consume(start(), turn: turn)
             }
         } else {
-            end = await consume(start(), question: question, snapshot: snapshot, seen: shared, generation: generation)
+            end = await consume(start(), turn: turn)
         }
 
-        guard generation == replyGeneration, case .failed(let message, let error, _) = end else { return }
+        quickTurnFailed(end, generation: generation)
+    }
+
+    private func quickTurnFailed(_ end: TurnEnd, generation: Int) {
+        guard case .failed(let message, let error, _) = end else { return }
+        guard generation == replyGeneration else {
+            // There could have been a correction in it, and nothing else will tell you it's gone.
+            if !takenBack.contains(generation) {
+                post(caption: CatWords.earlierMessageCaption, text: CatWords.earlierMessageFailed, threadID: nil)
+            }
+            return
+        }
         reply = nil
         if let error {
             say(CatWords.problem(error, while: .agents))
@@ -174,59 +214,83 @@ extension AppController {
         }
     }
 
-    /// `seen` is what the router was shown, which is all it can point at.
-    func consume(
-        _ stream: AsyncThrowingStream<AgentReplyEvent, Error>,
-        question: String,
-        snapshot: ScreenSnapshot?,
-        seen: ScreenSnapshot?,
-        generation: Int
-    ) async -> TurnEnd {
+    func consume(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>, turn: QuickTurn) async -> TurnEnd {
         var holdback = ReplyHoldback()
+        var thread: String?
         var finished = false
         do {
             for try await event in stream {
                 switch event {
                 case .started(let threadID):
-                    quick.use(threadID, at: now())
+                    thread = threadID
                     watch.markQuick(threadID)
-                    if generation == replyGeneration { reply?.threadID = threadID }
+                    guard turn.generation == replyGeneration else {
+                        // A thread of its own is only here to find a correction, so no newer question should route into it.
+                        if threadID != turn.following { hiddenThreads.insert(threadID) }
+                        continue
+                    }
+                    quick.use(threadID, at: now())
+                    reply?.threadID = threadID
                 case .text(let delta):
-                    guard let text = holdback.add(delta), generation == replyGeneration else { continue }
+                    guard let text = holdback.add(delta), turn.generation == replyGeneration else { continue }
                     reply?.text = text
                     renderBubble()
                 case .needsApproval(let request):
                     addApproval(request)
                 case .finished(let fullText):
                     finished = true
-                    finish(holdback.finish(fullText: fullText), question: question, snapshot: snapshot, seen: seen, generation: generation)
+                    finish(holdback.read(fullText: fullText), turn: turn, thread: thread)
                 case .failed(let message):
                     return .failed(message: message, error: nil, sawText: !holdback.text.isEmpty)
                 }
             }
         } catch {
+            // The reply was already read and acted on, so it got through, whatever broke after it.
+            if finished { return .finished }
             return .failed(message: nil, error: error, sawText: !holdback.text.isEmpty)
         }
         if !finished {
-            finish(holdback.finish(fullText: nil), question: question, snapshot: snapshot, seen: seen, generation: generation)
+            finish(holdback.read(fullText: nil), turn: turn, thread: thread)
         }
         return .finished
     }
 
-    func finish(_ outcome: ReplyHoldback.Outcome, question: String, snapshot: ScreenSnapshot?, seen: ScreenSnapshot?, generation: Int) {
+    func finish(_ reading: ReplyHoldback.Reading, turn: QuickTurn, thread: String?) {
         // The ten minutes run from the last time the thread was used.
-        if let threadID = quick.thread(at: now()) {
-            quick.use(threadID, at: now())
-            wrapUpQuickThread(threadID, after: outcome)
+        if let thread, thread == quick.thread(at: now()) {
+            quick.use(thread, at: now())
+            wrapUpQuickThread(thread, after: reading)
+        } else if let thread, hiddenThreads.contains(thread) {
+            // It was overtaken before it joined the conversation, so nothing will use it again.
+            Task { [backend] in try? await backend.archive(threadID: thread) }
         }
-        guard generation == replyGeneration else { return }
-        switch outcome {
+        // Esc takes a message back. Being overtaken only loses the rest of it.
+        guard !takenBack.contains(turn.generation) else { return }
+        let owners = reading.corrections.compactMap(turn.kitten(numbered:))
+        if owners.count < reading.corrections.count {
+            post(caption: CatWords.correctionCaption, text: CatWords.lostTheCorrection, threadID: nil)
+        }
+        var copies = owners
+        // Your words only, so a page that fools the router gains no new place to send what's on it.
+        defer { copies.forEach { give(turn.question, to: $0, snapshot: nil, as: .correctionCopy) } }
+        guard turn.generation == replyGeneration else { return }
+        switch reading.outcome {
         case .answer(let text, let point):
             // It only points with what the router was shown, and if it can't find the spot, it says so.
-            let region = point.flatMap { seen?.region(for: $0) }
+            let region = point.flatMap { turn.seen?.region(for: $0) }
             if text.isEmpty && region == nil {
                 reply = nil
-                say(point == nil ? CatWords.noReply : CatWords.cantPoint)
+                // A kitten takes a moment to say anything, and "thinking" shouldn't stay up until it does.
+                renderBubble()
+                if reading.wentNowhere, !reading.corrections.isEmpty {
+                    // The rest was meant for somewhere else, so the owner only gets its copy.
+                    say(CatWords.lostTheSession)
+                } else if owners.count == 1 {
+                    give(turn.question, to: owners[0], snapshot: turn.snapshot, as: .correction)
+                    copies = []
+                } else if reading.corrections.isEmpty {
+                    say(point == nil ? CatWords.noReply : CatWords.cantPoint)
+                }
             } else {
                 reply?.text = text.isEmpty ? CatWords.overHere : text
                 reply?.done = true
@@ -237,25 +301,30 @@ extension AppController {
         case .rewrite(let text):
             reply?.text = text
             reply?.done = true
-            if let selected = snapshot?.selectedText { reply?.replacing = (selected, snapshot?.bundleID) }
+            if let selected = turn.snapshot?.selectedText { reply?.replacing = (selected, turn.snapshot?.bundleID) }
             renderBubble()
         case .handoff(let task):
             reply = nil
-            handOff(task: task, question: question, snapshot: snapshot)
+            handOff(task: task, question: turn.question, snapshot: turn.snapshot)
         case .route(let session):
             reply = nil
-            guard roster.indices.contains(session - 1) else {
+            guard turn.sessions.indices.contains(session - 1) else {
                 say(CatWords.lostTheSession)
                 return
             }
-            forward(question, to: roster[session - 1], snapshot: snapshot)
+            let thread = turn.sessions[session - 1]
+            let home = owners.first { KittenBoard.isInFolder(thread.projectPath, of: $0) }
+            forward(turn.question, to: thread, snapshot: turn.snapshot, correction: home != nil)
+            copies.removeAll { $0 == home }
         case .kitten(let number):
             reply = nil
-            guard kittens.indices.contains(number - 1) else {
+            renderBubble()
+            guard let kitten = turn.kitten(numbered: number) else {
                 say(CatWords.lostTheSession)
                 return
             }
-            give(question, to: kittens[number - 1], snapshot: snapshot)
+            give(turn.question, to: kitten, snapshot: turn.snapshot, as: owners.contains(kitten) ? .correction : .work)
+            copies.removeAll { $0 == kitten }
         }
     }
 
@@ -275,11 +344,14 @@ extension AppController {
 
     /// Its job is done, whether that was answering or passing the work on. A new thread that
     /// only passed something on has nothing worth keeping, so it goes rather than cluttering T3.
-    private func wrapUpQuickThread(_ threadID: String, after outcome: ReplyHoldback.Outcome) {
+    private func wrapUpQuickThread(_ threadID: String, after reading: ReplyHoldback.Reading) {
         var passedOn = false
-        switch outcome {
+        switch reading.outcome {
         case .answer(let text, let point):
-            if text.isEmpty && point == nil { return }
+            if text.isEmpty && point == nil {
+                if reading.corrections.isEmpty { return }
+                passedOn = true
+            }
         case .rewrite:
             break
         case .handoff, .route, .kitten:
@@ -351,6 +423,25 @@ extension AppController {
         return [AgentAttachment(name: "screen.jpg", mimeType: "image/jpeg", data: jpeg)]
     }
 
+    /// Why an agent's being started, which decides how you hear about it.
+    enum Errand {
+        /// Real work, which it may pass on to another thread.
+        case work
+        /// A correction, whose report has to reach you even if it starts threads elsewhere.
+        case correction
+        /// The same, while the rest of the message goes somewhere else.
+        case correctionCopy
+    }
+
+    /// A copy goes out alongside the rest of the message, so it waits its turn rather than talking over that.
+    func tell(_ text: String, threadID: String? = nil, as errand: Errand) {
+        if errand == .correctionCopy {
+            post(caption: CatWords.correctionCaption, text: text, threadID: threadID)
+        } else {
+            say(text, threadID: threadID)
+        }
+    }
+
     /// `onStarted` hears the new thread, or `nil` if there isn't one. `asked` is the question it came from, if not the latest.
     func startFrontier(
         title: String?,
@@ -358,6 +449,7 @@ extension AppController {
         snapshot: ScreenSnapshot?,
         projectID: String? = nil,
         name: String? = nil,
+        as errand: Errand = .work,
         missesScreen: Bool = false,
         asked: Int? = nil,
         onStarted: ((String?) -> Void)? = nil
@@ -372,7 +464,7 @@ extension AppController {
             runtimeMode: settings.frontierMode,
             projectID: projectID
         )
-        say(CatWords.handingOff(modelName: name), seconds: nil)
+        if errand != .correctionCopy { say(CatWords.handingOff(modelName: name), seconds: nil) }
         frontierTask = Task {
             var startedThread: String?
             var warning: Int?
@@ -381,26 +473,31 @@ extension AppController {
                     switch event {
                     case .started(let threadID):
                         startedThread = threadID
-                        dispatchers.insert(threadID)
+                        if errand == .work { dispatchers.insert(threadID) } else { noteCorrection(in: threadID) }
                         onStarted?(threadID)
-                        warning = sayPassedOn(CatWords.onIt(modelName: name), threadID: threadID, missesScreen: missesScreen, asked: asked)
+                        let said = errand == .correctionCopy ? CatWords.correctionSent(to: name) : CatWords.onIt(modelName: name)
+                        if missesScreen {
+                            warning = sayPassedOn(said, threadID: threadID, missesScreen: true, asked: asked)
+                        } else {
+                            tell(said, threadID: threadID, as: errand)
+                        }
                     case .needsApproval(let request):
                         addApproval(request)
                     case .failed(let message):
                         // Only this turn's, since words sent to the thread after it started still went without your screen.
                         if let warning { takeBackNotice(warning) }
-                        say(message)
+                        tell(message, as: errand)
                     case .text, .finished:
                         break
                     }
                 }
                 if startedThread == nil {
                     onStarted?(nil)
-                    say(CatWords.noReply)
+                    tell(CatWords.noReply, as: errand)
                 }
             } catch {
                 if startedThread == nil { onStarted?(nil) }
-                say(CatWords.problem(error, while: .agents))
+                tell(CatWords.problem(error, while: .agents), as: errand)
             }
         }
     }
