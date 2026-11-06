@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import ShadesCore
 
 /// Messages on your phone: the page, a stream of what one place in Messages shows, and what you do there, which goes
@@ -20,6 +20,7 @@ final class PhoneLink {
     }
 
     let door: PhoneDoor
+    let pushes: PhonePushes
     var onPaired: (() -> Void)?
     private let server = PhoneServer()
     /// Holds Messages open, and returns what it shows.
@@ -35,8 +36,17 @@ final class PhoneLink {
     private var book: ChannelBook?
     private var letting: Task<Void, Never>?
 
-    init(keys: PhoneKeyStoring, grace: TimeInterval, hold: @escaping () -> ChannelBook?, release: @escaping () -> Void, act: @escaping (MessagesAction) -> Void, now: @escaping () -> Date) {
+    init(
+        keys: PhoneKeyStoring,
+        grace: TimeInterval,
+        hold: @escaping () -> ChannelBook?,
+        release: @escaping () -> Void,
+        act: @escaping (MessagesAction) -> Void,
+        sendPush: @escaping (URLRequest) async -> Int?,
+        now: @escaping () -> Date
+    ) {
         door = PhoneDoor(keys: keys)
+        pushes = PhonePushes(keys: keys, send: sendPush)
         self.grace = grace
         self.hold = hold
         self.release = release
@@ -85,6 +95,13 @@ final class PhoneLink {
             return .full(status: 200, type: "text/javascript; charset=utf-8", body: Data(PhonePage.script.utf8))
         case ("GET", "/app.css"):
             return .full(status: 200, type: "text/css; charset=utf-8", body: Data(PhonePage.style.utf8))
+        // What a phone needs to keep the page on its Home Screen, and to show notifications while it's closed.
+        case ("GET", "/manifest.json"):
+            return .full(status: 200, type: "application/manifest+json", body: Data(PhonePage.manifest.utf8))
+        case ("GET", "/sw.js"):
+            return .full(status: 200, type: "text/javascript; charset=utf-8", body: Data(PhonePage.worker.utf8))
+        case ("GET", "/icon.png"):
+            return .full(status: 200, type: "image/png", body: Self.icon)
         case ("GET", "/hello"):
             return door.admits(request) ? .status(204) : .status(401)
         case ("POST", "/pair"):
@@ -93,7 +110,11 @@ final class PhoneLink {
             return door.admits(request) ? watch(request.query["key"] ?? PhonePlace.home) : .status(401)
         case ("POST", "/act"):
             return door.admits(request) ? perform(request) : .status(401)
-        case (_, "/"), (_, "/hello"), (_, "/pair"), (_, "/events"), (_, "/act"):
+        case ("GET", "/push"):
+            return door.admits(request) ? .json(["key": pushes.publicKey]) : .status(401)
+        case ("POST", "/push"):
+            return door.admits(request) ? subscribe(request) : .status(401)
+        case (_, "/"), (_, "/hello"), (_, "/pair"), (_, "/events"), (_, "/act"), (_, "/push"):
             return .status(405)
         default:
             return .status(404)
@@ -148,6 +169,24 @@ final class PhoneLink {
         book = nil
         release()
     }
+
+    private func subscribe(_ request: PhoneServer.Request) -> PhoneServer.Response {
+        guard Self.isFromPage(request), let subscription = try? JSONDecoder().decode(WebPush.Subscription.self, from: request.body) else { return .status(400) }
+        return pushes.subscribe(subscription) ? .status(204) : .status(400)
+    }
+
+    /// The app's own icon, at the size a Home Screen wants.
+    private static let icon: Data = {
+        let side = 180
+        let image = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return Data() }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+        NSGraphicsContext.restoreGraphicsState()
+        return bitmap.representation(using: .png, properties: [:]) ?? Data()
+    }()
 
     private struct Opened: Encodable {
         var open: String?

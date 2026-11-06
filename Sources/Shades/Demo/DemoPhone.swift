@@ -36,6 +36,18 @@ final class DemoPhone {
         }
     }
 
+    /// Runs the body of an async function in the page, so it can wait on the page's own requests.
+    func runAsync(_ body: String) async -> String {
+        await withCheckedContinuation { continuation in
+            view.callAsyncJavaScript(body, arguments: [:], in: nil, in: .page) { result in
+                switch result {
+                case .success(let value): continuation.resume(returning: "\(value)")
+                case .failure(let error): continuation.resume(returning: "failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     func draw(to file: URL) async -> Bool {
         guard let image = try? await view.takeSnapshot(configuration: nil),
               let tiff = image.tiffRepresentation,

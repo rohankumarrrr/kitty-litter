@@ -69,7 +69,10 @@ MainActor.assumeIsolated {
                     guard let tailscale else { throw TailscaleServe.Problem(errorDescription: "A copy trying a flow out stays off your tailnet.") }
                     return try await tailscale.serve(to: port)
                 },
-                stopServingPhone: { await tailscale?.stop() }
+                stopServingPhone: { await tailscale?.stop() },
+                sendPush: { request in
+                    (try? await URLSession(configuration: .ephemeral).data(for: request)).flatMap { ($0.1 as? HTTPURLResponse)?.statusCode }
+                }
             ),
             stage: stage
         )

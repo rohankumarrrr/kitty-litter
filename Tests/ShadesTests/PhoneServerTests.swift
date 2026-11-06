@@ -1,3 +1,4 @@
+import CryptoKit
 @testable import Shades
 import ShadesCore
 import XCTest
@@ -13,6 +14,9 @@ final class PhoneServerTests: XCTestCase {
     /// What Tailscale was asked, in order.
     private var tailscale: [String] = []
     private var serveTakes: UInt64 = 0
+    /// What was sent to phones' push services, and what they answer.
+    private var pushed: [URLRequest] = []
+    private var pushAnswer = 201
     private var controller: AppController!
     private var port: UInt16 = 0
     private let penny = Kitten(name: "Penny", role: "Finance", covers: "their money", folder: "/k/penny")
@@ -48,7 +52,11 @@ final class PhoneServerTests: XCTestCase {
                     self.tailscale.append("serve \(port)")
                     return "https://mac.example.ts.net:4797"
                 },
-                stopServingPhone: { [unowned self] in self.tailscale.append("off") }
+                stopServingPhone: { [unowned self] in self.tailscale.append("off") },
+                sendPush: { [unowned self] in
+                    self.pushed.append($0)
+                    return self.pushAnswer
+                }
             ),
             stage: stage
         )
@@ -256,6 +264,85 @@ final class PhoneServerTests: XCTestCase {
         turnOff()
         await until { !tailscale.isEmpty }
         XCTAssertEqual(tailscale, ["off"])
+    }
+
+    // MARK: - Notifications
+
+    private let phone = P256.KeyAgreement.PrivateKey()
+    private let phoneAuth = Data(repeating: 9, count: 16)
+
+    private func subscribe(key: String, endpoint: String = "https://web.push.apple.com/QGuW") async throws -> Int {
+        let subscription = #"{"endpoint":"\#(endpoint)","p256dh":"\#(WebPush.string(phone.publicKey.x963Representation))","auth":"\#(WebPush.string(phoneAuth))"}"#
+        return try await send("POST", "/push", json: subscription, key: key, headers: ["X-Shades": "1"]).response.statusCode
+    }
+
+    private func approvalNow() {
+        let asking = AgentThread(
+            id: "w", title: "Budget", projectTitle: "Penny", status: .waitingForApproval, model: "m", updatedAt: Date(),
+            pendingApprovals: [ApprovalRequest(id: "r1", threadID: "w", threadTitle: "Budget", kind: .command, summary: "rm -rf build", createdAt: Date())],
+            projectPath: penny.folder
+        )
+        controller.threadsChanged([asking])
+    }
+
+    func testANotificationSaysOnlyWhoAndWhatKind() async throws {
+        let key = try await pair()
+        let (asked, body) = try await send("GET", "/push", key: key)
+        XCTAssertEqual(asked.statusCode, 200)
+        let signing = try XCTUnwrap((try JSONSerialization.jsonObject(with: body) as? [String: Any])?["key"] as? String)
+        let subscribed = try await subscribe(key: key)
+        XCTAssertEqual(subscribed, 204)
+
+        approvalNow()
+        await until { !pushed.isEmpty }
+        let request = try XCTUnwrap(pushed.first)
+        XCTAssertEqual(request.url?.absoluteString, "https://web.push.apple.com/QGuW")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Encoding"), "aes128gcm")
+        XCTAssertTrue(request.value(forHTTPHeaderField: "Authorization")?.hasSuffix(", k=\(signing)") == true, "signed with the key the phone subscribed with")
+        let opened = try WebPush.decrypt(XCTUnwrap(request.httpBody), with: phone, auth: phoneAuth)
+        XCTAssertEqual(try JSONSerialization.jsonObject(with: opened) as? [String: String], ["title": "Penny needs an approval", "tag": "r1"], "and nothing they asked")
+        XCTAssertFalse(String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self).contains("Penny"), "the push service only sees that Shades sent something")
+
+        approvalNow()
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(pushed.count, 1, "once, as on the Mac")
+    }
+
+    func testOnlyAPairedPhoneSubscribesAndOnlyToAPushService() async throws {
+        let refused = try await subscribe(key: "made-up")
+        XCTAssertEqual(refused, 401)
+        let key = try await pair()
+        let elsewhere = try await subscribe(key: key, endpoint: "https://127.0.0.1:4797/act")
+        XCTAssertEqual(elsewhere, 400, "or a phone could have Shades send requests anywhere")
+        XCTAssertEqual(keys.load(PhoneKeys.pushes), [])
+    }
+
+    func testAPhoneItsPushServiceSaysIsGoneStopsGettingThem() async throws {
+        let key = try await pair()
+        _ = try await subscribe(key: key)
+        pushAnswer = 410
+        approvalNow()
+        await until { keys.load(PhoneKeys.pushes).isEmpty }
+        XCTAssertEqual(keys.load(PhoneKeys.pushes), [])
+    }
+
+    func testTurningItOffStopsEveryPhonesNotifications() async throws {
+        let key = try await pair()
+        _ = try await subscribe(key: key)
+        XCTAssertEqual(keys.load(PhoneKeys.pushes).count, 1)
+        turnOff()
+        XCTAssertEqual(keys.load(PhoneKeys.pushes), [])
+        approvalNow()
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(pushed, [])
+    }
+
+    func testTheSigningKeyLastsSoSubscriptionsKeepWorking() async throws {
+        let key = try await pair()
+        let first = try await send("GET", "/push", key: key).body
+        let again = PhonePushes(keys: keys, send: { _ in nil }).publicKey
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: first) as? [String: Any])?["key"] as? String, again)
+        XCTAssertEqual(keys.load(PhoneKeys.signing).count, 1)
     }
 
     private func turnOff() {

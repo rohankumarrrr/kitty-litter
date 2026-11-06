@@ -42,4 +42,6 @@ struct AppDependencies {
     var servePhone: (UInt16) async throws -> String = { _ in throw TailscaleServe.Problem(errorDescription: "Tailscale isn't set up here.") }
     /// Takes it off your tailnet.
     var stopServingPhone: () async -> Void = {}
+    /// Sends a notification to a phone's push service, and returns its status, or `nil` if it didn't get there.
+    var sendPush: (URLRequest) async -> Int? = { _ in nil }
 }

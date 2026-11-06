@@ -1,0 +1,18 @@
+front
+phone on
+wait 3
+phone pair
+wait 1
+phone open
+wait 4
+phone text
+draw .verify/shades/phone-notifications/1-home
+wait 2
+phone subscribe
+wait 2
+approval command npm run build && npm test
+wait 3
+question
+wait 3
+front
+windows

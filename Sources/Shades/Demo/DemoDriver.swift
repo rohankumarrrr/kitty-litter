@@ -112,13 +112,21 @@ final class DemoDriver {
         case "answer":
             // The same as typing into a question card's box.
             runOnPhone("(() => { const i = document.querySelector('.card input'); if (!i) return 'no box'; i.value = \(DemoPhone.quoted(rest)); i.dispatchEvent(new Event('input')); return 'typed' })()")
+        case "subscribe":
+            // What turning notifications on does, with a stand-in for the phone's push service.
+            guard let phone else { return print("The page isn't open. Try: phone open") }
+            let subscription = String(decoding: (try? JSONEncoder().encode(Demo.phoneSubscription)) ?? Data(), as: UTF8.self)
+            Task {
+                print("[phone] subscribed: \(await phone.runAsync("const r = await post('/push', \(subscription)); return r ? String(r.status) : 'unreachable'"))")
+                fflush(stdout)
+            }
         case "text":
             runOnPhone("document.body.innerText.split('\\n').filter((l) => l.trim()).join(' | ')")
         case "close":
             phone?.close()
             phone = nil
         default:
-            print("phone on | off | pair | open [place] | go [place] | send [words] | press [button] | answer [words] | text | close")
+            print("phone on | off | pair | open [place] | go [place] | send [words] | press [button] | answer [words] | subscribe | text | close")
         }
     }
 
@@ -156,7 +164,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|[kitten] | thread | back | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|text|close | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
+            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|[kitten] | thread | back | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|close | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
