@@ -143,6 +143,7 @@ enum CatWords {
     static let lostTheSession = "I lost track of which session that was for. Try asking again?"
     static func sentTo(_ thread: AgentThread) -> String { sentTo(thread.title) }
     static func sentTo(_ title: String) -> String { "Sent that to \(title)." }
+    static let sendTheLink = "It can't see your screen, so send the link or paste the text."
     static func passedOn(to title: String?) -> String {
         title.map { "Work's started in a new session: \($0)." } ?? "Work's started in a new session."
     }

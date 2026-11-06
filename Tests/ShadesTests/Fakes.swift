@@ -136,6 +136,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     var whileFindingAProject: (() async -> Void)?
     var connectError: Error?
     var streamError: Error?
+    var forwardError: Error?
     var droppedAfterReply: Error?
     var runReports: [String: String] = [:]
     var silentRuns: Set<String> = []
@@ -161,6 +162,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
             return count
         }
         if holdStarts { return AsyncThrowingStream { $0.yield(.started(threadID: "thread-\(id)")) } }
+        if let holdTurn, prompt.text.hasPrefix(holdTurn) { return heldTurn(threadID: "thread-\(id)") }
         return play(threadID: "thread-\(id)", prompt: prompt)
     }
 
@@ -174,6 +176,8 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
 
     /// The router's turn for this question starts, then waits for `releaseHeld()`.
     var holdQuestion: String?
+    /// A new thread's first turn, or a follow-up, whose text starts with this starts, then waits for `releaseHeld()`.
+    var holdTurn: String?
     private var held: [() -> Void] = []
     func releaseHeld() {
         let waiting = lock.withLock { () -> [() -> Void] in
@@ -181,6 +185,19 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
             return held
         }
         waiting.forEach { $0() }
+    }
+
+    private func heldTurn(threadID: String) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        let events = lock.withLock { replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst() }
+        return AsyncThrowingStream { continuation in
+            continuation.yield(.started(threadID: threadID))
+            lock.withLock {
+                held.append {
+                    events.forEach { continuation.yield($0) }
+                    continuation.finish()
+                }
+            }
+        }
     }
 
     /// What Messages reads: every thread, and what was said in each.
@@ -220,8 +237,12 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     }
 
     func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        if let forwardError {
+            return AsyncThrowingStream { $0.finish(throwing: forwardError) }
+        }
         let prompt = AgentPrompt(text: text, attachments: attachments, model: .quick, runtimeMode: .auto)
         lock.withLock { _sent.append(Sent(mode: .forward, threadID: threadID, prompt: prompt)) }
+        if let holdTurn, text.hasPrefix(holdTurn) { return heldTurn(threadID: threadID) }
         return play(threadID: threadID)
     }
 

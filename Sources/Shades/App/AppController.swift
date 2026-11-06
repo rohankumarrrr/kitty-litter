@@ -64,6 +64,11 @@ final class AppController {
         var threadID: String?
         /// Set for a question, which goes away by itself once it's answered.
         var questionID: String?
+        /// For a screen warning on work handed to a thread that had already finished a run, that run, which isn't the work.
+        var after: String?
+        /// A follow-up's warning. The list only names the run a thread last finished, so it can't say which run is
+        /// carrying your words, and only the send's own turn failing takes the warning back.
+        var followUp = false
     }
     struct Line {
         var text: String
@@ -121,6 +126,8 @@ final class AppController {
     var quickIsFresh = false
     var lineCounter = 0
     var replyGeneration = 0
+    /// Only goes up when you ask something, unlike `replyGeneration`, which closing a reply moves on too.
+    var questionsAsked = 0
 
     enum VoiceMode {
         case talk, dictate

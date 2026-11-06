@@ -30,6 +30,237 @@ final class QuickSessionTests: XCTestCase {
     }
 }
 
+final class ScreenWordsTests: XCTestCase {
+    func testWordsThatOnlyMakeSenseWithTheScreen() {
+        for words in [
+            "Read this x thread, and see what lessons we can take from it to improve our kitten litter.",
+            "look at this",
+            "See this? Do that for the kittens",
+            "What's this?",
+            "What\u{2019}s this?",
+            "whats this",
+            "what does this say",
+            "What does this error mean?",
+            "what are these",
+            "Summarize this",
+            "check out this repo",
+            "thoughts on this?",
+            "what do you think of this",
+            "What can we learn from this article?",
+            "Is this reddit post right about the install?",
+            "compare these screenshots",
+            "Is this email a scam?",
+            "Is this website legit?",
+            "Check this link",
+            "what's on my screen?",
+            "what I'm looking at",
+            "the article I\u{2019}m reading",
+            "Quick one: read this x thread",
+            "He said \"wow\" about this article",
+        ] {
+            XCTAssertTrue(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    func testWordsThatStandOnTheirOwn() {
+        for words in [
+            "Steve should stop doing that",
+            "and that part?",
+            "Make the bubble a little bigger",
+            "Fix the install script",
+            "Stop doing this",
+            "Let's do this",
+            "Why did this happen?",
+            "Can you ship this today?",
+            "Does this fix the error?",
+            "Check that the page loads",
+            "I read that the new model is out",
+            "the cat sits too low on the screen",
+            "I'm reading the logs now",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    func testThisWeekPointsAtTheCalendar() {
+        for words in [
+            "What should we build this week?",
+            "What's this month's budget?",
+            "What's this week looking like?",
+            "What does this month look like for rent?",
+            "What does this Friday mean for the release?",
+            "What's this Friday look like?",
+            "Look at this month's spending and tell me if I'm over",
+            "Summarize this week",
+            "Summarize this past week",
+            "Check out this coming week's schedule",
+            "Thoughts on this week's plan?",
+            "What do you think of this week's release?",
+            "Read this week's notes and tell me what's due",
+            "Check out this weekend's schedule",
+            "Write this week's blog post",
+            "Send this week's email to the team",
+            "What do people read these days?",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    func testThisAloneIsntEnough() {
+        for words in [
+            "What does this change do?",
+            "Explain this function",
+            "What is this test for?",
+            "Is this error fixed now?",
+            "Is this doc up to date?",
+            "What are these warnings in the build?",
+            "Did this comment get pushed?",
+            "What does this PR do?",
+            "See this through to the end",
+            "Is this thread-safe?",
+            "Does this window take focus?",
+            "Export this to PDF",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    func testAFollowUpsThisIsUsuallyTheSessionsOwnWork() {
+        for words in [
+            "Look at this error",
+            "Look at this function and fix it",
+            "Read this file and tell me what it does",
+            "Check out this branch and run the tests",
+            "Summarize this PR",
+            "Translate this function to Swift",
+            "what does this say?",
+            "What's this?",
+            "Is this page up to date?",
+            "Make this page load faster",
+            "Does this link work now?",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words, isFollowUp: true), words)
+            XCTAssertTrue(ScreenWords.pointAtScreen(words), "a new thread has nothing else it could mean: \(words)")
+        }
+    }
+
+    func testAFollowUpStillWarnsWhenItNamesSomethingOutsideTheConversation() {
+        for words in [
+            "Read this x thread, and see what lessons we can take from it to improve our kitten litter.",
+            "Is this tweet right?",
+            "what's on my screen?",
+            "the article I'm reading",
+        ] {
+            XCTAssertTrue(ScreenWords.pointAtScreen(words, isFollowUp: true), words)
+        }
+    }
+
+    func testALinkMeansTheyAlreadySentIt() {
+        XCTAssertFalse(ScreenWords.pointAtScreen("Read this x thread https://x.com/someone/status/1"))
+        XCTAssertFalse(ScreenWords.pointAtScreen("Read this x thread x.com/someone/status/1"))
+        XCTAssertFalse(ScreenWords.pointAtScreen("Read this www.example.com"))
+    }
+
+    func testASitesNameIsntTheLink() {
+        for words in ["Read this thread on x.com", "Summarize this article from nytimes.com", "Read this email from sam@example.com", "Read this thread on httpbin.org"] {
+            XCTAssertTrue(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    /// Code is where follow-ups usually go, and plenty of it is named after things on a page.
+    func testCodeNamedAfterAThingIsntTheThing() {
+        for words in [
+            "Why is this thread pool deadlocking?",
+            "Why does this post request return 404?",
+            "Fix this video player so it autoplays",
+            "Make this photo upload faster",
+            "Add a test for this image picker",
+            "Why does this blog post component re-render?",
+            "Make this blog post list load faster",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words, isFollowUp: true), words)
+            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+        XCTAssertTrue(ScreenWords.pointAtScreen("Is this tweet right?", isFollowUp: true))
+        XCTAssertTrue(ScreenWords.pointAtScreen("Read this blog post", isFollowUp: true))
+    }
+
+    /// Doing what the cat says mustn't get the same advice again.
+    func testPastedTextDoesntGetAskedForAgain() {
+        for words in [
+            "Summarize this: the build failed because the signing key expired.",
+            "Read this: Shades is a desktop cat.",
+            "Translate this to Spanish: where is the library?",
+            "Thoughts on this tweet: \"ship small, ship often\"",
+            "Read this \"ship small, ship often\"",
+            "Read this \u{201C}ship small, ship often\u{201D}",
+            "The build failed because the signing key expired. Summarize this.",
+            "Build failed: errSecInternalComponent on codesign. What does this mean?",
+            "ship small, ship often. Thoughts on this?",
+            "\"ship small, ship often\" what do you think of this?",
+            "\"ship small, ship often\"\n\nRead this and tell me what lessons we can take from it",
+            "Summarize this:\n- the build failed\n- the signing key expired",
+            "What does this mean: `errSecInternalComponent`",
+            "Translate this: \u{BF}D\u{F3}nde est\u{E1} la biblioteca?",
+            "Thoughts on this: [error] build failed on main",
+            "Translate this \"\u{BF}D\u{F3}nde est\u{E1} la biblioteca?\"",
+            "Translate this \u{201C}\u{BF}D\u{F3}nde est\u{E1} la biblioteca?\u{201D}",
+            "Thoughts on this \"[error] build failed on main\"",
+            "Thoughts on this tweet\u{2014}\u{201C}ship small, ship often\u{201D}",
+            "Thoughts on this tweet\u{2014}\"ship small, ship often\"",
+            "Read this (\u{201C}ship small, ship often\u{201D})",
+            "Read this (\"ship small, ship often\")",
+            "Thoughts on this tweet--\"ship small, ship often\"",
+            "Thoughts on this tweet-\"ship small, ship often\"",
+            "What does this error mean {\"error\":\"invalid_grant\"}",
+            "the build failed because the signing key expired\n\nSummarize this",
+            "Summarize this\n\nThe build failed because the signing key expired.",
+        ] {
+            XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    func testPunctuationAloneIsntPastedText() {
+        for words in [
+            "Read this x thread, and see what lessons we can take from it to improve our kitten litter :)",
+            "Read this x thread before my 3:30 call",
+            "Read this:",
+            "Read this :)",
+            "Read this \"",
+            "Read this \"\"",
+            "Read this \u{201C}\u{201D}",
+            "Read this \" :)",
+            "Read this \"?",
+            "Summarize \"this article\".",
+            "What do you think of \"this video\"?",
+            "Sam sent me \"this video\", is it right?",
+            "Sam sent me \"this video\" - is it right?",
+            "Sam sent me \"this video\"\u{2014}is it right?",
+            "What do you think of \"this video\"\u{2026}",
+            "Read this \"\u{2026}\"",
+            "Read this \"-\"",
+            "Read this \"\u{2014}\"",
+            "Read this \" =)",
+            "Read this \"]\"",
+            "Read this \"\u{2019}\"",
+            "Read this \"\u{FF1F}\"",
+            "Read this \" \u{1F642}",
+            "What do you think of \"this video\" \u{1F914}",
+            "Hey there: read this x thread",
+            "Read this x thread\n",
+        ] {
+            XCTAssertTrue(ScreenWords.pointAtScreen(words), words)
+        }
+    }
+
+    func testLotsOfTextMeansTheyPastedIt() {
+        let fits = "Read this " + String(repeating: "x", count: 270)
+        XCTAssertEqual(fits.count, 280)
+        XCTAssertTrue(ScreenWords.pointAtScreen(fits))
+        XCTAssertFalse(ScreenWords.pointAtScreen(fits + "x"))
+    }
+}
+
 final class ApprovalQueueTests: XCTestCase {
     private func request(_ id: String, at time: TimeInterval = 0, kind: ApprovalKind = .command) -> ApprovalRequest {
         ApprovalRequest(id: id, threadID: "t", threadTitle: "Thread", kind: kind, summary: "do \(id)", createdAt: Date(timeIntervalSince1970: time))

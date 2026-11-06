@@ -56,6 +56,7 @@ extension AppController {
     /// All this thread did was start another one, so that's where the work is now.
     func passedOn(_ thread: AgentThread, to next: String) {
         dispatchers.insert(next)
+        moveScreenWarnings(from: thread.id, to: next)
         // Work that came from Everyone keeps answering there from wherever it moves, and what it said before stays.
         if let since = messagesThreads[thread.id] { messagesThreads[next] = min(since, messagesThreads[next] ?? since) }
         hiddenThreads.insert(thread.id)
@@ -151,9 +152,9 @@ extension AppController {
     }
 
     /// Notices wait their turn behind each other and anything more urgent, so none get lost.
-    func post(caption: String, text: String, threadID: String?, questionID: String? = nil) {
+    func post(caption: String, text: String, threadID: String?, questionID: String? = nil, first: Bool = false) {
         lineCounter += 1
-        notices.append(Notice(id: lineCounter, caption: caption, text: text, threadID: threadID, questionID: questionID))
+        notices.insert(Notice(id: lineCounter, caption: caption, text: text, threadID: threadID, questionID: questionID), at: first ? 0 : notices.count)
         renderBubble()
     }
 

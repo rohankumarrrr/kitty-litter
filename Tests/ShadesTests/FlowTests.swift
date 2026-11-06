@@ -474,6 +474,469 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(forwarded.attachments.isEmpty)
     }
 
+    private let sendTheLink = "It can't see your screen, so send the link or paste the text."
+
+    private func askClawde(_ words: String, thenReply second: [AgentReplyEvent] = [.finished(fullText: "Started.")]) async {
+        kittens = [clawde]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], second]
+        await ask(words)
+        await controller.frontierTask?.value
+    }
+
+    /// What actually happened: the kitten could only ask for the link about a minute later.
+    func testWordsThatPointAtAScreenAKittenWontGetSayWhatToDoAndStillGo() async {
+        await askClawde("Read this x thread, and see what lessons we can take from it")
+
+        XCTAssertEqual(stage.bubble, .notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2"))
+        let given = backend.sent[1].prompt
+        XCTAssertTrue(given.text.hasPrefix("Read this x thread, and see what lessons we can take from it\n"))
+        XCTAssertFalse(given.text.contains("<screen>"))
+        XCTAssertTrue(given.attachments.isEmpty)
+    }
+
+    func testAKittenWithFullAccessGetsTheSameWarning() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        useFullAccess(frontier: true)
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("Read this x thread")
+        await controller.frontierTask?.value
+
+        XCTAssertEqual(stage.bubble, .notice(caption: "Steve Pawsniak has this.", text: sendTheLink, threadID: "thread-2"))
+        XCTAssertFalse(backend.sent[1].prompt.text.contains("<screen>"))
+    }
+
+    func testAKittenThatSeesTheScreenGetsNoWarning() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("Read this x thread")
+        await controller.frontierTask?.value
+        XCTAssertEqual(stage.bubble, .line("Steve Pawsniak has this.", threadID: "thread-2"))
+        XCTAssertTrue(backend.sent[1].prompt.text.contains("<screen>"))
+    }
+
+    func testWordsThatDontPointAtTheScreenGetNoWarning() async {
+        await askClawde("Steve should stop doing that")
+        XCTAssertEqual(stage.bubble, .line("Clawde has this.", threadID: "thread-2"))
+    }
+
+    func testNothingIsSaidAboutTheScreenWhenNothingWent() async {
+        kittens = [clawde]
+        backend.replies = [[.finished(fullText: "KITTEN: 1")]]
+        await ask("Read this x thread")
+        XCTAssertEqual(stage.bubble, .line(CatWords.notSetUp(clawde), threadID: nil))
+        XCTAssertFalse(stage.bubbles.contains { bubble in
+            if case .notice? = bubble { return true }
+            return false
+        })
+    }
+
+    func testAFollowUpThatPointsAtTheScreenWarnsForBothReasons() async {
+        kittens = [clawde]
+        controller.threadsChanged([session("w", "Clawde: Fix routing")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("Read this x thread")
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Clawde: Fix routing.", text: sendTheLink, threadID: "w"))
+        XCTAssertTrue(backend.sent[1].prompt.text.hasPrefix("Read this x thread"))
+
+        kittens = []
+        controller.threadsChanged([session("f", "Work", mode: .fullAccess)])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("Read this x thread")
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
+    }
+
+    func testAFollowUpToASessionThatSeesTheScreenGetsNoWarning() async {
+        controller.threadsChanged([session("w", "Work")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("Read this x thread")
+        XCTAssertEqual(stage.bubble, .line("Sent that to Work.", threadID: "w"))
+    }
+
+    func testAFollowUpsThisIsItsOwnWorkButANewThreadsIsTheScreen() async {
+        controller.threadsChanged([session("f", "Work", mode: .fullAccess)])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("Read this file and tell me what it does")
+        XCTAssertEqual(stage.bubble, .line("Sent that to Work.", threadID: "f"))
+
+        await askClawde("Read this file and tell me what it does")
+        guard case .notice(_, sendTheLink, _)? = stage.bubble else { return XCTFail("a new thread has nothing else it could mean") }
+    }
+
+    func testASendThatFailsTakesTheWarningBack() async {
+        controller.threadsChanged([session("f", "Work", mode: .fullAccess)])
+        backend.forwardError = URLError(.notConnectedToInternet)
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("Read this x thread")
+        XCTAssertEqual(stage.bubble, .line(CatWords.problem(URLError(.notConnectedToInternet), while: .agents), threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertNil(stage.bubble)
+    }
+
+    func testAFollowUpThatFailsOutOfSightTakesTheWarningBack() async {
+        controller.threadsChanged([session("f", "Work", mode: .fullAccess)])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")], [.failed(message: "It ran into a problem.")]]
+        await ask("Read this x thread")
+        XCTAssertTrue(stage.bubbles.contains(.notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f")))
+        XCTAssertNil(stage.bubble)
+    }
+
+    /// The kitten has your words by then, and is working without your screen.
+    func testLosingTheConnectionAfterAKittenStartedKeepsTheWarning() async {
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.give("Read this x thread", to: clawde, snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .line(CatWords.problem(URLError(.networkConnectionLost), while: .agents), threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-1"))
+    }
+
+    func testAnotherThreadsFailureLeavesTheWarningAlone() async {
+        await askClawde("Read this x thread")
+        let warning = BubbleContent.notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2")
+
+        backend.replies = [[.failed(message: "Stopped.")]]
+        controller.forward("and that part?", to: session("a", "Build"), snapshot: nil)
+        await settle()
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, warning, "a follow-up to another session failed")
+
+        backend.replies = [[.failed(message: "It ran into a problem.")]]
+        controller.startFrontier(title: "Fix it", text: "Fix it", snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .line("It ran into a problem.", threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, warning, "a fix failed")
+    }
+
+    func testAKittenThatFailsTakesTheWarningBack() async {
+        await askClawde("Read this x thread", thenReply: [.failed(message: "It ran into a problem.")])
+        XCTAssertEqual(stage.bubble, .line("It ran into a problem.", threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertNil(stage.bubble)
+    }
+
+    func testTheWarningWaitsBehindAnApproval() async {
+        let approval = request(thread: "thread-2")
+        await askClawde("Read this x thread", thenReply: [.needsApproval(approval), .finished(fullText: "Started.")])
+        guard case .approval? = stage.bubble else { return XCTFail("the approval should come first") }
+        controller.answer(approval, .accept)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2"))
+    }
+
+    func testAnotherLineDoesntLoseTheWarning() async {
+        await askClawde("Read this x thread")
+        controller.say("Work's started in a new session.", seconds: nil)
+        XCTAssertEqual(stage.bubble, .line("Work's started in a new session.", threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2"))
+    }
+
+    func testTheWarningGoesInFrontOfOlderNotices() async {
+        controller.post(caption: "Done: Old work", text: "It went fine.", threadID: "old")
+        await askClawde("Read this x thread")
+        XCTAssertEqual(stage.bubble, .notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2"))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Done: Old work", text: "It went fine.", threadID: "old"))
+    }
+
+    func testSendingTheLinkClearsTheWarningButNotOtherNotices() async {
+        controller.post(caption: "Done: Old work", text: "It went fine.", threadID: "old")
+        await askClawde("Read this x thread")
+        backend.replies = [[.finished(fullText: "Thanks.")]]
+        await ask("https://example.com/a-thread")
+        guard case .reply? = stage.bubble else { return XCTFail("the reply should show") }
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Done: Old work", text: "It went fine.", threadID: "old"))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertNil(stage.bubble)
+    }
+
+    func testALongTitleCantCutOffWhatToDo() async {
+        let title = String(repeating: "x", count: 190)
+        controller.threadsChanged([session("w", title, mode: .fullAccess)])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        await ask("Read this x thread")
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to \(title).", text: sendTheLink, threadID: "w"))
+    }
+
+    func testLoadingTheEarsDoesntLoseTheWarning() async {
+        controller.fetchingEars(0.1)
+        clock = clock.addingTimeInterval(5)
+        controller.fetchingEars(0.2)
+        XCTAssertEqual(stage.bubble, .line(CatWords.fetchingEars(0.2), threadID: nil))
+
+        await askClawde("Read this x thread")
+        let warning = BubbleContent.notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2")
+        XCTAssertEqual(stage.bubble, warning)
+        controller.fetchingEars(0.5)
+        XCTAssertEqual(stage.bubble, .line(CatWords.fetchingEars(0.5), threadID: nil), "the download keeps saying how it's going")
+        controller.fetchingEars(nil)
+        XCTAssertEqual(stage.bubble, warning)
+    }
+
+    /// The session has your words by then too, the same as a kitten that started.
+    func testLosingTheConnectionDuringAFollowUpKeepsTheWarning() async {
+        backend.replies = [[.text(delta: "Working on it.")]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.forward("Read this x thread", to: session("f", "Work", mode: .fullAccess), snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .line(CatWords.problem(URLError(.networkConnectionLost), while: .agents), threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
+    }
+
+    func testAnEarlierWarningOutlivesASendThatNeverGotThere() async {
+        backend.replies = [[.finished(fullText: "Okay.")]]
+        controller.forward("Read this x thread", to: session("f", "Work", mode: .fullAccess), snapshot: nil)
+        await settle()
+        backend.forwardError = URLError(.notConnectedToInternet)
+        controller.forward("and that part?", to: session("f", "Work", mode: .fullAccess), snapshot: nil)
+        await settle()
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
+
+        backend.forwardError = nil
+        backend.replies = [[]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.forward("Read this x thread", to: session("f", "Work", mode: .fullAccess), snapshot: nil)
+        await settle()
+        XCTAssertEqual(controller.notices.filter { $0.text == sendTheLink }.count, 1, "only its own warning goes")
+    }
+
+    /// T3 says a follow-up has started before it sends it, so failing before anything comes back means it never got there.
+    func testAFollowUpThatFailsBeforeAnythingComesBackTakesTheWarningBack() async {
+        backend.replies = [[]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.forward("Read this x thread", to: session("f", "Work", mode: .fullAccess), snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .line(CatWords.problem(URLError(.networkConnectionLost), while: .agents), threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertNil(stage.bubble)
+    }
+
+    /// Clicking an old answer away isn't asking anything, so it doesn't take back a warning.
+    func testClosingAnOldAnswerKeepsAWarning() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.text(delta: "Four."), .finished(fullText: "Four.")]]
+        await ask("what's 2 + 2?")
+        controller.channelsPressed()
+        backend.routerSays = ["Read this x thread": "KITTEN: 1"]
+        // The router's folder is looked up first, then the kitten's, and the click comes while that's on its way.
+        backend.whileFindingAProject = { [unowned self] in
+            self.backend.whileFindingAProject = { [unowned self] in self.controller.bubbleDismissed(byClick: true) }
+        }
+        await messages("Read this x thread", to: .router)
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.caption == "Steve Pawsniak has this." })
+    }
+
+    /// Nothing was captured, so wherever your words go, the screen doesn't go with them.
+    func testNoScreenToSendWarnsWhereverYourWordsGo() async {
+        kittens = [clawde]
+        controller.threadsChanged([session("w", "Clawde: Fix routing")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        controller.ask("Read this x thread", snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Clawde: Fix routing.", text: sendTheLink, threadID: "w"))
+
+        kittens = []
+        controller.threadsChanged([session("a", "Work")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        controller.ask("Read this x thread", snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "a"))
+
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        controller.ask("Read this x thread", snapshot: ScreenSnapshot(appName: "Signal", isPrivate: true))
+        await settle()
+        await controller.frontierTask?.value
+        guard case .notice("Steve Pawsniak has this.", sendTheLink, _)? = stage.bubble else { return XCTFail("a private app's screen is only a note") }
+    }
+
+    func testAHandoffWarnsWhenTheScreenDoesntGo() async {
+        useFullAccess(frontier: true)
+        backend.replies = [[.finished(fullText: "HANDOFF: Read the thread")], [.finished(fullText: "Started.")]]
+        await ask("Read this x thread")
+        await controller.frontierTask?.value
+        let onIt = CatWords.onIt(modelName: controller.frontierName)
+        XCTAssertEqual(stage.bubble, .notice(caption: onIt, text: sendTheLink, threadID: "thread-2"))
+
+        useFullAccess()
+        backend.replies = [[.finished(fullText: "HANDOFF: Read the thread")], [.finished(fullText: "Started.")]]
+        controller.ask("Read this x thread", snapshot: nil)
+        await settle()
+        await controller.frontierTask?.value
+        guard case .notice(onIt, sendTheLink, _)? = stage.bubble else { return XCTFail("nothing was captured to send") }
+    }
+
+    func testAHandoffThatTakesTheScreenGetsNoWarning() async {
+        backend.replies = [[.finished(fullText: "HANDOFF: Read the thread")], [.finished(fullText: "Started.")]]
+        await ask("Read this x thread")
+        await controller.frontierTask?.value
+        XCTAssertEqual(stage.bubble, .line(CatWords.onIt(modelName: controller.frontierName), threadID: "thread-2"))
+    }
+
+    func testAFailureInTheThreadListTakesTheWarningBack() async {
+        await askClawde("Read this x thread")
+        let running = session("thread-2", "Clawde: Read the thread", status: .running)
+        controller.threadsChanged([running])
+        var failed = running
+        failed.status = .failed
+        controller.threadsChanged([failed])
+        await controller.reportTask?.value
+        guard case .notice(CatWords.failedCaption(failed), _, _)? = stage.bubble else { return XCTFail("the failure should show") }
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    func testAFailureFiledInTheInboxTakesTheWarningBack() async {
+        kittens = [inboxKitten]
+        backend.projects["/k/clawde"] = "project-clawde"
+        controller.give("Read this x thread", to: inboxKitten, snapshot: nil)
+        await settle()
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink })
+
+        controller.threadsChanged([work("thread-1", title: "Clawde: Read the thread", status: .running)])
+        controller.threadsChanged([work("thread-1", title: "Clawde: Read the thread", status: .failed)])
+        await settleFiling()
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    /// The connection dropped after it started, and the first list after that already says it failed.
+    func testAFailureFiledWithoutBeingSeenRunningTakesTheWarningBack() async {
+        kittens = [inboxKitten]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.give("Read this x thread", to: inboxKitten, snapshot: nil)
+        await settle()
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink })
+
+        controller.threadsChanged([work("thread-1", title: "Clawde: Read the thread", status: .failed)])
+        await settleFiling()
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    /// The same for a kitten without the inbox, and for new work.
+    func testAFailureTheListNeverSawRunningTakesTheWarningBack() async {
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.give("Read this x thread", to: clawde, snapshot: nil)
+        await settle()
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink })
+        controller.threadsChanged([work("thread-1", title: "Clawde: Read the thread", status: .failed)])
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+
+        useFullAccess(frontier: true)
+        backend.replies = [[]]
+        controller.handOff(task: "Read the thread", question: "Read this x thread", snapshot: nil)
+        await settle()
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink })
+        controller.threadsChanged([session("thread-2", "Read the thread", status: .failed)])
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    /// The run that failed was before your words, which are with the thread now and going without your screen.
+    func testAFailureFromBeforeAFollowUpLeavesItsWarning() async {
+        kittens = [inboxKitten]
+        let old = work("k", title: "Clawde: Fix login", run: "run-1", status: .failed)
+        backend.replies = [[.text(delta: "Looking at it.")]]
+        backend.whileReadingAReport = { [unowned self] in
+            self.controller.forward("Is this tweet right?", to: old, snapshot: nil)
+            await self.controller.forwardTask?.value
+        }
+        controller.threadsChanged([work("k", title: "Clawde: Fix login", run: "run-1", status: .running)])
+        controller.threadsChanged([old])
+        await settleFiling()
+        XCTAssertEqual(rows.count, 1, "the old failure is filed")
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "k" })
+    }
+
+    /// The list only names the run a thread last finished, so it can't say which run is carrying a follow-up's words,
+    /// whether the thread was busy or more words were queued behind it. Only the send's own turn failing counts.
+    func testTheListLeavesAFollowUpsWarningToItsOwnTurn() async {
+        let done = AgentThread(id: "f", title: "Work", projectTitle: nil, status: .completed, model: "m", updatedAt: clock, lastRunID: "run-1")
+        controller.threadsChanged([done])
+        backend.replies = [[.text(delta: "Looking.")]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.forward("Is this tweet right?", to: done, snapshot: nil)
+        await controller.forwardTask?.value
+        controller.threadsChanged([done.with(status: .running)])
+        controller.threadsChanged([done.with(status: .failed).with(run: "run-2")])
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "f" })
+
+        backend.droppedAfterReply = nil
+        backend.replies = [[.failed(message: "It ran into a problem.")]]
+        controller.forward("Read this x thread", to: done, snapshot: nil)
+        await controller.forwardTask?.value
+        XCTAssertEqual(controller.notices.filter { $0.text == sendTheLink }.count, 1, "its own turn took back only its own")
+    }
+
+    /// The kitten's thread handed the work to another, so that's whose failure counts.
+    func testWorkHandedOnTakesItsWarningWithIt() async {
+        await askClawde("Read this x thread")
+        var kitten = session("thread-2", "Clawde: Read the thread", status: .running)
+        var worker = session("worker", "Read the x thread", status: .running)
+        controller.threadsChanged([kitten, worker])
+        backend.reports["thread-2"] = "The reading went to a new thread, <t3-thread://v2/env/worker>."
+        kitten.status = .completed
+        controller.threadsChanged([kitten, worker])
+        await controller.reportTask?.value
+        XCTAssertEqual(controller.notices.first { $0.text == sendTheLink }?.threadID, "worker")
+
+        worker.status = .failed
+        controller.threadsChanged([kitten, worker])
+        await controller.reportTask?.value
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    /// You asked the cat something, maybe with the link, while the router in Messages was still deciding.
+    func testAMessagesSendRoutedAfterYourNextQuestionDoesntWarn() async {
+        kittens = [steve, clawde]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.threadsChanged([session("w", "Clawde: Fix routing")])
+        controller.channelsPressed()
+        for (words, routed, mode) in [("Read this x thread", "KITTEN: 1", FakeBackend.Mode.start), ("Read this tweet", "SEND TO: 1", .forward)] {
+            backend.routerSays = [words: routed]
+            backend.holdQuestion = words
+            controller.messagesAction(.send(words, to: .router, shownIn: .everyone))
+            for _ in 0..<50 { await Task.yield() }
+
+            backend.replies = [[.finished(fullText: "Got the link.")]]
+            controller.ask("https://x.com/example/status/1", snapshot: nil)
+            await controller.replyTask?.value
+            backend.releaseHeld()
+            await controller.messagesTurn?.value
+            await settle()
+            await controller.frontierTask?.value
+            XCTAssertEqual(backend.sent.last?.mode, mode, "your words still went")
+            XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink }, words)
+        }
+    }
+
+    /// Its folder took a while to find, and by then you'd asked something else, maybe with the link.
+    func testAnOlderSendCantBringTheWarningBackAfterYourNextQuestion() async {
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "Got the link.")], [.finished(fullText: "Started.")]]
+        backend.whileFindingAProject = { [unowned self] in
+            self.controller.ask("https://x.com/example/status/1", snapshot: nil)
+            await self.controller.replyTask?.value
+        }
+        controller.give("Read this x thread", to: clawde, snapshot: nil)
+        await controller.flow?.value
+        await controller.frontierTask?.value
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+        XCTAssertEqual(backend.sent.last?.mode, .start, "your words still went")
+    }
+
     /// Some prompts explain what the block means and say it's empty, so this looks for what's on the screen.
     private func assertLeftOut(_ prompt: AgentPrompt, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertFalse(prompt.text.contains("<screen>\n"), file: file, line: line)
@@ -2670,6 +3133,20 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(book.everyone.messages.first?.speaker, .cat)
         XCTAssertTrue(book.between.isEmpty)
     }
+
+    /// Messages never sends your screen, so even a kitten that sees it can't tell what "this thread" is.
+    /// A reply straight to a thread is only what you typed.
+    func testMessagesSaysWhenYourWordsPointAtAScreenItWontSend() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.channelsPressed()
+        await messages("Read this x thread", to: .thread(id: "w", title: "Work"), in: nil)
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+
+        backend.routerSays = ["Read this x thread": "KITTEN: 1"]
+        await messages("Read this x thread", to: .router)
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.caption == "Steve Pawsniak has this." })
+    }
 }
 
 
@@ -2979,3 +3456,96 @@ extension FlowTests {
     }
 }
 
+
+
+extension FlowTests {
+    /// The kitten's thread hands the reading to another, which fails before the kitten's report is read.
+    func testHandedOnWorkThatHasAlreadyFailedTakesTheWarningBack() async {
+        await askClawde("Read this x thread")
+        var kitten = work("thread-2", title: "Clawde: Read the thread", run: "k-run-1", status: .running)
+        let worker = work("worker", title: "Read the x thread", run: "w-run-1", status: .running)
+        controller.threadsChanged([kitten, worker])
+        backend.reports["thread-2"] = "The reading went to a new thread, <t3-thread://v2/env/worker>."
+        kitten.status = .completed
+        backend.whileReadingAReport = { [unowned self] in
+            self.controller.threadsChanged([kitten, worker.with(status: .failed)])
+        }
+        controller.threadsChanged([kitten, worker])
+        await controller.reportTask?.value
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    /// Words sent while an earlier turn is going still go without your screen, whatever happens to that turn.
+    func testAnEarlierTurnFailingLeavesALaterWarning() async {
+        let done = AgentThread(id: "f", title: "Work", projectTitle: nil, status: .completed, model: "m", updatedAt: clock, lastRunID: "run-1")
+        controller.threadsChanged([done])
+        backend.holdTurn = "and that part?"
+        backend.replies = [[.text(delta: "Working."), .failed(message: "It ran into a problem.")]]
+        controller.forward("and that part?", to: done, snapshot: nil)
+        for _ in 0..<20 { await Task.yield() }
+        let earlier = controller.forwardTask
+        // The list names the run a thread last finished, so it still says run-1 while run-2 is going.
+        let running = done.with(status: .running)
+        controller.threadsChanged([running])
+
+        backend.holdTurn = nil
+        backend.replies = [[.text(delta: "Looking.")]]
+        controller.forward("Is this tweet right?", to: running, snapshot: nil)
+        await controller.forwardTask?.value
+        backend.releaseHeld()
+        await earlier?.value
+        controller.threadsChanged([running.with(status: .failed).with(run: "run-2")])
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "f" }, "your words wait behind run-2")
+    }
+
+    /// The same for a new thread still on its first run, and the whole way from the Ask box to a busy session.
+    func testWordsQueuedBehindABusyRunKeepTheirWarningWhenThatRunFails() async {
+        let starting = AgentThread(id: "n", title: "Read the thread", projectTitle: nil, status: .running, model: "m", updatedAt: clock)
+        controller.threadsChanged([starting])
+        backend.replies = [[.text(delta: "Queued.")]]
+        controller.forward("Is this tweet right?", to: starting, snapshot: nil)
+        await controller.forwardTask?.value
+        controller.threadsChanged([starting.with(status: .failed).with(run: "run-1")])
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "n" })
+
+        let busy = AgentThread(id: "f", title: "Work", projectTitle: nil, status: .running, model: "m", updatedAt: clock, runtimeMode: .fullAccess, lastRunID: "run-1")
+        controller.threadsChanged([busy])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")], [.text(delta: "Queued.")]]
+        await ask("Is this tweet right?")
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
+        controller.threadsChanged([busy.with(status: .failed).with(run: "run-2")])
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
+    }
+
+    func testANewThreadsFirstTurnFailingLeavesAFollowUpsWarning() async {
+        backend.holdTurn = "Fix the login page"
+        backend.replies = [[.failed(message: "It ran into a problem.")]]
+        controller.startFrontier(title: "Fix the login page", text: "Fix the login page", snapshot: nil)
+        for _ in 0..<20 { await Task.yield() }
+        let first = controller.frontierTask
+        let running = AgentThread(id: "thread-1", title: "Fix the login page", projectTitle: nil, status: .running, model: "m", updatedAt: clock, lastRunID: "run-1")
+        controller.threadsChanged([running])
+
+        backend.holdTurn = nil
+        backend.replies = [[.text(delta: "Looking.")]]
+        controller.forward("Is this tweet right?", to: running, snapshot: nil)
+        await controller.forwardTask?.value
+        backend.releaseHeld()
+        await first?.value
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "thread-1" })
+    }
+}
+
+private extension AgentThread {
+    func with(status: AgentStatus) -> AgentThread {
+        var copy = self
+        copy.status = status
+        return copy
+    }
+
+    func with(run: String) -> AgentThread {
+        var copy = self
+        copy.lastRunID = run
+        return copy
+    }
+}

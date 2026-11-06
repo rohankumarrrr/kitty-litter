@@ -38,11 +38,13 @@ extension AppController {
                 stage.catCelebrate()
                 if !goesToInbox(thread) { reportOn(thread, failed: false) }
             case .failed(let thread):
+                dropScreenWarning(for: thread.id, run: thread.lastRunID)
                 if !goesToInbox(thread) { reportOn(thread, failed: true) }
             case .hasQuestion(let question):
                 announce(question)
             }
         }
+        dropScreenWarnings(forFailuresIn: threads)
         fileOwedReports()
     }
 

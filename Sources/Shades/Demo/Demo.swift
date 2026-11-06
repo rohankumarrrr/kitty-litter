@@ -250,6 +250,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         let lower = question.lowercased()
         if lower.contains("follow") || lower.contains("what you") { return "\(Prompts.routeMarker) 1" }
         if lower.contains("interview") || lower.contains("resume") { return "\(Prompts.kittenMarker) 1" }
+        if lower.contains("budget") { return "\(Prompts.kittenMarker) 2" }
         if lower.contains("tighten") { return "\(Prompts.rewriteMarker) The new pricing page is live, with three plans to pick from." }
         if ["fix", "change", "refactor", "build", "rewrite"].contains(where: lower.contains) {
             return "\(Prompts.handoffMarker) Fix the Buy button on the pricing page so it opens checkout."
@@ -404,7 +405,7 @@ enum Demo {
     /// Enough of a team to show every state in the kitten view.
     static let kittens = [
         Kitten(name: "Steve Pawsniak", role: "Professional", covers: "Their career, resume and interviews.", folder: "/demo/steve"),
-        Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: 0xb3261e),
+        Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: 0xb3261e, seesScreen: false),
         Kitten(name: "Clawde", role: "The system", covers: "Shades and the other kittens.", folder: "/demo/clawde", color: 0xd9730d, seesScreen: false, usesInbox: true),
         Kitten(name: "Cali", role: "Scheduling", covers: "Their time.", folder: "/demo/cali", planned: true, color: 0x1e7fb3),
         Kitten(name: "Furbit", role: "Health", covers: "Their health.", folder: "/demo/furbit", planned: true, color: 0x2e9e4f),

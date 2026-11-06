@@ -68,9 +68,11 @@ extension AppController {
             // One at a time, so each goes where it's meant to before the next is read.
             let previous = messagesTurn
             let sentAt = now()
+            // Asking the cat something while the router thinks moves on from this, as it would in the Ask box.
+            let asked = questionsAsked
             messagesTurn = Task {
                 await previous?.value
-                await route(words, sentAt: sentAt)
+                await route(words, sentAt: sentAt, asked: asked)
             }
         case .newThread(let kitten):
             echo()
@@ -91,7 +93,7 @@ extension AppController {
 
     /// The same prompt and model as the Ask box, on Messages' own conversation with the router, so nothing from
     /// your screen is in what it can see, and asking the cat meanwhile can't cut it short.
-    private func route(_ words: String, sentAt: Date) async {
+    private func route(_ words: String, sentAt: Date, asked: Int) async {
         await waitForThreadList()
         let current = messagesQuick.thread(at: now())
         // Only Messages' own world: the kittens' threads, and work it passed your words to. Anything the Ask box
@@ -134,7 +136,7 @@ extension AppController {
             Task { [backend] in try? await backend.settle(threadID: threadID) }
             return
         case .handoff(let task):
-            handOff(task: task, question: words, snapshot: nil) { [weak self] started in
+            handOff(task: task, question: words, snapshot: nil, asked: asked) { [weak self] started in
                 if let started { self?.messagesThreads[started] = sentAt }
             }
         case .route(let session):
@@ -142,10 +144,10 @@ extension AppController {
             let thread = sessions[session - 1]
             // From the first time, so what it said before stays in Everyone too.
             if KittenBoard.owner(of: thread, among: owners) == nil { messagesThreads[thread.id] = messagesThreads[thread.id] ?? sentAt }
-            forward(words, to: thread, snapshot: nil)
+            forward(words, to: thread, snapshot: nil, asked: asked)
         case .kitten(let number):
             guard kittens.indices.contains(number - 1) else { return catSays(CatWords.lostTheSession) }
-            give(words, to: kittens[number - 1], snapshot: nil)
+            give(words, to: kittens[number - 1], snapshot: nil, asked: asked)
         }
         // A new thread that only passed something on has nothing worth keeping.
         if isFresh {

@@ -56,8 +56,11 @@ extension AppController {
 
     func ask(_ question: String, capture: Task<Capture, Never>?) {
         replyGeneration += 1
+        questionsAsked += 1
         let generation = replyGeneration
         line = nil
+        // You've moved on, and may well be sending what it asked for.
+        notices.removeAll { $0.text == CatWords.sendTheLink }
         reply = Reply()
         renderBubble()
         replyTask = Task {
@@ -253,10 +256,17 @@ extension AppController {
     var frontierName: String { ModelNames.friendly(settings.frontierModel) }
 
     /// The quick agent decided this needs more, so it goes straight to the frontier agent, which says so.
-    func handOff(task: String, question: String, snapshot: ScreenSnapshot?, onStarted: ((String?) -> Void)? = nil) {
+    func handOff(task: String, question: String, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil) {
         // With full access, neither the page nor the quick agent's reading of it gets to reach it.
         guard settings.frontierMode != .fullAccess else {
-            startFrontier(title: question, text: Prompts.frontier(request: question, snapshot: nil, screenshotPath: nil), snapshot: nil, onStarted: onStarted)
+            startFrontier(
+                title: question,
+                text: Prompts.frontier(request: question, snapshot: nil, screenshotPath: nil),
+                snapshot: nil,
+                missesScreen: ScreenWords.pointAtScreen(question),
+                asked: asked,
+                onStarted: onStarted
+            )
             return
         }
         let path = saveScreenshot(of: snapshot)
@@ -266,6 +276,8 @@ extension AppController {
             title: task,
             text: Prompts.frontier(request: request, snapshot: snapshot, screenshotPath: path),
             snapshot: snapshot,
+            missesScreen: !carriesScreen(snapshot) && ScreenWords.pointAtScreen(question),
+            asked: asked,
             onStarted: onStarted
         )
     }
@@ -280,16 +292,19 @@ extension AppController {
         return [AgentAttachment(name: "screen.jpg", mimeType: "image/jpeg", data: jpeg)]
     }
 
-    /// `onStarted` hears the new thread, or `nil` if there isn't one.
+    /// `onStarted` hears the new thread, or `nil` if there isn't one. `asked` is the question it came from, if not the latest.
     func startFrontier(
         title: String?,
         text: String,
         snapshot: ScreenSnapshot?,
         projectID: String? = nil,
         name: String? = nil,
+        missesScreen: Bool = false,
+        asked: Int? = nil,
         onStarted: ((String?) -> Void)? = nil
     ) {
         let name = name ?? frontierName
+        let asked = asked ?? questionsAsked
         let prompt = AgentPrompt(
             title: title.map { String($0.prefix(80)) },
             text: text,
@@ -300,29 +315,32 @@ extension AppController {
         )
         say(CatWords.handingOff(modelName: name), seconds: nil)
         frontierTask = Task {
-            var started = false
+            var startedThread: String?
+            var warning: Int?
             do {
                 for try await event in backend.start(prompt) {
                     switch event {
                     case .started(let threadID):
-                        started = true
+                        startedThread = threadID
                         dispatchers.insert(threadID)
                         onStarted?(threadID)
-                        say(CatWords.onIt(modelName: name), threadID: threadID)
+                        warning = sayPassedOn(CatWords.onIt(modelName: name), threadID: threadID, missesScreen: missesScreen, asked: asked)
                     case .needsApproval(let request):
                         addApproval(request)
                     case .failed(let message):
+                        // Only this turn's, since words sent to the thread after it started still went without your screen.
+                        if let warning { takeBackNotice(warning) }
                         say(message)
                     case .text, .finished:
                         break
                     }
                 }
-                if !started {
+                if startedThread == nil {
                     onStarted?(nil)
                     say(CatWords.noReply)
                 }
             } catch {
-                if !started { onStarted?(nil) }
+                if startedThread == nil { onStarted?(nil) }
                 say(CatWords.problem(error, while: .agents))
             }
         }
