@@ -64,7 +64,11 @@ enum ChannelImages {
 
     private static func shots() -> [Shot] {
         let full = book()
-        var shots = [Shot(name: "needs-you", selection: .needsYou, book: full), Shot(name: "everyone", selection: .channel(.everyone), book: full)]
+        var shots = [
+            Shot(name: "needs-you", selection: .needsYou, book: full),
+            Shot(name: "done", selection: .done, book: full),
+            Shot(name: "everyone", selection: .channel(.everyone), book: full),
+        ]
         for status in full.statuses {
             shots.append(Shot(name: "dm-\(slug(status.kitten.name))", selection: .channel(.direct(status.kitten)), book: full))
         }
@@ -87,6 +91,7 @@ enum ChannelImages {
             Shot(name: "unreadable", selection: steve, book: book(unreadable: 2)),
             Shot(name: "nothing-said", selection: steve, book: book(threads: [], transcripts: [:])),
             Shot(name: "nothing-open", selection: .needsYou, book: book(threads: [], transcripts: [:])),
+            Shot(name: "nothing-done", selection: .done, book: book(threads: [], transcripts: [:])),
         ]
         return shots
     }

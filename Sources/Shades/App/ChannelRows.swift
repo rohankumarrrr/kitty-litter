@@ -3,6 +3,8 @@ import ShadesCore
 
 enum ChannelSelection: Hashable {
     case needsYou
+    /// What's finished, out of the way of what's still going.
+    case done
     case channel(ChannelID)
 }
 
@@ -77,6 +79,7 @@ enum ChannelRows {
     static func rows(_ selection: ChannelSelection, in book: ChannelBook) -> [ChannelRow] {
         switch selection {
         case .needsYou: return needsYou(in: book)
+        case .done: return done(in: book)
         case .channel(let id): return messages(in: id, of: book) + cards(in: id, of: book)
         }
     }
@@ -107,6 +110,15 @@ enum ChannelRows {
             let open: [ChannelRow] = issues.threads.isEmpty ? [.note(CatWords.nothingOpen)] : issues.threads.map(ChannelRow.issue)
             return [.heading(status)] + open
         }
+    }
+
+    private static func done(in book: ChannelBook) -> [ChannelRow] {
+        let rows = book.issues.flatMap { issues -> [ChannelRow] in
+            guard !issues.done.isEmpty, let status = book.status(of: .kitten(issues.kitten.id)) else { return [] }
+            return [.heading(status)] + issues.done.map(ChannelRow.issue)
+        }
+        if book.cantReachT3 { return [.note(CatWords.cantReachT3Yet)] + rows }
+        return rows.isEmpty ? [.note(book.isReading ? CatWords.readingMessages : CatWords.nothingDone)] : rows
     }
 
     /// A DM ends with whatever that kitten is waiting on you for, so it can be answered right there.

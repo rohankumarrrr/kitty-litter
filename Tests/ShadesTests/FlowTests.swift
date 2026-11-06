@@ -1933,7 +1933,7 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(rows.map(\.text), ["The fix is live."])
     }
 
-    func testSeveralFinishesMakeOneBubble() async {
+    func testSeveralFinishesMakeOneBubble() async throws {
         kittens = [inboxKitten]
         backend.replies = [[.finished(fullText: "DECISION: Ship the fix?")], [.finished(fullText: "SHIPPED: The icon is live.")]]
         backend.reports = ["a": "One.", "b": "Two."]
@@ -1943,7 +1943,9 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(controller.notices.isEmpty)
         XCTAssertEqual(stage.status, .attention)
         XCTAssertEqual(controller.inboxMenuLine, "1 needs you")
-        XCTAssertEqual(CatWords.inboxSummary([rows[0], rows[0]]), "2 need you")
+        // The two reports are filed at once, so either can land first.
+        let decision = try XCTUnwrap(rows.first { $0.kind == .decision })
+        XCTAssertEqual(CatWords.inboxSummary([decision, decision]), "2 need you")
     }
 
     func testTheBubbleOnlyGoesWhenItSafelyCan() async {
