@@ -721,3 +721,22 @@ extension ChannelsWindowTests {
         XCTAssertNil(view.pane.composer.target, "once it's answered, carrying on in a thread another kitten started still isn't yours")
     }
 }
+
+extension ChannelsWindowTests {
+    func testAskingAboutAReportDoesntAnswerAQuestionWaitingInItsThread() throws {
+        let report = InboxEntry(id: "shipped", kind: .shipped, text: "The staging backup is ready.", threadID: "t", threadTitle: "Work", at: at)
+        let question = AgentQuestion(id: "q", threadID: "t", threadTitle: "Work", text: "Which account?", form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which account?", options: [], values: [], takesOwnWords: true)]))
+        let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .waitingForAnswer, model: "m", updatedAt: at, projectPath: "/k/steve")
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [thread], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id], reports: [report])))
+        let card = try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first { $0.accessibilityLabel()?.contains(report.text) == true })
+        XCTAssertTrue(try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == "Ask" }).accessibilityPerformPress())
+        view.pane.composer.send("Where is the staging backup stored?")
+        XCTAssertEqual(sent, [.send("Where is the staging backup stored?", to: .thread(id: "t", title: "Work", report: "shipped"), shownIn: .direct(steve))])
+
+        try press(CatWords.answerInWords, in: view)
+        XCTAssertEqual(view.pane.composer.target, .question(question), "Type an answer is how to answer it")
+    }
+}

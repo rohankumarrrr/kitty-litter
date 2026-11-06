@@ -109,7 +109,9 @@ final class ChannelFeed {
         let kittens = kittens()
         return session.threads.filter { thread in
             guard let owner = KittenBoard.owner(of: thread, among: kittens), session.readStamps[thread.id] == thread.updatedAt else { return false }
-            if case .thread(let shown, _) = selection { return thread.id == shown }
+            if case .thread(let shown, _) = selection {
+                return thread.id == shown && session.published?.channel(id)?.messages.contains { $0.threadID == shown } == true
+            }
             return id == .everyone || id == .direct(owner)
         }
     }

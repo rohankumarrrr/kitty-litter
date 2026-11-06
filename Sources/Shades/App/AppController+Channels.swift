@@ -34,6 +34,7 @@ extension AppController {
 
     func channelsClosed() {
         channels.close()
+        messagesClosings += 1
         guard nudgeOnClose else { return }
         nudgeOnClose = false
         // Only if something's still there to say. Otherwise a note later on would bring it up, which notes don't.

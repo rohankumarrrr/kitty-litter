@@ -95,8 +95,10 @@ final class AppController {
     var boxesOpened = 0
     /// The box what's being said belongs in, fixed when the key goes down.
     var talkBox: Int?
-    /// What's being said goes into Messages' box, fixed when the key goes down.
-    var talkToMessages = false
+    /// What's being said goes into Messages' box, fixed when the key goes down, as how many times Messages had
+    /// closed then. Closing it again means the box you were talking to is gone.
+    var talkToMessages: Int?
+    var messagesClosings = 0
     var inboxSaveFailed = false
     /// Questions answered from Messages, kept out of it until the list catches up.
     var answeredQuestions: Set<String> = []

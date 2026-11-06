@@ -36,6 +36,10 @@ private final class FeedBackend: AgentBackend, @unchecked Sendable {
     var mostAtOnce: Int { lock.withLock { _mostAtOnce } }
     var heldReads: Int { lock.withLock { _gates.count } }
 
+    func set(_ exchanges: [Exchange], in threadID: String) {
+        lock.withLock { _words[threadID] = exchanges }
+    }
+
     func say(_ words: String, in threadID: String) {
         let exchange = Exchange(id: "\(threadID):\(words)", asker: .you, askedAt: Date(timeIntervalSince1970: 1), ask: words)
         lock.withLock { _words[threadID] = [exchange] }
@@ -433,5 +437,19 @@ final class ChannelFeedTests: XCTestCase {
         feed.sent(ChannelMessage(exchangeID: "sent-2", kind: .ask, speaker: .you, text: "Another", at: start, threadID: "", threadTitle: ""), in: .direct(steve))
         feed.started("sent-2", in: nil, title: "Another")
         XCTAssertEqual(latest?.channel(.direct(steve))?.messages.last?.failure, "That didn't start. Try again?")
+    }
+}
+
+// MARK: - Messages, review round 2
+
+extension ChannelFeedTests {
+    func testAThreadOnItsOwnOnlyCountsAsReadIfItsWordsAreShown() async throws {
+        let work = thread("work")
+        backend.threads = [work, thread("other")]
+        backend.set([Exchange(id: "between", asker: .agent(threadID: nil), askedAt: start, ask: "Another agent's request", reply: "An unseen answer", repliedAt: start)], in: work.id)
+        backend.say("Other", in: "other")
+        await openAndRead()
+        XCTAssertEqual(feed.threads(in: .thread(work.id, in: .direct(steve))).map(\.id), [], "its words are only between agents, so its DM shows none")
+        XCTAssertEqual(feed.threads(in: .thread("other", in: .direct(steve))).map(\.id), ["other"], "and only that thread")
     }
 }

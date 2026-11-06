@@ -2980,3 +2980,40 @@ extension FlowTests {
         XCTAssertNil(stage.bubble, "a note doesn't bring up the bubble unless it answers you")
     }
 }
+
+extension FlowTests {
+    func testTalkingGoesToMessagesWhenItHasTheKeyboardEvenWithAFixBoxBehindIt() async {
+        await controller.beginFix()
+        XCTAssertTrue(controller.fixIsOpen)
+        controller.channelsPressed()
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "where is the backup", cleaned: "Where is the backup?", audioSeconds: 1, latencySeconds: 0.1)
+        controller.talkDown()
+        await controller.talkUp()
+        await settle()
+
+        XCTAssertEqual(stage.sentInMessages, ["Where is the backup?"], "the Messages box has the keyboard, not the Fix box behind it")
+        XCTAssertEqual(backend.sent.count, 0, "nothing went with the fix's picture")
+        XCTAssertEqual(context.saved, 0)
+    }
+
+    func testWordsForAMessagesBoxYouClosedGoNowhere() async {
+        controller.channelsPressed(selecting: .channel(.everyone))
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "words for the original thread", cleaned: "Words for the original thread.", audioSeconds: 1, latencySeconds: 0.1)
+        controller.talkDown()
+
+        stage.hideChannels()
+        stage.isMessagesBoxTyping = false
+        controller.channelsClosed()
+        controller.channelsPressed(selecting: .thread("different-thread", in: .direct(steve)))
+        stage.isMessagesBoxTyping = true
+        await controller.talkUp()
+        await settle()
+
+        XCTAssertEqual(stage.sentInMessages, [], "the box you were talking to closed, so another one mustn't get your words")
+        XCTAssertFalse(stage.messagesBoxHeld)
+        XCTAssertTrue(backend.sent.isEmpty)
+        XCTAssertFalse(log.all.contains("snapshot"))
+    }
+}

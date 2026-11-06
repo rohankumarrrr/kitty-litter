@@ -263,11 +263,9 @@ final class ChannelPane: QuietView {
         // Words already typed go where the box said when you started, so a refresh can't send them somewhere else.
         if let replyingTo, case .thread(let id, _) = selection, replyingTo.threadID == id {
             // Even a thread T3 no longer lists, such as an archived one, takes a reply to its report.
-            if case .thread(_, let title, nil)? = target {
-                target = .thread(id: id, title: title, report: replyingTo.id)
-            } else if target == nil {
-                target = .thread(id: id, title: replyingTo.threadTitle, report: replyingTo.id)
-            }
+            // A question waiting in the same thread doesn't take words meant for the report. Type an answer is for that.
+            let title = book?.title(ofThread: id, in: selection.channelID ?? .everyone) ?? ""
+            target = .thread(id: id, title: title.isEmpty ? replyingTo.threadTitle : title, report: replyingTo.id)
         }
         if let spokenTo, spokenTo.selection == selection { target = spokenTo.target }
         if keepingDraft, composer.hasDraft, let current = composer.target, let book, current.isStill(in: book) {
@@ -447,6 +445,7 @@ final class ChannelPane: QuietView {
                 let thread = book.thread(holding: question.id, else: question.threadID)
                 buttons.append(CardRowView.Button(title: CatWords.answerInWords) { [weak self] in
                     guard let self else { return }
+                    self.replyingTo = nil
                     self.open(thread: thread, in: self.channel(of: kitten), typing: true)
                 })
             }

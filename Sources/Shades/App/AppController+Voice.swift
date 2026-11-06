@@ -23,16 +23,17 @@ extension AppController {
 
     func talkDown() {
         guard voiceMode == nil else { return }
-        talkBox = fixIsOpen ? boxesOpened : nil
-        // Messages' box only counts if you're typing in it, not if it's open behind your work.
-        talkToMessages = !fixIsOpen && stage.isMessagesBoxTyping
-        if talkToMessages { stage.holdMessagesBox() }
+        // Messages' box only counts if you're typing in it, not if it's open behind your work. When you are, it has the
+        // keyboard, so it wins over a Fix box left open behind it.
+        talkToMessages = stage.isMessagesBoxTyping ? messagesClosings : nil
+        talkBox = fixIsOpen && talkToMessages == nil ? boxesOpened : nil
+        if talkToMessages != nil { stage.holdMessagesBox() }
         // The look happens as the key goes down: that's the moment you mean.
         if !boxTakesVoiceNow { talkLook = startLook(CaptureOptions()) }
         guard beginListening(.talk) else {
             talkLook = nil
-            if talkToMessages { stage.releaseMessagesBox() }
-            talkToMessages = false
+            if talkToMessages != nil { stage.releaseMessagesBox() }
+            talkToMessages = nil
             return
         }
         stage.catWake()
@@ -45,7 +46,7 @@ extension AppController {
 
     func talkUp() async {
         let toMessages = talkToMessages
-        talkToMessages = false
+        talkToMessages = nil
         hearing = false
         stage.catLevel(0)
         heard = nil
@@ -60,9 +61,9 @@ extension AppController {
                 if !text.isEmpty, talkBoxIsStillUp { stage.submitInput(text) }
                 return
             }
-            if toMessages {
-                // The same goes for Messages: if you've stopped typing there, it isn't sent anywhere.
-                if !text.isEmpty, stage.isMessagesBoxTyping {
+            if let toMessages {
+                // The same goes for Messages: if you've stopped typing there, or closed it, it isn't sent anywhere.
+                if !text.isEmpty, toMessages == messagesClosings, stage.isMessagesBoxTyping {
                     stage.sendInMessages(text)
                 } else {
                     stage.releaseMessagesBox()
@@ -79,14 +80,14 @@ extension AppController {
         } catch {
             voiceMode = nil
             talkLook = nil
-            if toMessages { stage.releaseMessagesBox() }
+            if toMessages != nil { stage.releaseMessagesBox() }
             refreshStatus()
             say(CatWords.problem(error, while: .listening))
         }
     }
 
     /// A box what you say belongs in was up when the key went down, so nothing needs a look at the screen.
-    private var boxTakesVoiceNow: Bool { talkBox != nil || talkToMessages }
+    private var boxTakesVoiceNow: Bool { talkBox != nil || talkToMessages != nil }
 
     func dictateDown() {
         guard voiceMode == nil, beginListening(.dictate) else { return }
@@ -138,8 +139,8 @@ extension AppController {
         voiceMode = nil
         heard = nil
         talkLook = nil
-        if talkToMessages { stage.releaseMessagesBox() }
-        talkToMessages = false
+        if talkToMessages != nil { stage.releaseMessagesBox() }
+        talkToMessages = nil
         renderBubble()
     }
 
