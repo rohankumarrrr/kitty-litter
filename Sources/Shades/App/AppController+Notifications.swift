@@ -40,7 +40,9 @@ extension AppController {
         for item in fresh {
             let thread = latestThreads.first { $0.id == item.threadID }
             let owner = waiting.owners[item.id] ?? thread.flatMap { KittenBoard.owner(of: $0, among: kittens) }?.id
-            notify(NeedsYouAlert(id: item.id, kind: item.kind, who: kittens.first { $0.id == owner }?.name))
+            let alert = NeedsYouAlert(id: item.id, kind: item.kind, who: kittens.first { $0.id == owner }?.name)
+            notify(alert)
+            phone?.pushes.push(alert, now: now())
             notified.insert(item.id)
             showing.insert(item.id)
         }

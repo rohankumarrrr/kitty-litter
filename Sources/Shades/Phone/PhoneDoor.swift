@@ -29,7 +29,7 @@ final class PhoneDoor {
 
     init(keys: PhoneKeyStoring) {
         self.keys = keys
-        hashes = Set(keys.load())
+        hashes = Set(keys.load(PhoneKeys.paired))
     }
 
     var hasPhones: Bool { !hashes.isEmpty }
@@ -64,7 +64,7 @@ final class PhoneDoor {
         let bytes = (0..<32).map { _ in UInt8.random(in: .min ... .max, using: &random) }
         let token = Data(bytes).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
         hashes.insert(Self.hash(token))
-        keys.save(hashes.sorted())
+        keys.save(PhoneKeys.paired, hashes.sorted())
         return token
     }
 
@@ -73,10 +73,6 @@ final class PhoneDoor {
         return hashes.contains(Self.hash(String(header.dropFirst(7))))
     }
 
-    func forgetPhones() {
-        hashes = []
-        keys.save([])
-    }
 
     private static func hash(_ token: String) -> String {
         SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined()
@@ -89,32 +85,46 @@ final class PhoneDoor {
     }
 }
 
+/// What Shades keeps for phones, each a short list of lines under its own name.
 protocol PhoneKeyStoring {
-    func load() -> [String]
-    func save(_ hashes: [String])
+    func load(_ name: String) -> [String]
+    func save(_ name: String, _ lines: [String])
+}
+
+enum PhoneKeys {
+    /// The hashes of paired phones' keys.
+    static let paired = "paired"
+    /// Where to send each phone's notifications.
+    static let pushes = "pushes"
+    /// The key Shades signs its notifications with.
+    static let signing = "signing"
 }
 
 /// For the demo and tests, which never touch the Keychain.
 final class MemoryPhoneKeys: PhoneKeyStoring {
-    var hashes: [String] = []
+    var saved: [String: [String]] = [:]
 
-    func load() -> [String] { hashes }
-    func save(_ hashes: [String]) { self.hashes = hashes }
+    var hashes: [String] { saved[PhoneKeys.paired] ?? [] }
+
+    func load(_ name: String) -> [String] { saved[name] ?? [] }
+    func save(_ name: String, _ lines: [String]) { saved[name] = lines }
 }
 
-/// The hashes of paired phones' tokens, in one login Keychain item rather than a file a kitten could rewrite to let
-/// itself in. As with the T3 sign-in, a build signed differently can't read it, which only means pairing again, and this
-/// never calls `SecItemUpdate`, since that shows a dialog for another build's item.
+/// In the login Keychain rather than a file a kitten could rewrite to let itself in, or read to send as you. As with the
+/// T3 sign-in, a build signed differently can't read them, which only means pairing again, and this never calls
+/// `SecItemUpdate`, since that shows a dialog for another build's item.
 final class KeychainPhoneKeys: PhoneKeyStoring {
-    private static let item: [String: Any] = [
-        kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: "dev.shades.phone",
-        kSecAttrAccount as String: "paired",
-    ]
+    private static func item(_ name: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "dev.shades.phone",
+            kSecAttrAccount as String: name,
+        ]
+    }
 
-    func load() -> [String] {
+    func load(_ name: String) -> [String] {
         withoutPrompts {
-            var query = Self.item
+            var query = Self.item(name)
             query[kSecReturnData as String] = true
             query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
             var result: CFTypeRef?
@@ -123,13 +133,13 @@ final class KeychainPhoneKeys: PhoneKeyStoring {
         }
     }
 
-    func save(_ hashes: [String]) {
+    func save(_ name: String, _ lines: [String]) {
         withoutPrompts {
-            SecItemDelete(Self.item as CFDictionary)
-            guard !hashes.isEmpty else { return }
-            var attributes = Self.item
-            attributes[kSecValueData as String] = Data(hashes.joined(separator: "\n").utf8)
-            attributes[kSecAttrLabel as String] = "Shades: paired phones"
+            SecItemDelete(Self.item(name) as CFDictionary)
+            guard !lines.isEmpty else { return }
+            var attributes = Self.item(name)
+            attributes[kSecValueData as String] = Data(lines.joined(separator: "\n").utf8)
+            attributes[kSecAttrLabel as String] = "Shades: phone \(name)"
             attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
             SecItemAdd(attributes as CFDictionary, nil)
         }

@@ -24,6 +24,7 @@ extension AppController {
                 self.channels.close()
             },
             act: { [weak self] in self?.messagesAction($0) },
+            sendPush: sendPush,
             now: now
         )
         link.onPaired = { [weak self] in
@@ -48,16 +49,18 @@ extension AppController {
         }
     }
 
-    /// Off means off: the page goes from your tailnet, and every phone has to pair again. That holds even if it
+    /// Off means off: the page goes from your tailnet, and every phone has to pair again and turn its notifications on again. That holds even if it
     /// never started, since the last run may have left the page on.
     func stopPhone() {
         phoneAddress = nil
         phoneListening = nil
         onTailscale { [stopServingPhone] in await stopServingPhone() }
+        // Straight from the Keychain, since this run may never have started, and an earlier one left them there.
+        phoneKeys.save(PhoneKeys.paired, [])
+        phoneKeys.save(PhoneKeys.pushes, [])
         guard let link = phone else { return }
         phone = nil
         link.stop()
-        link.door.forgetPhones()
         stage.showPairing(nil)
     }
 

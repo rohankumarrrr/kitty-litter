@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import CryptoKit
 import Foundation
 import ShadesCore
 
@@ -465,6 +466,13 @@ enum Demo {
     }
 
     /// Enough of a team to show every state in the kitten view.
+    /// A phone's half of a push subscription, which `phone subscribe` hands the page.
+    static let phone = P256.KeyAgreement.PrivateKey()
+    static let phoneAuth = Data((0..<16).map { _ in UInt8.random(in: .min ... .max) })
+    static var phoneSubscription: WebPush.Subscription {
+        WebPush.Subscription(endpoint: "https://web.push.apple.com/demo-phone", p256dh: WebPush.string(phone.publicKey.x963Representation), auth: WebPush.string(phoneAuth))
+    }
+
     static let kittens = [
         Kitten(name: "Steve Pawsniak", role: "Professional", covers: "Their career, resume and interviews.", folder: "/demo/steve"),
         Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: 0xb3261e, seesScreen: false),
@@ -493,7 +501,13 @@ enum Demo {
             withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") },
             // The page stays on loopback, on a free port, so it's never on your tailnet or in the real app's way.
             servePhone: { "http://127.0.0.1:\($0)" },
-            stopServingPhone: { print("[demo] phone page off") }
+            stopServingPhone: { print("[demo] phone page off") },
+            // Nothing leaves the Mac. The stand-in phone opens what it's sent, to show what a real one would get.
+            sendPush: { request in
+                let opened = request.httpBody.flatMap { try? WebPush.decrypt($0, with: Demo.phone, auth: Demo.phoneAuth) }
+                print("[demo] pushed to \(request.url?.host ?? "?"): \(opened.map { String(decoding: $0, as: UTF8.self) } ?? "nothing it could open")")
+                return 201
+            }
         )
         return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys)
     }

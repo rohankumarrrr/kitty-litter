@@ -182,9 +182,6 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(keys.hashes.count, 1)
         XCTAssertFalse(keys.hashes[0].contains(token), "only a hash of it is kept")
         XCTAssertTrue(PhoneDoor(keys: keys).admits(request(key: "Bearer \(token)")), "and it still works after a restart")
-        door.forgetPhones()
-        XCTAssertFalse(door.admits(request(key: "Bearer \(token)")))
-        XCTAssertEqual(keys.hashes, [])
     }
 
     func testGuessingUsesTheCodeUpAndItRunsOut() {

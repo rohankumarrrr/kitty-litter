@@ -8,6 +8,7 @@ With **Messages on my phone** on in Settings, the cat shows a code and a picture
 - `phone-places` lists Needs you, Everyone and Done, each kitten's DM and each pair that's talked.
 - `phone-answer` allows or denies an approval, answers a question from its card, and replies to a report.
 - `phone-send` sends in Everyone through the router, and starts a new topic from a DM, which opens on its own.
+- `phone-notify` sends each new thing in Needs you to a subscribed phone, encrypted for it, saying only who and what kind.
 
 ## How to get to it (user POV)
 
@@ -35,9 +36,15 @@ Journey: `journeys/phone-answers.txt`, in light mode.
 - **Question.** `question`, then `phone press Press Start 2P`, `2-picked` showing it picked, and `phone press Send answer`. The output says `[demo] answered: Press Start 2P`.
 - **Reply.** `phone press Reply` on Clawde's decision, then `phone send Yes, ship it`. The output says `[demo] forwarded to demo-login` with your words, and `4-replied` shows them in that thread.
 
-End both with `front` and `windows`. The app in front stays whatever it was, and `active=false`.
+Journey: `journeys/phone-notifications.txt`.
+
+- **Subscribe.** `phone open` and `draw`. `1-home` shows the page's note that an iPhone needs it on the Home Screen, since the web view, like Safari on an iPhone, has no push. `phone subscribe` stands in for **Turn on**: the page sends a stand-in phone's subscription with its own `/push` request, and the output says `[phone] subscribed: 204`.
+- **Notify.** `approval command ...` and `question`. The output says `[demo] notified: Steve Pawsniak needs an approval`, then `[demo] pushed to web.push.apple.com: {"title":"Steve Pawsniak needs an approval","tag":"demo-1"}`, which is what the stand-in phone opened from the encrypted push. The same follows for the question, and nothing says what was asked.
+
+End every journey with `front` and `windows`. The app in front stays whatever it was, and `active=false`.
 
 ## Gotchas
 
 - Each place is a stream of its own, so moving between them reconnects. Give `phone go` and `phone send` two or three seconds before drawing.
 - Tailscale itself isn't in the demo. `swift test --filter PhoneServerTests` runs the server on a free port and checks pairing and what it turns away over HTTP, and checks the helper that takes the page off with a stand-in for the `tailscale` tool.
+- Neither a real push service nor a real phone is in the demo. `swift test --filter WebPushTests` checks the encryption against RFC 8291's own example, and the signature as a push service checks it.

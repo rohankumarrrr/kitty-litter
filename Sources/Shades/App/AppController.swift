@@ -40,6 +40,7 @@ final class AppController {
     let phoneKeys: PhoneKeyStoring
     let servePhone: (UInt16) async throws -> String
     let stopServingPhone: () async -> Void
+    let sendPush: (URLRequest) async -> Int?
     let stage: CatStage
     let now: () -> Date
     let launchedAt: Date
@@ -211,6 +212,7 @@ final class AppController {
         phoneKeys = dependencies.phoneKeys
         servePhone = dependencies.servePhone
         stopServingPhone = dependencies.stopServingPhone
+        sendPush = dependencies.sendPush
         self.stage = stage
         self.now = now
         launchedAt = now()

@@ -11,6 +11,8 @@ enum PhonePage {
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-title" content="Shades">
         <title>Shades</title>
+        <link rel="manifest" href="/manifest.json">
+        <link rel="apple-touch-icon" href="/icon.png">
         <link rel="stylesheet" href="/app.css">
         <script src="/app.js" defer></script>
         </head>
@@ -21,6 +23,10 @@ enum PhonePage {
           <p id="subtitle"></p>
         </header>
         <div id="banner" role="status" hidden></div>
+        <div id="notify" hidden>
+          <p id="notifytext"></p>
+          <button id="notifybutton" type="button" hidden>Turn on</button>
+        </div>
         <main id="rows"></main>
         <form id="box" hidden>
           <label id="label" for="words"></label>
@@ -66,6 +72,10 @@ enum PhonePage {
         #subtitle { margin: 2px 0 0; color: var(--soft); font-size: 13px; }
         #subtitle:empty { display: none; }
         #banner { background: var(--warn); color: #fff; padding: 8px 16px; font-size: 14px; }
+        #notify { display: flex; align-items: center; gap: 12px; margin: 12px 12px 0; padding: 10px 14px; border-radius: 14px;
+          background: var(--card); border: 1px solid var(--line); }
+        #notifytext { flex: 1; margin: 0; color: var(--soft); font-size: 14px; }
+        #notifybutton { background: var(--you); color: #fff; border-radius: 999px; padding: 6px 14px; font-size: 15px; }
 
         main { flex: 1; padding: 8px 12px 16px; }
         .group { color: var(--soft); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 22px 4px 6px; }
@@ -143,6 +153,8 @@ enum PhonePage {
           gone: "That's changed since. Have another look.",
           wrongCode: "That code didn't work. Turn pairing on again in Shades on your Mac for a new one.",
           answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear',
+          notifyAsk: 'Get a notification when something needs you.',
+          homeScreen: 'For notifications on an iPhone, add this page to your Home Screen with Share, then pair it there.',
         };
 
         let key = new URLSearchParams(location.search).get('key') || 'home';
@@ -205,6 +217,68 @@ enum PhonePage {
           $('pair').hidden = true;
           for (const id of ['top', 'rows']) $(id).hidden = false;
           listen();
+          notifications().catch(() => {});
+        }
+
+        // Only who and what kind, as on the Mac. An iPhone only offers this to a page on its Home Screen.
+        let pushKey = null;
+        async function notifications() {
+          if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+            return offer(words.homeScreen, false);
+          }
+          const registration = await navigator.serviceWorker.register('/sw.js');
+          // Opening the page is looking at what they were about.
+          for (const shown of await registration.getNotifications()) shown.close();
+          if (Notification.permission === 'denied') return offer(null);
+          const response = await fetch('/push', { headers: headers(), cache: 'no-store' });
+          if (!response.ok) return offer(null);
+          pushKey = (await response.json()).key;
+          let subscription = await registration.pushManager.getSubscription();
+          // Shades has a new signing key, such as after it was set up again, so this subscription goes nowhere now.
+          if (subscription && encode(subscription.options.applicationServerKey) !== pushKey) {
+            await subscription.unsubscribe();
+            subscription = null;
+          }
+          if (subscription && Notification.permission === 'granted') {
+            await keep(subscription);
+            return offer(null);
+          }
+          offer(words.notifyAsk, true);
+        }
+
+        function offer(text, asks) {
+          $('notifytext').textContent = text || '';
+          $('notifybutton').hidden = !asks;
+          $('notify').hidden = !text || key !== 'home';
+        }
+
+        $('notifybutton').onclick = async () => {
+          $('notifybutton').disabled = true;
+          try {
+            if (await Notification.requestPermission() !== 'granted') return offer(null);
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decode(pushKey) });
+            await keep(subscription);
+            offer(null);
+          } catch (error) {
+            banner(words.unreachable);
+          } finally {
+            $('notifybutton').disabled = false;
+          }
+        };
+
+        function keep(subscription) {
+          const json = subscription.toJSON();
+          return post('/push', { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
+        }
+
+        function encode(buffer) {
+          return btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        function decode(text) {
+          const base64 = text.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((text.length + 3) % 4);
+          return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
         }
 
         function pairing() {
@@ -289,6 +363,7 @@ enum PhonePage {
             $('send').disabled = !next.box.ready;
           }
           $('rows').replaceChildren(...(key === 'home' ? places(next.places) : next.rows.map(row)));
+          $('notify').hidden = key !== 'home' || !$('notifytext').textContent;
           if (conversation(key) && (fresh || nearBottom)) window.scrollTo(0, document.body.scrollHeight);
           else if (fresh) window.scrollTo(0, 0);
           if (conversation(key) && document.visibilityState === 'visible') act({ act: 'seen', key }, true);
@@ -528,5 +603,31 @@ enum PhonePage {
         });
 
         start();
+        """#
+
+    static let manifest = """
+        {"name": "Shades", "short_name": "Shades", "start_url": "/?key=home", "scope": "/", "display": "standalone",
+         "background_color": "#1d1d1f", "theme_color": "#1d1d1f", "icons": [{"src": "/icon.png", "sizes": "180x180", "type": "image/png"}]}
+        """
+
+    /// Runs on the phone even with the page closed. Each push says only who and what kind, and tapping it opens
+    /// Needs you, where it is.
+    static let worker = #"""
+        'use strict';
+        self.addEventListener('push', (event) => {
+          let message = {};
+          try { message = event.data ? event.data.json() : {}; } catch (error) {}
+          event.waitUntil(self.registration.showNotification(message.title || 'Shades', { tag: message.tag, icon: '/icon.png' }));
+        });
+        self.addEventListener('notificationclick', (event) => {
+          event.notification.close();
+          event.waitUntil((async () => {
+            for (const client of await clients.matchAll({ type: 'window', includeUncontrolled: true })) {
+              await client.navigate('/?key=needs');
+              return client.focus();
+            }
+            return clients.openWindow('/?key=needs');
+          })());
+        });
         """#
 }
