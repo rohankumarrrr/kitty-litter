@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import ShadesCore
 
@@ -11,6 +12,7 @@ protocol ContextSources: Sendable {
     func focus(pid: pid_t) async -> FocusedContext
     func location(of browser: Browser, pid: pid_t) async -> BrowserLocation
     func page(of browser: Browser, pid: pid_t, location: BrowserLocation, wantsText: Bool) async -> PageRead
+    func elements(pid: pid_t) async -> [ScreenElement]
     func screenshot(_ request: ScreenCapture.Request) async -> ScreenCapture.Result?
 }
 
@@ -19,6 +21,7 @@ struct LiveSources: ContextSources {
     private static let focusLimit: TimeInterval = 0.4
     private static let locationLimit: TimeInterval = 0.4
     private static let accessibilityPageLimit: TimeInterval = 0.3
+    private static let elementsLimit: TimeInterval = 0.5
     private static let screenshotLimit: TimeInterval = 2
 
     var hasScreenRecording: Bool { Permissions.hasScreenRecording }
@@ -63,6 +66,16 @@ struct LiveSources: ContextSources {
         } ?? PageRead()
         read.failure = failure
         return read
+    }
+
+    func elements(pid: pid_t) async -> [ScreenElement] {
+        guard hasAccessibility else { return [] }
+        let primaryHeight = CGDisplayBounds(CGMainDisplayID()).height
+        let deadline = Date().addingTimeInterval(Self.elementsLimit)
+        // A hung app can hold the walk past its deadline, and then nothing is better than waiting.
+        return await blocking(within: Self.elementsLimit + 0.2) {
+            AccessibilityReader.elements(pid: pid, primaryHeight: primaryHeight, until: deadline)
+        } ?? []
     }
 
     func screenshot(_ request: ScreenCapture.Request) async -> ScreenCapture.Result? {

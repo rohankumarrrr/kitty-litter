@@ -59,6 +59,8 @@ final class AppController {
         var note: String?
         /// What a finished rewrite would go in place of: the selection as it was read, and its app.
         var replacing: (text: String, bundleID: String?)?
+        /// Where the answer points, which the cat sits by for as long as the answer's up.
+        var pointingAt: CGRect?
     }
     /// Something an agent has to tell you, which stays until you've had a chance to read it.
     struct Notice {
@@ -83,7 +85,11 @@ final class AppController {
     var approvalsOnShow = false
     var approvalsHidden = false
     var catIsAway = false
-    var reply: Reply?
+    var reply: Reply? {
+        didSet {
+            if reply?.pointingAt != oldValue?.pointingAt { catFollowsReply() }
+        }
+    }
     var line: Line?
     var notices: [Notice] = []
     /// Threads that are the cat's own plumbing, like writing a summary.

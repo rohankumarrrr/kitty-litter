@@ -1,11 +1,12 @@
-import CoreGraphics
+import AppKit
 import Foundation
 import ShadesContext
 import ShadesCore
 import ShadesT3
 
 /// Runs a flow from the command line, so it can be tried without touching the mouse or
-/// keyboard. With `--image`, the agent sees that picture instead of your real screen.
+/// keyboard. With `--image`, the agent sees that picture instead of your real screen, as if it
+/// filled the main display, so an answer that points there sends the cat to the same spot.
 ///
 ///     shades --ask "What's on my screen?" --image page.jpg
 ///     shades --hand-off "Which of my projects is the budget app?" --image page.jpg
@@ -13,6 +14,8 @@ import ShadesT3
 ///     shades --ask "Summarize this." --drop syllabus.pdf   # a file or link dropped onto the cat, with no look at the screen
 ///     shades --ask "Research this" --then "And that part?" --image page.jpg   # waits for the agents first
 ///     shades --ask "Make this friendlier" --selection "Send it by Friday." --image page.jpg   # as if that were selected
+///
+/// `--ask` prints where the cat pointed once the answer's in, or that it didn't.
 ///
 /// And for the Channels window, none of which sends anything:
 ///
@@ -34,6 +37,12 @@ enum DevFlags {
     static func run(on controller: AppController) {
         if let question = value(after: "--ask") {
             controller.ask(question, capture: look(controller))
+            Task {
+                while controller.reply?.done == false { try? await Task.sleep(nanoseconds: 200_000_000) }
+                // Where the cat went and nothing of what was said, so a run can check an answer pointed right.
+                print(controller.reply?.pointingAt.map { "pointed at \(NSStringFromRect($0))" } ?? "didn't point")
+                fflush(stdout)
+            }
             if let next = value(after: "--then") {
                 Task {
                     repeat {
@@ -117,7 +126,8 @@ enum DevFlags {
             appName: "Test picture",
             selectedText: value(after: "--selection"),
             screenshotJPEG: picture,
-            focusRegion: focusRegion
+            focusRegion: focusRegion,
+            screenshotArea: NSScreen.screens.first?.frame
         )
         return Task { AppController.Capture(snapshot: snapshot, error: nil) }
     }

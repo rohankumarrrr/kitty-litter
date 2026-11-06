@@ -101,4 +101,33 @@ final class ReplyHoldbackTests: XCTestCase {
         XCTAssertEqual(holdback.add("Sure. HANDOFF: no"), "Sure. HANDOFF: no")
         XCTAssertEqual(holdback.finish(fullText: "Sure. HANDOFF: no"), .answer("Sure. HANDOFF: no"))
     }
+
+    func testWhereToPointNeverShowsEvenHalfWritten() {
+        var holdback = ReplyHoldback()
+        XCTAssertEqual(holdback.add("Top right."), "Top right.")
+        XCTAssertEqual(holdback.add("\nP"), "Top right.")
+        XCTAssertEqual(holdback.add("OINT: "), "Top right.")
+        XCTAssertEqual(holdback.add("2"), "Top right.")
+        XCTAssertEqual(holdback.finish(fullText: "Top right.\nPOINT: 2"), .answer("Top right.", point: .element(2)))
+    }
+
+    func testWhereToPointStaysHiddenWhenANewLineFollowsIt() {
+        var holdback = ReplyHoldback()
+        XCTAssertEqual(holdback.add("Top right."), "Top right.")
+        XCTAssertEqual(holdback.add("\nPOINT: 2"), "Top right.")
+        XCTAssertEqual(holdback.add("\n"), "Top right.")
+        XCTAssertEqual(holdback.finish(fullText: "Top right.\nPOINT: 2\n"), .answer("Top right.", point: .element(2)))
+    }
+
+    func testALineThatOnlyStartsLikeItShows() {
+        var holdback = ReplyHoldback()
+        XCTAssertEqual(holdback.add("Top right.\nP"), "Top right.")
+        XCTAssertEqual(holdback.add("ress it."), "Top right.\nPress it.")
+    }
+
+    func testAReplyThatOnlyPointsHasNoWords() {
+        var holdback = ReplyHoldback()
+        XCTAssertEqual(holdback.add("POINT: 1"), "")
+        XCTAssertEqual(holdback.finish(fullText: "POINT: 1"), .answer("", point: .element(1)))
+    }
 }

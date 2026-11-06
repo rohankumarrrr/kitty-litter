@@ -15,7 +15,9 @@ final class ScreenBoundaryTests: XCTestCase {
         url: URL(string: "https://page-5ad1.example"),
         selectedText: "Selected-5ad1",
         pageText: "Page-5ad1",
-        screenshotJPEG: Data("Picture-5ad1".utf8)
+        screenshotJPEG: Data("Picture-5ad1".utf8),
+        screenshotArea: CGRect(x: 0, y: 0, width: 1440, height: 900),
+        elements: [ScreenElement(role: "button", label: "Element-5ad1", frame: CGRect(x: 10, y: 10, width: 80, height: 24))]
     )
     /// A file dropped onto the cat, which could as well be a screenshot, so it's held to the same promise.
     static let dropped = ScreenSnapshot(

@@ -154,15 +154,15 @@ extension AppController {
         let start: () -> AsyncThrowingStream<AgentReplyEvent, Error> = { [backend] in backend.start(prompt) }
         var end: TurnEnd
         if let thread = quick.thread(at: now()) {
-            end = await consume(backend.followUp(threadID: thread, prompt), question: question, snapshot: snapshot, generation: generation)
+            end = await consume(backend.followUp(threadID: thread, prompt), question: question, snapshot: snapshot, seen: shared, generation: generation)
             // The old thread might have gone. Nothing was shown yet, so just start fresh.
             if case .failed(_, _, false) = end {
                 quick.reset()
                 quickIsFresh = true
-                end = await consume(start(), question: question, snapshot: snapshot, generation: generation)
+                end = await consume(start(), question: question, snapshot: snapshot, seen: shared, generation: generation)
             }
         } else {
-            end = await consume(start(), question: question, snapshot: snapshot, generation: generation)
+            end = await consume(start(), question: question, snapshot: snapshot, seen: shared, generation: generation)
         }
 
         guard generation == replyGeneration, case .failed(let message, let error, _) = end else { return }
@@ -174,10 +174,12 @@ extension AppController {
         }
     }
 
+    /// `seen` is what the router was shown, which is all it can point at.
     func consume(
         _ stream: AsyncThrowingStream<AgentReplyEvent, Error>,
         question: String,
         snapshot: ScreenSnapshot?,
+        seen: ScreenSnapshot?,
         generation: Int
     ) async -> TurnEnd {
         var holdback = ReplyHoldback()
@@ -197,7 +199,7 @@ extension AppController {
                     addApproval(request)
                 case .finished(let fullText):
                     finished = true
-                    finish(holdback.finish(fullText: fullText), question: question, snapshot: snapshot, generation: generation)
+                    finish(holdback.finish(fullText: fullText), question: question, snapshot: snapshot, seen: seen, generation: generation)
                 case .failed(let message):
                     return .failed(message: message, error: nil, sawText: !holdback.text.isEmpty)
                 }
@@ -206,12 +208,12 @@ extension AppController {
             return .failed(message: nil, error: error, sawText: !holdback.text.isEmpty)
         }
         if !finished {
-            finish(holdback.finish(fullText: nil), question: question, snapshot: snapshot, generation: generation)
+            finish(holdback.finish(fullText: nil), question: question, snapshot: snapshot, seen: seen, generation: generation)
         }
         return .finished
     }
 
-    func finish(_ outcome: ReplyHoldback.Outcome, question: String, snapshot: ScreenSnapshot?, generation: Int) {
+    func finish(_ outcome: ReplyHoldback.Outcome, question: String, snapshot: ScreenSnapshot?, seen: ScreenSnapshot?, generation: Int) {
         // The ten minutes run from the last time the thread was used.
         if let threadID = quick.thread(at: now()) {
             quick.use(threadID, at: now())
@@ -219,13 +221,17 @@ extension AppController {
         }
         guard generation == replyGeneration else { return }
         switch outcome {
-        case .answer(let text):
-            if text.isEmpty {
+        case .answer(let text, let point):
+            // It only points with what the router was shown, and if it can't find the spot, it says so.
+            let region = point.flatMap { seen?.region(for: $0) }
+            if text.isEmpty && region == nil {
                 reply = nil
-                say(CatWords.noReply)
+                say(point == nil ? CatWords.noReply : CatWords.cantPoint)
             } else {
-                reply?.text = text
+                reply?.text = text.isEmpty ? CatWords.overHere : text
                 reply?.done = true
+                reply?.pointingAt = region
+                if point != nil && region == nil { reply?.note = CatWords.cantPoint }
                 renderBubble()
             }
         case .rewrite(let text):
@@ -272,8 +278,8 @@ extension AppController {
     private func wrapUpQuickThread(_ threadID: String, after outcome: ReplyHoldback.Outcome) {
         var passedOn = false
         switch outcome {
-        case .answer(let text):
-            if text.isEmpty { return }
+        case .answer(let text, let point):
+            if text.isEmpty && point == nil { return }
         case .rewrite:
             break
         case .handoff, .route, .kitten:
@@ -286,6 +292,17 @@ extension AppController {
             Task { [backend] in try? await backend.settle(threadID: threadID) }
         }
         quickIsFresh = false
+    }
+
+    /// Sits by what the answer points at, and goes home once that answer's gone. An approval needs
+    /// the cat with you first, and it comes back here after.
+    func catFollowsReply() {
+        guard !catIsAway else { return }
+        if let region = reply?.pointingAt {
+            stage.catRun(toRegion: region) {}
+        } else {
+            stage.catGoHome()
+        }
     }
 
     // MARK: - Handing off
