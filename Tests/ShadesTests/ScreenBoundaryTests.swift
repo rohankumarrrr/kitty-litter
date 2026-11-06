@@ -48,7 +48,7 @@ final class ScreenBoundaryTests: XCTestCase {
     func testNoThreadThatIsOrMightBeAScreenlessKittensGetsYourScreen() async {
         var reachedAllowed = 0
         for clawdeProject in [nil, "/code/shades"] {
-            for mode in [RuntimeMode.autoAcceptEdits, .fullAccess, nil] {
+            for mode in RuntimeMode.allCases.map(Optional.some) + [nil] {
                 for folder in Destination.Folder.allCases {
                     for named in [false, true] {
                         for starter in Destination.Starter.allCases {
@@ -113,6 +113,27 @@ final class ScreenBoundaryTests: XCTestCase {
         }
     }
 
+    /// A thread whose title starts with a screenless kitten's name counts as that kitten's, wherever it runs. Shades sets
+    /// that title from the router's hand-off, or T3 takes it from your first line, before anyone knows what's in it.
+    func testANewThreadNamedForAScreenlessKittenGetsNoScreen() async {
+        let clawde = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", seesScreen: false)
+        let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "their career", folder: "/k/steve")
+        let handedOff = World(kittens: [clawde, steve])
+        await handedOff.ask("this one", routerSays: "HANDOFF: Clawde: Tighten the rules")
+        let given = World(kittens: [clawde, steve])
+        await given.ask("Clawde: tighten the rules", routerSays: "KITTEN: 2")
+
+        for (name, world) in [("hand-off", handedOff), ("kitten", given)] {
+            let named = world.sends.filter { $0.place != .router && $0.title.hasPrefix("Clawde:") }
+            XCTAssertEqual(named.count, 1, "the \(name) started no thread named for Clawde")
+            for send in named {
+                XCTExpectFailure("An access gap this check found: a new thread named for a screenless kitten still gets your screen. See the screen-boundary skill.") {
+                    XCTAssertFalse(Self.carriesScreen(send.prompt), "the \(name) thread counts as Clawde's and got your screen")
+                }
+            }
+        }
+    }
+
     /// Everything a page could ask the router to use to put text where another thread reads it, as of T3 Code and
     /// Claude Code on 2026-11-05, and names standing in for tools that don't exist yet.
     static let waysToAnotherThread = [
@@ -167,6 +188,8 @@ private enum Pass: CaseIterable {
     case dmReply
     /// Reply on an inbox row.
     case inboxReply
+    /// Answering a question that thread asked, in Messages.
+    case answerQuestion
 }
 
 /// A thread your words can be passed to, described by what decides whose it is.
@@ -211,6 +234,8 @@ private enum Place: Equatable, CustomStringConvertible {
 private final class World {
     struct Send {
         var place: Place
+        /// The title of the thread it went to, which is how far T3 has got when it starts: the one Shades gave, or the first line.
+        var title: String
         var prompt: AgentPrompt
     }
 
@@ -222,6 +247,7 @@ private final class World {
     let controller: AppController
     let kittens: [Kitten]
     private var asks = 0
+    private var askedIn: [String: String] = [:]
 
     init(kittens: [Kitten], frontierMode: RuntimeMode = .autoAcceptEdits) {
         self.kittens = kittens
@@ -328,6 +354,10 @@ private final class World {
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             controller.reply("Go ahead", to: InboxEntry(id: "e", kind: .decision, text: "Page-5ad1 says ship it?", threadID: "w", threadTitle: "Fix routing", at: clock))
             await settle()
+        case .answerQuestion:
+            await ask("what's this?", routerSays: "It's Page-5ad1.")
+            askedIn["q"] = "w"
+            await messages("The first one", to: .question(AgentQuestion(id: "q", threadID: "w", threadTitle: "Fix routing", text: "Page-5ad1 says to pick one. Which?")))
         }
     }
 
@@ -344,7 +374,7 @@ private final class World {
         await settle()
     }
 
-    private func ask(_ question: String, routerSays: String) async {
+    func ask(_ question: String, routerSays: String) async {
         asks += 1
         backend.routerSays[question] = routerSays
         await controller.beginAsk()
@@ -370,27 +400,33 @@ private final class World {
         }
     }
 
-    /// Where each prompt went, by how it was sent. A new thread's ID says how many had started before it.
+    /// Where each prompt and answer went, by how it was sent. A new thread's ID says how many had started before it.
     var sends: [Send] {
-        var started: [String: Place] = [:]
-        return backend.sent.map { sent in
-            let place: Place
+        var started: [String: (place: Place, title: String)] = [:]
+        let prompts = backend.sent.map { sent in
             switch sent.mode {
             case .start:
                 let id = sent.prompt.projectID
-                place = id == nil ? .scratch : id == "project-router" ? .router : .project(String(id!.dropFirst(2)))
-                started["thread-\(started.count + 1)"] = place
+                let place: Place = id == nil ? .scratch : id == "project-router" ? .router : .project(String(id!.dropFirst(2)))
+                let title = sent.prompt.title ?? String(sent.prompt.text.prefix { !$0.isNewline })
+                started["thread-\(started.count + 1)"] = (place, title)
+                return Send(place: place, title: title, prompt: sent.prompt)
             case .followUp, .forward:
-                place = started[sent.threadID ?? ""] ?? .thread(sent.threadID ?? "")
+                let thread = started[sent.threadID ?? ""] ?? (.thread(sent.threadID ?? ""), "")
+                return Send(place: thread.place, title: thread.title, prompt: sent.prompt)
             }
-            return Send(place: place, prompt: sent.prompt)
         }
+        let answers = backend.answers.map { id, words in
+            Send(place: .thread(askedIn[id] ?? id), title: "", prompt: AgentPrompt(text: words.joined(separator: "\n"), attachments: [], model: .quick, runtimeMode: .auto))
+        }
+        return prompts + answers
     }
 
     /// Fails for anything from the screen in a place that is, or might be, a screenless kitten's. `threads` says which
     /// existing threads might be, from how they were set up. Gives back how many places the screen reached that may see it.
     func check(_ scene: String, threads: [String: Bool], file: StaticString = #filePath, line: UInt = #line) -> Int {
         let screenless = Set(kittens.filter { !$0.seesScreen }.flatMap { [$0.folder, $0.project] })
+        let names = kittens.filter { !$0.seesScreen }.map { "\($0.name):" }
         var reachedAllowed = 0
         XCTAssertEqual(context.options.count, asks, "\(scene): something other than Ask looked at the screen", file: file, line: line)
         for send in sends {
@@ -398,9 +434,11 @@ private final class World {
                 XCTAssertEqual(send.place, .router, "\(scene): the router ran in \(send.place)", file: file, line: line)
             }
             guard ScreenBoundaryTests.carriesScreen(send.prompt) else { continue }
+            let named = names.contains { send.title.hasPrefix($0) }
             let mightBeScreenless: Bool = switch send.place {
-            case .router, .scratch: false
-            case .project(let path): screenless.contains(path)
+            case .router: false
+            case .scratch: named
+            case .project(let path): screenless.contains(path) || named
             case .thread(let id): threads[id] ?? true
             }
             XCTAssertFalse(mightBeScreenless, "\(scene): the screen reached \(send.place)", file: file, line: line)

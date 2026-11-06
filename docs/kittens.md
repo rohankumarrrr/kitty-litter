@@ -220,7 +220,7 @@ These are still open, and most can only be fixed in T3:
 - **Summaries and sorting the inbox.** They read agents' reports, which can quote your screen, and they run in T3's scratch folders, where T3's tools work. Being told not to use any tools is all that stops one passing a quote to another thread. The screen-boundary check in `.agents/skills/` reports this as an open gap.
 - **Earlier setups.** Shades goes by what each `kitten.json` says now. If a kitten that works in a `project` stops seeing your screen, leave that `project` in its file until you've archived its threads there, or they'll count as nobody's.
 - **Commands let out of the sandbox.** `swift run` can run code an agent wrote.
-- **Thread titles.** The thread list still shows them, and a handoff's title is the router's reading of what you asked.
+- **Thread titles.** The thread list still shows them, and a handoff's title is the router's reading of what you asked. A new thread whose title starts with a screenless kitten's name, such as a handoff the router titles that way, counts as that kitten's and still gets your screen. The screen-boundary check reports this as an open gap.
 - **T3 keeping it all.** Nothing in T3 deletes old attachments or logs, and deleting a thread leaves its attachments behind. Shades keeps its own saved screenshots for a day.
 - **T3's macOS permissions.** The block stops a kitten using them, but every other agent can. If you don't use T3 Code for something that needs them, turn off Screen Recording and Accessibility for it in System Settings. Shades has its own.
 
