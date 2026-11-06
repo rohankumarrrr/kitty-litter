@@ -56,11 +56,6 @@ final class PhonePushes {
         }
     }
 
-    func forget() {
-        subscriptions = []
-        save()
-    }
-
     private var signing: P256.Signing.PrivateKey {
         if let signingKey { return signingKey }
         let saved = keys.load(PhoneKeys.signing).first.flatMap(WebPush.data).flatMap { try? P256.Signing.PrivateKey(rawRepresentation: $0) }

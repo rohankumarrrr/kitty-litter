@@ -73,10 +73,6 @@ final class PhoneDoor {
         return hashes.contains(Self.hash(String(header.dropFirst(7))))
     }
 
-    func forgetPhones() {
-        hashes = []
-        keys.save(PhoneKeys.paired, [])
-    }
 
     private static func hash(_ token: String) -> String {
         SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined()

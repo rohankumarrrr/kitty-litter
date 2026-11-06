@@ -15,7 +15,7 @@ final class WebPushTests: XCTestCase {
     func testTheRFCsExampleEncryptsToTheRFCsBody() throws {
         let phone = try P256.KeyAgreement.PublicKey(x963Representation: XCTUnwrap(WebPush.data(phonePublic)))
         let sender = try P256.KeyAgreement.PrivateKey(rawRepresentation: XCTUnwrap(WebPush.data(senderPrivate)))
-        let encrypted = try WebPush.encrypt(plaintext, for: phone, auth: auth, sender: sender, salt: salt)
+        let encrypted = try WebPush.encrypt(plaintext, for: phone, auth: auth, blocks: 1, sender: sender, salt: salt)
         XCTAssertEqual(WebPush.string(encrypted), body)
     }
 
@@ -31,6 +31,17 @@ final class WebPushTests: XCTestCase {
         let second = try WebPush.encrypt(plaintext, for: phone.publicKey, auth: auth)
         XCTAssertNotEqual(first.prefix(86), second.prefix(86))
         XCTAssertEqual(try WebPush.decrypt(second, with: phone, auth: auth), plaintext)
+    }
+
+    func testEveryNotificationIsTheSameSizeSoItsLengthSaysNothing() throws {
+        let phone = P256.KeyAgreement.PrivateKey()
+        let titles = ["Pepper needs an approval", "Pepper has a question", "Pepper needs a decision", "Steve Pawsniak needs an approval", "An agent needs an approval"]
+        let sizes = try titles.map { title in
+            try WebPush.encrypt(Data(#"{"title":"\#(title)","tag":"11111111-1111-1111-1111-111111111111"}"#.utf8), for: phone.publicKey, auth: auth).count
+        }
+        XCTAssertEqual(Set(sizes).count, 1, "\(sizes)")
+        let padded = try WebPush.encrypt(plaintext, for: phone.publicKey, auth: auth)
+        XCTAssertEqual(try WebPush.decrypt(padded, with: phone, auth: auth), plaintext, "and the phone takes the padding off")
     }
 
     func testTheSignatureIsWhatAPushServiceChecks() throws {
@@ -60,6 +71,8 @@ final class WebPushTests: XCTestCase {
         XCTAssertFalse(subscription("http://web.push.apple.com/QGuW").isValid)
         XCTAssertFalse(subscription("https://127.0.0.1:4797/act").isValid, "or a phone could have Shades send requests anywhere")
         XCTAssertFalse(subscription("https://web.push.apple.com.example.com/x").isValid)
+        XCTAssertFalse(subscription("https://web.push.apple.com:22/x").isValid, "only its https port")
+        XCTAssertTrue(subscription("https://web.push.apple.com:443/x").isValid)
         XCTAssertFalse(subscription("https://web.push.apple.com/x", key: "not-a-key").isValid)
         XCTAssertFalse(subscription("https://web.push.apple.com/x", auth: WebPush.string(Data(repeating: 7, count: 8))).isValid)
     }

@@ -345,6 +345,23 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(keys.load(PhoneKeys.signing).count, 1)
     }
 
+    func testTurningItOffAfterItCouldntStartStillForgetsEveryPhone() async throws {
+        let key = try await pair()
+        _ = try await subscribe(key: key)
+        // As if it couldn't start this time, with a phone paired and subscribed in an earlier run.
+        controller.phone?.stop()
+        controller.phone = nil
+        turnOff()
+        XCTAssertEqual(keys.hashes, [])
+        XCTAssertEqual(keys.load(PhoneKeys.pushes), [], "off means off, even if it never started")
+        var settings = controller.settings
+        settings.phone = true
+        controller.apply(settings)
+        approvalNow()
+        for _ in 0..<50 { await Task.yield() }
+        XCTAssertEqual(pushed, [], "a phone has to pair and turn its notifications on again")
+    }
+
     private func turnOff() {
         var settings = controller.settings
         settings.phone = false

@@ -55,11 +55,12 @@ extension AppController {
         phoneAddress = nil
         phoneListening = nil
         onTailscale { [stopServingPhone] in await stopServingPhone() }
+        // Straight from the Keychain, since this run may never have started, and an earlier one left them there.
+        phoneKeys.save(PhoneKeys.paired, [])
+        phoneKeys.save(PhoneKeys.pushes, [])
         guard let link = phone else { return }
         phone = nil
         link.stop()
-        link.door.forgetPhones()
-        link.pushes.forget()
         stage.showPairing(nil)
     }
 

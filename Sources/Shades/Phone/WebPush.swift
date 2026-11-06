@@ -17,7 +17,7 @@ enum WebPush {
         private static let services = ["push.apple.com", "fcm.googleapis.com", "push.services.mozilla.com", "notify.windows.com"]
 
         var isValid: Bool {
-            guard let url = URL(string: endpoint), url.scheme == "https", let host = url.host?.lowercased(),
+            guard let url = URL(string: endpoint), url.scheme == "https", url.port == nil || url.port == 443, let host = url.host?.lowercased(),
                   Self.services.contains(where: { host == $0 || host.hasSuffix("." + $0) }),
                   let key = WebPush.data(p256dh), (try? P256.KeyAgreement.PublicKey(x963Representation: key)) != nil,
                   WebPush.data(auth)?.count == 16
@@ -28,12 +28,13 @@ enum WebPush {
 
     private static let recordSize: UInt32 = 4096
 
-    /// RFC 8291 section 3, as one aes128gcm record. The sender's key and the salt are fresh each time, and only given
-    /// here for the RFC's own example.
+    /// RFC 8291 section 3, as one aes128gcm record, padded up to a whole number of `blocks` so its length doesn't give away
+    /// what it says. The sender's key and the salt are fresh each time, and only given here for the RFC's own example.
     static func encrypt(
         _ plaintext: Data,
         for phone: P256.KeyAgreement.PublicKey,
         auth: Data,
+        blocks: Int = 256,
         sender: P256.KeyAgreement.PrivateKey = P256.KeyAgreement.PrivateKey(),
         salt: Data = Data((0..<16).map { _ in UInt8.random(in: .min ... .max) })
     ) throws -> Data {
@@ -45,7 +46,8 @@ enum WebPush {
             sender: senderPublic,
             salt: salt
         )
-        let sealed = try AES.GCM.seal(plaintext + Data([2]), using: key, nonce: nonce)
+        let padded = (plaintext.count / blocks + 1) * blocks
+        let sealed = try AES.GCM.seal(plaintext + Data([2]) + Data(count: padded - plaintext.count - 1), using: key, nonce: nonce)
         var size = recordSize.bigEndian
         return salt + Data(bytes: &size, count: 4) + Data([UInt8(senderPublic.count)]) + senderPublic + sealed.ciphertext + sealed.tag
     }
