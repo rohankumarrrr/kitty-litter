@@ -87,6 +87,15 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
+    func answer(_ question: AgentQuestion, with answers: [String]) async throws {
+        print("[demo] answered: \(answers.joined(separator: " | "))")
+        update { threads in
+            guard let index = threads.firstIndex(where: { $0.id == question.threadID }) else { return }
+            threads[index].pendingQuestion = nil
+            threads[index].status = .running
+        }
+    }
+
     func projectID(atPath path: String) async -> String? { "demo-project" }
 
     func report(threadID: String, run: String?) async throws -> String? {
@@ -116,7 +125,14 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
                 threadID: threadID,
                 threadTitle: threads[index].title,
                 text: "Which pixel font should the headings use?",
-                options: ["Silkscreen (Recommended)", "Press Start 2P", "Keep the system font"]
+                options: ["Silkscreen (Recommended)", "Press Start 2P", "Keep the system font"],
+                form: AnswerForm(parts: [AnswerForm.Part(
+                    key: "font",
+                    text: "Which pixel font should the headings use?",
+                    options: ["Silkscreen (Recommended)", "Press Start 2P", "Keep the system font"],
+                    values: ["Silkscreen", "Press Start 2P", "Keep the system font"],
+                    takesOwnWords: true
+                )])
             )
         }
     }
@@ -474,7 +490,10 @@ enum Demo {
             kittens: { Demo.kittens },
             routerFolder: { "demo-router" },
             notify: { print("[demo] notified: \(CatWords.notification($0))") },
-            withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") }
+            withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") },
+            // The page stays on loopback, on a free port, so it's never on your tailnet or in the real app's way.
+            servePhone: { "http://127.0.0.1:\($0)" },
+            stopServingPhone: { print("[demo] phone page off") }
         )
         return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys)
     }

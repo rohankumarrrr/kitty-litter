@@ -15,6 +15,7 @@ final class AppStage: CatStage {
     let kittens = KittenPanel()
     let channels = ChannelsWindow()
     let settingsPanel = SettingsPanel()
+    let pairing = PairingPanel()
     let menuBar = MenuBar()
     weak var controller: AppController?
 
@@ -93,6 +94,9 @@ final class AppStage: CatStage {
         menuBar.onMessages = { [weak self] in self?.controller?.channelsPressed() }
         menuBar.messagesSummary = { [weak self] in self?.controller?.messagesMenuLine }
         menuBar.onSettings = { [weak self] in self?.controller?.settingsPressed() }
+        menuBar.canPairPhone = { [weak self] in self?.controller?.phone != nil }
+        menuBar.onPairPhone = { [weak self] in self?.controller?.pairPhone() }
+        pairing.onClose = { [weak self] in self?.controller?.pairingClosed() }
     }
 
     func start() {
@@ -240,6 +244,11 @@ final class AppStage: CatStage {
 
     func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {
         settingsPanel.show(settings, near: menuBar.corner, onSave: onSave)
+    }
+
+    func showPairing(_ card: PhonePairingCard?) {
+        guard let card else { return pairing.hide() }
+        pairing.show(card, centeredIn: cat.visibleFrame)
     }
 
     func copyToPasteboard(_ text: String) {

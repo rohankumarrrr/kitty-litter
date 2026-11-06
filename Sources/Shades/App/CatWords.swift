@@ -73,6 +73,14 @@ enum CatWords {
         }
     }
 
+    static let pairTitle = "Pair your phone"
+    static func pairHow(_ address: String?) -> String {
+        let open = address.map { "Scan this with your phone's camera, or open \($0) and type the code." } ?? "Open the page on your phone and type the code."
+        return open + " It works once, for the next 10 minutes. Your phone needs Tailscale on, and your Mac awake with me running."
+    }
+    static let phonePaired = "Your phone's paired. Messages is there now."
+    static func phoneProblem(_ error: Error) -> String { "Messages on your phone isn't working. \(error.localizedDescription)" }
+
     static let messagesTitle = "Messages"
     static let needsYouTitle = "Needs you"
     static let needsYouSubtitle = "What's waiting on you, and what each kitten is on"

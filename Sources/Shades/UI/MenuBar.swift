@@ -21,6 +21,9 @@ final class MenuBar: NSObject, NSMenuDelegate {
     /// What goes next to Messages, read each time the menu opens.
     var messagesSummary: (() -> String?)?
     var onSettings: (() -> Void)?
+    /// Whether Messages on your phone is on, so there's a phone to pair.
+    var canPairPhone: (() -> Bool)?
+    var onPairPhone: (() -> Void)?
     /// Extra items, such as setting up permissions or demo mode's controls.
     var extras: [Extra] = []
 
@@ -76,6 +79,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         addAction("Ask...", shortcut: Shortcut.askLabel) { [weak self] in self?.onAsk?() }
         addAction("Fix what I'm looking at", shortcut: Shortcut.fixLabel) { [weak self] in self?.onFix?() }
         addAction("Kittens", shortcut: "Shift-click the cat") { [weak self] in self?.onKittens?() }
+        if canPairPhone?() == true { addAction("Pair a phone...") { [weak self] in self?.onPairPhone?() } }
 
         if !extras.isEmpty {
             menu.addItem(.separator())
