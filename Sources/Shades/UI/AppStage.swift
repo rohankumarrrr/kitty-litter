@@ -208,8 +208,16 @@ final class AppStage: CatStage {
         return channels.panel.isKeyWindow && channels.panel.firstResponder === composer.textView && composer.target != nil
     }
 
+    func holdMessagesBox() {
+        channels.view.pane.startSpeaking()
+    }
+
     func sendInMessages(_ text: String) {
-        channels.view.pane.composer.send(text)
+        channels.view.pane.spoke(text)
+    }
+
+    func releaseMessagesBox() {
+        channels.view.pane.stopSpeaking()
     }
 
     // MARK: - Everything else

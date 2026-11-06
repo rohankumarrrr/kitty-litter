@@ -62,7 +62,7 @@ enum MessageTarget: Equatable {
         case .channel(let id):
             return book.writableKitten(in: id).map(MessageTarget.newThread)
         case .thread(let id, let channel):
-            guard channel == .everyone || book.writableKitten(in: channel) != nil, !book.elsewhere.contains(id) else { return nil }
+            guard channel == .everyone || book.writableKitten(in: channel) != nil else { return nil }
             if let topic = book.channel(channel)?.messages.first(where: { $0.exchangeID == id && $0.threadID.isEmpty }),
                let kitten = book.writableKitten(in: channel) {
                 return topic.failure == nil ? .starting(kitten) : .newThread(kitten)
@@ -71,10 +71,11 @@ enum MessageTarget: Equatable {
                 guard let parts = question.form?.parts, parts.indices.contains(answered[question.id] ?? 0) else { return false }
                 return parts[answered[question.id] ?? 0].takesOwnWords
             }
+            // A question is yours to answer even in a thread another kitten started. Carrying on there isn't.
             if let question = book.waiting.questions.first(where: { book.thread(holding: $0.id, else: $0.threadID) == id && takesWords($0) }) {
                 return .question(question)
             }
-            guard book.knows(thread: id, in: channel) else { return nil }
+            guard !book.elsewhere.contains(id), book.knows(thread: id, in: channel) else { return nil }
             return .thread(id: id, title: book.title(ofThread: id, in: channel))
         }
     }

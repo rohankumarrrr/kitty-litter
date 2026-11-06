@@ -2896,3 +2896,87 @@ extension FlowTests {
         XCTAssertEqual(stage.bubble, .inbox("1 decision"), "open isn't the same as looked at")
     }
 }
+
+// MARK: - Messages, review round 2
+
+extension FlowTests {
+    func testEverythingYouSendAfterAskingAboutWhatShippedStaysWithThatRow() async throws {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Deploy production?\nSHIPPED: The staging backup is ready.")
+        let decision = try XCTUnwrap(rows.first { $0.kind == .decision })
+        let shipped = try XCTUnwrap(rows.first { $0.kind == .shipped })
+        controller.channelsPressed(selecting: .needsYou)
+        let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: 820, height: 560))
+        view.pane.onAction = { [unowned self] in self.controller.messagesAction($0) }
+        view.show(try XCTUnwrap(stage.channelsShown.last))
+        func descendants(_ parent: NSView) -> [NSView] {
+            parent.subviews + parent.subviews.flatMap(descendants)
+        }
+        let card = try XCTUnwrap(descendants(view).compactMap { $0 as? CardRowView }.first {
+            $0.accessibilityLabel()?.contains(shipped.text) == true
+        })
+        try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == "Ask" }).onPress?()
+        view.pane.composer.send("Where is the staging backup stored?")
+        await settle()
+        if let latest = stage.channelsUpdated.last { view.show(latest) }
+        XCTAssertEqual(view.selection, .thread("w", in: .direct(inboxKitten)))
+        view.pane.composer.send("And how big is it?")
+        await settle()
+
+        XCTAssertTrue(try XCTUnwrap(rows.first { $0.id == decision.id }).needsYou, "a follow-up about the backup answered the deployment decision")
+        await finish(work(run: "run-2"), sorted: "NOTE: The backup is in staging storage, 4 GB.")
+        XCTAssertNil(try XCTUnwrap(rows.first { $0.id == decision.id }).answer)
+        XCTAssertEqual(try XCTUnwrap(rows.first { $0.id == shipped.id }).answer, "The backup is in staging storage, 4 GB.")
+    }
+
+    func testTalkingIntoMessagesHoldsItsBoxAndNeverShowsYourWordsOverTheCat() async {
+        controller.start()
+        await drainMainQueue()
+        controller.channelsPressed()
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "make it shorter", cleaned: "Make it shorter.", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        XCTAssertTrue(stage.messagesBoxHeld, "where the box points is fixed as the key goes down")
+        let before = stage.bubbles.count
+        voice.partialsIn.yield("make it")
+        await drainMainQueue()
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertFalse(stage.bubbles.dropFirst(before).contains(.listening("make it")), "that bubble is for asking the cat")
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertEqual(stage.sentInMessages, ["Make it shorter."])
+        XCTAssertFalse(stage.messagesBoxHeld)
+    }
+
+    func testTalkingIntoMessagesThenStoppingLetsTheBoxGo() async {
+        controller.start()
+        await drainMainQueue()
+        controller.channelsPressed()
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "", cleaned: "", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertEqual(stage.sentInMessages, [])
+        XCTAssertFalse(stage.messagesBoxHeld)
+    }
+
+    func testANoteAfterYouveDealtWithWhatCameInWhileMessagesWasOpenStaysQuiet() async throws {
+        kittens = [inboxKitten]
+        controller.channelsPressed()
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        let decision = try XCTUnwrap(rows.first { $0.kind == .decision })
+        controller.messagesAction(.inbox(.done(id: decision.id)))
+        controller.messagesHotkeyPressed()
+        controller.channelsClosed()
+        XCTAssertNil(stage.bubble, "nothing's left to tell you about")
+
+        await finish(work("w2", title: "Clawde: Tidy logs"), sorted: "NOTE: The logs are tidy.")
+        XCTAssertEqual(rows.last?.kind, .note)
+        XCTAssertNil(stage.bubble, "a note doesn't bring up the bubble unless it answers you")
+    }
+}

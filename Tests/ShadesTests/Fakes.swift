@@ -101,7 +101,13 @@ final class FakeStage: CatStage {
     func hideChannels() { isChannelsVisible = false }
     var isMessagesBoxTyping = false
     var sentInMessages: [String] = []
-    func sendInMessages(_ text: String) { sentInMessages.append(text) }
+    var messagesBoxHeld = false
+    func holdMessagesBox() { messagesBoxHeld = true }
+    func sendInMessages(_ text: String) {
+        sentInMessages.append(text)
+        messagesBoxHeld = false
+    }
+    func releaseMessagesBox() { messagesBoxHeld = false }
     func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {}
     func copyToPasteboard(_ text: String) { copied = text }
 

@@ -84,8 +84,12 @@ protocol CatStage: AnyObject {
     func hideChannels()
     /// You're typing in Messages' box, so what you say belongs there.
     var isMessagesBoxTyping: Bool { get }
-    /// Sends this from Messages' box, as if it had been typed and Return pressed.
+    /// Keeps Messages' box pointing where it does now, while you say something into it.
+    func holdMessagesBox()
+    /// Sends this from Messages' box where it pointed when it was held, after anything typed, as if Return were pressed.
     func sendInMessages(_ text: String)
+    /// You said nothing after all.
+    func releaseMessagesBox()
 
     // Everything else
     /// For the menu bar: how things are going, and whether anything needs you.

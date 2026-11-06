@@ -26,10 +26,13 @@ extension AppController {
         talkBox = fixIsOpen ? boxesOpened : nil
         // Messages' box only counts if you're typing in it, not if it's open behind your work.
         talkToMessages = !fixIsOpen && stage.isMessagesBoxTyping
+        if talkToMessages { stage.holdMessagesBox() }
         // The look happens as the key goes down: that's the moment you mean.
         if !boxTakesVoiceNow { talkLook = startLook(CaptureOptions()) }
         guard beginListening(.talk) else {
             talkLook = nil
+            if talkToMessages { stage.releaseMessagesBox() }
+            talkToMessages = false
             return
         }
         stage.catWake()
@@ -59,7 +62,11 @@ extension AppController {
             }
             if toMessages {
                 // The same goes for Messages: if you've stopped typing there, it isn't sent anywhere.
-                if !text.isEmpty, stage.isMessagesBoxTyping { stage.sendInMessages(text) }
+                if !text.isEmpty, stage.isMessagesBoxTyping {
+                    stage.sendInMessages(text)
+                } else {
+                    stage.releaseMessagesBox()
+                }
                 return
             }
             let capture = talkLook
@@ -72,6 +79,7 @@ extension AppController {
         } catch {
             voiceMode = nil
             talkLook = nil
+            if toMessages { stage.releaseMessagesBox() }
             refreshStatus()
             say(CatWords.problem(error, while: .listening))
         }
@@ -130,13 +138,15 @@ extension AppController {
         voiceMode = nil
         heard = nil
         talkLook = nil
+        if talkToMessages { stage.releaseMessagesBox() }
         talkToMessages = false
         renderBubble()
     }
 
     func heardSoFar(_ text: String) {
         guard hearing, voiceMode == .talk else { return }
-        if talkBox != nil {
+        if boxTakesVoiceNow {
+            // Words for a box show in that box, if any, never over the cat as if you were asking it.
             if talkBoxIsStillUp { stage.setInputText(text) }
         } else {
             heard = text

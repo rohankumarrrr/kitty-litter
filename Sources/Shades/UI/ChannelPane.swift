@@ -128,8 +128,10 @@ final class ChannelPane: QuietView {
     private var book: ChannelBook?
     /// Answers to the parts of a question so far, by its ID. Nothing goes until every part has one, as T3 wants.
     private var partAnswers: [String: [String]] = [:]
-    /// The inbox row whose Reply or Ask opened this thread, until you send or look elsewhere.
+    /// The inbox row whose Reply or Ask opened this thread, until you look elsewhere. All you send here is about it.
     private var replyingTo: InboxEntry?
+    /// Where the box pointed when the talk key went down, so nothing arriving meanwhile can move what you say.
+    private var spokenTo: (selection: ChannelSelection, target: MessageTarget)?
     private(set) var shown: [ChannelRow] = []
     private var views: [ChannelRowView] = []
     private var expanded: Set<String> = []
@@ -166,7 +168,6 @@ final class ChannelPane: QuietView {
                 self.onAction?(.startTopic(words, with: kitten, id: topic))
                 self.onSelect?(.thread(topic, in: .direct(kitten)))
             default:
-                self.replyingTo = nil
                 self.onAction?(.send(words, to: target, shownIn: self.selection.channelID))
                 self.updateComposer()
                 self.arrange(force: true)
@@ -232,6 +233,7 @@ final class ChannelPane: QuietView {
         book = nil
         partAnswers = [:]
         replyingTo = nil
+        spokenTo = nil
         composer.clear()
         stack()
     }
@@ -259,15 +261,50 @@ final class ChannelPane: QuietView {
     private func updateComposer(keepingDraft: Bool = false) {
         var target = book.flatMap { MessageTarget.standard(for: selection, in: $0, answered: partAnswers.mapValues(\.count)) }
         // Words already typed go where the box said when you started, so a refresh can't send them somewhere else.
-        if case .thread(let id, let title, nil)? = target, let replyingTo, replyingTo.threadID == id {
-            target = .thread(id: id, title: title, report: replyingTo.id)
+        if let replyingTo, case .thread(let id, _) = selection, replyingTo.threadID == id {
+            // Even a thread T3 no longer lists, such as an archived one, takes a reply to its report.
+            if case .thread(_, let title, nil)? = target {
+                target = .thread(id: id, title: title, report: replyingTo.id)
+            } else if target == nil {
+                target = .thread(id: id, title: replyingTo.threadTitle, report: replyingTo.id)
+            }
         }
+        if let spokenTo, spokenTo.selection == selection { target = spokenTo.target }
         if keepingDraft, composer.hasDraft, let current = composer.target, let book, current.isStill(in: book) {
             target = current
         }
         var label: String?
         if case .question(let question)? = target, let part = part(of: question) { label = CatWords.answering(part.part.text) }
         composer.show(target, label: label)
+    }
+
+    /// The talk key went down while you were typing here.
+    func startSpeaking() {
+        spokenTo = composer.target.map { (selection, $0) }
+    }
+
+    /// What you said goes after anything you'd typed, and is sent where the box pointed when you started, as if you'd
+    /// pressed Return. If that's gone, such as a question answered meanwhile, it waits in the box instead.
+    func spoke(_ text: String) {
+        let typed = composer.textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = typed.isEmpty ? text : "\(typed) \(text)"
+        let spot = spokenTo
+        spokenTo = nil
+        guard let spot, spot.selection == selection, let book, spot.target.isReady, spot.target.isStill(in: book) else {
+            composer.textView.string = words
+            updateComposer(keepingDraft: true)
+            arrange(force: true)
+            NSSound.beep()
+            return
+        }
+        composer.textView.string = ""
+        composer.onSend?(words, spot.target)
+        arrange(force: true)
+    }
+
+    func stopSpeaking() {
+        spokenTo = nil
+        updateComposer(keepingDraft: true)
     }
 
     /// The part of a question that's next to answer.

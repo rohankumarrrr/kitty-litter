@@ -637,3 +637,87 @@ extension ChannelsWindowTests {
         XCTAssertGreaterThanOrEqual(ratio, 4.5, "white words on a faded teal were \(ratio)")
     }
 }
+
+// MARK: - Messages, review round 2
+
+extension ChannelsWindowTests {
+    func testWordsYouStartedSayingStayWhereTheBoxPointedWhenAQuestionArrives() {
+        let threads = [work("t", title: "Resume")]
+        let transcripts = ["t": [said("e1", ask: "Tidy my resume", reply: "Done.", at: 0)]]
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false))
+        view.select(.thread("t", in: .direct(steve)))
+        view.pane.startSpeaking()
+
+        let question = AgentQuestion(id: "q", threadID: "t", threadTitle: "Resume", text: "Which font?", form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which font?", options: [], values: [], takesOwnWords: true)]))
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id])))
+        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Resume"), "the box doesn't move while you talk")
+        view.pane.spoke("Make the summary shorter")
+        XCTAssertEqual(sent, [.send("Make the summary shorter", to: .thread(id: "t", title: "Resume"), shownIn: .direct(steve))])
+        XCTAssertEqual(view.pane.composer.target, .question(question), "and once it's sent, it goes on to the question")
+    }
+
+    func testWhatYouSayGoesAfterWhatYouTyped() {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        view.show(book())
+        view.select(.thread("t", in: .direct(steve)))
+        view.pane.composer.textView.string = "Make the summary"
+        view.pane.startSpeaking()
+        view.pane.spoke("shorter, and keep it to one page")
+        XCTAssertEqual(sent, [.send("Make the summary shorter, and keep it to one page", to: .thread(id: "t", title: "Work"), shownIn: .direct(steve))])
+        XCTAssertEqual(view.pane.composer.textView.string, "")
+    }
+
+    func testWordsForAQuestionAnsweredMeanwhileWaitInTheBox() {
+        let question = AgentQuestion(id: "q", threadID: "t", threadTitle: "Work", text: "Which font?", form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which font?", options: [], values: [], takesOwnWords: true)]))
+        let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [thread], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id])))
+        view.select(.thread("t", in: .direct(steve)))
+        XCTAssertEqual(view.pane.composer.target, .question(question))
+        view.pane.startSpeaking()
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [thread], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false))
+        view.pane.spoke("Silkscreen")
+        XCTAssertEqual(sent, [], "it was answered in T3 meanwhile, so the words don't go to the thread instead")
+        XCTAssertEqual(view.pane.composer.textView.string, "Silkscreen")
+    }
+
+    func testReplyingToAReportWhoseThreadT3NoLongerListsStillHasABox() throws {
+        let report = InboxEntry(id: "r", kind: .decision, text: "Merged. Say ship it.", threadID: "gone", threadTitle: "Work", at: at)
+        let built = ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(reports: [report]))
+        let view = view()
+        view.show(built)
+        let card = try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first)
+        XCTAssertTrue(try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == "Reply" }).accessibilityPerformPress())
+        XCTAssertEqual(view.pane.composer.target, .thread(id: "gone", title: "Work", report: "r"), "an archived thread still takes a reply to its report")
+        XCTAssertFalse(view.pane.composer.isHidden)
+    }
+
+    func testTypeAnAnswerWorksInAThreadAnotherKittenStarted() throws {
+        let between = AgentThread(id: "asked", title: "From Pepper", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
+        let pepperThread = AgentThread(id: "p", title: "Plans", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at, projectPath: "/k/pepper")
+        let asked = Exchange(id: "x", asker: .agent(threadID: "p"), askedAt: at, ask: "Can you draft the budget email?", reply: "Before I send it, which tone?", repliedAt: at.addingTimeInterval(1))
+        let question = AgentQuestion(id: "q", threadID: "asked", threadTitle: "From Pepper", text: "Which tone?", options: ["Formal"], form: AnswerForm(parts: [
+            AnswerForm.Part(key: "tone", text: "Which tone?", options: ["Formal"], values: ["formal"], takesOwnWords: true),
+        ]))
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        let built = ChannelBook.build(kittens: [steve, pepper], threads: [between, pepperThread], transcripts: ["asked": [asked], "p": []], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id], listed: ["q": "asked"]))
+        view.show(built)
+        try press(CatWords.answerInWords, in: view)
+        XCTAssertEqual(view.selection, .thread("asked", in: .direct(steve)))
+        XCTAssertEqual(view.pane.composer.target, .question(question))
+        view.pane.composer.send("Warm but brief")
+        XCTAssertEqual(sent, [.answer(question, ["Warm but brief"])])
+
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [between, pepperThread], transcripts: ["asked": [asked], "p": []], isReading: false, unreadable: 0, cantReachT3: false))
+        XCTAssertNil(view.pane.composer.target, "once it's answered, carrying on in a thread another kitten started still isn't yours")
+    }
+}
