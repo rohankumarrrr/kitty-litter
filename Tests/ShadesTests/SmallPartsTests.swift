@@ -210,6 +210,9 @@ final class ScreenWordsTests: XCTestCase {
             "Thoughts on this tweet\u{2014}\"ship small, ship often\"",
             "Read this (\u{201C}ship small, ship often\u{201D})",
             "Read this (\"ship small, ship often\")",
+            "Thoughts on this tweet--\"ship small, ship often\"",
+            "Thoughts on this tweet-\"ship small, ship often\"",
+            "What does this error mean {\"error\":\"invalid_grant\"}",
             "the build failed because the signing key expired\n\nSummarize this",
             "Summarize this\n\nThe build failed because the signing key expired.",
         ] {

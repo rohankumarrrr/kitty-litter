@@ -46,11 +46,11 @@ enum ScreenWords {
 
     /// What they're pointing at is already here: a sentence before the pointing words, a colon with
     /// text after it, or a quote with a letter or number in it. Asking for it would be silly. A quote
-    /// opens after a space, a bracket or a dash, so one right against the pointing words closes them,
-    /// as in `"this video"?`, and doesn't count.
+    /// opens after a space, a bracket or a dash, typed or not, so one right against the pointing words
+    /// closes them, as in `"this video"?`, and doesn't count.
     private static func camePasted(before: Substring, after: Substring) -> Bool {
         before.range(of: #"(\S+ ){3,}\S*[.!?:"”] "#, options: .regularExpression) != nil
-            || after.range(of: #"(:\s+\S|[\s(\[—–]["“][^"“”]*[\p{L}\p{N}])"#, options: .regularExpression) != nil
+            || after.range(of: #"(:\s+\S|[\s(\[{—–-]["“][^"“”]*[\p{L}\p{N}])"#, options: .regularExpression) != nil
     }
 
     /// A web address they typed, or one to a page. A site's name on its own, like "on x.com", isn't the thing.
