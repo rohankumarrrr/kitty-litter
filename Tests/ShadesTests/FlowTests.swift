@@ -2333,6 +2333,28 @@ final class FlowTests: XCTestCase {
         XCTAssertNotNil(sentTo("project-clawde"), "the owner should still get its copy, without the file")
     }
 
+    func testAForwardThatNeverGotThereLeavesTheOwnersSessionUnmarked() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        var work = session("w", "Tailor resume")
+        work.projectPath = steve.folder
+        controller.threadsChanged([work])
+        controller.dispatchers.insert("w")
+        backend.forwardError = URLError(.notConnectedToInternet)
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nSEND TO: 1")]]
+        await ask(wrong)
+        await controller.forwardTask?.value
+        await settle()
+        XCTAssertFalse(controller.inbox.wasCorrected("w"), "nothing reached the session, so it wasn't given a correction")
+        XCTAssertTrue(controller.dispatchers.contains("w"), "nothing reached the session, so it still only passes work on")
+        await laterPassesWorkOn("failed-forward")
+    }
+
+    func testTheOwnersOwnSessionRefusingADropStillSaysSo() async {
+        await dropOntoOwnersSession(inOwnersFolder: true)
+        XCTAssertTrue(stage.bubbles.contains(.line(CatWords.cantTakeFiles("Tailor resume"), threadID: nil)))
+    }
+
     // MARK: - Self-check
 
     func testAKittenWithNothingKeepingItOffTheScreenIsFound() async {

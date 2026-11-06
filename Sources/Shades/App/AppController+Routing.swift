@@ -220,11 +220,6 @@ extension AppController {
                 refused?()
                 return
             }
-            // What it says about a correction has to reach you, even if it starts threads elsewhere.
-            if correction {
-                dispatchers.remove(thread.id)
-                noteCorrection(in: thread.id)
-            }
             say(CatWords.sentTo(thread), threadID: thread.id)
             let shared = seesScreen ? snapshot : nil
             let text = Prompts.forwarded(
@@ -244,6 +239,12 @@ extension AppController {
                             warning = sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: true, asked: asked, followUp: true)
                         }
                         continue
+                    }
+                    // Only now is it known to have your words, and with them a correction, whose report has to
+                    // reach you even if the session starts threads elsewhere.
+                    if correction, !heardBack {
+                        dispatchers.remove(thread.id)
+                        noteCorrection(in: thread.id)
                     }
                     heardBack = true
                     switch event {
