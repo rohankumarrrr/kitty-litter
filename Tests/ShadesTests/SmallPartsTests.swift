@@ -220,6 +220,13 @@ final class ScreenWordsTests: XCTestCase {
             "Read this:",
             "Read this :)",
             "Read this \"",
+            "Read this \"\"",
+            "Read this \u{201C}\u{201D}",
+            "Read this \" :)",
+            "Read this \"?",
+            "Summarize \"this article\".",
+            "What do you think of \"this video\"?",
+            "Sam sent me \"this video\", is it right?",
             "Hey there: read this x thread",
             "Read this x thread\n",
         ] {

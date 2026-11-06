@@ -48,7 +48,7 @@ enum ScreenWords {
     /// colon or quote mark with text after them. Asking for it would be silly.
     private static func camePasted(before: Substring, after: Substring) -> Bool {
         before.range(of: #"(\S+ ){3,}\S*[.!?:"”] "#, options: .regularExpression) != nil
-            || after.range(of: #"(:\s+\S|["“]\s*\S)"#, options: .regularExpression) != nil
+            || after.range(of: #"(:\s+\S|["“]\s*[^"“”.,!?;:)\s])"#, options: .regularExpression) != nil
     }
 
     /// A web address they typed, or one to a page. A site's name on its own, like "on x.com", isn't the thing.
