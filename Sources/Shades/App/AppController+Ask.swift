@@ -237,7 +237,13 @@ extension AppController {
     func handOff(task: String, question: String, snapshot: ScreenSnapshot?, onStarted: ((String?) -> Void)? = nil) {
         // With full access, neither the page nor the quick agent's reading of it gets to reach it.
         guard settings.frontierMode != .fullAccess else {
-            startFrontier(title: question, text: Prompts.frontier(request: question, snapshot: nil, screenshotPath: nil), snapshot: nil, onStarted: onStarted)
+            startFrontier(
+                title: question,
+                text: Prompts.frontier(request: question, snapshot: nil, screenshotPath: nil),
+                snapshot: nil,
+                missesScreen: ScreenWords.pointAtScreen(question),
+                onStarted: onStarted
+            )
             return
         }
         let path = saveScreenshot(of: snapshot)
@@ -247,6 +253,7 @@ extension AppController {
             title: task,
             text: Prompts.frontier(request: request, snapshot: snapshot, screenshotPath: path),
             snapshot: snapshot,
+            missesScreen: !carriesScreen(snapshot) && ScreenWords.pointAtScreen(question),
             onStarted: onStarted
         )
     }
@@ -261,7 +268,7 @@ extension AppController {
         return [AgentAttachment(name: "screen.jpg", mimeType: "image/jpeg", data: jpeg)]
     }
 
-    /// `onStarted` hears the new thread, or `nil` if there isn't one.
+    /// `onStarted` hears the new thread, or `nil` if there isn't one. `asked` is the question it came from, if not the latest.
     func startFrontier(
         title: String?,
         text: String,
@@ -269,9 +276,11 @@ extension AppController {
         projectID: String? = nil,
         name: String? = nil,
         missesScreen: Bool = false,
+        asked: Int? = nil,
         onStarted: ((String?) -> Void)? = nil
     ) {
         let name = name ?? frontierName
+        let asked = asked ?? replyGeneration
         let prompt = AgentPrompt(
             title: title.map { String($0.prefix(80)) },
             text: text,
@@ -290,7 +299,7 @@ extension AppController {
                         startedThread = threadID
                         dispatchers.insert(threadID)
                         onStarted?(threadID)
-                        sayPassedOn(CatWords.onIt(modelName: name), threadID: threadID, missesScreen: missesScreen)
+                        sayPassedOn(CatWords.onIt(modelName: name), threadID: threadID, missesScreen: missesScreen, asked: asked)
                     case .needsApproval(let request):
                         addApproval(request)
                     case .failed(let message):

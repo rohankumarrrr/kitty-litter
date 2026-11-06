@@ -75,13 +75,19 @@ extension AppController {
 
     /// Says your words have gone. If they point at a screen the agent won't get, you need to act
     /// on that, so it's a notice that goes first and waits to be read, not a line that can be lost.
-    func sayPassedOn(_ said: String, threadID: String, missesScreen: Bool) {
-        guard missesScreen else {
+    /// `asked` is the question they came from, since asking another takes the warning back.
+    func sayPassedOn(_ said: String, threadID: String, missesScreen: Bool, asked: Int) {
+        guard missesScreen, asked == replyGeneration else {
             say(said, threadID: threadID)
             return
         }
         line = nil
         post(caption: said, text: CatWords.sendTheLink, threadID: threadID, first: true)
+    }
+
+    /// Whether the agent gets anything of your screen to go on. A private app's is only a note that it's hidden.
+    func carriesScreen(_ shared: ScreenSnapshot?) -> Bool {
+        shared.map { !$0.isPrivate } ?? false
     }
 
     /// That thread's work went wrong, so there's nothing left to warn about. Other threads' warnings stand.
@@ -116,7 +122,8 @@ extension AppController {
         }
         let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
         let shared = seesScreen ? snapshot : nil
-        let missesScreen = !seesScreen && ScreenWords.pointAtScreen(words)
+        let missesScreen = !carriesScreen(shared) && ScreenWords.pointAtScreen(words)
+        let asked = replyGeneration
         flow = Task {
             guard let projectID = await backend.projectID(atPath: kitten.workspace) else {
                 onStarted?(nil)
@@ -136,6 +143,7 @@ extension AppController {
                 projectID: projectID,
                 name: kitten.name,
                 missesScreen: missesScreen,
+                asked: asked,
                 onStarted: onStarted
             )
         }
@@ -148,6 +156,7 @@ extension AppController {
 
         // Quick chats are left out of the thread list's news, so their replies are picked up here.
         let isQuick = watch.isQuick(thread.id)
+        let asked = replyGeneration
         forwardTask = Task {
             // A session with full access can do anything, so text from a page doesn't get to reach it.
             // Neither does one working for a kitten that isn't meant to see it, or one that won't say.
@@ -160,12 +169,12 @@ extension AppController {
                 screenshotPath: saveScreenshot(of: shared),
                 screenLeftOut: !seesScreen && snapshot != nil
             )
-            if !seesScreen && ScreenWords.pointAtScreen(words, isFollowUp: true) {
-                sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: true)
-            }
+            let missesScreen = !carriesScreen(shared) && ScreenWords.pointAtScreen(words, isFollowUp: true)
             do {
                 for try await event in backend.forward(threadID: thread.id, text: text, attachments: attachments(for: shared)) {
                     switch event {
+                    case .started where missesScreen:
+                        sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: true, asked: asked)
                     case .finished where isQuick:
                         reportOn(thread, failed: false)
                     case .failed(let message):
@@ -176,7 +185,7 @@ extension AppController {
                     }
                 }
             } catch {
-                dropScreenWarning(for: thread.id)
+                // As with a new thread, losing the connection doesn't mean your words didn't get there.
                 say(CatWords.problem(error, while: .agents))
             }
         }

@@ -987,6 +987,117 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, warning)
     }
 
+    /// The session has your words by then too, the same as a kitten that started.
+    func testLosingTheConnectionDuringAFollowUpKeepsTheWarning() async {
+        backend.replies = [[.text(delta: "Working on it.")]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.forward("Read this x thread", to: session("f", "Work", mode: .fullAccess), snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .line(CatWords.problem(URLError(.networkConnectionLost), while: .agents), threadID: nil))
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
+    }
+
+    func testAnEarlierWarningOutlivesASendThatNeverGotThere() async {
+        backend.replies = [[.finished(fullText: "Okay.")]]
+        controller.forward("Read this x thread", to: session("f", "Work", mode: .fullAccess), snapshot: nil)
+        await settle()
+        backend.forwardError = URLError(.notConnectedToInternet)
+        controller.forward("and that part?", to: session("f", "Work", mode: .fullAccess), snapshot: nil)
+        await settle()
+        controller.bubbleDismissed(byClick: false)
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "f"))
+    }
+
+    /// Nothing was captured, so wherever your words go, the screen doesn't go with them.
+    func testNoScreenToSendWarnsWhereverYourWordsGo() async {
+        kittens = [clawde]
+        controller.threadsChanged([session("w", "Clawde: Fix routing")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        controller.ask("Read this x thread", snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Clawde: Fix routing.", text: sendTheLink, threadID: "w"))
+
+        kittens = []
+        controller.threadsChanged([session("a", "Work")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        controller.ask("Read this x thread", snapshot: nil)
+        await settle()
+        XCTAssertEqual(stage.bubble, .notice(caption: "Sent that to Work.", text: sendTheLink, threadID: "a"))
+
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        controller.ask("Read this x thread", snapshot: ScreenSnapshot(appName: "Signal", isPrivate: true))
+        await settle()
+        await controller.frontierTask?.value
+        guard case .notice("Steve Pawsniak has this.", sendTheLink, _)? = stage.bubble else { return XCTFail("a private app's screen is only a note") }
+    }
+
+    func testAHandoffWarnsWhenTheScreenDoesntGo() async {
+        useFullAccess(frontier: true)
+        backend.replies = [[.finished(fullText: "HANDOFF: Read the thread")], [.finished(fullText: "Started.")]]
+        await ask("Read this x thread")
+        await controller.frontierTask?.value
+        let onIt = CatWords.onIt(modelName: controller.frontierName)
+        XCTAssertEqual(stage.bubble, .notice(caption: onIt, text: sendTheLink, threadID: "thread-2"))
+
+        useFullAccess()
+        backend.replies = [[.finished(fullText: "HANDOFF: Read the thread")], [.finished(fullText: "Started.")]]
+        controller.ask("Read this x thread", snapshot: nil)
+        await settle()
+        await controller.frontierTask?.value
+        guard case .notice(onIt, sendTheLink, _)? = stage.bubble else { return XCTFail("nothing was captured to send") }
+    }
+
+    func testAHandoffThatTakesTheScreenGetsNoWarning() async {
+        backend.replies = [[.finished(fullText: "HANDOFF: Read the thread")], [.finished(fullText: "Started.")]]
+        await ask("Read this x thread")
+        await controller.frontierTask?.value
+        XCTAssertEqual(stage.bubble, .line(CatWords.onIt(modelName: controller.frontierName), threadID: "thread-2"))
+    }
+
+    func testAFailureInTheThreadListTakesTheWarningBack() async {
+        await askClawde("Read this x thread")
+        let running = session("thread-2", "Clawde: Read the thread", status: .running)
+        controller.threadsChanged([running])
+        var failed = running
+        failed.status = .failed
+        controller.threadsChanged([failed])
+        await controller.reportTask?.value
+        guard case .notice(CatWords.failedCaption(failed), _, _)? = stage.bubble else { return XCTFail("the failure should show") }
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    func testAFailureFiledInTheInboxTakesTheWarningBack() async {
+        kittens = [inboxKitten]
+        backend.projects["/k/clawde"] = "project-clawde"
+        controller.give("Read this x thread", to: inboxKitten, snapshot: nil)
+        await settle()
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink })
+
+        controller.threadsChanged([work("thread-1", title: "Clawde: Read the thread", status: .running)])
+        controller.threadsChanged([work("thread-1", title: "Clawde: Read the thread", status: .failed)])
+        await settleFiling()
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    /// Its folder took a while to find, and by then you'd asked something else, maybe with the link.
+    func testAnOlderSendCantBringTheWarningBackAfterYourNextQuestion() async {
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "Got the link.")], [.finished(fullText: "Started.")]]
+        backend.whileFindingAProject = { [unowned self] in
+            self.controller.ask("https://x.com/example/status/1", snapshot: nil)
+            await self.controller.replyTask?.value
+        }
+        controller.give("Read this x thread", to: clawde, snapshot: nil)
+        await controller.flow?.value
+        await controller.frontierTask?.value
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+        XCTAssertEqual(backend.sent.last?.mode, .start, "your words still went")
+    }
+
     /// Some prompts explain what the block means and say it's empty, so this looks for what's on the screen.
     private func assertLeftOut(_ prompt: AgentPrompt, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertFalse(prompt.text.contains("<screen>\n"), file: file, line: line)
@@ -3180,6 +3291,20 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(book.everyone.messages.map(\.text), ["Found one for $212."])
         XCTAssertEqual(book.everyone.messages.first?.speaker, .cat)
         XCTAssertTrue(book.between.isEmpty)
+    }
+
+    /// Messages never sends your screen, so even a kitten that sees it can't tell what "this thread" is.
+    /// A reply straight to a thread is only what you typed.
+    func testMessagesSaysWhenYourWordsPointAtAScreenItWontSend() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.channelsPressed()
+        await messages("Read this x thread", to: .thread(id: "w", title: "Work"), in: nil)
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+
+        backend.routerSays = ["Read this x thread": "KITTEN: 1"]
+        await messages("Read this x thread", to: .router)
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.caption == "Steve Pawsniak has this." })
     }
 }
 
