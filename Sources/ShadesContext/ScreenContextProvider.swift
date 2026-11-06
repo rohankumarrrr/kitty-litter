@@ -83,8 +83,11 @@ public final class ScreenContextProvider: ScreenContextProviding, @unchecked Sen
             await Self.page(of: frontBrowser, location: location, pid: app.pid, wantsText: options.includePageText, from: sources)
         }
         async let timedShot = Self.timed { wantsScreenshot ? await sources.screenshot(request) : nil }
+        async let timedElements = Self.timed { options.includeElements ? await sources.elements(pid: app.pid) : [] }
         let (page, pageTime) = await timedPage
         let (shot, shotTime) = await timedShot
+        let (elements, elementsTime) = await timedElements
+        report.timings.elements = options.includeElements ? elementsTime : nil
 
         report.browser = Self.status(browser: frontBrowser, location: location, page: page)
         report.timings.page = frontBrowser == nil ? nil : pageTime
@@ -107,8 +110,15 @@ public final class ScreenContextProvider: ScreenContextProviding, @unchecked Sen
             pageText: pageText,
             screenshotJPEG: shot?.jpeg,
             focusRegion: shot?.focusRegion,
+            screenshotArea: shot?.area,
+            elements: elements,
             isPrivate: false
         )
+    }
+
+    /// What the cat could point at in an app, read the way a snapshot reads it, so a probe can check a window of its own.
+    public static func elements(ofApp pid: pid_t) async -> [ScreenElement] {
+        await LiveSources().elements(pid: pid)
     }
 
     public func pickRegion() async -> CGRect? {

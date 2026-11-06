@@ -1,5 +1,6 @@
 import ApplicationServices
 import Foundation
+import ShadesCore
 
 /// The window title and selected text, read from the app through Accessibility.
 struct FocusedContext: Equatable, Sendable {
@@ -12,6 +13,16 @@ enum AccessibilityReader {
     /// A hung app would otherwise hold each of these calls for six seconds.
     private static let messageTimeout: Float = 0.2
     private static let searchLimit = 400
+    private static let visitLimit = 2000
+    private static let elementLimit = 150
+    private static let labelLimit = 80
+    /// What's worth pointing at. Groups and other containers only matter for what's inside them.
+    private static let pointableRoles: Set<String> = [
+        "AXButton", "AXMenuButton", "AXPopUpButton", "AXCheckBox", "AXRadioButton", "AXLink", "AXTextField",
+        "AXTextArea", "AXComboBox", "AXSlider", "AXIncrementor", "AXDisclosureTriangle", "AXMenuBarItem",
+        "AXStaticText", "AXImage",
+    ]
+    private static let fieldRoles: Set<String> = ["AXTextField", "AXTextArea", "AXComboBox"]
 
     private static let webArea = "AXWebArea"
     private static let secureField = "AXSecureTextField"
@@ -33,6 +44,96 @@ enum AccessibilityReader {
         let subrole = string(focused, kAXSubroleAttribute)
         guard !isPasswordField(role: role, subrole: subrole) else { return nil }
         return string(focused, kAXSelectedTextAttribute)
+    }
+
+    /// What the cat could point at: the menus in the menu bar, then the labelled things in the front
+    /// window, in AppKit global points. It stops at the deadline with what it has, nearest the window first.
+    /// What's typed into a field is never read, only its label or placeholder.
+    static func elements(pid: pid_t, primaryHeight: CGFloat, until deadline: Date) -> [ScreenElement] {
+        let app = AXUIElementCreateApplication(pid)
+        let menus = element(app, kAXMenuBarAttribute).map(children) ?? []
+        var found = menus.compactMap { pointable(read($0), $0) }
+        if let window = frontWindow(of: app), let bounds = read(window).frame {
+            var queue: [(element: AXUIElement, parentLabel: String?)] = [(window, nil)]
+            var next = 0
+            while next < queue.count, next < visitLimit, found.count < elementLimit, Date() < deadline {
+                let (candidate, parentLabel) = queue[next]
+                next += 1
+                let node = read(candidate)
+                if isPasswordField(role: node.role, subrole: node.subrole) { continue }
+                // Scrolled out of sight, so nothing inside can be pointed at either.
+                if let frame = node.frame, !frame.isEmpty, !frame.intersects(bounds) { continue }
+                let item = pointable(node, candidate)
+                // A link's text repeats the link, and saying it twice only crowds the list.
+                if let item, item.label != parentLabel, bounds.contains(CGPoint(x: item.frame.midX, y: item.frame.midY)) {
+                    found.append(item)
+                }
+                queue += node.children.map { ($0, item?.label) }
+            }
+        }
+        return found.map {
+            ScreenElement(role: $0.role, label: $0.label, frame: ScreenGeometry.flipped($0.frame, primaryHeight: primaryHeight))
+        }
+    }
+
+    private struct Node {
+        var role: String?
+        var subrole: String?
+        var roleDescription: String?
+        var title: String?
+        var description: String?
+        /// In Quartz points.
+        var frame: CGRect?
+        var children: [AXUIElement] = []
+    }
+
+    /// One round trip per element, since a page can have thousands of them.
+    private static func read(_ element: AXUIElement) -> Node {
+        let names = [
+            kAXRoleAttribute, kAXSubroleAttribute, kAXRoleDescriptionAttribute, kAXTitleAttribute,
+            kAXDescriptionAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXChildrenAttribute,
+        ]
+        AXUIElementSetMessagingTimeout(element, messageTimeout)
+        var result: CFArray?
+        guard AXUIElementCopyMultipleAttributeValues(element, names as CFArray, [], &result) == .success,
+              let values = result as? [AnyObject], values.count == names.count
+        else { return Node() }
+        // A missing attribute comes back as an error in its place.
+        let present = values.map { value -> AnyObject? in
+            guard CFGetTypeID(value) == AXValueGetTypeID() else { return value }
+            return AXValueGetType(value as! AXValue) == .axError ? nil : value
+        }
+        var origin = CGPoint.zero
+        var size = CGSize.zero
+        var frame: CGRect?
+        if let position = present[5], CFGetTypeID(position) == AXValueGetTypeID(), AXValueGetValue(position as! AXValue, .cgPoint, &origin),
+           let extent = present[6], CFGetTypeID(extent) == AXValueGetTypeID(), AXValueGetValue(extent as! AXValue, .cgSize, &size) {
+            frame = CGRect(origin: origin, size: size)
+        }
+        return Node(
+            role: present[0] as? String,
+            subrole: present[1] as? String,
+            roleDescription: present[2] as? String,
+            title: present[3] as? String,
+            description: present[4] as? String,
+            frame: frame,
+            children: present[7] as? [AXUIElement] ?? []
+        )
+    }
+
+    /// In Quartz points, like the node.
+    private static func pointable(_ node: Node, _ element: AXUIElement) -> ScreenElement? {
+        guard let role = node.role, pointableRoles.contains(role), let frame = node.frame, frame.width >= 2, frame.height >= 2 else { return nil }
+        var text = label(node.title) ?? label(node.description)
+        if text == nil, role == "AXStaticText" { text = label(string(element, kAXValueAttribute)) }
+        if text == nil, fieldRoles.contains(role) { text = label(string(element, kAXPlaceholderValueAttribute)) }
+        guard let text else { return nil }
+        return ScreenElement(role: label(node.roleDescription) ?? String(role.dropFirst(2)).lowercased(), label: text, frame: frame)
+    }
+
+    /// One line, so a label can't pass for another item in the list.
+    private static func label(_ text: String?) -> String? {
+        ScreenText.clean(text?.split(whereSeparator: \.isWhitespace).joined(separator: " "), limit: labelLimit)
     }
 
     /// Reads a browser page without JavaScript, if the page is exposed at all. WebKit always does.

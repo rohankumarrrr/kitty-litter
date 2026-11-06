@@ -15,6 +15,8 @@ import ShadesCore
 //   probe-context --pick             the real region picker, for you to drag
 //   probe-context --synthetic <dir>  capture checks against a window of its own (see Fixture.swift)
 //                                    (add --screen 1 for the second display)
+//   probe-context --elements          reads what the cat could point at in a window of its own
+//                                    (add --screen 1 for the second display)
 //   probe-context --picker-test <dir>  drives the picker with events handed to its own windows
 //                                      (add --real-mouse for one real drag through the window server)
 
@@ -144,6 +146,10 @@ Task {
         await serveField(secure: true)
     } else if arguments.contains("--serve-text-field") {
         await serveField(secure: false)
+    } else if arguments.contains("--serve-buttons") {
+        await serveButtons()
+    } else if arguments.contains("--elements") {
+        await runElementsCheck()
     } else if let directory = value(after: "--synthetic") {
         await runSyntheticChecks(in: URL(fileURLWithPath: directory))
     } else if let directory = value(after: "--picker-test") {

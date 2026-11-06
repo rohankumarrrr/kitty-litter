@@ -16,7 +16,8 @@ extension AppController {
         stage.hideInbox()
         guard let region = await context.pickRegion() else { return }
         stage.catRun(toRegion: region) {}
-        let capture = await startLook(CaptureOptions(focusRegion: region)).value
+        // Nothing gets pointed at here, and the box waits on this look.
+        let capture = await startLook(CaptureOptions(includeElements: false, focusRegion: region)).value
         let snapshot = capture.snapshot ?? ScreenSnapshot(focusRegion: region)
 
         // With nothing to look at, a description is the only way it can help.

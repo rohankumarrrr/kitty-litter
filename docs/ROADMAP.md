@@ -20,7 +20,7 @@ A kitten for the system itself, a self-check, rollback and a window for reading 
 
 ## Next ideas
 
-- **Pointing at things.** Ask "where do I change this?" and the cat runs to the button and sits on it. The agent returns screen coordinates, and the cat's perching does the rest. This also suits step-by-step homework hints, where it shows you the next step without doing it for you.
+- **Step-by-step hints.** The cat can already point at what you ask about. For homework, it could point at the next step each time you ask, without doing it for you.
 - **Kittens out on the desktop.** Shift-clicking Shades already shows every kitten and how it's doing. Next, each working kitten could walk around the screen as its own small cat. Click one to open its thread.
 - **Local screen memory.** An opt-in, on-device history for "where did I see that article?", plus a summary at the end of the day. It's the riskiest for privacy, so it comes last and never leaves your Mac.
 - **An inbox for everyone.** The inbox started with the kitten that looks after the system, and it works for any kitten that sets `inbox: true`. Next, make it the default for every kitten, and show a kitten's proposals as decision rows, so everything waiting on you is in one place. A digest of several finishes would do the same job, so it should become part of Needs you in Messages rather than sit beside it. The inbox panel over the cat and Needs you show the same reports, and could become one.

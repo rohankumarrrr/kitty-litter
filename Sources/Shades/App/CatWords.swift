@@ -18,6 +18,8 @@ enum CatWords {
     static let didntCatch = "I didn't catch that."
     static let tellMeWhatsWrong = "I can't see this one, so tell me what's wrong."
     static let cantSeeScreen = "I can't see your screen just now, but ask away."
+    static let overHere = "Over here."
+    static let cantPoint = "I couldn't find it on screen to point at."
     static let approvalFailed = "That answer didn't go through. It's still waiting."
     static let frontDoorNoFolder = "I can't get the folder I answer from ready, so I can't take questions. Choose Check Myself from my menu."
     static let frontDoorNotClaude = "My front door model isn't Claude, so nothing would stop it passing your screen on. Pick a Claude one in my settings."

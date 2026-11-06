@@ -35,6 +35,7 @@ public struct CaptureReport: Sendable, Equatable {
         public var screenshotList: Double?
         public var screenshotGrab: Double?
         public var screenshotEncode: Double?
+        public var elements: Double?
     }
 
     public init() {}

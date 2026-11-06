@@ -256,6 +256,11 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         if lower.hasPrefix("summarize") {
             return "It's a one-page syllabus for Intro to Statistics. Week 1 covers describing data, week 2 is probability, and the final is on December 12."
         }
+        // Before the hand-off words, since "where do I change this?" is a question about the screen.
+        if lower.contains("where") {
+            if lower.contains("logo") { return "It's at the top left.\n\(Prompts.pointMarker) 9" }
+            return "It's the Start free trial button, on the right under the Pro plan.\n\(Prompts.pointMarker) 2"
+        }
         if ["fix", "change", "refactor", "build", "rewrite"].contains(where: lower.contains) {
             return "\(Prompts.handoffMarker) Fix the Buy button on the pricing page so it opens checkout."
         }
@@ -284,6 +289,7 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
         if isPrivate {
             return ScreenSnapshot(isPrivate: true)
         }
+        let screen = await MainActor.run { NSScreen.screens.first?.frame ?? CGRect(x: 0, y: 0, width: 1440, height: 900) }
         return ScreenSnapshot(
             appName: "Safari",
             bundleID: "com.apple.Safari",
@@ -291,8 +297,22 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
             url: URL(string: "https://example.com/pricing"),
             pageText: "Pro plan, $12 a month.",
             screenshotJPEG: Self.fakeJPEG,
-            focusRegion: options.focusRegion
+            focusRegion: options.focusRegion,
+            screenshotArea: screen,
+            elements: options.includeElements ? Self.elements(on: screen) : []
         )
+    }
+
+    /// The pricing page's heading, its trial button and its plan, where they'd sit on the main display.
+    private static func elements(on screen: CGRect) -> [ScreenElement] {
+        func at(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> CGRect {
+            CGRect(x: screen.minX + screen.width * x, y: screen.maxY - screen.height * y - height, width: width, height: height)
+        }
+        return [
+            ScreenElement(role: "heading", label: "Pricing", frame: at(0.2, 0.18, 160, 40)),
+            ScreenElement(role: "button", label: "Start free trial", frame: at(0.62, 0.55, 180, 44)),
+            ScreenElement(role: "text", label: "Pro plan, $12 a month", frame: at(0.6, 0.45, 220, 24)),
+        ]
     }
 
     func pickRegion() async -> CGRect? {

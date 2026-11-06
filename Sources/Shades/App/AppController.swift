@@ -83,6 +83,8 @@ final class AppController {
     var approvalsOnShow = false
     var approvalsHidden = false
     var catIsAway = false
+    /// Where the cat is sitting for the reply that pointed there, until the reply goes.
+    var pointingAt: CGRect?
     var reply: Reply?
     var line: Line?
     var notices: [Notice] = []
@@ -287,9 +289,11 @@ final class AppController {
             guard !byClick else { return }
             reply = nil
             replyGeneration += 1
+            stopPointing()
         case .reply:
             reply = nil
             replyGeneration += 1
+            stopPointing()
         case .line:
             line = nil
         case .inbox:

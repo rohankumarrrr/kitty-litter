@@ -14,10 +14,12 @@ final class FakeSources: ContextSources, @unchecked Sendable {
     var focused = FocusedContext(windowTitle: "notes.txt", selectedText: "chosen words")
     var browserLocation = BrowserLocation(url: URL(string: "https://example.com/page"))
     var pageRead = PageRead(text: "page words")
+    var found = [ScreenElement(role: "button", label: "Send", frame: CGRect(x: 5, y: 6, width: 70, height: 20))]
     var shot: ScreenCapture.Result? = ScreenCapture.Result(
         jpeg: Data([1, 2, 3]),
         pixelSize: CGSize(width: 10, height: 10),
         focusRegion: CGRect(x: 1, y: 2, width: 3, height: 4),
+        area: CGRect(x: 0, y: 0, width: 1440, height: 900),
         listSeconds: 0,
         grabSeconds: 0,
         encodeSeconds: 0
@@ -50,6 +52,11 @@ final class FakeSources: ContextSources, @unchecked Sendable {
         return pageRead
     }
 
+    func elements(pid: pid_t) async -> [ScreenElement] {
+        note("elements")
+        return found
+    }
+
     func screenshot(_ request: ScreenCapture.Request) async -> ScreenCapture.Result? {
         note("screenshot")
         lock.withLock { lastRequest = request }
@@ -77,6 +84,8 @@ final class PrivacyTests: XCTestCase {
         XCTAssertNil(snapshot.pageText, file: file, line: line)
         XCTAssertNil(snapshot.screenshotJPEG, file: file, line: line)
         XCTAssertNil(snapshot.focusRegion, file: file, line: line)
+        XCTAssertNil(snapshot.screenshotArea, file: file, line: line)
+        XCTAssertEqual(snapshot.elements, [], file: file, line: line)
     }
 
     func testAnAppOnTheListGetsNothingReadAtAll() async throws {
@@ -112,6 +121,7 @@ final class PrivacyTests: XCTestCase {
         assertHidesEverything(snapshot)
         XCTAssertFalse(sources.called.contains("page"))
         XCTAssertFalse(sources.called.contains("screenshot"))
+        XCTAssertFalse(sources.called.contains("elements"))
     }
 
     func testABrowserThatWontAnswerStaysHidden() {
@@ -128,6 +138,7 @@ final class PrivacyTests: XCTestCase {
         assertHidesEverything(try await provider(sources).snapshot(CaptureOptions()))
         XCTAssertFalse(sources.called.contains("page"))
         XCTAssertFalse(sources.called.contains("screenshot"))
+        XCTAssertFalse(sources.called.contains("elements"))
     }
 
     func testOnlyBrowsersGetJudgedByTheirTitle() {
@@ -147,6 +158,15 @@ final class PrivacyTests: XCTestCase {
         XCTAssertNil(snapshot.url)
         XCTAssertEqual(snapshot.screenshotJPEG, Data([1, 2, 3]))
         XCTAssertEqual(snapshot.focusRegion, CGRect(x: 1, y: 2, width: 3, height: 4))
+        XCTAssertEqual(snapshot.screenshotArea, CGRect(x: 0, y: 0, width: 1440, height: 900))
+        XCTAssertEqual(snapshot.elements.map(\.label), ["Send"])
+    }
+
+    func testWhatCouldBePointedAtIsOnlyReadWhenWanted() async throws {
+        let sources = FakeSources()
+        let snapshot = try await provider(sources).snapshot(CaptureOptions(includeElements: false))
+        XCTAssertEqual(snapshot.elements, [])
+        XCTAssertFalse(sources.called.contains("elements"))
     }
 
     func testAppsOnTheListStayOutOfOtherAppsScreenshots() async throws {

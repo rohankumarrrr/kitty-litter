@@ -6,7 +6,7 @@ The maintained list of what a person can do with Shades, and how to prove each i
 
 - Every journey starts a fresh demo with `--no-script`, so it begins from the same state: four threads, five kittens (Cali and Furbit not set up yet), Clawde with an inbox and no screen, and nothing waiting on you.
 - The demo's screen is Safari showing a pricing page. `ask <question>` uses a screen with no picture, so it sends 0 attachments, and with whatever `select <text>` last set as the selected text.
-- The demo router picks by words in the question (`reply(to:)` in `Sources/Shades/Demo/Demo.swift`): "resume" or "interview" goes to Steve Pawsniak, "Clawde" goes to Clawde, a question starting "Summarize" gets a summary of the demo's syllabus, "fix", "change", "build", "refactor" or "rewrite" goes to the frontier agent, "tighten" rewrites the selected text, "follow" or "what you" carries on in the first session, "hello" gets a greeting, "long" gets a long answer, and anything else gets an answer about the pricing page.
+- The demo router picks by words in the question (`reply(to:)` in `Sources/Shades/Demo/Demo.swift`): "resume" or "interview" goes to Steve Pawsniak, "Clawde" goes to Clawde, a question starting "Summarize" gets a summary of the demo's syllabus, "fix", "change", "build", "refactor" or "rewrite" goes to the frontier agent, "tighten" rewrites the selected text, "follow" or "what you" carries on in the first session, "hello" gets a greeting, "long" gets a long answer, and anything else gets an answer about the pricing page. Before the hand-off words, "where" gets an answer that points at the Start free trial button, or at something the screen doesn't have if the question says "logo".
 
 ## Proof
 
@@ -22,7 +22,7 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 
 ## Features
 
-- [Ask](./ask.md) covers asking the cat, its answer, passing to a kitten and handing off.
+- [Ask](./ask.md) covers asking the cat, its answer, pointing at things, passing to a kitten and handing off.
 - [Drop](./drop.md) covers dropping a PDF, picture or link onto the cat, and where it may go.
 - [Messages](./messages.md) covers Needs you, Everyone and a kitten's DM.
 - [Inbox](./inbox.md) covers a kitten's report arriving, the inbox and clearing a row.

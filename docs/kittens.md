@@ -152,7 +152,7 @@ Since it can change the rules everyone works by, it needs more care than the oth
 
 Telling an agent not to look isn't enough. Agents run as you, so they can open whatever you can, and copies of your screen end up in several places however careful Shades is:
 
-- **The router sees it first.** It looks at your screen before it knows who the question is for, so a screenshot and the page text are saved with its thread even when the kitten gets neither.
+- **The router sees it first.** It looks at your screen before it knows who the question is for, so a screenshot, the page text and the labels of what it could point at are saved with its thread even when the kitten gets none of them. Only the router is shown those labels.
 - **T3 keeps everything.** Its database, logs and attachments folder hold every message, and it opens that folder to every Claude thread.
 - **Claude and Codex keep transcripts,** with the screenshots inside them.
 - **T3 Code can have permission to see your screen.** If it does, so does every agent it runs, whatever the privacy list says.

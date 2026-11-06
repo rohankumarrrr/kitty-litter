@@ -131,7 +131,7 @@ extension AppController {
             return
         }
         switch outcome {
-        case .answer(let text), .rewrite(let text):
+        case .answer(let text, _), .rewrite(let text):
             catSays(text.isEmpty ? CatWords.noReply : text)
             Task { [backend] in try? await backend.settle(threadID: threadID) }
             return

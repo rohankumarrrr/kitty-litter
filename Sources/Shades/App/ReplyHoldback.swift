@@ -6,7 +6,7 @@ import ShadesCore
 /// is no longer than the first letter.
 struct ReplyHoldback {
     enum Outcome: Equatable {
-        case answer(String)
+        case answer(String, point: PointTarget? = nil)
         /// New text for what's selected, which waits for you to say where it goes.
         case rewrite(String)
         case handoff(task: String)
@@ -22,13 +22,14 @@ struct ReplyHoldback {
     /// Takes the next bit of text, returning everything to show so far, or `nil` to keep waiting.
     mutating func add(_ delta: String) -> String? {
         text += delta
-        if released { return Self.visible(text) }
         let start = Self.visible(text)
-        if start.isEmpty || Self.markers.contains(where: { start.hasPrefix($0) || $0.hasPrefix(start) }) {
-            return nil
+        if !released {
+            if start.isEmpty || Self.markers.contains(where: { start.hasPrefix($0) || $0.hasPrefix(start) }) {
+                return nil
+            }
+            released = true
         }
-        released = true
-        return start
+        return Self.withoutPointing(start)
     }
 
     /// The reply is done, so it's clear what it was. Prefers the backend's full text, if any.
@@ -42,7 +43,19 @@ struct ReplyHoldback {
         // A marker that goes nowhere is nothing worth reading.
         if [Prompts.routeMarker, Prompts.kittenMarker, Prompts.rewriteMarker].contains(where: visible.hasPrefix) { return .answer("") }
         // The marker with nothing after it is nothing worth reading.
-        return .answer(visible.trimmingCharacters(in: .whitespacesAndNewlines) == Prompts.handoffMarker ? "" : visible)
+        if visible.trimmingCharacters(in: .whitespacesAndNewlines) == Prompts.handoffMarker { return .answer("") }
+        let (words, point) = Prompts.pointing(in: visible)
+        return .answer(words, point: point)
+    }
+
+    /// The line saying where to point is for the cat, so it never shows, even half written.
+    private static func withoutPointing(_ text: String) -> String {
+        let lineStart = text.lastIndex(where: \.isNewline).map(text.index(after:)) ?? text.startIndex
+        let line = text[lineStart...].drop(while: \.isWhitespace)
+        guard !line.isEmpty, line.hasPrefix(Prompts.pointMarker) || Prompts.pointMarker.hasPrefix(line) else { return text }
+        var kept = text[..<lineStart]
+        while kept.last?.isWhitespace == true { kept.removeLast() }
+        return String(kept)
     }
 
     private static func visible(_ text: String) -> String {

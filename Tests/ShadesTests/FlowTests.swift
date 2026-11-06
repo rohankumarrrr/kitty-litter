@@ -310,6 +310,60 @@ final class FlowTests: XCTestCase {
         XCTAssertLessThanOrEqual(backend.sent.count, 1)
     }
 
+    // MARK: - Pointing
+
+    private let importButton = ScreenElement(role: "button", label: "Import", frame: CGRect(x: 10, y: 10, width: 80, height: 24))
+    private let exportButton = ScreenElement(role: "button", label: "Export", frame: CGRect(x: 900, y: 700, width: 80, height: 24))
+
+    private var replyTexts: [String] {
+        stage.bubbles.compactMap { if case .reply(let text, _, _, _, _)? = $0 { return text } else { return nil } }
+    }
+
+    func testAnAnswerThatPointsSendsTheCatToThatElementUntilTheReplyGoes() async {
+        context.snapshotValue.elements = [importButton, exportButton]
+        backend.replies = [[
+            .text(delta: "It's top right."), .text(delta: "\nPOI"), .text(delta: "NT: 2"),
+            .finished(fullText: "It's top right.\nPOINT: 2"),
+        ]]
+        await ask("where's export?")
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("2. button \"Export\""))
+        XCTAssertEqual(stage.ranTo, exportButton.frame)
+        XCTAssertEqual(stage.bubble, .reply(text: "It's top right.", done: true, threadID: "thread-1", note: nil))
+        XCTAssertFalse(replyTexts.contains { $0.contains("POI") }, "\(replyTexts)")
+        XCTAssertEqual(stage.wentHome, 0)
+        controller.bubbleDismissed(byClick: true)
+        XCTAssertEqual(stage.wentHome, 1)
+    }
+
+    func testWhenItCantFindTheSpotItSaysSoAndStaysPut() async {
+        context.snapshotValue.elements = [exportButton]
+        backend.replies = [[.finished(fullText: "Top right.\nPOINT: 4")]]
+        await ask("where's export?")
+        XCTAssertNil(stage.ranTo)
+        XCTAssertEqual(stage.bubble, .reply(text: "Top right.", done: true, threadID: "thread-1", note: CatWords.cantPoint))
+    }
+
+    func testTheNextAnswerThatDoesntPointSendsTheCatHome() async {
+        context.snapshotValue.elements = [exportButton]
+        backend.replies = [[.finished(fullText: "There.\nPOINT: 1")], [.finished(fullText: "Red.")]]
+        await ask("where's export?")
+        await ask("what colour is it?")
+        XCTAssertEqual(stage.wentHome, 1)
+    }
+
+    /// The router can only point at what it was shown, and with full access it's shown nothing.
+    func testARouterThatWasntShownTheScreenCantPointAtIt() async {
+        var changed = settings
+        changed.quickMode = .fullAccess
+        controller.apply(changed)
+        context.snapshotValue.elements = [exportButton]
+        backend.replies = [[.finished(fullText: "Top right.\nPOINT: 1")]]
+        await ask("where's export?")
+        XCTAssertFalse(backend.sent[0].prompt.text.contains("Export"))
+        XCTAssertFalse(backend.sent[0].prompt.text.contains(Prompts.pointMarker))
+        XCTAssertNil(stage.ranTo)
+    }
+
     // MARK: - Settling
 
     func testASimpleAnswerSettlesItsThread() async {

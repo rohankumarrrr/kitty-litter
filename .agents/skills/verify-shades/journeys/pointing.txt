@@ -1,0 +1,17 @@
+wait 1
+windows
+ask
+wait 0.5
+submit Where's the free trial button?
+wait 6
+draw .verify/shades/pointing/1-pointed
+windows
+esc
+wait 4
+windows
+ask
+wait 0.5
+submit Where's the logo?
+wait 5
+draw .verify/shades/pointing/2-cant-point
+windows

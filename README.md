@@ -8,7 +8,7 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 ## What it does
 
-**Ask.** Press ⌥Space or click the cat, and ask anything. It looks at your screen at that moment and answers in a bubble, usually in about 10 seconds, though a model can occasionally take much longer. Good for "how do I start problem 3?" or "what does this error mean?"
+**Ask.** Press ⌥Space or click the cat, and ask anything. It looks at your screen at that moment and answers in a bubble, usually in about 10 seconds, though a model can occasionally take much longer. Good for "how do I start problem 3?" or "what does this error mean?" Ask where something is, like "where's the export button?", and the cat runs over and sits on it. It only points, and never clicks. If it can't find the spot, it says so.
 
 **Rewrite what you've selected.** Select some text, ask the cat to "tighten this" or "make it friendlier", and the rewrite shows in the bubble with **Replace**. Nothing in your app changes until you press it. Then it goes in place of your selection, as long as the same text is still selected, and Command-Z takes it back. That works in apps whose text fields allow it, such as Notes, Mail and TextEdit. Anywhere else, or if the selection has moved, the rewrite is copied for you to paste instead.
 
@@ -70,7 +70,7 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 ## Privacy
 
 - **It looks only when you ask:** pressing a key or clicking the cat takes one snapshot. Nothing runs in the background.
-- **What leaves your Mac:** your question, a screenshot, the app and window names, the address, and any selected or page text go to the model you've chosen, through T3 Code. T3 Code keeps them with the thread. Your voice stays on your Mac, and only the resulting text is sent. When a session ends, its final report goes to the summary model, which may be a different provider from the one that ran the session.
+- **What leaves your Mac:** your question, a screenshot, the app and window names, the address, and any selected or page text go to the model you've chosen, through T3 Code. The router also gets the labels and places of the buttons, fields and text in the front window and the menu bar, so it can point at one, but never what's typed into a field. T3 Code keeps them with the thread. Your voice stays on your Mac, and only the resulting text is sent. When a session ends, its final report goes to the summary model, which may be a different provider from the one that ran the session.
 - **Private apps stay private:** password managers are on a list you can edit, and incognito windows in Chromium browsers are skipped. Nothing is captured while they're in front. Background windows can still show up in a screenshot, and Safari's private windows mostly can't be detected.
 - **Screen text is treated as data:** the agents are told it's never instructions, and they run in T3's `auto` mode rather than with full access. That lowers the risk of a page steering an agent, but doesn't remove it. For that reason, Allow is never a default in the cat's approval requests.
 - **What you drop:** a PDF's text, a picture or a link, plus the file's name and where it is on your Mac, go to the router and whoever it picks. A kitten that doesn't see your screen gets nothing you drop, with the same exception as your screen: a new thread titled with its name.
@@ -99,7 +99,7 @@ Choose **Check Myself** from the cat's menu, and it goes through its signature, 
 |---|---|
 | `ShadesCore` | Shared types, contracts, prompts and kittens |
 | `Shades` | The cat, its windows and the flows |
-| `ShadesContext` | Screen capture, selected text, browser pages, the region picker |
+| `ShadesContext` | Screen capture, selected text, browser pages, what the cat can point at, the region picker |
 | `ShadesT3` | The T3 Code client. See [docs/t3-integration.md](docs/t3-integration.md) |
 | `ShadesVoice` | Hold keys, the microphone, speech and cleanup. See [docs/voice.md](docs/voice.md) |
 
