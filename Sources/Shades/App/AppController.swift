@@ -62,10 +62,11 @@ final class AppController {
         var threadID: String?
         /// Set for a question, which goes away by itself once it's answered.
         var questionID: String?
-        /// For a screen warning, its thread's last run before your words, so a failure from before then can't take it back.
+        /// For a screen warning on work handed to a thread that had already finished a run, that run, which isn't the work.
         var after: String?
-        /// The thread was busy when your words went, so they wait behind a run that hasn't finished yet.
-        var behind = false
+        /// A follow-up's warning. The list only names the run a thread last finished, so it can't say which run is
+        /// carrying your words, and only the send's own turn failing takes the warning back.
+        var followUp = false
     }
     struct Line {
         var text: String

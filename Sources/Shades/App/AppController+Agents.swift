@@ -17,7 +17,6 @@ extension AppController {
         hideTestThreads(threads)
         latestThreads = threads
         threadListArrived = true
-        catchUpScreenWarnings(threads)
         let asked = Set(threads.compactMap(\.pendingQuestion?.id))
         answeredQuestions.formIntersection(asked)
         let events = watch.update(threads)

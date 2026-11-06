@@ -1193,9 +1193,26 @@ final class FlowTests: XCTestCase {
         await settleFiling()
         XCTAssertEqual(rows.count, 1, "the old failure is filed")
         XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "k" })
+    }
 
-        controller.threadsChanged([work("k", title: "Clawde: Fix login", run: "run-2", status: .failed)])
-        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink }, "the run for these words did fail")
+    /// The list only names the run a thread last finished, so it can't say which run is carrying a follow-up's words,
+    /// whether the thread was busy or more words were queued behind it. Only the send's own turn failing counts.
+    func testTheListLeavesAFollowUpsWarningToItsOwnTurn() async {
+        let done = AgentThread(id: "f", title: "Work", projectTitle: nil, status: .completed, model: "m", updatedAt: clock, lastRunID: "run-1")
+        controller.threadsChanged([done])
+        backend.replies = [[.text(delta: "Looking.")]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.forward("Is this tweet right?", to: done, snapshot: nil)
+        await controller.forwardTask?.value
+        controller.threadsChanged([done.with(status: .running)])
+        controller.threadsChanged([done.with(status: .failed).with(run: "run-2")])
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "f" })
+
+        backend.droppedAfterReply = nil
+        backend.replies = [[.failed(message: "It ran into a problem.")]]
+        controller.forward("Read this x thread", to: done, snapshot: nil)
+        await controller.forwardTask?.value
+        XCTAssertEqual(controller.notices.filter { $0.text == sendTheLink }.count, 1, "its own turn took back only its own")
     }
 
     /// The kitten's thread handed the work to another, so that's whose failure counts.
@@ -3823,9 +3840,6 @@ extension FlowTests {
         await earlier?.value
         controller.threadsChanged([running.with(status: .failed).with(run: "run-2")])
         XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "f" }, "your words wait behind run-2")
-
-        controller.threadsChanged([running.with(status: .failed).with(run: "run-3")])
-        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink }, "the run for your words failed")
     }
 
     /// The same for a new thread still on its first run, and the whole way from the Ask box to a busy session.
