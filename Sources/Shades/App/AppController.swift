@@ -125,6 +125,8 @@ final class AppController {
     var inboxSaveFailed = false
     /// Where the router's threads run, once it's known. Every thread there is a talk with the cat.
     var knownRouterFolder: String?
+    /// Shortcuts another app already had, for the self-check.
+    var takenShortcuts: [String] = []
     /// Questions answered from Messages, kept out of it until the list catches up.
     var answeredQuestions: Set<String> = []
     /// The router's turn for what you said in Messages, so each waits for the one before.
@@ -271,6 +273,7 @@ final class AppController {
     }
 
     func shortcutTaken(_ label: String) {
+        if !takenShortcuts.contains(label) { takenShortcuts.append(label) }
         say(CatWords.shortcutTaken(label))
     }
 

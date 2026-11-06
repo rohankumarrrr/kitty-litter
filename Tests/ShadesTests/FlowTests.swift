@@ -2546,6 +2546,14 @@ final class FlowTests: XCTestCase {
 
     // MARK: - Self-check
 
+    func testAShortcutAnotherAppHasShowsInTheSelfCheck() async {
+        controller.shortcutTaken("⌃⌘B")
+        controller.shortcutTaken("⌃⌘B")
+        let finding = await controller.runHealthCheck().first { $0.check == "shortcuts" }
+        XCTAssertEqual(finding?.ok, false)
+        XCTAssertEqual(finding?.problem, "Another app has ⌃⌘B, so pressing it does nothing here.", "once, however often it's tried")
+    }
+
     func testAKittenWithNothingKeepingItOffTheScreenIsFound() async {
         kittens = [clawde, steve]
         screenBlockGaps = ["/k/clawde": ["sandbox.enabled"]]
