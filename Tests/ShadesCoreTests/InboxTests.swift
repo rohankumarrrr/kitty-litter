@@ -368,6 +368,20 @@ final class InboxTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
     }
 
+    func testCorrectedThreadsAreSavedAsIDsAndAFileFromBeforeThemStillLoads() throws {
+        let file = try folder().appendingPathComponent("inbox.json")
+        var inbox = Inbox(since: start)
+        inbox.noteCorrection(in: "t")
+        try inbox.save(to: file)
+        XCTAssertTrue(Inbox.load(from: file, now: start).wasCorrected("t"))
+        XCTAssertFalse(Inbox.load(from: file, now: start).wasCorrected("other"))
+
+        let older = #"{"entries":[],"handled":{},"since":-999999999}"#
+        try older.write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertFalse(Inbox.load(from: file, now: start).wasCorrected("t"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
+    }
+
     func testOnlyYouCanReadIt() throws {
         let file = try folder().appendingPathComponent("inbox.json")
         try Inbox(since: start).save(to: file)

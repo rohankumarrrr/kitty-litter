@@ -35,7 +35,8 @@ extension AppController {
                 await file(report, of: current, failed: current.status == .failed, startedAnother: link)
                 return
             }
-            if !failed, dispatchers.contains(thread.id), let link {
+            // A thread given a correction says how it went, even if it was passed work before that.
+            if !failed, dispatchers.contains(thread.id), !inbox.wasCorrected(thread.id), let link {
                 passedOn(thread, to: link)
                 return
             }

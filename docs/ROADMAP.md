@@ -16,7 +16,7 @@ Kittens themselves now exist, as described in [kittens.md](kittens.md). Review, 
 
 Your own data in context exists too, through kittens, the router and a kitten's `project`, and so does dropping a file onto the cat.
 
-A kitten for the system itself, a self-check, rollback and a window for reading what kittens say now exist. Work lists, proposals from kittens and a defined way of taking corrections are next.
+A kitten for the system itself, a self-check, rollback, a window for reading what kittens say and a defined way of taking corrections now exist. Work lists and proposals from kittens are next.
 
 ## Next ideas
 

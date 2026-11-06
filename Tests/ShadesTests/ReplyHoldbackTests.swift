@@ -20,6 +20,53 @@ final class ReplyHoldbackTests: XCTestCase {
         XCTAssertEqual(ReplyHoldback().finish(fullText: "Rewrite it yourself."), .answer("Rewrite it yourself."))
     }
 
+    func testACorrectionIsHeldBackAndTheRestIsStillRead() {
+        var holdback = ReplyHoldback()
+        for piece in ["COR", "RECTION: 1", "\n", "CORRECTION: 3\nSE", "ND TO: 2"] {
+            XCTAssertNil(holdback.add(piece))
+        }
+        XCTAssertEqual(holdback.read(fullText: nil), .init(corrections: [1, 3], outcome: .route(session: 2)))
+    }
+
+    func testAnAnswerAfterACorrectionShowsWithoutIt() {
+        var holdback = ReplyHoldback()
+        XCTAssertNil(holdback.add("CORRECTION: 1\n"))
+        XCTAssertEqual(holdback.add("Red"), "Red")
+        XCTAssertEqual(holdback.add("."), "Red.")
+        XCTAssertEqual(holdback.read(fullText: "CORRECTION: 1\nRed."), .init(corrections: [1], outcome: .answer("Red.")))
+    }
+
+    func testACorrectionOnItsOwnIsNothingToShow() {
+        XCTAssertEqual(ReplyHoldback().read(fullText: "CORRECTION: 2"), .init(corrections: [2], outcome: .answer("")))
+    }
+
+    /// A marker with nothing usable after it meant the rest for somewhere, so it isn't an answer of nothing.
+    func testAMarkerThatGoesNowhereBesideACorrectionIsntNothing() {
+        for rest in ["KITTEN: Penny", "SEND TO: Work", "HANDOFF:", "REWRITE: "] {
+            XCTAssertTrue(ReplyHoldback().read(fullText: "CORRECTION: 1\n\(rest)").wentNowhere, rest)
+        }
+        XCTAssertFalse(ReplyHoldback().read(fullText: "CORRECTION: 1").wentNowhere)
+    }
+
+    func testACorrectionThatDoesntSayANumberNeverShows() {
+        var holdback = ReplyHoldback()
+        XCTAssertNil(holdback.add("CORRECTION: it was 12 people"))
+        XCTAssertEqual(holdback.read(fullText: nil), .init(corrections: [0], outcome: .answer("")))
+        XCTAssertEqual(ReplyHoldback().read(fullText: "CORRECTION: Steve\nSEND TO: 2"), .init(corrections: [0], outcome: .route(session: 2)))
+    }
+
+    func testACorrectionLineInsideAnAnswerIsJustWords() {
+        var holdback = ReplyHoldback()
+        XCTAssertEqual(holdback.add("Red.\nCORRECTION: 1"), "Red.\nCORRECTION: 1")
+        XCTAssertEqual(holdback.read(fullText: nil), .init(corrections: [], outcome: .answer("Red.\nCORRECTION: 1")))
+    }
+
+    func testAWordThatStartsLikeACorrectionIsStillAnAnswer() {
+        var holdback = ReplyHoldback()
+        XCTAssertNil(holdback.add("CORRECTION"))
+        XCTAssertEqual(holdback.add(" fluid is a thing"), "CORRECTION fluid is a thing")
+    }
+
     func testARouteIsHeldBackAndReadAtTheEnd() {
         var holdback = ReplyHoldback()
         XCTAssertNil(holdback.add("SE"))

@@ -651,3 +651,40 @@ final class DemoTests: XCTestCase {
         XCTAssertEqual(Set(Demo.kittens.map(\.folder)).count, Demo.kittens.count)
     }
 }
+
+final class CorrectionSendsTests: XCTestCase {
+    func testOneThatNeverGotTherePutsThingsBack() {
+        var sends = CorrectionSends()
+        sends.start("w", wasDispatcher: true, wasCorrected: false)
+        let before = sends.end("w", reached: false)
+        XCTAssertEqual(before?.wasDispatcher, true)
+        XCTAssertEqual(before?.wasCorrected, false)
+    }
+
+    func testOneThatGotThereKeepsTheMark() {
+        var sends = CorrectionSends()
+        sends.start("w", wasDispatcher: true, wasCorrected: false)
+        XCTAssertNil(sends.end("w", reached: true))
+    }
+
+    /// Whichever order they end in, one that got there keeps the mark, and only the first one's view of before counts.
+    func testOverlappingSendsOnlyPutBackWhatNoneEarned() {
+        for firstEndsFirst in [true, false] {
+            var sends = CorrectionSends()
+            sends.start("w", wasDispatcher: true, wasCorrected: false)
+            sends.start("w", wasDispatcher: false, wasCorrected: true)
+            if firstEndsFirst {
+                XCTAssertNil(sends.end("w", reached: false))
+                XCTAssertNil(sends.end("w", reached: true))
+            } else {
+                XCTAssertNil(sends.end("w", reached: true))
+                XCTAssertNil(sends.end("w", reached: false))
+            }
+        }
+        var sends = CorrectionSends()
+        sends.start("w", wasDispatcher: true, wasCorrected: false)
+        sends.start("w", wasDispatcher: false, wasCorrected: true)
+        XCTAssertNil(sends.end("w", reached: false))
+        XCTAssertEqual(sends.end("w", reached: false)?.wasDispatcher, true, "neither got there, so it goes back to how it was before both")
+    }
+}
