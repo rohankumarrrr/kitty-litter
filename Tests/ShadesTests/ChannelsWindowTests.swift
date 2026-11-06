@@ -740,3 +740,33 @@ extension ChannelsWindowTests {
         XCTAssertEqual(view.pane.composer.target, .question(question), "Type an answer is how to answer it")
     }
 }
+
+// MARK: - Messages, review round 3
+
+extension ChannelsWindowTests {
+    /// Steve's thread that Pepper's thread started, so it's only heard between kittens, with a report in Steve's inbox.
+    private func reportInAThreadBetweenKittens() -> (ChannelBook, InboxEntry) {
+        let asked = AgentThread(id: "asked", title: "From Pepper", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
+        let plans = AgentThread(id: "p", title: "Plans", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at, projectPath: "/k/pepper")
+        let exchange = Exchange(id: "x", asker: .agent(threadID: "p"), askedAt: at, ask: "Can you draft the budget email?", reply: "Drafted. Ship it?", repliedAt: at.addingTimeInterval(1))
+        let report = InboxEntry(id: "r", kind: .decision, text: "Drafted the budget email. Ship it?", threadID: "asked", threadTitle: "From Pepper", at: at)
+        let book = ChannelBook.build(kittens: [steve, pepper], threads: [asked, plans], transcripts: ["asked": [exchange], "p": []], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(reports: [report]))
+        return (book, report)
+    }
+
+    func testSayingAReplyToAReportGoesWhereTypingItWouldEvenInAThreadBetweenKittens() throws {
+        let (book, report) = reportInAThreadBetweenKittens()
+        XCTAssertTrue(book.elsewhere.contains("asked"))
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.pane.onAction = { sent.append($0) }
+        view.show(book)
+        let card = try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first { $0.accessibilityLabel()?.contains(report.text) == true })
+        XCTAssertTrue(try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == "Reply" }).accessibilityPerformPress())
+        XCTAssertEqual(view.pane.composer.target, .thread(id: "asked", title: "From Pepper", report: "r"))
+        view.pane.startSpeaking()
+        view.pane.spoke("Ship it")
+        XCTAssertEqual(sent, [.send("Ship it", to: .thread(id: "asked", title: "From Pepper", report: "r"), shownIn: .direct(steve))], "saying it counts as pressing Return")
+        XCTAssertEqual(view.pane.composer.textView.string, "")
+    }
+}

@@ -1,6 +1,6 @@
 ---
 name: verify-shades
-description: Drive the Shades desktop cat in demo mode and have its windows (the cat, its bubble, the Ask box, Messages, the inbox, the kitten view) draw themselves to PNGs, with no clicks, no keystrokes and no screen capture. Use to prove a change to anything a person sees or does in Shades before opening a pull request, and to reproduce a UI bug.
+description: Drive the Shades desktop cat in demo mode and have its windows (the cat, its bubble, the Ask box, Messages, the kitten view) draw themselves to PNGs, with no clicks, no keystrokes and no screen capture. Use to prove a change to anything a person sees or does in Shades before opening a pull request, and to reproduce a UI bug.
 ---
 
 # Verify Shades

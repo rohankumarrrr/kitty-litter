@@ -93,7 +93,8 @@ extension MessageTarget {
         switch self {
         case .starting: return false
         case .question(let question): return book.waiting.questions.contains { $0.id == question.id }
-        case .thread(let id, _, _): return !book.elsewhere.contains(id)
+        // A reply to a report goes to its thread wherever that is, as Reply on the report said it would.
+        case .thread(let id, _, let report): return report != nil || !book.elsewhere.contains(id)
         case .router, .newThread: return true
         }
     }

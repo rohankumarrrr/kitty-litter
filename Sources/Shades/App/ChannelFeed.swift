@@ -110,7 +110,10 @@ final class ChannelFeed {
         return session.threads.filter { thread in
             guard let owner = KittenBoard.owner(of: thread, among: kittens), session.readStamps[thread.id] == thread.updatedAt else { return false }
             if case .thread(let shown, _) = selection {
-                return thread.id == shown && session.published?.channel(id)?.messages.contains { $0.threadID == shown } == true
+                // Its latest words have to be the ones showing here, not only older ones while the latest are between kittens.
+                guard thread.id == shown, let book = session.published else { return false }
+                let latest = (book.directs + book.between).flatMap(\.messages).filter { $0.threadID == shown }.max { $0.at < $1.at }
+                return latest.map { latest in book.channel(id)?.messages.contains { $0.id == latest.id } == true } ?? false
             }
             return id == .everyone || id == .direct(owner)
         }

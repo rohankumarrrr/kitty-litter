@@ -453,3 +453,23 @@ extension ChannelFeedTests {
         XCTAssertEqual(feed.threads(in: .thread("other", in: .direct(steve))).map(\.id), ["other"], "and only that thread")
     }
 }
+
+extension ChannelFeedTests {
+    func testAThreadOnItsOwnDoesntCountAsReadWhileItsLatestAnswerIsOnlyBetweenKittens() async throws {
+        let pepper = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper")
+        feed = ChannelFeed(backend: backend, kittens: { [steve] in [steve, pepper] }, gap: .milliseconds(20))
+        feed.onChange = { [unowned self] in self.books.append($0) }
+        let work = thread("work")
+        let plans = AgentThread(id: "p", title: "Plans", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: start, projectPath: "/k/pepper")
+        backend.threads = [work, plans]
+        backend.set([
+            Exchange(id: "mine", asker: .you, askedAt: start.addingTimeInterval(-100), ask: "Draft the budget", reply: "Drafted.", repliedAt: start.addingTimeInterval(-90)),
+            Exchange(id: "theirs", asker: .agent(threadID: "p"), askedAt: start.addingTimeInterval(-10), ask: "Change the totals?", reply: "Changed the totals.", repliedAt: start),
+        ], in: work.id)
+        backend.set([], in: "p")
+        await openAndRead()
+        let book = try XCTUnwrap(latest)
+        XCTAssertTrue(book.channel(.direct(steve))?.messages.contains { $0.threadID == "work" } == true, "its older words are in the DM")
+        XCTAssertEqual(feed.threads(in: .thread("work", in: .direct(steve))).map(\.id), [], "but its latest answer isn't, so it isn't read")
+    }
+}
