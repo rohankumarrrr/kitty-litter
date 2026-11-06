@@ -37,7 +37,6 @@ A kitten for the system itself, a self-check, rollback and a window for reading 
 - A screen block that follows a kitten instead of its folder. T3 can run Claude with `--settings` per provider instance, so a kitten's threads could share one wherever they work. Untested, because it needs a change to T3's settings.
 
 - Answer an agent's question from the bubble. It shows the question and options now, and you answer in Messages or T3.
-- Say a reply into the box in Messages by holding the talk key while it has the keyboard. Replying out loud went with the inbox panel over the cat.
 - Fold a busy conversation in Messages down to one row per thread, with how many replies it has and the latest, the way a Slack channel shows a thread. Today every thread's messages are shown in order, and its title and project mark where each one starts.
 - Read a thread's whole history in Messages when it opens on its own, even past each kitten's newest 30, instead of saying the rest is in T3.
 - Several choices at once for a question that takes them, from Messages. It takes one choice or your own words for now.

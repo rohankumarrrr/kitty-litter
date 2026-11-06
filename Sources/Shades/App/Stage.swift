@@ -82,6 +82,10 @@ protocol CatStage: AnyObject {
     func updateChannels(_ book: ChannelBook)
     /// Closes it, which forgets every word.
     func hideChannels()
+    /// You're typing in Messages' box, so what you say belongs there.
+    var isMessagesBoxTyping: Bool { get }
+    /// Sends this from Messages' box, as if it had been typed and Return pressed.
+    func sendInMessages(_ text: String)
 
     // Everything else
     /// For the menu bar: how things are going, and whether anything needs you.

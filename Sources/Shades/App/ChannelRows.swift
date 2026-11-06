@@ -41,7 +41,8 @@ enum MessageTarget: Equatable {
     case router
     /// A new thread in the kitten's folder.
     case newThread(Kitten)
-    case thread(id: String, title: String)
+    /// `report` is the inbox row you're replying to, if you pressed Reply or Ask on one, so the answer goes under it.
+    case thread(id: String, title: String, report: String? = nil)
     /// The new topic you just started, until T3 has its thread. Nothing can be sent before then.
     case starting(Kitten)
     /// Your own words as the answer.
@@ -89,7 +90,7 @@ extension MessageTarget {
         switch self {
         case .starting: return false
         case .question(let question): return book.waiting.questions.contains { $0.id == question.id }
-        case .thread(let id, _): return !book.elsewhere.contains(id)
+        case .thread(let id, _, _): return !book.elsewhere.contains(id)
         case .router, .newThread: return true
         }
     }

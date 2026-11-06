@@ -334,8 +334,12 @@ final class ChannelsWindowTests: XCTestCase {
         let card = try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first)
         XCTAssertTrue(try XCTUnwrap(card.buttons.first).accessibilityPerformPress())
         XCTAssertEqual(view.selection, .thread("t", in: .direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
+        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work", report: "r"), "and the answer goes under that report")
         XCTAssertFalse(view.pane.composer.isHidden)
+
+        view.select(.channel(.direct(steve)))
+        view.select(.thread("t", in: .direct(steve)))
+        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"), "coming back some other way is just the thread")
     }
 
     func testLookingAtAConversationCountsAsSeeingIt() {
@@ -538,5 +542,71 @@ extension ChannelsWindowTests {
         let book = ChannelBook.build(kittens: [plain, Kitten(name: "Sunny", role: "", covers: "", folder: "/k/sunny", color: 0xffcc00)], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
         XCTAssertEqual(ChannelSpeakerLook(.kitten("/k/sunny"), in: book).bubbleText, .black, "dark words on a light bubble")
         XCTAssertEqual(ChannelSpeakerLook(.you, in: book).bubbleText, .white)
+    }
+}
+
+// MARK: - Messages, review round 1
+
+extension ChannelsWindowTests {
+    private static func luminance(_ color: NSColor) -> Double {
+        let c = color.usingColorSpace(.sRGB)!
+        let linear = { (value: CGFloat) -> Double in
+            let value = Double(value)
+            return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(c.redComponent) + 0.7152 * linear(c.greenComponent) + 0.0722 * linear(c.blueComponent)
+    }
+
+    private static func contrast(_ a: NSColor, _ b: NSColor) -> Double {
+        let (x, y) = (luminance(a), luminance(b))
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    private func resolved(_ color: NSColor, in name: NSAppearance.Name) -> NSColor {
+        var solid = color
+        NSAppearance(named: name)!.performAsCurrentDrawingAppearance { solid = color.usingColorSpace(.sRGB)! }
+        return solid
+    }
+
+    private func looks() -> [(String, ChannelSpeakerLook)] {
+        let colours = ChannelSpeakerLook.palette + Demo.kittens.compactMap(ChannelSpeakerLook.color(of:))
+        let kittens = colours.enumerated().map { Kitten(name: "K\($0.offset)", role: "", covers: "", folder: "/k/k\($0.offset)", color: $0.element) }
+        let book = ChannelBook.build(kittens: kittens, threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        return [("yours", ChannelSpeakerLook(.you, in: book))] + kittens.map { (String(format: "%06x", $0.color!), ChannelSpeakerLook(.kitten($0.id), in: book)) }
+    }
+
+    func testWordsOnEveryBubbleReadWell() {
+        for (name, look) in looks() {
+            let ratio = Self.contrast(look.bubbleText, look.bubbleFill)
+            XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(name) gives \(ratio)")
+        }
+    }
+
+    func testWordsStillReadWhileAReplyIsStillComing() {
+        for (name, look) in looks() {
+            for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+                let ratio = Self.contrast(resolved(look.text(fadedTo: 0.55), in: appearance), resolved(look.fill(fadedTo: 0.55), in: appearance))
+                XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(name) in \(appearance.rawValue) gives \(ratio)")
+            }
+        }
+    }
+
+    func testAStillComingBubbleIsDrawnInTheColourItsWordsWerePickedFor() throws {
+        let kitten = Kitten(name: "K", role: "", covers: "", folder: "/k/k", color: 0x30b0c7)
+        let thread = AgentThread(id: "t", title: "Work", projectTitle: "K", status: .running, model: "m", updatedAt: at, projectPath: kitten.folder)
+        let book = ChannelBook.build(kittens: [kitten], threads: [thread], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        let message = ChannelMessage(exchangeID: "e", kind: .reply, speaker: .kitten(kitten.id), text: "Moved the plans onto the new grid.", at: at, threadID: "t", threadTitle: "Work", isStillGoing: true)
+        let look = ChannelSpeakerLook(message.speaker, in: book)
+        let row = MessageRowView(message: message, look: look)
+        let host = QuietView(frame: NSRect(x: 0, y: 0, width: 640, height: 200))
+        host.appearance = NSAppearance(named: .aqua)
+        host.addSubview(row)
+        row.frame = NSRect(x: 0, y: 0, width: 640, height: row.fit(width: 640))
+        let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: rep)
+        let scale = CGFloat(rep.pixelsWide) / host.bounds.width
+        let pixel = try XCTUnwrap(rep.colorAt(x: Int((row.bubble.minX + 5) * scale), y: Int(row.bubble.midY * scale))?.usingColorSpace(.sRGB))
+        let ratio = Self.contrast(resolved(look.text(fadedTo: 0.55), in: .aqua), pixel)
+        XCTAssertGreaterThanOrEqual(ratio, 4.5, "white words on a faded teal were \(ratio)")
     }
 }

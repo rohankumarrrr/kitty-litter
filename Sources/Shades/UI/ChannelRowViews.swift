@@ -64,8 +64,8 @@ extension KittenStatus.State {
 
 struct ChannelSpeakerLook {
     static let otherJacket: UInt32 = 0x8f8f95
-    /// Yours, as in iMessage.
-    static let yours: UInt32 = 0x0a84ff
+    /// Yours, as in iMessage, a shade deeper so white words on it read well.
+    static let yours: UInt32 = 0x0071e3
     /// For a kitten with no colour of its own. Blue is left for you.
     static let palette: [UInt32] = [0x34c759, 0xff9500, 0xaf52de, 0xff2d55, 0x30b0c7, 0xa2845e, 0x5856d6, 0xffcc00]
 
@@ -99,13 +99,48 @@ struct ChannelSpeakerLook {
 
     /// Black or white, whichever reads better on the bubble.
     var bubbleText: NSColor {
+        bubble.map { Self.readable(on: $0) } ?? Ink.text
+    }
+
+    /// A reply that's still coming is paler. It's worked out as one solid colour for light and dark, so its words can
+    /// be picked to read on it too.
+    func fill(fadedTo alpha: Double) -> NSColor {
+        let bubble = bubble
+        return NSColor(name: nil) { Ink.hex(Self.faded(bubble, to: alpha, dark: $0.isDark)) }
+    }
+
+    func text(fadedTo alpha: Double) -> NSColor {
         guard let bubble else { return Ink.text }
+        return NSColor(name: nil) { Self.readable(on: Self.faded(bubble, to: alpha, dark: $0.isDark)) }
+    }
+
+    /// The colour over the window at `alpha`. `nil` is the grey.
+    private static func faded(_ bubble: UInt32?, to alpha: Double, dark: Bool) -> UInt32 {
+        let top = bubble ?? (dark ? 0x3a3a3c : 0xe9e9eb)
+        let under: UInt32 = dark ? 0x1d1d1f : 0xf9f9f9
+        return [16, 8, 0].reduce(UInt32(0)) { mixed, shift in
+            let channel = Double((top >> shift) & 0xff) * alpha + Double((under >> shift) & 0xff) * (1 - alpha)
+            return mixed | UInt32(channel.rounded()) << shift
+        }
+    }
+
+    /// Whichever of black and white has more contrast with it.
+    static func readable(on color: UInt32) -> NSColor {
+        contrast(color, 0x000000) >= contrast(color, 0xffffff) ? .black : .white
+    }
+
+    /// As WCAG measures it, from 1 to 21.
+    static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
+        let (x, y) = (luminance(a), luminance(b))
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    static func luminance(_ color: UInt32) -> Double {
         let channel = { (shift: UInt32) -> Double in
-            let value = Double((bubble >> shift) & 0xff) / 255
+            let value = Double((color >> shift) & 0xff) / 255
             return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
         }
-        let luminance = 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
-        return luminance > 0.4 ? .black : .white
+        return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
     }
 }
 
@@ -239,6 +274,7 @@ final class MessageRowView: ChannelRowView {
     private static let insetY: CGFloat = 7
     /// Of the pane's width, so a long message still reads as a bubble.
     private static let widest: CGFloat = 0.7
+    private static let stillGoingAlpha = 0.55
 
     var onOpen: (() -> Void)? { didSet { setActions() } }
     var onReply: (() -> Void)? { didSet { setActions() } }
@@ -261,7 +297,8 @@ final class MessageRowView: ChannelRowView {
         self.message = message
         self.look = look
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
-        words = said.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: look.bubbleText)) }
+        let color = message.isStillGoing ? look.text(fadedTo: Self.stillGoingAlpha) : look.bubbleText
+        words = said.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: color)) }
         failure = message.failure.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Ink.hex(0xff3b30))) }
         super.init(frame: .zero)
 
@@ -365,7 +402,7 @@ final class MessageRowView: ChannelRowView {
         drawHead()
         if bubble.height > 0 {
             let radius = min(16, bubble.height / 2)
-            fill.withAlphaComponent(message.isStillGoing ? 0.55 : 1).setFill()
+            (message.isStillGoing ? look.fill(fadedTo: Self.stillGoingAlpha) : fill).setFill()
             NSBezierPath(roundedRect: bubble, xRadius: radius, yRadius: radius).fill()
             words?.draw(at: NSPoint(x: bubble.minX + Self.insetX, y: bubble.minY + Self.insetY))
         }

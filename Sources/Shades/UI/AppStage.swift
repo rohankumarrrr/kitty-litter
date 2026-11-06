@@ -203,6 +203,15 @@ final class AppStage: CatStage {
         channels.panel.close()
     }
 
+    var isMessagesBoxTyping: Bool {
+        let composer = channels.view.pane.composer
+        return channels.panel.isKeyWindow && channels.panel.firstResponder === composer.textView && composer.target != nil
+    }
+
+    func sendInMessages(_ text: String) {
+        channels.view.pane.composer.send(text)
+    }
+
     // MARK: - Everything else
 
     func showStatus(_ status: String, needsYou: Bool) {

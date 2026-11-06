@@ -100,7 +100,7 @@ enum CatWords {
         switch target {
         case .router: return "To whoever it's for"
         case .newThread(let kitten): return "New topic with \(kitten.name)"
-        case .thread(_, let title): return "In \(title)"
+        case .thread(_, let title, _): return "In \(title)"
         case .starting(let kitten): return "Starting a new topic with \(kitten.name)..."
         case .question(let question): return answering(question.text)
         }

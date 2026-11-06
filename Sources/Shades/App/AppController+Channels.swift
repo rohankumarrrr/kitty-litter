@@ -34,6 +34,10 @@ extension AppController {
 
     func channelsClosed() {
         channels.close()
+        guard nudgeOnClose else { return }
+        nudgeOnClose = false
+        inboxNudge = true
+        renderBubble()
     }
 
     /// From the live list, the one place that has the words of approvals and questions.
@@ -100,9 +104,9 @@ extension AppController {
             give(words, to: kitten, snapshot: nil) { [weak self] threadID in
                 self?.channels.started(echoID, in: threadID, title: title)
             }
-        case .thread(let id, let title):
+        case .thread(let id, let title, let report):
             echo(threadID: id, title: title)
-            reply(words, toThread: id, title: title)
+            reply(words, toThread: id, title: title, marking: report)
         case .starting:
             break
         case .question(let question):

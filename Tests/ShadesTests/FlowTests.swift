@@ -99,6 +99,9 @@ private final class FakeStage: CatStage {
     }
     func updateChannels(_ book: ChannelBook) { channelsUpdated.append(book) }
     func hideChannels() { isChannelsVisible = false }
+    var isMessagesBoxTyping = false
+    var sentInMessages: [String] = []
+    func sendInMessages(_ text: String) { sentInMessages.append(text) }
     func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {}
     func copyToPasteboard(_ text: String) { copied = text }
 
@@ -3163,5 +3166,96 @@ extension FlowTests {
         controller.hiddenThreads.insert("summary")
         controller.threadsChanged([own, kittens, plumbing])
         XCTAssertEqual(controller.waiting.shadesWork.map(\.id), ["own"], "a kitten's work is under that kitten, and the cat's plumbing isn't work")
+    }
+}
+
+// MARK: - Messages, review round 1
+
+extension FlowTests {
+    func testAskingAboutWhatShippedAnswersThatRowAndLeavesTheDecision() async throws {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Deploy production?\nSHIPPED: The staging backup is ready.")
+        let decision = try XCTUnwrap(rows.first { $0.kind == .decision })
+        let shipped = try XCTUnwrap(rows.first { $0.kind == .shipped })
+        controller.channelsPressed(selecting: .needsYou)
+        let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: 820, height: 560))
+        view.pane.onAction = { [unowned self] in self.controller.messagesAction($0) }
+        view.show(try XCTUnwrap(stage.channelsShown.last))
+        func descendants(_ parent: NSView) -> [NSView] {
+            parent.subviews + parent.subviews.flatMap(descendants)
+        }
+        let card = try XCTUnwrap(descendants(view).compactMap { $0 as? CardRowView }.first {
+            $0.accessibilityLabel()?.contains(shipped.text) == true
+        })
+        let ask = try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == "Ask" })
+        ask.onPress?()
+        view.pane.composer.send("Where is the staging backup stored?")
+        await settle()
+
+        XCTAssertTrue(try XCTUnwrap(rows.first { $0.id == decision.id }).needsYou, "asking about the backup answered the deployment decision")
+        XCTAssertNotNil(try XCTUnwrap(rows.first { $0.id == shipped.id }).repliedAt)
+        await finish(work(run: "run-2"), sorted: "NOTE: The backup is in staging storage.")
+        XCTAssertNil(try XCTUnwrap(rows.first { $0.id == decision.id }).answer)
+        XCTAssertEqual(try XCTUnwrap(rows.first { $0.id == shipped.id }).answer, "The backup is in staging storage.")
+    }
+
+    func testTalkingWhileYoureTypingInMessagesGoesInItsBoxWithoutLooking() async throws {
+        controller.start()
+        await drainMainQueue()
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        controller.bubbleAction(.openMessages)
+        stage.isMessagesBoxTyping = true
+        let sends = backend.sent.count
+        voice.transcript = Transcript(raw: "yes go ahead", cleaned: "Yes, go ahead.", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+
+        XCTAssertFalse(log.all.contains("snapshot"), "talking into Messages' box looked at the screen")
+        XCTAssertEqual(stage.sentInMessages, ["Yes, go ahead."], "saying it counts as pressing Return")
+        XCTAssertEqual(backend.sent.count, sends, "it goes where the box says, not to the cat")
+    }
+
+    func testTalkingAfterYouStopTypingInMessagesSendsNothing() async {
+        controller.start()
+        await drainMainQueue()
+        controller.channelsPressed()
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "never mind", cleaned: "Never mind.", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        stage.isMessagesBoxTyping = false
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertEqual(stage.sentInMessages, [])
+        XCTAssertFalse(log.all.contains("snapshot"))
+    }
+
+    func testTalkingWithMessagesOpenBehindYourWorkStillAsksAboutYourScreen() async {
+        controller.start()
+        await drainMainQueue()
+        controller.channelsPressed()
+        voice.transcript = Transcript(raw: "what is this", cleaned: "What is this?", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertTrue(log.all.contains("snapshot"), "an open window you aren't typing in doesn't stop the talk key")
+        XCTAssertEqual(stage.sentInMessages, [])
+    }
+
+    func testADecisionWhileMessagesSitsOpenGetsTheBubbleOnceItsClosed() async {
+        kittens = [inboxKitten]
+        controller.channelsPressed()
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        XCTAssertNil(stage.bubble, "nothing interrupts while it's open")
+        controller.messagesHotkeyPressed()
+        controller.channelsClosed()
+        XCTAssertEqual(stage.bubble, .inbox("1 decision"), "open isn't the same as looked at")
     }
 }

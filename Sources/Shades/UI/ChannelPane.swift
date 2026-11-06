@@ -124,6 +124,8 @@ final class ChannelPane: QuietView {
     private var book: ChannelBook?
     /// Answers to the parts of a question so far, by its ID. Nothing goes until every part has one, as T3 wants.
     private var partAnswers: [String: [String]] = [:]
+    /// The inbox row whose Reply or Ask opened this thread, until you send or look elsewhere.
+    private var replyingTo: InboxEntry?
     private(set) var shown: [ChannelRow] = []
     private var views: [ChannelRowView] = []
     private var expanded: Set<String> = []
@@ -160,6 +162,7 @@ final class ChannelPane: QuietView {
                 self.onAction?(.startTopic(words, with: kitten, id: topic))
                 self.onSelect?(.thread(topic, in: .direct(kitten)))
             default:
+                self.replyingTo = nil
                 self.onAction?(.send(words, to: target, shownIn: self.selection.channelID))
                 self.updateComposer()
                 self.arrange(force: true)
@@ -191,6 +194,7 @@ final class ChannelPane: QuietView {
     /// Selecting something shows its latest. A refresh only follows along if you were already at the bottom.
     func show(_ selection: ChannelSelection, in book: ChannelBook, isNewSelection: Bool) {
         let isNew = isNewSelection || selection != self.selection
+        if case .thread(let id, _) = selection, id == replyingTo?.threadID {} else { replyingTo = nil }
         partAnswers = partAnswers.filter { id, _ in book.waiting.questions.contains { $0.id == id } }
         self.selection = selection
         self.book = book
@@ -223,6 +227,7 @@ final class ChannelPane: QuietView {
         expanded = []
         book = nil
         partAnswers = [:]
+        replyingTo = nil
         composer.clear()
         stack()
     }
@@ -244,6 +249,9 @@ final class ChannelPane: QuietView {
     private func updateComposer(keepingDraft: Bool = false) {
         var target = book.flatMap { MessageTarget.standard(for: selection, in: $0, answered: partAnswers.mapValues(\.count)) }
         // Words already typed go where the box said when you started, so a refresh can't send them somewhere else.
+        if case .thread(let id, let title, nil)? = target, let replyingTo, replyingTo.threadID == id {
+            target = .thread(id: id, title: title, report: replyingTo.id)
+        }
         if keepingDraft, composer.hasDraft, let current = composer.target, let book, current.isStill(in: book) {
             target = current
         }
@@ -405,6 +413,7 @@ final class ChannelPane: QuietView {
         let kitten = book.kitten(of: entry.id)
         let reply = CardRowView.Button(title: entry.kind == .decision ? "Reply" : "Ask") { [weak self] in
             guard let self else { return }
+            self.replyingTo = entry
             self.open(thread: entry.threadID, in: self.channel(of: kitten), typing: true)
         }
         var buttons = [reply]

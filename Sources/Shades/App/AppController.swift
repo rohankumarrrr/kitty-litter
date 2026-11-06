@@ -89,10 +89,14 @@ final class AppController {
     var notForInboxSince = Date.distantPast
     /// Whether the bubble should mention the inbox.
     var inboxNudge = false
+    /// Something came in while Messages was open, so the bubble mentions it once it's closed.
+    var nudgeOnClose = false
     /// Counts the boxes that take what you say, so words meant for one can't land in the next.
     var boxesOpened = 0
     /// The box what's being said belongs in, fixed when the key goes down.
     var talkBox: Int?
+    /// What's being said goes into Messages' box, fixed when the key goes down.
+    var talkToMessages = false
     var inboxSaveFailed = false
     /// Questions answered from Messages, kept out of it until the list catches up.
     var answeredQuestions: Set<String> = []

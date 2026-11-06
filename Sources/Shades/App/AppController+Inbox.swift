@@ -125,9 +125,14 @@ extension AppController {
         renderBubble()
     }
 
-    /// Says there's something new, unless you're already looking at Messages.
+    /// Says there's something new, unless Messages is open. Being open isn't the same as having looked, since it can
+    /// sit behind your work, so the bubble comes once it's closed.
     func nudgeInbox() {
-        if !stage.isChannelsVisible { inboxNudge = true }
+        if stage.isChannelsVisible {
+            nudgeOnClose = true
+        } else {
+            inboxNudge = true
+        }
     }
 
     /// What the menu says next to Messages. What needs you comes first, since that's what it's for.
@@ -151,11 +156,12 @@ extension AppController {
     }
 
     /// Takes no snapshot, so no caller can pass one, and doesn't go near the router, whose thread is what would carry the screen.
-    /// That thread's report waiting on you stops asking, or failing that its latest one does, so the answer goes under it.
-    func reply(_ words: String, toThread threadID: String, title: String) {
+    /// The report you replied to, if you picked one, stops asking and gets the answer. Otherwise that thread's report
+    /// waiting on you does, or failing that its latest one.
+    func reply(_ words: String, toThread threadID: String, title: String, marking report: String? = nil) {
         let text = Prompts.forwarded(words: words, snapshot: nil, screenshotPath: nil, screenLeftOut: false)
         let own = inbox.entries.filter { $0.threadID == threadID }
-        let entryID = (own.last(where: \.needsYou) ?? own.last)?.id
+        let entryID = (own.first { $0.id == report } ?? own.last(where: \.needsYou) ?? own.last)?.id
         if let entryID {
             inbox.markReplied(entryID, at: now())
             keepInbox()
