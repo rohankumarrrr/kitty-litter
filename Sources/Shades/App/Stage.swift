@@ -20,12 +20,12 @@ enum BubbleAction: Equatable {
     case copy(String)
     case replace(String)
     case approval(ApprovalRequest, ApprovalDecision)
-    case openInbox
+    /// Messages, at what needs you.
+    case openMessages
 }
 
-/// What the buttons in the inbox can ask for. None of them can say anything for you.
+/// What Messages can do with a report. None of it says anything for you.
 enum InboxAction: Equatable {
-    case reply(InboxEntry)
     case open(threadID: String)
     case done(id: String)
     case clear(InboxEntry.Kind)
@@ -77,22 +77,25 @@ protocol CatStage: AnyObject {
     func showKittens(_ statuses: [KittenStatus])
     func hideKittens()
 
-    // Channels
-    /// Opens the window, or brings it to the front if it's open. It never closes it.
-    func showChannels(_ book: ChannelBook)
+    // Messages
+    var isChannelsVisible: Bool { get }
+    /// Opens the window, or brings it to the front if it's open, at `selection` if it's given.
+    func showChannels(_ book: ChannelBook, selecting selection: ChannelSelection?)
     func updateChannels(_ book: ChannelBook)
-    /// The same as clicking it in the sidebar.
-    func selectChannel(_ selection: ChannelSelection)
-
-    // The inbox
-    var isInboxVisible: Bool { get }
-    /// Opens the inbox, or brings it up to date if it's open.
-    func showInbox(_ entries: [InboxEntry])
-    func hideInbox()
+    /// Closes it, which forgets every word.
+    func hideChannels()
+    /// You're typing in Messages' box, so what you say belongs there.
+    var isMessagesBoxTyping: Bool { get }
+    /// Keeps Messages' box pointing where it does now, while you say something into it.
+    func holdMessagesBox()
+    /// Sends this from Messages' box where it pointed when it was held, after anything typed, as if Return were pressed.
+    func sendInMessages(_ text: String)
+    /// You said nothing after all.
+    func releaseMessagesBox()
 
     // Everything else
-    func showThreads(_ threads: [AgentThread], status: String)
-    func toggleDashboard()
+    /// For the menu bar: how things are going, and whether anything needs you.
+    func showStatus(_ status: String, needsYou: Bool)
     func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void)
     func copyToPasteboard(_ text: String)
 }

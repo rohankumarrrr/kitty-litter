@@ -1,6 +1,6 @@
 ---
 name: verify-shades
-description: Drive the Shades desktop cat in demo mode and have its windows (the cat, its bubble, the Ask box, Messages, the inbox, the kitten view) draw themselves to PNGs, with no clicks, no keystrokes and no screen capture. Use to prove a change to anything a person sees or does in Shades before opening a pull request, and to reproduce a UI bug.
+description: Drive the Shades desktop cat in demo mode and have its windows (the cat, its bubble, the Ask box, Messages, the kitten view) draw themselves to PNGs, with no clicks, no keystrokes and no screen capture. Use to prove a change to anything a person sees or does in Shades before opening a pull request, and to reproduce a UI bug.
 ---
 
 # Verify Shades
@@ -30,7 +30,7 @@ The cat and its windows show on the real desktop while it runs. They never make 
 swift run shades --demo --no-script --commands .agents/skills/verify-shades/journeys/doctor.txt
 ```
 
-It prints a `window <name> ...` line for each of `cat`, `bubble`, `input`, `dashboard`, `kittens`, `channels` and `inbox`, then `state ... active=false`. If it does, the build is worth driving. `active=true` means a window made Shades the active app, which breaks a rule in `AGENTS.md` and is a bug in its own right. A build error means fixing the build first.
+It prints `front <app>`, a `window <name> ...` line for each of `cat`, `bubble`, `input`, `kittens` and `channels`, then `state ... active=`. If it does, the build is worth driving. `front` is the app in front, which must stay whatever was in front before the run, never Shades. If it says Shades, a window made Shades the active app, which breaks a rule in `AGENTS.md` and is a bug in its own right. `active=true` on its own isn't: AppKit says that while one of Shades' panels has the keyboard, such as the Ask box or the box in Messages, even though your app stays in front. If the first `front` of a run already says Shades, macOS put the demo in front as it launched, such as when nothing else was in front, so that run can't show whether a window did it. A build error means fixing the build first.
 
 ## Drive
 
@@ -39,6 +39,7 @@ Find the feature in [features/README.md](features/README.md), run its journey fr
 - `wait <seconds>` holds back the lines after it. Each feature file says how long its steps take.
 - `draw <folder>` has each window that's showing draw itself to `<folder>/<name>.png`, and prints `drew <name> <path>`. `input` is the Ask box and `channels` is Messages.
 - `windows` prints each window's frame, whether it's showing and whether it has the keyboard, then the cat's state and `active=`.
+- `front` prints the app in front.
 - The rest, such as `ask`, `channels`, `channel`, `send`, `report`, `inbox`, `approval` and `allow`, are listed by `help` and defined in `handle` in `Sources/Shades/Demo/DemoDriver.swift`. Each calls the same controller method as the button it stands for.
 
 ## Evidence
@@ -47,7 +48,7 @@ A proof has three parts, and goes on the pull request as the command, the output
 
 - The pictures, before and after the action, in `.verify/shades/<feature>/<step>/`. Read each one with the Read tool and say what it shows.
 - The output. Lines starting `[demo] started`, `[demo] carried on in` and `[demo] forwarded to` say what was sent, to which thread and with how many attachments. `[demo] accept:` and `[demo] decline:` are answered approvals. These are the side effects to check alongside the pictures.
-- The `windows` line at the end, showing `active=false`.
+- The `front` and `windows` lines at the end, with your own app still in front.
 
 Drive the path a person takes, which is what the demo commands do. The demo's T3 is fake and every kitten's folder looks the same to it, so it can't show which folder a thread started in. Where that matters, such as your screen staying away from a kitten, use the `verify-screen-boundary` skill. To try a flow against real agents, use `--ask`, `--hand-off` or `--fix` with `--image`, as `Sources/Shades/App/DevFlags.swift` describes. Those talk to real T3, so name test threads `Shades test: ...` and archive them afterwards.
 

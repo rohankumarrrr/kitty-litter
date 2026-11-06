@@ -269,7 +269,7 @@ final class BubbleView: BalloonView {
                 add("Allow for this session", .text, .approval(request, .acceptForSession))
             }
         case .inbox:
-            add("Open", .text, .openInbox)
+            add("Open", .text, .openMessages)
         }
     }
 }

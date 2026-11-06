@@ -35,8 +35,8 @@ final class FakeStage: CatStage {
     var came = 0
     var ranTo: CGRect?
     var held: [String?] = []
-    var threads: [AgentThread] = []
     var statusText = ""
+    var statusNeedsYou = false
     var kittens: [KittenStatus]?
     var isKittensVisible: Bool { kittens != nil }
     var channelsShown: [ChannelBook] = []
@@ -84,21 +84,30 @@ final class FakeStage: CatStage {
         input = nil
         request?.onCancel()
     }
-    func showThreads(_ threads: [AgentThread], status: String) {
-        self.threads = threads
+    func showStatus(_ status: String, needsYou: Bool) {
         statusText = status
+        statusNeedsYou = needsYou
     }
-    func toggleDashboard() {}
     func showKittens(_ statuses: [KittenStatus]) { kittens = statuses }
     func hideKittens() { kittens = nil }
-    func showChannels(_ book: ChannelBook) { channelsShown.append(book) }
+    var isChannelsVisible = false
+    var selections: [ChannelSelection?] = []
+    func showChannels(_ book: ChannelBook, selecting selection: ChannelSelection?) {
+        channelsShown.append(book)
+        selections.append(selection)
+        isChannelsVisible = true
+    }
     func updateChannels(_ book: ChannelBook) { channelsUpdated.append(book) }
-    var channelSelected: ChannelSelection?
-    func selectChannel(_ selection: ChannelSelection) { channelSelected = selection }
-    var inboxRows: [InboxEntry]?
-    var isInboxVisible: Bool { inboxRows != nil }
-    func showInbox(_ entries: [InboxEntry]) { inboxRows = entries }
-    func hideInbox() { inboxRows = nil }
+    func hideChannels() { isChannelsVisible = false }
+    var isMessagesBoxTyping = false
+    var sentInMessages: [String] = []
+    var messagesBoxHeld = false
+    func holdMessagesBox() { messagesBoxHeld = true }
+    func sendInMessages(_ text: String) {
+        sentInMessages.append(text)
+        messagesBoxHeld = false
+    }
+    func releaseMessagesBox() { messagesBoxHeld = false }
     func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {}
     func copyToPasteboard(_ text: String) { copied = text }
 

@@ -12,7 +12,7 @@ The maintained list of what a person can do with Shades, and how to prove each i
 
 - Capture the action and the state after it, as a picture before and a picture after.
 - Check the `[demo]` lines for what was sent, alongside the pictures.
-- End every journey with `windows`, and check `active=false`.
+- Start every journey with `front`, and end it with `front` and `windows`. The last `front` mustn't be Shades unless the first one already was. `active=true` is expected while a box has the keyboard.
 - Record the feature and journey with each picture.
 - If a journey can't reach a state, report the command you ran and what was missing. Don't report a different path as the one you were asked to prove.
 
@@ -24,8 +24,8 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 
 - [Ask](./ask.md) covers asking the cat, its answer, pointing at things, passing to a kitten and handing off.
 - [Drop](./drop.md) covers dropping a PDF, picture or link onto the cat, and where it may go.
-- [Messages](./messages.md) covers Needs you, Everyone and a kitten's DM.
-- [Inbox](./inbox.md) covers a kitten's report arriving, the inbox and clearing a row.
+- [Messages](./messages.md) covers Needs you, Done, Everyone, a kitten's DM and a thread on its own.
+- [Inbox](./inbox.md) covers a kitten's report arriving, its row in Messages, replying to it and clearing it.
 - [Approvals](./approvals.md) covers an agent asking to run something, and allowing it.
 - [Notifications](./notifications.md) covers the macOS notification for something new in Needs you, clicking it and taking it back.
 - [Kittens](./kittens.md) covers the view of every kitten and how each is doing.

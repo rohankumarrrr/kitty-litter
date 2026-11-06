@@ -184,7 +184,7 @@ final class ChannelSidebarRow: ChannelRowView {
             let frame = NSRect(x: Self.catInset + CGFloat(index) * side / 2, y: (bounds.height - side) / 2, width: side, height: side)
             switch cat {
             case .kitten(let status):
-                CatStamp.draw(status.pose(tick: isLive ? tick : 0), jacket: status.kitten.color, in: frame, on: self, fraction: fraction)
+                CatStamp.draw(status.pose(tick: isLive ? tick : 0), jacket: ChannelSpeakerLook.color(of: status.kitten), in: frame, on: self, fraction: fraction)
             case .shades:
                 CatStamp.draw(CatPose(frame: .sit), jacket: nil, in: frame, on: self)
             case .other:

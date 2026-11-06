@@ -63,7 +63,7 @@ extension AppController {
         hiddenThreads.insert(thread.id)
         watch.markQuick(thread.id)
         Task { [backend] in try? await backend.settle(threadID: thread.id) }
-        stage.showThreads(watch.rows(at: now()), status: watch.summary)
+        stage.showStatus(watch.summary, needsYou: watch.needsYouCount > 0)
         let title = latestThreads.first { $0.id == next }?.title
         say(CatWords.passedOn(to: title), threadID: next)
     }

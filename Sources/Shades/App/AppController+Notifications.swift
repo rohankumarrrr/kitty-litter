@@ -47,7 +47,6 @@ extension AppController {
     }
 
     func notificationClicked() {
-        channelsPressed()
-        stage.selectChannel(.needsYou)
+        channelsPressed(selecting: .needsYou)
     }
 }

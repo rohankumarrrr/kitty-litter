@@ -108,11 +108,16 @@ final class AppController {
     var notForInboxSince = Date.distantPast
     /// Whether the bubble should mention the inbox.
     var inboxNudge = false
-    var inboxReplyIsOpen = false
+    /// Something came in while Messages was open, so the bubble mentions it once it's closed.
+    var nudgeOnClose = false
     /// Counts the boxes that take what you say, so words meant for one can't land in the next.
     var boxesOpened = 0
     /// The box what's being said belongs in, fixed when the key goes down.
     var talkBox: Int?
+    /// What's being said goes into Messages' box, fixed when the key goes down, as how many times Messages had
+    /// closed then. Closing it again means the box you were talking to is gone.
+    var talkToMessages: Int?
+    var messagesClosings = 0
     var inboxSaveFailed = false
     /// Questions answered from Messages, kept out of it until the list catches up.
     var answeredQuestions: Set<String> = []
@@ -269,8 +274,8 @@ final class AppController {
             replaceSelection(with: text)
         case .approval(let request, let decision):
             answer(request, decision)
-        case .openInbox:
-            inboxPressed()
+        case .openMessages:
+            channelsPressed(selecting: .needsYou)
         }
     }
 

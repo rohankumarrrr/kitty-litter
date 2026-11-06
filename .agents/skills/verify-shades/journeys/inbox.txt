@@ -1,10 +1,19 @@
+front
 report decision
 wait 7
 draw .verify/shades/inbox/0-bubble
 inbox
 wait 1
 draw .verify/shades/inbox/1-open
+inbox reply
+wait 1
+draw .verify/shades/inbox/2-reply
+send Go ahead
+wait 2
+draw .verify/shades/inbox/3-sent
+channel needs
 inbox done
 wait 1
-draw .verify/shades/inbox/2-done
+draw .verify/shades/inbox/4-done
+front
 windows

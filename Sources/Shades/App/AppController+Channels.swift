@@ -4,6 +4,8 @@ import ShadesCore
 /// What Messages can ask for. Nothing in it can say anything for you: sending takes words you typed.
 enum MessagesAction: Equatable {
     case send(String, to: MessageTarget, shownIn: ChannelID?)
+    /// A new thread in the kitten's folder. `id` is what Messages calls it until T3 has its thread.
+    case startTopic(String, with: Kitten, id: String)
     case approval(ApprovalRequest, ApprovalDecision)
     /// Every part of a question's answer, in order.
     case answer(AgentQuestion, [String])
@@ -14,24 +16,51 @@ enum MessagesAction: Equatable {
 /// Messages: what needs you, a group chat with every kitten, and a DM with each. Opening it captures nothing,
 /// and nothing typed in it takes your screen, since you're looking at Messages and not your work.
 extension AppController {
-    func channelsPressed() {
-        stage.showChannels(channels.open(threads: latestThreads))
+    /// Opens it, at `selection` if it's given. Looking at it covers whatever the cat was nudging you about.
+    func channelsPressed(selecting selection: ChannelSelection? = nil) {
+        inboxNudge = false
+        // Shown Needs you, you've seen what came in while it was open, so closing it has nothing new to say.
+        if selection == .needsYou { nudgeOnClose = false }
+        stage.showChannels(channels.open(threads: latestThreads), selecting: selection)
+        renderBubble()
+    }
+
+    /// The hotkey opens it from anywhere, and closes it if it's already open.
+    func messagesHotkeyPressed() {
+        if stage.isChannelsVisible {
+            stage.hideChannels()
+        } else {
+            channelsPressed()
+        }
     }
 
     func channelsClosed() {
         channels.close()
+        messagesClosings += 1
+        guard nudgeOnClose else { return }
+        nudgeOnClose = false
+        // Only if something's still there to say. Otherwise a note later on would bring it up, which notes don't.
+        guard !CatWords.inboxHeadline(inboxEntries).isEmpty else { return }
+        inboxNudge = true
+        renderBubble()
     }
 
     /// From the live list, the one place that has the words of approvals and questions.
     var waiting: Waiting {
         let kittens = loadKittens()
         var waiting = Waiting(approvals: approvals.pending, reports: inbox.entries)
+        // What used to be the dashboard: work the cat started outside any kitten, while it's going or just finished.
+        waiting.shadesWork = watch.rows(at: now()).filter { !hiddenThreads.contains($0.id) && KittenBoard.owner(of: $0, among: kittens) == nil }
         for thread in latestThreads where !hiddenThreads.contains(thread.id) {
             let owner = KittenBoard.owner(of: thread, among: kittens)?.id
-            for request in thread.pendingApprovals { waiting.owners[request.id] = owner }
+            for request in thread.pendingApprovals {
+                waiting.owners[request.id] = owner
+                waiting.listed[request.id] = thread.id
+            }
             if let question = thread.pendingQuestion, !answeredQuestions.contains(question.id) {
                 waiting.questions.append(question)
                 waiting.owners[question.id] = owner
+                waiting.listed[question.id] = thread.id
             }
         }
         return waiting
@@ -41,6 +70,8 @@ extension AppController {
         switch action {
         case .send(let words, let target, let channel):
             send(words, to: target, shownIn: channel)
+        case .startTopic(let words, let kitten, let id):
+            send(words, to: .newThread(kitten), shownIn: .direct(kitten), echoID: id)
         case .approval(let request, let decision):
             answer(request, decision)
         case .answer(let question, let answers):
@@ -56,8 +87,7 @@ extension AppController {
     }
 
     /// Each way of sending passes on your words and nothing else: no screen, and nothing anyone else said.
-    func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?) {
-        let echoID = "sent-\(UUID().uuidString)"
+    func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, echoID: String = "sent-\(UUID().uuidString)") {
         func echo(threadID: String = "", title: String = "") {
             guard let channel else { return }
             channels.sent(ChannelMessage(exchangeID: echoID, kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: title), in: channel)
@@ -81,9 +111,9 @@ extension AppController {
             give(words, to: kitten, snapshot: nil) { [weak self] threadID in
                 self?.channels.started(echoID, in: threadID, title: title)
             }
-        case .thread(let id, let title):
+        case .thread(let id, let title, let report):
             echo(threadID: id, title: title)
-            reply(words, toThread: id, title: title)
+            reply(words, toThread: id, title: title, marking: report)
         case .starting:
             break
         case .question(let question):

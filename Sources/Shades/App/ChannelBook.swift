@@ -74,7 +74,11 @@ struct Waiting: Equatable {
     var questions: [AgentQuestion] = []
     /// The kitten each approval, question or report is for, by its ID.
     var owners: [String: String] = [:]
+    /// The listed thread each approval or question holds up, by its ID. A subagent's own thread isn't listed.
+    var listed: [String: String] = [:]
     var reports: [InboxEntry] = []
+    /// Work the cat started outside any kitten, while it's going or just finished. It's what each kitten is on, for Shades.
+    var shadesWork: [AgentThread] = []
 
     var count: Int { approvals.count + questions.count + reports.filter(\.needsYou).count }
 }
@@ -99,9 +103,10 @@ struct ChannelBook: Equatable {
     var waiting: Waiting
     /// Kittens with a finished run you haven't looked at.
     var unread: Set<String>
-    /// Each kitten's newest thread you could be talking in, with its title as shown: one with your DM in it, or
-    /// one whose words aren't known yet. By kitten ID.
-    var newestThreads: [String: AgentThread]
+    /// Every thread T3 listed, by ID, with its title as shown.
+    var threads: [String: AgentThread]
+    /// The thread each new topic you started became, by the ID of what you sent.
+    var started: [String: String]
     /// Threads only ever heard between kittens, which aren't yours to carry on.
     var elsewhere: Set<String>
     var isReading: Bool
@@ -201,19 +206,15 @@ struct ChannelBook: Equatable {
         }
         let everyone = channel(.everyone, directIDs.flatMap { placed[$0] ?? [] } + (placed[.everyone] ?? []))
         let unread = Set(threads.filter(isUnread).compactMap { KittenBoard.owner(of: $0, among: kittens)?.id })
-        var newestThreads: [String: AgentThread] = [:]
+        var named: [String: AgentThread] = [:]
         var elsewhere: Set<String> = []
-        for thread in threads {
+        for thread in threads where named[thread.id] == nil {
+            named[thread.id] = thread
             guard let owner = KittenBoard.owner(of: thread, among: kittens) else { continue }
-            if let heard = heardIn[thread.id], !heard.contains(.direct(owner)) {
-                elsewhere.insert(thread.id)
-                continue
-            }
-            guard thread.updatedAt > newestThreads[owner.id]?.updatedAt ?? .distantPast else { continue }
-            var named = thread
-            named.title = title(of: thread, owner: owner)
-            newestThreads[owner.id] = named
+            named[thread.id]?.title = title(of: thread, owner: owner)
+            if let heard = heardIn[thread.id], !heard.contains(.direct(owner)) { elsewhere.insert(thread.id) }
         }
+        let started = Dictionary(sent.compactMap { $0.message.threadID.isEmpty ? nil : ($0.message.exchangeID, $0.message.threadID) }, uniquingKeysWith: { first, _ in first })
         return ChannelBook(
             directs: directs,
             statuses: statuses,
@@ -222,7 +223,8 @@ struct ChannelBook: Equatable {
             everyone: everyone,
             waiting: waiting,
             unread: unread,
-            newestThreads: newestThreads,
+            threads: named,
+            started: started,
             elsewhere: elsewhere,
             isReading: isReading,
             unreadable: unreadable,
@@ -341,8 +343,28 @@ extension ChannelBook {
         id == .everyone ? everyone : directs.first { $0.id == id } ?? between.first { $0.id == id }
     }
 
+    /// The thread an approval or question is shown in: the listed one it holds up.
+    func thread(holding request: String, else threadID: String) -> String {
+        waiting.listed[request] ?? threadID
+    }
+
     func kitten(of requestID: String) -> Kitten? {
         waiting.owners[requestID].flatMap { owner in statuses.first { $0.id == owner }?.kitten }
+    }
+
+    /// The kitten a DM is with, if it's one you can write in.
+    func writableKitten(in id: ChannelID) -> Kitten? {
+        statuses.first { id == .direct($0.kitten) && $0.state != .notSetUp }?.kitten
+    }
+
+    /// A thread's title as shown, from T3's list or, for one too new to be listed, from what's been said in it.
+    func title(ofThread id: String, in channel: ChannelID) -> String {
+        threads[id]?.title ?? self.channel(channel)?.messages.first { $0.threadID == id && !$0.threadTitle.isEmpty }?.threadTitle ?? ""
+    }
+
+    /// Whether anything is known of this thread, so there's somewhere for words to go.
+    func knows(thread id: String, in channel: ChannelID) -> Bool {
+        threads[id] != nil || self.channel(channel)?.messages.contains { $0.threadID == id } == true
     }
 
     func status(of speaker: Speaker) -> KittenStatus? {

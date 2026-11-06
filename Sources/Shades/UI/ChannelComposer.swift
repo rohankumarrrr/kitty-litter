@@ -11,16 +11,10 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     private static let fieldPad: CGFloat = 8
 
     var onSend: ((String, MessageTarget) -> Void)?
-    /// Starts something new instead, or goes back to where typing usually goes.
-    var onRetarget: ((MessageTarget?) -> Void)?
     var onResize: (() -> Void)?
 
     private(set) var target: MessageTarget?
-    private var kitten: Kitten?
-    private var isPicked = false
     private let label = NSTextField(labelWithString: "")
-    private let newTopic = QuietButton(CatWords.newTopic, style: .text)
-    private let cancel = QuietButton("Cancel", style: .text)
     private let scroll = NSScrollView()
     let textView = PlaceholderTextView()
 
@@ -31,13 +25,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         label.lineBreakMode = .byTruncatingTail
         label.isSelectable = false
         addSubview(label)
-        newTopic.onPress = { [weak self] in
-            guard let kitten = self?.kitten else { return }
-            self?.onRetarget?(.newThread(kitten))
-        }
-        cancel.onPress = { [weak self] in self?.onRetarget?(nil) }
-        addSubview(newTopic)
-        addSubview(cancel)
 
         textView.delegate = self
         textView.isRichText = false
@@ -65,18 +52,13 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// `kitten` is whose DM this is, if it's one, which is what lets you start something new.
-    func show(_ target: MessageTarget?, picked: Bool, kitten: Kitten?, label: String? = nil) {
+    func show(_ target: MessageTarget?, label: String? = nil) {
         let changed = target != self.target
         self.target = target
-        self.kitten = kitten
-        isPicked = picked
         isHidden = target == nil
         guard let target else { return }
         self.label.stringValue = label ?? CatWords.target(target)
         textView.placeholder = CatWords.placeholder(target)
-        cancel.isHidden = !picked
-        if case .newThread = target { newTopic.isHidden = true } else { newTopic.isHidden = kitten == nil }
         if changed { needsLayout = true }
     }
 
@@ -95,12 +77,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     override func layout() {
         super.layout()
         let inner = bounds.width - ChannelRowView.margin * 2
-        var right = bounds.width - ChannelRowView.margin + 6
-        for button in [cancel, newTopic] where !button.isHidden {
-            right -= button.frame.width
-            button.frame.origin = NSPoint(x: right, y: Self.pad - 2)
-        }
-        label.frame = NSRect(x: ChannelRowView.margin - 2, y: Self.pad + 2, width: max(right - ChannelRowView.margin - 4, 40), height: 16)
+        label.frame = NSRect(x: ChannelRowView.margin - 2, y: Self.pad + 2, width: inner, height: 16)
         let field = NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight, width: inner, height: textHeight + Self.fieldPad * 2)
         scroll.frame = field.insetBy(dx: 10, dy: Self.fieldPad)
         textView.minSize = NSSize(width: scroll.frame.width, height: 0)
@@ -127,7 +104,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
             send()
             return true
         case #selector(NSResponder.cancelOperation(_:)):
-            if isPicked { onRetarget?(nil) }
             return true
         default:
             return false

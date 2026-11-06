@@ -32,7 +32,7 @@ final class ChannelRowsTests: XCTestCase {
 
     private func subjects(_ rows: [ChannelRow]) -> [String] {
         rows.compactMap {
-            if case .subject(let title, _) = $0 { return title }
+            if case .subject(let title, _, _) = $0 { return title }
             return nil
         }
     }
@@ -50,7 +50,7 @@ final class ChannelRowsTests: XCTestCase {
             "b": [exchange("b1", asked: 20)],
         ])
         XCTAssertEqual(subjects(dm(steve, in: built)), ["First", "Second", "First"])
-        XCTAssertTrue(dm(steve, in: built).contains(.subject("Second", threadID: "b")), "and it knows what to open")
+        XCTAssertTrue(dm(steve, in: built).contains(.subject("Second", project: "Steve Pawsniak", threadID: "b")), "and it says which project, and knows what to open")
     }
 
     func testADayDividerComesBeforeEachNewDay() {
@@ -213,17 +213,61 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertNil(MessageTarget.standard(for: .channel(ChannelID(.kitten(steve.id), .kitten(pepper.id))!), in: built), "what kittens say to each other is only read")
     }
 
-    func testADMCarriesOnInItsLatestThreadOrStartsANewOne() {
+    func testADMsOwnBoxStartsSomethingNewAndAThreadsCarriesOnInIt() {
         let built = book(threads: [thread("a", title: "Old"), thread("b", title: "Newer")], transcripts: ["a": [exchange("e1")], "b": [exchange("e2", asked: 10)]])
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: built), .thread(id: "b", title: "Newer"))
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: built), .newThread(steve), "never a guess at which thread")
+        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: built), .thread(id: "a", title: "Old"))
+        XCTAssertEqual(MessageTarget.standard(for: .thread("b", in: .everyone), in: built), .thread(id: "b", title: "Newer"), "a thread opened from Everyone goes straight to it")
         XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(pepper)), in: built), .newThread(pepper))
+        XCTAssertNil(MessageTarget.standard(for: .thread("nowhere", in: .direct(steve)), in: built), "a thread nothing is known of has nowhere to send")
+        XCTAssertNil(MessageTarget.standard(for: .thread("a", in: ChannelID(.kitten(steve.id), .kitten(pepper.id))!), in: built), "a thread between kittens is only read")
     }
 
-    func testAQuestionThatTakesYourWordsIsWhatTheDMAnswers() {
+    func testAQuestionThatTakesYourWordsIsWhatItsThreadAnswers() {
         let open = waitingBook(Waiting(questions: [question()], owners: ["q": steve.id]), transcripts: ["a": [exchange("e")]])
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: open), .question(question()))
+        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: open), .question(question()))
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: open), .newThread(steve), "the box under everything never answers")
         let choicesOnly = waitingBook(Waiting(questions: [question(ownWords: false)], owners: ["q": steve.id]), transcripts: ["a": [exchange("e")]])
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: choicesOnly), .thread(id: "a", title: "Work"))
+        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: choicesOnly), .thread(id: "a", title: "Work"))
+    }
+
+    func testYourWordsAnswerWhicheverPartOfAQuestionIsNext() {
+        let parts = AnswerForm(parts: [
+            AnswerForm.Part(key: "m", text: "Which month?", options: ["Dec", "Jan"], values: ["dec", "jan"], takesOwnWords: false),
+            AnswerForm.Part(key: "c", text: "Which currency?", options: [], values: [], takesOwnWords: true),
+        ])
+        let asked = AgentQuestion(id: "q", threadID: "a", threadTitle: "Work", text: "Which month?", form: parts)
+        let built = waitingBook(Waiting(questions: [asked], owners: ["q": steve.id]), transcripts: ["a": [exchange("e")]])
+        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: built), .thread(id: "a", title: "Work"), "the month is picked, not typed")
+        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: built, answered: ["q": 1]), .question(asked))
+    }
+
+    func testASubagentsQuestionIsAnsweredInTheThreadItHoldsUp() {
+        var asked = question()
+        asked.threadID = "subagent"
+        let built = waitingBook(Waiting(questions: [asked], owners: ["q": steve.id], listed: ["q": "a"]), transcripts: ["a": [exchange("e")]])
+        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: built), .question(asked))
+        XCTAssertEqual(ChannelRows.rows(.thread("a", in: .direct(steve)), in: built).last, .question(asked))
+    }
+
+    func testAThreadOnItsOwnShowsOnlyItsWordsAndWhatItsWaitingOn() {
+        let approval = ApprovalRequest(id: "ap", threadID: "b", threadTitle: "Second", kind: .command, summary: "Run: ls", createdAt: noon)
+        let built = ChannelBook.build(
+            kittens: [steve, pepper, cali],
+            threads: [thread("a", title: "First"), thread("b", title: "Second")],
+            transcripts: ["a": [exchange("a1", asked: 0)], "b": [exchange("b1", asked: 20)]],
+            isReading: false, unreadable: 0, cantReachT3: false,
+            waiting: Waiting(approvals: [approval], owners: ["ap": steve.id])
+        )
+        let rows = ChannelRows.rows(.thread("b", in: .direct(steve)), in: built)
+        XCTAssertEqual(subjects(rows), [], "the header says which thread it is")
+        let threads = rows.compactMap { row -> String? in
+            if case .message(let message) = row { return message.threadID }
+            return nil
+        }
+        XCTAssertEqual(threads, ["b", "b"])
+        XCTAssertEqual(rows.last, .approval(approval))
+        XCTAssertEqual(ChannelRows.rows(.thread("c", in: .direct(steve)), in: built), [.note("Its messages are in T3.")])
     }
 
     func testADMEndsWithWhatThatKittenIsWaitingOnYouFor() {
@@ -250,5 +294,16 @@ final class ChannelRowsTests: XCTestCase {
 
     func testEveryoneWithNothingSaidSaysWhereItGoes() {
         XCTAssertEqual(ChannelRows.rows(.channel(.everyone), in: book()), [.note("Say something and it goes to whoever it's for.")])
+    }
+
+    func testShadesOwnWorkComesFirstInProgress() {
+        let own = AgentThread(id: "own", title: "Find a cheaper flight", projectTitle: nil, status: .running, model: "m", updatedAt: noon)
+        let built = ChannelBook.build(kittens: [steve, pepper, cali], threads: [thread("a")], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(shadesWork: [own]))
+        let rows = ChannelRows.rows(.needsYou, in: built)
+        let progress = Array(rows.drop { $0 != .section("In progress", clearing: nil) }.dropFirst())
+        guard case .heading(let shades) = progress.first else { return XCTFail("\(rows)") }
+        XCTAssertEqual(shades.kitten, KittenBoard.shades)
+        XCTAssertEqual(shades.state, .working(sessions: 1))
+        XCTAssertEqual(progress[1], .issue(own))
     }
 }

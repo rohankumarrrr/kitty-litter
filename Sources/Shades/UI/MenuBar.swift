@@ -1,7 +1,7 @@
 import AppKit
 import ShadesCore
 
-/// The menu bar item: how things are going, your threads, and the main actions.
+/// The menu bar item: how things are going, and the main actions. What your agents are saying is in Messages.
 @MainActor
 final class MenuBar: NSObject, NSMenuDelegate {
     struct Extra {
@@ -12,19 +12,15 @@ final class MenuBar: NSObject, NSMenuDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
     private var status = "Napping"
-    private var threads: [AgentThread] = []
     private var actions: [() -> Void] = []
 
     var onAsk: (() -> Void)?
     var onFix: (() -> Void)?
-    var onInbox: (() -> Void)?
-    /// What goes next to Inbox, read each time the menu opens.
-    var inboxSummary: (() -> String?)?
-    var onDashboard: (() -> Void)?
     var onKittens: (() -> Void)?
-    var onChannels: (() -> Void)?
+    var onMessages: (() -> Void)?
+    /// What goes next to Messages, read each time the menu opens.
+    var messagesSummary: (() -> String?)?
     var onSettings: (() -> Void)?
-    var onOpenThread: ((String) -> Void)?
     /// Extra items, such as setting up permissions or demo mode's controls.
     var extras: [Extra] = []
 
@@ -47,9 +43,8 @@ final class MenuBar: NSObject, NSMenuDelegate {
         return NSPoint(x: min(frame.maxX, visible.maxX - 8), y: frame.minY - 4)
     }
 
-    func show(status: String, threads: [AgentThread], needsYou: Bool) {
+    func show(status: String, needsYou: Bool) {
         self.status = status
-        self.threads = threads
         item.button?.contentTintColor = needsYou ? Ink.hex(CatGlint.attention(bright: true).color!) : nil
         item.button?.setAccessibilityLabel("Shades: \(status)")
     }
@@ -75,29 +70,12 @@ final class MenuBar: NSObject, NSMenuDelegate {
         header.isEnabled = false
         menu.addItem(header)
 
-        if !threads.isEmpty {
-            menu.addItem(.separator())
-            for thread in threads.prefix(6) {
-                let row = NSMenuItem(title: thread.title, action: nil, keyEquivalent: "")
-                let detail = [thread.projectTitle, CatWords.status(thread)].compactMap { $0 }.joined(separator: " · ")
-                let title = NSMutableAttributedString(string: thread.title, attributes: [.font: NSFont.menuFont(ofSize: 13)])
-                title.append(NSAttributedString(string: "\n\(detail)", attributes: [
-                    .font: NSFont.menuFont(ofSize: 11),
-                    .foregroundColor: NSColor.secondaryLabelColor,
-                ]))
-                row.attributedTitle = title
-                bind(row) { [weak self] in self?.onOpenThread?(thread.id) }
-                menu.addItem(row)
-            }
-        }
-
         menu.addItem(.separator())
+        let waiting = messagesSummary?().map { "\($0) · " } ?? ""
+        addAction(CatWords.messagesTitle, shortcut: waiting + Shortcut.messagesLabel) { [weak self] in self?.onMessages?() }
         addAction("Ask...", shortcut: Shortcut.askLabel) { [weak self] in self?.onAsk?() }
         addAction("Fix what I'm looking at", shortcut: Shortcut.fixLabel) { [weak self] in self?.onFix?() }
-        addAction("Inbox", shortcut: inboxSummary?() ?? nil) { [weak self] in self?.onInbox?() }
-        addAction("Dashboard") { [weak self] in self?.onDashboard?() }
         addAction("Kittens", shortcut: "Shift-click the cat") { [weak self] in self?.onKittens?() }
-        addAction(CatWords.messagesTitle) { [weak self] in self?.onChannels?() }
 
         if !extras.isEmpty {
             menu.addItem(.separator())

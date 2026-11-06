@@ -85,7 +85,16 @@ enum CatWords {
     static let everyoneSubtitle = "Goes to whoever it's for"
     static let everyoneEmpty = "Say something and it goes to whoever it's for."
     static let shades = "Shades"
+    static let shadesRole = "Work I started for you"
     static let newTopic = "New topic"
+    static let openInT3 = "Open in T3"
+    static let quietThread = "Its messages are in T3."
+    /// Short, so a long name can't crowd out the thread's own title.
+    static func back(to title: String) -> String { "‹ \(title.count > 18 ? title.prefix(17) + "…" : title)" }
+    /// Under a thread's title: where it is and how it's going.
+    static func threadDetails(_ thread: AgentThread) -> String {
+        [thread.projectTitle, status(thread), thread.pullRequest.map(pullRequest)].compactMap { $0 }.joined(separator: " · ")
+    }
     static let answerInWords = "Type an answer"
     static let didntStart = "That didn't start. Try again?"
     static let answerInT3 = "This one's answered in T3."
@@ -112,7 +121,7 @@ enum CatWords {
         switch target {
         case .router: return "To whoever it's for"
         case .newThread(let kitten): return "New topic with \(kitten.name)"
-        case .thread(_, let title): return "In \(title)"
+        case .thread(_, let title, _): return "In \(title)"
         case .starting(let kitten): return "Starting a new topic with \(kitten.name)..."
         case .question(let question): return answering(question.text)
         }
@@ -123,7 +132,8 @@ enum CatWords {
     static func placeholder(_ target: MessageTarget) -> String {
         switch target {
         case .router: return "Message everyone"
-        case .newThread, .thread, .starting: return "Message"
+        case .newThread: return "Start a new topic"
+        case .thread, .starting: return "Reply"
         case .question: return "Your answer"
         }
     }
@@ -188,14 +198,8 @@ enum CatWords {
     static let failedWithoutReport = "It stopped before it could say why."
     static func failedRow(_ opening: String) -> String { "Hit a snag: \(opening)" }
 
-    static let inboxCaption = "Inbox"
-    static let inboxEmpty = "All clear. Nothing shipped or waiting on you."
+    static let inboxCaption = "Messages"
     static let inboxSent = "Sent. Waiting to hear back."
-    static let replyFirst = "Click Reply on the one you mean, then talk."
-
-    static func replyPlaceholder(talkKey: HoldKey) -> String {
-        talkKey == .off ? "Type your reply" : "Type your reply, or say it"
-    }
 
     static func inboxHeadline(_ entries: [InboxEntry]) -> String {
         let decisions = entries.filter(\.needsYou).count
@@ -215,7 +219,6 @@ enum CatWords {
         return notes == 0 ? "" : notes == 1 ? "1 note" : "\(notes) notes"
     }
 
-    /// What the menu says next to Inbox. What needs you comes first, since that's what it's for.
     static func inboxSummary(_ entries: [InboxEntry]) -> String? {
         let decisions = entries.filter(\.needsYou).count
         if decisions > 0 { return decisions == 1 ? "1 needs you" : "\(decisions) need you" }
@@ -223,15 +226,6 @@ enum CatWords {
         return shipped > 0 ? "\(shipped) shipped" : nil
     }
 
-    static func ago(_ date: Date, now: Date) -> String {
-        let minutes = Int(now.timeIntervalSince(date) / 60)
-        switch minutes {
-        case ..<1: return "just now"
-        case ..<60: return "\(minutes)m ago"
-        case ..<(24 * 60): return "\(minutes / 60)h ago"
-        default: return "\(minutes / (24 * 60))d ago"
-        }
-    }
 
     /// The question and what you can say to it. Answering happens in T3.
     static func question(_ question: AgentQuestion) -> String {

@@ -59,7 +59,6 @@ extension AppController {
         guard !openingAsk else { return }
         openingAsk = true
         defer { openingAsk = false }
-        stage.hideInbox()
         stage.catWake()
 
         if let dropped {

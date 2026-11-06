@@ -1,3 +1,4 @@
+front
 wait 1
 draw .verify/shades/ask/0-before
 ask What's on this page?
@@ -9,4 +10,5 @@ draw .verify/shades/ask/2-to-a-kitten
 ask Fix the buy button
 wait 3
 draw .verify/shades/ask/3-handed-off
+front
 windows

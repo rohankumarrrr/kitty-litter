@@ -13,7 +13,6 @@ extension AppController {
         picking = true
         defer { picking = false }
         stage.hideInput()
-        stage.hideInbox()
         guard let region = await context.pickRegion() else { return }
         stage.catRun(toRegion: region) {}
         // Nothing gets pointed at here, and the box waits on this look.

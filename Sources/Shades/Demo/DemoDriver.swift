@@ -80,10 +80,8 @@ final class DemoDriver {
             ("cat", stage.cat.panel),
             ("bubble", stage.bubble.panel),
             ("input", stage.input.panel),
-            ("dashboard", stage.dashboard.panel),
             ("kittens", stage.kittens.panel),
             ("channels", stage.channels.panel),
-            ("inbox", stage.inbox.panel),
         ]
     }
 
@@ -93,7 +91,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | channel needs|done|everyone|[kitten] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | dash | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
+            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|[kitten] | thread | back | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -120,8 +118,6 @@ final class DemoDriver {
         case "esc":
             if stage.input.isVisible {
                 stage.input.cancel()
-            } else if stage.inbox.isVisible {
-                stage.inbox.hide()
             } else {
                 controller.bubbleDismissed(byClick: false)
             }
@@ -135,6 +131,9 @@ final class DemoDriver {
             controller.kittensPressed()
         case "channels":
             controller.channelsPressed()
+        case "messages":
+            // The same as pressing ⌃⌘M: it opens Messages, or closes it if it's open.
+            controller.messagesHotkeyPressed()
         case "channel":
             // channel needs | done | everyone | the start of a kitten's name, the same as clicking it in the sidebar.
             let kitten = Demo.kittens.first { $0.name.lowercased().hasPrefix(rest.lowercased()) }
@@ -144,11 +143,18 @@ final class DemoDriver {
             case "everyone": stage.channels.view.select(.channel(.everyone))
             default: if let kitten, !rest.isEmpty { stage.channels.view.select(.channel(.direct(kitten))) }
             }
+        case "thread":
+            // The same as clicking the title over the last thread in the conversation that's showing.
+            let view = stage.channels.view
+            if case .channel(let id) = view.selection, let last = view.pane.shown.last(where: { if case .subject = $0 { true } else { false } }),
+               case .subject(_, _, let threadID) = last {
+                view.select(.thread(threadID, in: id))
+            }
+        case "back":
+            stage.channels.view.select(stage.channels.view.selection.place)
         case "send":
             // The same as typing into Messages' box and pressing Return.
             stage.channels.view.pane.composer.send(rest)
-        case "dash":
-            stage.toggleDashboard()
         case "settings":
             controller.settingsPressed()
         case "allow", "deny", "session":
@@ -166,17 +172,19 @@ final class DemoDriver {
         case "report":
             parts.backend.report(rest)
         case "inbox":
-            // The same as pressing the first row's buttons, so nothing has to click.
+            // The same as pressing a report's buttons in Messages, so nothing has to click.
             let first = controller.inboxEntries.first { $0.questionID == nil }
             switch rest {
             case "reply":
-                if let first { controller.inboxAction(.reply(first)) }
+                // The same as pressing the first report's Reply: its thread opens with the box ready.
+                controller.channelsPressed(selecting: .needsYou)
+                if let first { stage.channels.view.pane.reply(to: first) }
             case "done":
                 if let first { controller.inboxAction(.done(id: first.id)) }
             case "clear":
                 controller.inboxAction(.clear(.shipped))
             default:
-                controller.inboxPressed()
+                controller.channelsPressed(selecting: .needsYou)
             }
         case "notification":
             // The same as clicking the last notification.

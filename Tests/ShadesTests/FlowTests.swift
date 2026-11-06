@@ -3143,21 +3143,22 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(controller.hiddenThreads.contains("thread-1"))
     }
 
-    private func replyWithPanelOpen() async throws -> InboxEntry {
+    private func reportToReply() async throws -> InboxEntry {
         kittens = [inboxKitten]
         await finish(work(), report: "The secret report.", sorted: "DECISION: Ship the fix?")
-        controller.inboxPressed()
-        let entry = try XCTUnwrap(stage.inboxRows?.first)
-        controller.inboxAction(.reply(entry))
-        return entry
+        controller.channelsPressed(selecting: .needsYou)
+        return try XCTUnwrap(rows.first)
+    }
+
+    /// What pressing Reply on a report in Messages and typing does.
+    private func replyInMessages(_ words: String, to entry: InboxEntry) async {
+        controller.messagesAction(.send(words, to: .thread(id: entry.threadID, title: entry.threadTitle), shownIn: nil))
+        await settle()
     }
 
     func testAReplyIsOnlyYourWordsAboveTheLine() async throws {
-        let entry = try await replyWithPanelOpen()
-        XCTAssertEqual(stage.input?.caption, entry.text, "you can see what you're replying to")
-        XCTAssertEqual(stage.input?.allowsEmpty, false)
-        stage.type("What's the risk?")
-        await settle()
+        let entry = try await reportToReply()
+        await replyInMessages("What's the risk?", to: entry)
 
         let sent = try XCTUnwrap(backend.sent.last)
         XCTAssertEqual(sent.mode, .forward)
@@ -3168,13 +3169,11 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("Sent that to Clawde: Fix login.", threadID: "w"))
         XCTAssertNotNil(rows[0].repliedAt)
         XCTAssertFalse(rows[0].needsYou)
-        XCTAssertEqual(stage.inboxRows?.first?.repliedAt, rows[0].repliedAt, "the row dims straight away")
+        XCTAssertEqual(stage.channelsUpdated.last?.waiting.reports.first?.repliedAt, rows[0].repliedAt, "the row dims straight away")
     }
 
     func testAReplyNeverLooksAtTheScreen() async throws {
-        _ = try await replyWithPanelOpen()
-        stage.type("Typed.")
-        await settle()
+        await replyInMessages("Typed.", to: try await reportToReply())
         XCTAssertFalse(log.all.contains("snapshot"))
         XCTAssertTrue(context.options.isEmpty)
         XCTAssertEqual(context.saved, 0)
@@ -3185,81 +3184,21 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.sent.filter { $0.mode != .forward }.count, 1, "only the sort, and nothing to the router")
     }
 
-    func testASpokenReplyGoesInTheBoxWithoutLooking() async throws {
-        controller.start()
-        await drainMainQueue()
-        _ = try await replyWithPanelOpen()
-        keys.onPress?(settings.talkKey)
-        await drainMainQueue()
-        XCTAssertEqual(voice.began, 1)
-        XCTAssertNotNil(stage.input, "the box stays up")
-        voice.partialsIn.yield("what is")
-        await settle()
-        XCTAssertEqual(stage.inputText, ["what is"])
-        XCTAssertNotEqual(stage.bubble, .listening(""), "what you say shows in the box")
-        keys.onRelease?(settings.talkKey)
-        await drainMainQueue()
-        await settle()
-
-        XCTAssertNil(stage.input, "saying it counts as Return")
-        XCTAssertFalse(controller.inboxReplyIsOpen)
-        XCTAssertFalse(log.all.contains("snapshot"))
-        XCTAssertTrue(context.options.isEmpty)
-        let sent = try XCTUnwrap(backend.sent.last)
-        XCTAssertEqual(sent.mode, .forward)
-        XCTAssertTrue(sent.prompt.text.hasPrefix("What is this?\n\n---\n"))
-        XCTAssertTrue(sent.prompt.attachments.isEmpty)
-        XCTAssertFalse(sent.prompt.text.contains("<screen>"))
-        XCTAssertEqual(backend.sent.filter { $0.mode != .forward }.count, 1, "only the sort, and nothing to the router")
-    }
-
-    func testTalkingWithThePanelOpenDoesNothing() async {
-        controller.start()
-        await drainMainQueue()
-        kittens = [inboxKitten]
-        await finish(work(), sorted: "DECISION: Ship the fix?")
-        controller.inboxPressed()
-        let sends = backend.sent.count
-        keys.onPress?(settings.talkKey)
-        await drainMainQueue()
-        keys.onRelease?(settings.talkKey)
-        await drainMainQueue()
-        await settle()
-
-        XCTAssertEqual(voice.began, 0)
-        XCTAssertTrue(context.options.isEmpty)
-        XCTAssertEqual(backend.sent.count, sends)
-        XCTAssertEqual(stage.bubble, .line(CatWords.replyFirst, threadID: nil))
-        XCTAssertNotNil(stage.inboxRows, "and the panel stays open")
-    }
-
-    func testCancellingAReplySendsNothingAndKeepsThePanel() async throws {
-        _ = try await replyWithPanelOpen()
-        let sends = backend.sent.count
-        stage.hideInput()
-        XCTAssertFalse(controller.inboxReplyIsOpen)
-        XCTAssertEqual(backend.sent.count, sends)
-        XCTAssertTrue(rows[0].needsYou)
-        XCTAssertNotNil(stage.inboxRows)
-    }
-
     func testNoButtonSendsAnything() async throws {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")
         await finish(work("o", title: "Clawde: New icon"), sorted: "SHIPPED: The icon is live.")
         let sends = backend.sent.count
-        controller.inboxPressed()
+        controller.channelsPressed(selecting: .needsYou)
         let decision = try XCTUnwrap(rows.first { $0.kind == .decision })
 
         controller.inboxAction(.open(threadID: "w"))
         XCTAssertEqual(backend.opened, ["w"])
-        XCTAssertNil(stage.inboxRows, "you've gone to look at it")
 
-        controller.inboxPressed()
         controller.inboxAction(.done(id: decision.id))
-        XCTAssertEqual(stage.inboxRows?.map(\.text), ["The icon is live."])
+        XCTAssertEqual(stage.channelsUpdated.last?.waiting.reports.map(\.text), ["The icon is live."])
         controller.inboxAction(.clear(.shipped))
-        XCTAssertEqual(stage.inboxRows, [])
+        XCTAssertEqual(stage.channelsUpdated.last?.waiting.reports, [])
 
         XCTAssertEqual(backend.sent.count, sends)
         XCTAssertTrue(backend.settled.isEmpty)
@@ -3275,57 +3214,46 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .inbox("1 decision"))
         XCTAssertTrue(controller.notices.isEmpty, "it doesn't take a turn in the bubble as well")
         XCTAssertEqual(stage.status, .attention)
-        controller.inboxPressed()
-        let row = try XCTUnwrap(stage.inboxRows?.first)
+        let row = try XCTUnwrap(controller.inboxEntries.first)
         XCTAssertEqual(row.questionID, "q")
         XCTAssertEqual(row.text, "Which one?\n\n• A\n• B")
-
-        controller.inboxAction(.reply(row))
-        XCTAssertNil(stage.input, "a message would only queue behind it")
         XCTAssertTrue(backend.sent.isEmpty)
-        controller.inboxAction(.open(threadID: row.threadID))
-        XCTAssertEqual(backend.opened, ["sub"])
         XCTAssertTrue(rows.isEmpty)
         XCTAssertNil(savedInbox)
 
-        controller.inboxPressed()
         asking.pendingQuestion = nil
         asking.status = .running
         controller.threadsChanged([asking])
-        XCTAssertEqual(stage.inboxRows, [], "it goes away by itself")
+        XCTAssertEqual(controller.inboxEntries, [], "it goes away by itself")
     }
 
     func testAFailedSendPutsTheRowBack() async throws {
-        _ = try await replyWithPanelOpen()
+        let entry = try await reportToReply()
         backend.streamError = URLError(.notConnectedToInternet)
-        stage.type("What's the risk?")
-        await settle()
+        await replyInMessages("What's the risk?", to: entry)
         XCTAssertNil(rows[0].repliedAt)
         XCTAssertTrue(rows[0].needsYou)
         XCTAssertEqual(savedInbox?.entries, rows)
-        XCTAssertEqual(stage.inboxRows?.first?.repliedAt, nil)
+        XCTAssertEqual(stage.channelsUpdated.last?.waiting.reports.first?.repliedAt, nil)
         XCTAssertEqual(stage.bubble, .line(CatWords.problem(URLError(.notConnectedToInternet), while: .agents), threadID: nil))
     }
 
     func testLosingTheConnectionPartWayThroughDoesntUndoAReply() async throws {
-        _ = try await replyWithPanelOpen()
+        let entry = try await reportToReply()
         backend.replies = [[.text(delta: "Looking")]]
         backend.droppedAfterReply = URLError(.networkConnectionLost)
-        stage.type("What's the risk?")
-        await settle()
+        await replyInMessages("What's the risk?", to: entry)
         XCTAssertNotNil(rows[0].repliedAt)
         XCTAssertFalse(rows[0].needsYou)
     }
 
     func testAnAnswerGoesUnderTheRowYouAskedOn() async throws {
-        _ = try await replyWithPanelOpen()
-        stage.type("What's the risk?")
-        await settle()
+        await replyInMessages("What's the risk?", to: try await reportToReply())
         await finish(work(run: "run-2"), sorted: "NOTE: The risk is low.")
         XCTAssertEqual(rows.map(\.text), ["Ship the fix?"])
         XCTAssertEqual(rows[0].answer, "The risk is low.")
         XCTAssertTrue(rows[0].needsYou, "it's back to you")
-        XCTAssertEqual(stage.inboxRows?.first?.answer, "The risk is low.", "and the open panel keeps up")
+        XCTAssertEqual(stage.channelsUpdated.last?.waiting.reports.first?.answer, "The risk is low.", "and Messages keeps up")
     }
 
     func testAReportTheSorterCallsANoteStaysInTheInbox() async {
@@ -3339,8 +3267,8 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(CatWords.inboxHeadline(rows), "")
         XCTAssertNil(CatWords.inboxSummary(rows))
 
-        controller.inboxPressed()
-        XCTAssertEqual(stage.inboxRows?.map(\.text), ["Nothing else to say."], "it's still there if you go looking")
+        controller.channelsPressed(selecting: .needsYou)
+        XCTAssertEqual(stage.channelsShown.last?.waiting.reports.map(\.text), ["Nothing else to say."], "it's still there if you go looking")
     }
 
     func testANoteDoesntBringBackABubbleYouDismissed() async {
@@ -3358,9 +3286,7 @@ final class FlowTests: XCTestCase {
         kittens = [inboxKitten]
         await finish(work(), sorted: "SHIPPED: The fix is live.")
         controller.bubbleDismissed(byClick: false)
-        controller.inboxAction(.reply(rows[0]))
-        stage.type("Did you check the rollback?")
-        await settle()
+        await replyInMessages("Did you check the rollback?", to: rows[0])
         controller.line = nil
         await finish(work(run: "run-2"), sorted: "NOTE: Yes, it rolled back cleanly.")
         XCTAssertEqual(rows[0].answer, "Yes, it rolled back cleanly.")
@@ -3371,11 +3297,7 @@ final class FlowTests: XCTestCase {
         kittens = [inboxKitten]
         await finish(work(), sorted: "NOTE: The review is still going.")
         XCTAssertNil(stage.bubble)
-        controller.inboxPressed()
-        controller.inboxAction(.reply(try XCTUnwrap(stage.inboxRows?.first)))
-        stage.type("What's left?")
-        await settle()
-        controller.inboxPressed()
+        await replyInMessages("What's left?", to: rows[0])
         controller.line = nil
         await finish(work(run: "run-2"), sorted: "NOTE: Only the rollback check.")
         XCTAssertEqual(rows.map(\.kind), [.note], "it's still not something that shipped")
@@ -3428,7 +3350,7 @@ final class FlowTests: XCTestCase {
         XCTAssertNil(stage.bubble)
         XCTAssertTrue(backend.sent.isEmpty, "no model is asked to sort it")
         XCTAssertEqual(stage.celebrated, 0)
-        XCTAssertTrue(stage.threads.isEmpty)
+        XCTAssertTrue(controller.watch.rows(at: clock).isEmpty)
     }
 
     func testALiveTestsThreadCantAskYouAnythingEither() async {
@@ -3443,8 +3365,7 @@ final class FlowTests: XCTestCase {
         controller.threadsChanged([liveTest(.waitingForAnswer, question: question)])
         await settle()
         XCTAssertNil(stage.bubble)
-        controller.inboxPressed()
-        XCTAssertEqual(stage.inboxRows?.count, 0)
+        XCTAssertTrue(controller.inboxEntries.isEmpty)
     }
 
     func testACopyTryingAFlowOutStillSeesItsOwnTestThread() async {
@@ -3560,9 +3481,7 @@ final class FlowTests: XCTestCase {
     func testAnAnswerWithALinkInItGoesUnderTheRow() async throws {
         kittens = [inboxKitten]
         await finish(work(), report: "Should I merge it?", sorted: "DECISION: Merge it?")
-        controller.inboxAction(.reply(rows[0]))
-        stage.type("What does the review say?")
-        await settle()
+        await replyInMessages("What does the review say?", to: rows[0])
         controller.dispatchers.insert("w")
         await finish(work(run: "run-2"), report: "It found one bug. Details are in <t3-thread://v2/env/reviewer>.", sorted: "NOTE: It found one bug.")
         XCTAssertEqual(rows.first?.answer, "It found one bug.")
@@ -3659,7 +3578,7 @@ final class FlowTests: XCTestCase {
         for _ in 0..<20 { await Task.yield() }
         XCTAssertTrue(backend.responses.isEmpty)
         XCTAssertTrue(backend.archived.isEmpty)
-        XCTAssertEqual(stage.threads.map(\.id), ["own"])
+        XCTAssertEqual(controller.watch.rows(at: clock).map(\.id), ["own"])
     }
 
     func testASummaryThatHasOnlyJustStartedIsntTidiedAway() async {
@@ -3756,36 +3675,6 @@ final class FlowTests: XCTestCase {
         backend.sent.filter { $0.prompt.text.contains("Their question:") }
     }
 
-    func testLettingGoAfterTheReplyBoxHasGoneSendsNothing() async throws {
-        _ = try await replyWithPanelOpen()
-        let sends = backend.sent.count
-        controller.keyPressed(settings.talkKey)
-        stage.hideInput()
-        controller.keyReleased(settings.talkKey)
-        await settle()
-        XCTAssertEqual(backend.sent.count, sends, "it means never mind, and doesn't turn into a question for the cat")
-    }
-
-    func testEscWhileItsBeingTranscribedSendsNothing() async throws {
-        _ = try await replyWithPanelOpen()
-        let sends = backend.sent.count
-        controller.keyPressed(settings.talkKey)
-        controller.keyReleased(settings.talkKey)
-        stage.hideInput()
-        await settle()
-        XCTAssertEqual(backend.sent.count, sends)
-    }
-
-    func testPressingReturnWhileHoldingTheKeySendsOnce() async throws {
-        _ = try await replyWithPanelOpen()
-        controller.keyPressed(settings.talkKey)
-        stage.type("What is")
-        controller.keyReleased(settings.talkKey)
-        await settle()
-        XCTAssertTrue(routerPrompts.isEmpty)
-        XCTAssertEqual(backend.sent.filter { $0.mode == .forward }.count, 1)
-    }
-
     func testAnOldLookCantComeWithAReply() async throws {
         kittens = [inboxKitten]
         await finish(work(), report: "The report.", sorted: "DECISION: Ship the fix?")
@@ -3796,56 +3685,9 @@ final class FlowTests: XCTestCase {
         voice.endError = nil
         XCTAssertNil(controller.talkLook)
 
-        controller.inboxPressed()
-        controller.inboxAction(.reply(try XCTUnwrap(stage.inboxRows?.first)))
-        controller.keyPressed(settings.talkKey)
-        stage.hideInput()
-        controller.keyReleased(settings.talkKey)
-        await settle()
+        await replyInMessages("Ship it", to: rows[0])
         XCTAssertTrue(routerPrompts.isEmpty)
         XCTAssertTrue(backend.sent.allSatisfy(\.prompt.attachments.isEmpty))
-    }
-
-    private func twoOpenDecisions() async throws -> (a: InboxEntry, b: InboxEntry) {
-        kittens = [inboxKitten]
-        await finish(work("a", title: "Clawde: Thread A"), report: "Report A.", sorted: "DECISION: Ship A?")
-        await finish(work("b", title: "Clawde: Thread B"), report: "Report B.", sorted: "DECISION: Ship B?")
-        controller.inboxPressed()
-        let rows = try XCTUnwrap(stage.inboxRows)
-        return (try XCTUnwrap(rows.first { $0.threadID == "a" }), try XCTUnwrap(rows.first { $0.threadID == "b" }))
-    }
-
-    func testWordsSaidForOneRowDontGoToTheNextYouClick() async throws {
-        let (a, b) = try await twoOpenDecisions()
-        controller.inboxAction(.reply(a))
-        controller.keyPressed(settings.talkKey)
-        controller.keyReleased(settings.talkKey)
-        controller.inboxAction(.reply(b))
-        await settle()
-        XCTAssertFalse(backend.sent.contains { $0.mode == .forward })
-        XCTAssertNotNil(stage.input, "B's box is still yours to use")
-    }
-
-    func testWordsSaidForARowDontBecomeAFix() async throws {
-        let (a, _) = try await twoOpenDecisions()
-        controller.inboxAction(.reply(a))
-        controller.keyPressed(settings.talkKey)
-        await controller.beginFix()
-        controller.keyReleased(settings.talkKey)
-        await settle()
-        XCTAssertFalse(backend.sent.contains { $0.prompt.title?.hasPrefix("Fix:") == true })
-    }
-
-    func testAQuestionForTheCatStaysAQuestionIfYouPressReplyWhileItsTranscribed() async throws {
-        kittens = [inboxKitten]
-        await finish(work(), report: "The report.", sorted: "DECISION: Ship the fix?")
-        controller.keyPressed(settings.talkKey)
-        controller.keyReleased(settings.talkKey)
-        controller.inboxPressed()
-        controller.inboxAction(.reply(try XCTUnwrap(stage.inboxRows?.first)))
-        await settle()
-        XCTAssertFalse(backend.sent.contains { $0.mode == .forward }, "you were asking the cat, not replying")
-        XCTAssertEqual(routerPrompts.count, 1)
     }
 
     func testOtherKittensStillGetABubble() async {
@@ -3921,7 +3763,7 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .inbox("1 decision, 1 shipped"))
         XCTAssertTrue(controller.notices.isEmpty)
         XCTAssertEqual(stage.status, .attention)
-        XCTAssertEqual(controller.inboxMenuLine, "1 needs you")
+        XCTAssertEqual(controller.messagesMenuLine, "1 needs you")
         // The two reports are filed at once, so either can land first.
         let decision = try XCTUnwrap(rows.first { $0.kind == .decision })
         XCTAssertEqual(CatWords.inboxSummary([decision, decision]), "2 need you")
@@ -3939,9 +3781,11 @@ final class FlowTests: XCTestCase {
 
         await finish(work("o", title: "Clawde: Other"), sorted: "SHIPPED: The icon is live.")
         XCTAssertEqual(stage.bubble, .inbox("1 decision, 1 shipped"))
-        controller.bubbleAction(.openInbox)
-        XCTAssertNil(stage.bubble, "opening it clears the bubble")
-        XCTAssertEqual(stage.inboxRows?.map(\.text), ["Ship the fix?", "The icon is live."])
+        controller.bubbleAction(.openMessages)
+        XCTAssertNil(stage.bubble, "opening Messages clears the bubble")
+        XCTAssertTrue(stage.isChannelsVisible)
+        XCTAssertEqual(stage.selections.last, .needsYou, "at what needs you")
+        XCTAssertEqual(stage.channelsShown.last?.waiting.reports.map(\.text), ["Ship the fix?", "The icon is live."])
     }
 
     func testAClickElsewhereClearsTheBubbleWhenNothingNeedsYou() async {
@@ -3956,9 +3800,9 @@ final class FlowTests: XCTestCase {
 
     func testAReportWhileYoureLookingDoesntInterrupt() async {
         kittens = [inboxKitten]
-        controller.inboxPressed()
+        controller.channelsPressed()
         await finish(work(), sorted: "DECISION: Ship the fix?")
-        XCTAssertEqual(stage.inboxRows?.map(\.text), ["Ship the fix?"])
+        XCTAssertEqual(stage.channelsUpdated.last?.waiting.reports.map(\.text), ["Ship the fix?"])
         XCTAssertNil(stage.bubble)
     }
 
@@ -3969,29 +3813,6 @@ final class FlowTests: XCTestCase {
         controller.start()
         XCTAssertEqual(stage.bubble, .inbox("1 decision"))
         XCTAssertEqual(rows.map(\.text), ["Ship the fix?"])
-    }
-
-    func testThePanelTogglesAndGetsOutOfTheWay() async {
-        controller.inboxPressed()
-        XCTAssertEqual(stage.inboxRows, [])
-        controller.inboxPressed()
-        XCTAssertNil(stage.inboxRows)
-
-        controller.inboxPressed()
-        controller.kittensPressed()
-        XCTAssertNil(stage.inboxRows)
-        XCTAssertNotNil(stage.kittens)
-        controller.inboxPressed()
-        XCTAssertNil(stage.kittens)
-        XCTAssertNotNil(stage.inboxRows)
-
-        await controller.beginAsk()
-        XCTAssertNil(stage.inboxRows, "it isn't in the look at your screen")
-        stage.hideInput()
-
-        controller.inboxPressed()
-        await controller.beginFix()
-        XCTAssertNil(stage.inboxRows)
     }
 
     func testACantSaveInboxIsAFinding() async {
@@ -4422,6 +4243,20 @@ final class FlowTests: XCTestCase {
         }
     }
 
+    func testANewTopicKeepsTheNameMessagesGaveItUntilItHasAThread() async {
+        kittens = [steve, penny]
+        backend.projects["/k/penny"] = "project-penny"
+        controller.channelsPressed()
+        controller.messagesAction(.startTopic("How's December looking?", with: penny, id: "sent-topic"))
+        let shown = stage.channelsUpdated.last?.channel(.direct(penny))?.messages.first { $0.exchangeID == "sent-topic" }
+        XCTAssertEqual(shown?.text, "How's December looking?", "it shows at once, under the name Messages opened it by")
+
+        await settle()
+        let started = backend.sent.first { $0.mode == .start && $0.prompt.projectID == "project-penny" }
+        XCTAssertEqual(started?.prompt.text, Prompts.forKitten(penny, words: "How's December looking?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
+        XCTAssertEqual(stage.channelsUpdated.last?.started["sent-topic"], "thread-1", "so Messages can follow it into its thread")
+    }
+
     func testEveryoneGoesThroughTheRouterAndTheKittenGetsOnlyYourWords() async {
         kittens = [steve, penny]
         backend.projects["/k/penny"] = "project-penny"
@@ -4577,7 +4412,7 @@ final class FlowTests: XCTestCase {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")
         backend.streamError = URLError(.notConnectedToInternet)
-        controller.reply("Yes, ship it", to: rows[0])
+        controller.reply("Yes, ship it", toThread: rows[0].threadID, title: rows[0].threadTitle, marking: rows[0].id)
         await controller.forwardTask?.value
         XCTAssertTrue(rows[0].needsYou, "it's back")
         XCTAssertEqual(notified.count, 1)
@@ -4593,7 +4428,7 @@ final class FlowTests: XCTestCase {
     func testClickingANotificationOpensNeedsYouInMessages() async {
         controller.notificationClicked()
         XCTAssertEqual(stage.channelsShown.count, 1)
-        XCTAssertEqual(stage.channelSelected, .needsYou)
+        XCTAssertEqual(stage.selections.last ?? nil, .needsYou)
     }
 
     func testReplyingInAThreadStopsItsReportAsking() async {
@@ -5088,6 +4923,252 @@ extension FlowTests {
 }
 
 
+// MARK: - Messages as the one place to look
+
+extension FlowTests {
+    func testTheHotkeyOpensMessagesAndClosesItWithoutLooking() async {
+        controller.messagesHotkeyPressed()
+        XCTAssertTrue(stage.isChannelsVisible)
+        XCTAssertEqual(stage.selections, [nil], "where you were last time")
+        controller.messagesHotkeyPressed()
+        XCTAssertFalse(stage.isChannelsVisible)
+        XCTAssertFalse(log.all.contains("snapshot"))
+        XCTAssertNil(stage.input, "it never takes the keyboard by itself")
+    }
+
+    func testMessagesCoversWhatTheCatWasNudgingAbout() async {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+        controller.messagesHotkeyPressed()
+        XCTAssertNil(stage.bubble, "you're looking at it")
+        await finish(work("o", title: "Clawde: Other"), sorted: "SHIPPED: The icon is live.")
+        XCTAssertNil(stage.bubble, "and nothing new interrupts while you are")
+        XCTAssertEqual(controller.messagesMenuLine, "1 needs you")
+    }
+
+    func testShadesOwnWorkIsWhatsInProgressForIt() async {
+        kittens = [steve]
+        let own = AgentThread(id: "own", title: "Find a cheaper flight", projectTitle: nil, status: .running, model: "m", updatedAt: clock)
+        let kittens = AgentThread(id: "k", title: "Tailor resume", projectTitle: "Steve", status: .running, model: "m", updatedAt: clock, projectPath: steve.folder)
+        let plumbing = AgentThread(id: "summary", title: "Sum up", projectTitle: nil, status: .running, model: "m", updatedAt: clock)
+        controller.hiddenThreads.insert("summary")
+        controller.threadsChanged([own, kittens, plumbing])
+        XCTAssertEqual(controller.waiting.shadesWork.map(\.id), ["own"], "a kitten's work is under that kitten, and the cat's plumbing isn't work")
+    }
+}
+
+// MARK: - Messages, review round 1
+
+extension FlowTests {
+    func testAskingAboutWhatShippedAnswersThatRowAndLeavesTheDecision() async throws {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Deploy production?\nSHIPPED: The staging backup is ready.")
+        let decision = try XCTUnwrap(rows.first { $0.kind == .decision })
+        let shipped = try XCTUnwrap(rows.first { $0.kind == .shipped })
+        controller.channelsPressed(selecting: .needsYou)
+        let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: 820, height: 560))
+        view.pane.onAction = { [unowned self] in self.controller.messagesAction($0) }
+        view.show(try XCTUnwrap(stage.channelsShown.last))
+        func descendants(_ parent: NSView) -> [NSView] {
+            parent.subviews + parent.subviews.flatMap(descendants)
+        }
+        let card = try XCTUnwrap(descendants(view).compactMap { $0 as? CardRowView }.first {
+            $0.accessibilityLabel()?.contains(shipped.text) == true
+        })
+        let ask = try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == "Ask" })
+        ask.onPress?()
+        view.pane.composer.send("Where is the staging backup stored?")
+        await settle()
+
+        XCTAssertTrue(try XCTUnwrap(rows.first { $0.id == decision.id }).needsYou, "asking about the backup answered the deployment decision")
+        XCTAssertNotNil(try XCTUnwrap(rows.first { $0.id == shipped.id }).repliedAt)
+        await finish(work(run: "run-2"), sorted: "NOTE: The backup is in staging storage.")
+        XCTAssertNil(try XCTUnwrap(rows.first { $0.id == decision.id }).answer)
+        XCTAssertEqual(try XCTUnwrap(rows.first { $0.id == shipped.id }).answer, "The backup is in staging storage.")
+    }
+
+    func testTalkingWhileYoureTypingInMessagesGoesInItsBoxWithoutLooking() async throws {
+        controller.start()
+        await drainMainQueue()
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        controller.bubbleAction(.openMessages)
+        stage.isMessagesBoxTyping = true
+        let sends = backend.sent.count
+        voice.transcript = Transcript(raw: "yes go ahead", cleaned: "Yes, go ahead.", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+
+        XCTAssertFalse(log.all.contains("snapshot"), "talking into Messages' box looked at the screen")
+        XCTAssertEqual(stage.sentInMessages, ["Yes, go ahead."], "saying it counts as pressing Return")
+        XCTAssertEqual(backend.sent.count, sends, "it goes where the box says, not to the cat")
+    }
+
+    func testTalkingAfterYouStopTypingInMessagesSendsNothing() async {
+        controller.start()
+        await drainMainQueue()
+        controller.channelsPressed()
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "never mind", cleaned: "Never mind.", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        stage.isMessagesBoxTyping = false
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertEqual(stage.sentInMessages, [])
+        XCTAssertFalse(log.all.contains("snapshot"))
+    }
+
+    func testTalkingWithMessagesOpenBehindYourWorkStillAsksAboutYourScreen() async {
+        controller.start()
+        await drainMainQueue()
+        controller.channelsPressed()
+        voice.transcript = Transcript(raw: "what is this", cleaned: "What is this?", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertTrue(log.all.contains("snapshot"), "an open window you aren't typing in doesn't stop the talk key")
+        XCTAssertEqual(stage.sentInMessages, [])
+    }
+
+    func testADecisionWhileMessagesSitsOpenGetsTheBubbleOnceItsClosed() async {
+        kittens = [inboxKitten]
+        controller.channelsPressed()
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        XCTAssertNil(stage.bubble, "nothing interrupts while it's open")
+        controller.messagesHotkeyPressed()
+        controller.channelsClosed()
+        XCTAssertEqual(stage.bubble, .inbox("1 decision"), "open isn't the same as looked at")
+    }
+}
+
+// MARK: - Messages, review round 2
+
+extension FlowTests {
+    func testEverythingYouSendAfterAskingAboutWhatShippedStaysWithThatRow() async throws {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Deploy production?\nSHIPPED: The staging backup is ready.")
+        let decision = try XCTUnwrap(rows.first { $0.kind == .decision })
+        let shipped = try XCTUnwrap(rows.first { $0.kind == .shipped })
+        controller.channelsPressed(selecting: .needsYou)
+        let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: 820, height: 560))
+        view.pane.onAction = { [unowned self] in self.controller.messagesAction($0) }
+        view.show(try XCTUnwrap(stage.channelsShown.last))
+        func descendants(_ parent: NSView) -> [NSView] {
+            parent.subviews + parent.subviews.flatMap(descendants)
+        }
+        let card = try XCTUnwrap(descendants(view).compactMap { $0 as? CardRowView }.first {
+            $0.accessibilityLabel()?.contains(shipped.text) == true
+        })
+        try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == "Ask" }).onPress?()
+        view.pane.composer.send("Where is the staging backup stored?")
+        await settle()
+        if let latest = stage.channelsUpdated.last { view.show(latest) }
+        XCTAssertEqual(view.selection, .thread("w", in: .direct(inboxKitten)))
+        view.pane.composer.send("And how big is it?")
+        await settle()
+
+        XCTAssertTrue(try XCTUnwrap(rows.first { $0.id == decision.id }).needsYou, "a follow-up about the backup answered the deployment decision")
+        await finish(work(run: "run-2"), sorted: "NOTE: The backup is in staging storage, 4 GB.")
+        XCTAssertNil(try XCTUnwrap(rows.first { $0.id == decision.id }).answer)
+        XCTAssertEqual(try XCTUnwrap(rows.first { $0.id == shipped.id }).answer, "The backup is in staging storage, 4 GB.")
+    }
+
+    func testTalkingIntoMessagesHoldsItsBoxAndNeverShowsYourWordsOverTheCat() async {
+        controller.start()
+        await drainMainQueue()
+        controller.channelsPressed()
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "make it shorter", cleaned: "Make it shorter.", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        XCTAssertTrue(stage.messagesBoxHeld, "where the box points is fixed as the key goes down")
+        let before = stage.bubbles.count
+        voice.partialsIn.yield("make it")
+        await drainMainQueue()
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertFalse(stage.bubbles.dropFirst(before).contains(.listening("make it")), "that bubble is for asking the cat")
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertEqual(stage.sentInMessages, ["Make it shorter."])
+        XCTAssertFalse(stage.messagesBoxHeld)
+    }
+
+    func testTalkingIntoMessagesThenStoppingLetsTheBoxGo() async {
+        controller.start()
+        await drainMainQueue()
+        controller.channelsPressed()
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "", cleaned: "", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertEqual(stage.sentInMessages, [])
+        XCTAssertFalse(stage.messagesBoxHeld)
+    }
+
+    func testANoteAfterYouveDealtWithWhatCameInWhileMessagesWasOpenStaysQuiet() async throws {
+        kittens = [inboxKitten]
+        controller.channelsPressed()
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        let decision = try XCTUnwrap(rows.first { $0.kind == .decision })
+        controller.messagesAction(.inbox(.done(id: decision.id)))
+        controller.messagesHotkeyPressed()
+        controller.channelsClosed()
+        XCTAssertNil(stage.bubble, "nothing's left to tell you about")
+
+        await finish(work("w2", title: "Clawde: Tidy logs"), sorted: "NOTE: The logs are tidy.")
+        XCTAssertEqual(rows.last?.kind, .note)
+        XCTAssertNil(stage.bubble, "a note doesn't bring up the bubble unless it answers you")
+    }
+}
+
+extension FlowTests {
+    func testTalkingGoesToMessagesWhenItHasTheKeyboardEvenWithAFixBoxBehindIt() async {
+        await controller.beginFix()
+        XCTAssertTrue(controller.fixIsOpen)
+        controller.channelsPressed()
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "where is the backup", cleaned: "Where is the backup?", audioSeconds: 1, latencySeconds: 0.1)
+        controller.talkDown()
+        await controller.talkUp()
+        await settle()
+
+        XCTAssertEqual(stage.sentInMessages, ["Where is the backup?"], "the Messages box has the keyboard, not the Fix box behind it")
+        XCTAssertEqual(backend.sent.count, 0, "nothing went with the fix's picture")
+        XCTAssertEqual(context.saved, 0)
+    }
+
+    func testWordsForAMessagesBoxYouClosedGoNowhere() async {
+        controller.channelsPressed(selecting: .channel(.everyone))
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "words for the original thread", cleaned: "Words for the original thread.", audioSeconds: 1, latencySeconds: 0.1)
+        controller.talkDown()
+
+        stage.hideChannels()
+        stage.isMessagesBoxTyping = false
+        controller.channelsClosed()
+        controller.channelsPressed(selecting: .thread("different-thread", in: .direct(steve)))
+        stage.isMessagesBoxTyping = true
+        await controller.talkUp()
+        await settle()
+
+        XCTAssertEqual(stage.sentInMessages, [], "the box you were talking to closed, so another one mustn't get your words")
+        XCTAssertFalse(stage.messagesBoxHeld)
+        XCTAssertTrue(backend.sent.isEmpty)
+        XCTAssertFalse(log.all.contains("snapshot"))
+    }
+}
 
 extension FlowTests {
     /// The kitten's thread hands the reading to another, which fails before the kitten's report is read.
@@ -5178,5 +5259,91 @@ private extension AgentThread {
         var copy = self
         copy.lastRunID = run
         return copy
+    }
+}
+
+// MARK: - Messages with notifications, drops and the screen warning
+
+extension FlowTests {
+    /// Messages closed: the click covers the nudge, and closing again says nothing.
+    func testANotificationClickWithMessagesClosedCoversTheNudge() async {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        XCTAssertEqual(notified.map(\.kind), [.decision])
+        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+        controller.notificationClicked()
+        XCTAssertEqual(stage.selections.last ?? nil, .needsYou)
+        controller.messagesHotkeyPressed()
+        controller.channelsClosed()
+        XCTAssertNil(stage.bubble)
+    }
+
+    /// Messages open behind your work: the click brings it up at Needs you, which is looking at it.
+    func testANotificationClickWithMessagesOpenCoversTheNudge() async {
+        kittens = [inboxKitten]
+        controller.channelsPressed()
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        XCTAssertEqual(notified.map(\.kind), [.decision])
+        XCTAssertNil(stage.bubble)
+        controller.notificationClicked()
+        XCTAssertEqual(stage.selections.last ?? nil, .needsYou)
+        controller.messagesHotkeyPressed()
+        controller.channelsClosed()
+        XCTAssertNil(stage.bubble, "you clicked the notification and were shown Needs you")
+    }
+
+    /// #1 for #12's new topic: it warns, and asking the cat before it starts takes that back.
+    func testANewTopicWarnsAndAskingMeanwhileTakesItBack() async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.channelsPressed()
+        controller.messagesAction(.startTopic("Read this x thread", with: steve, id: "sent-a"))
+        await settle()
+        await controller.frontierTask?.value
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink })
+
+        controller.notices.removeAll()
+        var open: AsyncStream<Void>.Continuation!
+        let opened = AsyncStream<Void> { open = $0 }
+        backend.heldProject = Task { for await _ in opened { break } }
+        controller.messagesAction(.startTopic("Read this x thread", with: steve, id: "sent-b"))
+        backend.routerSays = ["what's this?": "It's a page."]
+        await controller.beginAsk()
+        stage.type("what's this?")
+        await controller.replyTask?.value
+        open.yield()
+        backend.heldProject = nil
+        await settle()
+        await controller.frontierTask?.value
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    /// A drop's box takes what you say without a look, and Messages' box wins when you're typing in it.
+    func testADropsBoxAndMessagesBoxTakeWhatYouSay() async {
+        controller.start()
+        await drainMainQueue()
+        controller.dropped(syllabus)
+        await controller.flow?.value
+        XCTAssertTrue(controller.dropIsOpen)
+        stage.isMessagesBoxTyping = true
+        voice.transcript = Transcript(raw: "yes", cleaned: "Yes.", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertEqual(stage.sentInMessages, ["Yes."])
+        XCTAssertFalse(log.all.contains("snapshot"))
+
+        stage.isMessagesBoxTyping = false
+        backend.routerSays = ["What's due?": "Week 1."]
+        voice.transcript = Transcript(raw: "what's due", cleaned: "What's due?", audioSeconds: 1, latencySeconds: 0.1)
+        keys.onPress?(settings.talkKey)
+        await drainMainQueue()
+        keys.onRelease?(settings.talkKey)
+        await drainMainQueue()
+        await settle()
+        XCTAssertFalse(log.all.contains("snapshot"))
+        XCTAssertFalse(controller.dropIsOpen)
     }
 }

@@ -100,8 +100,8 @@ extension AppController {
         report.map { ReportDigest.firstSentences(of: $0) }.flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    /// What's saved, plus any question a thread has stopped to ask. That's answered in T3, since a message would
-    /// only queue behind it, and it goes away by itself, so it's never saved.
+    /// What's saved, plus any question a thread has stopped to ask, for the cat's nudge. A question goes away by
+    /// itself once it's answered, so it's never saved.
     var inboxEntries: [InboxEntry] {
         let questions = latestThreads.filter { $0.pendingQuestion != nil && goesToInbox($0) }.compactMap { thread -> InboxEntry? in
             guard let question = thread.pendingQuestion else { return nil }
@@ -126,33 +126,25 @@ extension AppController {
         renderBubble()
     }
 
-    /// Says there's something new in there, unless you're already looking.
+    /// Says there's something new, unless Messages is open. Being open isn't the same as having looked, since it can
+    /// sit behind your work, so the bubble comes once it's closed.
     func nudgeInbox() {
-        if !stage.isInboxVisible { inboxNudge = true }
-    }
-
-    func inboxPressed() {
-        if stage.isInboxVisible {
-            stage.hideInbox()
-            return
+        if stage.isChannelsVisible {
+            nudgeOnClose = true
+        } else {
+            inboxNudge = true
         }
-        inboxNudge = false
-        stage.hideKittens()
-        stage.showInbox(inboxEntries)
-        renderBubble()
     }
 
-    var inboxMenuLine: String? {
+    /// What the menu says next to Messages. What needs you comes first, since that's what it's for.
+    var messagesMenuLine: String? {
         CatWords.inboxSummary(inboxEntries)
     }
 
     func inboxAction(_ action: InboxAction) {
         switch action {
-        case .reply(let entry):
-            openReply(to: entry)
         case .open(let threadID):
             backend.open(threadID: threadID)
-            stage.hideInbox()
         case .done(let id):
             inbox.remove(id)
             keepInbox()
@@ -164,32 +156,13 @@ extension AppController {
         }
     }
 
-    private func openReply(to entry: InboxEntry) {
-        guard entry.questionID == nil else { return }
-        stage.hideInput()
-        inboxReplyIsOpen = true
-        boxesOpened += 1
-        stage.showInput(InputRequest(
-            placeholder: CatWords.replyPlaceholder(talkKey: settings.talkKey),
-            caption: entry.text,
-            allowsEmpty: false,
-            onSubmit: { [weak self] words in
-                self?.inboxReplyIsOpen = false
-                self?.reply(words, to: entry)
-            },
-            onCancel: { [weak self] in self?.inboxReplyIsOpen = false }
-        ))
-    }
-
-    func reply(_ words: String, to entry: InboxEntry) {
-        reply(words, toThread: entry.threadID, title: entry.threadTitle, marking: entry.id)
-    }
-
     /// Takes no snapshot, so no caller can pass one, and doesn't go near the router, whose thread is what would carry the screen.
-    /// A report from that thread that's waiting on you stops asking, unless it's told which one.
-    func reply(_ words: String, toThread threadID: String, title: String, marking entryID: String? = nil) {
+    /// The report you replied to, if you picked one, stops asking and gets the answer. Otherwise that thread's report
+    /// waiting on you does, or failing that its latest one.
+    func reply(_ words: String, toThread threadID: String, title: String, marking report: String? = nil) {
         let text = Prompts.forwarded(words: words, snapshot: nil, screenshotPath: nil, screenLeftOut: false)
-        let entryID = entryID ?? inbox.entries.last { $0.threadID == threadID && $0.needsYou }?.id
+        let own = inbox.entries.filter { $0.threadID == threadID }
+        let entryID = (own.first { $0.id == report } ?? own.last(where: \.needsYou) ?? own.last)?.id
         if let entryID {
             inbox.markReplied(entryID, at: now())
             keepInbox()
@@ -237,7 +210,6 @@ extension AppController {
     }
 
     private func inboxChanged() {
-        if stage.isInboxVisible { stage.showInbox(inboxEntries) }
         channels.refresh()
         notifyNeedsYou()
         renderBubble()

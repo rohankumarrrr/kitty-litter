@@ -12,10 +12,8 @@ final class AppStage: CatStage {
     let bubble = BubbleController()
     let input = InputPanel()
     let pill = SayPill()
-    let dashboard = DashboardPanel()
     let kittens = KittenPanel()
     let channels = ChannelsWindow()
-    let inbox = InboxPanel()
     let settingsPanel = SettingsPanel()
     let menuBar = MenuBar()
     weak var controller: AppController?
@@ -27,7 +25,6 @@ final class AppStage: CatStage {
             guard let self else { return (.zero, .zero) }
             // Stack above whatever else is open over the cat, so both stay readable.
             let frame = self.input.isVisible ? self.input.frame
-                : self.inbox.isVisible ? self.inbox.frame
                 : self.kittens.isVisible ? self.kittens.frame
                 : self.cat.destinationFrame
             return (frame, self.cat.visibleFrame)
@@ -38,7 +35,7 @@ final class AppStage: CatStage {
 
         input.anchor = { [weak self] in
             guard let self else { return (.zero, .zero) }
-            return (self.inbox.isVisible ? self.inbox.frame : self.cat.destinationFrame, self.cat.visibleFrame)
+            return (self.cat.destinationFrame, self.cat.visibleFrame)
         }
         input.onLayout = { [weak self] in
             guard let self else { return }
@@ -50,7 +47,6 @@ final class AppStage: CatStage {
         cat.onMove = { [weak self] in
             guard let self else { return }
             self.pill.follow(self.pillAnchor, in: self.cat.visibleFrame)
-            self.inbox.reposition()
             self.input.reposition()
             self.kittens.reposition()
             self.bubble.reposition()
@@ -91,30 +87,12 @@ final class AppStage: CatStage {
         channels.view.pane.onAction = { [weak self] action in self?.controller?.messagesAction(action) }
         channels.view.onSeen = { [weak self] selection in self?.controller?.messagesAction(.seen(selection)) }
 
-        inbox.anchor = { [weak self] in
-            guard let self else { return (.zero, .zero) }
-            return (self.cat.destinationFrame, self.cat.visibleFrame)
-        }
-        inbox.onAction = { [weak self] action in self?.controller?.inboxAction(action) }
-        inbox.onChange = { [weak self] in
-            self?.input.reposition()
-            self?.bubble.reposition()
-            self?.updateEscape()
-        }
-
-        dashboard.anchor = { [weak self] in self?.menuBar.corner ?? .zero }
-        dashboard.onHide = { [weak self] in self?.updateEscape() }
-        dashboard.onOpen = { [weak self] id in self?.controller?.openThread(id) }
-
         menuBar.onAsk = { [weak self] in self?.controller?.askPressed() }
         menuBar.onFix = { [weak self] in self?.controller?.fixPressed() }
-        menuBar.onInbox = { [weak self] in self?.controller?.inboxPressed() }
-        menuBar.inboxSummary = { [weak self] in self?.controller?.inboxMenuLine }
-        menuBar.onDashboard = { [weak self] in self?.toggleDashboard() }
         menuBar.onKittens = { [weak self] in self?.controller?.kittensPressed() }
-        menuBar.onChannels = { [weak self] in self?.controller?.channelsPressed() }
+        menuBar.onMessages = { [weak self] in self?.controller?.channelsPressed() }
+        menuBar.messagesSummary = { [weak self] in self?.controller?.messagesMenuLine }
         menuBar.onSettings = { [weak self] in self?.controller?.settingsPressed() }
-        menuBar.onOpenThread = { [weak self] id in self?.controller?.openThread(id) }
     }
 
     func start() {
@@ -127,6 +105,10 @@ final class AppStage: CatStage {
             self?.controller?.fixPressed()
         }
         if fix == nil { controller?.shortcutTaken(Shortcut.fixLabel) }
+        let messages = Hotkeys.shared.register(keyCode: Shortcut.messages.keyCode, modifiers: Shortcut.messages.modifiers) { [weak self] in
+            self?.controller?.messagesHotkeyPressed()
+        }
+        if messages == nil { controller?.shortcutTaken(Shortcut.messagesLabel) }
     }
 
     // MARK: - The cat
@@ -168,14 +150,12 @@ final class AppStage: CatStage {
     func catRun(toRegion region: CGRect, arrived: @escaping () -> Void) {
         let size = CGSize(width: CatArt.points, height: CatArt.points)
         cat.run(to: ScreenBounds.perch(on: region, size: size, screens: NSScreen.screens.map(\.visibleFrame)), arrived: arrived)
-        inbox.reposition()
         input.reposition()
         bubble.reposition()
     }
 
     func catGoHome() {
         cat.goHome()
-        inbox.reposition()
         input.reposition()
         bubble.reposition()
     }
@@ -218,43 +198,44 @@ final class AppStage: CatStage {
         kittens.hide()
     }
 
-    // MARK: - Channels
+    // MARK: - Messages
 
-    func showChannels(_ book: ChannelBook) {
+    var isChannelsVisible: Bool { channels.panel.isVisible }
+
+    func showChannels(_ book: ChannelBook, selecting selection: ChannelSelection?) {
         channels.show(book, centeredIn: cat.visibleFrame)
+        if let selection { channels.view.select(selection) }
     }
 
     func updateChannels(_ book: ChannelBook) {
         channels.update(book)
     }
 
-    func selectChannel(_ selection: ChannelSelection) {
-        channels.view.select(selection)
+    func hideChannels() {
+        channels.panel.close()
     }
 
-    // MARK: - The inbox
-
-    var isInboxVisible: Bool { inbox.isVisible }
-
-    func showInbox(_ entries: [InboxEntry]) {
-        inbox.show(entries)
+    var isMessagesBoxTyping: Bool {
+        let composer = channels.view.pane.composer
+        return channels.panel.isKeyWindow && channels.panel.firstResponder === composer.textView && composer.target != nil
     }
 
-    func hideInbox() {
-        inbox.hide()
+    func holdMessagesBox() {
+        channels.view.pane.startSpeaking()
+    }
+
+    func sendInMessages(_ text: String) {
+        channels.view.pane.spoke(text)
+    }
+
+    func releaseMessagesBox() {
+        channels.view.pane.stopSpeaking()
     }
 
     // MARK: - Everything else
 
-    func showThreads(_ threads: [AgentThread], status: String) {
-        dashboard.update(threads)
-        let needsYou = threads.contains { !$0.pendingApprovals.isEmpty || $0.status == .waitingForApproval || $0.status == .waitingForAnswer }
-        menuBar.show(status: status, threads: threads, needsYou: needsYou)
-    }
-
-    func toggleDashboard() {
-        dashboard.toggle()
-        updateEscape()
+    func showStatus(_ status: String, needsYou: Bool) {
+        menuBar.show(status: status, needsYou: needsYou)
     }
 
     func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {
@@ -270,7 +251,7 @@ final class AppStage: CatStage {
 
     /// Esc is only taken from other apps while there's something up for it to dismiss.
     private func updateEscape() {
-        let wanted = bubble.isVisible || dashboard.isVisible || kittens.isVisible || inbox.isVisible
+        let wanted = bubble.isVisible || kittens.isVisible
         if wanted, escape == nil {
             escape = Hotkeys.shared.register(keyCode: kVK_Escape, modifiers: 0) { [weak self] in self?.escapePressed() }
         } else if !wanted, let id = escape {
@@ -282,12 +263,8 @@ final class AppStage: CatStage {
     private func escapePressed() {
         if input.isVisible {
             input.cancel()
-        } else if dashboard.isVisible {
-            dashboard.hide()
         } else if kittens.isVisible {
             kittens.hide()
-        } else if inbox.isVisible {
-            inbox.hide()
         } else {
             controller?.bubbleDismissed(byClick: false)
         }

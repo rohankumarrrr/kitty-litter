@@ -4,7 +4,7 @@ import ShadesCore
 /// Talk goes through the Ask flow. Dictate only ever goes to the cursor.
 extension AppController {
     /// A box is up that what you say belongs in, so nothing needs a look at the screen.
-    var boxTakesVoice: Bool { fixIsOpen || inboxReplyIsOpen || dropIsOpen }
+    var boxTakesVoice: Bool { fixIsOpen || dropIsOpen }
     private var talkBoxIsStillUp: Bool { boxTakesVoice && talkBox == boxesOpened }
 
     func keyPressed(_ key: HoldKey) {
@@ -25,19 +25,21 @@ extension AppController {
 
     func talkDown() {
         guard voiceMode == nil else { return }
-        if stage.isInboxVisible && !stage.isInputVisible {
-            say(CatWords.replyFirst)
-            return
-        }
-        talkBox = boxTakesVoice ? boxesOpened : nil
+        // Messages' box only counts if you're typing in it, not if it's open behind your work. When you are, it has the
+        // keyboard, so it wins over a Fix or drop box left open behind it.
+        talkToMessages = stage.isMessagesBoxTyping ? messagesClosings : nil
+        talkBox = boxTakesVoice && talkToMessages == nil ? boxesOpened : nil
+        if talkToMessages != nil { stage.holdMessagesBox() }
         // The look happens as the key goes down: that's the moment you mean.
-        if talkBox == nil { talkLook = startLook(CaptureOptions()) }
+        if !boxTakesVoiceNow { talkLook = startLook(CaptureOptions()) }
         guard beginListening(.talk) else {
             talkLook = nil
+            if talkToMessages != nil { stage.releaseMessagesBox() }
+            talkToMessages = nil
             return
         }
         stage.catWake()
-        if talkBox == nil {
+        if !boxTakesVoiceNow {
             stage.hideInput()
             heard = ""
             renderBubble()
@@ -45,6 +47,7 @@ extension AppController {
     }
 
     func talkUp() async {
+        let forMessages = talkToMessages != nil
         hearing = false
         stage.catLevel(0)
         heard = nil
@@ -59,6 +62,17 @@ extension AppController {
                 if !text.isEmpty, talkBoxIsStillUp { stage.submitInput(text) }
                 return
             }
+            if forMessages {
+                // The same goes for Messages: if you've stopped typing there, closed it or cancelled, it isn't sent anywhere.
+                let held = talkToMessages
+                talkToMessages = nil
+                if !text.isEmpty, let held, held == messagesClosings, stage.isMessagesBoxTyping {
+                    stage.sendInMessages(text)
+                } else {
+                    stage.releaseMessagesBox()
+                }
+                return
+            }
             let capture = talkLook
             talkLook = nil
             guard !text.isEmpty else {
@@ -69,10 +83,15 @@ extension AppController {
         } catch {
             voiceMode = nil
             talkLook = nil
+            if talkToMessages != nil { stage.releaseMessagesBox() }
+            talkToMessages = nil
             refreshStatus()
             say(CatWords.problem(error, while: .listening))
         }
     }
+
+    /// A box what you say belongs in was up when the key went down, so nothing needs a look at the screen.
+    private var boxTakesVoiceNow: Bool { talkBox != nil || talkToMessages != nil }
 
     func dictateDown() {
         guard voiceMode == nil, beginListening(.dictate) else { return }
@@ -124,12 +143,15 @@ extension AppController {
         voiceMode = nil
         heard = nil
         talkLook = nil
+        if talkToMessages != nil { stage.releaseMessagesBox() }
+        talkToMessages = nil
         renderBubble()
     }
 
     func heardSoFar(_ text: String) {
         guard hearing, voiceMode == .talk else { return }
-        if talkBox != nil {
+        if boxTakesVoiceNow {
+            // Words for a box show in that box, if any, never over the cat as if you were asking it.
             if talkBoxIsStillUp { stage.setInputText(text) }
         } else {
             heard = text

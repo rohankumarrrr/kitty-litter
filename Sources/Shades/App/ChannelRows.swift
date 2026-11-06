@@ -6,11 +6,27 @@ enum ChannelSelection: Hashable {
     /// What's finished, out of the way of what's still going.
     case done
     case channel(ChannelID)
+    /// One thread of a channel on its own, like a thread in Slack. What you type there goes only into it. Until a new
+    /// topic has its thread, its ID is the ID of what you sent.
+    case thread(String, in: ChannelID)
+
+    var channelID: ChannelID? {
+        switch self {
+        case .needsYou, .done: return nil
+        case .channel(let id), .thread(_, let id): return id
+        }
+    }
+
+    /// What the sidebar shows as selected: a thread's channel, or the selection itself.
+    var place: ChannelSelection {
+        if case .thread(_, let id) = self { return .channel(id) }
+        return self
+    }
 }
 
 enum ChannelRow: Equatable {
     case day(Date)
-    case subject(String, threadID: String)
+    case subject(String, project: String?, threadID: String)
     case message(ChannelMessage)
     case section(String, clearing: InboxEntry.Kind?)
     case heading(KittenStatus)
@@ -27,32 +43,41 @@ enum MessageTarget: Equatable {
     case router
     /// A new thread in the kitten's folder.
     case newThread(Kitten)
-    case thread(id: String, title: String)
+    /// `report` is the inbox row you're replying to, if you pressed Reply or Ask on one, so the answer goes under it.
+    case thread(id: String, title: String, report: String? = nil)
     /// The new topic you just started, until T3 has its thread. Nothing can be sent before then.
     case starting(Kitten)
     /// Your own words as the answer.
     case question(AgentQuestion)
 
-    /// Where typing goes until you pick somewhere else. `nil` means there's no box: you only read there.
-    static func standard(for selection: ChannelSelection, in book: ChannelBook) -> MessageTarget? {
-        guard case .channel(let id) = selection else { return nil }
-        if id == .everyone { return .router }
-        guard let status = book.statuses.first(where: { id == .direct($0.kitten) }), status.state != .notSetUp else { return nil }
-        // Your words with no thread yet are a new topic still starting, even if something else has been said since.
-        if book.channel(id)?.messages.contains(where: { $0.speaker == .you && $0.threadID.isEmpty && $0.failure == nil }) == true {
-            return .starting(status.kitten)
+    /// Where typing goes. `nil` means there's no box: you only read there. A DM's own box always starts something
+    /// new, the way a message in a Slack channel does, so carrying on in a thread is always a choice you can see.
+    /// `answered` is how many parts of each question have their answer so far, since your words answer the next one.
+    static func standard(for selection: ChannelSelection, in book: ChannelBook, answered: [String: Int] = [:]) -> MessageTarget? {
+        switch selection {
+        case .needsYou, .done:
+            return nil
+        case .channel(.everyone):
+            return .router
+        case .channel(let id):
+            return book.writableKitten(in: id).map(MessageTarget.newThread)
+        case .thread(let id, let channel):
+            guard channel == .everyone || book.writableKitten(in: channel) != nil else { return nil }
+            if let topic = book.channel(channel)?.messages.first(where: { $0.exchangeID == id && $0.threadID.isEmpty }),
+               let kitten = book.writableKitten(in: channel) {
+                return topic.failure == nil ? .starting(kitten) : .newThread(kitten)
+            }
+            let takesWords = { (question: AgentQuestion) -> Bool in
+                guard let parts = question.form?.parts, parts.indices.contains(answered[question.id] ?? 0) else { return false }
+                return parts[answered[question.id] ?? 0].takesOwnWords
+            }
+            // A question is yours to answer even in a thread another kitten started. Carrying on there isn't.
+            if let question = book.waiting.questions.first(where: { book.thread(holding: $0.id, else: $0.threadID) == id && takesWords($0) }) {
+                return .question(question)
+            }
+            guard !book.elsewhere.contains(id), book.knows(thread: id, in: channel) else { return nil }
+            return .thread(id: id, title: book.title(ofThread: id, in: channel))
         }
-        if let question = book.waiting.questions.first(where: { book.kitten(of: $0.id) == status.kitten && $0.form?.parts.first?.takesOwnWords == true }) {
-            return .question(question)
-        }
-        // Carrying on where you left off is what a message in a DM usually means: the last thing said, or a newer
-        // thread whose words haven't been read yet.
-        let lastSaid = book.channel(id)?.messages.last { !$0.threadID.isEmpty }
-        if let newest = book.newestThreads[status.kitten.id], newest.updatedAt > lastSaid?.at ?? .distantPast {
-            return .thread(id: newest.id, title: newest.title)
-        }
-        if let lastSaid { return .thread(id: lastSaid.threadID, title: lastSaid.threadTitle) }
-        return .newThread(status.kitten)
     }
 }
 
@@ -68,7 +93,8 @@ extension MessageTarget {
         switch self {
         case .starting: return false
         case .question(let question): return book.waiting.questions.contains { $0.id == question.id }
-        case .thread(let id, _): return !book.elsewhere.contains(id)
+        // A reply to a report goes to its thread wherever that is, as Reply on the report said it would.
+        case .thread(let id, _, let report): return report != nil || !book.elsewhere.contains(id)
         case .router, .newThread: return true
         }
     }
@@ -81,6 +107,7 @@ enum ChannelRows {
         case .needsYou: return needsYou(in: book)
         case .done: return done(in: book)
         case .channel(let id): return messages(in: id, of: book) + cards(in: id, of: book)
+        case .thread(let id, let channel): return thread(id, in: channel, of: book)
         }
     }
 
@@ -100,12 +127,14 @@ enum ChannelRows {
     }
 
     private static func inProgress(in book: ChannelBook) -> [ChannelRow] {
+        let shades = book.waiting.shadesWork
         // Threads are known before any words are, so reading only matters if there's nothing to show yet.
-        if book.issueCount == 0 {
+        if book.issueCount == 0, shades.isEmpty {
             if book.cantReachT3 { return [] }
             if book.isReading { return [.note(CatWords.readingMessages)] }
         }
-        return book.issues.flatMap { issues -> [ChannelRow] in
+        let own: [ChannelRow] = shades.isEmpty ? [] : [.heading(KittenBoard.shadesStatus(shades))] + shades.map(ChannelRow.issue)
+        return own + book.issues.flatMap { issues -> [ChannelRow] in
             guard let status = book.status(of: .kitten(issues.kitten.id)) else { return [] }
             let open: [ChannelRow] = issues.threads.isEmpty ? [.note(CatWords.nothingOpen)] : issues.threads.map(ChannelRow.issue)
             return [.heading(status)] + open
@@ -143,12 +172,35 @@ enum ChannelRows {
             }
             // What you've just sent, and the cat's own answers, aren't in any thread yet.
             if !message.threadID.isEmpty, message.threadID != lastThread {
-                rows.append(.subject(message.threadTitle, threadID: message.threadID))
+                rows.append(.subject(message.threadTitle, project: book.threads[message.threadID]?.projectTitle, threadID: message.threadID))
                 lastThread = message.threadID
             }
             rows.append(.message(message))
         }
         return rows + statusNotes(of: book)
+    }
+
+    /// One thread on its own: what's been said in it here, then whatever it's waiting on you for. The header says
+    /// which thread it is, so there are no subjects.
+    private static func thread(_ id: String, in channel: ChannelID, of book: ChannelBook) -> [ChannelRow] {
+        let said = book.channel(channel)?.messages.filter { $0.threadID == id || ($0.threadID.isEmpty && $0.exchangeID == id) } ?? []
+        var rows: [ChannelRow] = []
+        var lastDay = Date.distantPast
+        for message in said {
+            let day = Calendar.current.startOfDay(for: message.at)
+            if day > lastDay {
+                rows.append(.day(day))
+                lastDay = day
+            }
+            rows.append(.message(message))
+        }
+        if rows.isEmpty {
+            rows = [.note(book.cantReachT3 ? CatWords.cantReachT3Yet : book.isReading ? CatWords.readingMessages : CatWords.quietThread)]
+        } else {
+            rows += statusNotes(of: book)
+        }
+        let approvals = book.waiting.approvals.filter { book.thread(holding: $0.id, else: $0.threadID) == id }.map(ChannelRow.approval)
+        return rows + approvals + book.waiting.questions.filter { book.thread(holding: $0.id, else: $0.threadID) == id }.map(ChannelRow.question)
     }
 
     private static func emptyNote(_ id: ChannelID, in book: ChannelBook) -> ChannelRow {

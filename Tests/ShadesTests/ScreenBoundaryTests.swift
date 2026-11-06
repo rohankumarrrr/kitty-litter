@@ -177,7 +177,7 @@ private enum Give: CaseIterable {
     case askKitten
     /// Everyone in Messages, and the router picks a kitten.
     case everyoneKitten
-    /// New topic in a kitten's DM.
+    /// The box under a kitten's whole conversation in Messages, which starts a new topic.
     case newTopic
     /// Ask, and the router hands it to the frontier agent, with its own reading of the page as the task.
     case handOff
@@ -197,9 +197,9 @@ private enum Pass: CaseIterable {
     case askThread
     /// Everyone in Messages, and the router says the same.
     case everyoneThread
-    /// Typing in a kitten's DM, or Reply on one of its messages.
+    /// Typing in a thread opened on its own in Messages, from a DM, Everyone, or Reply on a message.
     case dmReply
-    /// Reply on an inbox row.
+    /// Reply or Ask on an inbox row, which opens its thread with the box ready.
     case inboxReply
     /// Answering a question that thread asked, in Messages.
     case answerQuestion
@@ -344,7 +344,8 @@ private final class World {
             await messages("this one", to: .router, routerSays: "KITTEN: \(number)")
         case .newTopic:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
-            await messages("this one", to: .newThread(kittens[number - 1]))
+            controller.messagesAction(.startTopic("this one", with: kittens[number - 1], id: "sent-topic"))
+            await settle()
         case .handOff:
             await ask("this one", routerSays: "HANDOFF: Do what Page-5ad1 says")
             await ask("what's this?", routerSays: "It's Page-5ad1.")
@@ -371,8 +372,7 @@ private final class World {
             await messages("and that part?", to: .thread(id: "w", title: "Fix routing"))
         case .inboxReply:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
-            controller.reply("Go ahead", to: InboxEntry(id: "e", kind: .decision, text: "Page-5ad1 says ship it?", threadID: "w", threadTitle: "Fix routing", at: clock))
-            await settle()
+            await messages("Go ahead", to: .thread(id: "w", title: "Fix routing", report: "e"))
         case .answerQuestion:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             askedIn["q"] = "w"

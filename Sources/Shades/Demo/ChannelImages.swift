@@ -77,10 +77,20 @@ enum ChannelImages {
         }
 
         let steve = ChannelSelection.channel(.direct(Demo.kittens[0]))
+        // Each crowded kitten's thread has the kitten's own ID.
+        let longNamed = crowded().statuses[0].kitten
+        if let latest = full.channel(.direct(Demo.kittens[0]))?.messages.last(where: { !$0.threadID.isEmpty })?.threadID {
+            let thread = ChannelSelection.thread(latest, in: .direct(Demo.kittens[0]))
+            shots += [
+                Shot(name: "thread", selection: thread, book: full),
+                Shot(name: "narrow-thread", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
+            ]
+        }
         shots += [
             Shot(name: "dm-expanded", selection: steve, book: full, expandsLongMessage: true),
             Shot(name: "dm-hover", selection: steve, book: full, hoversLastMessage: true),
             Shot(name: "crowded", selection: .needsYou, book: crowded(), height: ChannelsWindow.minimumSize.height),
+            Shot(name: "crowded-thread", selection: .thread(longNamed.id, in: .direct(longNamed)), book: crowded(), width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
             Shot(name: "narrow-dm", selection: steve, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
             Shot(name: "narrow-needs-you", selection: .needsYou, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
             Shot(name: "reading", selection: steve, book: book(threads: [], transcripts: [:], isReading: true)),
