@@ -220,6 +220,14 @@ extension AppController {
                 refused?()
                 return
             }
+            // What it says about a correction has to reach you, even if it starts threads elsewhere. It's marked as it
+            // goes, so a restart while it waits behind a busy run can't lose that, and unmarked below if it never got there.
+            let wasDispatcher = dispatchers.contains(thread.id)
+            let wasCorrected = inbox.wasCorrected(thread.id)
+            if correction {
+                dispatchers.remove(thread.id)
+                noteCorrection(in: thread.id)
+            }
             say(CatWords.sentTo(thread), threadID: thread.id)
             let shared = seesScreen ? snapshot : nil
             let text = Prompts.forwarded(
@@ -240,12 +248,6 @@ extension AppController {
                         }
                         continue
                     }
-                    // Only now is it known to have your words, and with them a correction, whose report has to
-                    // reach you even if the session starts threads elsewhere.
-                    if correction, !heardBack {
-                        dispatchers.remove(thread.id)
-                        noteCorrection(in: thread.id)
-                    }
                     heardBack = true
                     switch event {
                     case .finished where isQuick:
@@ -261,6 +263,10 @@ extension AppController {
                 // T3 says it's started before it sends, so only hearing back means your words got there.
                 // After that, losing the connection doesn't take them back, the same as with a new thread.
                 if !heardBack, let warning { takeBackNotice(warning) }
+                if !heardBack, correction {
+                    if wasDispatcher { dispatchers.insert(thread.id) }
+                    if !wasCorrected { forgetCorrection(in: thread.id) }
+                }
                 say(CatWords.problem(error, while: .agents))
             }
         }

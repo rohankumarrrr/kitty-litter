@@ -138,6 +138,11 @@ public struct Inbox: Codable, Equatable, Sendable {
         corrections = (corrections ?? []).union([threadID])
     }
 
+    /// For a correction that never got there after all.
+    public mutating func forgetCorrection(in threadID: String) {
+        corrections?.remove(threadID)
+    }
+
     public func wasCorrected(_ threadID: String) -> Bool {
         corrections?.contains(threadID) == true
     }

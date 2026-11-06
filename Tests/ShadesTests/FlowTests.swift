@@ -2355,6 +2355,94 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(stage.bubbles.contains(.line(CatWords.cantTakeFiles("Tailor resume"), threadID: nil)))
     }
 
+    /// The front door turns a drop away before it reads anything, so there's no correction found to send.
+    func testAFrontDoorThatCantTakeADropSendsNothingAtAll() async {
+        useFullAccess(quick: true)
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        await drop("Summarize this. By the way, \(wrong)")
+        await controller.flow?.value
+        await settle()
+        XCTAssertEqual(stage.bubble, .line("Haiku can't take files. Put a link or the text in your message instead.", threadID: nil))
+        XCTAssertTrue(backend.sent.isEmpty)
+    }
+
+    private func correctInboxSession(holdForward: Bool) async -> AgentThread {
+        kittens = [inboxKitten]
+        backend.projects["/k/clawde"] = "project-clawde"
+        controller.keepInbox()
+        var running = work("w", title: "Clawde: Team size", status: .running)
+        running.projectPath = inboxKitten.folder
+        controller.threadsChanged([running])
+        controller.dispatchers.insert("w")
+        if holdForward { backend.holdTurn = wrong }
+        backend.replies = [[.finished(fullText: "CORRECTION: 1\nSEND TO: 1")]]
+        await controller.beginAsk()
+        stage.type(wrong)
+        await controller.replyTask?.value
+        for _ in 0..<500 where backend.sent.count < 2 { await Task.yield() }
+        if !holdForward { await controller.forwardTask?.value }
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(backend.sent.last?.mode, .forward)
+        XCTAssertEqual(backend.sent.last?.threadID, "w")
+        XCTAssertEqual(backend.sent.last?.prompt.text.contains("correct something you look after"), true)
+        return running
+    }
+
+    /// The session is busy, so T3 queues the correction behind its current run and nothing comes back yet.
+    /// Shades restarts (install.sh, a crash, a quit). The session then acts on the correction and passes work on.
+    func testACorrectionQueuedBehindARunningSessionSurvivesARestart() async throws {
+        var thread = await correctInboxSession(holdForward: true)
+        XCTAssertTrue(controller.inbox.wasCorrected("w"), "marked as it goes")
+        controller = makeController(inbox: try XCTUnwrap(savedInbox))
+        thread.status = .completed
+        thread.lastRunID = "run-2"
+        await finish(thread, report: passedTheFixOn, sorted: "PASSED: yes")
+        XCTAssertEqual(rows.map(\.threadID), ["w"], "its report about the correction should reach the inbox")
+        XCTAssertFalse(controller.hiddenThreads.contains("w"))
+    }
+
+    /// The same, except the session answered before the restart.
+    func testACorrectionThatCameBackSurvivesARestart() async throws {
+        var thread = await correctInboxSession(holdForward: false)
+        XCTAssertTrue(controller.inbox.wasCorrected("w"))
+        controller = makeController(inbox: try XCTUnwrap(savedInbox))
+        thread.status = .completed
+        thread.lastRunID = "run-2"
+        await finish(thread, report: passedTheFixOn, sorted: "PASSED: yes")
+        XCTAssertEqual(rows.map(\.threadID), ["w"])
+        XCTAssertFalse(controller.hiddenThreads.contains("w"))
+    }
+
+    private func correctFromEveryone(failing: Bool) async {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        var work = session("w", "Tailor resume")
+        work.projectPath = steve.folder
+        controller.threadsChanged([work])
+        controller.dispatchers.insert("w")
+        if failing { backend.forwardError = URLError(.notConnectedToInternet) }
+        backend.routerSays = [wrong: "CORRECTION: 1\nSEND TO: 1"]
+        controller.channelsPressed()
+        await messages(wrong, to: .router)
+        await controller.forwardTask?.value
+        await settle()
+    }
+
+    func testAFailedForwardFromEveryoneLeavesTheSessionUnmarked() async {
+        await correctFromEveryone(failing: true)
+        XCTAssertFalse(controller.inbox.wasCorrected("w"))
+        XCTAssertTrue(controller.dispatchers.contains("w"))
+        XCTAssertNil(sentTo("project-steve"), "no extra copy")
+    }
+
+    func testAForwardFromEveryoneThatCameBackMarksTheSession() async {
+        await correctFromEveryone(failing: false)
+        XCTAssertEqual(backend.sent.last?.mode, .forward)
+        XCTAssertTrue(controller.inbox.wasCorrected("w"))
+        XCTAssertFalse(controller.dispatchers.contains("w"))
+    }
+
     // MARK: - Self-check
 
     func testAKittenWithNothingKeepingItOffTheScreenIsFound() async {

@@ -222,6 +222,11 @@ extension AppController {
         keepInbox()
     }
 
+    func forgetCorrection(in threadID: String) {
+        inbox.forgetCorrection(in: threadID)
+        keepInbox()
+    }
+
     func keepInbox() {
         do {
             try saveInbox(inbox)
