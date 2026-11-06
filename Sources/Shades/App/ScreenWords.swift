@@ -45,10 +45,11 @@ enum ScreenWords {
     }
 
     /// What they're pointing at is already here: a sentence before the pointing words, or a
-    /// colon or quote mark with text after them. Asking for it would be silly.
+    /// colon or opening quote mark with text after them. Asking for it would be silly. A quote
+    /// right against the pointing words closes them, as in `"this video"?`, so it doesn't count.
     private static func camePasted(before: Substring, after: Substring) -> Bool {
         before.range(of: #"(\S+ ){3,}\S*[.!?:"”] "#, options: .regularExpression) != nil
-            || after.range(of: #"(:\s+\S|["“]\s*[^"“”.,!?;:)\s])"#, options: .regularExpression) != nil
+            || after.range(of: #"(:\s+\S|\s["“]\s*[^"“”.,!?;:)…\s])"#, options: .regularExpression) != nil
     }
 
     /// A web address they typed, or one to a page. A site's name on its own, like "on x.com", isn't the thing.

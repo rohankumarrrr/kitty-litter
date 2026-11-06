@@ -227,6 +227,11 @@ final class ScreenWordsTests: XCTestCase {
             "Summarize \"this article\".",
             "What do you think of \"this video\"?",
             "Sam sent me \"this video\", is it right?",
+            "Sam sent me \"this video\" - is it right?",
+            "Sam sent me \"this video\"\u{2014}is it right?",
+            "What do you think of \"this video\"\u{2026}",
+            "Read this \"\u{2026}\"",
+            "What do you think of \"this video\" \u{1F914}",
             "Hey there: read this x thread",
             "Read this x thread\n",
         ] {
