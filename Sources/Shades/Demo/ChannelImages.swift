@@ -126,6 +126,10 @@ enum ChannelImages {
 
     /// The view as it draws itself, which reads nothing from the screen.
     static func png(of view: NSView, scale: CGFloat = 2) -> Data? {
+        bitmap(of: view, scale: scale)?.representation(using: .png, properties: [:])
+    }
+
+    static func bitmap(of view: NSView, scale: CGFloat) -> NSBitmapImageRep? {
         view.layoutSubtreeIfNeeded()
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
@@ -141,7 +145,7 @@ enum ChannelImages {
         ) else { return nil }
         rep.size = view.bounds.size
         view.cacheDisplay(in: view.bounds, to: rep)
-        return rep.representation(using: .png, properties: [:])
+        return rep
     }
 
     private static func hideScrollers(in view: NSView) {

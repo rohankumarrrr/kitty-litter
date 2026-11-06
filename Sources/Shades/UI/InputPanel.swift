@@ -154,7 +154,7 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
 
     /// Clicking somewhere else takes the keyboard back, and that means never mind.
     func windowDidResignKey(_ notification: Notification) {
-        if request != nil { cancel() }
+        if request != nil, !ClickAway.isPaused { cancel() }
     }
 
     private func submit() {

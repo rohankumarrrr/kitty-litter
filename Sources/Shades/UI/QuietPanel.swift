@@ -1,5 +1,12 @@
 import AppKit
 
+/// Clicking or typing somewhere else closes the cat's small windows. The demo pauses that while it records, since the
+/// real desktop around it goes on being used.
+@MainActor
+enum ClickAway {
+    static var isPaused = false
+}
+
 /// A window that floats over everything, on every Space and over full-screen apps,
 /// without ever making Shades the active app. Most never take the keyboard either.
 class QuietPanel: NSPanel {

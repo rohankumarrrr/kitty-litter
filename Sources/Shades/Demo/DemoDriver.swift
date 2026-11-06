@@ -9,6 +9,7 @@ final class DemoDriver {
     private let controller: AppController
     private let stage: AppStage
     private var phone: DemoPhone?
+    private var recorder: DemoRecorder?
 
     init(parts: Demo.Parts, controller: AppController, stage: AppStage) {
         self.parts = parts
@@ -130,6 +131,46 @@ final class DemoDriver {
         }
     }
 
+    /// `record <file.gif> <window>...` records those windows, or `phone`, until `record stop` writes the GIF.
+    private func record(_ line: String) {
+        if line == "stop" {
+            print(recorder?.stop() ?? "Nothing's recording. Try: record <file.gif> cat bubble")
+            recorder = nil
+            ClickAway.isPaused = false
+            stage.pointer = { NSEvent.mouseLocation }
+            return
+        }
+        let words = line.split(separator: " ").map(String.init)
+        guard let file = words.first, words.count > 1 else { return print("record <file.gif> cat | bubble | input | kittens | channels | pairing | phone ... | stop") }
+        let names = Set(words.dropFirst())
+        let recorder = DemoRecorder(
+            file: URL(fileURLWithPath: file),
+            windows: { [weak self] in
+                guard let self else { return [] }
+                return self.windows.compactMap { name, window in
+                    guard names.contains(name), window.isVisible else { return nil }
+                    // The cat is pixel art on a layer, which a drawn copy would smooth, so its own picture goes in.
+                    if name == "cat", let sprite = self.stage.cat.view.layer?.contents {
+                        let view = self.stage.cat.view
+                        return ((sprite as! CGImage), window.convertToScreen(view.convert(view.bounds, to: nil)))
+                    }
+                    guard let view = window.contentView?.superview ?? window.contentView,
+                          let image = ChannelImages.bitmap(of: view, scale: DemoRecorder.scale)?.cgImage
+                    else { return nil }
+                    return (image, window.frame)
+                }
+            },
+            onPage: names.contains("cat"),
+            phone: names.contains("phone") ? phone : nil
+        )
+        self.recorder = recorder
+        // The person's own clicks and typing go on around the demo, and mustn't close what's being recorded.
+        ClickAway.isPaused = true
+        let screen = NSScreen.screens.first?.frame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+        stage.pointer = { CGPoint(x: screen.minX + screen.width * 0.55, y: screen.minY + screen.height * 0.3) }
+        recorder.start()
+    }
+
     private func runOnPhone(_ script: String) {
         guard let phone else { return print("The page isn't open. Try: phone open") }
         Task {
@@ -164,7 +205,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|shades|[kitten] | thread | back | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|close | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
+            print("ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|shades|[kitten] | thread | back | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -233,6 +274,16 @@ final class DemoDriver {
             controller.settingsPressed()
         case "phone":
             phone(rest)
+        case "type":
+            // Fills the Ask box a letter at a time, the way typing looks. `submit` with the same words sends it.
+            Task {
+                for count in 1...max(rest.count, 1) {
+                    stage.input.setText(String(rest.prefix(count)))
+                    try? await Task.sleep(nanoseconds: 45_000_000)
+                }
+            }
+        case "record":
+            record(rest)
         case "allow", "deny", "session":
             if case .approval(let request, _, _)? = stage.bubble.content {
                 let decision: ApprovalDecision = word == "allow" ? .accept : word == "deny" ? .decline : .acceptForSession
