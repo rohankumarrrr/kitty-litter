@@ -20,7 +20,7 @@ final class ChannelsPanel: NSPanel {
         collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
         isReleasedWhenClosed = false
         contentMinSize = ChannelsWindow.minimumSize
-        backgroundColor = Ink.paper
+        backgroundColor = MessagesInk.paper
         animationBehavior = .none
         becomesKeyOnlyIfNeeded = true
         title = CatWords.messagesTitle
@@ -45,12 +45,17 @@ final class ChannelsPanel: NSPanel {
 
 /// The sidebar and the pane. They're apart from the window so they can be drawn with no window on the screen.
 final class ChannelsView: QuietView {
+    /// What a theme file can be: T3 Code's and VS Code's are JSON, and iTerm2's a property list or JSON.
+    static let themeFiles: Set<String> = ["json", "itermcolors", "plist"]
+
     let sidebar = ChannelSidebar()
     let pane = ChannelPane()
     private(set) var selection: ChannelSelection = .needsYou
     private var book: ChannelBook?
     /// You've seen what's there, which is what takes its unread dot away.
     var onSeen: ((ChannelSelection) -> Void)?
+    /// A theme file let go of anywhere on the window.
+    var onDropTheme: ((URL) -> Void)?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -58,6 +63,7 @@ final class ChannelsView: QuietView {
         addSubview(pane)
         sidebar.onSelect = { [weak self] in self?.select($0) }
         pane.onSelect = { [weak self] in self?.select($0) }
+        registerForDraggedTypes([.fileURL])
     }
 
     @available(*, unavailable)
@@ -94,6 +100,30 @@ final class ChannelsView: QuietView {
         onSeen?(selection)
     }
 
+    /// Draws everything again in the colours there are now, since a row keeps the colours it was made with.
+    func restyle() {
+        sidebar.restyle()
+        pane.restyle()
+        if let book { sidebar.show(book, selection: selection.place) }
+        needsDisplay = true
+    }
+
+    private func themeFile(in drag: NSDraggingInfo) -> URL? {
+        let files = drag.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        guard files.count == 1, let file = files.first, Self.themeFiles.contains(file.pathExtension.lowercased()) else { return nil }
+        return file
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        themeFile(in: sender) == nil ? [] : .copy
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard let file = themeFile(in: sender) else { return false }
+        onDropTheme?(file)
+        return true
+    }
+
     func forget() {
         // A new topic that's still starting is only known while the window's open.
         if case .thread(let id, let channel) = selection, book?.threads[id] == nil { selection = .channel(channel) }
@@ -102,7 +132,7 @@ final class ChannelsView: QuietView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        Ink.paper.setFill()
+        MessagesInk.paper.setFill()
         dirtyRect.fill()
     }
 }
@@ -145,6 +175,15 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
 
     func update(_ book: ChannelBook) {
         view.show(book)
+    }
+
+    /// Messages in a theme's colours, or Shades' own with `nil`. Its buttons, scrollers and cats follow the theme's
+    /// light or dark.
+    func apply(_ theme: ColorTheme?) {
+        MessagesInk.theme = theme
+        panel.appearance = MessagesInk.appearance
+        panel.backgroundColor = MessagesInk.paper
+        view.restyle()
     }
 
     static func centered(in visible: NSRect) -> NSRect {

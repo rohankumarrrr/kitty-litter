@@ -99,21 +99,21 @@ final class ChannelHeader: QuietView {
         let room = (rightButton?.frame.minX ?? bounds.width - ChannelRowView.margin) - left - 8
         let name = NSAttributedString(string: title, attributes: [
             .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
-            .foregroundColor: Ink.text,
+            .foregroundColor: MessagesInk.text,
             .paragraphStyle: truncating,
         ])
         if let subtitle {
             name.draw(in: NSRect(x: left, y: Self.top - 1, width: room, height: 18))
             NSAttributedString(string: subtitle, attributes: [
                 .font: NSFont.systemFont(ofSize: 11),
-                .foregroundColor: Ink.soft,
+                .foregroundColor: MessagesInk.soft,
                 .paragraphStyle: truncating,
             ]).draw(in: NSRect(x: left, y: Self.top + 18, width: room, height: 14))
         } else {
             name.draw(in: NSRect(x: left, y: Self.top + 7, width: room, height: 18))
         }
 
-        Ink.line.setFill()
+        MessagesInk.line.setFill()
         NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1).fill()
     }
 }
@@ -234,6 +234,19 @@ final class ChannelPane: QuietView {
         }
     }
 
+    /// Makes every row again in the colours there are now, where you were.
+    func restyle() {
+        composer.restyle()
+        header.needsDisplay = true
+        guard let book else { return }
+        let offset = scrollOffset
+        views.forEach { $0.removeFromSuperview() }
+        views = shown.map { view(for: $0, in: book, among: shown, selection: selection) }
+        views.forEach(document.addSubview)
+        stack()
+        scrollOffset = offset
+    }
+
     /// Nothing on the screen is kept once the window closes.
     func forget() {
         views.forEach { $0.removeFromSuperview() }
@@ -283,7 +296,7 @@ final class ChannelPane: QuietView {
         }
         var label: String?
         if case .question(let question)? = target, let part = part(of: question) { label = CatWords.answering(part.part.text) }
-        composer.show(target, label: label)
+        composer.show(target, label: label, in: selection.channelID)
     }
 
     /// The talk key went down while you were typing here.
@@ -352,8 +365,9 @@ final class ChannelPane: QuietView {
     }
 
     /// Replying in a thread is offered from a channel you can write in. In the thread itself, the box already does it.
+    /// The cat's own threads take nothing straight in, so Shades' box is the way to say more.
     private var canReply: Bool {
-        guard case .channel = selection, let book else { return false }
+        guard case .channel(let id) = selection, id != .shades, let book else { return false }
         return MessageTarget.standard(for: selection, in: book) != nil
     }
 

@@ -193,6 +193,17 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(door.pair(pairing.code, now: noon.addingTimeInterval(601)), "and ten minutes on it's gone too")
     }
 
+    func testThePageTakesMessagesThemeAsColoursAlone() {
+        XCTAssertEqual(PhonePage.colors(nil), "")
+        let theme = ColorTheme(name: "Opal; } body { display: none } :root {", isDark: true, paper: 0x0c0a10, text: 0xe7e4ec, accent: 0x7458e8)
+        let css = PhonePage.colors(theme)
+        for line in ["color-scheme: dark", "--paper: #0c0a10", "--text: #e7e4ec", "--you: #7458e8", "--grey: \(ColorTheme.hex(theme.bubble))", "--on-you: #"] {
+            XCTAssertTrue(css.contains(line), line)
+        }
+        XCTAssertFalse(css.contains("display"), "only colours worked out on the Mac, never the theme's own words")
+        XCTAssertTrue(PhonePage.style.contains("--on-you: #ffffff"), "and without one, the page's own")
+    }
+
     private func request(key: String) -> PhoneServer.Request {
         PhoneServer.Request(method: "GET", path: "/events", query: [:], headers: ["authorization": key], body: Data())
     }

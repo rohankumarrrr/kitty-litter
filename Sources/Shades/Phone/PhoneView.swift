@@ -255,7 +255,7 @@ struct PhoneView: Encodable, Equatable {
                 detail: message.earlierNotes > 0 ? CatWords.earlierNotes(message.earlierNotes) : nil,
                 text: message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil),
                 color: look.bubble.map(hex),
-                ink: look.bubble.map(ink),
+                ink: look.words.map(hex),
                 mine: look.isYou,
                 going: message.isStillGoing,
                 failure: message.failure,
@@ -332,11 +332,6 @@ struct PhoneView: Encodable, Equatable {
     }
 
     private static func hex(_ color: UInt32) -> String {
-        String(format: "#%06x", color)
-    }
-
-    /// Black or white, whichever reads better on it, as the window picks.
-    private static func ink(_ color: UInt32) -> String {
-        ChannelSpeakerLook.contrast(color, 0x000000) >= ChannelSpeakerLook.contrast(color, 0xffffff) ? "#000000" : "#ffffff"
+        ColorTheme.hex(color)
     }
 }

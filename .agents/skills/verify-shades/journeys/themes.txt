@@ -1,0 +1,26 @@
+front
+themes
+channels
+wait 1
+channel steve
+wait 1
+draw .verify/shades/themes/0-shades
+colors Cursor/Opal Horizon
+wait 1
+draw .verify/shades/themes/1-opal
+themes
+channel shades
+wait 1
+draw .verify/shades/themes/2-opal-shades
+colors T3 Code/Paper
+channel steve
+wait 1
+draw .verify/shades/themes/3-paper
+colors Package.swift
+wait 1
+draw .verify/shades/themes/4-not-a-theme
+colors shades
+wait 1
+draw .verify/shades/themes/5-shades
+front
+windows

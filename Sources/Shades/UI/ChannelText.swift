@@ -4,7 +4,7 @@ import AppKit
 enum ChannelMarkdown {
     static let font = NSFont.systemFont(ofSize: 13)
 
-    static func attributed(_ text: String, color: NSColor = Ink.text) -> NSAttributedString {
+    static func attributed(_ text: String, color: NSColor = MessagesInk.text) -> NSAttributedString {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = 2
         let plain: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: paragraph]
@@ -31,16 +31,20 @@ enum ChannelMarkdown {
     }
 }
 
-/// Some text laid out at one width, cut short to a number of lines if asked. There's no text view
-/// because selecting text needs a key window, which this window can never be.
+/// Some text laid out at one width, cut short to a number of lines if asked, in a text view you can select and copy
+/// from. Pressing in it gives Messages the keyboard, the way pressing in the box does, which still leaves your app in
+/// front, so Command-C has somewhere to go.
 final class ChannelTextBlock {
     private let layoutManager = NSLayoutManager()
     private let container = NSTextContainer()
     private let storage: NSTextStorage
+    let view: ChannelTextView
     private var fitted: (width: CGFloat, maxLines: Int?)?
     private(set) var height: CGFloat = 0
     /// The widest line, so a bubble can be no wider than its words.
     private(set) var width: CGFloat = 0
+    /// Where the words end, which for centred words is past `width`.
+    private var right: CGFloat = 0
     private(set) var isCut = false
 
     init(_ text: NSAttributedString) {
@@ -48,6 +52,12 @@ final class ChannelTextBlock {
         storage.addLayoutManager(layoutManager)
         layoutManager.addTextContainer(container)
         container.lineFragmentPadding = 0
+        view = ChannelTextView(frame: .zero, textContainer: container)
+        let words = text.length > 0 ? text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor : nil
+        // A tint of the words' own colour shows on any bubble, where the system's blue might not.
+        view.selectedTextAttributes = [.backgroundColor: NSColor(name: nil) { _ in
+            (words ?? MessagesInk.text).usingColorSpace(.sRGB)?.withAlphaComponent(0.3) ?? .selectedTextBackgroundColor
+        }]
     }
 
     @discardableResult
@@ -58,7 +68,7 @@ final class ChannelTextBlock {
         container.maximumNumberOfLines = 0
         container.lineBreakMode = .byWordWrapping
         isCut = false
-        let lines = lineWidths
+        let lines = lineRects.map(\.width)
         if let maxLines, lines.count > maxLines {
             // A blank line at the end would look like the end of the message, so it stops short of one.
             let lastWithWords = lines.prefix(maxLines).lastIndex { $0 > 0 } ?? maxLines - 1
@@ -67,24 +77,74 @@ final class ChannelTextBlock {
             isCut = true
         }
         layoutManager.ensureLayout(for: container)
-        let used = layoutManager.usedRect(for: container)
-        height = ceil(used.height)
-        self.width = ceil(used.width)
+        height = ceil(layoutManager.usedRect(for: container).height)
+        // With a text view on it, the used rect is as wide as the container, so the lines say how wide the words are.
+        let shown = lineRects
+        self.width = ceil(shown.map(\.width).max() ?? 0)
+        right = ceil(shown.map(\.maxX).max() ?? 0)
         return height
     }
 
-    func draw(at origin: NSPoint) {
-        let glyphs = layoutManager.glyphRange(for: container)
-        layoutManager.drawBackground(forGlyphRange: glyphs, at: origin)
-        layoutManager.drawGlyphs(forGlyphRange: glyphs, at: origin)
+    /// Puts the words in `superview` with their top left at `origin`, as wide as they are, so pressing beside them
+    /// doesn't start a selection.
+    func place(at origin: NSPoint, in superview: NSView) {
+        if view.superview !== superview { superview.addSubview(view) }
+        view.frame = NSRect(x: origin.x, y: origin.y, width: right, height: height)
     }
 
-    private var lineWidths: [CGFloat] {
+    /// What each line's words take up.
+    private var lineRects: [NSRect] {
         layoutManager.ensureLayout(for: container)
-        var widths: [CGFloat] = []
+        var rects: [NSRect] = []
         layoutManager.enumerateLineFragments(forGlyphRange: layoutManager.glyphRange(for: container)) { _, used, _, _, _ in
-            widths.append(used.width)
+            rects.append(used)
         }
-        return widths
+        return rects
+    }
+}
+
+/// Words in Messages, which you can select and copy but not change. Like the reply in the cat's bubble, pressing in
+/// them is what gives the window the keyboard, and only because you asked.
+final class ChannelTextView: NSTextView {
+    override init(frame: NSRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        isEditable = false
+        isSelectable = true
+        // Plain words when copied, so pasting doesn't bring along a bubble's white text. What's shown keeps its look.
+        isRichText = false
+        drawsBackground = false
+        textContainerInset = .zero
+        isVerticallyResizable = false
+        isHorizontallyResizable = false
+        usesFontPanel = false
+        importsGraphics = false
+        isAutomaticLinkDetectionEnabled = false
+        isAutomaticDataDetectionEnabled = false
+        // Nothing to check in words you can't change, and a window full of them shouldn't wake the spelling service.
+        isContinuousSpellCheckingEnabled = false
+        isGrammarCheckingEnabled = false
+        isAutomaticSpellingCorrectionEnabled = false
+        isAutomaticTextReplacementEnabled = false
+        isAutomaticTextCompletionEnabled = false
+        linkTextAttributes = [:]
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override var needsPanelToBecomeKey: Bool { true }
+
+    /// A right-click is about these words too, so Copy in its menu has them.
+    override func rightMouseDown(with event: NSEvent) {
+        window?.makeKey()
+        window?.makeFirstResponder(self)
+        super.rightMouseDown(with: event)
+    }
+
+    /// Only one selection at a time, as there would be in one long page.
+    override func resignFirstResponder() -> Bool {
+        setSelectedRange(NSRange(location: 0, length: 0))
+        return super.resignFirstResponder()
     }
 }

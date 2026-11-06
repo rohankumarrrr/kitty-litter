@@ -13,8 +13,8 @@ enum MessagesAction: Equatable {
     case seen(ChannelSelection)
 }
 
-/// Messages: what needs you, a group chat with every kitten, and a DM with each. Opening it captures nothing,
-/// and nothing typed in it takes your screen, since you're looking at Messages and not your work.
+/// Messages: what needs you, a group chat with every kitten, a DM with the cat and one with each kitten. Opening it
+/// captures nothing, and nothing typed in it takes your screen, since you're looking at Messages and not your work.
 extension AppController {
     /// Opens it, at `selection` if it's given. Looking at it covers whatever the cat was nudging you about.
     func channelsPressed(selecting selection: ChannelSelection? = nil) {
@@ -114,7 +114,7 @@ extension AppController {
             let asked = questionsAsked
             messagesTurn = Task {
                 await previous?.value
-                await route(words, sentAt: sentAt, asked: asked)
+                await route(words, sentAt: sentAt, asked: asked, answeringIn: channel ?? .everyone)
             }
         case .newThread(let kitten):
             echo()
@@ -134,8 +134,14 @@ extension AppController {
     }
 
     /// The same prompt and model as the Ask box, on Messages' own conversation with the router, so nothing from
-    /// your screen is in what it can see, and asking the cat meanwhile can't cut it short.
-    private func route(_ words: String, sentAt: Date, asked: Int) async {
+    /// your screen is in what it can see, and asking the cat meanwhile can't cut it short. Everyone and Shades share
+    /// that conversation, and the cat answers in whichever you wrote in.
+    private func route(_ words: String, sentAt: Date, asked: Int, answeringIn place: ChannelID) async {
+        // In Everyone, whoever takes your words answers there. Shades only has the cat, so it says where they went,
+        // in the words it uses for the same thing once T3 has the thread.
+        func passedOn(_ what: String) {
+            if place == .shades { catSays(what, in: place) }
+        }
         await waitForThreadList()
         let current = messagesQuick.thread(at: now())
         // Only Messages' own world: the kittens' threads, and work it passed your words to. Anything the Ask box
@@ -151,7 +157,7 @@ extension AppController {
         do {
             projectID = try await routerProjectID(for: model)
         } catch {
-            return catSays(CatWords.problem(error, while: .agents))
+            return catSays(CatWords.problem(error, while: .agents), in: place)
         }
         let prompt = AgentPrompt(
             title: String(words.prefix { !$0.isNewline }.prefix(60)),
@@ -169,45 +175,49 @@ extension AppController {
             turn = await routerTurn(backend.start(prompt))
         }
         guard let (reading, threadID) = turn else {
-            catSays(CatWords.noReply)
+            catSays(CatWords.noReply, in: place)
             return
         }
         // As in the Ask box: a correction reaches its owner, in a copy of its own if your words go somewhere else.
         let corrected = reading.corrections.compactMap { kittens.indices.contains($0 - 1) ? kittens[$0 - 1] : nil }
-        if corrected.count < reading.corrections.count { catSays(CatWords.lostTheCorrection) }
+        if corrected.count < reading.corrections.count { catSays(CatWords.lostTheCorrection, in: place) }
         var copies = corrected
         defer { copies.forEach { give(words, to: $0, snapshot: nil, as: .correctionCopy) } }
         switch reading.outcome {
         // There's nothing selected in Messages to replace, so a rewrite is only an answer here.
         case .answer(let text, _) where !text.isEmpty || reading.corrections.isEmpty, .rewrite(let text):
-            catSays(text.isEmpty ? CatWords.noReply : text)
+            catSays(text.isEmpty ? CatWords.noReply : text, in: place)
             Task { [backend] in try? await backend.settle(threadID: threadID) }
             return
         case .answer:
             if reading.wentNowhere {
                 // The rest was meant for somewhere else, so the owner only gets its copy.
-                catSays(CatWords.lostTheSession)
+                catSays(CatWords.lostTheSession, in: place)
             } else if corrected.count == 1 {
                 give(words, to: corrected[0], snapshot: nil, as: .correction, asked: asked)
                 copies = []
             }
+            if !reading.wentNowhere, !corrected.isEmpty { passedOn(CatWords.passedOnCorrection) }
         case .handoff(let task):
             handOff(task: task, question: words, snapshot: nil, asked: asked) { [weak self] started in
                 if let started { self?.messagesThreads[started] = sentAt }
             }
+            passedOn(CatWords.handedOff(task))
         case .route(let session):
-            guard sessions.indices.contains(session - 1) else { return catSays(CatWords.lostTheSession) }
+            guard sessions.indices.contains(session - 1) else { return catSays(CatWords.lostTheSession, in: place) }
             let thread = sessions[session - 1]
             // From the first time, so what it said before stays in Everyone too.
             if KittenBoard.owner(of: thread, among: owners) == nil { messagesThreads[thread.id] = messagesThreads[thread.id] ?? sentAt }
             let home = corrected.first { KittenBoard.isInFolder(thread.projectPath, of: $0) }
             forward(words, to: thread, snapshot: nil, correction: home != nil, asked: asked)
             copies.removeAll { $0 == home }
+            passedOn(CatWords.passedOnToSession)
         case .kitten(let number):
-            guard kittens.indices.contains(number - 1) else { return catSays(CatWords.lostTheSession) }
+            guard kittens.indices.contains(number - 1) else { return catSays(CatWords.lostTheSession, in: place) }
             let kitten = kittens[number - 1]
             give(words, to: kitten, snapshot: nil, as: corrected.contains(kitten) ? .correction : .work, asked: asked)
             copies.removeAll { $0 == kitten }
+            passedOn(CatWords.passedOnToKitten)
         }
         // A new thread that only passed something on has nothing worth keeping.
         if isFresh {
@@ -249,10 +259,10 @@ extension AppController {
         return (holdback.read(fullText: fullText), thread)
     }
 
-    /// The router's own words, in the group chat, or over the cat if you've closed Messages since.
-    private func catSays(_ text: String) {
-        guard channels.isOpen else { return post(caption: CatWords.everyone, text: text, threadID: nil) }
-        channels.sent(ChannelMessage(exchangeID: "cat-\(UUID().uuidString)", kind: .reply, speaker: .cat, text: text, at: now(), threadID: "", threadTitle: ""), in: .everyone)
+    /// The router's own words, where you wrote, or over the cat if you've closed Messages since.
+    private func catSays(_ text: String, in place: ChannelID) {
+        guard channels.isOpen else { return post(caption: place == .shades ? CatWords.shades : CatWords.everyone, text: text, threadID: nil) }
+        channels.sent(ChannelMessage(exchangeID: "cat-\(UUID().uuidString)", kind: .reply, speaker: .cat, text: text, at: now(), threadID: "", threadTitle: ""), in: place)
     }
 
     func answer(_ question: AgentQuestion, with answers: [String]) {

@@ -18,6 +18,9 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
     /// What `exchanges(threadID:)` names senders from, as of the last `allThreads()`.
     private var catalog = T3ThreadList()
 
+    /// T3 Code's data folder: `$T3CODE_HOME`, then `~/.t3`.
+    public static var defaultHome: URL { T3Auth.defaultHome }
+
     /// - Parameters:
     ///   - home: T3 Code's data folder. Defaults to `$T3CODE_HOME`, then `~/.t3`.
     ///   - credentials: Where the sign-in is kept.

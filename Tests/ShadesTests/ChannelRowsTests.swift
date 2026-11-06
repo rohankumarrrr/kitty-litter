@@ -311,11 +311,14 @@ final class ChannelRowsTests: XCTestCase {
 // MARK: - Talking to the cat
 
 extension ChannelRowsTests {
-    func testTheCatsConversationIsOnlyForReading() {
+    func testTheCatsBoxGoesThroughTheRouterAndItsThreadsTakeNothingStraightIn() {
         let talk = AgentThread(id: "r", title: "Which plan?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: noon, projectPath: "/shades/router")
         let built = ChannelBook.build(kittens: [steve], threads: [talk], transcripts: ["r": [exchange("1")]], isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r"])
-        XCTAssertNil(MessageTarget.standard(for: .channel(.shades), in: built), "the router answers in lines the app acts on, so nothing goes straight to it")
-        XCTAssertNil(MessageTarget.standard(for: .thread("r", in: .shades), in: built))
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.shades), in: built), .router, "the same way Everyone goes, so the app acts on what the router says")
+        XCTAssertNil(MessageTarget.standard(for: .thread("r", in: .shades), in: built), "the router answers in lines the app acts on, so nothing goes straight into one of its threads")
+        XCTAssertEqual(CatWords.target(.router, in: .shades), "To me, without looking at your screen")
+        XCTAssertEqual(CatWords.placeholder(.router, in: .shades), "Message Shades")
+        XCTAssertEqual(CatWords.placeholder(.router, in: .everyone), "Message everyone")
         XCTAssertTrue(ChannelRows.rows(.channel(.shades), in: built).contains(.subject("Which plan?", project: nil, threadID: "r")), "the router's folder isn't a project you'd know")
         let empty = ChannelBook.build(kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
         XCTAssertEqual(ChannelRows.rows(.channel(.shades), in: empty), [.note(CatWords.shadesEmpty)])

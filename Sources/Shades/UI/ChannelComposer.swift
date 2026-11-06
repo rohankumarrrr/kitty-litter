@@ -21,7 +21,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     override init(frame: NSRect) {
         super.init(frame: frame)
         label.font = .systemFont(ofSize: 11)
-        label.textColor = Ink.soft
         label.lineBreakMode = .byTruncatingTail
         label.isSelectable = false
         addSubview(label)
@@ -31,7 +30,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         textView.allowsUndo = true
         textView.drawsBackground = false
         textView.font = .systemFont(ofSize: 14)
-        textView.textColor = Ink.text
         textView.insertionPointColor = Ink.accent
         textView.textContainerInset = .zero
         textView.textContainer?.lineFragmentPadding = 0
@@ -47,18 +45,26 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         scroll.scrollerStyle = .overlay
         scroll.documentView = textView
         addSubview(scroll)
+        restyle()
+    }
+
+    func restyle() {
+        label.textColor = MessagesInk.soft
+        textView.textColor = MessagesInk.text
+        needsDisplay = true
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func show(_ target: MessageTarget?, label: String? = nil) {
+    /// `channel` is where the box is, which says who the router's answers come from.
+    func show(_ target: MessageTarget?, label: String? = nil, in channel: ChannelID? = nil) {
         let changed = target != self.target
         self.target = target
         isHidden = target == nil
         guard let target else { return }
-        self.label.stringValue = label ?? CatWords.target(target)
-        textView.placeholder = CatWords.placeholder(target)
+        self.label.stringValue = label ?? CatWords.target(target, in: channel)
+        textView.placeholder = CatWords.placeholder(target, in: channel)
         if changed { needsLayout = true }
     }
 
@@ -86,10 +92,10 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        Ink.line.setFill()
+        MessagesInk.line.setFill()
         NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
         let field = NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight, width: bounds.width - ChannelRowView.margin * 2, height: textHeight + Self.fieldPad * 2)
-        Ink.hover.setFill()
+        MessagesInk.hover.setFill()
         NSBezierPath(roundedRect: field, xRadius: 9, yRadius: 9).fill()
     }
 

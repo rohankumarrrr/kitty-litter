@@ -42,7 +42,7 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(ChannelsPanel().sharingType, .none, "so a kitten's own screen tools can't be shown another kitten's messages")
     }
 
-    func testEveryViewTakesClicksAndRefusesTheKeyboard() {
+    func testEveryViewTakesClicksAndOnlyTheBoxAndWordsYouPressInTakeTheKeyboard() throws {
         let view = view()
         view.show(book())
         view.select(.channel(.direct(steve)))
@@ -54,10 +54,34 @@ final class ChannelsWindowTests: XCTestCase {
             XCTAssertFalse(row.needsPanelToBecomeKey, "\(row)")
         }
         let box = Set(subviews(of: view.pane.composer).map(ObjectIdentifier.init))
-        let typing = subviews(of: view).filter { !box.contains(ObjectIdentifier($0)) && ($0.acceptsFirstResponder || $0.needsPanelToBecomeKey) }
-        XCTAssertTrue(typing.isEmpty, "only the box takes the keyboard, not \(typing.map { type(of: $0) })")
+        let taking = subviews(of: view).filter { !box.contains(ObjectIdentifier($0)) && ($0.acceptsFirstResponder || $0.needsPanelToBecomeKey) }
+        XCTAssertFalse(taking.isEmpty, "the words can be selected")
+        for taker in taking {
+            // Only so you can select and copy them, the way the bubble's reply does, and never to type into.
+            let words = try XCTUnwrap(taker as? ChannelTextView, "only the box and words take the keyboard, not \(type(of: taker))")
+            XCTAssertFalse(words.isEditable)
+            XCTAssertTrue(words.isSelectable)
+            XCTAssertTrue(words.acceptsFirstMouse(for: nil), "the first press starts selecting")
+        }
         XCTAssertTrue(view.pane.composer.textView.acceptsFirstResponder)
         XCTAssertTrue(view.pane.composer.textView.needsPanelToBecomeKey)
+    }
+
+    func testPartOfAMessageCanBeSelectedAndCopiesAsPlainWords() throws {
+        let view = view()
+        view.show(book())
+        view.select(.channel(.direct(steve)))
+        let row = try XCTUnwrap(view.pane.shownMessageRows.first { !$0.isYours })
+        let words = try XCTUnwrap(subviews(of: row).compactMap { $0 as? ChannelTextView }.first)
+        XCTAssertTrue(row.bubble.contains(words.frame), "the words sit in their bubble, so pressing beside it selects nothing")
+        XCTAssertFalse(words.string.isEmpty)
+
+        // Command-C copies the selection. The pasteboard itself is out of reach of tests, so this checks what it'd get.
+        words.setSelectedRange(NSRange(location: 0, length: 4))
+        XCTAssertEqual((words.string as NSString).substring(with: words.selectedRange()), String(words.string.prefix(4)))
+        XCTAssertEqual(words.writablePasteboardTypes.map(\.rawValue), ["NSStringPboardType"], "plain words, without the bubble's colours")
+        XCTAssertTrue(words.resignFirstResponder())
+        XCTAssertEqual(words.selectedRange().length, 0, "one selection at a time")
     }
 
     func testItStartsOnNeedsYou() {
@@ -768,5 +792,82 @@ extension ChannelsWindowTests {
         view.pane.spoke("Ship it")
         XCTAssertEqual(sent, [.send("Ship it", to: .thread(id: "asked", title: "From Pepper", report: "r"), shownIn: .direct(steve))], "saying it counts as pressing Return")
         XCTAssertEqual(view.pane.composer.textView.string, "")
+    }
+}
+
+// MARK: - Themes
+
+extension ChannelsWindowTests {
+    private static let opal = ColorTheme(name: "Opal Horizon", isDark: true, paper: 0x0c0a10, text: 0xe7e4ec, soft: 0x837d90, accent: 0x7458e8, sidebar: 0x0a080d)
+    private static let paper = ColorTheme(name: "Paper", isDark: false, paper: 0xffffff, text: 0x1d1d1f, accent: 0x0066cc)
+
+    private func themed(_ theme: ColorTheme?, _ body: () throws -> Void) rethrows {
+        MessagesInk.theme = theme
+        defer { MessagesInk.theme = nil }
+        try body()
+    }
+
+    func testAThemeTintsYourMessagesAndTheWindowAndLeavesEveryKittenItsOwnColour() throws {
+        let colours = ChannelSpeakerLook.palette + Demo.kittens.compactMap(ChannelSpeakerLook.color(of:))
+        let kittens = colours.enumerated().map { Kitten(name: "K\($0.offset)", role: "", covers: "", folder: "/k/k\($0.offset)", color: $0.element) }
+        let book = ChannelBook.build(kittens: kittens, threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        for theme in [Self.opal, Self.paper] {
+            try themed(theme) {
+                let yours = ChannelSpeakerLook(.you, in: book)
+                XCTAssertEqual(yours.bubble, theme.yours)
+                XCTAssertGreaterThanOrEqual(ColorTheme.contrast(try XCTUnwrap(yours.words), theme.yours), 4.5, theme.name)
+                XCTAssertEqual(MessagesInk.paper, Ink.hex(theme.paper))
+                XCTAssertEqual(ChannelSpeakerLook.grey, Ink.hex(theme.bubble), "the cat's own messages")
+                for kitten in kittens {
+                    let look = ChannelSpeakerLook(.kitten(kitten.id), in: book)
+                    XCTAssertEqual(look.bubble, kitten.color, "\(kitten.name) keeps its colour in \(theme.name)")
+                    // Yours is a quiet tint and every kitten's is a strong colour, so they never look alike.
+                    XCTAssertGreaterThan(Self.distance(look.bubble!, theme.yours), 100, "\(kitten.name) against yours in \(theme.name)")
+                }
+            }
+        }
+    }
+
+    func testTheWholeWindowTakesATheme() throws {
+        let window = ChannelsWindow()
+        window.update(book())
+        window.view.select(.channel(.direct(steve)))
+        window.apply(Self.opal)
+        defer { window.apply(nil) }
+        XCTAssertEqual(window.panel.appearance?.name, .darkAqua, "its buttons, scrollers and cats go dark too")
+        let row = try XCTUnwrap(window.view.pane.shownMessageRows.first { $0.isYours })
+        XCTAssertEqual(row.fill, Ink.hex(Self.opal.yours), "rows are made again in the theme's colours")
+
+        window.apply(nil)
+        XCTAssertNil(window.panel.appearance, "and back to following the system")
+        XCTAssertEqual(try XCTUnwrap(window.view.pane.shownMessageRows.first { $0.isYours }).fill, Ink.hex(ChannelSpeakerLook.yours))
+    }
+
+    func testTheThemeMenuOffersShadesAndEachAppsThemesAndSaysToDropTheRest() throws {
+        let found = [
+            ColorTheme.Found(theme: Self.paper, app: "T3 Code", file: URL(fileURLWithPath: "/t3/paper.json")),
+            ColorTheme.Found(theme: Self.opal, app: "T3 Code", file: URL(fileURLWithPath: "/t3/opal.json")),
+            ColorTheme.Found(theme: Self.opal, app: "iTerm2", file: URL(fileURLWithPath: "/iterm/opal.json")),
+        ]
+        let menu = ThemeMenu()
+        let items = menu.items(found, current: Self.opal)
+        let shown = items.map { item in
+            item.isSeparatorItem ? "---" : "\(item.state == .on ? "* " : "")\(item.title)\(item.submenu == nil ? "" : " >")\(item.isEnabled ? "" : " (off)")"
+        }
+        XCTAssertEqual(shown, ["Shades", "---", "* T3 Code >", "* iTerm2 >", "---", CatWords.dropATheme + " (off)"])
+        let t3 = try XCTUnwrap(items[2].submenu).items
+        XCTAssertEqual(t3.map(\.title), ["Opal Horizon", "Paper"], "by name")
+        XCTAssertEqual(t3.map(\.state), [.on, .off])
+        XCTAssertEqual(t3.map { $0.representedObject as? URL }, [URL(fileURLWithPath: "/t3/opal.json"), URL(fileURLWithPath: "/t3/paper.json")])
+
+        XCTAssertEqual(menu.items([], current: nil).compactMap { $0.isSeparatorItem ? nil : $0.title }, [CatWords.plainTheme, CatWords.noThemesFound, CatWords.dropATheme])
+        XCTAssertEqual(menu.items([], current: nil)[0].state, .on)
+        let dropped = ColorTheme(name: "Dropped", isDark: false, paper: 0xfafafa, text: 0x111111, accent: 0xcc0000)
+        XCTAssertEqual(menu.items(found, current: dropped)[1].title, "Dropped", "a theme you dropped shows as the one in use")
+    }
+
+    private static func distance(_ a: UInt32, _ b: UInt32) -> Double {
+        let channels = { (color: UInt32) in [16, 8, 0].map { Double((color >> UInt32($0)) & 0xff) } }
+        return zip(channels(a), channels(b)).map { ($0 - $1) * ($0 - $1) }.reduce(0, +).squareRoot()
     }
 }

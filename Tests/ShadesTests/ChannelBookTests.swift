@@ -429,4 +429,19 @@ extension ChannelBookTests {
         )
         XCTAssertTrue(built.everyone.messages.contains { $0.id == sent.id }, "the router's copy is in the cat's conversation, not Everyone's")
     }
+
+    func testWhatYouSaidToShadesAndItsAnswerShowOnceWhenTheRouterHasThem() {
+        let asked = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "What day is it?", at: at, threadID: "", threadTitle: "")
+        let answered = ChannelMessage(exchangeID: "cat-1", kind: .reply, speaker: .cat, text: "Friday.", at: at.addingTimeInterval(2), threadID: "", threadTitle: "")
+        let sent = [SentMessage(channel: .shades, message: asked), SentMessage(channel: .shades, message: answered)]
+        let waiting = ChannelBook.build(kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, sent: sent)
+        XCTAssertEqual(waiting.shades.messages.compactMap(\.text), ["What day is it?", "Friday."], "it shows at once")
+
+        let read = ChannelBook.build(
+            kittens: [steve], threads: [talk("r")], transcripts: ["r": [exchange("1", ask: "What day is it?", reply: "Friday.", asked: 1)]],
+            isReading: false, unreadable: 0, cantReachT3: false, sent: sent, withShades: ["r"]
+        )
+        XCTAssertEqual(read.shades.messages.compactMap(\.text), ["What day is it?", "Friday."], "and once T3 has it, only T3's copy")
+        XCTAssertTrue(read.shades.messages.allSatisfy { $0.threadID == "r" })
+    }
 }

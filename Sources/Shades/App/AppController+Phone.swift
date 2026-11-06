@@ -31,6 +31,7 @@ extension AppController {
             self?.stage.showPairing(nil)
             self?.say(CatWords.phonePaired)
         }
+        link.theme = theme
         phone = link
         phoneTask = Task { [weak self] in
             do {

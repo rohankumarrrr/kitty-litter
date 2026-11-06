@@ -72,7 +72,13 @@ MainActor.assumeIsolated {
                 stopServingPhone: { await tailscale?.stop() },
                 sendPush: { request in
                     (try? await URLSession(configuration: .ephemeral).data(for: request)).flatMap { ($0.1 as? HTTPURLResponse)?.statusCode }
-                }
+                },
+                theme: ColorTheme.load(),
+                // A copy trying a flow out leaves the real theme alone.
+                saveTheme: { theme in
+                    if !DevFlags.wantsFlow { try ColorTheme.save(theme) }
+                },
+                installedThemes: { ColorTheme.installed(home: FileManager.default.homeDirectoryForCurrentUser, t3Home: T3Backend.defaultHome) }
             ),
             stage: stage
         )

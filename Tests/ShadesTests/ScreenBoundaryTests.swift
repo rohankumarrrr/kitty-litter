@@ -177,6 +177,8 @@ private enum Give: CaseIterable {
     case askKitten
     /// Everyone in Messages, and the router picks a kitten.
     case everyoneKitten
+    /// Shades in Messages, which goes through the router the same way, and it picks a kitten.
+    case shadesKitten
     /// The box under a kitten's whole conversation in Messages, which starts a new topic.
     case newTopic
     /// Ask, and the router hands it to the frontier agent, with its own reading of the page as the task.
@@ -187,8 +189,10 @@ private enum Give: CaseIterable {
     case dropKitten
     /// Drop a file onto the cat, and the router hands it to the frontier agent.
     case dropHandOff
+    /// Shades in Messages, and the router hands it to the frontier agent.
+    case shadesHandOff
 
-    var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff].contains(self) }
+    var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff, .shadesHandOff].contains(self) }
 }
 
 /// Ways your words reach a thread that's already there.
@@ -197,6 +201,8 @@ private enum Pass: CaseIterable {
     case askThread
     /// Everyone in Messages, and the router says the same.
     case everyoneThread
+    /// Shades in Messages, and the router says the same.
+    case shadesThread
     /// Typing in a thread opened on its own in Messages, from a DM, Everyone, or Reply on a message.
     case dmReply
     /// Reply or Ask on an inbox row, which opens its thread with the box ready.
@@ -342,6 +348,9 @@ private final class World {
         case .everyoneKitten:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("this one", to: .router, routerSays: "KITTEN: \(number)")
+        case .shadesKitten:
+            await ask("what's this?", routerSays: "It's Page-5ad1.")
+            await messages("this one", to: .router, in: .shades, routerSays: "KITTEN: \(number)")
         case .newTopic:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             controller.messagesAction(.startTopic("this one", with: kittens[number - 1], id: "sent-topic"))
@@ -357,6 +366,9 @@ private final class World {
             await drop("this one", routerSays: "KITTEN: \(number)")
         case .dropHandOff:
             await drop("this one", routerSays: "HANDOFF: Do what Statement-5ad1 says")
+        case .shadesHandOff:
+            await ask("this one", routerSays: "HANDOFF: Do what Page-5ad1 says")
+            await messages("this one too", to: .router, in: .shades, routerSays: "HANDOFF: Do what Page-5ad1 says")
         }
     }
 
@@ -367,6 +379,9 @@ private final class World {
         case .everyoneThread:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("and that part?", to: .router, routerSays: "SEND TO: 1")
+        case .shadesThread:
+            await ask("what's this?", routerSays: "It's Page-5ad1.")
+            await messages("and that part?", to: .router, in: .shades, routerSays: "SEND TO: 1")
         case .dmReply:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("and that part?", to: .thread(id: "w", title: "Fix routing"))
@@ -412,9 +427,9 @@ private final class World {
         await settle()
     }
 
-    private func messages(_ words: String, to target: MessageTarget, routerSays: String? = nil) async {
+    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID = .everyone, routerSays: String? = nil) async {
         if let routerSays { backend.routerSays[words] = routerSays }
-        controller.messagesAction(.send(words, to: target, shownIn: .everyone))
+        controller.messagesAction(.send(words, to: target, shownIn: channel))
         await settle()
     }
 

@@ -44,4 +44,10 @@ struct AppDependencies {
     var stopServingPhone: () async -> Void = {}
     /// Sends a notification to a phone's push service, and returns its status, or `nil` if it didn't get there.
     var sendPush: (URLRequest) async -> Int? = { _ in nil }
+    /// The colours you picked for Messages, or `nil` for Shades' own.
+    var theme: ColorTheme?
+    /// Where a theme you pick goes, so it's there next time.
+    var saveTheme: (ColorTheme?) throws -> Void = { _ in }
+    /// The themes other apps on this Mac have, for Messages to offer.
+    var installedThemes: () -> [ColorTheme.Found] = { [] }
 }

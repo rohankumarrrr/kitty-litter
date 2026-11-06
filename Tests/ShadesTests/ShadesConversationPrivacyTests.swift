@@ -157,10 +157,11 @@ final class ShadesConversationPrivacyTests: XCTestCase {
         XCTAssertEqual(built.shades.messages.filter { $0.kind == .ask }.compactMap(\.text), ["First", "Second"])
     }
 
-    func testOrdinaryShadesSelectionAndThreadAreReadOnlyAndAbsentOnPhone() {
+    func testShadesTakesWordsOnlyThroughTheRouterAndStaysOffThePhone() {
         let built = book(router(), exchanges: [Exchange(id: "e", asker: .you, askedAt: at, ask: "What's here?", reply: "An answer.")])
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.shades), in: built), .router, "Messages' own conversation with the router, which never had your screen")
+        XCTAssertNil(MessageTarget.standard(for: .thread("router", in: .shades), in: built), "a thread the Ask box started can hold your screen")
         for selection in [ChannelSelection.channel(.shades), .thread("router", in: .shades)] {
-            XCTAssertNil(MessageTarget.standard(for: selection, in: built))
             XCTAssertNil(PhonePlace(PhonePlace.key(selection), in: built).selection)
         }
         XCTAssertFalse(PhoneView(PhonePlace("home", in: built), in: built, now: at).places.contains { $0.title == "Shades" })
