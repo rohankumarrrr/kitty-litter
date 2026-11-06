@@ -10,6 +10,8 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 **Ask.** Press ⌥Space or click the cat, and ask anything. It looks at your screen at that moment and answers in a bubble, usually in about 10 seconds, though a model can occasionally take much longer. Good for "how do I start problem 3?" or "what does this error mean?"
 
+**Rewrite what you've selected.** Select some text, ask the cat to "tighten this" or "make it friendlier", and the rewrite shows in the bubble with **Replace**. Nothing in your app changes until you press it. Then it goes in place of your selection, as long as the same text is still selected, and Command-Z takes it back. That works in apps whose text fields allow it, such as Notes, Mail and TextEdit. Anywhere else, or if the selection has moved, the rewrite is copied for you to paste instead.
+
 **Fix what I'm looking at.** Press ⌃⌥F and drag a box around whatever's wrong. Say what's wrong, or just press Return. A frontier agent works out which of your projects it is, and fixes it in its own worktree, so your checkout stays untouched.
 
 **Talk and dictate.** Hold right Option to talk to the cat. Hold Fn to dictate into any app, and your rambling comes out as clean text: fillers gone, self-corrections applied. Speech recognition and cleanup both run on your Mac.

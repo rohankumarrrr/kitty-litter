@@ -37,6 +37,12 @@ final class TextFitTests: XCTestCase {
         XCTAssertEqual(TextFit.fit("the blue one", before: "I want ", after: ", please"), "the blue one")
         XCTAssertEqual(TextFit.fit("the blue one.", before: "I want ", after: "."), "the blue one")
     }
+
+    func testARewriteKeepsTheSelectionsSpacingAtEachEnd() {
+        XCTAssertEqual(TextFit.inPlace(of: "We wanted to say hi.\n", "Hi."), "Hi.\n")
+        XCTAssertEqual(TextFit.inPlace(of: " two words ", "\nfew words\n"), " few words ")
+        XCTAssertEqual(TextFit.inPlace(of: "plain", "Plain"), "Plain")
+    }
 }
 
 final class PasteboardSnapshotTests: XCTestCase {

@@ -250,6 +250,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         let lower = question.lowercased()
         if lower.contains("follow") || lower.contains("what you") { return "\(Prompts.routeMarker) 1" }
         if lower.contains("interview") || lower.contains("resume") { return "\(Prompts.kittenMarker) 1" }
+        if lower.contains("tighten") { return "\(Prompts.rewriteMarker) The new pricing page is live, with three plans to pick from." }
         if ["fix", "change", "refactor", "build", "rewrite"].contains(where: lower.contains) {
             return "\(Prompts.handoffMarker) Fix the Buy button on the pricing page so it opens checkout."
         }
@@ -364,10 +365,22 @@ final class DemoVoice: VoiceEngine {
 
 final class DemoInserter: TextInserting {
     var onInsert: ((String) -> Void)?
+    /// What's selected in the pretend app right now.
+    var selection: String?
 
     func insert(_ text: String) async throws {
         print("[demo] would type: \(text)")
         onInsert?(text)
+    }
+
+    func replaceSelection(_ original: String, in bundleID: String?, with text: String) async -> Bool {
+        guard original == selection else {
+            print("[demo] the selection moved, so nothing was replaced")
+            return false
+        }
+        print("[demo] would replace the selection with: \(text)")
+        selection = nil
+        return true
     }
 }
 

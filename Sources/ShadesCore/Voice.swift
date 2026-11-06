@@ -33,6 +33,9 @@ public protocol VoiceEngine: AnyObject {
 /// Puts text wherever the cursor is, in any app.
 public protocol TextInserting: AnyObject {
     func insert(_ text: String) async throws
+    /// Puts `text` in place of the selection, but only if the field in front, in the app with `bundleID`, still has
+    /// exactly `original` selected and takes the change. `false` means nothing changed.
+    func replaceSelection(_ original: String, in bundleID: String?, with text: String) async -> Bool
 }
 
 /// A key you hold down to talk.

@@ -40,5 +40,5 @@ A kitten for the system itself, a self-check, rollback and a window for reading 
 - Several choices at once for a question that takes them, from Messages. It takes one choice or your own words for now.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
 - Remember project nicknames, so the frontier agent can skip the search next time.
-- Replace text in place after a rewrite, starting with apps that expose selected text well.
+- Replace a rewrite in place in apps that only take paste, such as browsers, Slack and VS Code. Today the rewrite is copied there, since a paste can't be read back to prove it landed.
 - Windows and Linux. Version one is macOS only because capture, the non-activating window and on-device speech are all native.

@@ -30,6 +30,8 @@ public enum Prompts {
     public static let routeMarker = "SEND TO:"
     /// A quick agent replies with this, then a kitten's number, to give the message to a specialist.
     public static let kittenMarker = "KITTEN:"
+    /// A quick agent replies with this, then only the new text, when asked to rewrite what's selected.
+    public static let rewriteMarker = "REWRITE:"
     /// How a sorted report marks each of its lines.
     public static let shippedMarker = "SHIPPED:"
     public static let decisionMarker = "DECISION:"
@@ -63,7 +65,9 @@ public enum Prompts {
         Reply with exactly one line: \(kittenMarker) followed by the kitten's number.
 
         3. If you can answer it now, answer it the way a sharp friend would: directly, in a few sentences, \
-        in plain text with no markdown. Assume they mean what's on their screen unless they say otherwise.
+        in plain text with no markdown. Assume they mean what's on their screen unless they say otherwise. \
+        If they want the selected text rewritten, such as made shorter or friendlier, reply with \(rewriteMarker) \
+        and then only the new text, in the same language and format, ready to go in its place.
 
         4. If it needs changing code, running things, or research that would take more than a minute, and \
         nothing below covers it, don't start it. \
@@ -329,6 +333,14 @@ public enum Prompts {
         let trimmed = reply.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix(marker) else { return nil }
         return Int(trimmed.dropFirst(marker.count).drop(while: \.isWhitespace).prefix(while: \.isNumber))
+    }
+
+    /// The new text, if a quick agent's reply is a rewrite of what's selected. Its own lines are kept.
+    public static func rewrite(in reply: String) -> String? {
+        let trimmed = reply.drop(while: \.isWhitespace)
+        guard trimmed.hasPrefix(rewriteMarker) else { return nil }
+        let text = trimmed.dropFirst(rewriteMarker.count).trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
     }
 
     /// The task, if a quick agent's reply is a handoff rather than an answer.

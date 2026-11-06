@@ -1,0 +1,15 @@
+select We wanted to let you know that our new pricing page is now live, and it has three plans for you to pick from.
+ask Tighten this
+wait 5
+draw .verify/shades/rewrite/1-rewritten
+replace
+wait 1
+draw .verify/shades/rewrite/2-replaced
+select We wanted to let you know that our new pricing page is now live, and it has three plans for you to pick from.
+ask Tighten this
+wait 4
+select
+replace
+wait 1
+draw .verify/shades/rewrite/3-copied
+windows

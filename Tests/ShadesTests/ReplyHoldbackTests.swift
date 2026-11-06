@@ -11,6 +11,15 @@ final class ReplyHoldbackTests: XCTestCase {
         XCTAssertEqual(ReplyHoldback().finish(fullText: "KITTEN: Steve"), .answer(""))
     }
 
+    func testARewriteIsHeldBackAndReadAtTheEnd() {
+        var holdback = ReplyHoldback()
+        XCTAssertNil(holdback.add("REW"))
+        XCTAssertNil(holdback.add("RITE:\nShorter."))
+        XCTAssertEqual(holdback.finish(fullText: "REWRITE:\nShorter.\n\nStill short."), .rewrite("Shorter.\n\nStill short."))
+        XCTAssertEqual(ReplyHoldback().finish(fullText: "REWRITE: "), .answer(""))
+        XCTAssertEqual(ReplyHoldback().finish(fullText: "Rewrite it yourself."), .answer("Rewrite it yourself."))
+    }
+
     func testARouteIsHeldBackAndReadAtTheEnd() {
         var holdback = ReplyHoldback()
         XCTAssertNil(holdback.add("SE"))

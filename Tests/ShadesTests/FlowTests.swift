@@ -213,6 +213,50 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .reply(text: "Fresh.", done: true, threadID: "thread-2", note: nil))
     }
 
+    // MARK: - Rewriting
+
+    private func askForARewrite(selected: String? = "We wanted to let you know that the new page is live.\n") async {
+        context.snapshotValue.selectedText = selected
+        context.snapshotValue.bundleID = "com.apple.Notes"
+        backend.replies = [[
+            .text(delta: "REWR"), .text(delta: "ITE: The new"), .text(delta: " page is live."),
+            .finished(fullText: "REWRITE: The new page is live."),
+        ]]
+        await ask("tighten this")
+    }
+
+    func testARewriteOffersToGoInPlaceOfTheSelection() async {
+        await askForARewrite()
+        XCTAssertEqual(stage.bubble, .reply(text: "The new page is live.", done: true, threadID: "thread-1", note: nil, canReplace: true))
+        for case .reply(let text, _, _, _, _)? in stage.bubbles where text.contains("REWRITE") { XCTFail("the marker was shown") }
+        XCTAssertTrue(inserter.replaced.isEmpty, "nothing changes until you press Replace")
+
+        controller.bubbleAction(.replace("The new page is live."))
+        await settle()
+        XCTAssertEqual(inserter.replaced.map(\.original), ["We wanted to let you know that the new page is live.\n"])
+        XCTAssertEqual(inserter.replaced.map(\.bundleID), ["com.apple.Notes"])
+        XCTAssertEqual(inserter.replaced.map(\.text), ["The new page is live."])
+        XCTAssertNil(stage.bubble)
+        XCTAssertNil(stage.copied)
+    }
+
+    func testARewriteThatCantGoInIsCopiedInstead() async {
+        inserter.replaces = false
+        await askForARewrite()
+        controller.bubbleAction(.replace("The new page is live."))
+        await settle()
+        XCTAssertEqual(stage.copied, "The new page is live.")
+        XCTAssertEqual(stage.bubble, .line(CatWords.rewriteCopied, threadID: nil))
+    }
+
+    func testWithNothingSelectedARewriteIsOnlyAnAnswer() async {
+        await askForARewrite(selected: nil)
+        XCTAssertEqual(stage.bubble, .reply(text: "The new page is live.", done: true, threadID: "thread-1", note: nil))
+        controller.bubbleAction(.replace("The new page is live."))
+        await settle()
+        XCTAssertTrue(inserter.replaced.isEmpty)
+    }
+
     // MARK: - Handing off
 
     func testAHandoffIsNeverShownAsAnAnswer() async {
