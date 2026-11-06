@@ -1,0 +1,31 @@
+wait 1
+draw .verify/shades/drop/0-before
+drop pdf
+wait 1
+draw .verify/shades/drop/1-ask-box
+windows
+submit
+wait 4
+draw .verify/shades/drop/2-summarized
+drop pdf
+wait 1
+submit Clawde should keep this
+wait 3
+draw .verify/shades/drop/3-cant-take-files
+esc
+wait 1
+drop https://jobs.example.com/listing/123
+wait 1
+draw .verify/shades/drop/4-link
+submit I need help with my resume for this
+wait 3
+draw .verify/shades/drop/5-to-a-kitten
+drop /nowhere/notes.zip
+wait 1
+draw .verify/shades/drop/6-cant-read
+esc
+wait 1
+drop mailto:someone@example.com
+wait 1
+draw .verify/shades/drop/7-cant-read-link
+windows

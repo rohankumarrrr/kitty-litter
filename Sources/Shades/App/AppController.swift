@@ -147,6 +147,7 @@ final class AppController {
     var openingAsk = false
     var picking = false
     var fixIsOpen = false
+    var dropIsOpen = false
     var fetchingEarsSince: Date?
     var fetchingEarsLine = false
 

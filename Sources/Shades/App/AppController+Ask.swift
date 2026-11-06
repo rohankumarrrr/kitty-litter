@@ -18,7 +18,22 @@ extension AppController {
         flow = Task { await beginAsk() }
     }
 
-    func beginAsk() async {
+    /// Something was dropped onto the cat, or `nil` if it couldn't be read. Only what was dropped goes with
+    /// the question, so there's no look at the screen.
+    func dropped(_ snapshot: ScreenSnapshot?) {
+        guard let snapshot else {
+            say(CatWords.cantReadThat)
+            return
+        }
+        flow = Task {
+            // An Ask that's still opening shows its box first, so the drop, which came later, replaces it.
+            while openingAsk { try? await Task.sleep(nanoseconds: 50_000_000) }
+            if stage.isInputVisible { stage.hideInput() }
+            await beginAsk(dropped: snapshot)
+        }
+    }
+
+    func beginAsk(dropped: ScreenSnapshot? = nil) async {
         if stage.isInputVisible {
             stage.hideInput()
             return
@@ -28,6 +43,23 @@ extension AppController {
         defer { openingAsk = false }
         stage.hideInbox()
         stage.catWake()
+
+        if let dropped {
+            let capture = Task { Capture(snapshot: dropped, error: nil) }
+            dropIsOpen = true
+            boxesOpened += 1
+            stage.showInput(InputRequest(
+                placeholder: CatWords.askAboutDrop,
+                caption: CatWords.looking(at: dropped),
+                allowsEmpty: true,
+                onSubmit: { [weak self] question in
+                    self?.dropIsOpen = false
+                    self?.ask(question.isEmpty ? CatWords.summarize : question, capture: capture)
+                },
+                onCancel: { [weak self] in self?.dropIsOpen = false }
+            ))
+            return
+        }
 
         // The look at the screen comes first, before anything can take focus.
         let capture = startLook(CaptureOptions())
@@ -104,6 +136,11 @@ extension AppController {
 
         // Whoever it's passed to gets their own say on the snapshot, so this only holds it back from here.
         let shared = settings.quickMode == .fullAccess ? nil : snapshot
+        guard shared != nil || snapshot?.droppedName == nil else {
+            reply = nil
+            say(CatWords.cantTakeFiles(ModelNames.friendly(model)))
+            return
+        }
         let prompt = AgentPrompt(
             // A question can run over several lines, and a title can't.
             title: String(question.prefix { !$0.isNewline }.prefix(60)),
@@ -259,6 +296,11 @@ extension AppController {
     func handOff(task: String, question: String, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil) {
         // With full access, neither the page nor the quick agent's reading of it gets to reach it.
         guard settings.frontierMode != .fullAccess else {
+            guard snapshot?.droppedName == nil else {
+                onStarted?(nil)
+                say(CatWords.cantTakeFiles(frontierName))
+                return
+            }
             startFrontier(
                 title: question,
                 text: Prompts.frontier(request: question, snapshot: nil, screenshotPath: nil),

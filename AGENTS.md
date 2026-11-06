@@ -27,7 +27,7 @@ swift run shades --demo --no-script --commands steps.txt   # plays demo commands
 swift test --filter ScreenBoundaryTests   # every route your screen could take to a kitten
 ```
 
-To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-off` or `--fix` with `--image`, as described in `Sources/Shades/App/DevFlags.swift`. The `probe-t3`, `probe-context` and `probe-voice` tools try one module at a time.
+To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-off` or `--fix` with `--image`, or `--ask` with `--drop` for a file or link dropped onto the cat, as described in `Sources/Shades/App/DevFlags.swift`. The `probe-t3`, `probe-context` and `probe-voice` tools try one module at a time.
 
 ## Rules
 

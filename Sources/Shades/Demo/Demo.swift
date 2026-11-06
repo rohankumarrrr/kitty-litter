@@ -252,6 +252,10 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         if lower.contains("interview") || lower.contains("resume") { return "\(Prompts.kittenMarker) 1" }
         if lower.contains("budget") { return "\(Prompts.kittenMarker) 2" }
         if lower.contains("tighten") { return "\(Prompts.rewriteMarker) The new pricing page is live, with three plans to pick from." }
+        if lower.contains("clawde") { return "\(Prompts.kittenMarker) 3" }
+        if lower.hasPrefix("summarize") {
+            return "It's a one-page syllabus for Intro to Statistics. Week 1 covers describing data, week 2 is probability, and the final is on December 12."
+        }
         if ["fix", "change", "refactor", "build", "rewrite"].contains(where: lower.contains) {
             return "\(Prompts.handoffMarker) Fix the Buy button on the pricing page so it opens checkout."
         }
@@ -400,6 +404,25 @@ enum Demo {
         var voice: DemoVoice
         var inserter: DemoInserter
         var keys: DemoKeys
+    }
+
+    /// A made-up one-page syllabus in a temporary file, for dropping onto the cat.
+    static func samplePDF() -> URL? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("syllabus.pdf")
+        var page = CGRect(x: 0, y: 0, width: 612, height: 792)
+        guard let pdf = CGContext(url as CFURL, mediaBox: &page, nil) else { return nil }
+        let text = NSAttributedString(
+            string: "Intro to Statistics\nWeek 1: Describing data\nWeek 2: Probability\nFinal exam: December 12",
+            attributes: [.font: NSFont.systemFont(ofSize: 18)]
+        )
+        let frame = CTFramesetterCreateFrame(
+            CTFramesetterCreateWithAttributedString(text), CFRange(), CGPath(rect: page.insetBy(dx: 72, dy: 72), transform: nil), nil
+        )
+        pdf.beginPDFPage(nil)
+        CTFrameDraw(frame, pdf)
+        pdf.endPDFPage()
+        pdf.closePDF()
+        return url
     }
 
     /// Enough of a team to show every state in the kitten view.

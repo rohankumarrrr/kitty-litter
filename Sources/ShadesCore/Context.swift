@@ -15,6 +15,9 @@ public struct ScreenSnapshot: Sendable {
     public var focusRegion: CGRect?
     /// The app is on the privacy list, so nothing else was captured.
     public var isPrivate: Bool
+    /// The name of a file or link dropped onto the cat, when that's what this holds instead of the screen.
+    /// It goes wherever the screen may and nowhere else, since a file can be a copy of the screen.
+    public var droppedName: String?
 
     public init(
         capturedAt: Date = Date(),
@@ -26,7 +29,8 @@ public struct ScreenSnapshot: Sendable {
         pageText: String? = nil,
         screenshotJPEG: Data? = nil,
         focusRegion: CGRect? = nil,
-        isPrivate: Bool = false
+        isPrivate: Bool = false,
+        droppedName: String? = nil
     ) {
         self.capturedAt = capturedAt
         self.appName = appName
@@ -38,6 +42,7 @@ public struct ScreenSnapshot: Sendable {
         self.screenshotJPEG = screenshotJPEG
         self.focusRegion = focusRegion
         self.isPrivate = isPrivate
+        self.droppedName = droppedName
     }
 }
 

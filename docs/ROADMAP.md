@@ -14,14 +14,14 @@ Shades as a conductor with a kitten for each area of your life or work. Shades d
 
 Kittens themselves now exist, as described in [kittens.md](kittens.md). Review, shipping and working across several kittens are the parts still being proven, one kitten end to end before any others.
 
+Your own data in context exists too, through kittens, the router and a kitten's `project`, and so does dropping a file onto the cat.
+
 A kitten for the system itself, a self-check, rollback and a window for reading what kittens say now exist. Work lists, proposals from kittens and a defined way of taking corrections are next.
 
 ## Next ideas
 
 - **Pointing at things.** Ask "where do I change this?" and the cat runs to the button and sits on it. The agent returns screen coordinates, and the cat's perching does the rest. This also suits step-by-step homework hints, where it shows you the next step without doing it for you.
 - **Kittens out on the desktop.** Shift-clicking Shades already shows every kitten and how it's doing. Next, each working kitten could walk around the screen as its own small cat. Click one to open its thread.
-- **Your own data in context.** Bring in the connectors your agents already have. "Can I afford this?" on a checkout page checks your budget app, and a job posting goes to your resume project. The no-project agent already finds projects on its own, so much of the routing exists.
-- **Drop onto the cat.** Drag a PDF, link or screenshot onto it to summarize it or turn it into an issue.
 - **Local screen memory.** An opt-in, on-device history for "where did I see that article?", plus a summary at the end of the day. It's the riskiest for privacy, so it comes last and never leaves your Mac.
 - **An inbox for everyone.** The inbox started with the kitten that looks after the system, and it works for any kitten that sets `inbox: true`. Next, make it the default for every kitten, and show a kitten's proposals as decision rows, so everything waiting on you is in one place. A digest of several finishes would do the same job, so it should become part of Needs you in Messages rather than sit beside it. The inbox panel over the cat and Needs you show the same reports, and could become one.
 - **Steer or queue from Messages.** Enter steers a kitten that's still working, by joining the run it's on, and Option-Enter queues the next task behind it. Today a message always waits for its own run.

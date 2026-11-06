@@ -8,6 +8,9 @@ final class CatView: NSView {
     var onMouseDragged: ((NSEvent) -> Void)?
     var onMouseUp: ((NSEvent) -> Void)?
     var onRightMouseDown: ((NSEvent) -> Void)?
+    var onDragEnter: (() -> Void)?
+    /// Something was let go over the cat. Says whether it was taken.
+    var onDrop: ((NSPasteboard) -> Bool)?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -49,4 +52,13 @@ final class CatView: NSView {
     override func mouseDragged(with event: NSEvent) { onMouseDragged?(event) }
     override func mouseUp(with event: NSEvent) { onMouseUp?(event) }
     override func rightMouseDown(with event: NSEvent) { onRightMouseDown?(event) }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        onDragEnter?()
+        return .copy
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        onDrop?(sender.draggingPasteboard) ?? false
+    }
 }

@@ -156,6 +156,12 @@ extension AppController {
             !$0.seesScreen && KittenBoard.belongs(title: "", projectPath: kitten.workspace, to: $0)
         }
         let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
+        // Your words alone would only make sense with the file, so nothing goes.
+        if !seesScreen, snapshot?.droppedName != nil {
+            onStarted?(nil)
+            say(CatWords.cantTakeFiles(kitten.name))
+            return
+        }
         let shared = seesScreen ? snapshot : nil
         let missesScreen = !carriesScreen(shared) && ScreenWords.pointAtScreen(words)
         let asked = asked ?? questionsAsked
@@ -187,8 +193,6 @@ extension AppController {
     /// Passes your words to a session that already has the context. The session's reply comes
     /// back the usual way, as a notice when it finishes.
     func forward(_ words: String, to thread: AgentThread, snapshot: ScreenSnapshot?, asked: Int? = nil) {
-        say(CatWords.sentTo(thread), threadID: thread.id)
-
         // Quick chats are left out of the thread list's news, so their replies are picked up here.
         let isQuick = watch.isQuick(thread.id)
         let asked = asked ?? questionsAsked
@@ -197,6 +201,11 @@ extension AppController {
             // Neither does one working for a kitten that isn't meant to see it, or one that won't say.
             var seesScreen = thread.runtimeMode != nil && thread.runtimeMode != .fullAccess
             if seesScreen, snapshot != nil { seesScreen = await isClearOfScreenlessKittens(thread) }
+            guard seesScreen || snapshot?.droppedName == nil else {
+                say(CatWords.cantTakeFiles(thread.title))
+                return
+            }
+            say(CatWords.sentTo(thread), threadID: thread.id)
             let shared = seesScreen ? snapshot : nil
             let text = Prompts.forwarded(
                 words: words,
