@@ -1,0 +1,8 @@
+approval command npm test
+wait 4
+draw .verify/shades/approvals/0-asked
+allow
+wait 1
+draw .verify/shades/approvals/1-allowed
+front
+windows

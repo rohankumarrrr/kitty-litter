@@ -1,0 +1,23 @@
+channels
+wait 1
+draw .verify/shades/messages/0-needs-you
+channel everyone
+send I need help with my resume
+wait 4
+draw .verify/shades/messages/1-everyone
+channel steve
+send How did the interview prep go?
+wait 2
+draw .verify/shades/messages/2-new-topic
+channel steve
+thread
+wait 1
+send Make the checkout button bigger too
+wait 2
+draw .verify/shades/messages/3-thread
+back
+channel done
+wait 1
+draw .verify/shades/messages/4-done
+front
+windows

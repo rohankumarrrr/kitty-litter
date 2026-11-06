@@ -263,14 +263,18 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertNil(KittenBoard.owner(of: thread("t", project: "site"), among: [pepper, steve]))
     }
 
-    func testAnIssueIsAnOpenThread() throws {
+    func testAnIssueIsAnOpenThreadAndAFinishedOneIsDoneWhetherOrNotItsSettled() throws {
         let built = book(kittens: [steve], threads: [
-            thread("done-unsettled", status: .completed),
-            thread("done-settled", status: .completed, settled: true),
+            thread("done-unsettled", status: .completed, age: 1),
+            thread("done-settled", status: .completed, settled: true, age: 2),
+            thread("failed-unsettled", status: .failed),
+            thread("failed-settled", status: .failed, settled: true, age: 3),
             thread("working-settled", status: .running, settled: true),
             thread("someone-elses", project: "site", status: .running),
         ])
-        XCTAssertEqual(Set(try XCTUnwrap(built.issues.first).threads.map(\.id)), ["done-unsettled", "working-settled"])
+        let steves = try XCTUnwrap(built.issues.first)
+        XCTAssertEqual(Set(steves.threads.map(\.id)), ["failed-unsettled", "working-settled"])
+        XCTAssertEqual(steves.done.map(\.id), ["done-unsettled", "done-settled", "failed-settled"], "newest first")
         XCTAssertEqual(built.issueCount, 2)
     }
 
@@ -278,17 +282,17 @@ final class ChannelBookTests: XCTestCase {
         var approving = thread("approving", status: .running, age: 40)
         approving.pendingApprovals = [ApprovalRequest(id: "r", threadID: "approving", threadTitle: "Work", kind: .command, summary: "x", createdAt: at)]
         let built = book(kittens: [steve], threads: [
-            thread("old-done", age: 30),
-            thread("new-done", age: 1),
+            thread("old-stopped", status: .interrupted, age: 30),
+            thread("new-stopped", status: .interrupted, age: 1),
             thread("working", status: .running, age: 20),
             thread("asking", status: .waitingForAnswer, age: 50),
             approving,
         ])
-        XCTAssertEqual(try XCTUnwrap(built.issues.first).threads.map(\.id), ["approving", "asking", "working", "new-done", "old-done"])
+        XCTAssertEqual(try XCTUnwrap(built.issues.first).threads.map(\.id), ["approving", "asking", "working", "new-stopped", "old-stopped"])
     }
 
     func testIssuesCoverEveryKittenThatsSetUpWithTheirNameTakenOff() throws {
-        let built = book(kittens: [steve, pepper, cali], threads: [thread("t", project: "site", title: "Steve: Fix the site")])
+        let built = book(kittens: [steve, pepper, cali], threads: [thread("t", project: "site", title: "Steve: Fix the site", status: .running)])
         XCTAssertEqual(built.issues.map(\.kitten), [steve, pepper])
         XCTAssertEqual(built.issues[0].threads.map(\.title), ["Fix the site"])
         XCTAssertEqual(built.issues[1].threads, [])

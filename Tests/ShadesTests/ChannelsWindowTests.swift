@@ -80,6 +80,16 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(row.accessibilityPerformPress())
     }
 
+    func testAFinishedThreadIsOnlyShownWhenYouOpenDone() throws {
+        let view = view()
+        view.show(book())
+        let issues = { view.pane.shown.compactMap { row -> String? in if case .issue(let thread) = row { thread.id } else { nil } } }
+        XCTAssertEqual(issues(), [])
+        try XCTUnwrap(view.sidebar.row(for: .done)).press()
+        XCTAssertEqual(view.selection, .done)
+        XCTAssertEqual(issues(), ["t"])
+    }
+
     func testAnEmptyBetweenSectionIsntDrawnAndAPairGetsARowOnceTheyTalk() throws {
         XCTAssertFalse(ChannelSidebarItem.groups(in: book()).contains { $0.heading == CatWords.betweenKittens })
 
@@ -242,7 +252,7 @@ final class ChannelsWindowTests: XCTestCase {
         )
         let line = DevFlags.checkLine(built, threadsRead: 7, milliseconds: 9)
         XCTAssertFalse(line.contains(secret))
-        for expected in ["threads read: 7", "unreadable: 1", "DMs with messages: 1", "between channels: 1", "messages: 4", "asked by you: 1", "asked by a kitten: 0", "asked by someone else: 1", "replies with no ask: 0", "issues: 1", "milliseconds: 9"] {
+        for expected in ["threads read: 7", "unreadable: 1", "DMs with messages: 1", "between channels: 1", "messages: 4", "asked by you: 1", "asked by a kitten: 0", "asked by someone else: 1", "replies with no ask: 0", "issues: 1", "done: 0", "milliseconds: 9"] {
             XCTAssertTrue(line.contains(expected), expected)
         }
     }
@@ -309,6 +319,23 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(opened, ["t"])
         try pressButton("‹ Steve", in: view)
         XCTAssertEqual(view.selection, .channel(.direct(steve)))
+    }
+
+    func testNeedsYouStaysAtTheTopWhenMoreComesIn() {
+        let view = view(height: 300)
+        let report = InboxEntry(id: "r", kind: .decision, text: "Ship it?", threadID: "t", threadTitle: "Work", at: at)
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: true, unreadable: 0, cantReachT3: false, waiting: Waiting(reports: [report])))
+        let busy = (0..<12).map { AgentThread(id: "w\($0)", title: "Work \($0)", projectTitle: "Steve", status: .running, model: "m", updatedAt: at, projectPath: "/k/steve") }
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: busy, transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(reports: [report])))
+        XCTAssertEqual(view.pane.scrollOffset, 0, "what needs you is at the top, so In progress growing mustn't scroll it away")
+    }
+
+    func testAThreadOpensAtItsLatestLikeAConversation() {
+        let view = view(height: 300)
+        view.show(book(exchanges: 30))
+        view.select(.thread("t", in: .direct(steve)))
+        XCTAssertGreaterThan(view.pane.scrollOffset, 0)
+        XCTAssertLessThanOrEqual(view.pane.distanceFromBottom, 1)
     }
 
     func testReplyOnAMessageOpensItsThreadReadyToType() throws {

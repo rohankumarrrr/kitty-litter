@@ -87,6 +87,8 @@ struct KittenIssues: Equatable {
     var kitten: Kitten
     /// Their titles are without the owner's "Name:" prefix.
     var threads: [AgentThread]
+    /// Every other thread of theirs, newest first, for when you go looking.
+    var done: [AgentThread] = []
 }
 
 /// Everything the Channels window shows, worked out from scratch each time, so nothing gets synced or merged.
@@ -193,8 +195,10 @@ struct ChannelBook: Equatable {
             .map { channel($0.key, $0.value) }
             .sorted { (latest($0), latestID($0)) > (latest($1), latestID($1)) }
         let issues = statuses.compactMap { status -> KittenIssues? in
-            let open = openThreads(of: status.kitten, among: kittens, in: threads)
-            return status.state == .notSetUp && open.isEmpty ? nil : KittenIssues(kitten: status.kitten, threads: open)
+            let mine = owned(by: status.kitten, among: kittens, in: threads)
+            let open = mine.filter(isOpen).sorted { (urgency($0), $1.updatedAt, $0.id) < (urgency($1), $0.updatedAt, $1.id) }
+            let done = mine.filter { !isOpen($0) }.sorted { ($1.updatedAt, $0.id) < ($0.updatedAt, $1.id) }
+            return status.state == .notSetUp && open.isEmpty ? nil : KittenIssues(kitten: status.kitten, threads: open, done: done)
         }
         var waiting = waiting
         for entry in waiting.reports {
@@ -300,17 +304,20 @@ struct ChannelBook: Equatable {
     private static func latest(_ channel: Channel) -> Date { channel.messages.last?.at ?? .distantPast }
     private static func latestID(_ channel: Channel) -> String { channel.messages.last?.id ?? "" }
 
-    /// Today an issue is an open thread. A finished one that isn't settled stays, because
-    /// that's a pull request waiting on "ship it". What needs you comes first, then what's working.
-    private static func openThreads(of kitten: Kitten, among kittens: [Kitten], in threads: [AgentThread]) -> [AgentThread] {
+    private static func owned(by kitten: Kitten, among kittens: [Kitten], in threads: [AgentThread]) -> [AgentThread] {
         threads
-            .filter { KittenBoard.owner(of: $0, among: kittens) == kitten && (!$0.isSettled || $0.status.isActive) }
+            .filter { KittenBoard.owner(of: $0, among: kittens) == kitten }
             .map { thread in
                 var thread = thread
                 thread.title = title(of: thread, owner: kitten)
                 return thread
             }
-            .sorted { (urgency($0), $1.updatedAt, $0.id) < (urgency($1), $0.updatedAt, $1.id) }
+    }
+
+    /// Today an issue is an open thread: still going, or stopped short of done and not settled yet. One that
+    /// finished goes to Done, the way a settled one does in T3, so it doesn't sit there for you to keep looking at.
+    private static func isOpen(_ thread: AgentThread) -> Bool {
+        thread.status.isActive || KittenBoard.needsYou(thread) || (!thread.isSettled && thread.status != .completed)
     }
 
     private static func urgency(_ thread: AgentThread) -> Int {

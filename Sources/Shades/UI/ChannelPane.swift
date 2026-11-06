@@ -25,6 +25,10 @@ final class ChannelHeader: QuietView {
             title = CatWords.needsYouTitle
             subtitle = CatWords.needsYouSubtitle
             cats = []
+        case .done:
+            title = CatWords.doneTitle
+            subtitle = CatWords.doneSubtitle
+            cats = []
         case .channel(.everyone):
             title = CatWords.everyone
             subtitle = CatWords.everyoneSubtitle
@@ -188,7 +192,7 @@ final class ChannelPane: QuietView {
         guard stackedSize != scroll.contentSize else { return }
         let wasAtBottom = isNearBottom
         stack()
-        if wasAtBottom { scrollToBottom() }
+        if wasAtBottom, followsLatest { scrollToBottom() }
     }
 
     /// Selecting something shows its latest. A refresh only follows along if you were already at the bottom.
@@ -213,8 +217,8 @@ final class ChannelPane: QuietView {
         stack()
 
         if isNewSelection {
-            scrollOffset = selection == .needsYou ? 0 : bottomOffset
-        } else if wasAtBottom {
+            scrollOffset = selection.channelID == nil ? 0 : bottomOffset
+        } else if wasAtBottom, followsLatest {
             scrollToBottom()
         }
     }
@@ -239,6 +243,12 @@ final class ChannelPane: QuietView {
         guard typing else { return }
         window?.makeKey()
         window?.makeFirstResponder(composer.textView)
+    }
+
+    /// Opens a report's thread, ready to type, and what you send there stops that report asking and gets its answer.
+    func reply(to entry: InboxEntry) {
+        replyingTo = entry
+        open(thread: entry.threadID, in: channel(of: book?.kitten(of: entry.id)), typing: true)
     }
 
     /// Where an approval, question or report is talked about: its kitten's DM, or Everyone for the cat's own work.
@@ -360,7 +370,8 @@ final class ChannelPane: QuietView {
         case .report(let entry):
             return card(for: entry, in: book)
         case .note(let text):
-            return NoteRowView(text: text, isCentered: selection != .needsYou || rows.count == 1)
+            let isConversation = selection.channelID != nil
+            return NoteRowView(text: text, isCentered: isConversation || rows.count == 1)
         }
     }
 
@@ -411,11 +422,7 @@ final class ChannelPane: QuietView {
 
     private func card(for entry: InboxEntry, in book: ChannelBook) -> CardRowView {
         let kitten = book.kitten(of: entry.id)
-        let reply = CardRowView.Button(title: entry.kind == .decision ? "Reply" : "Ask") { [weak self] in
-            guard let self else { return }
-            self.replyingTo = entry
-            self.open(thread: entry.threadID, in: self.channel(of: kitten), typing: true)
-        }
+        let reply = CardRowView.Button(title: entry.kind == .decision ? "Reply" : "Ask") { [weak self] in self?.reply(to: entry) }
         var buttons = [reply]
         if entry.kind == .decision {
             buttons.append(CardRowView.Button(title: "Done") { [weak self] in self?.onAction?(.inbox(.done(id: entry.id))) })
@@ -456,6 +463,9 @@ final class ChannelPane: QuietView {
     }
 
     // MARK: Scrolling
+
+    /// A conversation keeps its latest in view, as a chat does. Needs you and Done read from the top.
+    private var followsLatest: Bool { selection.channelID != nil }
 
     private var isNearBottom: Bool {
         distanceFromBottom <= Self.stickyDistance

@@ -139,7 +139,7 @@ final class ChannelRowsTests: XCTestCase {
     }
 
     func testWhatEachKittenIsOnSitsUnderWhatNeedsYou() {
-        let built = book(threads: [thread("a", status: .running), thread("b")])
+        let built = book(threads: [thread("a", status: .running), thread("b", status: .failed)])
         let rows = ChannelRows.rows(.needsYou, in: built)
         XCTAssertEqual(Array(rows.prefix(2)), [.note("Nothing needs you."), .section("In progress", clearing: nil)])
         let progress = Array(rows.dropFirst(2))
@@ -154,7 +154,7 @@ final class ChannelRowsTests: XCTestCase {
 
     func testNeedsYouWhileReadingWithNothingYetSaysReading() {
         XCTAssertEqual(ChannelRows.rows(.needsYou, in: book(isReading: true)).last, .note("Reading their messages..."))
-        let known = ChannelRows.rows(.needsYou, in: book(threads: [thread("a")], isReading: true))
+        let known = ChannelRows.rows(.needsYou, in: book(threads: [thread("a", status: .running)], isReading: true))
         XCTAssertFalse(known.contains(.note("Reading their messages...")), "threads are known before any words are")
     }
 
@@ -166,6 +166,29 @@ final class ChannelRowsTests: XCTestCase {
 
     func testNeedsYouLeadsWithAnyTrouble() {
         XCTAssertEqual(ChannelRows.rows(.needsYou, in: book(threads: [thread("a")], cantReachT3: true)).first, .note("I can't reach T3 Code. Open it and I'll catch up."))
+    }
+
+    private func issueIDs(_ rows: [ChannelRow]) -> [String] {
+        rows.compactMap {
+            if case .issue(let thread) = $0 { return thread.id }
+            return nil
+        }
+    }
+
+    func testAFinishedThreadLeavesNeedsYouForDone() {
+        let built = book(threads: [thread("working", status: .running), thread("finished")])
+        XCTAssertEqual(issueIDs(ChannelRows.rows(.needsYou, in: built)), ["working"])
+        let done = ChannelRows.rows(.done, in: built)
+        XCTAssertEqual(issueIDs(done), ["finished"])
+        guard case .heading(let status) = done.first else { return XCTFail("\(done)") }
+        XCTAssertEqual(status.kitten, steve)
+        XCTAssertEqual(done.count, 2, "a kitten with nothing finished isn't listed")
+    }
+
+    func testDoneWithNothingInItSaysWhy() {
+        XCTAssertEqual(ChannelRows.rows(.done, in: book(threads: [thread("a", status: .running)])), [.note("Nothing's finished yet.")])
+        XCTAssertEqual(ChannelRows.rows(.done, in: book(isReading: true)), [.note("Reading their messages...")])
+        XCTAssertEqual(ChannelRows.rows(.done, in: book(threads: [thread("a")], cantReachT3: true)).first, .note("I can't reach T3 Code. Open it and I'll catch up."))
     }
 
     // MARK: - Messages
@@ -185,6 +208,7 @@ final class ChannelRowsTests: XCTestCase {
         let built = book(threads: [thread("a")], transcripts: ["a": [exchange("e")]])
         XCTAssertEqual(MessageTarget.standard(for: .channel(.everyone), in: built), .router)
         XCTAssertNil(MessageTarget.standard(for: .needsYou, in: built))
+        XCTAssertNil(MessageTarget.standard(for: .done, in: built))
         XCTAssertNil(MessageTarget.standard(for: .channel(.direct(cali)), in: built), "a kitten that isn't set up takes nothing")
         XCTAssertNil(MessageTarget.standard(for: .channel(ChannelID(.kitten(steve.id), .kitten(pepper.id))!), in: built), "what kittens say to each other is only read")
     }

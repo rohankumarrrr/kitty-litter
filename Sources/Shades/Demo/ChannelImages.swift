@@ -64,7 +64,11 @@ enum ChannelImages {
 
     private static func shots() -> [Shot] {
         let full = book()
-        var shots = [Shot(name: "needs-you", selection: .needsYou, book: full), Shot(name: "everyone", selection: .channel(.everyone), book: full)]
+        var shots = [
+            Shot(name: "needs-you", selection: .needsYou, book: full),
+            Shot(name: "done", selection: .done, book: full),
+            Shot(name: "everyone", selection: .channel(.everyone), book: full),
+        ]
         for status in full.statuses {
             shots.append(Shot(name: "dm-\(slug(status.kitten.name))", selection: .channel(.direct(status.kitten)), book: full))
         }
@@ -97,12 +101,12 @@ enum ChannelImages {
             Shot(name: "unreadable", selection: steve, book: book(unreadable: 2)),
             Shot(name: "nothing-said", selection: steve, book: book(threads: [], transcripts: [:])),
             Shot(name: "nothing-open", selection: .needsYou, book: book(threads: [], transcripts: [:])),
+            Shot(name: "nothing-done", selection: .done, book: book(threads: [], transcripts: [:])),
         ]
         return shots
     }
 
     private static func render(_ shot: Shot, appearance: NSAppearance?) -> Data? {
-        let scale: CGFloat = 2
         // Drawn from the window's own frame, so the window's buttons are in the picture. It's never ordered in.
         let panel = ChannelsPanel()
         let view = ChannelsView(frame: .zero)
@@ -114,12 +118,16 @@ enum ChannelImages {
         if shot.expandsLongMessage { view.pane.longMessageRow?.pressShowMore() }
         if shot.hoversLastMessage { view.pane.shownMessageRows.last?.hovering = true }
         hideScrollers(in: view)
-        let frame = view.superview ?? view
+        return png(of: view.superview ?? view)
+    }
 
+    /// The view as it draws itself, which reads nothing from the screen.
+    static func png(of view: NSView, scale: CGFloat = 2) -> Data? {
+        view.layoutSubtreeIfNeeded()
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
-            pixelsWide: Int(shot.width * scale),
-            pixelsHigh: Int(shot.height * scale),
+            pixelsWide: Int(view.bounds.width * scale),
+            pixelsHigh: Int(view.bounds.height * scale),
             bitsPerSample: 8,
             samplesPerPixel: 4,
             hasAlpha: true,
@@ -128,9 +136,8 @@ enum ChannelImages {
             bytesPerRow: 0,
             bitsPerPixel: 0
         ) else { return nil }
-        rep.size = frame.bounds.size
-        frame.layoutSubtreeIfNeeded()
-        frame.cacheDisplay(in: frame.bounds, to: rep)
+        rep.size = view.bounds.size
+        view.cacheDisplay(in: view.bounds, to: rep)
         return rep.representation(using: .png, properties: [:])
     }
 

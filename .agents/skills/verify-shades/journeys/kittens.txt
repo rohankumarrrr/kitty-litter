@@ -1,0 +1,5 @@
+kittens
+wait 1
+draw .verify/shades/kittens/0-open
+front
+windows
