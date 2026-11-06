@@ -203,6 +203,9 @@ final class ScreenWordsTests: XCTestCase {
             "What does this mean: `errSecInternalComponent`",
             "Translate this: \u{BF}D\u{F3}nde est\u{E1} la biblioteca?",
             "Thoughts on this: [error] build failed on main",
+            "Translate this \"\u{BF}D\u{F3}nde est\u{E1} la biblioteca?\"",
+            "Translate this \u{201C}\u{BF}D\u{F3}nde est\u{E1} la biblioteca?\u{201D}",
+            "Thoughts on this \"[error] build failed on main\"",
             "the build failed because the signing key expired\n\nSummarize this",
             "Summarize this\n\nThe build failed because the signing key expired.",
         ] {
