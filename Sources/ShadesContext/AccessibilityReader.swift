@@ -68,6 +68,8 @@ enum AccessibilityReader {
                 if let item, item.label != parentLabel, bounds.contains(CGPoint(x: item.frame.midX, y: item.frame.midY)) {
                     found.append(item)
                 }
+                // A page's text box holds what you typed as text inside it, so nothing in a field is read.
+                if let role = node.role, fieldRoles.contains(role) { continue }
                 queue += node.children.map { ($0, item?.label) }
             }
         }

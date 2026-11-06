@@ -455,6 +455,24 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(ScreenBounds.clamp(CGPoint(x: 2500, y: 900), size: size, to: screens), CGPoint(x: 1936, y: 736))
     }
 
+    func testTheCatSitsOnWhatItPointsAt() {
+        let screens = [CGRect(x: 0, y: 0, width: 1000, height: 775)]
+        let button = CGRect(x: 400, y: 300, width: 100, height: 30)
+        XCTAssertEqual(ScreenBounds.perch(on: button, size: CGSize(width: 64, height: 64), screens: screens), CGPoint(x: 418, y: 327))
+    }
+
+    /// A toolbar right under the menu bar has no room above it, and sitting on it would cover it.
+    func testWithNoRoomAboveTheCatSitsUnderWhatItPointsAt() {
+        let screens = [CGRect(x: 0, y: 0, width: 1000, height: 775)]
+        let size = CGSize(width: 64, height: 64)
+        let toolbarButton = CGRect(x: 800, y: 734, width: 28, height: 28)
+        let perch = ScreenBounds.perch(on: toolbarButton, size: size, screens: screens)
+        XCTAssertEqual(perch, CGPoint(x: 782, y: 673))
+        XCTAssertLessThanOrEqual(perch.y + size.height, toolbarButton.minY + 3)
+        let menu = CGRect(x: 60, y: 776, width: 40, height: 24)
+        XCTAssertEqual(ScreenBounds.perch(on: menu, size: size, screens: screens).y, 715)
+    }
+
     func testRemembersASpotOnAScreenThatIsNowGone() {
         let screens = [CGRect(x: 0, y: 0, width: 1000, height: 800)]
         XCTAssertEqual(ScreenBounds.clamp(CGPoint(x: 1500, y: 300), size: CGSize(width: 64, height: 64), to: screens), CGPoint(x: 936, y: 300))

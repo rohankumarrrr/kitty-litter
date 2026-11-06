@@ -40,7 +40,7 @@ enum DevFlags {
             Task {
                 while controller.reply?.done == false { try? await Task.sleep(nanoseconds: 200_000_000) }
                 // Where the cat went and nothing of what was said, so a run can check an answer pointed right.
-                print(controller.pointingAt.map { "pointed at \(NSStringFromRect($0))" } ?? "didn't point")
+                print(controller.reply?.pointingAt.map { "pointed at \(NSStringFromRect($0))" } ?? "didn't point")
                 fflush(stdout)
             }
             if let next = value(after: "--then") {

@@ -259,6 +259,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         // Before the hand-off words, since "where do I change this?" is a question about the screen.
         if lower.contains("where") {
             if lower.contains("logo") { return "It's at the top left.\n\(Prompts.pointMarker) 9" }
+            if lower.contains("share") { return "It's in Safari's toolbar, top right.\n\(Prompts.pointMarker) 4" }
             return "It's the Start free trial button, on the right under the Pro plan.\n\(Prompts.pointMarker) 2"
         }
         if ["fix", "change", "refactor", "build", "rewrite"].contains(where: lower.contains) {
@@ -303,7 +304,8 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
         )
     }
 
-    /// The pricing page's heading, its trial button and its plan, where they'd sit on the main display.
+    /// The pricing page's heading, its trial button and its plan, and Safari's Share button just under
+    /// the menu bar, where they'd sit on the main display.
     private static func elements(on screen: CGRect) -> [ScreenElement] {
         func at(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> CGRect {
             CGRect(x: screen.minX + screen.width * x, y: screen.maxY - screen.height * y - height, width: width, height: height)
@@ -312,6 +314,7 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
             ScreenElement(role: "heading", label: "Pricing", frame: at(0.2, 0.18, 160, 40)),
             ScreenElement(role: "button", label: "Start free trial", frame: at(0.62, 0.55, 180, 44)),
             ScreenElement(role: "text", label: "Pro plan, $12 a month", frame: at(0.6, 0.45, 220, 24)),
+            ScreenElement(role: "button", label: "Share", frame: at(0.9, 0.035, 28, 28)),
         ]
     }
 

@@ -14,6 +14,10 @@ extension ScreenSnapshot {
         !isPrivate && (!elements.isEmpty || screenshotArea != nil)
     }
 
+    /// Only something about the size of a control or a short label is worth snapping to. A picture
+    /// or a block of text would move the cat far from the spot it was given.
+    static let snapLimit = CGSize(width: 240, height: 100)
+
     /// The part of the screen to run to, in AppKit global points, or `nil` if it can't tell.
     /// A spot snaps to the smallest element under it, since a guess from a picture is rarely exact.
     public func region(for target: PointTarget) -> CGRect? {
@@ -23,7 +27,9 @@ extension ScreenSnapshot {
         case .spot(let x, let y):
             guard let area = screenshotArea, (0...1).contains(x), (0...1).contains(y) else { return nil }
             let point = CGPoint(x: area.minX + x * area.width, y: area.maxY - y * area.height)
-            let under = elements.map(\.frame).filter { $0.contains(point) }.min { $0.width * $0.height < $1.width * $1.height }
+            let under = elements.map(\.frame)
+                .filter { $0.contains(point) && $0.width <= Self.snapLimit.width && $0.height <= Self.snapLimit.height }
+                .min { $0.width * $0.height < $1.width * $1.height }
             return under ?? CGRect(x: point.x - 12, y: point.y - 12, width: 24, height: 24)
         }
     }

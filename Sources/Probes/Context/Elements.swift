@@ -1,6 +1,7 @@
 import AppKit
 import ShadesContext
 import ShadesCore
+import WebKit
 
 // Reads what the cat could point at from a window of the probe's own, in another process,
 // so nothing from your real screen is read.
@@ -10,6 +11,17 @@ private enum Sentinel {
     static let secret = "SECRETSENTINEL"
 }
 
+/// What's typed into a page's boxes is held in text inside them, unlike AppKit's fields.
+private let page = """
+<!doctype html><html><body style="font: 14px -apple-system">
+<input placeholder="Web search" value="\(Sentinel.typed)input">
+<textarea placeholder="Notes">\(Sentinel.typed)area</textarea>
+<div contenteditable="true" aria-label="Message body" style="border:1px solid #999;min-height:24px">\(Sentinel.typed)editable words</div>
+<div role="textbox" aria-label="Role box" contenteditable="true" style="border:1px solid #999">\(Sentinel.typed)rolebox words</div>
+<input type="password" placeholder="Web password" value="\(Sentinel.secret)">
+</body></html>
+"""
+
 /// Buttons and fields at known places, shown without taking focus. Prints the Export button's
 /// frame in AppKit points, then quits by itself, so nothing stays running.
 @MainActor
@@ -17,7 +29,7 @@ func serveButtons() async {
     let screens = NSScreen.screens
     let screen = screens[min(value(after: "--screen").flatMap(Int.init) ?? 0, screens.count - 1)].frame
     let window = NSWindow(
-        contentRect: CGRect(x: screen.minX + 240, y: screen.minY + 220, width: 520, height: 200),
+        contentRect: CGRect(x: screen.minX + 240, y: screen.minY + 220, width: 520, height: 420),
         styleMask: [.titled],
         backing: .buffered,
         defer: false
@@ -40,10 +52,14 @@ func serveButtons() async {
     secure.stringValue = Sentinel.secret
     let label = NSTextField(labelWithString: "Font size")
     label.frame = CGRect(x: 20, y: 30, width: 200, height: 20)
-    [field, secure, label].forEach { window.contentView?.addSubview($0) }
+    let web = WKWebView(frame: CGRect(x: 20, y: 210, width: 480, height: 200))
+    web.loadHTMLString(page, baseURL: nil)
+    [field, secure, label, web].forEach { window.contentView?.addSubview($0) }
     window.orderFrontRegardless()
     window.makeKey()
     window.makeMain()
+    // Long enough for the page to load and WebKit to build what Accessibility reads.
+    try? await Task.sleep(for: .seconds(2))
 
     let frame = window.convertToScreen(export.convert(export.bounds, to: nil))
     print("ready \(frame.minX) \(frame.minY) \(frame.width) \(frame.height)")
@@ -76,6 +92,9 @@ func runElementsCheck() async {
     let expected = CGRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3])
     try? await Task.sleep(for: .milliseconds(500))
 
+    // WebKit can build its tree on the first ask, so the second is the one that counts.
+    _ = await ScreenContextProvider.elements(ofApp: server.processIdentifier)
+    try? await Task.sleep(for: .milliseconds(500))
     let clock = ContinuousClock()
     let started = clock.now
     let elements = await ScreenContextProvider.elements(ofApp: server.processIdentifier)
@@ -96,7 +115,8 @@ func runElementsCheck() async {
     }
     let labels = elements.map(\.label).joined(separator: " ")
     print("typed text left out: \(labels.contains(Sentinel.typed) ? "WRONG" : "OK")")
-    print("password left out:   \(labels.contains(Sentinel.secret) || labels.contains("Password") ? "WRONG" : "OK")")
+    print("password left out:   \(labels.contains(Sentinel.secret) || labels.contains("Password") || labels.contains("Web password") ? "WRONG" : "OK")")
     print("field named by its placeholder: \(elements.contains { $0.label == "Search" } ? "OK" : "WRONG")")
+    print("page's boxes named: \(["Notes", "Message body"].allSatisfy { name in elements.contains { $0.label == name } } ? "OK" : "WRONG")")
     print("label read: \(elements.contains { $0.label == "Font size" } ? "OK" : "WRONG")")
 }

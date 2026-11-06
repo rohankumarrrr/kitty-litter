@@ -55,6 +55,14 @@ final class PointingTests: XCTestCase {
         XCTAssertEqual(region, save.frame)
     }
 
+    /// Something as big as a picture would move the cat far from where the answer meant.
+    func testASpotDoesntSnapToSomethingBig() {
+        let picture = ScreenElement(role: "image", label: "Banner", frame: CGRect(x: -1700, y: 100, width: 1200, height: 700))
+        let region = ScreenSnapshot(screenshotArea: leftDisplay, elements: [picture]).region(for: .spot(x: 0.25, y: 0.7))
+        XCTAssertEqual(region?.midX, -1440)
+        XCTAssertEqual(region?.midY, 324)
+    }
+
     func testASpotNeedsAScreenshotAndHasToBeOnIt() {
         XCTAssertNil(ScreenSnapshot(elements: [save]).region(for: .spot(x: 0.5, y: 0.5)))
         XCTAssertNil(snapshot.region(for: .spot(x: 1.4, y: 0.5)))

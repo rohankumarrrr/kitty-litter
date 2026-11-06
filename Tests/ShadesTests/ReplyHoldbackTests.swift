@@ -111,6 +111,14 @@ final class ReplyHoldbackTests: XCTestCase {
         XCTAssertEqual(holdback.finish(fullText: "Top right.\nPOINT: 2"), .answer("Top right.", point: .element(2)))
     }
 
+    func testWhereToPointStaysHiddenWhenANewLineFollowsIt() {
+        var holdback = ReplyHoldback()
+        XCTAssertEqual(holdback.add("Top right."), "Top right.")
+        XCTAssertEqual(holdback.add("\nPOINT: 2"), "Top right.")
+        XCTAssertEqual(holdback.add("\n"), "Top right.")
+        XCTAssertEqual(holdback.finish(fullText: "Top right.\nPOINT: 2\n"), .answer("Top right.", point: .element(2)))
+    }
+
     func testALineThatOnlyStartsLikeItShows() {
         var holdback = ReplyHoldback()
         XCTAssertEqual(holdback.add("Top right.\nP"), "Top right.")

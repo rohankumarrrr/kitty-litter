@@ -48,12 +48,15 @@ struct ReplyHoldback {
         return .answer(words, point: point)
     }
 
-    /// The line saying where to point is for the cat, so it never shows, even half written.
+    /// The line saying where to point is for the cat, so it never shows, even half written or with
+    /// a new line already started after it.
     private static func withoutPointing(_ text: String) -> String {
-        let lineStart = text.lastIndex(where: \.isNewline).map(text.index(after:)) ?? text.startIndex
-        let line = text[lineStart...].drop(while: \.isWhitespace)
+        var written = Substring(text)
+        while written.last?.isWhitespace == true { written.removeLast() }
+        let lineStart = written.lastIndex(where: \.isNewline).map(written.index(after:)) ?? written.startIndex
+        let line = written[lineStart...].drop(while: \.isWhitespace)
         guard !line.isEmpty, line.hasPrefix(Prompts.pointMarker) || Prompts.pointMarker.hasPrefix(line) else { return text }
-        var kept = text[..<lineStart]
+        var kept = written[..<lineStart]
         while kept.last?.isWhitespace == true { kept.removeLast() }
         return String(kept)
     }

@@ -94,7 +94,7 @@ extension AppController {
             approvalsHidden = false
             if catIsAway {
                 catIsAway = false
-                stage.catGoHome()
+                catFollowsReply()
             }
         } else if !hadApprovals {
             // It comes to you first, then asks.

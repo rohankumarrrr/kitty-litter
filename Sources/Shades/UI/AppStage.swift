@@ -166,9 +166,8 @@ final class AppStage: CatStage {
     }
 
     func catRun(toRegion region: CGRect, arrived: @escaping () -> Void) {
-        // Perches on top of it, the way it sits on bubbles on the site.
-        let spot = CGPoint(x: region.midX - CGFloat(CatArt.points) / 2, y: region.maxY - 3)
-        cat.run(to: spot, arrived: arrived)
+        let size = CGSize(width: CatArt.points, height: CatArt.points)
+        cat.run(to: ScreenBounds.perch(on: region, size: size, screens: NSScreen.screens.map(\.visibleFrame)), arrived: arrived)
         inbox.reposition()
         input.reposition()
         bubble.reposition()

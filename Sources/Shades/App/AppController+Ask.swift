@@ -220,17 +220,18 @@ extension AppController {
             wrapUpQuickThread(threadID, after: outcome)
         }
         guard generation == replyGeneration else { return }
-        // Whatever comes next replaces the answer the cat was sitting by.
-        stopPointing()
         switch outcome {
         case .answer(let text, let point):
-            if text.isEmpty && point == nil {
+            // It only points with what the router was shown, and if it can't find the spot, it says so.
+            let region = point.flatMap { seen?.region(for: $0) }
+            if text.isEmpty && region == nil {
                 reply = nil
-                say(CatWords.noReply)
+                say(point == nil ? CatWords.noReply : CatWords.cantPoint)
             } else {
                 reply?.text = text.isEmpty ? CatWords.overHere : text
                 reply?.done = true
-                self.point(at: point, on: seen)
+                reply?.pointingAt = region
+                if point != nil && region == nil { reply?.note = CatWords.cantPoint }
                 renderBubble()
             }
         case .rewrite(let text):
@@ -293,21 +294,15 @@ extension AppController {
         quickIsFresh = false
     }
 
-    /// The cat only ever sits by what the answer means. If it can't find that, it says so instead.
-    func point(at target: PointTarget?, on seen: ScreenSnapshot?) {
-        guard let target else { return }
-        guard let region = seen?.region(for: target) else {
-            reply?.note = CatWords.cantPoint
-            return
+    /// Sits by what the answer points at, and goes home once that answer's gone. An approval needs
+    /// the cat with you first, and it comes back here after.
+    func catFollowsReply() {
+        guard !catIsAway else { return }
+        if let region = reply?.pointingAt {
+            stage.catRun(toRegion: region) {}
+        } else {
+            stage.catGoHome()
         }
-        pointingAt = region
-        stage.catRun(toRegion: region) {}
-    }
-
-    func stopPointing() {
-        guard pointingAt != nil else { return }
-        pointingAt = nil
-        if !catIsAway { stage.catGoHome() }
     }
 
     // MARK: - Handing off

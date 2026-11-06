@@ -15,3 +15,9 @@ submit Where's the logo?
 wait 5
 draw .verify/shades/pointing/2-cant-point
 windows
+ask
+wait 0.5
+submit Where's the share button?
+wait 6
+draw .verify/shades/pointing/3-under-the-menu-bar
+windows
