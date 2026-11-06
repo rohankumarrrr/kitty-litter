@@ -20,28 +20,29 @@ struct NeedsYouAlert: Equatable {
 /// opens Needs you, where it is.
 extension AppController {
     func notifyNeedsYou() {
-        // What's already waiting when the app starts is the cat's to say, so a restart doesn't post it all again.
-        guard threadListArrived else { return }
         let waiting = waiting
-        let items: [(kind: NeedsYouAlert.Kind, id: String, threadID: String, title: String)] =
-            waiting.approvals.map { (.approval, $0.id, $0.threadID, $0.threadTitle) }
-            + waiting.questions.map { (.question, $0.id, $0.threadID, $0.threadTitle) }
-            + waiting.reports.filter(\.needsYou).map { (.decision, $0.id, $0.threadID, $0.threadTitle) }
+        let items: [(kind: NeedsYouAlert.Kind, id: String, threadID: String, title: String, at: Date?)] =
+            waiting.approvals.map { (.approval, $0.id, $0.threadID, $0.threadTitle, $0.createdAt) }
+            + waiting.questions.map { (.question, $0.id, $0.threadID, $0.threadTitle, $0.askedAt) }
+            + waiting.reports.filter(\.needsYou).map { (.decision, $0.id, $0.threadID, $0.threadTitle, $0.at) }
         let current = items.filter { item in
             !AgentThread.isLiveTest(title: item.title) && latestThreads.first { $0.id == item.threadID }?.isLiveTest != true
         }
         let ids = Set(current.map(\.id))
-        defer { self.notified = ids }
-        guard let notified else { return }
-        let gone = notified.subtracting(ids)
+        let gone = showing.subtracting(ids)
         if !gone.isEmpty { withdrawNotifications(gone.sorted()) }
-        let fresh = current.filter { !notified.contains($0.id) }
+        showing.formIntersection(ids)
+        // What was already waiting when the app started is the cat's to say. T3 can take a moment to list it, so
+        // it's told apart by when it was asked, not by when it showed up.
+        let fresh = current.filter { ($0.at ?? launchedAt) >= launchedAt && !notified.contains($0.id) }
         guard !fresh.isEmpty else { return }
         let kittens = loadKittens()
         for item in fresh {
             let thread = latestThreads.first { $0.id == item.threadID }
             let owner = waiting.owners[item.id] ?? thread.flatMap { KittenBoard.owner(of: $0, among: kittens) }?.id
             notify(NeedsYouAlert(id: item.id, kind: item.kind, who: kittens.first { $0.id == owner }?.name))
+            notified.insert(item.id)
+            showing.insert(item.id)
         }
     }
 

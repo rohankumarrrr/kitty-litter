@@ -58,7 +58,8 @@ MainActor.assumeIsolated {
                 },
                 hidesTestThreads: !DevFlags.wantsFlow,
                 notify: { notifications?.post($0) },
-                withdrawNotifications: { notifications?.withdraw($0) }
+                withdrawNotifications: { notifications?.withdraw($0) },
+                clearNotifications: { notifications?.clear() }
             ),
             stage: stage
         )

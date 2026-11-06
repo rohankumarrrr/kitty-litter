@@ -111,7 +111,8 @@ struct T3ThreadList {
                 text: words.text,
                 options: words.options,
                 moreCount: words.moreCount,
-                form: words.form
+                form: words.form,
+                askedAt: pending.createdAt
             )
         }
         for thread in threads.values {

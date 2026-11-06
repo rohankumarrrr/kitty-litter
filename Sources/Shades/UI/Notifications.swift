@@ -32,6 +32,10 @@ final class NeedsYouNotifications: NSObject, UNUserNotificationCenterDelegate {
         center?.removeDeliveredNotifications(withIdentifiers: ids)
     }
 
+    func clear() {
+        center?.removeAllDeliveredNotifications()
+    }
+
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,

@@ -85,7 +85,8 @@ final class T3ThreadListTests: XCTestCase {
 
         let words = T3ThreadList.QuestionWords(text: "Which?", options: ["A", "B"], moreCount: 0)
         let asked = list.agentThreads(summaries: [:], questions: ["req-1": words])
-        XCTAssertEqual(asked.first?.pendingQuestion, AgentQuestion(id: "req-1", threadID: "t", threadTitle: "Work", text: "Which?", options: ["A", "B"]))
+        let askedAt = ISO8601DateFormatter().date(from: "2026-11-05T04:00:00Z")
+        XCTAssertEqual(asked.first?.pendingQuestion, AgentQuestion(id: "req-1", threadID: "t", threadTitle: "Work", text: "Which?", options: ["A", "B"], askedAt: askedAt))
     }
 
     private func item(_ json: String) throws -> T3Wire.ShellItem {

@@ -36,8 +36,10 @@ final class AppController {
     let hidesTestThreads: Bool
     let notify: (NeedsYouAlert) -> Void
     let withdrawNotifications: ([String]) -> Void
+    let clearNotifications: () -> Void
     let stage: CatStage
     let now: () -> Date
+    let launchedAt: Date
     let channels: ChannelFeed
     private(set) var settings: Settings
 
@@ -115,8 +117,10 @@ final class AppController {
     var messagesThreads: [String: Date] = [:]
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
-    /// What's had a notification and is still waiting. `nil` until the first look after the thread list arrives.
-    var notified: Set<String>?
+    /// Everything that's had a notification since the app started, so an answer that didn't go through can't bring a second.
+    var notified: Set<String> = []
+    /// Those that haven't been taken back.
+    var showing: Set<String> = []
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
     /// Waiting a little before saying it's finished means that doesn't read as done.
     var reportDelay: TimeInterval = 5
@@ -177,8 +181,10 @@ final class AppController {
         hidesTestThreads = dependencies.hidesTestThreads
         notify = dependencies.notify
         withdrawNotifications = dependencies.withdrawNotifications
+        clearNotifications = dependencies.clearNotifications
         self.stage = stage
         self.now = now
+        launchedAt = now()
         channels = ChannelFeed(backend: dependencies.backend, kittens: dependencies.kittens)
         channels.onChange = { [weak self] in self?.stage.updateChannels($0) }
         channels.waiting = { [weak self] in self?.waiting ?? Waiting() }
@@ -216,6 +222,8 @@ final class AppController {
         }
         startKeys()
         startInbox()
+        // Anything from before may have been answered since, and the cat says again whatever's still waiting.
+        clearNotifications()
     }
 
     func startKeys() {

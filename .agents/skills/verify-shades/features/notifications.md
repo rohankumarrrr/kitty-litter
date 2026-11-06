@@ -4,9 +4,9 @@ Each new approval, question or decision in Needs you posts one macOS notificatio
 
 ## Sub-features
 
-- `notify-new` posts one for each new thing waiting on you, and never for what was already waiting when the app started.
+- `notify-new` posts one for each new thing waiting on you, and never for what was asked before the app started.
 - `notify-click` opens Messages on Needs you, from whichever conversation it was on.
-- `notify-withdraw` takes a notification back once what it was about is answered.
+- `notify-withdraw` takes a notification back once what it was about is answered, and starting takes back every one from before.
 
 ## How to get to it (user POV)
 
@@ -31,3 +31,4 @@ Journey: `journeys/notifications.txt`.
 - A real notification needs the bundled app, so a demo never posts one, and `swift run` without `--demo` doesn't either.
 - `report decision` takes about 6 seconds to be filed, the same as in the inbox journey.
 - The question is from a thread no kitten owns, which is why it says "An agent".
+- What's "already waiting" goes by when T3 says it was asked, not when it was listed, so it can't be shown with the demo's threads. `FlowTests` covers it, along with a restart and an answer that doesn't go through.

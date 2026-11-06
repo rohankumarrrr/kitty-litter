@@ -34,4 +34,6 @@ struct AppDependencies {
     var notify: (NeedsYouAlert) -> Void = { _ in }
     /// Takes notifications back by ID, once what they were about isn't waiting anymore.
     var withdrawNotifications: ([String]) -> Void = { _ in }
+    /// Takes back every notification Shades has posted.
+    var clearNotifications: () -> Void = {}
 }

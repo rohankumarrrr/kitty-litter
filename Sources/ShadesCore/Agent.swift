@@ -130,6 +130,8 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
     public var moreCount: Int
     /// What an answer from Shades needs, or `nil` if it can only be answered in T3.
     public var form: AnswerForm?
+    /// `nil` if the backend doesn't say.
+    public var askedAt: Date?
 
     public init(
         id: String,
@@ -138,7 +140,8 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
         text: String,
         options: [String] = [],
         moreCount: Int = 0,
-        form: AnswerForm? = nil
+        form: AnswerForm? = nil,
+        askedAt: Date? = nil
     ) {
         self.id = id
         self.threadID = threadID
@@ -147,6 +150,7 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
         self.options = options
         self.moreCount = moreCount
         self.form = form
+        self.askedAt = askedAt
     }
 }
 
