@@ -62,6 +62,8 @@ final class AppController {
         var threadID: String?
         /// Set for a question, which goes away by itself once it's answered.
         var questionID: String?
+        /// For a screen warning, its thread's last run before your words, so a failure from before then can't take it back.
+        var after: String?
     }
     struct Line {
         var text: String

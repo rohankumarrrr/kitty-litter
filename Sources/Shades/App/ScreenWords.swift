@@ -15,7 +15,8 @@ enum ScreenWords {
     private static let things = "thread|tweet|post|article|blog|video|screenshot|picture|photo|paper"
 
     /// The thing used to describe something in code, like "this thread pool" or "this video player", isn't the thing.
-    private static let notThe = #"(?!-)\b(?! (pool|safe|safety|local|id|ids|count|request|requests|response|handler|player|upload|uploads|uploader|picker|viewer|editor|component|model|controller|service|endpoint|route|router|queue|table|card|button|form|field|type|schema|url|urls|cache|manager|view|layout|template|parser|class|struct|function|method|module|metadata|thumbnail|preview|feed|list)s?\b)"#
+    /// Nor is the first of two, so "this blog post component" is looked at as a post.
+    private static let notThe = #"(?!-)\b(?! (pool|safe|safety|local|id|ids|count|request|requests|response|handler|player|upload|uploads|uploader|picker|viewer|editor|component|model|controller|service|endpoint|route|router|queue|table|card|button|form|field|type|schema|url|urls|cache|manager|view|layout|template|parser|class|struct|function|method|module|metadata|thumbnail|preview|feed|list|\#(things)|page|site|website|link|email|image)s?\b)"#
 
     /// These name something outside the conversation, so they hold for a session that has context too.
     private static let naming = [

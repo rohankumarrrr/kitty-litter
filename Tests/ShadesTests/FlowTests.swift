@@ -1133,6 +1133,63 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
     }
 
+    /// The same for a kitten without the inbox, and for new work.
+    func testAFailureTheListNeverSawRunningTakesTheWarningBack() async {
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[]]
+        backend.droppedAfterReply = URLError(.networkConnectionLost)
+        controller.give("Read this x thread", to: clawde, snapshot: nil)
+        await settle()
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink })
+        controller.threadsChanged([work("thread-1", title: "Clawde: Read the thread", status: .failed)])
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+
+        useFullAccess(frontier: true)
+        backend.replies = [[]]
+        controller.handOff(task: "Read the thread", question: "Read this x thread", snapshot: nil)
+        await settle()
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink })
+        controller.threadsChanged([session("thread-2", "Read the thread", status: .failed)])
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
+    /// The run that failed was before your words, which are with the thread now and going without your screen.
+    func testAFailureFromBeforeAFollowUpLeavesItsWarning() async {
+        kittens = [inboxKitten]
+        let old = work("k", title: "Clawde: Fix login", run: "run-1", status: .failed)
+        backend.replies = [[.text(delta: "Looking at it.")]]
+        backend.whileReadingAReport = { [unowned self] in
+            self.controller.forward("Is this tweet right?", to: old, snapshot: nil)
+            await self.controller.forwardTask?.value
+        }
+        controller.threadsChanged([work("k", title: "Clawde: Fix login", run: "run-1", status: .running)])
+        controller.threadsChanged([old])
+        await settleFiling()
+        XCTAssertEqual(rows.count, 1, "the old failure is filed")
+        XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "k" })
+
+        controller.threadsChanged([work("k", title: "Clawde: Fix login", run: "run-2", status: .failed)])
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink }, "the run for these words did fail")
+    }
+
+    /// The kitten's thread handed the work to another, so that's whose failure counts.
+    func testWorkHandedOnTakesItsWarningWithIt() async {
+        await askClawde("Read this x thread")
+        var kitten = session("thread-2", "Clawde: Read the thread", status: .running)
+        var worker = session("worker", "Read the x thread", status: .running)
+        controller.threadsChanged([kitten, worker])
+        backend.reports["thread-2"] = "The reading went to a new thread, <t3-thread://v2/env/worker>."
+        kitten.status = .completed
+        controller.threadsChanged([kitten, worker])
+        await controller.reportTask?.value
+        XCTAssertEqual(controller.notices.first { $0.text == sendTheLink }?.threadID, "worker")
+
+        worker.status = .failed
+        controller.threadsChanged([kitten, worker])
+        await controller.reportTask?.value
+        XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
+    }
+
     /// You asked the cat something, maybe with the link, while the router in Messages was still deciding.
     func testAMessagesSendRoutedAfterYourNextQuestionDoesntWarn() async {
         kittens = [steve, clawde]

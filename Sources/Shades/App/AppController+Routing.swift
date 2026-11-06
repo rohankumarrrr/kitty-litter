@@ -75,15 +75,17 @@ extension AppController {
 
     /// Says your words have gone. If they point at a screen the agent won't get, you need to act
     /// on that, so it's a notice that goes first and waits to be read, not a line that can be lost.
-    /// `asked` is `questionsAsked` when they were sent, since asking another takes the warning back. Says which notice it was.
+    /// `asked` is `questionsAsked` when they were sent, since asking another takes the warning back, and `after` is
+    /// the thread's last run before them. Says which notice it was.
     @discardableResult
-    func sayPassedOn(_ said: String, threadID: String, missesScreen: Bool, asked: Int) -> Int? {
+    func sayPassedOn(_ said: String, threadID: String, missesScreen: Bool, asked: Int, after run: String? = nil) -> Int? {
         guard missesScreen, asked == questionsAsked else {
             say(said, threadID: threadID)
             return nil
         }
         line = nil
         post(caption: said, text: CatWords.sendTheLink, threadID: threadID, first: true)
+        if let index = notices.firstIndex(where: { $0.id == lineCounter }) { notices[index].after = run }
         return lineCounter
     }
 
@@ -92,10 +94,32 @@ extension AppController {
         shared.map { !$0.isPrivate } ?? false
     }
 
-    /// That thread's work went wrong, so there's nothing left to warn about. Other threads' warnings stand.
-    func dropScreenWarning(for threadID: String?) {
-        notices.removeAll { $0.text == CatWords.sendTheLink && $0.threadID == threadID }
+    /// That thread's work went wrong, so there's nothing left to warn about. Other threads' warnings stand, and so
+    /// does one for words sent after `run`, the run that failed, if it's known.
+    func dropScreenWarning(for threadID: String?, run: String? = nil) {
+        notices.removeAll { $0.text == CatWords.sendTheLink && $0.threadID == threadID && (run == nil || $0.after != run) }
         renderBubble()
+    }
+
+    /// The list can show a failure it never saw running, such as one from while the connection was down.
+    /// A new thread has nothing from before your words, and for a follow-up only a newer run counts.
+    func dropScreenWarnings(forFailuresIn threads: [AgentThread]) {
+        let failed = Dictionary(threads.filter { $0.status == .failed }.map { ($0.id, $0.lastRunID) }, uniquingKeysWith: { first, _ in first })
+        let before = notices.count
+        notices.removeAll { notice in
+            guard notice.text == CatWords.sendTheLink, let id = notice.threadID, let run = failed[id] else { return false }
+            return notice.after == nil || (run != nil && notice.after != run)
+        }
+        if notices.count != before { renderBubble() }
+    }
+
+    /// The warning goes with the work, so it's taken back if that fails. A run the thread had already finished isn't it.
+    func moveScreenWarnings(from threadID: String, to next: String) {
+        let known = latestThreads.first { $0.id == next }
+        for index in notices.indices where notices[index].text == CatWords.sendTheLink && notices[index].threadID == threadID {
+            notices[index].threadID = next
+            notices[index].after = known?.status.isActive == false ? known?.lastRunID : nil
+        }
     }
 
     /// Only that one, since another send's warning for the same thread can still stand.
@@ -166,6 +190,7 @@ extension AppController {
         // Quick chats are left out of the thread list's news, so their replies are picked up here.
         let isQuick = watch.isQuick(thread.id)
         let asked = asked ?? questionsAsked
+        let runBefore = (latestThreads.first { $0.id == thread.id } ?? thread).lastRunID
         forwardTask = Task {
             // A session with full access can do anything, so text from a page doesn't get to reach it.
             // Neither does one working for a kitten that isn't meant to see it, or one that won't say.
@@ -184,7 +209,9 @@ extension AppController {
             do {
                 for try await event in backend.forward(threadID: thread.id, text: text, attachments: attachments(for: shared)) {
                     if case .started = event {
-                        if missesScreen { warning = sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: true, asked: asked) }
+                        if missesScreen {
+                            warning = sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: true, asked: asked, after: runBefore)
+                        }
                         continue
                     }
                     heardBack = true

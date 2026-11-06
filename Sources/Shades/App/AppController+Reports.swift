@@ -56,6 +56,7 @@ extension AppController {
     /// All this thread did was start another one, so that's where the work is now.
     func passedOn(_ thread: AgentThread, to next: String) {
         dispatchers.insert(next)
+        moveScreenWarnings(from: thread.id, to: next)
         // Work that came from Everyone keeps answering there from wherever it moves, and what it said before stays.
         if let since = messagesThreads[thread.id] { messagesThreads[next] = min(since, messagesThreads[next] ?? since) }
         hiddenThreads.insert(thread.id)

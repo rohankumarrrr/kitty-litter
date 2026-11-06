@@ -49,8 +49,6 @@ extension AppController {
     /// The run only counts as handled once this has sorted it and saved, so stopping at any point before that
     /// means it's filed on the next launch.
     func file(_ report: String?, of thread: AgentThread, failed: Bool, startedAnother next: String?) async {
-        // The list may never have shown it running, so this can be the first anyone hears it failed.
-        if failed { dropScreenWarning(for: thread.id) }
         // It said nothing this time, so whatever's already waiting on you stays as it is.
         let saidNothing = report?.contains(where: { !$0.isWhitespace }) != true
         if saidNothing, !failed, inbox.entries.contains(where: { $0.threadID == thread.id }) {

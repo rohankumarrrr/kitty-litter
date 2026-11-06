@@ -175,11 +175,14 @@ final class ScreenWordsTests: XCTestCase {
             "Fix this video player so it autoplays",
             "Make this photo upload faster",
             "Add a test for this image picker",
+            "Why does this blog post component re-render?",
+            "Make this blog post list load faster",
         ] {
             XCTAssertFalse(ScreenWords.pointAtScreen(words, isFollowUp: true), words)
             XCTAssertFalse(ScreenWords.pointAtScreen(words), words)
         }
         XCTAssertTrue(ScreenWords.pointAtScreen("Is this tweet right?", isFollowUp: true))
+        XCTAssertTrue(ScreenWords.pointAtScreen("Read this blog post", isFollowUp: true))
     }
 
     /// Doing what the cat says mustn't get the same advice again.
