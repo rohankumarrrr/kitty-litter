@@ -49,14 +49,29 @@ enum CatStamp {
             hints: [.interpolation: NSNumber(value: NSImageInterpolation.none.rawValue)]
         )
     }
+
+    /// The same cat as a PNG for the phone, each art pixel `scale` pixels square, so it scales up crisply there.
+    @MainActor
+    static func png(_ pose: CatPose, jacket: UInt32?, dark: Bool, scale: Int) -> Data? {
+        let art = renderer.image(for: pose, theme: dark ? .dark : .light, jacket: jacket)
+        let side = art.width * scale
+        guard let context = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        context.interpolationQuality = .none
+        context.draw(art, in: CGRect(x: 0, y: 0, width: side, height: side))
+        return context.makeImage().flatMap { NSBitmapImageRep(cgImage: $0).representation(using: .png, properties: [:]) }
+    }
 }
 
 /// The same colours as the kitten view. An idle kitten has no dot, which keeps the sidebar calm.
 extension KittenStatus.State {
-    var dotColor: NSColor? {
+    var dotColor: NSColor? { dot.map(Ink.hex) }
+
+    /// As 0xRRGGBB, which a phone is sent.
+    var dot: UInt32? {
         switch self {
-        case .working: return Ink.hex(CatGlint.thinking(bright: true).color!)
-        case .needsYou: return Ink.hex(CatGlint.attention(bright: true).color!)
+        case .working: return CatGlint.thinking(bright: true).color
+        case .needsYou: return CatGlint.attention(bright: true).color
         case .idle, .notSetUp: return nil
         }
     }

@@ -1,3 +1,4 @@
+import AppKit
 import CryptoKit
 @testable import Shades
 import ShadesCore
@@ -156,6 +157,72 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertFalse(keys.hashes.contains(key))
         let hello = try await call("GET", "/hello", key: key)
         XCTAssertEqual(hello.statusCode, 204)
+    }
+
+    func testACatsAddressIsTheWindowsArtInThatColourAndSaysNothingElse() async throws {
+        // An image can't send the key, so like the icon it's served without one.
+        let (drawn, png) = try await send("GET", "/cat/dark/sit/7458e8.png")
+        XCTAssertEqual(drawn.statusCode, 200)
+        XCTAssertEqual(drawn.value(forHTTPHeaderField: "Content-Type"), "image/png")
+        XCTAssertEqual(drawn.value(forHTTPHeaderField: "Cache-Control"), "no-store", "under the same rules as the page's other files")
+        XCTAssertEqual(drawn.value(forHTTPHeaderField: "X-Content-Type-Options"), "nosniff")
+        XCTAssertTrue(drawn.value(forHTTPHeaderField: "Content-Security-Policy")?.contains("img-src 'self'") == true)
+        XCTAssertNil(drawn.value(forHTTPHeaderField: "Set-Cookie"))
+
+        let image = try XCTUnwrap(NSBitmapImageRep(data: png))
+        XCTAssertEqual([image.pixelsWide, image.pixelsHigh], [96, 96], "each art pixel six pixels square, for a 2x or 3x phone")
+        let art = CatRenderer.pixels(for: CatPose(frame: .sit), theme: .dark, jacket: 0x7458e8)
+        XCTAssertEqual(image.colorSpace, .sRGB)
+        var jacket = 0
+        for y in 0..<16 {
+            for x in 0..<16 {
+                let i = (y * 16 + x) * 4
+                var pixel = [Int](repeating: 0, count: 4)
+                image.getPixel(&pixel, atX: x * 6 + 3, y: y * 6 + 3)
+                XCTAssertEqual(pixel[3], Int(art[i + 3]), "(\(x), \(y))")
+                guard pixel[3] == 255 else { continue }
+                XCTAssertEqual(Array(pixel.prefix(3)), [Int(art[i]), Int(art[i + 1]), Int(art[i + 2])], "the window's own art at (\(x), \(y))")
+                if Array(pixel.prefix(3)) == [0x74, 0x58, 0xe8] { jacket += 1 }
+            }
+        }
+        XCTAssertGreaterThan(jacket, 0, "in that jacket")
+        var chunks: [String] = []
+        var at = 8
+        while at + 8 <= png.count {
+            let length = png[at..<at + 4].reduce(0) { $0 << 8 | Int($1) }
+            chunks.append(String(decoding: png[at + 4..<at + 8], as: UTF8.self))
+            at += 12 + length
+        }
+        XCTAssertEqual(chunks.first, "IHDR")
+        XCTAssertTrue(Set(chunks).isDisjoint(with: ["tEXt", "iTXt", "zTXt", "tIME"]), "no words or times in it: \(chunks)")
+
+        // Any colour gets a cat, so an address can't tell anyone which colours your kittens wear, or that you have any.
+        let (stranger, _) = try await send("GET", "/cat/light/alert/123456.png")
+        XCTAssertEqual(stranger.statusCode, 200)
+        let (own, _) = try await send("GET", "/cat/light/sleep/shades.png")
+        XCTAssertEqual(own.statusCode, 200, "and the cat its own")
+        let key = try await pair()
+        let (_, paired) = try await send("GET", "/cat/dark/sit/7458e8.png", key: key)
+        XCTAssertEqual(paired, png, "and it's the same picture whether you're paired or not")
+
+        for path in [
+            "/cat/dark/sit/7458E8.png", "/cat/dark/sit/7458e8ff.png", "/cat/dark/sit/7458e.png", "/cat/dark/sit/7458e8.svg",
+            "/cat/dim/sit/7458e8.png", "/cat/dark/dance/7458e8.png", "/cat/dark/sit/penny.png", "/cat/dark/sit/7458e8.png/more",
+            "/cat/dark/7458e8.png", "/cat/", "/cat/dark/sit/%2E%2E.png",
+        ] {
+            let (refused, body) = try await send("GET", path)
+            XCTAssertEqual(refused.statusCode, 404, path)
+            XCTAssertTrue(body.isEmpty, path)
+        }
+        let posted = try await call("POST", "/cat/dark/sit/7458e8.png", json: "{}", headers: ["X-Shades": "1"])
+        XCTAssertNotEqual(posted.statusCode, 200)
+
+        // They're kept in memory, and only so many, however many colours are asked for.
+        for n in 0..<(PhoneLink.catsKept + 8) {
+            let (each, _) = try await send("GET", "/cat/light/sit/\(String(format: "%06x", n)).png")
+            XCTAssertEqual(each.statusCode, 200)
+        }
+        XCTAssertLessThanOrEqual(try XCTUnwrap(controller.phone?.catsDrawn), PhoneLink.catsKept)
     }
 
     func testTheKeyIsntACookieSoNoOtherPortOnTheMacsNameGetsIt() async throws {
