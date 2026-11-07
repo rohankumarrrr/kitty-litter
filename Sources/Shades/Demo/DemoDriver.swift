@@ -30,6 +30,8 @@ final class DemoDriver {
             .init(title: "Ask a question") { [weak self] in self?.parts.backend.askQuestion(threadID: "demo-research") },
             .init(title: "Finish all the work") { [weak self] in self?.parts.backend.stopEverything() },
         ]
+        // A reply you also sent to Steve's channel, which Messages keeps in memory only.
+        if let steve = Demo.kittens.first { controller.channels.sent(DemoChannels.alsoSentEcho, in: .of(steve), alsoSent: true) }
         readCommands()
         print("Demo mode. Type a command, or use the menu bar item. Try: help")
         if script {
@@ -206,13 +208,25 @@ final class DemoDriver {
         }
     }
 
-    /// needs, done, everyone, home, the start of a kitten's name for its DM, or a key as it is.
+    /// activity, threads, general, home, the start of a kitten's name for its channel, or a key as it is.
     private func phoneKey(_ place: String) -> String {
-        if ["needs", "done", "everyone", "home"].contains(place) { return place }
+        if ["activity", "threads", "general", "home"].contains(place) { return place }
         if let kitten = Demo.kittens.first(where: { $0.name.lowercased().hasPrefix(place.lowercased()) }) {
-            return PhonePlace.key(.channel(.direct(kitten)))
+            return PhonePlace.key(.channel(.of(kitten)))
         }
         return place
+    }
+
+    /// The threads the place that's showing leads to, with the words each is shown by, top to bottom.
+    private var shownThreads: [(id: String, words: String)] {
+        stage.channels.view.pane.shown.compactMap { row in
+            switch row {
+            case .parent(let post): return (post.threadID, post.parent.text ?? "")
+            case .digest(let digest): return (digest.threadID, digest.parent.text ?? "")
+            case .alsoSent(let message, let threadID, _): return (threadID, message.text ?? "")
+            default: return nil
+            }
+        }
     }
 
     private var windows: [(String, NSWindow)] {
@@ -232,7 +246,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel needs|done|everyone|shades|[kitten] | thread | back | scroll [points] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | scroll [points] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -281,31 +295,40 @@ final class DemoDriver {
             // The same as pressing ⌃⌘B: it opens Messages, or closes it if it's open.
             controller.messagesHotkeyPressed()
         case "channel":
-            // channel needs | done | everyone | shades | the start of a kitten's name, the same as clicking it in the sidebar.
+            // channel activity | threads | general | shades | the start of a kitten's name, the same as clicking it in the sidebar.
             let kitten = Demo.kittens.first { $0.name.lowercased().hasPrefix(rest.lowercased()) }
             switch rest {
-            case "needs": stage.channels.view.select(.needsYou)
-            case "done": stage.channels.view.select(.done)
-            case "everyone": stage.channels.view.select(.channel(.everyone))
+            case "activity": stage.channels.view.select(.activity)
+            case "threads": stage.channels.view.select(.threads)
+            case "general": stage.channels.view.select(.channel(.general))
             case "shades": stage.channels.view.select(.channel(.shades))
-            default: if let kitten, !rest.isEmpty { stage.channels.view.select(.channel(.direct(kitten))) }
+            default: if let kitten, !rest.isEmpty { stage.channels.view.select(.channel(.of(kitten))) }
             }
         case "thread":
-            // The same as clicking the title over the last thread in the conversation that's showing.
-            let view = stage.channels.view
-            if case .channel(let id) = view.selection, let last = view.pane.shown.last(where: { if case .subject = $0 { true } else { false } }),
-               case .subject(_, _, let threadID) = last {
-                view.select(.thread(threadID, in: id))
+            // The same as clicking the reply bar under the newest thread showing, or under the one whose words include these.
+            let chosen = rest.isEmpty ? shownThreads.last : shownThreads.last { $0.words.localizedCaseInsensitiveContains(rest) }
+            if let chosen {
+                stage.channels.view.open(thread: chosen.id)
+                print("thread \(chosen.id)")
+            } else {
+                print("no thread shows [\(rest)]")
             }
         case "back":
-            stage.channels.view.select(stage.channels.view.selection.place)
+            // The same as the ✕ on a thread's pane.
+            stage.channels.view.closeThread()
+        case "also":
+            // The same as clicking "Also send to #channel" under a thread's box.
+            let composer = stage.channels.view.threadPane.composer
+            composer.alsoSends = rest == "on"
+            print("also \(composer.alsoSend.isHidden ? "isn't offered" : "\(composer.alsoSend.title) \(composer.alsoSends ? "on" : "off")")")
         case "scroll":
             // Moves what Messages shows by that many points, up if it's negative, the way scrolling would.
             let pane = stage.channels.view.pane
             if let points = Double(rest) { pane.scrollOffset = min(max(pane.scrollOffset + points, 0), pane.scrollOffset + pane.distanceFromBottom) }
         case "send":
-            // The same as typing into Messages' box and pressing Return.
-            stage.channels.view.pane.composer.send(rest)
+            // The same as typing into a box in Messages and pressing Return: the open thread's, or the place's.
+            let view = stage.channels.view
+            (view.selection.thread == nil ? view.pane : view.threadPane).composer.send(rest)
         case "settings":
             controller.settingsPressed()
         case "phone":
@@ -339,15 +362,15 @@ final class DemoDriver {
             let first = controller.inboxEntries.first { $0.questionID == nil }
             switch rest {
             case "reply":
-                // The same as pressing the first report's Reply: its thread opens with the box ready.
-                controller.channelsPressed(selecting: .needsYou)
+                // The same as pressing the first report's Reply: its thread opens beside its channel with the box ready.
+                controller.channelsPressed(selecting: .activity)
                 if let first { stage.channels.view.pane.reply(to: first) }
             case "done":
                 if let first { controller.inboxAction(.done(id: first.id)) }
             case "clear":
                 controller.inboxAction(.clear(.shipped))
             default:
-                controller.channelsPressed(selecting: .needsYou)
+                controller.channelsPressed(selecting: .activity)
             }
         case "notification":
             // The same as clicking the last notification.

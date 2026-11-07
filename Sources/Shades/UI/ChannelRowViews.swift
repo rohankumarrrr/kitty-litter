@@ -234,52 +234,91 @@ final class DayRowView: ChannelRowView {
     }
 }
 
-/// A thread's title, so one conversation with a kitten reads as topics. Clicking opens it in T3.
-final class SubjectRowView: ChannelRowView {
-    var onPress: (() -> Void)?
-    private let title: String
-    private let project: String?
-
-    init(title: String, project: String?) {
-        self.title = title
-        self.project = project
-        super.init(frame: .zero)
-        setAccessibilityElement(true)
-        setAccessibilityRole(.button)
-        setAccessibilityLabel([title, project].compactMap { $0 }.joined(separator: ", "))
+/// What a thread's reply bar shows, as Slack draws it: who replied, how many replies, and when the last one was.
+@MainActor
+struct ReplyBar {
+    enum Face {
+        case cat(UInt32?)
+        case you
     }
 
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
+    static let height: CGFloat = 26
+    private static let face: CGFloat = 16
 
-    override var isPressable: Bool { onPress != nil }
-    override func press() { onPress?() }
-    override func fit(width: CGFloat) -> CGFloat { 30 }
+    var count: Int
+    var faces: [Face]
+    var lastReply: Date?
+    var isGoing: Bool
+    var needsYou: Bool
 
-    override func draw(_ dirtyRect: NSRect) {
-        let truncating = NSMutableParagraphStyle()
-        truncating.lineBreakMode = .byTruncatingTail
-        let label = NSMutableAttributedString(string: title, attributes: [
-            .font: NSFont.systemFont(ofSize: 12, weight: .medium),
-            .foregroundColor: hovering ? MessagesInk.text : MessagesInk.soft,
-        ])
-        if let project, !project.isEmpty {
-            label.append(NSAttributedString(string: "  ·  \(project)", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: MessagesInk.soft]))
+    init(_ post: ThreadPost, in book: ChannelBook) {
+        count = post.replies
+        faces = post.repliers.prefix(4).map { speaker in
+            speaker == .you ? .you : .cat(ChannelSpeakerLook(speaker, in: book).jacket)
         }
-        if onPress != nil {
-            label.append(NSAttributedString(string: "  ›", attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: MessagesInk.soft]))
-        }
-        label.addAttribute(.paragraphStyle, value: truncating, range: NSRange(location: 0, length: label.length))
-        let left = Self.textLeft
-        let room = bounds.width - left - Self.margin
-        let width = min(ceil(label.size().width), room)
-        let height: CGFloat = 16
-        let top = bounds.height - height - 3
-        if hovering, onPress != nil {
+        lastReply = post.lastReply
+        isGoing = post.isGoing
+        needsYou = post.needsYou
+    }
+
+    var isEmpty: Bool { count == 0 && !isGoing && !needsYou }
+
+    private func words(now: Date) -> (strong: String, soft: String) {
+        var soft: [String] = []
+        if count > 0, let lastReply { soft.append(CatWords.lastReply(lastReply, now: now)) }
+        if isGoing { soft.append(CatWords.workingOnIt) }
+        return (count > 0 ? CatWords.replies(count) : "", soft.joined(separator: "  ·  "))
+    }
+
+    func accessibilityWords(now: Date) -> String {
+        let (strong, soft) = words(now: now)
+        return [needsYou ? CatWords.needsYouLabel : nil, strong, soft].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
+    /// How wide it draws, so it can sit under yours on the right.
+    func width(now: Date) -> CGFloat {
+        let (strong, soft) = words(now: now)
+        var width = CGFloat(faces.count) * (Self.face + 3) + 8
+        if needsYou { width += ceil(Self.attributed(CatWords.needsYouLabel, color: MessagesInk.badge, bold: true).size().width) + 10 }
+        if !strong.isEmpty { width += ceil(Self.attributed(strong, color: MessagesInk.link, bold: true).size().width) + 8 }
+        if !soft.isEmpty { width += ceil(Self.attributed(soft, color: MessagesInk.soft, bold: false).size().width) }
+        return width + 8
+    }
+
+    func draw(in rect: NSRect, on view: NSView, hovering: Bool, now: Date) {
+        if hovering {
             MessagesInk.hover.setFill()
-            NSBezierPath(roundedRect: NSRect(x: left - 6, y: top - 2, width: width + 12, height: height + 4), xRadius: 6, yRadius: 6).fill()
+            NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
         }
-        label.draw(in: NSRect(x: left, y: top, width: width, height: height))
+        var x = rect.minX + 4
+        let faceTop = rect.midY - Self.face / 2
+        for face in faces {
+            let frame = NSRect(x: x, y: faceTop, width: Self.face, height: Self.face)
+            switch face {
+            case .cat(let jacket):
+                CatStamp.draw(CatPose(frame: .sit), jacket: jacket, in: frame, on: view)
+            case .you:
+                Ink.hex(MessagesInk.theme?.yours ?? ChannelSpeakerLook.yours).setFill()
+                NSBezierPath(roundedRect: frame.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4).fill()
+            }
+            x += Self.face + 3
+        }
+        if !faces.isEmpty { x += 5 }
+        let (strong, soft) = words(now: now)
+        for (text, color, bold) in [
+            (needsYou ? CatWords.needsYouLabel : "", MessagesInk.badge, true),
+            (strong, MessagesInk.link, true),
+            (soft, MessagesInk.soft, false),
+        ] where !text.isEmpty {
+            let label = Self.attributed(text, color: color, bold: bold)
+            let size = label.size()
+            label.draw(at: NSPoint(x: x, y: rect.midY - size.height / 2))
+            x += ceil(size.width) + 8
+        }
+    }
+
+    private static func attributed(_ text: String, color: NSColor, bold: Bool) -> NSAttributedString {
+        NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: bold ? .semibold : .regular), .foregroundColor: color])
     }
 }
 
@@ -318,6 +357,7 @@ final class MessageRowView: ChannelRowView {
     private static let catSide: CGFloat = 28
     private static let pad: CGFloat = 5
     private static let headHeight: CGFloat = 18
+    private static let contextHeight: CGFloat = 16
     private static let insetX: CGFloat = 12
     private static let insetY: CGFloat = 7
     /// Of the pane's width, so a long message still reads as a bubble.
@@ -328,7 +368,13 @@ final class MessageRowView: ChannelRowView {
     var onReply: (() -> Void)?
     var onCopy: ((String) -> Void)?
     var onShowMore: (() -> Void)?
+    /// Opens its thread: a parent, or a reply also sent to the channel.
+    var onPress: (() -> Void)?
     var isExpanded = false
+    /// Under a thread's parent, what's been said since.
+    var replyBar: ReplyBar? { didSet { fitted = nil } }
+    /// Over a reply also sent to the channel, which thread it's in.
+    var context: String? { didSet { fitted = nil } }
 
     private let message: ChannelMessage
     private let look: ChannelSpeakerLook
@@ -339,6 +385,8 @@ final class MessageRowView: ChannelRowView {
     private var hoverButtons: (open: QuietButton, copy: QuietButton, reply: QuietButton)?
     private(set) var bubble = NSRect.zero
     private var failureTop: CGFloat = 0
+    private var replyBarFrame = NSRect.zero
+    private var headTop: CGFloat { context == nil ? Self.pad : Self.pad + Self.contextHeight }
     /// A row is laid out again each time the rows around it are, so it keeps its answer until something it depends on changes.
     private var fitted: (width: CGFloat, isExpanded: Bool, height: CGFloat)?
 
@@ -359,11 +407,20 @@ final class MessageRowView: ChannelRowView {
     // Worked out when VoiceOver asks, rather than for every row of a long conversation as it's laid out.
     override func accessibilityLabel() -> String? {
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
-        return [look.name, time, said, message.failure].compactMap { $0 }.joined(separator: ", ")
+        return [context, look.name, time, said, message.failure, replyBar?.accessibilityWords(now: Date())].compactMap { $0 }.joined(separator: ", ")
     }
+
+    override var isPressable: Bool { onPress != nil }
+    override func press() { onPress?() }
 
     override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
         var actions: [NSAccessibilityCustomAction] = []
+        if onPress != nil {
+            actions.append(NSAccessibilityCustomAction(name: CatWords.threadTitle) { [weak self] in
+                self?.onPress?()
+                return self != nil
+            })
+        }
         if onReply != nil {
             actions.append(NSAccessibilityCustomAction(name: "Reply") { [weak self] in
                 self?.onReply?()
@@ -422,14 +479,14 @@ final class MessageRowView: ChannelRowView {
         var right = width - Self.margin + 6
         for button in [hoverButtons.open, hoverButtons.copy, hoverButtons.reply] {
             right -= button.frame.width
-            button.frame.origin = NSPoint(x: right, y: 0)
+            button.frame.origin = NSPoint(x: right, y: headTop - Self.pad)
         }
     }
 
     override func fit(width: CGFloat) -> CGFloat {
         if let fitted, fitted.width == width, fitted.isExpanded == isExpanded { return fitted.height }
         let room = max(min(width * Self.widest, width - Self.textLeft - Self.margin) - Self.insetX * 2, 60)
-        var bottom = Self.pad + Self.headHeight
+        var bottom = headTop + Self.headHeight
         if let words {
             words.fit(width: room, maxLines: isExpanded ? nil : Self.clampedLines)
             let size = NSSize(width: words.width + Self.insetX * 2, height: words.height + Self.insetY * 2)
@@ -454,15 +511,37 @@ final class MessageRowView: ChannelRowView {
             showMore.frame.origin = NSPoint(x: look.isYou ? bubble.maxX - showMore.frame.width + 6 : bubble.minX - 6, y: bottom + 1)
             bottom += showMore.frame.height + 2
         }
+        if let replyBar, !replyBar.isEmpty {
+            let barWidth = min(replyBar.width(now: Date()), width - Self.textLeft - Self.margin)
+            let left = look.isYou ? width - Self.margin - barWidth : Self.textLeft - 4
+            replyBarFrame = NSRect(x: left, y: bottom + 3, width: barWidth, height: ReplyBar.height)
+            bottom = replyBarFrame.maxY
+        } else {
+            replyBarFrame = .zero
+        }
         placeHoverButtons(width: width)
-        let height = max(bottom + Self.pad, look.hasCat ? Self.pad * 2 + Self.headHeight + Self.catSide : 0)
+        let height = max(bottom + Self.pad, look.hasCat ? headTop + Self.pad + Self.headHeight + Self.catSide : 0)
         fitted = (width, isExpanded, height)
         return height
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        if let context {
+            // Over the bubble it's about: yours on the right, everyone else's on the left.
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineBreakMode = .byTruncatingTail
+            paragraph.alignment = look.isYou ? .right : .left
+            NSAttributedString(string: context, attributes: [
+                .font: NSFont.systemFont(ofSize: 11),
+                .foregroundColor: hovering ? MessagesInk.text : MessagesInk.soft,
+                .paragraphStyle: paragraph,
+            ]).draw(in: NSRect(x: Self.textLeft + 2, y: Self.pad, width: max(bounds.width - Self.textLeft - Self.margin - 2, 60), height: 15))
+        }
+        if let replyBar, replyBarFrame.width > 0 {
+            replyBar.draw(in: replyBarFrame, on: self, hovering: hovering && onPress != nil, now: Date())
+        }
         if look.hasCat {
-            let top = max(Self.pad + Self.headHeight, bubble.maxY - Self.catSide)
+            let top = max(headTop + Self.headHeight, bubble.maxY - Self.catSide)
             CatStamp.draw(CatPose(frame: .sit), jacket: look.jacket, in: NSRect(x: Self.catLeft, y: top, width: Self.catSide, height: Self.catSide), on: self)
         }
         drawHead()
@@ -478,7 +557,7 @@ final class MessageRowView: ChannelRowView {
         let small = NSFont.systemFont(ofSize: 11)
         let timeLabel = NSAttributedString(string: time, attributes: [.font: small, .foregroundColor: MessagesInk.soft])
         let timeWidth = ceil(timeLabel.size().width)
-        let baseline = Self.pad + 1
+        let baseline = headTop + 1
         guard !look.isYou else {
             if !hovering { timeLabel.draw(at: NSPoint(x: bounds.width - Self.margin - timeWidth, y: baseline)) }
             return
@@ -492,7 +571,135 @@ final class MessageRowView: ChannelRowView {
             .font: NSFont.systemFont(ofSize: 11, weight: .medium),
             .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: Self.textLeft + 2, y: baseline, width: max(bounds.width - Self.textLeft - Self.margin - 150, 60), height: 15))
+        ]).draw(in: NSRect(x: Self.textLeft + 2, y: baseline, width: max(bounds.width - Self.textLeft - Self.margin - (hovering ? 150 : 0), 60), height: 15))
+    }
+}
+
+/// The line in a thread's pane between its parent and its replies.
+final class RepliesRowView: ChannelRowView {
+    private let count: Int
+
+    init(count: Int) {
+        self.count = count
+        super.init(frame: .zero)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityLabel(CatWords.replies(count))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func fit(width: CGFloat) -> CGFloat { 30 }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let label = NSAttributedString(string: CatWords.replies(count), attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+            .foregroundColor: MessagesInk.soft,
+        ])
+        let size = label.size()
+        label.draw(at: NSPoint(x: Self.margin, y: bounds.midY - size.height / 2))
+        MessagesInk.line.setFill()
+        NSRect(x: Self.margin + ceil(size.width) + 10, y: bounds.midY.rounded(), width: max(bounds.width - Self.margin * 2 - size.width - 10, 0), height: 1).fill()
+    }
+}
+
+/// One thread you're in, as Threads lists it: its channel, its parent, its latest reply and how many more there are.
+/// Clicking it opens the thread beside the list.
+final class ThreadDigestRowView: ChannelRowView {
+    private static let catSide: CGFloat = 22
+    private static let lines = 2
+
+    var onPress: (() -> Void)?
+    private let digest: ThreadDigest
+    private let channel: String
+    private let said: [(look: ChannelSpeakerLook, message: ChannelMessage)]
+    private let now: () -> Date
+    private var blocks: [(top: CGFloat, height: CGFloat)] = []
+
+    init(digest: ThreadDigest, in book: ChannelBook, now: @escaping () -> Date) {
+        self.digest = digest
+        self.now = now
+        channel = book.title(of: digest.channel)
+        said = ([digest.parent] + [digest.latest].compactMap { $0 }).map { (ChannelSpeakerLook($0.speaker, in: book), $0) }
+        super.init(frame: .zero)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        let words = said.map { "\($0.look.name): \($0.message.text ?? "")" }
+        setAccessibilityLabel(([channel, digest.isUnread ? "unread" : nil] + words + [digest.more > 0 ? CatWords.moreReplies(digest.more) : nil]).compactMap { $0 }.joined(separator: ", "))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var isPressable: Bool { true }
+    override func press() { onPress?() }
+
+    private static let textFont = NSFont.systemFont(ofSize: 13)
+
+    private func text(_ message: ChannelMessage) -> NSAttributedString {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byWordWrapping
+        let words = (message.text ?? message.failure ?? CatWords.stillGoing).replacingOccurrences(of: "\n", with: " ")
+        return NSAttributedString(string: words, attributes: [.font: Self.textFont, .foregroundColor: MessagesInk.text, .paragraphStyle: paragraph])
+    }
+
+    override func fit(width: CGFloat) -> CGFloat {
+        let room = max(width - Self.textLeft - Self.margin, 60)
+        let most = ceil(Self.textFont.boundingRectForFont.height) * CGFloat(Self.lines)
+        var y: CGFloat = 32
+        blocks = said.map { _, message in
+            let measured = text(message).boundingRect(with: NSSize(width: room, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin]).height
+            let height = min(ceil(measured), most)
+            defer { y += 18 + height + 8 }
+            return (y + 18, height)
+        }
+        if digest.more > 0 { y += 18 }
+        return y + 8
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if hovering {
+            MessagesInk.hover.setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 2), xRadius: 8, yRadius: 8).fill()
+        }
+        MessagesInk.line.setFill()
+        NSRect(x: Self.margin, y: bounds.height - 1, width: bounds.width - Self.margin * 2, height: 1).fill()
+
+        var x = Self.catLeft
+        if digest.isUnread {
+            MessagesInk.badge.setFill()
+            NSBezierPath(ovalIn: NSRect(x: x, y: 15, width: 7, height: 7)).fill()
+            x += 13
+        }
+        NSAttributedString(string: channel, attributes: [
+            .font: NSFont.systemFont(ofSize: 12, weight: digest.isUnread ? .bold : .semibold),
+            .foregroundColor: MessagesInk.text,
+        ]).draw(at: NSPoint(x: x, y: 10))
+
+        let truncating = NSMutableParagraphStyle()
+        truncating.lineBreakMode = .byTruncatingTail
+        let room = max(bounds.width - Self.textLeft - Self.margin, 60)
+        for ((look, message), block) in zip(said, blocks) {
+            let cat = NSRect(x: Self.catLeft + 8, y: block.top - 16, width: Self.catSide, height: Self.catSide)
+            if look.hasCat {
+                CatStamp.draw(CatPose(frame: .sit), jacket: look.jacket, in: cat, on: self)
+            } else {
+                look.bubbleFill.setFill()
+                NSBezierPath(roundedRect: cat.insetBy(dx: 3, dy: 3), xRadius: 5, yRadius: 5).fill()
+            }
+            let head = NSMutableAttributedString(string: look.name, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .semibold), .foregroundColor: MessagesInk.text])
+            head.append(NSAttributedString(string: "  \(message.at.formatted(date: .omitted, time: .shortened))", attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: MessagesInk.soft]))
+            head.addAttribute(.paragraphStyle, value: truncating, range: NSRange(location: 0, length: head.length))
+            head.draw(in: NSRect(x: Self.textLeft, y: block.top - 17, width: room, height: 16))
+            text(message).draw(with: NSRect(x: Self.textLeft, y: block.top, width: room, height: block.height), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        }
+        if digest.more > 0, let last = blocks.last {
+            NSAttributedString(string: CatWords.moreReplies(digest.more), attributes: [
+                .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+                .foregroundColor: MessagesInk.link,
+            ]).draw(at: NSPoint(x: Self.textLeft, y: last.top + last.height + 6))
+        }
     }
 }
 

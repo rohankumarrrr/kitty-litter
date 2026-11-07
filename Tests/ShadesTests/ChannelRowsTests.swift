@@ -12,6 +12,10 @@ final class ChannelRowsTests: XCTestCase {
         AgentThread(id: id, title: title, projectTitle: "Steve Pawsniak", status: status, model: "m", updatedAt: noon, projectPath: "/k/steve")
     }
 
+    private func pepperThread(_ id: String) -> AgentThread {
+        AgentThread(id: id, title: "Plans", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: noon, projectPath: "/k/pepper")
+    }
+
     private func exchange(_ id: String, asked: TimeInterval = 0, reply: String? = "Reply") -> Exchange {
         Exchange(id: id, asker: .you, askedAt: noon.addingTimeInterval(asked), ask: "Ask", reply: reply, repliedAt: reply == nil ? nil : noon.addingTimeInterval(asked + 1))
     }
@@ -26,13 +30,13 @@ final class ChannelRowsTests: XCTestCase {
         ChannelBook.build(kittens: [steve, pepper, cali], threads: threads, transcripts: transcripts, isReading: isReading, unreadable: unreadable, cantReachT3: cantReachT3)
     }
 
-    private func dm(_ kitten: Kitten, in book: ChannelBook) -> [ChannelRow] {
-        ChannelRows.rows(.channel(.direct(kitten)), in: book)
+    private func channel(_ kitten: Kitten, in book: ChannelBook) -> [ChannelRow] {
+        ChannelRows.rows(.channel(.of(kitten)), in: book)
     }
 
-    private func subjects(_ rows: [ChannelRow]) -> [String] {
+    private func parents(_ rows: [ChannelRow]) -> [ThreadPost] {
         rows.compactMap {
-            if case .subject(let title, _, _) = $0 { return title }
+            if case .parent(let post) = $0 { return post }
             return nil
         }
     }
@@ -44,23 +48,58 @@ final class ChannelRowsTests: XCTestCase {
         }
     }
 
-    func testTheSubjectAppearsOnlyWhenTheThreadChanges() {
+    func testAChannelShowsEachThreadsParentWithItsReplyBar() throws {
         let built = book(threads: [thread("a", title: "First"), thread("b", title: "Second")], transcripts: [
             "a": [exchange("a1", asked: 0), exchange("a2", asked: 10), exchange("a3", asked: 40)],
             "b": [exchange("b1", asked: 20)],
         ])
-        XCTAssertEqual(subjects(dm(steve, in: built)), ["First", "Second", "First"])
-        XCTAssertTrue(dm(steve, in: built).contains(.subject("Second", project: "Steve Pawsniak", threadID: "b")), "and it says which project, and knows what to open")
+        let posts = parents(channel(steve, in: built))
+        XCTAssertEqual(posts.map(\.threadID), ["a", "b"])
+        XCTAssertFalse(channel(steve, in: built).contains { if case .message = $0 { true } else { false } }, "replies stay in their thread")
+        let first = try XCTUnwrap(posts.first)
+        XCTAssertEqual(first.parent.id, "a1:ask")
+        XCTAssertEqual(first.replies, 5)
+        XCTAssertEqual(first.repliers, [.kitten(steve.id), .you])
+        XCTAssertEqual(first.lastReply, noon.addingTimeInterval(41))
+        XCTAssertFalse(first.isGoing)
+    }
+
+    @MainActor
+    func testTheReplyBarCountsSaysWhosRepliedAndWhenTheLastWas() throws {
+        let built = book(
+            threads: [thread("a", status: .running), pepperThread("p")],
+            transcripts: ["a": [
+                exchange("a1", asked: 0),
+                Exchange(id: "a2", asker: .agent(threadID: "p"), askedAt: noon.addingTimeInterval(10), ask: "From Pepper", reply: "Sure.", repliedAt: noon.addingTimeInterval(12)),
+                exchange("a3", asked: 30, reply: nil),
+            ], "p": []]
+        )
+        let post = try XCTUnwrap(parents(channel(steve, in: built)).first)
+        XCTAssertEqual(post.replies, 4, "Steve, Pepper, Steve, you, and not the reply still coming")
+        XCTAssertEqual(post.repliers, [.kitten(steve.id), .kitten(pepper.id), .you])
+        XCTAssertEqual(post.lastReply, noon.addingTimeInterval(30), "the last that's said anything")
+        XCTAssertTrue(post.isGoing)
+        let bar = ReplyBar(post, in: built)
+        XCTAssertEqual(bar.accessibilityWords(now: noon.addingTimeInterval(60)), "4 replies, Last reply \(noon.addingTimeInterval(30).formatted(date: .omitted, time: .shortened))  ·  Working on it")
+        XCTAssertEqual(CatWords.replies(1), "1 reply")
+        XCTAssertEqual(CatWords.replies(12), "12 replies")
+    }
+
+    func testAThreadsReplyBarSaysWhenItNeedsYou() throws {
+        let approval = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
+        let built = waitingBook(Waiting(approvals: [approval], owners: ["ap": steve.id]), transcripts: ["a": [exchange("e")]])
+        XCTAssertEqual(try XCTUnwrap(parents(channel(steve, in: built)).first).needsYou, true)
+        XCTAssertFalse(channel(steve, in: built).contains(.approval(approval)), "it's answered in the thread and Activity")
     }
 
     func testADayDividerComesBeforeEachNewDay() {
         let day = 86_400.0
-        let built = book(threads: [thread("a")], transcripts: ["a": [
-            exchange("yesterday", asked: -day),
-            exchange("today1", asked: 0),
-            exchange("today2", asked: 60),
-        ]])
-        let rows = dm(steve, in: built)
+        let built = book(threads: [thread("y"), thread("a"), thread("b")], transcripts: [
+            "y": [exchange("yesterday", asked: -day)],
+            "a": [exchange("today1", asked: 0)],
+            "b": [exchange("today2", asked: 60)],
+        ])
+        let rows = channel(steve, in: built)
         let start = Calendar.current.startOfDay(for: noon)
         let days = rows.filter {
             if case .day = $0 { return true }
@@ -70,16 +109,16 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(rows.first, days.first)
     }
 
-    func testAnOldAskThatFinishedLaterDoesntBringADayBack() {
+    func testAThreadPaneShowsItsParentHowManyRepliesThenEachReply() {
         let day = 86_400.0
-        var slow = exchange("slow", asked: -day)
-        slow.repliedAt = noon.addingTimeInterval(100)
-        let built = book(threads: [thread("a")], transcripts: ["a": [exchange("quick", asked: -30), slow]])
-        let days = dm(steve, in: built).filter {
-            if case .day = $0 { return true }
-            return false
-        }
-        XCTAssertEqual(days.count, 1)
+        var late = exchange("late", asked: day)
+        late.repliedAt = noon.addingTimeInterval(day + 5)
+        let built = book(threads: [thread("a")], transcripts: ["a": [exchange("first", asked: 0), late]])
+        let rows = ChannelRows.thread("a", in: built)
+        guard case .message(let parent) = rows.first else { return XCTFail("\(rows)") }
+        XCTAssertEqual(parent.id, "first:ask")
+        XCTAssertEqual(rows[1], .replies(3))
+        XCTAssertEqual(rows.filter { if case .day = $0 { true } else { false } }.count, 1, "a day divider once the replies reach a new day")
     }
 
     func testDaysReadTodayYesterdayOrTheDate() {
@@ -98,49 +137,40 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(CatWords.age(of: noon, now: noon.addingTimeInterval(90_000)), "1d ago")
     }
 
-    func testAnEmptyDMSaysSo() {
-        XCTAssertEqual(notes(dm(steve, in: book())), ["You and Steve Pawsniak haven't talked yet."])
-        XCTAssertEqual(notes(dm(cali, in: book())), ["Cali isn't set up yet."])
+    func testAnEmptyChannelSaysSo() {
+        XCTAssertEqual(notes(channel(steve, in: book())), ["You and Steve Pawsniak haven't started a thread yet."])
+        XCTAssertEqual(notes(channel(cali, in: book())), ["Cali isn't set up yet."])
     }
 
     func testAnEmptyChannelWhileReadingSaysSo() {
-        XCTAssertEqual(notes(dm(steve, in: book(isReading: true))), ["Reading their messages..."])
-        XCTAssertEqual(notes(dm(cali, in: book(isReading: true))), ["Cali isn't set up yet."])
+        XCTAssertEqual(notes(channel(steve, in: book(isReading: true))), ["Reading their messages..."])
+        XCTAssertEqual(notes(channel(cali, in: book(isReading: true))), ["Cali isn't set up yet."])
     }
 
     func testAnEmptyChannelWhenT3IsAwaySaysSo() {
-        XCTAssertEqual(notes(dm(steve, in: book(isReading: true, cantReachT3: true))), ["I can't reach T3 Code. Open it and I'll catch up."])
+        XCTAssertEqual(notes(channel(steve, in: book(isReading: true, cantReachT3: true))), ["I can't reach T3 Code. Open it and I'll catch up."])
     }
 
     func testAnEmptyChannelWithAFailedReadSaysThatInstead() {
-        XCTAssertEqual(notes(dm(steve, in: book(unreadable: 2))), ["Couldn't read 2 threads. I'll try again."])
-        XCTAssertEqual(notes(dm(steve, in: book(unreadable: 1))), ["Couldn't read 1 thread. I'll try again."])
+        XCTAssertEqual(notes(channel(steve, in: book(unreadable: 2))), ["Couldn't read 2 threads. I'll try again."])
+        XCTAssertEqual(notes(channel(steve, in: book(unreadable: 1))), ["Couldn't read 1 thread. I'll try again."])
     }
 
     func testTroubleDoesntTakeAwayWhatsAlreadyThere() {
-        let rows = dm(steve, in: book(threads: [thread("a")], transcripts: ["a": [exchange("e")]], unreadable: 2, cantReachT3: true))
+        let rows = channel(steve, in: book(threads: [thread("a")], transcripts: ["a": [exchange("e")]], unreadable: 2, cantReachT3: true))
         XCTAssertEqual(rows.suffix(2), [.note("I can't reach T3 Code. Open it and I'll catch up."), .note("Couldn't read 2 threads. I'll try again.")])
-        XCTAssertTrue(rows.contains {
-            if case .message = $0 { return true }
-            return false
-        })
-    }
-
-    func testAChannelThatsGoneReadsAsEmpty() throws {
-        let pair = try XCTUnwrap(ChannelID(.kitten(steve.id), .kitten(pepper.id)))
-        XCTAssertEqual(notes(ChannelRows.rows(.channel(pair), in: book())), ["Steve Pawsniak and Pepper haven't talked yet."])
-        XCTAssertEqual(notes(ChannelRows.rows(.channel(pair), in: book(isReading: true))), ["Reading their messages..."])
+        XCTAssertEqual(parents(rows).count, 1)
     }
 
     func testTheOlderMessagesNoteOpensACutChannel() {
-        let many = (0..<201).map { exchange("e\($0)", asked: TimeInterval($0)) }
-        let rows = dm(steve, in: book(threads: [thread("a")], transcripts: ["a": many]))
+        let threads = (0..<201).map { thread("t\($0)") }
+        let rows = channel(steve, in: book(threads: threads, transcripts: Dictionary(uniqueKeysWithValues: threads.enumerated().map { ($1.id, [exchange("e\($0)", asked: TimeInterval($0))]) })))
         XCTAssertEqual(rows.first, .note("Older messages are in T3."))
     }
 
-    func testWhatEachKittenIsOnSitsUnderWhatNeedsYou() {
+    func testWhatEachKittenIsOnSitsUnderWhatsWaitingInActivity() {
         let built = book(threads: [thread("a", status: .running), thread("b", status: .failed)])
-        let rows = ChannelRows.rows(.needsYou, in: built)
+        let rows = ChannelRows.rows(.activity, in: built)
         XCTAssertEqual(Array(rows.prefix(2)), [.note("Nothing needs you."), .section("In progress", clearing: nil)])
         let progress = Array(rows.dropFirst(2))
         XCTAssertEqual(progress.count, 5)
@@ -152,20 +182,20 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(progress[4], .note("Nothing open."))
     }
 
-    func testNeedsYouWhileReadingWithNothingYetSaysReading() {
-        XCTAssertEqual(ChannelRows.rows(.needsYou, in: book(isReading: true)).last, .note("Reading their messages..."))
-        let known = ChannelRows.rows(.needsYou, in: book(threads: [thread("a", status: .running)], isReading: true))
+    func testActivityWhileReadingWithNothingYetSaysReading() {
+        XCTAssertEqual(ChannelRows.rows(.activity, in: book(isReading: true)).last, .note("Reading their messages..."))
+        let known = ChannelRows.rows(.activity, in: book(threads: [thread("a", status: .running)], isReading: true))
         XCTAssertFalse(known.contains(.note("Reading their messages...")), "threads are known before any words are")
     }
 
-    func testNeedsYouWithNothingKnownAndNoT3SaysSoOnce() {
-        let rows = ChannelRows.rows(.needsYou, in: book(isReading: true, cantReachT3: true))
+    func testActivityWithNothingKnownAndNoT3SaysSoOnce() {
+        let rows = ChannelRows.rows(.activity, in: book(isReading: true, cantReachT3: true))
         XCTAssertEqual(rows.first, .note("I can't reach T3 Code. Open it and I'll catch up."))
         XCTAssertEqual(rows.filter { $0 == .note("I can't reach T3 Code. Open it and I'll catch up.") }.count, 1)
     }
 
-    func testNeedsYouLeadsWithAnyTrouble() {
-        XCTAssertEqual(ChannelRows.rows(.needsYou, in: book(threads: [thread("a")], cantReachT3: true)).first, .note("I can't reach T3 Code. Open it and I'll catch up."))
+    func testActivityLeadsWithAnyTrouble() {
+        XCTAssertEqual(ChannelRows.rows(.activity, in: book(threads: [thread("a")], cantReachT3: true)).first, .note("I can't reach T3 Code. Open it and I'll catch up."))
     }
 
     private func issueIDs(_ rows: [ChannelRow]) -> [String] {
@@ -175,20 +205,40 @@ final class ChannelRowsTests: XCTestCase {
         }
     }
 
-    func testAFinishedThreadLeavesNeedsYouForDone() {
-        let built = book(threads: [thread("working", status: .running), thread("finished")])
-        XCTAssertEqual(issueIDs(ChannelRows.rows(.needsYou, in: built)), ["working"])
-        let done = ChannelRows.rows(.done, in: built)
-        XCTAssertEqual(issueIDs(done), ["finished"])
-        guard case .heading(let status) = done.first else { return XCTFail("\(done)") }
-        XCTAssertEqual(status.kitten, steve)
-        XCTAssertEqual(done.count, 2, "a kitten with nothing finished isn't listed")
+    func testAFinishedThreadLeavesActivityForItsChannel() {
+        let built = book(threads: [thread("working", status: .running), thread("finished")], transcripts: ["finished": [exchange("e")]])
+        XCTAssertEqual(issueIDs(ChannelRows.rows(.activity, in: built)), ["working"])
+        XCTAssertEqual(parents(channel(steve, in: built)).map(\.threadID), ["finished"])
     }
 
-    func testDoneWithNothingInItSaysWhy() {
-        XCTAssertEqual(ChannelRows.rows(.done, in: book(threads: [thread("a", status: .running)])), [.note("Nothing's finished yet.")])
-        XCTAssertEqual(ChannelRows.rows(.done, in: book(isReading: true)), [.note("Reading their messages...")])
-        XCTAssertEqual(ChannelRows.rows(.done, in: book(threads: [thread("a")], cantReachT3: true)).first, .note("I can't reach T3 Code. Open it and I'll catch up."))
+    func testThreadsListsEachThreadYouWroteInWithItsLatestReply() throws {
+        let built = book(threads: [thread("a"), thread("b")], transcripts: [
+            "a": [exchange("a1", asked: 0), exchange("a2", asked: 10)],
+            "b": [Exchange(id: "b1", asker: .agent(threadID: nil), askedAt: noon, ask: "Someone's", reply: "Not yours", repliedAt: noon)],
+        ])
+        let rows = ChannelRows.rows(.threads, in: built)
+        XCTAssertEqual(rows.count, 1, "only threads you've written in")
+        guard case .digest(let digest) = rows.first else { return XCTFail("\(rows)") }
+        XCTAssertEqual(digest.threadID, "a")
+        XCTAssertEqual(digest.channel, .of(steve))
+        XCTAssertEqual(digest.parent.id, "a1:ask")
+        XCTAssertEqual(digest.latest?.id, "a2:reply")
+        XCTAssertEqual(digest.more, 2)
+        XCTAssertEqual(CatWords.moreReplies(2), "2 more replies")
+        XCTAssertEqual(ChannelRows.rows(.threads, in: book()), [.note(CatWords.threadsEmpty)])
+        XCTAssertEqual(ChannelRows.rows(.threads, in: book(isReading: true)), [.note("Reading their messages...")])
+    }
+
+    func testAReplyAlsoSentToAChannelSaysWhichThreadItsIn() throws {
+        let reply = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Keep the FAQ", at: noon.addingTimeInterval(30), threadID: "a", threadTitle: "")
+        let built = ChannelBook.build(
+            kittens: [steve], threads: [thread("a")], transcripts: ["a": [Exchange(id: "e", asker: .you, askedAt: noon, ask: "Rewrite the pricing copy so it sounds like a person wrote it, please", reply: "Done.", repliedAt: noon)]],
+            isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .of(steve), message: reply, alsoSent: true)]
+        )
+        var shown = reply
+        shown.threadTitle = "Work"
+        XCTAssertEqual(channel(steve, in: built).last, .alsoSent(shown, threadID: "a", parent: "Rewrite the pricing copy so it sounds like a person wrote i…"))
+        XCTAssertEqual(CatWords.repliedToThread("Tidy it"), "replied to a thread: Tidy it")
     }
 
     // MARK: - Messages
@@ -204,31 +254,33 @@ final class ChannelRowsTests: XCTestCase {
         ChannelBook.build(kittens: [steve, pepper, cali], threads: [thread("a")], transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, waiting: waiting)
     }
 
-    func testEveryoneGoesThroughTheRouterAndOnlyReadingPlacesHaveNoBox() {
+    func testGeneralGoesThroughTheRouterAndOnlyReadingPlacesHaveNoBox() {
         let built = book(threads: [thread("a")], transcripts: ["a": [exchange("e")]])
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.everyone), in: built), .router)
-        XCTAssertNil(MessageTarget.standard(for: .needsYou, in: built))
-        XCTAssertNil(MessageTarget.standard(for: .done, in: built))
-        XCTAssertNil(MessageTarget.standard(for: .channel(.direct(cali)), in: built), "a kitten that isn't set up takes nothing")
-        XCTAssertNil(MessageTarget.standard(for: .channel(ChannelID(.kitten(steve.id), .kitten(pepper.id))!), in: built), "what kittens say to each other is only read")
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.general), in: built), .router)
+        XCTAssertNil(MessageTarget.standard(for: .activity, in: built))
+        XCTAssertNil(MessageTarget.standard(for: .threads, in: built))
+        XCTAssertNil(MessageTarget.standard(for: .channel(.of(cali)), in: built), "a kitten that isn't set up takes nothing")
     }
 
-    func testADMsOwnBoxStartsSomethingNewAndAThreadsCarriesOnInIt() {
+    func testAChannelsOwnBoxStartsSomethingNewAndAThreadsCarriesOnInIt() {
         let built = book(threads: [thread("a", title: "Old"), thread("b", title: "Newer")], transcripts: ["a": [exchange("e1")], "b": [exchange("e2", asked: 10)]])
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: built), .newThread(steve), "never a guess at which thread")
-        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: built), .thread(id: "a", title: "Old"))
-        XCTAssertEqual(MessageTarget.standard(for: .thread("b", in: .everyone), in: built), .thread(id: "b", title: "Newer"), "a thread opened from Everyone goes straight to it")
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(pepper)), in: built), .newThread(pepper))
-        XCTAssertNil(MessageTarget.standard(for: .thread("nowhere", in: .direct(steve)), in: built), "a thread nothing is known of has nowhere to send")
-        XCTAssertNil(MessageTarget.standard(for: .thread("a", in: ChannelID(.kitten(steve.id), .kitten(pepper.id))!), in: built), "a thread between kittens is only read")
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.of(steve)), in: built), .newThread(steve), "never a guess at which thread")
+        XCTAssertEqual(MessageTarget.reply(in: "a", of: built), .thread(id: "a", title: "Old"))
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.of(pepper)), in: built), .newThread(pepper))
+        XCTAssertNil(MessageTarget.reply(in: "nowhere", of: built), "a thread nothing is known of has nowhere to send")
+    }
+
+    func testAThreadAnotherKittenStartedTakesYourReplyAsInSlack() {
+        let built = book(threads: [thread("a"), pepperThread("p")], transcripts: ["a": [Exchange(id: "e", asker: .agent(threadID: "p"), askedAt: noon, ask: "From Pepper", reply: "Sure.", repliedAt: noon)], "p": []])
+        XCTAssertEqual(MessageTarget.reply(in: "a", of: built), .thread(id: "a", title: "Work"))
     }
 
     func testAQuestionThatTakesYourWordsIsWhatItsThreadAnswers() {
         let open = waitingBook(Waiting(questions: [question()], owners: ["q": steve.id]), transcripts: ["a": [exchange("e")]])
-        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: open), .question(question()))
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.direct(steve)), in: open), .newThread(steve), "the box under everything never answers")
+        XCTAssertEqual(MessageTarget.reply(in: "a", of: open), .question(question()))
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.of(steve)), in: open), .newThread(steve), "the box under the channel never answers")
         let choicesOnly = waitingBook(Waiting(questions: [question(ownWords: false)], owners: ["q": steve.id]), transcripts: ["a": [exchange("e")]])
-        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: choicesOnly), .thread(id: "a", title: "Work"))
+        XCTAssertEqual(MessageTarget.reply(in: "a", of: choicesOnly), .thread(id: "a", title: "Work"))
     }
 
     func testYourWordsAnswerWhicheverPartOfAQuestionIsNext() {
@@ -238,16 +290,16 @@ final class ChannelRowsTests: XCTestCase {
         ])
         let asked = AgentQuestion(id: "q", threadID: "a", threadTitle: "Work", text: "Which month?", form: parts)
         let built = waitingBook(Waiting(questions: [asked], owners: ["q": steve.id]), transcripts: ["a": [exchange("e")]])
-        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: built), .thread(id: "a", title: "Work"), "the month is picked, not typed")
-        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: built, answered: ["q": 1]), .question(asked))
+        XCTAssertEqual(MessageTarget.reply(in: "a", of: built), .thread(id: "a", title: "Work"), "the month is picked, not typed")
+        XCTAssertEqual(MessageTarget.reply(in: "a", of: built, answered: ["q": 1]), .question(asked))
     }
 
     func testASubagentsQuestionIsAnsweredInTheThreadItHoldsUp() {
         var asked = question()
         asked.threadID = "subagent"
         let built = waitingBook(Waiting(questions: [asked], owners: ["q": steve.id], listed: ["q": "a"]), transcripts: ["a": [exchange("e")]])
-        XCTAssertEqual(MessageTarget.standard(for: .thread("a", in: .direct(steve)), in: built), .question(asked))
-        XCTAssertEqual(ChannelRows.rows(.thread("a", in: .direct(steve)), in: built).last, .question(asked))
+        XCTAssertEqual(MessageTarget.reply(in: "a", of: built), .question(asked))
+        XCTAssertEqual(ChannelRows.thread("a", in: built).last, .question(asked))
     }
 
     func testAThreadOnItsOwnShowsOnlyItsWordsAndWhatItsWaitingOn() {
@@ -259,68 +311,63 @@ final class ChannelRowsTests: XCTestCase {
             isReading: false, unreadable: 0, cantReachT3: false,
             waiting: Waiting(approvals: [approval], owners: ["ap": steve.id])
         )
-        let rows = ChannelRows.rows(.thread("b", in: .direct(steve)), in: built)
-        XCTAssertEqual(subjects(rows), [], "the header says which thread it is")
+        let rows = ChannelRows.thread("b", in: built)
         let threads = rows.compactMap { row -> String? in
             if case .message(let message) = row { return message.threadID }
             return nil
         }
         XCTAssertEqual(threads, ["b", "b"])
         XCTAssertEqual(rows.last, .approval(approval))
-        XCTAssertEqual(ChannelRows.rows(.thread("c", in: .direct(steve)), in: built), [.note("It's archived or deleted in T3, so I can't read it here.")])
+        XCTAssertEqual(ChannelRows.thread("c", in: built), [.note("It's archived or deleted in T3, so I can't read it here.")])
     }
 
-    func testAScheduledRunIsItsKittensOwnWork() {
+    func testAScheduledRunIsItsKittensOwnWork() throws {
         let run = Exchange(id: "run", asker: .schedule, askedAt: noon, ask: "Check the packages, as you do every morning.", reply: "Two have updates. Merge them?", repliedAt: noon.addingTimeInterval(60))
         let built = book(threads: [thread("s", title: "Morning check")], transcripts: ["s": [run]])
-        let said = ChannelRows.rows(.thread("s", in: .direct(steve)), in: built).compactMap { row -> ChannelMessage? in
+        let said = ChannelRows.thread("s", in: built).compactMap { row -> ChannelMessage? in
             if case .message(let message) = row { return message }
             return nil
         }
         XCTAssertEqual(said.map(\.text), ["Two have updates. Merge them?"], "its report, without the schedule's prompt")
         XCTAssertEqual(said.map(\.speaker), [.kitten(steve.id)])
-        XCTAssertEqual(MessageTarget.standard(for: .thread("s", in: .direct(steve)), in: built), .thread(id: "s", title: "Morning check"), "and it takes your answer")
-        XCTAssertEqual(built.between, [], "nobody else was in it")
+        XCTAssertEqual(parents(channel(steve, in: built)).map(\.threadID), ["s"], "in its kitten's own channel")
+        XCTAssertEqual(MessageTarget.reply(in: "s", of: built), .thread(id: "s", title: "Morning check"), "and it takes your answer")
+        let posted = try XCTUnwrap(built.threads["s"])
+        XCTAssertEqual(posted.home, .of(steve))
+        XCTAssertFalse(posted.messages.contains { $0.speaker == .someoneElse }, "nobody else was in it")
+        XCTAssertEqual(ChannelRows.rows(.channel(.general), in: built), [.note(CatWords.generalEmpty)])
     }
 
     func testAnEmptyThreadSaysWhy() {
         let listed = book(threads: [thread("a")])
-        XCTAssertEqual(ChannelRows.rows(.thread("a", in: .direct(steve)), in: listed), [.note("Its messages are in T3.")])
-        XCTAssertEqual(ChannelRows.rows(.thread("gone", in: .direct(steve)), in: listed), [.note("It's archived or deleted in T3, so I can't read it here.")])
+        XCTAssertEqual(ChannelRows.thread("a", in: listed), [.note("Its messages are in T3.")])
+        XCTAssertEqual(ChannelRows.thread("gone", in: listed), [.note("It's archived or deleted in T3, so I can't read it here.")])
         let unread = book(threads: [thread("a")], unreadable: 1)
-        XCTAssertEqual(ChannelRows.rows(.thread("a", in: .direct(steve)), in: unread), [.note("Couldn't read 1 thread. I'll try again.")])
+        XCTAssertEqual(ChannelRows.thread("a", in: unread), [.note("Couldn't read 1 thread. I'll try again.")])
     }
 
-    func testADMEndsWithWhatThatKittenIsWaitingOnYouFor() {
-        let approval = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
-        let built = waitingBook(Waiting(approvals: [approval], questions: [question()], owners: ["ap": steve.id, "q": steve.id]), transcripts: ["a": [exchange("e")]])
-        XCTAssertEqual(Array(dm(steve, in: built).suffix(2)), [.approval(approval), .question(question())])
-        XCTAssertFalse(dm(pepper, in: built).contains(.approval(approval)))
-        XCTAssertFalse(ChannelRows.rows(.channel(.everyone), in: built).contains(.approval(approval)), "Everyone is only what's been said")
-    }
-
-    func testNeedsYouPutsWhatsWaitingFirstThenReportsThenWhatsInProgress() {
+    func testActivityPutsWhatsWaitingFirstThenReportsThenWhatsInProgress() {
         let approval = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
         let decision = InboxEntry(id: "d", kind: .decision, text: "Merged. Say ship it.", threadID: "a", threadTitle: "Work", at: noon)
         let shipped = InboxEntry(id: "s", kind: .shipped, text: "Shipped.", threadID: "a", threadTitle: "Work", at: noon)
         let note = InboxEntry(id: "n", kind: .note, text: "FYI.", threadID: "a", threadTitle: "Work", at: noon)
-        let rows = ChannelRows.rows(.needsYou, in: waitingBook(Waiting(approvals: [approval], questions: [question()], reports: [note, shipped, decision])))
+        let rows = ChannelRows.rows(.activity, in: waitingBook(Waiting(approvals: [approval], questions: [question()], reports: [note, shipped, decision])))
         XCTAssertEqual(Array(rows.prefix(10)), [
-            .section("Needs you", clearing: nil), .approval(approval), .question(question()), .report(decision),
+            .section("Waiting on you", clearing: nil), .approval(approval), .question(question()), .report(decision),
             .section("Shipped", clearing: .shipped), .report(shipped),
             .section("Also", clearing: .note), .report(note),
             .section("In progress", clearing: nil), .heading(KittenBoard.statuses(kittens: [steve], threads: [thread("a")])[0]),
         ])
     }
 
-    func testEveryoneWithNothingSaidSaysWhereItGoes() {
-        XCTAssertEqual(ChannelRows.rows(.channel(.everyone), in: book()), [.note("Say something and it goes to whoever it's for.")])
+    func testGeneralWithNothingSaidSaysWhereItGoes() {
+        XCTAssertEqual(ChannelRows.rows(.channel(.general), in: book()), [.note("Say something and it goes to whoever it's for.")])
     }
 
     func testShadesOwnWorkComesFirstInProgress() {
         let own = AgentThread(id: "own", title: "Find a cheaper flight", projectTitle: nil, status: .running, model: "m", updatedAt: noon)
         let built = ChannelBook.build(kittens: [steve, pepper, cali], threads: [thread("a")], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(shadesWork: [own]))
-        let rows = ChannelRows.rows(.needsYou, in: built)
+        let rows = ChannelRows.rows(.activity, in: built)
         let progress = Array(rows.drop { $0 != .section("In progress", clearing: nil) }.dropFirst())
         guard case .heading(let shades) = progress.first else { return XCTFail("\(rows)") }
         XCTAssertEqual(shades.kitten, KittenBoard.shades)
@@ -335,12 +382,13 @@ extension ChannelRowsTests {
     func testTheCatsBoxGoesThroughTheRouterAndItsThreadsTakeNothingStraightIn() {
         let talk = AgentThread(id: "r", title: "Which plan?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: noon, projectPath: "/shades/router")
         let built = ChannelBook.build(kittens: [steve], threads: [talk], transcripts: ["r": [exchange("1")]], isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r"])
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.shades), in: built), .router, "the same way Everyone goes, so the app acts on what the router says")
-        XCTAssertNil(MessageTarget.standard(for: .thread("r", in: .shades), in: built), "the router answers in lines the app acts on, so nothing goes straight into one of its threads")
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.shades), in: built), .router, "the same way #general goes, so the app acts on what the router says")
+        XCTAssertNil(MessageTarget.reply(in: "r", of: built), "the router answers in lines the app acts on, so nothing goes straight into one of its threads")
         XCTAssertEqual(CatWords.target(.router, in: .shades), "To me, without looking at your screen")
         XCTAssertEqual(CatWords.placeholder(.router, in: .shades), "Message Shades")
-        XCTAssertEqual(CatWords.placeholder(.router, in: .everyone), "Message everyone")
-        XCTAssertTrue(ChannelRows.rows(.channel(.shades), in: built).contains(.subject("Which plan?", project: nil, threadID: "r")), "the router's folder isn't a project you'd know")
+        XCTAssertEqual(CatWords.placeholder(.router, in: .general), "Message #general")
+        XCTAssertEqual(parents(ChannelRows.rows(.channel(.shades), in: built)).map(\.threadID), ["r"])
+        XCTAssertNil(ChannelHeader.words(forThread: "r", in: built).subtitle?.range(of: "Shades router"), "the router's folder isn't a project you'd know")
         let empty = ChannelBook.build(kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
         XCTAssertEqual(ChannelRows.rows(.channel(.shades), in: empty), [.note(CatWords.shadesEmpty)])
     }

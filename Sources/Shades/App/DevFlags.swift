@@ -87,7 +87,7 @@ enum DevFlags {
                 }
             }
             let started = Date()
-            _ = await until { !$0.everyone.messages.isEmpty }
+            _ = await until { !$0.threads.isEmpty }
             let firstWords = milliseconds(since: started)
             let book = await until { !$0.isReading }
             let cold = milliseconds(since: started)
@@ -111,7 +111,8 @@ enum DevFlags {
     }
 
     static func checkLine(_ book: ChannelBook, threadsRead: Int, milliseconds: Int) -> String {
-        let all = (book.directs + book.between).flatMap(\.messages)
+        let threads = Array(book.threads.values)
+        let all = threads.flatMap(\.messages)
         let asks = all.filter { $0.kind == .ask }
         let askIDs = Set(asks.map(\.exchangeID))
         let unasked = all.filter { $0.kind == .reply && !askIDs.contains($0.exchangeID) }
@@ -120,15 +121,15 @@ enum DevFlags {
             "reached T3: \(!book.cantReachT3)",
             "threads read: \(threadsRead)",
             "unreadable: \(book.unreadable)",
-            "DMs with messages: \(book.directs.filter { !$0.messages.isEmpty }.count)",
-            "between channels: \(book.between.count)",
+            "channels with threads: \(book.channels.filter { !$0.posts.isEmpty }.count)",
+            "threads: \(threads.count)",
+            "replies: \(threads.reduce(0) { $0 + $1.replies.count })",
             "messages: \(all.count)",
             "asked by you: \(asked { $0 == .you })",
             "asked by a kitten: \(asked { if case .kitten = $0 { return true } else { return false } })",
             "asked by someone else: \(asked { $0 == .someoneElse })",
             "replies with no ask: \(unasked.count)",
             "issues: \(book.issueCount)",
-            "done: \(book.issues.reduce(0) { $0 + $1.done.count })",
             "milliseconds: \(milliseconds)",
         ].joined(separator: "\n")
     }

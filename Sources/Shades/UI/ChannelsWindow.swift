@@ -43,26 +43,43 @@ final class ChannelsPanel: NSPanel {
     }
 }
 
-/// The sidebar and the pane. They're apart from the window so they can be drawn with no window on the screen.
+/// The sidebar, the pane for the place you're looking at, and beside it a thread's pane when one is open, as Slack
+/// lays them out. They're apart from the window so they can be drawn with no window on the screen.
 final class ChannelsView: QuietView {
     /// What a theme file can be: T3 Code's and VS Code's are JSON, and iTerm2's a property list or JSON.
     static let themeFiles: Set<String> = ["json", "itermcolors", "plist"]
+    static let threadWidths: ClosedRange<CGFloat> = 320...460
 
     let sidebar = ChannelSidebar()
-    let pane = ChannelPane()
-    private(set) var selection: ChannelSelection = .needsYou
-    private var book: ChannelBook?
+    let pane = ChannelPane(role: .place)
+    let threadPane = ChannelPane(role: .thread)
+    private(set) var selection: ChannelSelection = .activity
+    private(set) var book: ChannelBook?
     /// You've seen what's there, which is what takes its unread dot away.
     var onSeen: ((ChannelSelection) -> Void)?
     /// A theme file let go of anywhere on the window.
     var onDropTheme: ((URL) -> Void)?
+    /// Opens a thread in T3.
+    var onOpenThread: ((String) -> Void)? { didSet { panes.forEach { $0.onOpenThread = onOpenThread } } }
+    var onCopy: ((String) -> Void)? { didSet { panes.forEach { $0.onCopy = onCopy } } }
+    var onAction: ((MessagesAction) -> Void)? { didSet { panes.forEach { $0.onAction = onAction } } }
+
+    private var panes: [ChannelPane] { [pane, threadPane] }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         addSubview(sidebar)
         addSubview(pane)
-        sidebar.onSelect = { [weak self] in self?.select($0) }
-        pane.onSelect = { [weak self] in self?.select($0) }
+        addSubview(threadPane)
+        threadPane.isHidden = true
+        threadPane.parts = pane.parts
+        sidebar.onSelect = { [weak self] in self?.select(ChannelSelection($0)) }
+        for pane in panes {
+            pane.onSelect = { [weak self] in self?.select($0) }
+            pane.onOpen = { [weak self] thread, place, typing, report in self?.open(thread: thread, from: place, typing: typing, replyingTo: report) }
+            pane.onClose = { [weak self] in self?.closeThread() }
+            pane.composer.onEscape = { [weak self] in self?.closeThread() }
+        }
         registerForDraggedTypes([.fileURL])
     }
 
@@ -74,36 +91,68 @@ final class ChannelsView: QuietView {
         arrange()
     }
 
+    /// How wide a thread's pane is beside the rest of the window.
+    static func threadWidth(in width: CGFloat) -> CGFloat {
+        min(max((width - ChannelSidebar.width) * 0.45, threadWidths.lowerBound), threadWidths.upperBound)
+    }
+
     private func arrange() {
         let width = ChannelSidebar.width
         sidebar.frame = NSRect(x: 0, y: 0, width: width, height: bounds.height)
-        pane.frame = NSRect(x: width, y: 0, width: max(bounds.width - width, 0), height: bounds.height)
+        let thread = selection.thread == nil ? 0 : Self.threadWidth(in: bounds.width)
+        threadPane.isHidden = thread == 0
+        pane.frame = NSRect(x: width, y: 0, width: max(bounds.width - width - thread, 0), height: bounds.height)
+        if thread > 0 { threadPane.frame = NSRect(x: bounds.width - thread, y: 0, width: thread, height: bounds.height) }
     }
 
-    /// The selection survives closing the window, since it holds only IDs.
+    /// Everything shows again from what's in memory, in the same turn.
     func show(_ book: ChannelBook) {
         let isFresh = self.book == nil
         self.book = book
         // A new topic carries on in its own thread once T3 has one.
-        if case .thread(let id, let channel) = selection, let started = book.started[id] { selection = .thread(started, in: channel) }
+        if let thread = selection.thread, let started = book.started[thread] { selection.thread = started }
         arrange()
         sidebar.show(book, selection: selection.place)
         pane.show(selection, in: book, isNewSelection: isFresh)
+        if selection.thread != nil { threadPane.show(selection, in: book, isNewSelection: isFresh) }
         onSeen?(selection)
     }
 
     func select(_ selection: ChannelSelection) {
+        let old = self.selection
         self.selection = selection
+        if selection.thread != old.thread { threadPane.forgetReport() }
         guard let book else { return }
+        arrange()
         sidebar.show(book, selection: selection.place)
-        pane.show(selection, in: book, isNewSelection: true)
+        pane.show(selection, in: book, isNewSelection: selection.place != old.place)
+        if selection.thread != nil { threadPane.show(selection, in: book, isNewSelection: selection.thread != old.thread || old.thread == nil) }
         onSeen?(selection)
+    }
+
+    /// Opens a thread in the pane beside `place`, or beside where you are. `typing` means you're about to type, so its
+    /// box takes the keyboard, and `report` is the inbox row whose Reply or Ask opened it.
+    func open(thread id: String, from place: ChannelPlace? = nil, typing: Bool = false, replyingTo report: InboxEntry? = nil) {
+        select(.thread(id, in: place ?? selection.place))
+        threadPane.replying(to: report)
+        if typing { threadPane.focusComposer() }
+    }
+
+    func closeThread() {
+        guard selection.thread != nil else { return }
+        if window?.firstResponder === threadPane.composer.textView { window?.makeFirstResponder(nil) }
+        select(selection.closed)
+    }
+
+    /// The pane whose box has the keyboard.
+    var typingPane: ChannelPane? {
+        panes.first { !$0.isHidden && window?.firstResponder === $0.composer.textView && $0.composer.target != nil }
     }
 
     /// Draws everything again in the colours there are now, since a row keeps the colours it was made with.
     func restyle() {
         sidebar.restyle()
-        pane.restyle()
+        panes.forEach { $0.restyle() }
         if let book { sidebar.show(book, selection: selection.place) }
         needsDisplay = true
     }
@@ -127,15 +176,19 @@ final class ChannelsView: QuietView {
     override func draw(_ dirtyRect: NSRect) {
         MessagesInk.paper.setFill()
         dirtyRect.fill()
+        guard selection.thread != nil else { return }
+        MessagesInk.line.setFill()
+        NSRect(x: threadPane.frame.minX, y: 0, width: 1, height: bounds.height).fill()
     }
 }
 
-/// The Messages window: what needs you, a group chat with every kitten, your DMs with each, and what
-/// they say to each other. Closing it keeps everything as it was, so it opens again just as you left it.
+/// The Messages window: Activity, your threads, #general, a channel for each kitten and your DM with the cat, with a
+/// thread's pane beside them. Closing it keeps everything as it was, so it opens again just as you left it.
 @MainActor
 final class ChannelsWindow: NSObject, NSWindowDelegate {
-    nonisolated static let size = NSSize(width: 820, height: 560)
-    nonisolated static let minimumSize = NSSize(width: 640, height: 420)
+    nonisolated static let size = NSSize(width: 1040, height: 620)
+    /// Room for the sidebar, a channel and a thread's pane beside it.
+    nonisolated static let minimumSize = NSSize(width: 900, height: 440)
     private static let frameName = "Channels"
     private static let tickSeconds: TimeInterval = 0.2
     private static let ticksPerTimeRefresh = 300
@@ -160,6 +213,12 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         if !isPlaced {
             isPlaced = true
             if !panel.setFrameUsingName(Self.frameName) { panel.setFrame(Self.centered(in: visible), display: false) }
+            // A window left narrower than a thread's pane needs grows to fit it.
+            if panel.frame.width < Self.minimumSize.width || panel.frame.height < Self.minimumSize.height {
+                var frame = panel.frame
+                frame.size = NSSize(width: max(frame.width, Self.minimumSize.width), height: max(frame.height, Self.minimumSize.height))
+                panel.setFrame(frame, display: false)
+            }
             panel.setFrameAutosaveName(Self.frameName)
         }
         panel.orderFrontRegardless()
@@ -218,6 +277,9 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     private func advance() {
         tick += 1
         view.sidebar.advance(tick: tick)
-        if tick % Self.ticksPerTimeRefresh == 0 { view.pane.refreshTimes() }
+        if tick % Self.ticksPerTimeRefresh == 0 {
+            view.pane.refreshTimes()
+            view.threadPane.refreshTimes()
+        }
     }
 }

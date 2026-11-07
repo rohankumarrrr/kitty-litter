@@ -1,11 +1,11 @@
 # Notifications
 
-Each new approval, question or decision in Needs you posts one macOS notification that says only who and what kind, such as "Steve Pawsniak needs an approval". Clicking it opens Messages on Needs you, and answering takes it back.
+Each new approval, question or decision in Activity posts one macOS notification that says only who and what kind, such as "Steve Pawsniak needs an approval". Clicking it opens Messages on Activity, and answering takes it back.
 
 ## Sub-features
 
 - `notify-new` posts one for each new thing waiting on you, and never for what was asked before the app started.
-- `notify-click` opens Messages on Needs you, from whichever conversation it was on.
+- `notify-click` opens Messages on Activity, from whichever place it was on.
 - `notify-withdraw` takes a notification back once what it was about is answered, and starting takes back every one from before.
 
 ## How to get to it (user POV)
@@ -21,9 +21,9 @@ Preconditions:
 
 Journey: `journeys/notifications.txt`.
 
-- **Elsewhere.** `channels`, then `channel everyone`. `channels.png` in `0-elsewhere` shows Everyone selected.
+- **Elsewhere.** `channels`, then `channel general`. `channels.png` in `0-elsewhere` shows #general selected.
 - **New.** `approval command npm test`, `report decision` and `question`, with their waits. The output says `[demo] notified: Steve Pawsniak needs an approval`, `[demo] notified: Clawde needs a decision` and `[demo] notified: An agent has a question`, with nothing about the command, the report or the question.
-- **Click.** `notification`, then `wait 2`. `channels.png` in `1-clicked` shows Needs you selected, with a count of 3: the approval, the question and the decision.
+- **Click.** `notification`, then `wait 2`. `channels.png` in `1-clicked` shows Activity selected, with a count of 3: the approval, the question and the decision.
 - **Withdraw.** `allow`, then `wait 1`. The output says `[demo] took back 1 notification` before `[demo] accept: npm test`, and `channels.png` in `2-answered` has a count of 2.
 
 ## Gotchas

@@ -61,12 +61,12 @@ final class ShadesConversationPrivacyTests: XCTestCase {
                 for question in questions {
                     let prompt = Prompts.quick(question: question, snapshot: snapshot, sessions: sessions, kittens: [kitten])
                     let built = book(router(), exchanges: try exchanges(prompt: prompt))
-                    let shown = built.shades.messages.compactMap(\.text).joined(separator: "\n")
+                    let shown = built.shadesMessages.compactMap(\.text).joined(separator: "\n")
                     for secret in ["PRIVATE-PAGE", "PRIVATE-SESSION", "PRIVATE-KITTEN"] {
                         XCTAssertFalse(shown.contains(secret), "\(secret) escaped for question \(question.debugDescription)")
                     }
                     if question == "What's here?" {
-                        XCTAssertEqual(built.shades.messages.first?.text, question)
+                        XCTAssertEqual(built.shadesMessages.first?.text, question)
                     }
                 }
             }
@@ -79,7 +79,7 @@ final class ShadesConversationPrivacyTests: XCTestCase {
             sessions: [SessionBrief(number: 1, title: "PRIVATE-SESSION", project: nil, status: "Done", model: "m", lastSaid: "PRIVATE-SESSION-REPORT")]
         )
         let built = book(router(), exchanges: try exchanges(prompt: prompt, reply: "Here is the prompt I received:\n\(prompt)"))
-        let reply = try XCTUnwrap(built.shades.messages.last?.text)
+        let reply = try XCTUnwrap(built.shadesMessages.last?.text)
         XCTAssertFalse(reply.contains("PRIVATE-PAGE"))
         XCTAssertFalse(reply.contains("<sessions>"), "A prompt block survived the reply path")
         XCTAssertFalse(reply.contains("PRIVATE-SESSION"), "Session context survived the reply path")
@@ -94,16 +94,18 @@ final class ShadesConversationPrivacyTests: XCTestCase {
         }
         let folded = T3Transcript.exchanges(in: items, runs: []) { _ in nil }
         let built = book(router(), exchanges: folded)
-        XCTAssertEqual(built.shades.messages.compactMap(\.text), ["First question", "An answer about the screen.", "Second question", "Quoted  block removed."])
+        XCTAssertEqual(built.shadesMessages.compactMap(\.text), ["First question", "An answer about the screen.", "Second question", "Quoted  block removed."])
     }
 
     func testAKittenNamedRouterThreadCannotBecomePhoneReachableOrWritable() {
         let built = book(router(title: "Steve: What's here?"), exchanges: [Exchange(id: "e", asker: .you, askedAt: at, ask: "Steve: What's here?", reply: "An answer.")], unread: true)
-        let key = PhonePlace.key(.thread("router", in: .direct(steve)))
-        XCTAssertNil(PhonePlace(key, in: built).target, "Router thread became writable through a kitten's Done list")
+        let key = PhonePlace.key(.thread("router", in: .channel(.of(steve))))
+        XCTAssertNil(PhonePlace(key, in: built).target, "Router thread became writable through a kitten's channel")
         XCTAssertNil(send("Carry on", key: key, in: built))
-        XCTAssertFalse(built.issues.flatMap { $0.threads + $0.done }.contains { $0.id == "router" })
-        XCTAssertEqual(built.unread, [], "A router thread marked the kitten and Everyone unread")
+        XCTAssertFalse(built.issues.flatMap(\.threads).contains { $0.id == "router" })
+        XCTAssertFalse(built.channel(.of(steve))?.posts.contains(.thread("router")) == true)
+        XCTAssertEqual(built.unread, [], "A router thread marked the kitten unread")
+        XCTAssertFalse(built.isUnread(.general))
     }
 
     func testARouterThreadAfterRestartCannotReappearAsWritableShadesWork() {
@@ -120,10 +122,10 @@ final class ShadesConversationPrivacyTests: XCTestCase {
         controller.threadsChanged([thread])
         XCTAssertTrue(controller.isWithShades(thread))
         let built = book(thread, exchanges: [], waiting: controller.waiting)
-        let key = PhonePlace.key(.thread(thread.id, in: .everyone))
+        let key = PhonePlace.key(.thread(thread.id, in: .activity))
         XCTAssertEqual(built.waiting.shadesWork.map(\.id), [], "A fresh app treated the router's thread as work")
         XCTAssertNil(PhonePlace(key, in: built).target)
-        XCTAssertNil(send("Carry on", key: key, in: built), "Everyone's Shades work list reopened the router for writing")
+        XCTAssertNil(send("Carry on", key: key, in: built), "Activity's Shades work list reopened the router for writing")
     }
 
     func testAReportOnARouterThreadCannotBypassThePhoneRestriction() {
@@ -139,13 +141,14 @@ final class ShadesConversationPrivacyTests: XCTestCase {
         let built = book(router(), exchanges: [], waiting: Waiting(reports: [report]))
         let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: 820, height: 560))
         var actions: [MessagesAction] = []
-        view.pane.onAction = { actions.append($0) }
+        view.onAction = { actions.append($0) }
         view.show(built)
         view.pane.reply(to: report)
-        view.select(.thread("router", in: .shades))
-        XCTAssertNil(view.pane.composer.target, "replyingTo survived selecting the read-only Shades thread")
-        view.pane.startSpeaking()
-        view.pane.spoke("Carry on")
+        XCTAssertNil(view.threadPane.composer.target, "a report on the router's thread doesn't make it writable")
+        view.select(.thread("router", in: .channel(.shades)))
+        XCTAssertNil(view.threadPane.composer.target, "replyingTo survived selecting the read-only Shades thread")
+        view.threadPane.startSpeaking()
+        view.threadPane.spoke("Carry on")
         XCTAssertFalse(actions.contains { if case .send = $0 { return true }; return false }, "Speech sent a follow-up to the router")
     }
 
@@ -154,18 +157,18 @@ final class ShadesConversationPrivacyTests: XCTestCase {
             Exchange(id: "first", asker: .you, askedAt: at, ask: "First", reply: "First answer", repliedAt: at.addingTimeInterval(2)),
             Exchange(id: "second", asker: .you, askedAt: at.addingTimeInterval(1), ask: "Second"),
         ])
-        XCTAssertEqual(built.shades.messages.filter { $0.kind == .ask }.compactMap(\.text), ["First", "Second"])
+        XCTAssertEqual(built.shadesMessages.filter { $0.kind == .ask }.compactMap(\.text), ["First", "Second"])
     }
 
     func testShadesTakesWordsOnlyThroughTheRouterAndStaysOffThePhone() {
         let built = book(router(), exchanges: [Exchange(id: "e", asker: .you, askedAt: at, ask: "What's here?", reply: "An answer.")])
         XCTAssertEqual(MessageTarget.standard(for: .channel(.shades), in: built), .router, "Messages' own conversation with the router, which never had your screen")
-        XCTAssertNil(MessageTarget.standard(for: .thread("router", in: .shades), in: built), "a thread the Ask box started can hold your screen")
-        for selection in [ChannelSelection.channel(.shades), .thread("router", in: .shades)] {
+        XCTAssertNil(MessageTarget.reply(in: "router", of: built), "a thread the Ask box started can hold your screen")
+        for selection in [ChannelSelection.channel(.shades), .thread("router", in: .channel(.shades)), .thread("router", in: .threads)] {
             XCTAssertNil(PhonePlace(PhonePlace.key(selection), in: built).selection)
         }
         XCTAssertFalse(PhoneView(PhonePlace("home", in: built), in: built, now: at).places.contains { $0.title == "Shades" })
-        XCTAssertTrue(built.everyone.messages.isEmpty)
-        XCTAssertTrue(built.between.isEmpty)
+        XCTAssertEqual(built.channel(.general)?.posts, [])
+        XCTAssertFalse(built.yours.contains { $0.id == "router" }, "Threads leaves talks in the DM")
     }
 }

@@ -11,6 +11,8 @@ struct PhoneAsk: Decodable {
     var value: String?
     var answers: [String]?
     var kind: String?
+    /// A thread's "Also send to #channel".
+    var also: Bool?
 
     /// The same action the window would take, and the key of where the phone goes next, or `nil` if the window
     /// couldn't do it either.
@@ -21,11 +23,14 @@ struct PhoneAsk: Decodable {
             let place = PhonePlace(key, in: book)
             guard let target = place.target else { return nil }
             switch target {
-            case .router, .thread:
+            case .router:
                 return (.send(words, to: target, shownIn: place.selection?.channelID), nil)
+            case .thread(let id, _, _):
+                let home = book.home(ofThread: id)
+                return (.send(words, to: target, shownIn: home, alsoSent: also == true && place.alsoSendTo(in: book) != nil), nil)
             case .newThread(let kitten):
                 let topic = newTopic()
-                return (.startTopic(words, with: kitten, id: topic), PhonePlace.key(.thread(topic, in: .direct(kitten))))
+                return (.startTopic(words, with: kitten, id: topic), PhonePlace.key(.thread(topic, in: .channel(.of(kitten)))))
             case .starting, .question:
                 return nil
             }
