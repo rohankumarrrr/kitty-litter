@@ -124,6 +124,13 @@ final class ChannelsView: QuietView {
         return true
     }
 
+    func forget() {
+        // A new topic that's still starting is only known while the window's open.
+        if case .thread(let id, let channel) = selection, book?.threads[id] == nil { selection = .channel(channel) }
+        book = nil
+        pane.forget()
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         MessagesInk.paper.setFill()
         dirtyRect.fill()
@@ -131,7 +138,7 @@ final class ChannelsView: QuietView {
 }
 
 /// The Messages window: what needs you, a group chat with every kitten, your DMs with each, and what
-/// they say to each other. Closing it keeps everything as it was, so it opens again just as you left it.
+/// they say to each other. Closing it forgets every word.
 @MainActor
 final class ChannelsWindow: NSObject, NSWindowDelegate {
     nonisolated static let size = NSSize(width: 820, height: 560)
@@ -193,6 +200,7 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         timer?.invalidate()
         timer = nil
+        view.forget()
         onClose?()
     }
 

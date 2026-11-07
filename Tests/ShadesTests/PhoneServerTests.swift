@@ -206,7 +206,7 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertTrue(said.contains("How's December looking?"), "each place is its own stream, and moving between them mustn't forget what you sent: \(said)")
     }
 
-    func testAPhoneKeepsMessagesOpenUntilItStopsLookingToo() async throws {
+    func testAPhoneKeepsMessagesOpenAndClosingForgetsIt() async throws {
         let key = try await pair()
         controller.channelsPressed()
         let (_, stream) = try await watch("everyone", key: key)
@@ -219,7 +219,7 @@ final class PhoneServerTests: XCTestCase {
 
         stream.cancel()
         await until { !controller.channels.isOpen }
-        XCTAssertFalse(controller.channels.isOpen, "once the phone stops looking too, nothing reads until someone looks again")
+        XCTAssertFalse(controller.channels.isOpen, "once the phone stops looking too, every word is forgotten")
     }
 
     func testTurningItOffForgetsEveryPhone() async throws {

@@ -70,43 +70,23 @@ enum DevFlags {
         }
     }
 
-    /// One real pass over what's been said, then Messages closed and opened again a second later, the way you'd hide it
-    /// and bring it back. It never prints a name, a title or a word of text.
+    /// One real pass over what's been said. It never prints a name, a title or a word of text.
     static func checkChannels() -> Never {
         let backend = T3Backend(credentials: MemoryCredentialStore(), label: "Shades channels check", sessionTTL: "1h", renewBefore: 0)
         let feed = ChannelFeed(backend: backend, kittens: { Kittens.load() })
-        let router = Settings.directory.appendingPathComponent("router", isDirectory: true).standardizedFileURL.path
-        feed.isWithShades = { $0.projectPath.map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.path } == router }
-        Task { @MainActor in
-            func milliseconds(since start: Date) -> Int { Int(Date().timeIntervalSince(start) * 1000) }
-            @MainActor func until(_ done: (ChannelBook) -> Bool) async -> ChannelBook {
-                while true {
-                    let book = feed.open(threads: [])
-                    if done(book) || book.cantReachT3 { return book }
-                    try? await Task.sleep(for: .milliseconds(5))
-                }
-            }
-            let started = Date()
-            _ = await until { !$0.everyone.messages.isEmpty }
-            let firstWords = milliseconds(since: started)
-            let book = await until { !$0.isReading }
-            let cold = milliseconds(since: started)
+        let started = Date()
+        feed.onChange = { book in
+            guard !book.isReading || book.cantReachT3 else { return }
             let held = feed.threadsHeld
             feed.close()
-            try? await Task.sleep(for: .seconds(1))
-            let passes = feed.passes
-            let reopened = Date()
-            _ = await until { !$0.isReading }
-            let shown = milliseconds(since: reopened)
-            _ = await until { _ in feed.passes > passes }
-            let caughtUp = milliseconds(since: reopened)
-            feed.close()
-            print(checkLine(book, threadsRead: held, milliseconds: cold))
-            print("first words: \(firstWords) ms\nreopened and shown: \(shown) ms\nreopened and caught up: \(caughtUp) ms")
-            await backend.signOut()
-            await backend.disconnect()
-            exit(book.cantReachT3 ? 1 : 0)
+            print(checkLine(book, threadsRead: held, milliseconds: Int(Date().timeIntervalSince(started) * 1000)))
+            Task {
+                await backend.signOut()
+                await backend.disconnect()
+                exit(book.cantReachT3 ? 1 : 0)
+            }
         }
+        _ = feed.open(threads: [])
         dispatchMain()
     }
 
