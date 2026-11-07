@@ -46,7 +46,7 @@ extension AppController {
     }
 
     func channelsClosed() {
-        // A phone that's looking keeps what's been said. Once it stops too, it's forgotten.
+        // A phone that's looking keeps it reading. Once it stops too, what's been read waits for the next look.
         if phone?.isHolding != true { channels.close() }
         messagesClosings += 1
         guard nudgeOnClose else { return }
@@ -91,6 +91,7 @@ extension AppController {
         case .inbox(let action):
             inboxAction(action)
         case .seen(let selection):
+            channels.lookingAt = selection
             if inbox.markRead(channels.threads(in: selection)) {
                 keepInbox()
                 channels.refresh()
