@@ -15,5 +15,13 @@ channel needs
 inbox done
 wait 1
 draw .verify/shades/inbox/4-done
+report scheduled
+wait 7
+inbox reply
+wait 1
+draw .verify/shades/inbox/5-scheduled
+send Go ahead
+wait 2
+draw .verify/shades/inbox/6-scheduled-sent
 front
 windows

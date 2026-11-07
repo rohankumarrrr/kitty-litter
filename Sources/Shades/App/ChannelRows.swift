@@ -197,12 +197,22 @@ enum ChannelRows {
             rows.append(.message(message))
         }
         if rows.isEmpty {
-            rows = [.note(book.cantReachT3 ? CatWords.cantReachT3Yet : book.isReading ? CatWords.readingMessages : CatWords.quietThread)]
+            rows = [.note(emptyThreadNote(id, in: book))]
         } else {
             rows += statusNotes(of: book)
         }
         let approvals = book.waiting.approvals.filter { book.thread(holding: $0.id, else: $0.threadID) == id }.map(ChannelRow.approval)
         return rows + approvals + book.waiting.questions.filter { book.thread(holding: $0.id, else: $0.threadID) == id }.map(ChannelRow.question)
+    }
+
+    /// Why there's nothing to show, where that's known.
+    private static func emptyThreadNote(_ id: String, in book: ChannelBook) -> String {
+        if book.cantReachT3 { return CatWords.cantReachT3Yet }
+        if book.isReading { return CatWords.readingMessages }
+        if book.unreadable > 0 { return CatWords.couldntRead(book.unreadable) }
+        // Only listed threads are read, and T3 stops listing one once it's archived.
+        if book.threads[id] == nil { return CatWords.threadNotListed }
+        return CatWords.quietThread
     }
 
     private static func emptyNote(_ id: ChannelID, in book: ChannelBook) -> ChannelRow {

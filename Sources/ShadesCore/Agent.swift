@@ -258,6 +258,8 @@ public struct Exchange: Sendable, Equatable, Identifiable {
         case you
         /// The thread a person knows that agent by: its own, or the one that started a subagent. `nil` if T3 can't say.
         case agent(threadID: String?)
+        /// A schedule in T3, whoever set it up. Its run is the work of the thread's own agent.
+        case schedule
     }
 
     public var id: String

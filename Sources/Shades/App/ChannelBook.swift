@@ -175,7 +175,7 @@ struct ChannelBook: Equatable {
             // Within a thread, a later ask never sits above an earlier one.
             var latest = Date.distantPast
             for (index, exchange) in exchanges.enumerated() {
-                let speaker = speaker(of: exchange.asker, threads: threadsByID, owner: ownerOf)
+                let speaker = speaker(of: exchange.asker, in: owner, threads: threadsByID, owner: ownerOf)
                 // Waiting on you isn't working, so what it last said reads as said, and sits at the bottom where you'll see it.
                 let isStillGoing = thread.status.isActive && !KittenBoard.needsYou(thread) && index == exchanges.count - 1
                 let messages = messages(of: exchange, in: thread, owner: owner, speaker: speaker, isStillGoing: isStillGoing)
@@ -254,10 +254,13 @@ struct ChannelBook: Equatable {
         )
     }
 
-    private static func speaker(of asker: Exchange.Asker, threads: [String: AgentThread], owner: (AgentThread) -> Kitten?) -> Speaker {
+    private static func speaker(of asker: Exchange.Asker, in kitten: Kitten, threads: [String: AgentThread], owner: (AgentThread) -> Kitten?) -> Speaker {
         switch asker {
         case .you:
             return .you
+        // A kitten's schedule is its own routine, so what it reports goes in its DM.
+        case .schedule:
+            return .kitten(kitten.id)
         case .agent(let threadID):
             return threadID.flatMap { threads[$0] }.flatMap(owner).map { .kitten($0.id) } ?? .someoneElse
         }

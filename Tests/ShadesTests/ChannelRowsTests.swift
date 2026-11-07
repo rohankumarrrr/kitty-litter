@@ -267,7 +267,28 @@ final class ChannelRowsTests: XCTestCase {
         }
         XCTAssertEqual(threads, ["b", "b"])
         XCTAssertEqual(rows.last, .approval(approval))
-        XCTAssertEqual(ChannelRows.rows(.thread("c", in: .direct(steve)), in: built), [.note("Its messages are in T3.")])
+        XCTAssertEqual(ChannelRows.rows(.thread("c", in: .direct(steve)), in: built), [.note("It's archived or deleted in T3, so I can't read it here.")])
+    }
+
+    func testAScheduledRunIsItsKittensOwnWork() {
+        let run = Exchange(id: "run", asker: .schedule, askedAt: noon, ask: "Check the packages, as you do every morning.", reply: "Two have updates. Merge them?", repliedAt: noon.addingTimeInterval(60))
+        let built = book(threads: [thread("s", title: "Morning check")], transcripts: ["s": [run]])
+        let said = ChannelRows.rows(.thread("s", in: .direct(steve)), in: built).compactMap { row -> ChannelMessage? in
+            if case .message(let message) = row { return message }
+            return nil
+        }
+        XCTAssertEqual(said.map(\.text), ["Two have updates. Merge them?"], "its report, without the schedule's prompt")
+        XCTAssertEqual(said.map(\.speaker), [.kitten(steve.id)])
+        XCTAssertEqual(MessageTarget.standard(for: .thread("s", in: .direct(steve)), in: built), .thread(id: "s", title: "Morning check"), "and it takes your answer")
+        XCTAssertEqual(built.between, [], "nobody else was in it")
+    }
+
+    func testAnEmptyThreadSaysWhy() {
+        let listed = book(threads: [thread("a")])
+        XCTAssertEqual(ChannelRows.rows(.thread("a", in: .direct(steve)), in: listed), [.note("Its messages are in T3.")])
+        XCTAssertEqual(ChannelRows.rows(.thread("gone", in: .direct(steve)), in: listed), [.note("It's archived or deleted in T3, so I can't read it here.")])
+        let unread = book(threads: [thread("a")], unreadable: 1)
+        XCTAssertEqual(ChannelRows.rows(.thread("a", in: .direct(steve)), in: unread), [.note("Couldn't read 1 thread. I'll try again.")])
     }
 
     func testADMEndsWithWhatThatKittenIsWaitingOnYouFor() {

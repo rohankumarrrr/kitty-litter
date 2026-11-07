@@ -182,9 +182,15 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
             "shipped": ("demo-icon", "Clawde: New icon", "\(Prompts.shippedMarker) The new icon is live and healthy."),
             "note": ("demo-login", "Clawde: Fix login", "\(Prompts.noteMarker) The risk is low, since nothing else uses that page."),
             "long": ("demo-login", "Clawde: Fix login", "\(Prompts.decisionMarker) \(String(repeating: "Should the sign-in page keep its old layout for now? ", count: 12))"),
+            "scheduled": ("demo-morning", "Clawde: Morning check", "\(Prompts.decisionMarker) Merge the package updates? The tests pass with both."),
         ]
         guard let (threadID, title, reply) = replies[kind] else { return }
         sortedReplies[title] = reply
+        // A schedule starts a thread of its own each time it runs, so it isn't listed until then.
+        update { threads in
+            guard !threads.contains(where: { $0.id == threadID }) else { return }
+            threads.append(AgentThread(id: threadID, title: title, projectTitle: nil, status: .running, model: "claude-opus-5-5", updatedAt: Date(), runtimeMode: .auto))
+        }
         finish(threadID: threadID)
     }
 

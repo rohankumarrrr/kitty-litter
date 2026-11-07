@@ -221,6 +221,16 @@ final class T3TranscriptTests: XCTestCase {
         XCTAssertEqual(exchanges.map(\.asker), [.you, .you, .agent(threadID: "steve-thread"), .agent(threadID: nil), .agent(threadID: nil), .agent(threadID: nil)])
     }
 
+    func testAScheduledRunIsAskedByItsSchedule() throws {
+        let exchanges = fold([
+            try user("Check the packages, as you do every morning.", id: "1", at: 0, extra: ["createdBy": "agent", "creationSource": "mcp", "scheduledTaskId": "task-1"]),
+            try spoken("Two packages have updates. Merge them?", id: "a1", at: 1),
+            try user("A schedule you made yourself", id: "2", at: 2, extra: ["scheduledTaskId": "task-2"]),
+        ])
+        XCTAssertEqual(exchanges.map(\.asker), [.schedule, .schedule], "neither you nor another kitten asked")
+        XCTAssertEqual(exchanges[0].reply, "Two packages have updates. Merge them?")
+    }
+
     func testTheCapHolds() throws {
         let long = String(repeating: "word ", count: 3_000)
         let exchanges = fold([try user(long, at: 0), try spoken(long, at: 1)])

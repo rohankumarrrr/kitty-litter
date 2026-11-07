@@ -95,6 +95,16 @@ enum DemoChannels {
     }
 
     static let transcripts: [String: [Exchange]] = [
+        "demo-morning": [
+            exchange(
+                "morning-1",
+                asker: .schedule,
+                minutes: 1,
+                ask: "Check the app's packages for updates, as you do every morning.",
+                reply: "Two packages have updates, and the tests pass with both. They're on a branch. Should I merge it?",
+                repliedMinutes: 0
+            ),
+        ],
         "demo-tidy": [
             exchange(
                 "tidy-1",
