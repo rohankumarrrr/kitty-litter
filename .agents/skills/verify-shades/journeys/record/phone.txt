@@ -10,11 +10,11 @@ record docs/images/phone.gif phone
 wait 1.5
 approval command npm run build && npm test
 wait 2
-phone go needs
+phone go activity
 wait 3
 phone press Allow
 wait 2.5
-phone go everyone
+phone go general
 wait 3
 phone send Hello from my phone
 wait 4

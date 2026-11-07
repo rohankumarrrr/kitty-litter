@@ -24,9 +24,9 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 
 - [Ask](./ask.md) covers asking the cat, its answer, pointing at things, passing to a kitten and handing off.
 - [Drop](./drop.md) covers dropping a PDF, picture or link onto the cat, and where it may go.
-- [Messages](./messages.md) covers Needs you, Done, Everyone, Shades, a kitten's DM, a thread on its own, selecting and copying, and themes.
+- [Messages](./messages.md) covers Activity, Threads, #general, a kitten's channel, a thread in the pane beside it, Also send to #channel, the DM with the cat, selecting and copying, and themes.
 - [Inbox](./inbox.md) covers a kitten's report arriving, its row in Messages, replying to it and clearing it.
 - [Approvals](./approvals.md) covers an agent asking to run something, and allowing it.
 - [Phone](./phone.md) covers Messages on your phone: turning it on, pairing, reading and answering from the page, and its theme.
-- [Notifications](./notifications.md) covers the macOS notification for something new in Needs you, clicking it and taking it back.
+- [Notifications](./notifications.md) covers the macOS notification for something new in Activity, clicking it and taking it back.
 - [Kittens](./kittens.md) covers the view of every kitten and how each is doing.

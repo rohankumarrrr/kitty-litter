@@ -2,7 +2,8 @@ import Foundation
 import ShadesCore
 
 /// Where a phone is in Messages, and where words typed there go. The phone only ever names a place by its key, so
-/// what it can reach is worked out here from the book, the same way the window works it out.
+/// what it can reach is worked out here from the book, the same way the window works it out. A phone has no room for
+/// a thread's pane, so a thread is a page of its own, as in Slack's app.
 struct PhonePlace: Equatable {
     /// `nil` is the list of places.
     var selection: ChannelSelection?
@@ -11,52 +12,69 @@ struct PhonePlace: Equatable {
 
     static let home = "home"
 
-    /// An unknown key is the list of places, and a key for an inbox row that's gone is Needs you.
+    /// An unknown key is the list of places, and a key for an inbox row that's gone is Activity.
     init(_ key: String, in book: ChannelBook) {
         if key.hasPrefix("r:") {
             guard let id = Self.unescape(key.dropFirst(2)), let entry = book.waiting.reports.first(where: { $0.id == id }), !book.talks.contains(entry.threadID) else {
-                self.init(selection: .needsYou, in: book)
+                self.init(selection: .activity, in: book)
                 return
             }
-            let channel = book.kitten(of: entry.id).map(ChannelID.direct) ?? .everyone
-            let title = book.title(ofThread: entry.threadID, in: channel)
+            let title = book.title(ofThread: entry.threadID)
             // As with Reply on a report in the window: it goes to the report's thread wherever that is, and stops it asking.
             let target = MessageTarget.thread(id: entry.threadID, title: title.isEmpty ? entry.threadTitle : title, report: entry.id)
-            self.init(selection: .thread(entry.threadID, in: channel), target: target, key: key)
+            self.init(selection: .thread(entry.threadID, in: .activity), target: target, key: key)
             return
         }
         // What you've asked the cat can be about your screen, so it stays on the Mac.
-        guard var selection = Self.selection(key), selection.channelID != .shades, !Self.isTalk(selection, in: book) else {
+        guard var selection = Self.selection(key), selection.channelID != .shades, !Self.isTalk(selection, in: book), Self.exists(selection.place, in: book) else {
             self.init(selection: nil, in: book)
             return
         }
         // A new topic carries on in its own thread once T3 has one.
-        if case .thread(let id, let channel) = selection, let started = book.started[id] { selection = .thread(started, in: channel) }
+        if let thread = selection.thread, let started = book.started[thread] { selection.thread = started }
         // T3 lists every thread, and the window's own rules would let you write in any of them. What keeps it to the
         // ones it shows is that it only leads to those, so a phone gets only those too.
-        if case .thread(let id, let channel) = selection, !Self.leadsTo(id, from: channel, in: book) {
-            self.init(selection: .channel(channel), target: nil, key: Self.key(.channel(channel)))
+        // Words meant for it go nowhere, rather than into the place's own box.
+        if let thread = selection.thread, !Self.leadsTo(thread, from: selection.place, in: book) {
+            self.init(selection: selection.closed, target: nil, key: Self.key(selection.closed))
             return
         }
         self.init(selection: selection, in: book)
     }
 
     private static func isTalk(_ selection: ChannelSelection, in book: ChannelBook) -> Bool {
-        if case .thread(let id, _) = selection { return book.talks.contains(id) }
-        return false
+        selection.thread.map { book.talks.contains($0) || book.home(ofThread: $0) == .shades } ?? false
     }
 
-    /// Whether anything the window shows for this channel opens this thread: what's been said in it, the kitten's
-    /// list of what it's on and what it's done, or Shades' own work in Everyone.
-    private static func leadsTo(_ id: String, from channel: ChannelID, in book: ChannelBook) -> Bool {
-        book.channel(channel)?.messages.contains { $0.threadID == id || ($0.threadID.isEmpty && $0.exchangeID == id) } == true
-            || book.issues.contains { channel == .direct($0.kitten) && ($0.threads + $0.done).contains { $0.id == id } }
-            || (channel == .everyone && book.waiting.shadesWork.contains { $0.id == id })
+    private static func exists(_ place: ChannelPlace, in book: ChannelBook) -> Bool {
+        if case .channel(.kitten(let kitten)) = place { return book.kitten(kitten) != nil }
+        return true
+    }
+
+    /// Whether anything the window shows for this place opens this thread beside it: a channel's parents and the
+    /// replies also sent to it, the threads you're in, or in Activity, Type an answer, Reply or Ask, and what's in
+    /// progress that Messages has read.
+    static func leadsTo(_ id: String, from place: ChannelPlace, in book: ChannelBook) -> Bool {
+        switch place {
+        case .channel(let channel):
+            return book.channel(channel)?.posts.contains { post in
+                switch post {
+                case .thread(let thread), .alsoSent(_, let thread): return thread == id
+                case .message: return false
+                }
+            } == true
+        case .threads:
+            return book.yours.contains { $0.id == id }
+        case .activity:
+            return ChannelRows.activityThreads(in: book).contains(id)
+        }
     }
 
     init(selection: ChannelSelection?, in book: ChannelBook) {
+        var target = selection.flatMap { selection in
+            selection.thread.map { MessageTarget.reply(in: $0, of: book) } ?? MessageTarget.standard(for: selection.place, in: book)
+        }
         // A question is answered from its card, where every part goes at once, so the box doesn't take it.
-        var target = selection.flatMap { MessageTarget.standard(for: $0, in: book) }
         if case .question = target { target = nil }
         self.init(selection: selection, target: target, key: selection.map(Self.key) ?? Self.home)
     }
@@ -67,55 +85,50 @@ struct PhonePlace: Equatable {
         self.key = key
     }
 
+    /// The channel a reply here can also be sent to: the thread's home, as the window's checkbox offers.
+    func alsoSendTo(in book: ChannelBook) -> ChannelID? {
+        guard case .thread(let id, _, _)? = target, let home = book.home(ofThread: id), home != .shades else { return nil }
+        return home
+    }
+
     static func key(_ selection: ChannelSelection) -> String {
-        switch selection {
-        case .needsYou: return "needs"
-        case .done: return "done"
-        case .channel(let id): return key(id)
-        case .thread(let id, let channel): return "t:\(escape(id))@\(key(channel))"
-        }
+        let place = key(selection.place)
+        guard let thread = selection.thread else { return place }
+        return "t:\(escape(thread))@\(place)"
     }
 
     static func reply(to entry: InboxEntry) -> String {
         "r:\(escape(entry.id))"
     }
 
-    private static func key(_ channel: ChannelID) -> String {
-        if channel == .everyone { return "everyone" }
-        let members = channel.members.map { member -> String in
-            switch member {
-            case .you: return "you"
-            case .cat: return "cat"
-            case .someoneElse: return "other"
-            case .kitten(let id): return "k.\(escape(id))"
-            }
+    private static func key(_ place: ChannelPlace) -> String {
+        switch place {
+        case .activity: return "activity"
+        case .threads: return "threads"
+        case .channel(.general): return "general"
+        case .channel(.shades): return "shades"
+        case .channel(.kitten(let kitten)): return "c:\(escape(kitten))"
         }
-        return "c:" + members.sorted().joined(separator: "+")
     }
 
     private static func selection(_ key: String) -> ChannelSelection? {
-        switch key {
-        case "needs": return .needsYou
-        case "done": return .done
-        case "everyone": return .channel(.everyone)
-        default: break
-        }
         if key.hasPrefix("t:"), let at = key.lastIndex(of: "@"), at > key.index(key.startIndex, offsetBy: 2),
            let id = unescape(key[key.index(key.startIndex, offsetBy: 2)..<at]),
-           case .channel(let channel)? = selection(String(key[key.index(after: at)...])) {
-            return .thread(id, in: channel)
+           let place = place(String(key[key.index(after: at)...])) {
+            return .thread(id, in: place)
         }
-        guard key.hasPrefix("c:") else { return nil }
-        let members = key.dropFirst(2).split(separator: "+", omittingEmptySubsequences: false).map { member -> Speaker? in
-            switch member {
-            case "you": return .you
-            case "cat": return .cat
-            case "other": return .someoneElse
-            default: return member.hasPrefix("k.") ? unescape(member.dropFirst(2)).map(Speaker.kitten) : nil
-            }
+        return place(key).map { ChannelSelection($0) }
+    }
+
+    private static func place(_ key: String) -> ChannelPlace? {
+        switch key {
+        // The names before Activity and #general, which a page still open from then can ask for.
+        case "activity", "needs": return .activity
+        case "threads": return .threads
+        case "general", "everyone": return .channel(.general)
+        case "shades": return .channel(.shades)
+        default: return key.hasPrefix("c:") ? unescape(key.dropFirst(2)).map { .channel(.kitten($0)) } : nil
         }
-        guard members.count == 2, let first = members[0], let second = members[1], let channel = ChannelID(first, second) else { return nil }
-        return .channel(channel)
     }
 
     private static let plain = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
@@ -137,10 +150,13 @@ struct PhoneView: Encodable, Equatable {
         var key: String
         var title: String
         var group: String?
+        /// What's waiting on you there.
         var count: Int?
         var unread: Bool
         var color: String?
         var asleep: Bool
+        /// `activity`, `threads` or `channel`, for the ones without a cat.
+        var icon: String?
     }
 
     struct Box: Encodable, Equatable {
@@ -148,6 +164,16 @@ struct PhoneView: Encodable, Equatable {
         var placeholder: String
         /// A new topic that's still starting can't take more yet.
         var ready = true
+        /// A thread's "Also send to #channel".
+        var also: String?
+    }
+
+    /// The latest reply under a thread in Threads.
+    struct Reply: Encodable, Equatable {
+        var name: String
+        var text: String?
+        var color: String?
+        var at: Double
     }
 
     struct Choice: Encodable, Equatable {
@@ -184,6 +210,16 @@ struct PhoneView: Encodable, Equatable {
         var done: Bool?
         var choices: [Choice]?
         var parts: [Part]?
+        /// Over a reply also sent to a channel: which thread it's in.
+        var context: String?
+        /// A thread's reply bar: how many replies, the last one's time, and the colours of who replied.
+        var replies: Int?
+        var last: Double?
+        var faces: [String]?
+        var waiting: Bool?
+        var reply: Reply?
+        var more: Int?
+        var unread: Bool?
     }
 
     var key: String
@@ -200,67 +236,119 @@ struct PhoneView: Encodable, Equatable {
         key = place.key
         places = Self.places(in: book)
         cantReachT3 = book.cantReachT3
-        box = place.target.map { Box(label: CatWords.target($0), placeholder: CatWords.placeholder($0), ready: $0.isReady) }
+        let channel = place.selection?.channelID
+        let also = place.alsoSendTo(in: book).map { CatWords.alsoSendTo(book.title(of: $0)) }
+        box = place.target.map { target in
+            Box(label: CatWords.target(target, in: channel), placeholder: CatWords.placeholder(target, in: channel, name: channel.map(book.name)), ready: target.isReady, also: also)
+        }
         guard let selection = place.selection else {
             title = CatWords.messagesTitle
             rows = []
             return
         }
-        (title, subtitle) = ChannelHeader.words(for: selection, in: book)
-        if case .thread(_, let channel) = selection {
-            back = PhonePlace.key(.channel(channel))
-            backTitle = book.title(of: channel)
+        if let thread = selection.thread {
+            (title, subtitle) = ChannelHeader.words(forThread: thread, in: book)
+            back = PhonePlace.key(selection.closed)
+            backTitle = ChannelHeader.words(for: selection.place, in: book).title
+            rows = ChannelRows.thread(thread, in: book).map { Self.row($0, at: selection.place, in: book, now: now) }
         } else {
+            (title, subtitle) = ChannelHeader.words(for: selection.place, in: book)
             back = PhonePlace.home
             backTitle = CatWords.messagesTitle
+            rows = ChannelRows.rows(selection.place, in: book).map { Self.row($0, at: selection.place, in: book, now: now) }
         }
-        rows = ChannelRows.rows(selection, in: book).map { Self.row($0, at: selection, in: book, now: now) }
     }
 
     private static func places(in book: ChannelBook) -> [Place] {
         ChannelSidebarItem.groups(in: book).flatMap { group in
-            group.items.filter { $0.selection.channelID != .shades }.map { item in
+            group.items.filter { $0.place.channelID != .shades }.map { item in
                 var color: UInt32?
                 var asleep = false
-                if case .kitten(let status)? = item.cats.first {
+                var icon: String?
+                switch item.icon {
+                case .kitten(let status):
                     color = ChannelSpeakerLook.color(of: status.kitten)
                     asleep = status.state == .notSetUp
+                case .activity: icon = "activity"
+                case .threads: icon = "threads"
+                case .general, .shades: icon = "channel"
                 }
                 return Place(
-                    key: PhonePlace.key(item.selection),
-                    title: item.title,
+                    key: PhonePlace.key(ChannelSelection(item.place)),
+                    title: item.place.channelID.map(book.title) ?? item.title,
                     group: group.heading,
-                    count: item.count.flatMap { $0 > 0 ? $0 : nil },
+                    count: item.badge > 0 ? item.badge : nil,
                     unread: item.isUnread,
                     color: color.map(hex),
-                    asleep: asleep
+                    asleep: asleep,
+                    icon: icon
                 )
             }
         }
     }
 
-    private static func row(_ row: ChannelRow, at selection: ChannelSelection, in book: ChannelBook, now: Date) -> Row {
+    private static func message(_ message: ChannelMessage, in book: ChannelBook) -> Row {
+        let look = ChannelSpeakerLook(message.speaker, in: book)
+        return Row(
+            kind: "message",
+            id: message.id,
+            name: look.name,
+            detail: message.earlierNotes > 0 ? CatWords.earlierNotes(message.earlierNotes) : nil,
+            text: message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil),
+            color: look.bubble.map(hex),
+            ink: look.words.map(hex),
+            mine: look.isYou,
+            going: message.isStillGoing,
+            failure: message.failure,
+            at: millis(message.at)
+        )
+    }
+
+    private static func row(_ row: ChannelRow, at place: ChannelPlace, in book: ChannelBook, now: Date) -> Row {
         switch row {
         case .day(let date):
             return Row(kind: "day", text: CatWords.day(date, now: now))
-        case .subject(let title, let project, let threadID):
-            let open = selection.channelID.map { PhonePlace.key(.thread(threadID, in: $0)) }
-            return Row(kind: "subject", title: title, detail: project, open: open)
         case .message(let message):
-            let look = ChannelSpeakerLook(message.speaker, in: book)
+            return self.message(message, in: book)
+        case .parent(let post):
+            var row = message(post.parent, in: book)
+            row.kind = "parent"
+            row.open = PhonePlace.key(.thread(post.threadID, in: place))
+            row.replies = post.replies
+            row.last = post.lastReply.map(millis)
+            row.faces = post.repliers.prefix(4).map { speaker in
+                let look = ChannelSpeakerLook(speaker, in: book)
+                return hex(look.jacket ?? look.bubble ?? 0x1d1d1f)
+            }
+            row.waiting = post.needsYou ? true : nil
+            row.going = post.isGoing
+            return row
+        case .alsoSent(let message, let threadID, let parent):
+            var row = self.message(message, in: book)
+            row.context = CatWords.repliedToThread(parent)
+            row.open = PhonePlace.key(.thread(threadID, in: place))
+            return row
+        case .digest(let digest):
+            let look = ChannelSpeakerLook(digest.parent.speaker, in: book)
+            let reply = digest.latest.map { latest in
+                let look = ChannelSpeakerLook(latest.speaker, in: book)
+                return Reply(name: look.name, text: latest.text ?? latest.failure, color: look.bubble.map(hex), at: millis(latest.at))
+            }
             return Row(
-                kind: "message",
-                id: message.id,
+                kind: "digest",
+                id: digest.threadID,
+                title: book.title(of: digest.channel),
                 name: look.name,
-                detail: message.earlierNotes > 0 ? CatWords.earlierNotes(message.earlierNotes) : nil,
-                text: message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil),
+                text: digest.parent.text,
                 color: look.bubble.map(hex),
-                ink: look.words.map(hex),
-                mine: look.isYou,
-                going: message.isStillGoing,
-                failure: message.failure,
-                at: millis(message.at)
+                at: millis(digest.parent.at),
+                open: PhonePlace.key(.thread(digest.threadID, in: .threads)),
+                reply: reply,
+                more: digest.more > 0 ? digest.more : nil,
+                unread: digest.isUnread
             )
+        case .replies(let count):
+            return Row(kind: "replies", text: CatWords.replies(count))
         case .section(let title, let kind):
             return Row(kind: "section", title: title, clear: kind?.rawValue)
         case .heading(let status):
@@ -271,13 +359,13 @@ struct PhoneView: Encodable, Equatable {
                 color: ChannelSpeakerLook.color(of: status.kitten).map(hex)
             )
         case .issue(let thread):
-            let owner = book.issues.first { $0.threads.contains { $0.id == thread.id } || $0.done.contains { $0.id == thread.id } }?.kitten
             let details = [CatWords.age(of: thread.updatedAt, now: now), CatWords.status(thread), thread.pullRequest.map(CatWords.pullRequest)]
+            // As in the window, only a thread Messages has read opens. A phone has no T3 to open the rest in.
             return Row(
                 kind: "issue",
                 title: thread.title,
                 detail: details.compactMap { $0 }.joined(separator: " · "),
-                open: PhonePlace.key(.thread(thread.id, in: owner.map(ChannelID.direct) ?? .everyone))
+                open: book.threads[thread.id] == nil ? nil : PhonePlace.key(.thread(thread.id, in: .activity))
             )
         case .approval(let request):
             let kitten = book.kitten(of: request.id)

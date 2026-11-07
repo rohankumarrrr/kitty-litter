@@ -18,7 +18,7 @@ enum DemoBench {
         }
         await finishReading(controller)
         guard let steve = Demo.kittens.first, let clawde = Demo.kittens.first(where: { $0.name == "Clawde" }) else { return }
-        view.select(.channel(.direct(steve)))
+        view.select(.channel(.of(steve)))
         var reopens: [Double] = []
         for _ in 0..<rounds {
             stage.hideChannels()
@@ -29,40 +29,88 @@ enum DemoBench {
         report("reopen", reopens, "reading=\(controller.channels.open(threads: []).isReading) rows=\(pane.shown.count)")
         await finishReading(controller)
         let places: [(String, ChannelSelection)] = [
-            ("dm", .channel(.direct(steve))),
-            ("everyone", .channel(.everyone)),
+            ("kitten", .channel(.of(steve))),
+            ("general", .channel(.general)),
             ("shades", .channel(.shades)),
-            ("thread", .thread(DemoBusy.longThread, in: .direct(steve))),
-            ("needs", .needsYou),
-            ("done", .done),
-            ("dm2", .channel(.direct(clawde))),
+            ("threads", .threads),
+            ("activity", .activity),
+            ("kitten2", .channel(.of(clawde))),
         ]
         for (name, selection) in places {
             var times: [Double] = []
             for _ in 0..<rounds {
-                view.select(.needsYou)
+                view.select(.activity)
                 settle(window)
                 times.append(time(window) { view.select(selection) })
             }
             report("switch-\(name)", times, "rows=\(pane.shown.count) inWindow=\(rowViews(in: pane))")
         }
 
-        view.select(.channel(.direct(steve)))
+        // Opening a thread beside its channel, as clicking its reply bar does, then closing it with ✕, then going from
+        // one thread to the next.
+        let thread = view.threadPane
+        var opens: [Double] = []
+        var closes: [Double] = []
+        var nexts: [Double] = []
+        let others = controller.channels.open(threads: []).threads(in: .of(steve)).filter { $0 != DemoBusy.longThread }.suffix(rounds)
+        for other in others {
+            view.select(.channel(.of(steve)))
+            settle(window)
+            opens.append(time(window) { view.open(thread: DemoBusy.longThread) })
+            nexts.append(time(window) { view.open(thread: other) })
+            closes.append(time(window) { view.closeThread() })
+        }
+        view.open(thread: DemoBusy.longThread)
+        settle(window)
+        report("open-thread", opens, "rows=\(thread.shown.count) inWindow=\(rowViews(in: thread))")
+        report("switch-thread", nexts)
+        report("close-thread", closes)
+
+        // The shortcuts, each the same call its key makes once Messages has the keyboard: up a channel's threads from
+        // the newest, down and up the sidebar, back and forward, and jumping to a kitten by name.
+        view.closeThread()
+        view.select(.channel(.of(steve)))
+        settle(window)
+        var threadKeys: [Double] = []
+        for _ in 0..<rounds * 2 { threadKeys.append(time(window) { view.perform(.previousThread) }) }
+        report("key-thread", threadKeys, "rows=\(thread.shown.count)")
+        view.closeThread()
+        settle(window)
+        var placeKeys: [Double] = []
+        for index in 0..<rounds * 2 { placeKeys.append(time(window) { view.perform(index % 2 == 0 ? .nextPlace : .previousPlace) }) }
+        report("key-place", placeKeys)
+        var historyKeys: [Double] = []
+        for index in 0..<rounds * 2 { historyKeys.append(time(window) { view.perform(index % 2 == 0 ? .back : .forward) }) }
+        report("key-back", historyKeys)
+        var jumps: [Double] = []
+        var filters: [Double] = []
+        for _ in 0..<rounds {
+            jumps.append(time(window) { view.perform(.jump) })
+            filters.append(time(window) { view.jumpBox.query = "steve" })
+            jumps.append(time(window) { view.jumpBox.open() })
+        }
+        report("key-jump", jumps, "found=\(view.jumpBox.items.count)")
+        report("jump-filter", filters)
+
+        view.select(.channel(.of(steve)))
+        view.open(thread: DemoBusy.longThread)
         settle(window)
         var scrolls: [Double] = []
         // Read back each time, since rows laid out above as you go up move where you are.
-        while pane.scrollOffset > 0 {
-            let next = max(pane.scrollOffset - scrollStep, 0)
-            scrolls.append(time(window) { pane.scrollOffset = next })
+        while thread.scrollOffset > 0 {
+            let next = max(thread.scrollOffset - scrollStep, 0)
+            scrolls.append(time(window) { thread.scrollOffset = next })
         }
         report("scroll", scrolls, "steps=\(scrolls.count) over8ms=\(scrolls.filter { $0 > 8.3 }.count) over16ms=\(scrolls.filter { $0 > 16.7 }.count)")
+        view.closeThread()
 
+        view.select(.channel(.of(steve)))
         pane.scrollOffset = pane.scrollOffset + pane.distanceFromBottom
         settle(window)
         var arrivals: [Double] = []
         for index in 0..<rounds * 2 {
             let message = ChannelMessage(exchangeID: "bench-\(index)-\(UUID().uuidString)", kind: .ask, speaker: .you, text: "Bench message \(index)", at: Date(), threadID: "", threadTitle: "")
-            arrivals.append(time(window) { controller.channels.sent(message, in: .direct(steve)) })
+            arrivals.append(time(window) { controller.channels.sent(message, in: .of(steve)) })
         }
         report("arrive", arrivals)
         var refreshes: [Double] = []
@@ -106,9 +154,9 @@ enum DemoBench {
         let book = controller.channels.open(threads: [])
         var phones: [Double] = []
         for _ in 0..<rounds * 2 {
-            phones.append(measure { _ = PhoneView(PhonePlace(PhonePlace.key(.channel(.direct(steve))), in: book), in: book, now: Date()) })
+            phones.append(measure { _ = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: Date()) })
         }
-        let phoneView = PhoneView(PhonePlace(PhonePlace.key(.channel(.direct(steve))), in: book), in: book, now: Date())
+        let phoneView = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: Date())
         report("phone-view", phones, "rows=\(phoneView.rows.count) bytes=\((try? JSONEncoder().encode(phoneView))?.count ?? 0)")
         print("perf done")
     }

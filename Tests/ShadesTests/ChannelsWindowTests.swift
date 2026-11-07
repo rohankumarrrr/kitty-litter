@@ -22,6 +22,15 @@ final class ChannelsWindowTests: XCTestCase {
         return ChannelBook.build(kittens: [steve, pepper], threads: [thread], transcripts: ["t": said], isReading: false, unreadable: 0, cantReachT3: false)
     }
 
+    /// A channel with `count` threads of Steve's, each one exchange, for scrolling a channel.
+    private func book(threads count: Int) -> ChannelBook {
+        let threads = (0..<count).map { AgentThread(id: "t\($0)", title: "Work \($0)", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve") }
+        let said = Dictionary(uniqueKeysWithValues: (0..<count).map { ("t\($0)", [Exchange(id: "e\($0)", asker: .you, askedAt: at.addingTimeInterval(TimeInterval($0)), ask: "Ask \($0)", reply: "Reply", repliedAt: at.addingTimeInterval(TimeInterval($0)))]) })
+        return ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: said, isReading: false, unreadable: 0, cantReachT3: false)
+    }
+
+    private let inThread = ChannelSelection.thread("t", in: .channel(.kitten("/k/steve")))
+
     private func subviews(of view: NSView) -> [NSView] {
         view.subviews + view.subviews.flatMap(subviews)
     }
@@ -29,7 +38,7 @@ final class ChannelsWindowTests: XCTestCase {
     func testThePanelTakesTheKeyboardOnlyWhenNeededAndNeverFloatsOverYourWork() {
         let panel = ChannelsPanel()
         XCTAssertTrue(panel.canBecomeKey, "for the box at the bottom")
-        XCTAssertTrue(panel.becomesKeyOnlyIfNeeded, "a click anywhere else leaves the keyboard where it was")
+        XCTAssertTrue(panel.becomesKeyOnlyIfNeeded, "opening it leaves the keyboard where it was, and only a click into it, which makes it key without activating Shades, takes it")
         XCTAssertFalse(panel.canBecomeMain)
         XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
         XCTAssertEqual(panel.level, .normal)
@@ -42,36 +51,40 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(ChannelsPanel().sharingType, .none, "so a kitten's own screen tools can't be shown another kitten's messages")
     }
 
-    func testEveryViewTakesClicksAndOnlyTheBoxAndWordsYouPressInTakeTheKeyboard() throws {
+    func testEveryViewTakesClicksAndOnlyTheBoxesAndWordsYouPressInTakeTheKeyboard() throws {
         let view = view()
         view.show(book())
-        view.select(.channel(.direct(steve)))
-        let rows = subviews(of: view).filter { $0 is QuietView || $0 is QuietButton || $0 is QuietScrollView }
+        view.select(inThread)
+        let rows = subviews(of: view).filter { $0 is QuietView || $0 is QuietButton || $0 is QuietScrollView || $0 is QuietCheckbox }
         XCTAssertGreaterThan(rows.count, 10)
+        XCTAssertTrue(rows.contains { $0 is QuietCheckbox }, "the thread's Also send box is there")
         for row in rows {
             XCTAssertTrue(row.acceptsFirstMouse(for: nil), "\(row)")
             XCTAssertFalse(row.acceptsFirstResponder, "\(row)")
             XCTAssertFalse(row.needsPanelToBecomeKey, "\(row)")
         }
-        let box = Set(subviews(of: view.pane.composer).map(ObjectIdentifier.init))
-        let taking = subviews(of: view).filter { !box.contains(ObjectIdentifier($0)) && ($0.acceptsFirstResponder || $0.needsPanelToBecomeKey) }
+        // The jump box is a box too, only there once ⌘K opens it.
+        let boxes = Set(([view.jumpBox.field] + subviews(of: view.pane.composer) + subviews(of: view.threadPane.composer) + subviews(of: view.jumpBox)).map(ObjectIdentifier.init))
+        let taking = subviews(of: view).filter { !boxes.contains(ObjectIdentifier($0)) && ($0.acceptsFirstResponder || $0.needsPanelToBecomeKey) }
         XCTAssertFalse(taking.isEmpty, "the words can be selected")
         for taker in taking {
             // Only so you can select and copy them, the way the bubble's reply does, and never to type into.
-            let words = try XCTUnwrap(taker as? ChannelTextView, "only the box and words take the keyboard, not \(type(of: taker))")
+            let words = try XCTUnwrap(taker as? ChannelTextView, "only the boxes and words take the keyboard, not \(type(of: taker))")
             XCTAssertFalse(words.isEditable)
             XCTAssertTrue(words.isSelectable)
             XCTAssertTrue(words.acceptsFirstMouse(for: nil), "the first press starts selecting")
         }
-        XCTAssertTrue(view.pane.composer.textView.acceptsFirstResponder)
-        XCTAssertTrue(view.pane.composer.textView.needsPanelToBecomeKey)
+        for composer in [view.pane.composer, view.threadPane.composer] {
+            XCTAssertTrue(composer.textView.acceptsFirstResponder)
+            XCTAssertTrue(composer.textView.needsPanelToBecomeKey)
+        }
     }
 
     func testPartOfAMessageCanBeSelectedAndCopiesAsPlainWords() throws {
         let view = view()
         view.show(book())
-        view.select(.channel(.direct(steve)))
-        let row = try XCTUnwrap(view.pane.shownMessageRows.first { !$0.isYours })
+        view.select(inThread)
+        let row = try XCTUnwrap(view.threadPane.shownMessageRows.first { !$0.isYours })
         let words = try XCTUnwrap(subviews(of: row).compactMap { $0 as? ChannelTextView }.first)
         XCTAssertTrue(row.bubble.contains(words.frame), "the words sit in their bubble, so pressing beside it selects nothing")
         XCTAssertFalse(words.string.isEmpty)
@@ -84,60 +97,48 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(words.selectedRange().length, 0, "one selection at a time")
     }
 
-    func testItStartsOnNeedsYou() {
+    func testItStartsOnActivity() {
         let view = view()
         view.show(book())
-        XCTAssertEqual(view.selection, .needsYou)
-        XCTAssertEqual(view.sidebar.row(for: .needsYou)?.isSelected, true)
+        XCTAssertEqual(view.selection, .activity)
+        XCTAssertEqual(view.sidebar.row(for: .activity)?.isSelected, true)
+        XCTAssertTrue(view.threadPane.isHidden, "with no thread open")
     }
 
     func testPressingARowSelectsItsChannelAndShowsIt() throws {
         let view = view()
         let book = book()
         view.show(book)
-        let row = try XCTUnwrap(view.sidebar.row(for: .channel(.direct(steve))))
+        let row = try XCTUnwrap(view.sidebar.row(for: .channel(.of(steve))))
         row.press()
-        XCTAssertEqual(view.selection, .channel(.direct(steve)))
+        XCTAssertEqual(view.selection, .channel(.of(steve)))
         XCTAssertTrue(row.isSelected)
-        XCTAssertEqual(view.sidebar.row(for: .needsYou)?.isSelected, false)
-        XCTAssertEqual(view.pane.shown, ChannelRows.rows(.channel(.direct(steve)), in: book))
+        XCTAssertEqual(view.sidebar.row(for: .activity)?.isSelected, false)
+        XCTAssertEqual(view.pane.shown, ChannelRows.rows(.channel(.of(steve)), in: book))
         XCTAssertTrue(row.accessibilityPerformPress())
     }
 
-    func testAFinishedThreadIsOnlyShownWhenYouOpenDone() throws {
+    func testAFinishedThreadIsInItsChannelAndOutOfActivity() throws {
         let view = view()
         view.show(book())
         let issues = { view.pane.shown.compactMap { row -> String? in if case .issue(let thread) = row { thread.id } else { nil } } }
         XCTAssertEqual(issues(), [])
-        try XCTUnwrap(view.sidebar.row(for: .done)).press()
-        XCTAssertEqual(view.selection, .done)
-        XCTAssertEqual(issues(), ["t"])
+        try XCTUnwrap(view.sidebar.row(for: .channel(.of(steve)))).press()
+        XCTAssertEqual(view.pane.shown.compactMap { row -> String? in if case .parent(let post) = row { post.threadID } else { nil } }, ["t"])
     }
 
-    func testAnEmptyBetweenSectionIsntDrawnAndAPairGetsARowOnceTheyTalk() throws {
-        XCTAssertFalse(ChannelSidebarItem.groups(in: book()).contains { $0.heading == CatWords.betweenKittens })
-
-        let pepperThread = AgentThread(id: "p", title: "Work", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at, projectPath: "/k/pepper")
-        let steveThread = AgentThread(id: "s", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
-        let talked = ChannelBook.build(
-            kittens: [steve, pepper],
-            threads: [pepperThread, steveThread],
-            transcripts: ["s": [Exchange(id: "e", asker: .agent(threadID: pepperThread.id), askedAt: at, ask: "Ask")]],
-            isReading: false,
-            unreadable: 0,
-            cantReachT3: false
-        )
-        let view = view()
-        view.show(talked)
-        XCTAssertEqual(ChannelSidebarItem.groups(in: talked).last?.heading, CatWords.betweenKittens)
-        let pair = try XCTUnwrap(ChannelID(.kitten(steve.id), .kitten(pepper.id)))
-        XCTAssertNotNil(view.sidebar.row(for: .channel(pair)))
+    func testTheSidebarHasActivityThreadsEachChannelAndTheDM() throws {
+        let groups = ChannelSidebarItem.groups(in: book())
+        XCTAssertEqual(groups.map(\.heading), [nil, CatWords.channelsHeading, CatWords.directMessages])
+        XCTAssertEqual(groups.map { $0.items.map(\.title) }, [["Activity", "Threads"], ["general", "steve", "pepper"], ["Shades"]])
+        XCTAssertEqual(ChannelSidebarItem.places(in: book()), [.activity, .threads, .channel(.general), .channel(.of(steve)), .channel(.of(pepper)), .channel(.shades)])
+        XCTAssertFalse(groups.contains { $0.items.contains { ["Done", "Needs you", "Everyone"].contains($0.title) } })
     }
 
     func testOnlyAKittenThatsWorkingOrNeedsYouMoves() {
         func moves(_ state: KittenStatus.State) -> Bool {
             let status = KittenStatus(kitten: steve, state: state)
-            return ChannelSidebarRow(item: ChannelSidebarItem(selection: .channel(.direct(steve)), title: "Steve", cats: [.kitten(status)])).isLive
+            return ChannelSidebarRow(item: ChannelSidebarItem(place: .channel(.of(steve)), title: "steve", icon: .kitten(status))).isLive
         }
         XCTAssertTrue(moves(.working(sessions: 1)))
         XCTAssertTrue(moves(.needsYou))
@@ -148,8 +149,8 @@ final class ChannelsWindowTests: XCTestCase {
     func testALongMessageIsCutAndShowMoreSurvivesARefresh() throws {
         let view = view()
         view.show(book(text: long))
-        view.select(.channel(.direct(steve)))
-        let row = try XCTUnwrap(view.pane.longMessageRow)
+        view.select(inThread)
+        let row = try XCTUnwrap(view.threadPane.longMessageRow)
         let cutHeight = row.frame.height
 
         row.pressShowMore()
@@ -157,109 +158,114 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertGreaterThan(row.frame.height, cutHeight)
 
         view.show(book(exchanges: 2, text: long))
-        let first = view.pane.shownMessageRows.first { $0.isExpanded }
+        let first = view.threadPane.shownMessageRows.first { $0.isExpanded }
         XCTAssertNotNil(first, "still open after new messages came in")
-        XCTAssertEqual(view.pane.shownMessageRows.filter(\.isCut).count, 1, "and the new one starts cut")
+        XCTAssertEqual(view.threadPane.shownMessageRows.filter(\.isCut).count, 1, "and the new one starts cut")
     }
 
     func testAShortMessageIsntCut() {
         let view = view()
         view.show(book())
-        view.select(.channel(.direct(steve)))
-        XCTAssertNil(view.pane.longMessageRow)
+        view.select(inThread)
+        XCTAssertNil(view.threadPane.longMessageRow)
     }
 
-    func testSelectingAChannelGoesToTheBottomAndNeedsYouToTheTop() {
+    func testSelectingAChannelGoesToTheBottomAndActivityToTheTop() {
         let view = view()
-        view.show(book(exchanges: 40))
-        view.select(.channel(.direct(steve)))
+        view.show(book(threads: 40))
+        view.select(.channel(.of(steve)))
         XCTAssertGreaterThan(view.pane.scrollOffset, 0)
         XCTAssertEqual(view.pane.distanceFromBottom, 0, accuracy: 1)
 
-        view.select(.needsYou)
+        view.select(.activity)
         XCTAssertEqual(view.pane.scrollOffset, 0)
     }
 
     func testARefreshKeepsYouAtTheBottomOrLeavesYouAlone() {
         let view = view()
         view.show(book(exchanges: 40))
-        view.select(.channel(.direct(steve)))
+        view.select(inThread)
+        let pane = view.threadPane
 
         view.show(book(exchanges: 41))
-        XCTAssertEqual(view.pane.distanceFromBottom, 0, accuracy: 1, "at the bottom, you follow along")
+        XCTAssertEqual(pane.distanceFromBottom, 0, accuracy: 1, "at the bottom, you follow along")
 
-        view.pane.scrollOffset -= 30
+        pane.scrollOffset -= 30
         view.show(book(exchanges: 42))
-        XCTAssertEqual(view.pane.distanceFromBottom, 0, accuracy: 1, "close enough counts")
+        XCTAssertEqual(pane.distanceFromBottom, 0, accuracy: 1, "close enough counts")
 
         // Near the top, older rows are laid out above what you're reading, so where you are is wherever that leaves you.
-        view.pane.scrollOffset = 100
-        let reading = view.pane.scrollOffset
+        pane.scrollOffset = 100
+        let reading = pane.scrollOffset
         view.show(book(exchanges: 43))
-        XCTAssertEqual(view.pane.scrollOffset, reading, "reading further up, you're left alone")
+        XCTAssertEqual(pane.scrollOffset, reading, "reading further up, you're left alone")
     }
 
     func testRowsThatHaventChangedArentRebuilt() {
         let view = view()
         view.show(book(exchanges: 2))
-        view.select(.channel(.direct(steve)))
-        let first = view.pane.shownMessageRows.first
+        view.select(inThread)
+        let first = view.threadPane.shownMessageRows.first
+        let parent = view.pane.shownMessageRows.first
 
         view.show(book(exchanges: 2))
-        XCTAssertTrue(view.pane.shownMessageRows.first === first)
+        XCTAssertTrue(view.threadPane.shownMessageRows.first === first)
         view.show(book(exchanges: 3))
-        XCTAssertTrue(view.pane.shownMessageRows.first === first, "new rows don't disturb the ones above")
+        XCTAssertTrue(view.threadPane.shownMessageRows.first === first, "new rows don't disturb the ones above")
+        XCTAssertFalse(view.pane.shownMessageRows.first === parent, "the parent's reply bar says there's one more")
     }
 
     private func rowViews(in view: ChannelsView) -> [ChannelRowView] {
-        subviews(of: view.pane).compactMap { $0 as? ChannelRowView }
+        subviews(of: view.threadPane).compactMap { $0 as? ChannelRowView }
     }
 
-    func testALongConversationOnlyHasViewsNearWhatYouCanSee() {
+    func testALongThreadOnlyHasViewsNearWhatYouCanSee() {
         let view = view()
         view.show(book(exchanges: 300))
-        view.select(.channel(.direct(steve)))
-        XCTAssertGreaterThan(view.pane.shown.count, 400)
+        view.select(inThread)
+        let pane = view.threadPane
+        XCTAssertGreaterThan(pane.shown.count, 400)
         XCTAssertLessThan(rowViews(in: view).count, 60, "only the rows near the bottom are in the window")
-        XCTAssertLessThanOrEqual(view.pane.shownMessageRows.count, ChannelPane.page, "and only the newest page is laid out")
-        XCTAssertEqual(view.pane.distanceFromBottom, 0, accuracy: 1)
+        XCTAssertLessThanOrEqual(pane.shownMessageRows.count, ChannelPane.page, "and only the newest page is laid out")
+        XCTAssertEqual(pane.distanceFromBottom, 0, accuracy: 1)
 
-        view.pane.scrollOffset -= 2_000
+        pane.scrollOffset -= 2_000
         XCTAssertLessThan(rowViews(in: view).count, 60, "scrolling swaps rows in and out rather than adding them all")
-        XCTAssertTrue(rowViews(in: view).allSatisfy { $0.frame.intersects(NSRect(x: 0, y: view.pane.scrollOffset - 700, width: 820, height: 1_900)) })
+        XCTAssertTrue(rowViews(in: view).allSatisfy { $0.frame.intersects(NSRect(x: 0, y: pane.scrollOffset - 700, width: 820, height: 1_900)) })
     }
 
     func testScrollingUpLaysOutOlderRowsWithoutMovingWhatYoureReading() throws {
         let view = view()
         view.show(book(exchanges: 300))
-        view.select(.channel(.direct(steve)))
-        let laidOut = view.pane.shownMessageRows.count
+        view.select(inThread)
+        let pane = view.threadPane
+        let laidOut = pane.shownMessageRows.count
 
-        view.pane.scrollOffset = view.pane.visibleHeight + 50
-        XCTAssertEqual(view.pane.shownMessageRows.count, laidOut, "a screen from the top, nothing more is laid out yet")
-        let reading = try XCTUnwrap(view.pane.shownMessageRows.first { $0.superview != nil && $0.frame.maxY > view.pane.scrollOffset })
-        let above = view.pane.scrollOffset - reading.frame.minY
+        pane.scrollOffset = pane.visibleHeight + 50
+        XCTAssertEqual(pane.shownMessageRows.count, laidOut, "a screen from the top, nothing more is laid out yet")
+        let reading = try XCTUnwrap(pane.shownMessageRows.first { $0.superview != nil && $0.frame.maxY > pane.scrollOffset })
+        let above = pane.scrollOffset - reading.frame.minY
 
-        view.pane.scrollOffset -= 100
-        XCTAssertGreaterThan(view.pane.shownMessageRows.count, laidOut, "the page before it is laid out")
-        XCTAssertEqual(view.pane.scrollOffset - reading.frame.minY, above - 100, accuracy: 0.5, "and what you were reading moved only as far as you scrolled")
+        pane.scrollOffset -= 100
+        XCTAssertGreaterThan(pane.shownMessageRows.count, laidOut, "the page before it is laid out")
+        XCTAssertEqual(pane.scrollOffset - reading.frame.minY, above - 100, accuracy: 0.5, "and what you were reading moved only as far as you scrolled")
 
-        for _ in 0..<10 { view.pane.scrollOffset = 0 }
-        XCTAssertEqual(view.pane.shownMessageRows.count, 400, "every message is there once you've scrolled to the top")
-        XCTAssertEqual(view.pane.shown.first, .note(CatWords.olderMessages))
+        for _ in 0..<20 { pane.scrollOffset = 0 }
+        XCTAssertEqual(pane.shownMessageRows.count, 600, "every message is there once you've scrolled to the top")
+        guard case .message(let parent) = pane.shown.first else { return XCTFail("\(pane.shown.prefix(3))") }
+        XCTAssertEqual(parent.id, "e0:ask", "starting with its parent")
     }
 
-    func testANewMessageInALongConversationOnlyMakesViewsForItself() {
+    func testANewMessageInALongThreadOnlyMakesViewsForItself() {
         let view = view()
         view.show(book(exchanges: 200))
-        view.select(.channel(.direct(steve)))
-        let before = Set(view.pane.shownMessageRows.map(ObjectIdentifier.init))
+        view.select(inThread)
+        let before = Set(view.threadPane.shownMessageRows.map(ObjectIdentifier.init))
 
-        // The book keeps the newest 200 exchanges, so the oldest goes as this one comes in, and every row moves up.
         view.show(book(exchanges: 201))
-        let made = view.pane.shownMessageRows.filter { !before.contains(ObjectIdentifier($0)) }
+        let made = view.threadPane.shownMessageRows.filter { !before.contains(ObjectIdentifier($0)) }
         XCTAssertEqual(made.count, 2, "only the new ask and reply are new views")
-        XCTAssertEqual(view.pane.distanceFromBottom, 0, accuracy: 1)
+        XCTAssertEqual(view.threadPane.distanceFromBottom, 0, accuracy: 1)
     }
 
     func testClosingKeepsEverythingSoItOpensAgainAsYouLeftIt() {
@@ -267,7 +273,7 @@ final class ChannelsWindowTests: XCTestCase {
         var closed = 0
         window.onClose = { closed += 1 }
         window.update(book())
-        window.view.select(.channel(.direct(steve)))
+        window.view.select(.channel(.of(steve)))
         window.view.pane.composer.textView.string = "Half a thought"
         let rows = window.view.pane.shownMessageRows.map(ObjectIdentifier.init)
         XCTAssertFalse(rows.isEmpty)
@@ -276,7 +282,7 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(closed, 1)
         window.update(book())
         XCTAssertEqual(window.view.pane.shownMessageRows.map(ObjectIdentifier.init), rows, "nothing is laid out again")
-        XCTAssertEqual(window.view.selection, .channel(.direct(steve)))
+        XCTAssertEqual(window.view.selection, .channel(.of(steve)))
         XCTAssertEqual(window.view.pane.composer.textView.string, "Half a thought", "a draft waits, as it does in Slack")
     }
 
@@ -332,7 +338,7 @@ final class ChannelsWindowTests: XCTestCase {
         )
         let line = DevFlags.checkLine(built, threadsRead: 7, milliseconds: 9)
         XCTAssertFalse(line.contains(secret))
-        for expected in ["threads read: 7", "unreadable: 1", "DMs with messages: 1", "between channels: 1", "messages: 4", "asked by you: 1", "asked by a kitten: 0", "asked by someone else: 1", "replies with no ask: 0", "issues: 1", "done: 0", "milliseconds: 9"] {
+        for expected in ["threads read: 7", "unreadable: 1", "channels with threads: 1", "threads: 1", "replies: 3", "messages: 4", "asked by you: 1", "asked by a kitten: 0", "asked by someone else: 1", "replies with no ask: 0", "issues: 1", "milliseconds: 9"] {
             XCTAssertTrue(line.contains(expected), expected)
         }
     }
@@ -349,17 +355,18 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(button.accessibilityPerformPress())
     }
 
-    func testADMsBoxStartsANewTopicAndOpensIt() {
+    func testAChannelsBoxStartsANewThreadAndOpensItInThePane() {
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         view.show(book())
-        view.select(.channel(.direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .newThread(steve), "the box under the whole conversation never guesses a thread")
+        view.select(.channel(.of(steve)))
+        XCTAssertEqual(view.pane.composer.target, .newThread(steve), "the box under the channel never guesses a thread")
 
         view.pane.composer.send("  Write a cover letter  ")
         guard case .startTopic("Write a cover letter", steve, let topic)? = sent.last else { return XCTFail("\(sent)") }
-        XCTAssertEqual(view.selection, .thread(topic, in: .direct(steve)), "so what you add next goes into it")
+        XCTAssertEqual(view.selection, .thread(topic, in: .channel(.of(steve))), "so what you add next goes into it")
+        XCTAssertFalse(view.threadPane.isHidden)
         XCTAssertEqual(view.pane.composer.textView.string, "")
 
         view.pane.composer.send("   ")
@@ -369,67 +376,149 @@ final class ChannelsWindowTests: XCTestCase {
     func testAThreadsBoxRepliesOnlyIntoItAndStaysThere() {
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         view.show(book())
-        view.select(.thread("t", in: .direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
+        view.select(inThread)
+        XCTAssertEqual(view.threadPane.composer.target, .thread(id: "t", title: "Work"))
 
-        view.pane.composer.send("Make it shorter")
-        XCTAssertEqual(sent, [.send("Make it shorter", to: .thread(id: "t", title: "Work"), shownIn: .direct(steve))])
-        XCTAssertEqual(view.selection, .thread("t", in: .direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
+        view.threadPane.composer.send("Make it shorter")
+        XCTAssertEqual(sent, [.send("Make it shorter", to: .thread(id: "t", title: "Work"), shownIn: .of(steve))])
+        XCTAssertEqual(view.selection, inThread)
+        XCTAssertEqual(view.threadPane.composer.target, .thread(id: "t", title: "Work"))
+        XCTAssertEqual(view.pane.composer.target, .newThread(steve), "and the channel's own box still starts something new")
     }
 
-    func testEachTopicSaysWhichThreadAndProjectAndOpensOnItsOwn() throws {
+    func testAlsoSendToTheChannelGoesWithTheReplyAndThenUnticks() {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.show(book())
+        view.select(inThread)
+        let also = view.threadPane.composer.alsoSend
+        XCTAssertFalse(also.isHidden)
+        XCTAssertEqual(also.title, "Also send to #steve", "the thread's home channel")
+        XCTAssertFalse(also.isOn)
+
+        also.toggle()
+        view.threadPane.composer.send("Keep the FAQ")
+        XCTAssertEqual(sent, [.send("Keep the FAQ", to: .thread(id: "t", title: "Work"), shownIn: .of(steve), alsoSent: true)])
+        XCTAssertFalse(also.isOn, "as in Slack, it's for one reply")
+        view.threadPane.composer.send("Only in the thread")
+        XCTAssertEqual(sent.last, .send("Only in the thread", to: .thread(id: "t", title: "Work"), shownIn: .of(steve), alsoSent: false))
+        XCTAssertTrue(view.pane.composer.alsoSend.isHidden, "a channel's own box has none")
+    }
+
+    func testAThreadFromGeneralOffersGeneral() {
+        let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
+        let said = Exchange(id: "e", asker: .you, askedAt: at, ask: "Ask", reply: "Reply", repliedAt: at)
+        let built = ChannelBook.build(kittens: [steve], threads: [thread], transcripts: ["t": [said]], isReading: false, unreadable: 0, cantReachT3: false, inGeneral: ["t": at])
+        let view = view()
+        view.show(built)
+        view.select(.thread("t", in: .channel(.general)))
+        XCTAssertEqual(view.threadPane.composer.alsoSend.title, "Also send to #general")
+    }
+
+    func testClickingAParentOpensItsThreadBesideTheChannel() throws {
         let view = view()
         var opened: [String] = []
-        view.pane.onOpenThread = { opened.append($0) }
+        view.onOpenThread = { opened.append($0) }
         view.show(book())
-        view.select(.channel(.direct(steve)))
-        let subject = try XCTUnwrap(subviews(of: view).compactMap { $0 as? SubjectRowView }.first)
-        XCTAssertEqual(subject.accessibilityLabel(), "Work, Steve")
+        view.select(.channel(.of(steve)))
+        let parent = try XCTUnwrap(view.pane.shownMessageRows.first { $0.replyBar != nil })
+        XCTAssertEqual(parent.replyBar?.count, 1)
+        XCTAssertTrue(parent.isPressable)
 
-        subject.press()
-        XCTAssertEqual(view.selection, .thread("t", in: .direct(steve)))
-        XCTAssertEqual(header(in: view), "Work, Steve · Done")
-        XCTAssertTrue(view.sidebar.row(for: .channel(.direct(steve)))?.isSelected == true, "its channel stays selected")
-        XCTAssertFalse(view.pane.shown.contains { if case .subject = $0 { true } else { false } })
+        parent.press()
+        XCTAssertEqual(view.selection, inThread)
+        XCTAssertFalse(view.threadPane.isHidden)
+        XCTAssertEqual(header(in: view.threadPane), "Thread, #steve  ·  Work · Steve · Done")
+        XCTAssertTrue(view.sidebar.row(for: .channel(.of(steve)))?.isSelected == true, "its channel stays selected")
+        XCTAssertEqual(view.pane.shown, ChannelRows.rows(.channel(.of(steve)), in: book()), "and still showing beside it")
+        guard case .message(let first) = view.threadPane.shown.first else { return XCTFail("\(view.threadPane.shown)") }
+        XCTAssertEqual(first.id, "e0:ask")
+        XCTAssertEqual(view.threadPane.shown[1], .replies(1))
 
-        try pressButton(CatWords.openInT3, in: view)
+        try pressButton(CatWords.openInT3, in: view.threadPane)
         XCTAssertEqual(opened, ["t"])
-        try pressButton("‹ Steve", in: view)
-        XCTAssertEqual(view.selection, .channel(.direct(steve)))
+        try pressButton(CatWords.closeThread, in: view.threadPane)
+        XCTAssertEqual(view.selection, .channel(.of(steve)))
+        XCTAssertTrue(view.threadPane.isHidden)
     }
 
-    func testNeedsYouStaysAtTheTopWhenMoreComesIn() {
+    func testEscInTheBoxClosesTheThreadPane() {
+        let view = view()
+        view.show(book())
+        view.select(inThread)
+        let composer = view.threadPane.composer
+        XCTAssertTrue(composer.textView(composer.textView, doCommandBy: #selector(NSResponder.cancelOperation(_:))))
+        XCTAssertEqual(view.selection, .channel(.of(steve)))
+    }
+
+    func testThePaneFitsBesideTheChannelEvenAtItsNarrowest() {
+        let view = ChannelsView(frame: NSRect(origin: .zero, size: ChannelsWindow.minimumSize))
+        view.show(book())
+        view.select(inThread)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThanOrEqual(view.pane.frame.width, 300, "the channel still reads")
+        XCTAssertGreaterThanOrEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound)
+        XCTAssertEqual(view.pane.frame.maxX, view.threadPane.frame.minX)
+        XCTAssertEqual(view.threadPane.frame.maxX, ChannelsWindow.minimumSize.width)
+    }
+
+    func testThreadsOpensEachThreadBesideTheList() throws {
+        let view = view()
+        view.show(book(exchanges: 3))
+        view.select(.threads)
+        let digest = try XCTUnwrap(subviews(of: view.pane).compactMap { $0 as? ThreadDigestRowView }.first)
+        digest.press()
+        XCTAssertEqual(view.selection, .thread("t", in: .threads), "Threads stays beside it")
+    }
+
+    func testAReplyAlsoSentToTheChannelOpensItsThread() throws {
+        let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
+        let reply = ChannelMessage(exchangeID: "sent", kind: .ask, speaker: .you, text: "Keep the FAQ", at: at.addingTimeInterval(5), threadID: "t", threadTitle: "")
+        let built = ChannelBook.build(
+            kittens: [steve], threads: [thread], transcripts: ["t": [Exchange(id: "e", asker: .you, askedAt: at, ask: "Rewrite it", reply: "Done.", repliedAt: at)]],
+            isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .of(steve), message: reply, alsoSent: true)]
+        )
+        let view = view()
+        view.show(built)
+        view.select(.channel(.of(steve)))
+        let row = try XCTUnwrap(view.pane.shownMessageRows.first { $0.context != nil })
+        XCTAssertEqual(row.context, "replied to a thread: Rewrite it")
+        row.press()
+        XCTAssertEqual(view.selection, inThread)
+    }
+
+    func testActivityStaysAtTheTopWhenMoreComesIn() {
         let view = view(height: 300)
         let report = InboxEntry(id: "r", kind: .decision, text: "Ship it?", threadID: "t", threadTitle: "Work", at: at)
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: true, unreadable: 0, cantReachT3: false, waiting: Waiting(reports: [report])))
         let busy = (0..<12).map { AgentThread(id: "w\($0)", title: "Work \($0)", projectTitle: "Steve", status: .running, model: "m", updatedAt: at, projectPath: "/k/steve") }
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: busy, transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(reports: [report])))
-        XCTAssertEqual(view.pane.scrollOffset, 0, "what needs you is at the top, so In progress growing mustn't scroll it away")
+        XCTAssertEqual(view.pane.scrollOffset, 0, "what's waiting is at the top, so In progress growing mustn't scroll it away")
     }
 
     func testAThreadOpensAtItsLatestLikeAConversation() {
         let view = view(height: 300)
         view.show(book(exchanges: 30))
-        view.select(.thread("t", in: .direct(steve)))
-        XCTAssertGreaterThan(view.pane.scrollOffset, 0)
-        XCTAssertLessThanOrEqual(view.pane.distanceFromBottom, 1)
+        view.select(inThread)
+        XCTAssertGreaterThan(view.threadPane.scrollOffset, 0)
+        XCTAssertLessThanOrEqual(view.threadPane.distanceFromBottom, 1)
     }
 
-    func testReplyOnAMessageOpensItsThreadReadyToType() throws {
+    func testReplyOnAParentOpensItsThreadReadyToType() throws {
         let view = view()
         view.show(book())
-        view.select(.channel(.direct(steve)))
+        view.select(.channel(.of(steve)))
         let reply = try XCTUnwrap(view.pane.shownMessageRows.last?.onReply)
         reply()
-        XCTAssertEqual(view.selection, .thread("t", in: .direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"))
-        XCTAssertNil(view.pane.shownMessageRows.last?.onReply, "in the thread, the box already replies")
+        XCTAssertEqual(view.selection, inThread)
+        XCTAssertEqual(view.threadPane.composer.target, .thread(id: "t", title: "Work"))
+        XCTAssertNil(view.threadPane.shownMessageRows.last?.onReply, "in the thread, the box already replies")
     }
 
-    func testReplyingToAReportOpensItsThread() throws {
+    func testReplyingToAReportOpensItsThreadBesideItsChannel() throws {
         let report = InboxEntry(id: "r", kind: .decision, text: "Merged. Say ship it.", threadID: "t", threadTitle: "Work", at: at)
         let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
         let built = ChannelBook.build(kittens: [steve, pepper], threads: [thread], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(reports: [report]))
@@ -440,13 +529,13 @@ final class ChannelsWindowTests: XCTestCase {
 
         let card = try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first)
         XCTAssertTrue(try XCTUnwrap(card.buttons.first).accessibilityPerformPress())
-        XCTAssertEqual(view.selection, .thread("t", in: .direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work", report: "r"), "and the answer goes under that report")
-        XCTAssertFalse(view.pane.composer.isHidden)
+        XCTAssertEqual(view.selection, inThread, "in its home channel")
+        XCTAssertEqual(view.threadPane.composer.target, .thread(id: "t", title: "Work", report: "r"), "and the answer goes under that report")
+        XCTAssertFalse(view.threadPane.composer.isHidden)
 
-        view.select(.channel(.direct(steve)))
-        view.select(.thread("t", in: .direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Work"), "coming back some other way is just the thread")
+        view.select(.channel(.of(steve)))
+        view.select(inThread)
+        XCTAssertEqual(view.threadPane.composer.target, .thread(id: "t", title: "Work"), "coming back some other way is just the thread")
     }
 
     func testLookingAtAConversationCountsAsSeeingIt() {
@@ -454,8 +543,9 @@ final class ChannelsWindowTests: XCTestCase {
         var seen: [ChannelSelection] = []
         view.onSeen = { seen.append($0) }
         view.show(book())
-        view.select(.channel(.direct(steve)))
-        XCTAssertEqual(seen, [.needsYou, .channel(.direct(steve))])
+        view.select(.channel(.of(steve)))
+        view.select(inThread)
+        XCTAssertEqual(seen, [.activity, .channel(.of(steve)), inThread])
     }
 
     private func work(_ id: String, title: String, updated: TimeInterval = 0) -> AgentThread {
@@ -471,16 +561,16 @@ final class ChannelsWindowTests: XCTestCase {
         let transcripts = ["t": [said("e1", ask: "Tidy my resume", reply: "Done.", at: 0)]]
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false))
-        view.select(.thread("t", in: .direct(steve)))
-        view.pane.composer.textView.string = "Make the summary shorter"
+        view.select(inThread)
+        view.threadPane.composer.textView.string = "Make the summary shorter"
 
         let question = AgentQuestion(id: "q", threadID: "t", threadTitle: "Resume", text: "Which font?", form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which font?", options: [], values: [], takesOwnWords: true)]))
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id])))
-        view.pane.composer.send(view.pane.composer.textView.string)
-        XCTAssertEqual(sent, [.send("Make the summary shorter", to: .thread(id: "t", title: "Resume"), shownIn: .direct(steve))])
-        XCTAssertEqual(view.pane.composer.target, .question(question), "with nothing typed, it goes on to what needs answering")
+        view.threadPane.composer.send(view.threadPane.composer.textView.string)
+        XCTAssertEqual(sent, [.send("Make the summary shorter", to: .thread(id: "t", title: "Resume"), shownIn: .of(steve))])
+        XCTAssertEqual(view.threadPane.composer.target, .question(question), "with nothing typed, it goes on to what needs answering")
     }
 
     func testANewTopicHoldsTheBoxUntilItsThreadExistsAndThenCarriesOnThere() {
@@ -488,29 +578,29 @@ final class ChannelsWindowTests: XCTestCase {
         let transcripts = ["t": [said("e", ask: "Tidy my resume", reply: "Done.", at: 0)]]
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false))
-        view.select(.channel(.direct(steve)))
+        view.select(.channel(.of(steve)))
         view.pane.composer.send("Write a cover letter")
         guard case .startTopic(_, _, let topic)? = sent.last else { return XCTFail("\(sent)") }
 
         var echo = ChannelMessage(exchangeID: topic, kind: .ask, speaker: .you, text: "Write a cover letter", at: at.addingTimeInterval(60), threadID: "", threadTitle: "")
-        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .direct(steve), message: echo)]))
-        XCTAssertEqual(view.pane.composer.target, .starting(steve))
-        let said = view.pane.shown.compactMap { row -> String? in
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .of(steve), message: echo, startsThread: true)]))
+        XCTAssertEqual(view.threadPane.composer.target, .starting(steve))
+        let said = view.threadPane.shown.compactMap { row -> String? in
             if case .message(let message) = row { return message.text }
             return nil
         }
         XCTAssertEqual(said, ["Write a cover letter"], "only the new topic, not the resume")
-        view.pane.composer.send("Keep it to one page")
+        view.threadPane.composer.send("Keep it to one page")
         XCTAssertEqual(sent.count, 1, "nothing goes anywhere while it starts")
 
         echo.threadID = "n"
         echo.threadTitle = "Write a cover letter"
-        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .direct(steve), message: echo)]))
-        XCTAssertEqual(view.selection, .thread("n", in: .direct(steve)))
-        view.pane.composer.send(view.pane.composer.textView.string)
-        XCTAssertEqual(sent.last, .send("Keep it to one page", to: .thread(id: "n", title: "Write a cover letter"), shownIn: .direct(steve)))
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .of(steve), message: echo, startsThread: true)]))
+        XCTAssertEqual(view.selection, .thread("n", in: .channel(.of(steve))))
+        view.threadPane.composer.send(view.threadPane.composer.textView.string)
+        XCTAssertEqual(sent.last, .send("Keep it to one page", to: .thread(id: "n", title: "Write a cover letter"), shownIn: .of(steve)))
     }
 
     func testANewTopicHoldsTheBoxEvenIfAnotherThreadAnswersFirst() {
@@ -518,21 +608,21 @@ final class ChannelsWindowTests: XCTestCase {
         var transcripts = ["t": [Exchange(id: "e", asker: .you, askedAt: at, ask: "Tidy my resume", reply: nil, repliedAt: nil)]]
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         let echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Write a cover letter", at: at.addingTimeInterval(60), threadID: "", threadTitle: "")
-        let pending = [SentMessage(channel: .direct(steve), message: echo)]
+        let pending = [SentMessage(channel: .of(steve), message: echo, startsThread: true)]
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: pending))
-        view.select(.thread("sent-1", in: .direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .starting(steve))
-        view.pane.composer.textView.string = "Keep it to one page"
+        view.select(.thread("sent-1", in: .channel(.of(steve))))
+        XCTAssertEqual(view.threadPane.composer.target, .starting(steve))
+        view.threadPane.composer.textView.string = "Keep it to one page"
 
         // Meanwhile the resume thread finishes.
         threads[0].status = .completed
         threads[0].updatedAt = at.addingTimeInterval(61)
         transcripts["t"] = [Exchange(id: "e", asker: .you, askedAt: at, ask: "Tidy my resume", reply: "Done.", repliedAt: at.addingTimeInterval(61))]
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: pending))
-        XCTAssertEqual(view.pane.composer.target, .starting(steve))
-        view.pane.composer.send(view.pane.composer.textView.string)
+        XCTAssertEqual(view.threadPane.composer.target, .starting(steve))
+        view.threadPane.composer.send(view.threadPane.composer.textView.string)
         XCTAssertEqual(sent, [], "the follow-up to the new topic went to the old thread")
     }
 
@@ -540,18 +630,18 @@ final class ChannelsWindowTests: XCTestCase {
         var echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Write a cover letter", at: at, threadID: "", threadTitle: "")
         echo.failure = CatWords.didntStart
         let view = view()
-        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .direct(steve), message: echo)]))
-        view.select(.thread("sent-1", in: .direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .newThread(steve))
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .of(steve), message: echo, startsThread: true)]))
+        view.select(.thread("sent-1", in: .channel(.of(steve))))
+        XCTAssertEqual(view.threadPane.composer.target, .newThread(steve))
     }
 
     func testClosingWhileANewTopicStartsKeepsItForNextTime() {
         let window = ChannelsWindow()
         let echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Write a cover letter", at: at, threadID: "", threadTitle: "")
-        window.update(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .direct(steve), message: echo)]))
-        window.view.select(.thread("sent-1", in: .direct(steve)))
+        window.update(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .of(steve), message: echo, startsThread: true)]))
+        window.view.select(.thread("sent-1", in: .channel(.of(steve))))
         window.windowWillClose(Notification(name: NSWindow.willCloseNotification))
-        XCTAssertEqual(window.view.selection, .thread("sent-1", in: .direct(steve)), "what you sent is still known, so it's still there")
+        XCTAssertEqual(window.view.selection, .thread("sent-1", in: .channel(.of(steve))), "what you sent is still known, so it's still there")
     }
 
     private func twoPartQuestion() -> AgentQuestion {
@@ -575,37 +665,34 @@ final class ChannelsWindowTests: XCTestCase {
         let question = twoPartQuestion()
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id])))
         try press("January", in: view)
         XCTAssertEqual(sent, [], "nothing goes until every part has an answer")
         XCTAssertNil(try card(in: view).buttons.first { $0.accessibilityLabel() == "January" })
 
         try press(CatWords.answerInWords, in: view)
-        XCTAssertEqual(view.selection, .thread("t", in: .direct(steve)), "answering in words opens the thread it's in")
-        XCTAssertEqual(view.pane.composer.target, .question(question))
-        view.pane.composer.send("Pounds, please")
+        XCTAssertEqual(view.selection, inThread, "answering in words opens the thread it's in")
+        XCTAssertEqual(view.threadPane.composer.target, .question(question))
+        view.threadPane.composer.send("Pounds, please")
         XCTAssertEqual(sent, [.answer(question, ["jan", "Pounds, please"])])
     }
 
-    func testAThreadOnlyAnotherKittenTalksInHasNoBox() {
+    func testAThreadAnotherKittenStartedTakesYourReplyOnlyIntoIt() {
         let older = AgentThread(id: "old", title: "Old budget", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
         let between = AgentThread(id: "asked", title: "From Pepper", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at.addingTimeInterval(120), projectPath: "/k/steve")
         let pepperThread = AgentThread(id: "p", title: "Plans", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at, projectPath: "/k/pepper")
         let threads = [older, between, pepperThread]
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
-        view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: [:], isReading: true, unreadable: 0, cantReachT3: false))
-        view.select(.thread("asked", in: .direct(steve)))
-        view.pane.composer.textView.string = "Make the summary shorter"
-
+        view.onAction = { sent.append($0) }
         let asked = Exchange(id: "x", asker: .agent(threadID: "p"), askedAt: at.addingTimeInterval(100), ask: "Which font?", reply: "Silkscreen.", repliedAt: at.addingTimeInterval(101))
         let mine = Exchange(id: "e", asker: .you, askedAt: at, ask: "Old question", reply: "Old answer", repliedAt: at.addingTimeInterval(1))
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: ["old": [mine], "asked": [asked], "p": []], isReading: false, unreadable: 0, cantReachT3: false))
-        XCTAssertNil(view.pane.composer.target)
-        view.pane.composer.send(view.pane.composer.textView.string)
-        XCTAssertEqual(sent, [], "your words went into the thread where Pepper was asking Steve")
+        view.select(.thread("asked", in: .channel(.of(steve))))
+        XCTAssertEqual(view.threadPane.composer.target, .thread(id: "asked", title: "From Pepper"))
+        view.threadPane.composer.send("Make the summary shorter")
+        XCTAssertEqual(sent, [.send("Make the summary shorter", to: .thread(id: "asked", title: "From Pepper"), shownIn: .of(steve))], "only your words, and only into that thread")
     }
 }
 
@@ -622,8 +709,8 @@ extension ChannelsWindowTests {
         let said = Exchange(id: "e", asker: .you, askedAt: at, ask: "Hi", reply: "Hello there, this is a longer answer.", repliedAt: at.addingTimeInterval(1))
         let view = view()
         view.show(ChannelBook.build(kittens: [red], threads: [thread], transcripts: ["t": [said]], isReading: false, unreadable: 0, cantReachT3: false))
-        view.select(.channel(.direct(red)))
-        let rows = bubbles(in: view)
+        view.select(.thread("t", in: .channel(.of(red))))
+        let rows = bubbles(in: view.threadPane)
         let yours = try XCTUnwrap(rows.first(where: \.isYours))
         let theirs = try XCTUnwrap(rows.first { !$0.isYours })
 
@@ -721,30 +808,30 @@ extension ChannelsWindowTests {
         let transcripts = ["t": [said("e1", ask: "Tidy my resume", reply: "Done.", at: 0)]]
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false))
-        view.select(.thread("t", in: .direct(steve)))
-        view.pane.startSpeaking()
+        view.select(inThread)
+        view.threadPane.startSpeaking()
 
         let question = AgentQuestion(id: "q", threadID: "t", threadTitle: "Resume", text: "Which font?", form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which font?", options: [], values: [], takesOwnWords: true)]))
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id])))
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "t", title: "Resume"), "the box doesn't move while you talk")
-        view.pane.spoke("Make the summary shorter")
-        XCTAssertEqual(sent, [.send("Make the summary shorter", to: .thread(id: "t", title: "Resume"), shownIn: .direct(steve))])
-        XCTAssertEqual(view.pane.composer.target, .question(question), "and once it's sent, it goes on to the question")
+        XCTAssertEqual(view.threadPane.composer.target, .thread(id: "t", title: "Resume"), "the box doesn't move while you talk")
+        view.threadPane.spoke("Make the summary shorter")
+        XCTAssertEqual(sent, [.send("Make the summary shorter", to: .thread(id: "t", title: "Resume"), shownIn: .of(steve))])
+        XCTAssertEqual(view.threadPane.composer.target, .question(question), "and once it's sent, it goes on to the question")
     }
 
     func testWhatYouSayGoesAfterWhatYouTyped() {
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         view.show(book())
-        view.select(.thread("t", in: .direct(steve)))
-        view.pane.composer.textView.string = "Make the summary"
-        view.pane.startSpeaking()
-        view.pane.spoke("shorter, and keep it to one page")
-        XCTAssertEqual(sent, [.send("Make the summary shorter, and keep it to one page", to: .thread(id: "t", title: "Work"), shownIn: .direct(steve))])
-        XCTAssertEqual(view.pane.composer.textView.string, "")
+        view.select(inThread)
+        view.threadPane.composer.textView.string = "Make the summary"
+        view.threadPane.startSpeaking()
+        view.threadPane.spoke("shorter, and keep it to one page")
+        XCTAssertEqual(sent, [.send("Make the summary shorter, and keep it to one page", to: .thread(id: "t", title: "Work"), shownIn: .of(steve))])
+        XCTAssertEqual(view.threadPane.composer.textView.string, "")
     }
 
     func testWordsForAQuestionAnsweredMeanwhileWaitInTheBox() {
@@ -752,15 +839,15 @@ extension ChannelsWindowTests {
         let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: [thread], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id])))
-        view.select(.thread("t", in: .direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .question(question))
-        view.pane.startSpeaking()
+        view.select(inThread)
+        XCTAssertEqual(view.threadPane.composer.target, .question(question))
+        view.threadPane.startSpeaking()
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: [thread], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false))
-        view.pane.spoke("Silkscreen")
+        view.threadPane.spoke("Silkscreen")
         XCTAssertEqual(sent, [], "it was answered in T3 meanwhile, so the words don't go to the thread instead")
-        XCTAssertEqual(view.pane.composer.textView.string, "Silkscreen")
+        XCTAssertEqual(view.threadPane.composer.textView.string, "Silkscreen")
     }
 
     func testReplyingToAReportWhoseThreadT3NoLongerListsStillHasABox() throws {
@@ -770,8 +857,8 @@ extension ChannelsWindowTests {
         view.show(built)
         let card = try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first)
         XCTAssertTrue(try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == "Reply" }).accessibilityPerformPress())
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "gone", title: "Work", report: "r"), "an archived thread still takes a reply to its report")
-        XCTAssertFalse(view.pane.composer.isHidden)
+        XCTAssertEqual(view.threadPane.composer.target, .thread(id: "gone", title: "Work", report: "r"), "an archived thread still takes a reply to its report")
+        XCTAssertFalse(view.threadPane.composer.isHidden)
     }
 
     func testTypeAnAnswerWorksInAThreadAnotherKittenStarted() throws {
@@ -783,17 +870,17 @@ extension ChannelsWindowTests {
         ]))
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         let built = ChannelBook.build(kittens: [steve, pepper], threads: [between, pepperThread], transcripts: ["asked": [asked], "p": []], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id], listed: ["q": "asked"]))
         view.show(built)
         try press(CatWords.answerInWords, in: view)
-        XCTAssertEqual(view.selection, .thread("asked", in: .direct(steve)))
-        XCTAssertEqual(view.pane.composer.target, .question(question))
-        view.pane.composer.send("Warm but brief")
+        XCTAssertEqual(view.selection, .thread("asked", in: .channel(.of(steve))))
+        XCTAssertEqual(view.threadPane.composer.target, .question(question))
+        view.threadPane.composer.send("Warm but brief")
         XCTAssertEqual(sent, [.answer(question, ["Warm but brief"])])
 
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: [between, pepperThread], transcripts: ["asked": [asked], "p": []], isReading: false, unreadable: 0, cantReachT3: false))
-        XCTAssertNil(view.pane.composer.target, "once it's answered, carrying on in a thread another kitten started still isn't yours")
+        XCTAssertEqual(view.threadPane.composer.target, .thread(id: "asked", title: "From Pepper"), "once it's answered, the box replies in that thread, as Slack's does")
     }
 }
 
@@ -804,22 +891,22 @@ extension ChannelsWindowTests {
         let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .waitingForAnswer, model: "m", updatedAt: at, projectPath: "/k/steve")
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: [thread], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id], reports: [report])))
         let card = try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first { $0.accessibilityLabel()?.contains(report.text) == true })
         XCTAssertTrue(try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == "Ask" }).accessibilityPerformPress())
-        view.pane.composer.send("Where is the staging backup stored?")
-        XCTAssertEqual(sent, [.send("Where is the staging backup stored?", to: .thread(id: "t", title: "Work", report: "shipped"), shownIn: .direct(steve))])
+        view.threadPane.composer.send("Where is the staging backup stored?")
+        XCTAssertEqual(sent, [.send("Where is the staging backup stored?", to: .thread(id: "t", title: "Work", report: "shipped"), shownIn: .of(steve))])
 
         try press(CatWords.answerInWords, in: view)
-        XCTAssertEqual(view.pane.composer.target, .question(question), "Type an answer is how to answer it")
+        XCTAssertEqual(view.threadPane.composer.target, .question(question), "Type an answer is how to answer it")
     }
 }
 
 // MARK: - Messages, review round 3
 
 extension ChannelsWindowTests {
-    /// Steve's thread that Pepper's thread started, so it's only heard between kittens, with a report in Steve's inbox.
+    /// Steve's thread that Pepper's thread started, with a report in Steve's inbox.
     private func reportInAThreadBetweenKittens() -> (ChannelBook, InboxEntry) {
         let asked = AgentThread(id: "asked", title: "From Pepper", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
         let plans = AgentThread(id: "p", title: "Plans", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at, projectPath: "/k/pepper")
@@ -831,18 +918,17 @@ extension ChannelsWindowTests {
 
     func testSayingAReplyToAReportGoesWhereTypingItWouldEvenInAThreadBetweenKittens() throws {
         let (book, report) = reportInAThreadBetweenKittens()
-        XCTAssertTrue(book.elsewhere.contains("asked"))
         let view = view()
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         view.show(book)
         let card = try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first { $0.accessibilityLabel()?.contains(report.text) == true })
         XCTAssertTrue(try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == "Reply" }).accessibilityPerformPress())
-        XCTAssertEqual(view.pane.composer.target, .thread(id: "asked", title: "From Pepper", report: "r"))
-        view.pane.startSpeaking()
-        view.pane.spoke("Ship it")
-        XCTAssertEqual(sent, [.send("Ship it", to: .thread(id: "asked", title: "From Pepper", report: "r"), shownIn: .direct(steve))], "saying it counts as pressing Return")
-        XCTAssertEqual(view.pane.composer.textView.string, "")
+        XCTAssertEqual(view.threadPane.composer.target, .thread(id: "asked", title: "From Pepper", report: "r"))
+        view.threadPane.startSpeaking()
+        view.threadPane.spoke("Ship it")
+        XCTAssertEqual(sent, [.send("Ship it", to: .thread(id: "asked", title: "From Pepper", report: "r"), shownIn: .of(steve))], "saying it counts as pressing Return")
+        XCTAssertEqual(view.threadPane.composer.textView.string, "")
     }
 }
 
@@ -882,7 +968,7 @@ extension ChannelsWindowTests {
     func testTheWholeWindowTakesATheme() throws {
         let window = ChannelsWindow()
         window.update(book())
-        window.view.select(.channel(.direct(steve)))
+        window.view.select(.channel(.of(steve)))
         window.apply(Self.opal)
         defer { window.apply(nil) }
         XCTAssertEqual(window.panel.appearance?.name, .darkAqua, "its buttons, scrollers and cats go dark too")

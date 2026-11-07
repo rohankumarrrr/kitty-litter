@@ -3,55 +3,55 @@ import ShadesCore
 
 /// One line of the sidebar, as a value, so it's only rebuilt when something really changed.
 struct ChannelSidebarItem: Equatable {
-    enum Cat: Equatable {
+    enum Icon: Equatable {
+        case activity
+        case threads
+        case general
         case kitten(KittenStatus)
         case shades
-        case other
     }
 
-    var selection: ChannelSelection
+    var place: ChannelPlace
     var title: String
-    var cats: [Cat] = []
-    var count: Int?
+    var icon: Icon
+    /// What's waiting on you there, as Slack counts mentions.
+    var badge = 0
     var isUnread = false
 
     static func groups(in book: ChannelBook) -> [(heading: String?, items: [ChannelSidebarItem])] {
-        let directs = book.statuses.map { status in
-            ChannelSidebarItem(
-                selection: .channel(.direct(status.kitten)),
-                title: status.kitten.name,
-                cats: [.kitten(status)],
-                isUnread: book.unread.contains(status.kitten.id)
-            )
+        let activity = ChannelSidebarItem(place: .activity, title: CatWords.activityTitle, icon: .activity, badge: book.waiting.count)
+        let threads = ChannelSidebarItem(place: .threads, title: CatWords.threadsTitle, icon: .threads, isUnread: book.yours.contains { book.unreadThreads.contains($0.id) })
+        let general = ChannelSidebarItem(place: .channel(.general), title: book.name(of: .general), icon: .general, isUnread: book.isUnread(.general))
+        let kittens = book.statuses.map { status in
+            let id = ChannelID.of(status.kitten)
+            return ChannelSidebarItem(place: .channel(id), title: book.name(of: id), icon: .kitten(status), badge: book.badge(of: id), isUnread: book.isUnread(id))
         }
-        let between = book.between.map { channel in
-            ChannelSidebarItem(selection: .channel(channel.id), title: book.title(of: channel.id), cats: book.others(in: channel.id).map { other in
-                book.status(of: other).map(Cat.kitten) ?? .other
-            })
-        }
-        let needsYou = ChannelSidebarItem(selection: .needsYou, title: CatWords.needsYouTitle, count: book.waiting.count)
-        let everyone = ChannelSidebarItem(selection: .channel(.everyone), title: CatWords.everyone, cats: [.shades], isUnread: !book.unread.isEmpty)
-        let done = ChannelSidebarItem(selection: .done, title: CatWords.doneTitle)
-        // What you've said to the cat itself comes first, the way you'd talk to it before any kitten.
-        let shades = ChannelSidebarItem(selection: .channel(.shades), title: CatWords.shades, cats: [.shades])
-        return [(nil, [needsYou, everyone, done]), (CatWords.directMessages, [shades] + directs)] + (between.isEmpty ? [] : [(CatWords.betweenKittens, between)])
+        let shades = ChannelSidebarItem(place: .channel(.shades), title: CatWords.shades, icon: .shades)
+        return [(nil, [activity, threads]), (CatWords.channelsHeading, [general] + kittens), (CatWords.directMessages, [shades])]
+    }
+
+    /// Every place, top to bottom, the way the sidebar lists them.
+    static func places(in book: ChannelBook) -> [ChannelPlace] {
+        groups(in: book).flatMap(\.items).map(\.place)
     }
 }
 
-/// The left side of the window: Needs you, Everyone and Done, then Shades and a row for each kitten, then each pair that's talked.
+/// The left side of the window: Activity and Threads, then #general and a channel for each kitten, then the DM.
 final class ChannelSidebar: QuietView {
     static let width: CGFloat = 220
     /// Leaves room for the window's buttons.
     private static let top: CGFloat = 38
-    private static let rowHeight: CGFloat = 32
-    private static let headingHeight: CGFloat = 34
+    private static let rowHeight: CGFloat = 30
+    private static let headingHeight: CGFloat = 32
     private static let footerHeight: CGFloat = 40
 
-    var onSelect: ((ChannelSelection) -> Void)?
+    var onSelect: ((ChannelPlace) -> Void)?
     /// Theme was pressed, so its menu can open under it.
     var onTheme: ((NSView) -> Void)?
+    var onShortcuts: (() -> Void)?
     private(set) var rows: [ChannelSidebarRow] = []
     let themeButton = QuietButton(CatWords.themeButton, style: .text)
+    let shortcutsButton = QuietButton(CatWords.shortcutsButton, style: .text)
 
     private let scroll = QuietScrollView()
     private let list = QuietView()
@@ -63,23 +63,25 @@ final class ChannelSidebar: QuietView {
         scroll.documentView = list
         addSubview(scroll)
         addSubview(themeButton)
+        addSubview(shortcutsButton)
         themeButton.onPress = { [weak self] in
             guard let self else { return }
             self.onTheme?(self.themeButton)
         }
+        shortcutsButton.onPress = { [weak self] in self?.onShortcuts?() }
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func row(for selection: ChannelSelection) -> ChannelSidebarRow? {
-        rows.first { $0.item.selection == selection }
+    func row(for place: ChannelPlace) -> ChannelSidebarRow? {
+        rows.first { $0.item.place == place }
     }
 
-    func show(_ book: ChannelBook, selection: ChannelSelection) {
+    func show(_ book: ChannelBook, selection: ChannelPlace) {
         let groups = ChannelSidebarItem.groups(in: book)
         if groups.map(\.items) != shownGroups { rebuild(groups) }
-        rows.forEach { $0.isSelected = $0.item.selection == selection }
+        rows.forEach { $0.isSelected = $0.item.place == selection }
     }
 
     /// The next `show` makes every row again, in the colours there are now.
@@ -104,7 +106,7 @@ final class ChannelSidebar: QuietView {
             }
             for item in group.items {
                 let row = ChannelSidebarRow(item: item)
-                row.onPress = { [weak self] in self?.onSelect?(item.selection) }
+                row.onPress = { [weak self] in self?.onSelect?(item.place) }
                 row.update(tick: tick)
                 row.frame = NSRect(x: 8, y: y, width: Self.width - 16, height: Self.rowHeight)
                 list.addSubview(row)
@@ -131,6 +133,7 @@ final class ChannelSidebar: QuietView {
         super.layout()
         scroll.frame = NSRect(x: 0, y: Self.top, width: bounds.width - 1, height: max(bounds.height - Self.top - Self.footerHeight, 0))
         themeButton.frame.origin = NSPoint(x: 10, y: bounds.height - Self.footerHeight + (Self.footerHeight - themeButton.frame.height) / 2)
+        shortcutsButton.frame.origin = NSPoint(x: themeButton.frame.maxX + 4, y: themeButton.frame.minY)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -142,8 +145,8 @@ final class ChannelSidebar: QuietView {
 }
 
 final class ChannelSidebarRow: ChannelRowView {
-    private static let catSide: CGFloat = 24
-    private static let catInset: CGFloat = 6
+    private static let iconSide: CGFloat = 22
+    private static let iconInset: CGFloat = 6
 
     let item: ChannelSidebarItem
     var onPress: (() -> Void)?
@@ -162,9 +165,9 @@ final class ChannelSidebarRow: ChannelRowView {
     required init?(coder: NSCoder) { fatalError() }
 
     private var accessibilityWords: String {
-        if let count = item.count { return "\(item.title), \(count)" }
         var words = [item.title]
-        if case .kitten(let status)? = item.cats.first, item.cats.count == 1 { words.append(CatWords.kittenState(status.state)) }
+        if case .kitten(let status) = item.icon { words.append(CatWords.kittenState(status.state)) }
+        if item.badge > 0 { words.append("\(item.badge) waiting") }
         if item.isUnread { words.append("unread") }
         return words.joined(separator: ", ")
     }
@@ -174,14 +177,12 @@ final class ChannelSidebarRow: ChannelRowView {
 
     /// Only a kitten that's working or needs you moves, so nothing else has to redraw.
     var isLive: Bool {
-        item.cats.contains {
-            guard case .kitten(let status) = $0 else { return false }
-            return status.state.dotColor != nil
-        }
+        guard case .kitten(let status) = item.icon else { return false }
+        return status.state.dotColor != nil
     }
 
     private var isFaded: Bool {
-        guard case .kitten(let status)? = item.cats.first, item.cats.count == 1 else { return false }
+        guard case .kitten(let status) = item.icon else { return false }
         return status.state == .notSetUp
     }
 
@@ -196,45 +197,58 @@ final class ChannelSidebarRow: ChannelRowView {
             NSBezierPath(roundedRect: bounds, xRadius: 7, yRadius: 7).fill()
         }
 
-        let fraction: CGFloat = isFaded ? 0.4 : 1
-        let side = Self.catSide
-        for (index, cat) in item.cats.enumerated() {
-            let frame = NSRect(x: Self.catInset + CGFloat(index) * side / 2, y: (bounds.height - side) / 2, width: side, height: side)
-            switch cat {
-            case .kitten(let status):
-                CatStamp.draw(status.pose(tick: isLive ? tick : 0), jacket: ChannelSpeakerLook.color(of: status.kitten), in: frame, on: self, fraction: fraction)
-            case .shades:
-                CatStamp.draw(CatPose(frame: .sit), jacket: nil, in: frame, on: self)
-            case .other:
-                CatStamp.draw(CatPose(frame: .sit), jacket: ChannelSpeakerLook.otherJacket, in: frame, on: self)
-            }
+        let side = Self.iconSide
+        let frame = NSRect(x: Self.iconInset, y: (bounds.height - side) / 2, width: side, height: side)
+        switch item.icon {
+        case .kitten(let status):
+            CatStamp.draw(status.pose(tick: isLive ? tick : 0), jacket: ChannelSpeakerLook.color(of: status.kitten), in: frame, on: self, fraction: isFaded ? 0.4 : 1)
+        case .shades:
+            CatStamp.draw(CatPose(frame: .sit), jacket: nil, in: frame, on: self)
+        case .activity:
+            drawSymbol("bell", in: frame)
+        case .threads:
+            drawSymbol("bubble.left.and.bubble.right", in: frame)
+        case .general:
+            drawSymbol("number", in: frame)
         }
 
         var right = bounds.width - 10
-        if case .kitten(let status)? = item.cats.first, item.cats.count == 1, let dot = status.state.dotColor {
+        if case .kitten(let status) = item.icon, let dot = status.state.dotColor {
             dot.setFill()
             NSBezierPath(rect: NSRect(x: right - 8, y: bounds.midY - 4, width: 8, height: 8)).fill()
             right -= 16
         }
-        if item.isUnread {
-            Ink.accent.setFill()
-            NSBezierPath(ovalIn: NSRect(x: right - 8, y: bounds.midY - 4, width: 8, height: 8)).fill()
-            right -= 16
-        }
-        if let count = item.count, count > 0 {
-            let total = NSAttributedString(string: "\(count)", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: MessagesInk.soft])
-            let size = total.size()
-            total.draw(at: NSPoint(x: right - size.width, y: bounds.midY - size.height / 2))
-            right -= size.width + 8
+        if item.badge > 0 {
+            let count = NSAttributedString(string: "\(item.badge)", attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .bold), .foregroundColor: MessagesInk.onBadge])
+            let size = count.size()
+            let pill = NSRect(x: right - max(size.width + 10, 18), y: bounds.midY - 9, width: max(size.width + 10, 18), height: 18)
+            MessagesInk.badge.setFill()
+            NSBezierPath(roundedRect: pill, xRadius: 9, yRadius: 9).fill()
+            count.draw(at: NSPoint(x: pill.midX - size.width / 2, y: pill.midY - size.height / 2))
+            right = pill.minX - 6
         }
 
-        let left = item.cats.isEmpty ? 8 : Self.catInset + side + CGFloat(item.cats.count - 1) * side / 2 + 8
+        let left = Self.iconInset + side + 8
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         NSAttributedString(string: item.title, attributes: [
-            .font: NSFont.systemFont(ofSize: 13, weight: item.isUnread ? .semibold : item.count != nil ? .medium : .regular),
-            .foregroundColor: isFaded ? MessagesInk.soft : MessagesInk.text,
+            .font: NSFont.systemFont(ofSize: 13, weight: item.isUnread || item.badge > 0 ? .bold : .regular),
+            .foregroundColor: isFaded ? MessagesInk.soft : item.isUnread || item.badge > 0 || isSelected ? MessagesInk.text : MessagesInk.soft,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: left, y: (bounds.height - 17) / 2, width: max(right - left, 0), height: 17))
+    }
+
+    private func drawSymbol(_ name: String, in frame: NSRect) {
+        guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .medium))
+        else { return }
+        let tinted = NSImage(size: symbol.size, flipped: false) { rect in
+            symbol.draw(in: rect)
+            (self.item.isUnread || self.item.badge > 0 || self.isSelected ? MessagesInk.text : MessagesInk.soft).set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        let size = symbol.size
+        tinted.draw(in: NSRect(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
     }
 }

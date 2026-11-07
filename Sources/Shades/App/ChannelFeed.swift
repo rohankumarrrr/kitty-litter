@@ -13,13 +13,15 @@ final class ChannelFeed {
     private static let quietGaps = 5
     /// How long reads that land close together wait to be shown as one change.
     private static let showEvery: TimeInterval = 0.15
-    /// What you've sent that T3 hasn't echoed yet, such as the cat's own answers in Everyone, which T3 never has.
+    /// What you've sent that T3 hasn't echoed yet, such as the cat's own answers in #general, which T3 never has, and
+    /// replies you also sent to a channel.
     private static let sentKept = 100
 
     var onChange: ((ChannelBook) -> Void)?
     var waiting: () -> Waiting = { Waiting() }
     var isUnread: (AgentThread) -> Bool = { _ in false }
-    var alsoInEveryone: () -> [String: Date] = { [:] }
+    /// Threads Messages started from #general, or passed your words to there, and when. They live in #general.
+    var inGeneral: () -> [String: Date] = { [:] }
     /// Whether a thread is a conversation with the cat itself, which is any in the router's folder.
     var isWithShades: (AgentThread) -> Bool = { _ in false }
     /// What's on the screen, whose threads are read before the rest.
@@ -105,40 +107,63 @@ final class ChannelFeed {
         if isOpen { publish() }
     }
 
-    /// Shows it at once, until T3 has it.
-    func sent(_ message: ChannelMessage, in channel: ChannelID) {
-        sent.append(SentMessage(channel: channel, message: message))
+    /// Shows it at once, until T3 has it. A reply only shows in `channel` as well as its thread if it's `alsoSent`, from
+    /// memory only, as Slack's "Also send to #channel" does.
+    func sent(_ message: ChannelMessage, in channel: ChannelID, startsThread: Bool = false, alsoSent: Bool = false, isReply: Bool = false) {
+        sent.append(SentMessage(channel: channel, message: message, startsThread: startsThread, alsoSent: alsoSent, isReply: isReply))
         sent = sent.suffix(Self.sentKept)
         isDirty = true
         publish()
     }
 
-    /// A new topic you started now has a thread, or `nil` if it never got one.
-    func started(_ exchangeID: String, in threadID: String?, title: String) {
+    /// What you sent now has a thread, or `nil` if it never got one. A new topic says it didn't start, and anything
+    /// else stays where you said it.
+    func started(_ exchangeID: String, in threadID: String?, title: String = "", alsoSent: Bool? = nil) {
         guard let index = sent.firstIndex(where: { $0.message.exchangeID == exchangeID }) else { return }
         if let threadID {
             sent[index].message.threadID = threadID
             sent[index].message.threadTitle = title
-        } else {
+            if let alsoSent { sent[index].alsoSent = alsoSent }
+        } else if sent[index].startsThread {
             sent[index].message.failure = CatWords.didntStart
         }
+        isDirty = true
         publish()
     }
 
-    /// The threads behind what you're looking at whose words are on the screen as they are now, so they can count as read.
+    /// The threads behind what you're looking at whose latest words are on the screen as they are now, so they can
+    /// count as read. A channel only shows each thread's parent, so there that has to be all it's said, or its latest
+    /// reply has to be sent to the channel too. A thread's pane shows every reply.
     func threads(in selection: ChannelSelection) -> [AgentThread] {
-        guard let id = selection.channelID else { return [] }
-        let owners = KittenBoard.Owners(kittens())
-        return threads.filter { thread in
-            guard readStamps[thread.id] == thread.updatedAt, !isWithShades(thread), let owner = owners.of(thread) else { return false }
-            if case .thread(let shown, _) = selection {
-                // Its latest words have to be the ones showing here, not only older ones while the latest are between kittens.
-                guard thread.id == shown, let book = published else { return false }
-                let latest = (book.directs + book.between).flatMap(\.messages).filter { $0.threadID == shown }.max { $0.at < $1.at }
-                return latest.map { latest in book.channel(id)?.messages.contains { $0.id == latest.id } == true } ?? false
+        guard let book = published else { return [] }
+        var shown: Set<String> = []
+        if let open = selection.thread, book.threads[open] != nil { shown.insert(open) }
+        var quiet: (AgentThread) -> Bool = { _ in false }
+        if let id = selection.channelID, let channel = book.channel(id) {
+            // A thread that's said nothing has nothing left to see, so the channel it would be in counts for it.
+            let owners = KittenBoard.Owners(kittens())
+            let inGeneral = inGeneral()
+            quiet = { thread in
+                guard book.threads[thread.id] == nil, self.transcripts[thread.id] != nil else { return false }
+                let owner = owners.of(thread)
+                switch id {
+                case .kitten(let kitten): return owner?.id == kitten && inGeneral[thread.id] == nil
+                case .general: return inGeneral[thread.id] != nil
+                case .shades: return false
+                }
             }
-            return id == .everyone || id == .direct(owner)
+            for post in channel.posts {
+                switch post {
+                case .thread(let thread):
+                    if book.threads[thread]?.replies.isEmpty == true { shown.insert(thread) }
+                case .alsoSent(let message, let thread):
+                    if book.threads[thread]?.latest.id == message.id { shown.insert(thread) }
+                case .message:
+                    break
+                }
+            }
         }
+        return threads.filter { readStamps[$0.id] == $0.updatedAt && !isWithShades($0) && (shown.contains($0.id) || quiet($0)) }
     }
 
     /// One loop at a time, so there's only ever one pass. It holds off between passes, so a burst of changes makes one.
@@ -180,7 +205,7 @@ final class ChannelFeed {
         let owners = KittenBoard.Owners(kittens())
         let talks = listed.filter(isWithShades)
         let byOwner = Dictionary(grouping: listed.filter { !isWithShades($0) }) { owners.of($0)?.id }
-        let mine = alsoInEveryone()
+        let mine = inGeneral()
         let owned = byOwner.filter { $0.key != nil }.values.flatMap { threads in
             threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
         } + (byOwner[nil] ?? []).filter { mine[$0.id] != nil }
@@ -202,8 +227,10 @@ final class ChannelFeed {
         let read = await read(moved) { thread, exchanges in
             unreadNew.remove(thread.id)
             if let exchanges {
-                // A channel only ever shows its newest exchanges, so a thread's older ones would never be seen.
-                transcripts[thread.id] = Array(exchanges.suffix(ChannelBook.keptExchanges))
+                // A thread shows its newest replies, and always its first message, which is the one that started it.
+                transcripts[thread.id] = exchanges.count > ChannelBook.keptExchanges
+                    ? Array(exchanges.prefix(1) + exchanges.suffix(ChannelBook.keptExchanges - 1))
+                    : exchanges
                 readStamps[thread.id] = thread.updatedAt
             }
             if Date().timeIntervalSince(lastShown) >= Self.showEvery {
@@ -224,18 +251,22 @@ final class ChannelFeed {
     /// Whether a thread's words are part of what's on the screen.
     private func isOnScreen(_ owners: KittenBoard.Owners) -> (AgentThread) -> Bool {
         let isWithShades = isWithShades
-        switch lookingAt {
-        case .thread(let id, _)?:
-            return { $0.id == id }
+        let open = lookingAt?.thread
+        let inGeneral = inGeneral()
+        let place: (AgentThread) -> Bool
+        switch lookingAt?.place {
         case .channel(.shades)?:
-            return isWithShades
-        case .channel(.everyone)?:
-            return { !isWithShades($0) }
-        case .channel(let id)?:
-            return { thread in owners.of(thread).map { id.members.contains(.kitten($0.id)) } ?? false }
-        case .needsYou?, .done?, nil:
-            return { _ in false }
+            place = isWithShades
+        case .channel(.general)?:
+            place = { inGeneral[$0.id] != nil || (!isWithShades($0) && owners.of($0) == nil) }
+        case .channel(.kitten(let kitten))?:
+            place = { thread in owners.of(thread)?.id == kitten }
+        case .threads?:
+            place = { !isWithShades($0) }
+        case .activity?, nil:
+            place = { _ in false }
         }
+        return { $0.id == open || place($0) }
     }
 
     /// Hands each read over as it lands, in the order asked, and returns how many could be read.
@@ -282,7 +313,7 @@ final class ChannelFeed {
             waiting: waiting(),
             sent: sent,
             isUnread: isUnread,
-            inEveryone: alsoInEveryone(),
+            inGeneral: inGeneral(),
             withShades: Set(threads.filter(isWithShades).map(\.id)),
             said: { reply in
                 let words = self.said[reply] ?? ChannelBook.said(reply)

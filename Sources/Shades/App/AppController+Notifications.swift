@@ -16,8 +16,8 @@ struct NeedsYouAlert: Equatable {
     var who: String?
 }
 
-/// One notification for each new thing in Needs you, so Messages doesn't have to be open to know. Clicking one
-/// opens Needs you, where it is.
+/// One notification for each new thing waiting on you, so Messages doesn't have to be open to know. Clicking one
+/// opens Activity, where it is.
 extension AppController {
     func notifyNeedsYou() {
         let waiting = waiting
@@ -49,6 +49,6 @@ extension AppController {
     }
 
     func notificationClicked() {
-        channelsPressed(selecting: .needsYou)
+        channelsPressed(selecting: .activity)
     }
 }

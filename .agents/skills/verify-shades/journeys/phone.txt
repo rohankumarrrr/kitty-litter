@@ -11,7 +11,7 @@ wait 2
 approval command npm run build && npm test
 report decision
 wait 2
-phone go needs
+phone go activity
 wait 3
 phone text
 draw .verify/shades/phone/3-needs
@@ -21,7 +21,7 @@ wait 3
 phone text
 draw .verify/shades/phone/4-allowed
 wait 2
-phone go everyone
+phone go general
 wait 3
 phone send Hello from my phone
 wait 5

@@ -189,12 +189,12 @@ final class ScreenBoundaryTests: XCTestCase {
 private enum Give: CaseIterable {
     /// Ask, and the router picks a kitten.
     case askKitten
-    /// Everyone in Messages, and the router picks a kitten.
-    case everyoneKitten
-    /// Shades in Messages, which goes through the router the same way, and it picks a kitten.
+    /// #general in Messages, and the router picks a kitten.
+    case generalKitten
+    /// The cat's DM in Messages, which goes through the router the same way, and it picks a kitten.
     case shadesKitten
-    /// The box under a kitten's whole conversation in Messages, which starts a new topic.
-    case newTopic
+    /// The box under a kitten's channel in Messages, which starts a new thread.
+    case newThread
     /// Ask, and the router hands it to the frontier agent, with its own reading of the page as the task.
     case handOff
     /// Point at something broken.
@@ -203,7 +203,7 @@ private enum Give: CaseIterable {
     case dropKitten
     /// Drop a file onto the cat, and the router hands it to the frontier agent.
     case dropHandOff
-    /// Shades in Messages, and the router hands it to the frontier agent.
+    /// The cat's DM in Messages, and the router hands it to the frontier agent.
     case shadesHandOff
 
     var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff, .shadesHandOff].contains(self) }
@@ -213,12 +213,14 @@ private enum Give: CaseIterable {
 private enum Pass: CaseIterable {
     /// Ask, and the router says it carries on from that thread.
     case askThread
-    /// Everyone in Messages, and the router says the same.
-    case everyoneThread
-    /// Shades in Messages, and the router says the same.
+    /// #general in Messages, and the router says the same.
+    case generalThread
+    /// The cat's DM in Messages, and the router says the same.
     case shadesThread
-    /// Typing in a thread opened on its own in Messages, from a DM, Everyone, or Reply on a message.
-    case dmReply
+    /// Typing in a thread's pane in Messages, opened from its channel, Threads, Activity or Reply on a message.
+    case threadReply
+    /// The same, with "Also send to #channel" ticked, which only changes what Messages shows.
+    case threadReplyAlsoSent
     /// Reply or Ask on an inbox row, which opens its thread with the box ready.
     case inboxReply
     /// Answering a question that thread asked, in Messages.
@@ -359,13 +361,13 @@ private final class World {
         switch route {
         case .askKitten:
             await ask("this one", routerSays: "KITTEN: \(number)")
-        case .everyoneKitten:
+        case .generalKitten:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("this one", to: .router, routerSays: "KITTEN: \(number)")
         case .shadesKitten:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("this one", to: .router, in: .shades, routerSays: "KITTEN: \(number)")
-        case .newTopic:
+        case .newThread:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             controller.messagesAction(.startTopic("this one", with: kittens[number - 1], id: "sent-topic"))
             await settle()
@@ -390,15 +392,18 @@ private final class World {
         switch route {
         case .askThread:
             await ask("and that part?", routerSays: "SEND TO: 1")
-        case .everyoneThread:
+        case .generalThread:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("and that part?", to: .router, routerSays: "SEND TO: 1")
         case .shadesThread:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("and that part?", to: .router, in: .shades, routerSays: "SEND TO: 1")
-        case .dmReply:
+        case .threadReply:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("and that part?", to: .thread(id: "w", title: "Fix routing"))
+        case .threadReplyAlsoSent:
+            await ask("what's this?", routerSays: "It's Page-5ad1.")
+            await messages("and that part?", to: .thread(id: "w", title: "Fix routing"), alsoSent: true)
         case .inboxReply:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("Go ahead", to: .thread(id: "w", title: "Fix routing", report: "e"))
@@ -441,9 +446,9 @@ private final class World {
         await settle()
     }
 
-    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID = .everyone, routerSays: String? = nil) async {
+    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID = .general, alsoSent: Bool = false, routerSays: String? = nil) async {
         if let routerSays { backend.routerSays[words] = routerSays }
-        controller.messagesAction(.send(words, to: target, shownIn: channel))
+        controller.messagesAction(.send(words, to: target, shownIn: channel, alsoSent: alsoSent))
         await settle()
     }
 
