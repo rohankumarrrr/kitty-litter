@@ -16,6 +16,13 @@ extension AppController {
         tidyLeftoverSummaries(threads)
         hideTestThreads(threads)
         latestThreads = threads
+        if !threadListArrived {
+            Task { [weak self, warmDelay] in
+                try? await Task.sleep(for: warmDelay)
+                guard let self else { return }
+                self.channels.warm(threads: self.latestThreads)
+            }
+        }
         threadListArrived = true
         // Being the router's is only remembered while the app runs, and its folder says so after a restart too, so a
         // talk with the cat never counts as work, a session to pass words to, or a kitten's.
