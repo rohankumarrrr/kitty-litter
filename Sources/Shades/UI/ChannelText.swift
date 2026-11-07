@@ -33,12 +33,14 @@ enum ChannelMarkdown {
 
 /// Some text laid out at one width, cut short to a number of lines if asked, in a text view you can select and copy
 /// from. Pressing in it gives Messages the keyboard, the way pressing in the box does, which still leaves your app in
-/// front, so Command-C has somewhere to go.
+/// front, so Command-C has somewhere to go. It's measured without a view, and only gets one once the row it's in is
+/// shown, since most of a long conversation never is.
 final class ChannelTextBlock {
     private let layoutManager = NSLayoutManager()
     private let container = NSTextContainer()
     private let storage: NSTextStorage
-    let view: ChannelTextView
+    private var textView: ChannelTextView?
+    private var origin = NSPoint.zero
     private var fitted: (width: CGFloat, maxLines: Int?)?
     private(set) var height: CGFloat = 0
     /// The widest line, so a bubble can be no wider than its words.
@@ -52,12 +54,6 @@ final class ChannelTextBlock {
         storage.addLayoutManager(layoutManager)
         layoutManager.addTextContainer(container)
         container.lineFragmentPadding = 0
-        view = ChannelTextView(frame: .zero, textContainer: container)
-        let words = text.length > 0 ? text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor : nil
-        // A tint of the words' own colour shows on any bubble, where the system's blue might not.
-        view.selectedTextAttributes = [.backgroundColor: NSColor(name: nil) { _ in
-            (words ?? MessagesInk.text).usingColorSpace(.sRGB)?.withAlphaComponent(0.3) ?? .selectedTextBackgroundColor
-        }]
     }
 
     @discardableResult
@@ -65,7 +61,8 @@ final class ChannelTextBlock {
         if let fitted, fitted.width == width, fitted.maxLines == maxLines { return height }
         fitted = (width, maxLines)
         container.size = NSSize(width: width, height: .greatestFiniteMagnitude)
-        container.maximumNumberOfLines = 0
+        // One line past the most it can show is enough to tell it's cut, however long it goes on.
+        container.maximumNumberOfLines = maxLines.map { $0 + 1 } ?? 0
         container.lineBreakMode = .byWordWrapping
         isCut = false
         let lines = lineRects.map(\.width)
@@ -85,11 +82,41 @@ final class ChannelTextBlock {
         return height
     }
 
+    var view: ChannelTextView {
+        if let textView { return textView }
+        let view = ChannelTextView(frame: .zero, textContainer: container)
+        view.selectedTextAttributes = Self.selection(on: wordsColor)
+        textView = view
+        return view
+    }
+
     /// Puts the words in `superview` with their top left at `origin`, as wide as they are, so pressing beside them
-    /// doesn't start a selection.
+    /// doesn't start a selection. A row that isn't shown only remembers where they go.
     func place(at origin: NSPoint, in superview: NSView) {
+        self.origin = origin
+        if superview.superview != nil || textView?.superview === superview { show(in: superview) }
+    }
+
+    func show(in superview: NSView) {
         if view.superview !== superview { superview.addSubview(view) }
         view.frame = NSRect(x: origin.x, y: origin.y, width: right, height: height)
+    }
+
+    /// The same words in another colour, such as after a theme change, without reading or measuring them again.
+    func recolor(_ color: NSColor) {
+        storage.addAttribute(.foregroundColor, value: color, range: NSRange(location: 0, length: storage.length))
+        textView?.selectedTextAttributes = Self.selection(on: color)
+    }
+
+    private var wordsColor: NSColor? {
+        storage.length > 0 ? storage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor : nil
+    }
+
+    /// A tint of the words' own colour shows on any bubble, where the system's blue might not.
+    private static func selection(on words: NSColor?) -> [NSAttributedString.Key: Any] {
+        [.backgroundColor: NSColor(name: nil) { _ in
+            (words ?? MessagesInk.text).usingColorSpace(.sRGB)?.withAlphaComponent(0.3) ?? .selectedTextBackgroundColor
+        }]
     }
 
     /// What each line's words take up.

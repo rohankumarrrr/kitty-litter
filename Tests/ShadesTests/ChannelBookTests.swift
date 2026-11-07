@@ -263,6 +263,31 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertNil(KittenBoard.owner(of: thread("t", project: "site"), among: [pepper, steve]))
     }
 
+    func testAFolderCountsHoweverItsPathIsWritten() {
+        let worker = Kitten(name: "Worker", role: "", covers: "", folder: "/k/worker", project: "/code/site")
+        let at = { (path: String) in AgentThread(id: "t", title: "Work", projectTitle: nil, status: .completed, model: "m", updatedAt: self.at, projectPath: path) }
+        XCTAssertEqual(KittenBoard.owner(of: at("/k/worker/"), among: [steve, worker]), worker)
+        XCTAssertEqual(KittenBoard.owner(of: at("/k/steve/../worker"), among: [steve, worker]), worker)
+        XCTAssertEqual(KittenBoard.owner(of: at("/code/site"), among: [steve, worker]), worker, "its project counts too")
+        XCTAssertNil(KittenBoard.owner(of: at("/code/site/more"), among: [steve, worker]))
+    }
+
+    func testBuildingTheBookWorksOutEachThreadsOwnerOnce() throws {
+        // Standardizing a thread's folder is slow, and a build used to ask every thread's owner again at each step.
+        let kittens = (0..<6).map { Kitten(name: "Kitten \($0)", role: "", covers: "", folder: "/k/\($0)") }
+        let threads = (0..<800).map { thread("\($0)", project: "elsewhere-\($0 % 30)") }
+        func best(_ work: () -> Void) -> TimeInterval {
+            (0..<3).map { _ in
+                let start = Date()
+                work()
+                return Date().timeIntervalSince(start)
+            }.min() ?? 0
+        }
+        let askingEachOnce = best { for thread in threads { _ = KittenBoard.owner(of: thread, among: kittens) } }
+        let building = best { _ = book(kittens: kittens, threads: threads) }
+        XCTAssertLessThan(building, askingEachOnce * 2, "a build takes \(building)s, and asking each thread once takes \(askingEachOnce)s")
+    }
+
     func testAnIssueIsAnOpenThreadAndAFinishedOneIsDoneWhetherOrNotItsSettled() throws {
         let built = book(kittens: [steve], threads: [
             thread("done-unsettled", status: .completed, age: 1),

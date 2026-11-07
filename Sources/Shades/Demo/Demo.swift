@@ -113,7 +113,15 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     }
 
     func exchanges(threadID: String) async -> [Exchange]? {
-        DemoChannels.transcripts[threadID] ?? []
+        DemoChannels.transcripts[threadID] ?? DemoBusy.transcripts[threadID] ?? []
+    }
+
+    /// Hundreds more threads, with long conversations, as T3 would list them for someone who uses it all day.
+    func makeBusy() {
+        update { threads in
+            guard !threads.contains(where: { $0.id == DemoBusy.longThread }) else { return }
+            threads += DemoBusy.threads
+        }
     }
 
     /// An agent stops to ask you something, which then shows on the dashboard too.

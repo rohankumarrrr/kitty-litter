@@ -1,0 +1,9 @@
+front
+busy
+wait 1
+channels
+wait 2
+perf
+wait 90
+front
+windows

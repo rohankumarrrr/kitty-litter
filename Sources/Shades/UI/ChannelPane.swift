@@ -118,11 +118,19 @@ final class ChannelHeader: QuietView {
     }
 }
 
-/// The right side of the window: a header, then rows measured at the current width.
+/// The right side of the window: a header, then rows measured at the current width. Only the rows near what you can
+/// see are views in the window, and a conversation lays out its newest rows first and older ones as you scroll up to
+/// them, so a long one opens, scrolls and updates as quickly as a short one.
 final class ChannelPane: QuietView {
     private static let stickyDistance: CGFloat = 40
     private static let topPad: CGFloat = 6
     private static let bottomPad: CGFloat = 14
+    /// How many of a conversation's rows are laid out at a time.
+    static let page = 60
+    /// How far past what you can see rows are kept in the window, so scrolling finds them ready.
+    private static let overscan: CGFloat = 600
+    /// How far a refresh looks ahead for a row it already has a view for, which covers rows coming and going at the top.
+    private static let reuseReach = 64
 
     var onOpenThread: ((String) -> Void)?
     var onCopy: ((String) -> Void)?
@@ -143,9 +151,15 @@ final class ChannelPane: QuietView {
     /// Where the box pointed when the talk key went down, so nothing arriving meanwhile can move what you say.
     private var spokenTo: (selection: ChannelSelection, target: MessageTarget, answered: Int)?
     private(set) var shown: [ChannelRow] = []
+    /// Views for the rows from `first` on. Each is only in the window while it's near what you can see.
     private var views: [ChannelRowView] = []
+    /// Where each of `views` goes. Moving a view that isn't in the window still costs, so it only moves once it's in.
+    private var frames: [NSRect] = []
+    private var first = 0
+    private var words: [String: MessageWords] = [:]
     private var expanded: Set<String> = []
     private var stackedSize = NSSize.zero
+    private var isPaging = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -184,6 +198,8 @@ final class ChannelPane: QuietView {
             }
         }
         composer.onResize = { [weak self] in self?.arrange(force: true) }
+        scroll.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
     }
 
     @available(*, unavailable)
@@ -204,6 +220,7 @@ final class ChannelPane: QuietView {
         let wasAtBottom = isNearBottom
         stack()
         if wasAtBottom, followsLatest { scrollToBottom() }
+        attach()
     }
 
     /// Selecting something shows its latest. A refresh only follows along if you were already at the bottom.
@@ -220,10 +237,24 @@ final class ChannelPane: QuietView {
         guard isNewSelection || rows != shown else { return }
 
         let wasAtBottom = isNearBottom
-        let kept = isNewSelection ? 0 : zip(shown, rows).prefix { $0 == $1 }.count
-        views[kept...].forEach { $0.removeFromSuperview() }
-        views = Array(views[..<kept]) + rows[kept...].map { view(for: $0, in: book, among: rows, selection: selection) }
-        for view in views[kept...] { document.addSubview(view) }
+        let anchor = isNewSelection ? nil : firstInSight
+        // Following along at the bottom goes back to the newest page, so what's laid out doesn't keep growing.
+        let start = followsLatest ? (isNewSelection || wasAtBottom ? max(rows.count - Self.page, 0) : refreshedStart(in: rows)) : 0
+        // A refresh keeps the view of each row that's still there, wherever it's moved to.
+        var old: [(row: ChannelRow, view: ChannelRowView?)] = isNewSelection ? [] : zip(shown[first...], views).map { ($0, $1) }
+        var cursor = rows.indices.contains(start) ? old.firstIndex { $0.row == rows[start] } ?? 0 : 0
+        let previous = views
+        views = rows[start...].map { row in
+            if let match = old[cursor..<min(cursor + Self.reuseReach, old.count)].firstIndex(where: { $0.row == row }), let kept = old[match].view {
+                old[match].view = nil
+                cursor = match + 1
+                return kept
+            }
+            return view(for: row, in: book, among: rows, selection: selection)
+        }
+        let kept = Set(views.map(ObjectIdentifier.init))
+        previous.filter { !kept.contains(ObjectIdentifier($0)) }.forEach { $0.removeFromSuperview() }
+        first = start
         shown = rows
         stack()
 
@@ -231,7 +262,16 @@ final class ChannelPane: QuietView {
             scrollOffset = selection.channelID == nil ? 0 : bottomOffset
         } else if wasAtBottom, followsLatest {
             scrollToBottom()
+        } else if followsLatest, let anchor {
+            keep(anchor)
         }
+        attach()
+    }
+
+    /// Where the laid-out rows start after a refresh: at the same row as before, or as many from the end.
+    private func refreshedStart(in rows: [ChannelRow]) -> Int {
+        guard shown.indices.contains(first) else { return max(rows.count - Self.page, 0) }
+        return rows.firstIndex(of: shown[first]) ?? max(rows.count - (shown.count - first), 0)
     }
 
     /// Makes every row again in the colours there are now, where you were.
@@ -241,10 +281,10 @@ final class ChannelPane: QuietView {
         guard let book else { return }
         let offset = scrollOffset
         views.forEach { $0.removeFromSuperview() }
-        views = shown.map { view(for: $0, in: book, among: shown, selection: selection) }
-        views.forEach(document.addSubview)
+        views = shown[first...].map { view(for: $0, in: book, among: shown, selection: selection) }
         stack()
         scrollOffset = offset
+        attach()
     }
 
     /// Nothing on the screen is kept once the window closes.
@@ -252,6 +292,8 @@ final class ChannelPane: QuietView {
         views.forEach { $0.removeFromSuperview() }
         views = []
         shown = []
+        first = 0
+        words = [:]
         expanded = []
         book = nil
         partAnswers = [:]
@@ -356,12 +398,12 @@ final class ChannelPane: QuietView {
 
     /// For a row whose look changed while its value didn't.
     private func rebuild(_ row: ChannelRow) {
-        guard let book, let index = shown.firstIndex(of: row) else { return }
+        guard let book, let index = shown.firstIndex(of: row), index >= first else { return }
         let fresh = view(for: row, in: book, among: shown, selection: selection)
-        views[index].removeFromSuperview()
-        views[index] = fresh
-        document.addSubview(fresh)
+        views[index - first].removeFromSuperview()
+        views[index - first] = fresh
         stack()
+        attach()
     }
 
     /// Replying in a thread is offered from a channel you can write in. In the thread itself, the box already does it.
@@ -371,7 +413,8 @@ final class ChannelPane: QuietView {
         return MessageTarget.standard(for: selection, in: book) != nil
     }
 
-    /// Times are worked out as they're drawn, so a redraw brings them up to date.
+    /// Times are worked out as they're drawn, so a redraw brings them up to date. Rows out of the window are drawn
+    /// fresh when they come back.
     func refreshTimes() {
         document.subviews.forEach { $0.needsDisplay = true }
     }
@@ -380,6 +423,7 @@ final class ChannelPane: QuietView {
         shownMessageRows.first(where: \.isCut)
     }
 
+    /// Every message laid out so far, in the window or not.
     var shownMessageRows: [MessageRowView] {
         views.compactMap { $0 as? MessageRowView }
     }
@@ -407,7 +451,11 @@ final class ChannelPane: QuietView {
             if let channel = selection.channelID { view.onPress = { [weak self] in self?.open(thread: threadID, in: channel, typing: false) } }
             return view
         case .message(let message):
-            let view = MessageRowView(message: message, look: ChannelSpeakerLook(message.speaker, in: book))
+            let look = ChannelSpeakerLook(message.speaker, in: book)
+            let laidOut = words[message.id].flatMap { $0.message == message ? $0 : nil } ?? MessageWords(message, look: look)
+            laidOut.paint(for: look)
+            words[message.id] = laidOut
+            let view = MessageRowView(message: message, look: look, words: laidOut)
             view.isExpanded = expanded.contains(message.id)
             if canReply, !message.threadID.isEmpty, let channel = selection.channelID {
                 view.onReply = { [weak self] in self?.open(thread: message.threadID, in: channel, typing: true) }
@@ -418,6 +466,7 @@ final class ChannelPane: QuietView {
                 self?.expanded.insert(message.id)
                 view?.isExpanded = true
                 self?.stack()
+                self?.attach()
             }
             return view
         case .heading(let status):
@@ -509,6 +558,7 @@ final class ChannelPane: QuietView {
         CardRowView.Button(title: CatWords.openInT3, isWayOut: true) { [weak self] in self?.onOpenThread?(threadID) }
     }
 
+    /// Lays out every row that has a view. A row only draws again when its size changes or it comes back into the window.
     private func stack() {
         stackedSize = scroll.contentSize
         let width = stackedSize.width
@@ -516,12 +566,64 @@ final class ChannelPane: QuietView {
         let heights = views.map { $0.fit(width: width) }
         let total = heights.reduce(0, +) + Self.topPad + Self.bottomPad
         var y = isLoneNote ? max((clipHeight - total) / 2, 0) : Self.topPad
-        for (view, height) in zip(views, heights) {
-            view.frame = NSRect(x: 0, y: y, width: width, height: height)
-            view.needsDisplay = true
-            y += height
+        frames = heights.map { height in
+            defer { y += height }
+            return NSRect(x: 0, y: y, width: width, height: height)
+        }
+        for (view, frame) in zip(views, frames) where view.superview === document && view.frame != frame {
+            view.frame = frame
         }
         document.frame = NSRect(x: 0, y: 0, width: width, height: max(total, clipHeight))
+    }
+
+    /// Puts the rows near what you can see in the window and takes the rest out, except one you're selecting words in.
+    private func attach() {
+        let near = scroll.contentView.bounds.insetBy(dx: 0, dy: -Self.overscan)
+        let typing = (window?.firstResponder as? NSView).flatMap { responder in views.first { responder.isDescendant(of: $0) } }
+        for (view, frame) in zip(views, frames) {
+            let wanted = frame.intersects(near) || view === typing
+            if wanted, view.superview !== document {
+                view.frame = frame
+                document.addSubview(view)
+            } else if !wanted, view.superview === document {
+                view.removeFromSuperview()
+            }
+        }
+    }
+
+    /// How tall the part of the pane you can scroll through is.
+    var visibleHeight: CGFloat { scroll.contentSize.height }
+
+    @objc private func scrolled(_ notification: Notification) {
+        attach()
+        pageIfNeeded()
+    }
+
+    /// Scrolling up near the oldest row laid out lays out the page before it, without moving what you're looking at.
+    private func pageIfNeeded() {
+        guard !isPaging, let book else { return }
+        isPaging = true
+        defer { isPaging = false }
+        while first > 0, scroll.contentView.bounds.minY < scroll.contentSize.height {
+            let anchor = firstInSight
+            let start = max(first - Self.page, 0)
+            views = shown[start..<first].map { view(for: $0, in: book, among: shown, selection: selection) } + views
+            first = start
+            stack()
+            if let anchor { keep(anchor) }
+        }
+        attach()
+    }
+
+    /// The first row you can see, and how far above the top of the pane it starts.
+    private var firstInSight: (view: ChannelRowView, above: CGFloat)? {
+        let top = scroll.contentView.bounds.minY
+        return frames.firstIndex { $0.maxY > top }.map { (views[$0], top - frames[$0].minY) }
+    }
+
+    private func keep(_ anchor: (view: ChannelRowView, above: CGFloat)) {
+        guard let index = views.firstIndex(where: { $0 === anchor.view }) else { return }
+        scrollOffset = min(max(frames[index].minY + anchor.above, 0), bottomOffset)
     }
 
     private var isLoneNote: Bool {

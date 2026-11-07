@@ -165,6 +165,8 @@ class ChannelRowView: QuietView {
     var hovering = false { didSet { if hovering != oldValue { hoverChanged() } } }
 
     func fit(width: CGFloat) -> CGFloat { 0 }
+    /// Words that only get their views once the row is shown.
+    var textBlocks: [ChannelTextBlock] { [] }
     func press() {}
     var isPressable: Bool { false }
     func hoverChanged() { needsDisplay = true }
@@ -175,6 +177,11 @@ class ChannelRowView: QuietView {
         addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
         // A refresh can put a new row under a pointer that hasn't moved.
         if let window { hovering = bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) }
+    }
+
+    override func viewWillMove(toSuperview newSuperview: NSView?) {
+        super.viewWillMove(toSuperview: newSuperview)
+        if newSuperview != nil { textBlocks.forEach { $0.show(in: self) } }
     }
 
     override func mouseEntered(with event: NSEvent) { hovering = true }
@@ -276,6 +283,35 @@ final class SubjectRowView: ChannelRowView {
     }
 }
 
+/// A message's words, read from markdown and laid out once. Messages keeps them while it's open, so a message that's
+/// shown again, scrolled back to or kept through a refresh isn't read and measured again.
+final class MessageWords {
+    let message: ChannelMessage
+    let words: ChannelTextBlock?
+    let failure: ChannelTextBlock?
+    /// The bubble and theme its words are coloured for.
+    private var paint: (bubble: UInt32?, theme: ColorTheme?)
+
+    init(_ message: ChannelMessage, look: ChannelSpeakerLook) {
+        self.message = message
+        paint = (look.bubble, MessagesInk.theme)
+        let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
+        words = said.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Self.color(of: message, look: look))) }
+        failure = message.failure.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Ink.hex(0xff3b30))) }
+    }
+
+    /// Colours the words for `look` as it is now, which a theme can change.
+    func paint(for look: ChannelSpeakerLook) {
+        guard paint.bubble != look.bubble || paint.theme != MessagesInk.theme else { return }
+        paint = (look.bubble, MessagesInk.theme)
+        words?.recolor(Self.color(of: message, look: look))
+    }
+
+    private static func color(of message: ChannelMessage, look: ChannelSpeakerLook) -> NSColor {
+        message.isStillGoing ? look.text(fadedTo: MessageRowView.stillGoingAlpha) : look.bubbleText
+    }
+}
+
 /// One message as a bubble: yours on the right in blue, everyone else's on the left in their own colour.
 final class MessageRowView: ChannelRowView {
     private static let clampedLines = 12
@@ -286,10 +322,10 @@ final class MessageRowView: ChannelRowView {
     private static let insetY: CGFloat = 7
     /// Of the pane's width, so a long message still reads as a bubble.
     private static let widest: CGFloat = 0.7
-    private static let stillGoingAlpha = 0.55
+    static let stillGoingAlpha = 0.55
 
-    var onOpen: (() -> Void)? { didSet { setActions() } }
-    var onReply: (() -> Void)? { didSet { setActions() } }
+    var onOpen: (() -> Void)?
+    var onReply: (() -> Void)?
     var onCopy: ((String) -> Void)?
     var onShowMore: (() -> Void)?
     var isExpanded = false
@@ -298,41 +334,35 @@ final class MessageRowView: ChannelRowView {
     private let look: ChannelSpeakerLook
     private let words: ChannelTextBlock?
     private let failure: ChannelTextBlock?
-    private let showMore = QuietButton("Show more", style: .text)
-    private let copyButton = QuietButton("Copy", style: .text)
-    private let openButton = QuietButton("Open", style: .text)
-    private let replyButton = QuietButton("Reply", style: .text)
+    private var showMore: QuietButton?
+    /// Made the first time you hover, since most messages never are.
+    private var hoverButtons: (open: QuietButton, copy: QuietButton, reply: QuietButton)?
     private(set) var bubble = NSRect.zero
     private var failureTop: CGFloat = 0
+    /// A row is laid out again each time the rows around it are, so it keeps its answer until something it depends on changes.
+    private var fitted: (width: CGFloat, isExpanded: Bool, height: CGFloat)?
 
-    init(message: ChannelMessage, look: ChannelSpeakerLook) {
+    init(message: ChannelMessage, look: ChannelSpeakerLook, words laidOut: MessageWords? = nil) {
         self.message = message
         self.look = look
-        let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
-        let color = message.isStillGoing ? look.text(fadedTo: Self.stillGoingAlpha) : look.bubbleText
-        words = said.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: color)) }
-        failure = message.failure.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Ink.hex(0xff3b30))) }
+        let laidOut = laidOut ?? MessageWords(message, look: look)
+        words = laidOut.words
+        failure = laidOut.failure
         super.init(frame: .zero)
-
-        showMore.onPress = { [weak self] in self?.onShowMore?() }
-        openButton.onPress = { [weak self] in self?.onOpen?() }
-        replyButton.onPress = { [weak self] in self?.onReply?() }
-        copyButton.onPress = { [weak self] in self?.copyPressed() }
-        for button in [showMore, copyButton, openButton, replyButton] {
-            button.isHidden = true
-            addSubview(button)
-        }
-
         setAccessibilityElement(true)
         setAccessibilityRole(.staticText)
-        setAccessibilityLabel([look.name, time, said, message.failure].compactMap { $0 }.joined(separator: ", "))
-        setActions()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    private func setActions() {
+    // Worked out when VoiceOver asks, rather than for every row of a long conversation as it's laid out.
+    override func accessibilityLabel() -> String? {
+        let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
+        return [look.name, time, said, message.failure].compactMap { $0 }.joined(separator: ", ")
+    }
+
+    override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
         var actions: [NSAccessibilityCustomAction] = []
         if onReply != nil {
             actions.append(NSAccessibilityCustomAction(name: "Reply") { [weak self] in
@@ -352,9 +382,10 @@ final class MessageRowView: ChannelRowView {
                 return self != nil
             })
         }
-        setAccessibilityCustomActions(actions)
+        return actions
     }
 
+    override var textBlocks: [ChannelTextBlock] { [words, failure].compactMap { $0 } }
     var isCut: Bool { words?.isCut ?? false }
     var isYours: Bool { look.isYou }
     var fill: NSColor { look.bubbleFill }
@@ -366,17 +397,37 @@ final class MessageRowView: ChannelRowView {
     private func copyPressed() {
         guard let text = message.text else { return }
         onCopy?(text)
-        copyButton.flash("Copied")
+        hoverButtons?.copy.flash("Copied")
     }
 
     override func hoverChanged() {
-        copyButton.isHidden = !hovering || message.text == nil
-        openButton.isHidden = !hovering || onOpen == nil
-        replyButton.isHidden = !hovering || onReply == nil
+        if hovering, hoverButtons == nil {
+            let buttons = (
+                open: QuietButton("Open", style: .text) { [weak self] in self?.onOpen?() },
+                copy: QuietButton("Copy", style: .text) { [weak self] in self?.copyPressed() },
+                reply: QuietButton("Reply", style: .text) { [weak self] in self?.onReply?() }
+            )
+            [buttons.open, buttons.copy, buttons.reply].forEach(addSubview)
+            hoverButtons = buttons
+            placeHoverButtons(width: bounds.width)
+        }
+        hoverButtons?.copy.isHidden = !hovering || message.text == nil
+        hoverButtons?.open.isHidden = !hovering || onOpen == nil
+        hoverButtons?.reply.isHidden = !hovering || onReply == nil
         needsDisplay = true
     }
 
+    private func placeHoverButtons(width: CGFloat) {
+        guard let hoverButtons else { return }
+        var right = width - Self.margin + 6
+        for button in [hoverButtons.open, hoverButtons.copy, hoverButtons.reply] {
+            right -= button.frame.width
+            button.frame.origin = NSPoint(x: right, y: 0)
+        }
+    }
+
     override func fit(width: CGFloat) -> CGFloat {
+        if let fitted, fitted.width == width, fitted.isExpanded == isExpanded { return fitted.height }
         let room = max(min(width * Self.widest, width - Self.textLeft - Self.margin) - Self.insetX * 2, 60)
         var bottom = Self.pad + Self.headHeight
         if let words {
@@ -395,17 +446,18 @@ final class MessageRowView: ChannelRowView {
             failure.place(at: NSPoint(x: look.isYou ? bubble.maxX - failure.width : bubble.minX, y: failureTop), in: self)
             bottom = failureTop + failure.height
         }
-        showMore.isHidden = !isCut
+        showMore?.isHidden = !isCut
         if isCut {
+            let showMore = showMore ?? QuietButton("Show more", style: .text) { [weak self] in self?.onShowMore?() }
+            if showMore.superview == nil { addSubview(showMore) }
+            self.showMore = showMore
             showMore.frame.origin = NSPoint(x: look.isYou ? bubble.maxX - showMore.frame.width + 6 : bubble.minX - 6, y: bottom + 1)
             bottom += showMore.frame.height + 2
         }
-        var right = width - Self.margin + 6
-        for button in [openButton, copyButton, replyButton] {
-            right -= button.frame.width
-            button.frame.origin = NSPoint(x: right, y: 0)
-        }
-        return max(bottom + Self.pad, look.hasCat ? Self.pad * 2 + Self.headHeight + Self.catSide : 0)
+        placeHoverButtons(width: width)
+        let height = max(bottom + Self.pad, look.hasCat ? Self.pad * 2 + Self.headHeight + Self.catSide : 0)
+        fitted = (width, isExpanded, height)
+        return height
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -554,6 +606,7 @@ final class NoteRowView: ChannelRowView {
     required init?(coder: NSCoder) { fatalError() }
 
     private var left: CGFloat { isCentered ? Self.margin : Self.textLeft }
+    override var textBlocks: [ChannelTextBlock] { [block] }
 
     override func fit(width: CGFloat) -> CGFloat {
         let height = block.fit(width: max(width - left - Self.margin, 60))
@@ -636,6 +689,8 @@ final class CardRowView: ChannelRowView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    override var textBlocks: [ChannelTextBlock] { [words, answer].compactMap { $0 } }
 
     override func fit(width: CGFloat) -> CGFloat {
         let room = max(width - Self.textLeft - Self.margin, 60)

@@ -137,7 +137,8 @@ struct ChannelBook: Equatable {
         sent: [SentMessage] = [],
         isUnread: (AgentThread) -> Bool = { _ in false },
         inEveryone: [String: Date] = [:],
-        withShades: Set<String> = []
+        withShades: Set<String> = [],
+        said: (String) -> String? = ChannelBook.said
     ) -> ChannelBook {
         // A talk with the cat is titled with your question, which can start with a kitten's name, so it's kept apart
         // from everything worked out about kittens.
@@ -150,14 +151,18 @@ struct ChannelBook: Equatable {
             return waiting
         }
         let threadsByID = Dictionary(threads.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        // Each thread's owner is worked out once, since everything below asks.
+        let lookup = KittenBoard.Owners(kittens)
+        let owners = Dictionary(threads.map { ($0.id, lookup.of($0)) }, uniquingKeysWith: { first, _ in first })
+        let ownerOf = { (thread: AgentThread) in owners[thread.id] ?? nil }
         var placed: [ChannelID: [Placed]] = [:]
         var leftOut: Set<String> = []
         var heardIn: [String: Set<ChannelID>] = [:]
         for thread in talkThreads where !thread.isLiveTest {
-            if let exchanges = transcripts[thread.id] { placed[.shades, default: []] += talk(in: thread, exchanges) }
+            if let exchanges = transcripts[thread.id] { placed[.shades, default: []] += talk(in: thread, exchanges, said: said) }
         }
         for thread in threads {
-            guard let owner = KittenBoard.owner(of: thread, among: kittens) else {
+            guard let owner = ownerOf(thread) else {
                 if let since = inEveryone[thread.id], let exchanges = transcripts[thread.id] {
                     placed[.everyone, default: []] += answers(in: thread, exchanges, since: since)
                 }
@@ -170,7 +175,7 @@ struct ChannelBook: Equatable {
             // Within a thread, a later ask never sits above an earlier one.
             var latest = Date.distantPast
             for (index, exchange) in exchanges.enumerated() {
-                let speaker = speaker(of: exchange.asker, among: kittens, threads: threadsByID)
+                let speaker = speaker(of: exchange.asker, threads: threadsByID, owner: ownerOf)
                 // Waiting on you isn't working, so what it last said reads as said, and sits at the bottom where you'll see it.
                 let isStillGoing = thread.status.isActive && !KittenBoard.needsYou(thread) && index == exchanges.count - 1
                 let messages = messages(of: exchange, in: thread, owner: owner, speaker: speaker, isStillGoing: isStillGoing)
@@ -209,23 +214,23 @@ struct ChannelBook: Equatable {
             .map { channel($0.key, $0.value) }
             .sorted { (latest($0), latestID($0)) > (latest($1), latestID($1)) }
         let issues = statuses.compactMap { status -> KittenIssues? in
-            let mine = owned(by: status.kitten, among: kittens, in: threads)
+            let mine = owned(by: status.kitten, in: threads, owner: ownerOf)
             let open = mine.filter(isOpen).sorted { (urgency($0), $1.updatedAt, $0.id) < (urgency($1), $0.updatedAt, $1.id) }
             let done = mine.filter { !isOpen($0) }.sorted { ($1.updatedAt, $0.id) < ($0.updatedAt, $1.id) }
             return status.state == .notSetUp && open.isEmpty ? nil : KittenIssues(kitten: status.kitten, threads: open, done: done)
         }
         var waiting = waiting
         for entry in waiting.reports {
-            waiting.owners[entry.id] = threadsByID[entry.threadID].flatMap { KittenBoard.owner(of: $0, among: kittens) }?.id
+            waiting.owners[entry.id] = threadsByID[entry.threadID].flatMap(ownerOf)?.id
         }
         let everyone = channel(.everyone, directIDs.flatMap { placed[$0] ?? [] } + (placed[.everyone] ?? []))
-        let unread = Set(threads.filter(isUnread).compactMap { KittenBoard.owner(of: $0, among: kittens)?.id })
+        let unread = Set(threads.filter(isUnread).compactMap { ownerOf($0)?.id })
         var named: [String: AgentThread] = [:]
         var elsewhere: Set<String> = []
         for thread in talkThreads where named[thread.id] == nil { named[thread.id] = thread }
         for thread in threads where named[thread.id] == nil {
             named[thread.id] = thread
-            guard let owner = KittenBoard.owner(of: thread, among: kittens) else { continue }
+            guard let owner = ownerOf(thread) else { continue }
             named[thread.id]?.title = title(of: thread, owner: owner)
             if let heard = heardIn[thread.id], !heard.contains(.direct(owner)) { elsewhere.insert(thread.id) }
         }
@@ -249,12 +254,12 @@ struct ChannelBook: Equatable {
         )
     }
 
-    private static func speaker(of asker: Exchange.Asker, among kittens: [Kitten], threads: [String: AgentThread]) -> Speaker {
+    private static func speaker(of asker: Exchange.Asker, threads: [String: AgentThread], owner: (AgentThread) -> Kitten?) -> Speaker {
         switch asker {
         case .you:
             return .you
         case .agent(let threadID):
-            return threadID.flatMap { threads[$0] }.flatMap { KittenBoard.owner(of: $0, among: kittens) }.map { .kitten($0.id) } ?? .someoneElse
+            return threadID.flatMap { threads[$0] }.flatMap(owner).map { .kitten($0.id) } ?? .someoneElse
         }
     }
 
@@ -283,7 +288,12 @@ struct ChannelBook: Equatable {
     }
 
     private static func channel(_ id: ChannelID, _ placed: [Placed], leavesOutThreads: Bool = false) -> Channel {
-        let ordered = placed.sorted { ($0.position, $0.sequence, $0.messages[0].id) < ($1.position, $1.sequence, $1.messages[0].id) }
+        // A message's ID is made each time it's asked for, so it's only asked for when nothing else tells them apart.
+        let ordered = placed.sorted { a, b in
+            if a.position != b.position { return a.position < b.position }
+            if a.sequence != b.sequence { return a.sequence < b.sequence }
+            return a.messages[0].id < b.messages[0].id
+        }
         return Channel(id: id, messages: ordered.suffix(keptExchanges).flatMap(\.messages), isCut: leavesOutThreads || ordered.count > keptExchanges)
     }
 
@@ -312,7 +322,7 @@ struct ChannelBook: Equatable {
 
     /// A conversation with the cat: what you asked, and what it said or did about it, since the router answers in
     /// lines the app acts on. Only your words come out of what was asked, never the screen that went with them.
-    private static func talk(in thread: AgentThread, _ exchanges: [Exchange]) -> [Placed] {
+    private static func talk(in thread: AgentThread, _ exchanges: [Exchange], said: (String) -> String?) -> [Placed] {
         // As in a kitten's thread, a later ask never sits above an earlier one.
         var latest = Date.distantPast
         return exchanges.enumerated().compactMap { index, exchange in
@@ -377,9 +387,9 @@ struct ChannelBook: Equatable {
     private static func latest(_ channel: Channel) -> Date { channel.messages.last?.at ?? .distantPast }
     private static func latestID(_ channel: Channel) -> String { channel.messages.last?.id ?? "" }
 
-    private static func owned(by kitten: Kitten, among kittens: [Kitten], in threads: [AgentThread]) -> [AgentThread] {
+    private static func owned(by kitten: Kitten, in threads: [AgentThread], owner: (AgentThread) -> Kitten?) -> [AgentThread] {
         threads
-            .filter { KittenBoard.owner(of: $0, among: kittens) == kitten }
+            .filter { owner($0) == kitten }
             .map { thread in
                 var thread = thread
                 thread.title = title(of: thread, owner: kitten)
