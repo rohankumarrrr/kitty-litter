@@ -82,13 +82,7 @@ final class ScreenBoundaryTests: XCTestCase {
     /// The router reads your screen before anyone else does. A page can try to steer it, so nothing it can call may
     /// put text where another thread reads it. This is the way the leak that led to its folder went.
     func testTheRouterHasNoToolThatReachesAnotherThread() throws {
-        let settings = try XCTUnwrap(JSONSerialization.jsonObject(with: RouterBlock.settings) as? [String: Any])
-        let denied = try XCTUnwrap((settings["permissions"] as? [String: Any])?["deny"] as? [String])
-        let rule = try XCTUnwrap(((settings["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]])?.first)
-        let hook = try NSRegularExpression(pattern: try XCTUnwrap(rule["matcher"] as? String))
-        func turnedAway(_ tool: String) -> Bool {
-            hook.firstMatch(in: tool, range: NSRange(tool.startIndex..., in: tool)) != nil
-        }
+        let (denied, turnedAway) = try Self.routerRules()
         for tool in Self.waysToAnotherThread {
             XCTAssertTrue(turnedAway(tool), "\(tool) gets past the router's hook")
             if tool.hasPrefix("mcp__t3-code__") {
@@ -98,6 +92,17 @@ final class ScreenBoundaryTests: XCTestCase {
         for tool in RouterBlock.allowed {
             XCTAssertFalse(turnedAway(tool), "\(tool) is meant to stay")
             XCTAssertTrue(Self.onlyRead.contains(tool), "\(tool) is let through, and nothing here says it only reads")
+        }
+    }
+
+    /// Files anything running as you can read hold secrets in plain text, such as Claude Code's prompt history,
+    /// `~/.git-credentials`, `~/.ssh` and Notes' store. A page could steer the router into reading one and carrying
+    /// it out in a search, and it needs no file, since your screen comes in its message.
+    func testTheRouterCantReadYourFiles() throws {
+        let (denied, turnedAway) = try Self.routerRules()
+        for tool in ["Read", "Glob", "Grep"] {
+            XCTAssertTrue(turnedAway(tool), "\(tool) gets past the router's hook")
+            XCTAssertTrue(denied.contains { Self.denies($0, tool) }, "\(tool) isn't denied outright, so it's open if hooks are off")
         }
     }
 
@@ -155,8 +160,17 @@ final class ScreenBoundaryTests: XCTestCase {
         "mcp__t3-code__t3_thread_reply", "mcp__t3__t3_thread_send", "mcp__t3code__thread_send", "SomethingNew",
     ]
 
-    /// Tools that only read, so a page that steers the router can't make them put text anywhere a thread reads.
-    static let onlyRead: Set = ["Read", "Glob", "Grep", "WebSearch", "ToolSearch"]
+    /// Tools that only read, and no file, so a page that steers the router can't make them put text anywhere a thread reads.
+    static let onlyRead: Set = ["WebSearch", "ToolSearch"]
+
+    /// What the router's settings deny outright, and whether its hook turns a tool away.
+    static func routerRules() throws -> (denied: [String], turnedAway: (String) -> Bool) {
+        let settings = try XCTUnwrap(JSONSerialization.jsonObject(with: RouterBlock.settings) as? [String: Any])
+        let denied = try XCTUnwrap((settings["permissions"] as? [String: Any])?["deny"] as? [String])
+        let rule = try XCTUnwrap(((settings["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]])?.first)
+        let hook = try NSRegularExpression(pattern: try XCTUnwrap(rule["matcher"] as? String))
+        return (denied, { tool in hook.firstMatch(in: tool, range: NSRange(tool.startIndex..., in: tool)) != nil })
+    }
 
     /// How Claude Code reads a deny rule: a tool's own name, or `mcp__<server>` for every tool that server has.
     static func denies(_ rule: String, _ tool: String) -> Bool {

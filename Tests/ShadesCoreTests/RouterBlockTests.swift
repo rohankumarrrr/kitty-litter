@@ -36,8 +36,8 @@ final class RouterBlockTests: XCTestCase {
 
     /// What actually happened: with only a deny list, `Monitor` ran a shell command that messaged a thread through
     /// T3's own command, and `SendMessage` put text in another Claude session. So every tool that isn't one of the
-    /// few that only read is turned away, including ones that don't exist yet.
-    func testOnlyToolsThatReadGetPastTheHook() throws {
+    /// few that only search is turned away, including ones that don't exist yet and the ones that read your files.
+    func testOnlyToolsThatSearchGetPastTheHook() throws {
         _ = try RouterBlock.prepare(folder)
         let rules = try XCTUnwrap((try written()["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]])
         let rule = try XCTUnwrap(rules.first)
@@ -45,10 +45,10 @@ final class RouterBlockTests: XCTestCase {
         func turnedAway(_ tool: String) -> Bool {
             matcher.firstMatch(in: tool, range: NSRange(tool.startIndex..., in: tool)) != nil
         }
-        for tool in ["Monitor", "SendMessage", "ListAgents", "Bash", "Agent", "Task", "Skill", "CronCreate", "WebFetch", "mcp__t3-code__t3_thread_send", "mcp__mail__send", "ReadAll", "SomethingNew"] {
+        for tool in ["Monitor", "SendMessage", "ListAgents", "Bash", "Agent", "Task", "Skill", "CronCreate", "WebFetch", "mcp__t3-code__t3_thread_send", "mcp__mail__send", "Read", "Glob", "Grep", "ReadAll", "SomethingNew"] {
             XCTAssertTrue(turnedAway(tool), tool)
         }
-        for tool in ["Read", "Glob", "Grep", "WebSearch", "ToolSearch"] {
+        for tool in ["WebSearch", "ToolSearch"] {
             XCTAssertFalse(turnedAway(tool), tool)
         }
 

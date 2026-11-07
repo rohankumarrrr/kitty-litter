@@ -6,17 +6,18 @@ import Foundation
 public enum RouterBlock {
     /// Everything it can still use. Each only reads, and anything else, including tools Claude Code adds later,
     /// is turned away by a hook. Naming what's allowed matters, since the shell also comes as `Monitor`, and
-    /// `SendMessage` reaches other Claude sessions without T3.
-    static let allowed = ["Read", "Glob", "Grep", "WebSearch", "ToolSearch"]
+    /// `SendMessage` reaches other Claude sessions without T3. Reading files is out too. Your screen comes in its
+    /// message, and your home folder has secrets in plain text that a page could have it read and search for.
+    static let allowed = ["WebSearch", "ToolSearch"]
     /// Taken out of the list altogether, which still holds if hooks are ever turned off.
-    static let denied = ["mcp__t3-code", "Bash", "Edit", "Write", "NotebookEdit"]
+    static let denied = ["mcp__t3-code", "Bash", "Edit", "Write", "NotebookEdit", "Read", "Glob", "Grep"]
 
     static let settings = try! JSONSerialization.data(
         withJSONObject: [
             "permissions": ["deny": denied],
             "hooks": ["PreToolUse": [[
                 "matcher": "^(?!(\(allowed.joined(separator: "|")))$).*",
-                "hooks": [["type": "command", "command": "echo 'The router only replies, so it has no tools that act.' >&2; exit 2"]],
+                "hooks": [["type": "command", "command": "echo 'The router only replies, so it has no tools that act or read files.' >&2; exit 2"]],
             ]]],
         ],
         options: [.prettyPrinted, .sortedKeys]
