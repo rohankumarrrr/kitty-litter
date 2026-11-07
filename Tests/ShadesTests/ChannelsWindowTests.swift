@@ -262,22 +262,19 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.pane.distanceFromBottom, 0, accuracy: 1)
     }
 
-    func testClosingKeepsEverythingSoItOpensAgainAsYouLeftIt() {
+    func testClosingForgetsEveryWordButKeepsTheSelection() {
         let window = ChannelsWindow()
         var closed = 0
         window.onClose = { closed += 1 }
         window.update(book())
         window.view.select(.channel(.direct(steve)))
-        window.view.pane.composer.textView.string = "Half a thought"
-        let rows = window.view.pane.shownMessageRows.map(ObjectIdentifier.init)
-        XCTAssertFalse(rows.isEmpty)
+        XCTAssertFalse(window.view.pane.shownMessageRows.isEmpty)
 
         window.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         XCTAssertEqual(closed, 1)
-        window.update(book())
-        XCTAssertEqual(window.view.pane.shownMessageRows.map(ObjectIdentifier.init), rows, "nothing is laid out again")
+        XCTAssertTrue(window.view.pane.shownMessageRows.isEmpty)
+        XCTAssertEqual(window.view.pane.shown, [])
         XCTAssertEqual(window.view.selection, .channel(.direct(steve)))
-        XCTAssertEqual(window.view.pane.composer.textView.string, "Half a thought", "a draft waits, as it does in Slack")
     }
 
     func testTheFirstOpenIsCentredOnTheCatsScreen() {
@@ -545,13 +542,18 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.pane.composer.target, .newThread(steve))
     }
 
-    func testClosingWhileANewTopicStartsKeepsItForNextTime() {
+    func testClosingWhileANewTopicStartsGoesBackToItsChannel() {
         let window = ChannelsWindow()
         let echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Write a cover letter", at: at, threadID: "", threadTitle: "")
         window.update(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .direct(steve), message: echo)]))
         window.view.select(.thread("sent-1", in: .direct(steve)))
         window.windowWillClose(Notification(name: NSWindow.willCloseNotification))
-        XCTAssertEqual(window.view.selection, .thread("sent-1", in: .direct(steve)), "what you sent is still known, so it's still there")
+        XCTAssertEqual(window.view.selection, .channel(.direct(steve)), "what you sent is forgotten, so there's nothing to come back to")
+
+        window.update(book())
+        window.view.select(.thread("t", in: .direct(steve)))
+        window.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+        XCTAssertEqual(window.view.selection, .thread("t", in: .direct(steve)), "a real thread is still there next time")
     }
 
     private func twoPartQuestion() -> AgentQuestion {

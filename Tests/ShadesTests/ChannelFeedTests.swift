@@ -164,7 +164,7 @@ final class ChannelFeedTests: XCTestCase {
         feed.threadsChanged([moved(thread("a"), by: 5)])
         await holdOn()
         XCTAssertEqual(backend.listings, listings)
-        XCTAssertEqual(feed.threadsHeld, 1, "what's been read stays for next time")
+        XCTAssertEqual(feed.threadsHeld, 0)
     }
 
     func testOpeningReturnsAtOnceAndStillReading() {
@@ -287,112 +287,31 @@ final class ChannelFeedTests: XCTestCase {
         XCTAssertEqual(words(in: latest), ["New words"])
     }
 
-    func testAReadLandingAfterCloseIsKeptForNextTime() async {
+    func testAReadLandingAfterCloseIsDropped() async {
         backend.threads = [thread("a")]
-        backend.say("Worth keeping", in: "a")
+        backend.say("Too late", in: "a")
         backend.holdsReads = true
         _ = feed.open(threads: [])
         await eventually { self.backend.heldReads == 1 }
 
         feed.close()
         backend.releaseReads()
-        await eventually { self.feed.threadsHeld == 1 }
-        XCTAssertEqual(words(in: feed.open(threads: [])), ["Worth keeping"])
-    }
-
-    func testOpeningAgainShowsWhatWasReadAtOnceThenReadsOnlyWhatMoved() async {
-        let quiet = thread("quiet", age: 10)
-        let busy = thread("busy")
-        backend.threads = [quiet, busy]
-        backend.say("Old news", in: "quiet")
-        backend.say("Working on it", in: "busy")
-        await openAndRead()
-        feed.close()
-
-        backend.threads = [quiet, moved(busy, by: 5)]
-        backend.say("Done", in: "busy")
-        let reads = backend.reads.count
-        let reopened = feed.open(threads: [])
-        XCTAssertFalse(reopened.isReading, "nothing waits behind a loading note once anything's known")
-        XCTAssertEqual(Set(words(in: reopened)), ["Old news", "Working on it"])
-        await eventually { Set(self.words(in: self.latest)) == ["Old news", "Done"] }
-        XCTAssertEqual(Array(backend.reads.dropFirst(reads)), ["busy"])
-    }
-
-    func testOpeningCutsTheWaitBetweenPassesShort() async {
-        makeFeed(gap: .seconds(30))
-        let first = thread("a")
-        backend.threads = [first]
-        backend.say("Before", in: "a")
-        await openAndRead()
-        feed.close()
-
-        backend.threads = [moved(first, by: 1)]
-        backend.say("After", in: "a")
-        _ = feed.open(threads: [])
-        await eventually { self.words(in: self.latest) == ["After"] }
-    }
-
-    func testWarmingReadsOnceBeforeAnyoneLooks() async {
-        let first = thread("a")
-        backend.threads = [first]
-        backend.say("Ready", in: "a")
-        feed.warm(threads: [first])
-        await eventually { self.feed.threadsHeld == 1 }
         await holdOn()
-        XCTAssertEqual(backend.listings, 1, "it reads once, and not again until someone looks")
-
-        let book = feed.open(threads: [])
-        XCTAssertFalse(book.isReading)
-        XCTAssertEqual(words(in: book), ["Ready"])
+        XCTAssertEqual(books.filter { !$0.isReading }, [])
+        XCTAssertEqual(feed.threadsHeld, 0)
     }
 
-    func testReadingAheadTakesOneThreadAtATime() async {
-        backend.threads = (0..<8).map { thread("t\($0)", age: TimeInterval($0)) }
-        backend.readDuration = .milliseconds(10)
-        feed.warm(threads: [])
-        await eventually { self.feed.threadsHeld == 8 }
-        XCTAssertEqual(backend.mostAtOnce, 1, "with nobody looking, T3 keeps room for everything else")
-    }
-
-    func testWhatsOnTheScreenIsReadFirst() async {
-        let pepper = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper")
-        feed = ChannelFeed(backend: backend, kittens: { [steve] in [steve, pepper] }, gap: .milliseconds(20))
-        feed.onChange = { [unowned self] in self.books.append($0) }
-        feed.lookingAt = .channel(.direct(pepper))
-        backend.threads = (0..<12).map { thread("steve-\($0)", age: TimeInterval($0)) } + [thread("pepper", project: "Pepper", age: 100)]
+    func testClosingForgetsTheWords() async {
+        backend.threads = [thread("a")]
+        backend.say("Hello", in: "a")
         await openAndRead()
-        // Four go at once, so only which four is certain, not their order.
-        XCTAssertTrue(backend.reads.prefix(4).contains("pepper"), "\(backend.reads)")
-        XCTAssertFalse(backend.reads.prefix(4).contains("steve-11"), "then the newest: \(backend.reads)")
-    }
+        XCTAssertEqual(feed.threadsHeld, 1)
 
-    func testReadsShowAsTheyLand() async {
-        backend.threads = (0..<8).map { thread("t\($0)", age: TimeInterval($0)) }
-        for index in 0..<8 { backend.say("Words \(index)", in: "t\(index)") }
-        backend.readDuration = .milliseconds(200)
-        _ = feed.open(threads: [])
-        await eventually { !self.words(in: self.latest).isEmpty }
-        XCTAssertEqual(latest?.isReading, true, "the first words show before the pass is over")
-        await eventually { self.latest?.isReading == false }
-        XCTAssertEqual(words(in: latest).count, 8)
-    }
-
-    func testANewThreadStillBeingReadDoesntLookCutShort() async {
-        backend.threads = [thread("a", age: 10)]
-        backend.say("First", in: "a")
-        await openAndRead()
         feed.close()
-
-        backend.threads = [thread("a", age: 10), thread("b")]
-        backend.say("Second", in: "b")
+        XCTAssertEqual(feed.threadsHeld, 0)
         backend.holdsReads = true
-        _ = feed.open(threads: [])
-        await eventually { self.backend.heldReads == 1 }
-        feed.refresh()
-        XCTAssertEqual(latest?.channel(.direct(steve))?.isCut, false)
+        XCTAssertEqual(words(in: feed.open(threads: [])), [], "opening again starts from nothing")
         backend.releaseReads()
-        await eventually { self.words(in: self.latest) == ["First", "Second"] }
     }
 
     func testNeverMoreThanFourAtOnce() async {
@@ -412,18 +331,41 @@ final class ChannelFeedTests: XCTestCase {
         XCTAssertEqual(Set(backend.reads), Set((0..<30).map { "t\($0)" } + ["quiet"]))
     }
 
-    func testClosingMidPassFinishesThatPassAndStops() async {
+    func testClosingBeforeTheFirstPassListsNothing() async {
+        backend.threads = [thread("t")]
+        _ = feed.open(threads: [])
+        feed.close()
+        await holdOn()
+        XCTAssertEqual(backend.listings, 0)
+    }
+
+    func testClosingStopsTheReadsStillWaiting() async {
         backend.threads = (0..<12).map { thread("t\($0)", age: TimeInterval($0)) }
         backend.holdsReads = true
         _ = feed.open(threads: [])
         await eventually { self.backend.heldReads == 4 }
         feed.close()
         backend.releaseReads()
-        await eventually { self.feed.threadsHeld == 12 }
-        let listings = backend.listings
-        feed.threadsChanged([])
         await holdOn()
-        XCTAssertEqual(backend.listings, listings)
+        XCTAssertEqual(backend.reads.count, 4)
+    }
+
+    func testClosingForgetsTheWordsEvenWithAReadStillGoing() async {
+        let first = thread("t")
+        backend.threads = [first]
+        backend.say("Something private", in: "t")
+        await openAndRead()
+
+        backend.holdsReads = true
+        backend.threads = [moved(first, by: 1)]
+        feed.threadsChanged([])
+        await eventually { self.backend.heldReads == 1 }
+        weak var session = Mirror(reflecting: feed!).children.first { $0.label == "session" }
+            .flatMap { Mirror(reflecting: $0.value).children.first?.value as AnyObject? }
+        feed.close()
+        let kept = session.map { String(describing: Mirror(reflecting: $0).children.map(\.value)).contains("Something private") }
+        XCTAssertEqual(kept, false)
+        backend.releaseReads()
     }
 
     func testAnIdleWindowNoticesT3HasGone() async {

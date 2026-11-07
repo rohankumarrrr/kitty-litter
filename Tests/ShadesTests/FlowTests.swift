@@ -2690,20 +2690,6 @@ final class FlowTests: XCTestCase {
         XCTAssertNil(stage.kittens)
     }
 
-    func testMessagesReadsAheadOnlyOnceLaunchHasSettled() async throws {
-        kittens = [steve]
-        let work = AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .completed, model: "m", updatedAt: clock, projectPath: steve.folder)
-        backend.listed = [work]
-        backend.said = ["w": [Exchange(id: "e", asker: .you, askedAt: clock, ask: "Tailor my resume", reply: "Done.", repliedAt: clock)]]
-        controller.warmDelay = .milliseconds(300)
-        controller.threadsChanged([work])
-        try await Task.sleep(for: .milliseconds(100))
-        XCTAssertEqual(controller.channels.threadsHeld, 0, "nothing competes with T3's first answers")
-        try await Task.sleep(for: .milliseconds(400))
-        await until { controller.channels.threadsHeld == 1 }
-        XCTAssertEqual(controller.channels.threadsHeld, 1, "then it reads ahead, so the first look is instant")
-    }
-
     func testChannelsOpenWithoutLookingAtTheScreen() async {
         kittens = [steve]
         controller.threadsChanged([AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .running, model: "m", updatedAt: clock, projectPath: steve.folder)])
@@ -2719,7 +2705,7 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(log.all.contains("snapshot"))
         XCTAssertTrue(backend.sent.isEmpty)
         controller.channelsClosed()
-        XCTAssertFalse(controller.channels.isOpen)
+        XCTAssertEqual(controller.channels.threadsHeld, 0)
     }
 
     func testAKittenThatIsntInT3SaysSo() async {

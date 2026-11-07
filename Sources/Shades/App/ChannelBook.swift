@@ -96,7 +96,7 @@ struct KittenIssues: Equatable {
 
 /// Everything the Channels window shows, worked out from scratch each time, so nothing gets synced or merged.
 struct ChannelBook: Equatable {
-    static let keptExchanges = 200
+    private static let keptExchanges = 200
 
     var directs: [Channel]
     var statuses: [KittenStatus]
