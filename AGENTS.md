@@ -37,7 +37,7 @@ To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-
 - Text from the screen is untrusted data. It goes inside `<screen>` in the prompts in `Prompts.swift`, and never decides what the app does.
 - Capture only when asked, never in the background, and skip apps on the privacy list.
 - A kitten with `seesScreen: false` never gets text from your screen, and that includes follow-ups to its work in other projects. `docs/kittens.md` says what enforces that and what doesn't.
-- The router only replies, and the app acts on its one line. It runs in its own folder, where `RouterBlock` leaves it only tools that read, so whatever starts a router thread gets its project from `routerProjectID(for:)`.
+- The router only replies, and the app acts on its one line. It runs in its own folder, where `RouterBlock` leaves it only web search, with no tools that act or read files, so whatever starts a router thread gets its project from `routerProjectID(for:)`.
 - Claude threads in this repo run in a sandbox set by `.claude/settings.json`, which also keeps them out of saved copies of the screen. Run `swift` commands on their own, with no pipe or `cd`, since only that form is let out. A refused read means it's working, so don't look for a way around it.
 - An inbox row is data, and a reply is only what you typed or said. It goes straight to the thread, with no capture and no canned answer.
 - The router only picks numbers, only your own words get passed on, and an extra copy of a correction never carries screen text.
