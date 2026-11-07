@@ -94,6 +94,14 @@ enum DemoChannels {
         )
     }
 
+    /// Your reply in Steve's pricing copy thread, which you also sent to his channel, as "Also send to" does. Messages
+    /// only keeps that in memory, so the demo starts with it there.
+    static let alsoSent = "Keep the FAQ as it is for now."
+
+    static var alsoSentEcho: ChannelMessage {
+        ChannelMessage(exchangeID: "demo-also-sent", kind: .ask, speaker: .you, text: alsoSent, at: ago(minutes: 8), threadID: "demo-steve-copy", threadTitle: "Rewrite the pricing copy")
+    }
+
     static let transcripts: [String: [Exchange]] = [
         "demo-tidy": [
             exchange(
@@ -121,6 +129,13 @@ enum DemoChannels {
                 ask: "Which pixel font should the headings use?",
                 reply: "I'd use **Silkscreen**. It stays readable at 12 points, and it has a bold cut. *Press Start 2P* is wider than the column.",
                 repliedMinutes: 200
+            ),
+            exchange(
+                "fonts-2",
+                minutes: 198,
+                ask: "What about the body text?",
+                reply: "Keep the system font there. Pixel fonts are hard to read in paragraphs.",
+                repliedMinutes: 196
             ),
         ],
         "demo-steve-copy": [
@@ -160,6 +175,15 @@ enum DemoChannels {
                 repliedMinutes: 12,
                 notes: 2
             ),
+            exchange(
+                "copy-2",
+                asker: .agent(threadID: clawdeMain.id),
+                minutes: 10,
+                ask: "Does the new copy still match the settings panel's wording?",
+                reply: "It does. Both say Start free trial now.",
+                repliedMinutes: 9
+            ),
+            exchange("copy-3", minutes: 8, ask: alsoSent, reply: "Will do. I've left the FAQ alone.", repliedMinutes: 7),
         ],
         "demo-steve-from-clawde": [
             exchange(

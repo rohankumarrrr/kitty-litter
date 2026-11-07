@@ -21,6 +21,8 @@ final class AppStage: CatStage {
     weak var controller: AppController?
 
     private var escape: UInt32?
+    /// The Messages box that was typing when the talk key went down, so what you say goes there.
+    private var spokenPane: ChannelPane?
 
     init() {
         bubble.anchor = { [weak self] in
@@ -84,9 +86,9 @@ final class AppStage: CatStage {
         }
 
         channels.onClose = { [weak self] in self?.controller?.channelsClosed() }
-        channels.view.pane.onOpenThread = { [weak self] id in self?.controller?.openThread(id) }
-        channels.view.pane.onCopy = { [weak self] text in self?.copyToPasteboard(text) }
-        channels.view.pane.onAction = { [weak self] action in self?.controller?.messagesAction(action) }
+        channels.view.onOpenThread = { [weak self] id in self?.controller?.openThread(id) }
+        channels.view.onCopy = { [weak self] text in self?.copyToPasteboard(text) }
+        channels.view.onAction = { [weak self] action in self?.controller?.messagesAction(action) }
         channels.view.onSeen = { [weak self] selection in self?.controller?.messagesAction(.seen(selection)) }
         channels.view.sidebar.onTheme = { [weak self] anchor in self?.showThemeMenu(under: anchor) }
         channels.view.onDropTheme = { [weak self] file in self?.controller?.themeChosen(.file(file)) }
@@ -239,20 +241,22 @@ final class AppStage: CatStage {
     }
 
     var isMessagesBoxTyping: Bool {
-        let composer = channels.view.pane.composer
-        return channels.panel.isKeyWindow && channels.panel.firstResponder === composer.textView && composer.target != nil
+        channels.panel.isKeyWindow && channels.view.typingPane != nil
     }
 
     func holdMessagesBox() {
-        channels.view.pane.startSpeaking()
+        spokenPane = channels.view.typingPane
+        spokenPane?.startSpeaking()
     }
 
     func sendInMessages(_ text: String) {
-        channels.view.pane.spoke(text)
+        spokenPane?.spoke(text)
+        spokenPane = nil
     }
 
     func releaseMessagesBox() {
-        channels.view.pane.stopSpeaking()
+        spokenPane?.stopSpeaking()
+        spokenPane = nil
     }
 
     // MARK: - Everything else

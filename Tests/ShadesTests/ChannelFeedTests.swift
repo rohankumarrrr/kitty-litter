@@ -142,7 +142,8 @@ final class ChannelFeedTests: XCTestCase {
     private var latest: ChannelBook? { books.last }
 
     private func words(in book: ChannelBook?) -> [String?] {
-        (book?.channel(.direct(steve))?.messages ?? []).map(\.text)
+        guard let book else { return [] }
+        return book.threads(in: .of(steve)).flatMap { book.threads[$0]?.messages.map(\.text) ?? [] }
     }
 
     private func openAndRead() async {
@@ -171,7 +172,7 @@ final class ChannelFeedTests: XCTestCase {
         backend.holdsReads = true
         let book = feed.open(threads: [thread("a", status: .running)])
         XCTAssertTrue(book.isReading)
-        XCTAssertEqual(book.directs.map(\.messages), [[]])
+        XCTAssertEqual(book.channel(.of(steve))?.posts, [])
         XCTAssertEqual(book.issues.first?.threads.map(\.id), ["a"], "what's open is known before any words are")
         backend.releaseReads()
     }
@@ -351,7 +352,7 @@ final class ChannelFeedTests: XCTestCase {
         let pepper = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper")
         feed = ChannelFeed(backend: backend, kittens: { [steve] in [steve, pepper] }, gap: .milliseconds(20))
         feed.onChange = { [unowned self] in self.books.append($0) }
-        feed.lookingAt = .channel(.direct(pepper))
+        feed.lookingAt = .channel(.of(pepper))
         backend.threads = (0..<12).map { thread("steve-\($0)", age: TimeInterval($0)) } + [thread("pepper", project: "Pepper", age: 100)]
         await openAndRead()
         // Four go at once, so only which four is certain, not their order.
@@ -382,7 +383,7 @@ final class ChannelFeedTests: XCTestCase {
         _ = feed.open(threads: [])
         await eventually { self.backend.heldReads == 1 }
         feed.refresh()
-        XCTAssertEqual(latest?.channel(.direct(steve))?.isCut, false)
+        XCTAssertEqual(latest?.channel(.of(steve))?.isCut, false)
         backend.releaseReads()
         await eventually { self.words(in: self.latest) == ["First", "Second"] }
     }
@@ -449,29 +450,32 @@ final class ChannelFeedTests: XCTestCase {
 
     func testOnlyThreadsWhoseWordsHaveBeenReadCountAsSeen() async {
         backend.holdsReads = true
-        backend.threads = [thread("a")]
+        backend.threads = [thread("a"), thread("quiet", age: 5)]
+        backend.say("Tidy it", in: "a")
         _ = feed.open(threads: [thread("a")])
-        await eventually { self.backend.heldReads == 1 }
-        XCTAssertEqual(feed.threads(in: .channel(.direct(steve))), [], "nothing's on the screen while it's still reading")
+        await eventually { self.backend.heldReads == 2 }
+        XCTAssertEqual(feed.threads(in: .channel(.of(steve))), [], "nothing's on the screen while it's still reading")
 
         backend.releaseReads()
         await eventually { self.latest?.isReading == false }
-        XCTAssertEqual(feed.threads(in: .channel(.direct(steve))).map(\.id), ["a"])
-        XCTAssertEqual(feed.threads(in: .channel(.everyone)).map(\.id), ["a"])
-        XCTAssertEqual(feed.threads(in: .needsYou), [])
+        XCTAssertEqual(feed.threads(in: .channel(.of(steve))).map(\.id), ["a", "quiet"], "its parent is all it's said, so the channel shows it all, and one that's said nothing has nothing left to see")
+        XCTAssertEqual(feed.threads(in: .thread("a", in: .threads)).map(\.id), ["a"], "and so does its pane")
+        XCTAssertEqual(feed.threads(in: .channel(.general)).map(\.id), [], "it doesn't live in #general")
+        XCTAssertEqual(feed.threads(in: .activity), [])
+        XCTAssertEqual(feed.threads(in: .threads), [], "a line of a reply isn't all of it")
     }
 
     func testWorkEveryoneHandedOutsideAnyKittenIsReadToo() async {
         let work = thread("w", project: nil)
         backend.threads = [work]
         backend.say("Find a cheaper flight", in: "w")
-        feed.alsoInEveryone = { ["w": Date(timeIntervalSince1970: 0)] }
+        feed.inGeneral = { ["w": Date(timeIntervalSince1970: 0)] }
         await openAndRead()
         XCTAssertEqual(backend.reads, ["w"])
 
         let other = thread("other", project: nil)
         backend.threads = [work, other]
-        feed.alsoInEveryone = { [:] }
+        feed.inGeneral = { [:] }
         feed.threadsChanged([work, other])
         await holdOn()
         XCTAssertFalse(backend.reads.contains("other"), "anything else outside a kitten stays unread")
@@ -480,13 +484,31 @@ final class ChannelFeedTests: XCTestCase {
     func testANewTopicLearnsItsThreadOrThatItDidntStart() async {
         await openAndRead()
         let echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Draft a letter", at: start, threadID: "", threadTitle: "")
-        feed.sent(echo, in: .direct(steve))
+        feed.sent(echo, in: .of(steve), startsThread: true)
+        XCTAssertEqual(latest?.threads["sent-1"]?.isStarting, true)
         feed.started("sent-1", in: "new", title: "Draft a letter")
-        XCTAssertEqual(latest?.channel(.direct(steve))?.messages.last?.threadID, "new")
+        XCTAssertEqual(latest?.threads["new"]?.parent.text, "Draft a letter")
+        XCTAssertEqual(latest?.started["sent-1"], "new")
 
-        feed.sent(ChannelMessage(exchangeID: "sent-2", kind: .ask, speaker: .you, text: "Another", at: start, threadID: "", threadTitle: ""), in: .direct(steve))
+        feed.sent(ChannelMessage(exchangeID: "sent-2", kind: .ask, speaker: .you, text: "Another", at: start, threadID: "", threadTitle: ""), in: .of(steve), startsThread: true)
         feed.started("sent-2", in: nil, title: "Another")
-        XCTAssertEqual(latest?.channel(.direct(steve))?.messages.last?.failure, "That didn't start. Try again?")
+        XCTAssertEqual(latest?.threads["sent-2"]?.parent.failure, "That didn't start. Try again?")
+
+        feed.sent(ChannelMessage(exchangeID: "sent-3", kind: .ask, speaker: .you, text: "In general", at: start, threadID: "", threadTitle: ""), in: .general)
+        feed.started("sent-3", in: nil)
+        XCTAssertEqual(latest?.channel(.general)?.posts.count, 1, "anything else stays where you said it")
+        XCTAssertNil(latest?.threads["sent-3"])
+    }
+
+    func testALongThreadKeepsTheExchangeThatStartedIt() async {
+        backend.threads = [thread("a")]
+        backend.set((0..<250).map { Exchange(id: "e\($0)", asker: .you, askedAt: start.addingTimeInterval(TimeInterval($0)), ask: $0 == 0 ? "Start here" : "More \($0)") }, in: "a")
+        await openAndRead()
+        let thread = latest?.threads["a"]
+        XCTAssertEqual(thread?.parent.text, "Start here")
+        XCTAssertEqual(thread?.replies.count, ChannelBook.keptExchanges - 1)
+        XCTAssertEqual(thread?.replies.first?.text, "More 51", "then the newest")
+        XCTAssertEqual(thread?.isCut, true)
     }
 }
 
@@ -499,8 +521,8 @@ extension ChannelFeedTests {
         backend.set([Exchange(id: "between", asker: .agent(threadID: nil), askedAt: start, ask: "Another agent's request", reply: "An unseen answer", repliedAt: start)], in: work.id)
         backend.say("Other", in: "other")
         await openAndRead()
-        XCTAssertEqual(feed.threads(in: .thread(work.id, in: .direct(steve))).map(\.id), [], "its words are only between agents, so its DM shows none")
-        XCTAssertEqual(feed.threads(in: .thread("other", in: .direct(steve))).map(\.id), ["other"], "and only that thread")
+        XCTAssertEqual(feed.threads(in: .channel(.of(steve))).map(\.id), ["other"], "the channel only shows work's parent, not its answer")
+        XCTAssertEqual(feed.threads(in: .thread(work.id, in: .channel(.of(steve)))).map(\.id).sorted(), ["other", "work"], "its pane shows every reply")
     }
 }
 
@@ -519,8 +541,9 @@ extension ChannelFeedTests {
         backend.set([], in: "p")
         await openAndRead()
         let book = try XCTUnwrap(latest)
-        XCTAssertTrue(book.channel(.direct(steve))?.messages.contains { $0.threadID == "work" } == true, "its older words are in the DM")
-        XCTAssertEqual(feed.threads(in: .thread("work", in: .direct(steve))).map(\.id), [], "but its latest answer isn't, so it isn't read")
+        XCTAssertEqual(book.threads["work"]?.latest.text, "Changed the totals.", "Pepper's ask is a reply in Steve's thread")
+        XCTAssertEqual(feed.threads(in: .channel(.of(steve))).map(\.id), [], "its channel shows only its parent, so it isn't read")
+        XCTAssertEqual(feed.threads(in: .thread("work", in: .channel(.of(steve)))).map(\.id), ["work"], "but its pane shows its latest reply")
     }
 }
 
@@ -534,7 +557,8 @@ extension ChannelFeedTests {
         backend.say("Which plan?", in: "r")
         await openAndRead()
         XCTAssertEqual(backend.reads, ["r"], "and nothing else outside a kitten")
-        XCTAssertEqual(latest?.shades.messages.first?.text, "Which plan?")
+        XCTAssertEqual(latest?.threads["r"]?.parent.text, "Which plan?")
+        XCTAssertEqual(latest?.channel(.shades)?.posts, [.thread("r")])
     }
 }
 
@@ -549,7 +573,7 @@ extension ChannelFeedTests {
         backend.say("A real question", in: real.id)
         await openAndRead()
         XCTAssertTrue(backend.reads.contains(real.id), "30 newer live tests crowded out the real talk")
-        XCTAssertEqual(latest?.shades.messages.compactMap(\.text), ["A real question"])
+        XCTAssertEqual(latest?.channel(.shades)?.posts, [.thread(real.id)])
     }
 
     func testATalkWithTheCatNeverCountsAsReadAnywhereElse() async {
@@ -558,7 +582,22 @@ extension ChannelFeedTests {
         backend.threads = [router]
         backend.say("What's here?", in: router.id)
         await openAndRead()
-        XCTAssertEqual(feed.threads(in: .channel(.everyone)).map(\.id), [], "Everyone doesn't show it")
-        XCTAssertEqual(feed.threads(in: .channel(.direct(steve))).map(\.id), [], "nor does Steve's DM, whatever its title says")
+        XCTAssertEqual(feed.threads(in: .channel(.general)).map(\.id), [], "#general doesn't show it")
+        XCTAssertEqual(feed.threads(in: .channel(.of(steve))).map(\.id), [], "nor does Steve's channel, whatever its title says")
+        XCTAssertEqual(feed.threads(in: .thread(router.id, in: .channel(.shades))).map(\.id), [], "and its own pane doesn't count for a kitten's runs")
+    }
+}
+
+extension ChannelFeedTests {
+    func testAReplyAlsoSentToTheChannelLetsTheChannelCountItsThreadAsRead() async {
+        backend.threads = [thread("work")]
+        backend.set([
+            Exchange(id: "first", asker: .you, askedAt: start.addingTimeInterval(-100), ask: "Draft the budget", reply: "Drafted.", repliedAt: start.addingTimeInterval(-90)),
+            Exchange(id: "second", asker: .you, askedAt: start.addingTimeInterval(-10), ask: "Change the totals"),
+        ], in: "work")
+        await openAndRead()
+        XCTAssertEqual(feed.threads(in: .channel(.of(steve))).map(\.id), [])
+        feed.sent(ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Change the totals", at: start.addingTimeInterval(-10), threadID: "work", threadTitle: ""), in: .of(steve), alsoSent: true)
+        XCTAssertEqual(feed.threads(in: .channel(.of(steve))).map(\.id), ["work"], "its latest is in the channel too")
     }
 }

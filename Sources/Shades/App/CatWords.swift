@@ -82,16 +82,18 @@ enum CatWords {
     static func phoneProblem(_ error: Error) -> String { "Messages on your phone isn't working. \(error.localizedDescription)" }
 
     static let messagesTitle = "Messages"
-    static let needsYouTitle = "Needs you"
-    static let needsYouSubtitle = "What's waiting on you, and what each kitten is on"
+    static let activityTitle = "Activity"
+    static let activitySubtitle = "What's waiting on you, and what each kitten is on"
+    static let waitingOnYou = "Waiting on you"
     static let nothingNeedsYou = "Nothing needs you."
     static let inProgress = "In progress"
-    static let doneTitle = "Done"
-    static let doneSubtitle = "What each kitten has finished"
-    static let nothingDone = "Nothing's finished yet."
-    static let everyone = "Everyone"
-    static let everyoneSubtitle = "Goes to whoever it's for"
-    static let everyoneEmpty = "Say something and it goes to whoever it's for."
+    static let threadsTitle = "Threads"
+    static let threadsSubtitle = "Every thread you've written in"
+    static let threadsEmpty = "Threads you write in show up here."
+    static let channelsHeading = "Channels"
+    static let general = "general"
+    static let generalSubtitle = "Goes to whoever it's for"
+    static let generalEmpty = "Say something and it goes to whoever it's for."
     static let shadesSubtitle = "What you've asked me"
     static let shadesEmpty = "Say something, or ask me anywhere, and it shows up here."
     static func handedOff(_ task: String) -> String { "I started on that: \(task)" }
@@ -106,30 +108,40 @@ enum CatWords {
     static let themeUnreadable = "That isn't a theme I can read. Try one from T3 Code, VS Code, Cursor or iTerm2."
     static let themeNotSaved = "I couldn't save that theme, so it's only until I restart."
     static let shadesRole = "Work I started for you"
-    static let newTopic = "New topic"
+    static let threadTitle = "Thread"
+    static let newThread = "New thread"
     static let openInT3 = "Open in T3"
+    static let closeThread = "Close"
     static let quietThread = "Its messages are in T3."
-    /// Short, so a long name can't crowd out the thread's own title.
-    static func back(to title: String) -> String { "‹ \(title.count > 18 ? title.prefix(17) + "…" : title)" }
     /// Under a thread's title: where it is and how it's going.
     static func threadDetails(_ thread: AgentThread) -> String {
         [thread.projectTitle, status(thread), thread.pullRequest.map(pullRequest)].compactMap { $0 }.joined(separator: " · ")
     }
+    static func replies(_ count: Int) -> String { count == 1 ? "1 reply" : "\(count) replies" }
+    static func lastReply(_ date: Date, now: Date) -> String {
+        let time = date.formatted(date: .omitted, time: .shortened)
+        return Calendar.current.isDate(date, inSameDayAs: now) ? "Last reply \(time)" : "Last reply \(day(date, now: now)) at \(time)"
+    }
+    static let workingOnIt = "Working on it"
+    static let needsYouLabel = "Needs you"
+    static func repliedToThread(_ parent: String) -> String { "replied to a thread: \(parent)" }
+    static func moreReplies(_ count: Int) -> String { count == 1 ? "1 more reply" : "\(count) more replies" }
+    static func alsoSendTo(_ channel: String) -> String { "Also send to \(channel)" }
     static let answerInWords = "Type an answer"
     static let didntStart = "That didn't start. Try again?"
     static let answerInT3 = "This one's answered in T3."
     static func part(_ index: Int, of count: Int, _ text: String) -> String { count > 1 ? "\(index + 1) of \(count): \(text)" : text }
     static let unreadableQuestion = "They asked something I couldn't read."
     static let directMessages = "Direct messages"
-    static let betweenKittens = "Between kittens"
     static let you = "You"
     static let someoneElse = "Someone else"
     static let readingMessages = "Reading their messages..."
     static let nothingOpen = "Nothing open."
     static let olderMessages = "Older messages are in T3."
+    static let olderReplies = "Older replies are in T3."
     static let cantReachT3Yet = "I can't reach T3 Code. Open it and I'll catch up."
     static let stillGoing = "Still working on it..."
-    static func haventTalked(_ names: [String]) -> String { "\(names.joined(separator: " and ")) haven't talked yet." }
+    static func noThreadsYet(_ name: String) -> String { "You and \(name) haven't started a thread yet." }
     static func notSetUpYet(_ kitten: Kitten) -> String { "\(kitten.name) isn't set up yet." }
     static func couldntRead(_ count: Int) -> String { "Couldn't read \(count) \(count == 1 ? "thread" : "threads"). I'll try again." }
     static func earlierNotes(_ count: Int) -> String { "\(count) earlier \(count == 1 ? "note" : "notes")" }
@@ -140,20 +152,21 @@ enum CatWords {
     static func target(_ target: MessageTarget, in channel: ChannelID? = nil) -> String {
         switch target {
         case .router: return channel == .shades ? "To me, without looking at your screen" : "To whoever it's for"
-        case .newThread(let kitten): return "New topic with \(kitten.name)"
-        case .thread(_, let title, _): return "In \(title)"
-        case .starting(let kitten): return "Starting a new topic with \(kitten.name)..."
+        case .newThread(let kitten): return "Starts a new thread with \(kitten.name)"
+        case .thread(_, let title, _): return title.isEmpty ? "Replies in this thread" : "Replies in \(title)"
+        case .starting(let kitten): return "Starting a new thread with \(kitten.name)..."
         case .question(let question): return answering(question.text)
         }
     }
 
     static func answering(_ text: String) -> String { "Answering: \(text.isEmpty ? "their question" : text)" }
 
-    static func placeholder(_ target: MessageTarget, in channel: ChannelID? = nil) -> String {
+    /// `name` is the channel's, as the sidebar writes it.
+    static func placeholder(_ target: MessageTarget, in channel: ChannelID? = nil, name: String? = nil) -> String {
         switch target {
-        case .router: return channel == .shades ? "Message Shades" : "Message everyone"
-        case .newThread: return "Start a new topic"
-        case .thread, .starting: return "Reply"
+        case .router: return channel == .shades ? "Message Shades" : "Message #\(name ?? general)"
+        case .newThread(let kitten): return "Message #\(name ?? kitten.name)"
+        case .thread, .starting: return "Reply..."
         case .question: return "Your answer"
         }
     }

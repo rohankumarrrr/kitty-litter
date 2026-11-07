@@ -2,6 +2,7 @@ front
 channels
 wait 1
 channel steve
+thread pricing page
 wait 1
 draw .verify/shades/select/0-before
 copy
