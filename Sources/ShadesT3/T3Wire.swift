@@ -683,6 +683,8 @@ enum T3Wire {
         /// User messages: who sent it. Agents' messages name the thread they came from.
         let createdBy: String?
         let senderThreadId: String?
+        /// Set on what a schedule sent, which carries the `createdBy` of whoever set the schedule up.
+        let scheduledTaskId: String?
         /// T3 writes these itself, some of them marked as coming from the user.
         let idleCompaction: Lossy<Ignored>?
         let workflowScript: Lossy<Ignored>?

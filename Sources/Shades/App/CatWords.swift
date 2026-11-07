@@ -109,6 +109,7 @@ enum CatWords {
     static let newTopic = "New topic"
     static let openInT3 = "Open in T3"
     static let quietThread = "Its messages are in T3."
+    static let threadNotListed = "It's archived or deleted in T3, so I can't read it here."
     /// Short, so a long name can't crowd out the thread's own title.
     static func back(to title: String) -> String { "‹ \(title.count > 18 ? title.prefix(17) + "…" : title)" }
     /// Under a thread's title: where it is and how it's going.

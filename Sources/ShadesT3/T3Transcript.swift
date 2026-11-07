@@ -30,7 +30,8 @@ enum T3Transcript {
                 if let message = item.messageId { byMessage[message] = exchanges.count }
                 // A steer joins a run that's already going, so what comes after it answers it.
                 if let run = item.runId, let asked = askedInRun[run], asked != item.messageId { steered[run] = exchanges.count }
-                let asker: Exchange.Asker = item.isFromPerson ? .you : .agent(threadID: item.agentSenderThreadID.flatMap(sender))
+                let asker: Exchange.Asker = item.scheduledTaskId != nil ? .schedule
+                    : item.isFromPerson ? .you : .agent(threadID: item.agentSenderThreadID.flatMap(sender))
                 let ask = item.isFromPerson ? ownWords(item.text) : shown(item.text)
                 exchanges.append(Exchange(id: item.id, asker: asker, askedAt: item.when, ask: ask))
             } else if item.isSpoken, let words = shown(item.text) {
