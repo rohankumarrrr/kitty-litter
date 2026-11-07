@@ -92,6 +92,7 @@ final class AppStage: CatStage {
         channels.view.onSeen = { [weak self] selection in self?.controller?.messagesAction(.seen(selection)) }
         channels.view.sidebar.onTheme = { [weak self] anchor in self?.showThemeMenu(under: anchor) }
         channels.view.onDropTheme = { [weak self] file in self?.controller?.themeChosen(.file(file)) }
+        channels.view.onCloseWindow = { [weak self] in self?.hideChannels() }
 
         menuBar.onAsk = { [weak self] in self?.controller?.askPressed() }
         menuBar.onFix = { [weak self] in self?.controller?.fixPressed() }

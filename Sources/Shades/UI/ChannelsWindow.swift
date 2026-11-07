@@ -33,13 +33,36 @@ final class ChannelsPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        QuietPanel.performEdit(event, from: self) || super.performKeyEquivalent(with: event)
+        QuietPanel.performEdit(event, from: self) || shortcut(event) || super.performKeyEquivalent(with: event)
     }
 
-    /// A click raises it without activating anything.
+    /// A click raises it and gives it the keyboard, since you've clicked into it, without activating anything, so
+    /// the app you were in stays the active one.
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .leftMouseDown { orderFrontRegardless() }
+        if event.type == .leftMouseDown {
+            orderFrontRegardless()
+            if !isKeyWindow { makeKey() }
+        }
+        // ⌥ with the arrows, and Esc, have no ⌘, so they'd otherwise go straight to whatever has the keyboard.
+        if event.type == .keyDown, !event.modifierFlags.contains(.command), shortcut(event) { return }
         super.sendEvent(event)
+    }
+
+    private func shortcut(_ event: NSEvent) -> Bool {
+        guard let shortcut = MessagesShortcut(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers, modifiers: event.modifierFlags) else { return false }
+        // A box with words in it keeps ⌥ and the arrows for moving through them, and Esc for itself, which in Messages'
+        // own boxes closes the thread's pane anyway.
+        if let text = firstResponder as? NSTextView, text.isEditable, shortcut == .escape || (shortcut.movesInText && !text.string.isEmpty) {
+            return false
+        }
+        return handle(shortcut)
+    }
+
+    /// Does what a shortcut says, and only while Messages has the keyboard, so none of them is ever global.
+    @discardableResult
+    func handle(_ shortcut: MessagesShortcut) -> Bool {
+        guard isKeyWindow, let view = contentView as? ChannelsView else { return false }
+        return view.perform(shortcut)
     }
 }
 
@@ -50,11 +73,22 @@ final class ChannelsView: QuietView {
     static let themeFiles: Set<String> = ["json", "itermcolors", "plist"]
     static let threadWidths: ClosedRange<CGFloat> = 320...460
 
+    /// How many places and threads ⌘[ can go back through.
+    static let historyKept = 50
+
     let sidebar = ChannelSidebar()
     let pane = ChannelPane(role: .place)
     let threadPane = ChannelPane(role: .thread)
+    let jumpBox = JumpBoxView()
+    let cheatsheet = CheatsheetView()
     private(set) var selection: ChannelSelection = .activity
     private(set) var book: ChannelBook?
+    /// The places and threads you've looked at, oldest first, for ⌘[ and ⌘].
+    var history: [ChannelSelection] = [.activity]
+    var historyIndex = 0
+    var isTravelling = false
+    /// ⌘W, which closes the window.
+    var onCloseWindow: (() -> Void)?
     /// You've seen what's there, which is what takes its unread dot away.
     var onSeen: ((ChannelSelection) -> Void)?
     /// A theme file let go of anywhere on the window.
@@ -73,12 +107,20 @@ final class ChannelsView: QuietView {
         addSubview(threadPane)
         threadPane.isHidden = true
         threadPane.parts = pane.parts
+        jumpBox.isHidden = true
+        cheatsheet.isHidden = true
+        addSubview(jumpBox)
+        addSubview(cheatsheet)
+        jumpBox.onOpen = { [weak self] in self?.jumped(to: $0) }
+        jumpBox.onClose = { [weak self] in self?.closeJump() }
+        cheatsheet.onClose = { [weak self] in self?.cheatsheet.isHidden = true }
         sidebar.onSelect = { [weak self] in self?.select(ChannelSelection($0)) }
+        sidebar.onShortcuts = { [weak self] in self?.perform(.cheatsheet) }
         for pane in panes {
             pane.onSelect = { [weak self] in self?.select($0) }
             pane.onOpen = { [weak self] thread, place, typing, report in self?.open(thread: thread, from: place, typing: typing, replyingTo: report) }
             pane.onClose = { [weak self] in self?.closeThread() }
-            pane.composer.onEscape = { [weak self] in self?.closeThread() }
+            pane.composer.onEscape = { [weak self] in self?.perform(.escape) }
         }
         registerForDraggedTypes([.fileURL])
     }
@@ -103,6 +145,8 @@ final class ChannelsView: QuietView {
         threadPane.isHidden = thread == 0
         pane.frame = NSRect(x: width, y: 0, width: max(bounds.width - width - thread, 0), height: bounds.height)
         if thread > 0 { threadPane.frame = NSRect(x: bounds.width - thread, y: 0, width: thread, height: bounds.height) }
+        jumpBox.frame = bounds
+        cheatsheet.frame = bounds
     }
 
     /// Everything shows again from what's in memory, in the same turn.
@@ -122,6 +166,10 @@ final class ChannelsView: QuietView {
         let old = self.selection
         self.selection = selection
         if selection.thread != old.thread { threadPane.forgetReport() }
+        if !isTravelling, selection != history[historyIndex] {
+            history = Array(history[...historyIndex].suffix(Self.historyKept - 1)) + [selection]
+            historyIndex = history.count - 1
+        }
         guard let book else { return }
         arrange()
         sidebar.show(book, selection: selection.place)
@@ -153,6 +201,8 @@ final class ChannelsView: QuietView {
     func restyle() {
         sidebar.restyle()
         panes.forEach { $0.restyle() }
+        jumpBox.needsDisplay = true
+        cheatsheet.needsDisplay = true
         if let book { sidebar.show(book, selection: selection.place) }
         needsDisplay = true
     }

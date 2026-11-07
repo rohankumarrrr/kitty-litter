@@ -151,6 +151,9 @@ final class ChannelPane: QuietView {
     static let page = 60
     /// How far past what you can see rows are kept in the window, so scrolling finds them ready.
     private static let overscan: CGFloat = 600
+    /// How many of a thread's newest rows its pane lays out when it opens. It's narrow, so that's still more than
+    /// fills it, and opening one from the keyboard never waits on the rest.
+    private var firstPage: Int { role == .thread ? Self.page / 2 : Self.page }
     /// How far a refresh looks ahead for a row it already has a view for, which covers rows coming and going at the top.
     private static let reuseReach = 64
     /// How many messages' laid-out words are kept between looks before only what's showing is.
@@ -286,7 +289,7 @@ final class ChannelPane: QuietView {
         let wasAtBottom = isNearBottom
         let anchor = isNewSelection ? nil : firstInSight
         // Following along at the bottom goes back to the newest page, so what's laid out doesn't keep growing.
-        let start = followsLatest ? (isNewSelection || wasAtBottom ? max(rows.count - Self.page, 0) : refreshedStart(in: rows)) : 0
+        let start = followsLatest ? (isNewSelection || wasAtBottom ? max(rows.count - firstPage, 0) : refreshedStart(in: rows)) : 0
         // A refresh keeps the view of each row that's still there, wherever it's moved to.
         var old: [(row: ChannelRow, view: ChannelRowView?)] = isNewSelection ? [] : zip(shown[first...], views).map { ($0, $1) }
         var cursor = rows.indices.contains(start) ? old.firstIndex { $0.row == rows[start] } ?? 0 : 0

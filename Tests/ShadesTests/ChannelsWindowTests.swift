@@ -38,7 +38,7 @@ final class ChannelsWindowTests: XCTestCase {
     func testThePanelTakesTheKeyboardOnlyWhenNeededAndNeverFloatsOverYourWork() {
         let panel = ChannelsPanel()
         XCTAssertTrue(panel.canBecomeKey, "for the box at the bottom")
-        XCTAssertTrue(panel.becomesKeyOnlyIfNeeded, "a click anywhere else leaves the keyboard where it was")
+        XCTAssertTrue(panel.becomesKeyOnlyIfNeeded, "opening it leaves the keyboard where it was, and only a click into it, which makes it key without activating Shades, takes it")
         XCTAssertFalse(panel.canBecomeMain)
         XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
         XCTAssertEqual(panel.level, .normal)
@@ -63,7 +63,8 @@ final class ChannelsWindowTests: XCTestCase {
             XCTAssertFalse(row.acceptsFirstResponder, "\(row)")
             XCTAssertFalse(row.needsPanelToBecomeKey, "\(row)")
         }
-        let boxes = Set((subviews(of: view.pane.composer) + subviews(of: view.threadPane.composer)).map(ObjectIdentifier.init))
+        // The jump box is a box too, only there once ⌘K opens it.
+        let boxes = Set(([view.jumpBox.field] + subviews(of: view.pane.composer) + subviews(of: view.threadPane.composer) + subviews(of: view.jumpBox)).map(ObjectIdentifier.init))
         let taking = subviews(of: view).filter { !boxes.contains(ObjectIdentifier($0)) && ($0.acceptsFirstResponder || $0.needsPanelToBecomeKey) }
         XCTAssertFalse(taking.isEmpty, "the words can be selected")
         for taker in taking {

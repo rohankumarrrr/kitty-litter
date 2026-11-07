@@ -66,6 +66,35 @@ enum DemoBench {
         report("switch-thread", nexts)
         report("close-thread", closes)
 
+        // The shortcuts, each the same call its key makes once Messages has the keyboard: up a channel's threads from
+        // the newest, down and up the sidebar, back and forward, and jumping to a kitten by name.
+        view.closeThread()
+        view.select(.channel(.of(steve)))
+        settle(window)
+        var threadKeys: [Double] = []
+        for _ in 0..<rounds * 2 { threadKeys.append(time(window) { view.perform(.previousThread) }) }
+        report("key-thread", threadKeys, "rows=\(thread.shown.count)")
+        view.closeThread()
+        settle(window)
+        var placeKeys: [Double] = []
+        for index in 0..<rounds * 2 { placeKeys.append(time(window) { view.perform(index % 2 == 0 ? .nextPlace : .previousPlace) }) }
+        report("key-place", placeKeys)
+        var historyKeys: [Double] = []
+        for index in 0..<rounds * 2 { historyKeys.append(time(window) { view.perform(index % 2 == 0 ? .back : .forward) }) }
+        report("key-back", historyKeys)
+        var jumps: [Double] = []
+        var filters: [Double] = []
+        for _ in 0..<rounds {
+            jumps.append(time(window) { view.perform(.jump) })
+            filters.append(time(window) { view.jumpBox.query = "steve" })
+            jumps.append(time(window) { view.jumpBox.open() })
+        }
+        report("key-jump", jumps, "found=\(view.jumpBox.items.count)")
+        report("jump-filter", filters)
+
+        view.select(.channel(.of(steve)))
+        view.open(thread: DemoBusy.longThread)
+        settle(window)
         var scrolls: [Double] = []
         // Read back each time, since rows laid out above as you go up move where you are.
         while thread.scrollOffset > 0 {

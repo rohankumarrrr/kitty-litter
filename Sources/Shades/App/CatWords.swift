@@ -133,6 +133,32 @@ enum CatWords {
     static func part(_ index: Int, of count: Int, _ text: String) -> String { count > 1 ? "\(index + 1) of \(count): \(text)" : text }
     static let unreadableQuestion = "They asked something I couldn't read."
     static let directMessages = "Direct messages"
+    static let shortcutsButton = "⌘/ Shortcuts"
+    static let shortcutsTitle = "Keyboard shortcuts"
+    static let jumpTitle = "Jump to"
+    static let jumpPlaceholder = "Jump to a place or thread"
+    static let jumpNothing = "Nothing by that name."
+    /// What ⌘/ lists, grouped as Slack's list is. The keys are T3 Code's, the Claude app's and Slack's own.
+    static let shortcutGroups: [(title: String, rows: [(keys: String, does: String)])] = [
+        ("Moving around", [
+            ("⌥↑  ⌥↓", "Place above or below"),
+            ("⌥⇧↑  ⌥⇧↓", "Unread channel above or below"),
+            ("⌘1 … ⌘9", "That row of the sidebar"),
+            ("⌘[  ⌘]", "Back and forward"),
+            ("⌘K", "Jump to a place or thread"),
+            ("⌘⇧T", "Threads"),
+            ("⌘⇧M", "Activity"),
+        ]),
+        ("Threads", [
+            ("⌘⇧[  ⌘⇧]", "Thread above or below"),
+            ("Esc", "Close the thread"),
+        ]),
+        ("Messages", [
+            ("⌘N", "Write here"),
+            ("⌘W", "Close Messages"),
+            ("⌘/", "These shortcuts"),
+        ]),
+    ]
     static let you = "You"
     static let someoneElse = "Someone else"
     static let readingMessages = "Reading their messages..."
