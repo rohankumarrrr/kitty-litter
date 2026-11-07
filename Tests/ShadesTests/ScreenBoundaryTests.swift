@@ -97,10 +97,10 @@ final class ScreenBoundaryTests: XCTestCase {
 
     /// Files anything running as you can read hold secrets in plain text, such as Claude Code's prompt history,
     /// `~/.git-credentials`, `~/.ssh` and Notes' store. A page could steer the router into reading one and carrying
-    /// it out in a search, and it needs no file, since your screen comes in its message.
+    /// it out in a search, and it needs no file, since your screen comes in its message. `Monitor` is the shell too.
     func testTheRouterCantReadYourFiles() throws {
         let (denied, turnedAway) = try Self.routerRules()
-        for tool in ["Read", "Glob", "Grep"] {
+        for tool in ["Read", "Glob", "Grep", "Monitor"] {
             XCTAssertTrue(turnedAway(tool), "\(tool) gets past the router's hook")
             XCTAssertTrue(denied.contains { Self.denies($0, tool) }, "\(tool) isn't denied outright, so it's open if hooks are off")
         }

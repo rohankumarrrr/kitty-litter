@@ -9,8 +9,9 @@ public enum RouterBlock {
     /// `SendMessage` reaches other Claude sessions without T3. Reading files is out too. Your screen comes in its
     /// message, and your home folder has secrets in plain text that a page could have it read and search for.
     static let allowed = ["WebSearch", "ToolSearch"]
-    /// Taken out of the list altogether, which still holds if hooks are ever turned off.
-    static let denied = ["mcp__t3-code", "Bash", "Edit", "Write", "NotebookEdit", "Read", "Glob", "Grep"]
+    /// Taken out of the list altogether, which still holds if hooks are ever turned off. It also stops an `@path` in
+    /// the prompt, which Claude Code reads without calling a tool, so the hook never sees it.
+    static let denied = ["mcp__t3-code", "Bash", "Monitor", "Edit", "Write", "NotebookEdit", "Read", "Glob", "Grep"]
 
     static let settings = try! JSONSerialization.data(
         withJSONObject: [
