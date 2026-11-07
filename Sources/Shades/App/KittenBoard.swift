@@ -65,7 +65,34 @@ enum KittenBoard {
 
     /// Who a thread counts as, when more than one could. Carrying a kitten's name beats being in its project.
     static func owner(of thread: AgentThread, among kittens: [Kitten]) -> Kitten? {
-        kittens.first { thread.title.hasPrefix("\($0.name):") } ?? kittens.first { belongs(thread, to: $0) }
+        Owners(kittens).of(thread)
+    }
+
+    /// `owner(of:among:)` for many threads. Standardizing a path is slow, so each kitten's are standardized once here,
+    /// and each folder threads are in once, however many threads are in it.
+    final class Owners {
+        private let kittens: [Kitten]
+        private let folders: [[String]]
+        private var byFolder: [String: Kitten?] = [:]
+
+        init(_ kittens: [Kitten]) {
+            self.kittens = kittens
+            folders = kittens.map { [$0.folder, $0.project].map(KittenBoard.standard) }
+        }
+
+        func of(_ thread: AgentThread) -> Kitten? {
+            if let named = kittens.first(where: { thread.title.hasPrefix("\($0.name):") }) { return named }
+            guard let folder = thread.projectPath else { return nil }
+            if let known = byFolder[folder] { return known }
+            let path = KittenBoard.standard(folder)
+            let owner = zip(kittens, folders).first { $0.1.contains(path) }?.0
+            byFolder[folder] = owner
+            return owner
+        }
+    }
+
+    private static func standard(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.path
     }
 
     static func needsYou(_ thread: AgentThread) -> Bool {
@@ -74,15 +101,16 @@ enum KittenBoard {
 
     /// Kittens that are taking work come first, and otherwise they stay put, so you can find one at a glance.
     static func statuses(kittens: [Kitten], threads: [AgentThread]) -> [KittenStatus] {
-        let working = kittens.filter { !$0.planned }.map { status(of: $0, among: kittens, threads: threads) }
+        let owners = threads.map(Owners(kittens).of)
+        let working = kittens.filter { !$0.planned }.map { kitten in
+            status(of: kitten, own: zip(threads, owners).filter { $0.1 == kitten }.map(\.0))
+        }
         let planned = kittens.filter(\.planned).map { KittenStatus(kitten: $0, state: .notSetUp) }
         return working + planned
     }
 
-    private static func status(of kitten: Kitten, among kittens: [Kitten], threads: [AgentThread]) -> KittenStatus {
-        let own = threads
-            .filter { owner(of: $0, among: kittens) == kitten }
-            .sorted { $0.updatedAt > $1.updatedAt }
+    private static func status(of kitten: Kitten, own threads: [AgentThread]) -> KittenStatus {
+        let own = threads.sorted { $0.updatedAt > $1.updatedAt }
         let waiting = own.filter(needsYou)
         let active = own.filter(\.status.isActive)
 

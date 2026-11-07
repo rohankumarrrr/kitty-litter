@@ -192,9 +192,11 @@ final class ChannelsWindowTests: XCTestCase {
         view.show(book(exchanges: 42))
         XCTAssertEqual(view.pane.distanceFromBottom, 0, accuracy: 1, "close enough counts")
 
+        // Near the top, older rows are laid out above what you're reading, so where you are is wherever that leaves you.
         view.pane.scrollOffset = 100
+        let reading = view.pane.scrollOffset
         view.show(book(exchanges: 43))
-        XCTAssertEqual(view.pane.scrollOffset, 100, "reading further up, you're left alone")
+        XCTAssertEqual(view.pane.scrollOffset, reading, "reading further up, you're left alone")
     }
 
     func testRowsThatHaventChangedArentRebuilt() {
@@ -207,6 +209,57 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(view.pane.shownMessageRows.first === first)
         view.show(book(exchanges: 3))
         XCTAssertTrue(view.pane.shownMessageRows.first === first, "new rows don't disturb the ones above")
+    }
+
+    private func rowViews(in view: ChannelsView) -> [ChannelRowView] {
+        subviews(of: view.pane).compactMap { $0 as? ChannelRowView }
+    }
+
+    func testALongConversationOnlyHasViewsNearWhatYouCanSee() {
+        let view = view()
+        view.show(book(exchanges: 300))
+        view.select(.channel(.direct(steve)))
+        XCTAssertGreaterThan(view.pane.shown.count, 400)
+        XCTAssertLessThan(rowViews(in: view).count, 60, "only the rows near the bottom are in the window")
+        XCTAssertLessThanOrEqual(view.pane.shownMessageRows.count, ChannelPane.page, "and only the newest page is laid out")
+        XCTAssertEqual(view.pane.distanceFromBottom, 0, accuracy: 1)
+
+        view.pane.scrollOffset -= 2_000
+        XCTAssertLessThan(rowViews(in: view).count, 60, "scrolling swaps rows in and out rather than adding them all")
+        XCTAssertTrue(rowViews(in: view).allSatisfy { $0.frame.intersects(NSRect(x: 0, y: view.pane.scrollOffset - 700, width: 820, height: 1_900)) })
+    }
+
+    func testScrollingUpLaysOutOlderRowsWithoutMovingWhatYoureReading() throws {
+        let view = view()
+        view.show(book(exchanges: 300))
+        view.select(.channel(.direct(steve)))
+        let laidOut = view.pane.shownMessageRows.count
+
+        view.pane.scrollOffset = view.pane.visibleHeight + 50
+        XCTAssertEqual(view.pane.shownMessageRows.count, laidOut, "a screen from the top, nothing more is laid out yet")
+        let reading = try XCTUnwrap(view.pane.shownMessageRows.first { $0.superview != nil && $0.frame.maxY > view.pane.scrollOffset })
+        let above = view.pane.scrollOffset - reading.frame.minY
+
+        view.pane.scrollOffset -= 100
+        XCTAssertGreaterThan(view.pane.shownMessageRows.count, laidOut, "the page before it is laid out")
+        XCTAssertEqual(view.pane.scrollOffset - reading.frame.minY, above - 100, accuracy: 0.5, "and what you were reading moved only as far as you scrolled")
+
+        for _ in 0..<10 { view.pane.scrollOffset = 0 }
+        XCTAssertEqual(view.pane.shownMessageRows.count, 400, "every message is there once you've scrolled to the top")
+        XCTAssertEqual(view.pane.shown.first, .note(CatWords.olderMessages))
+    }
+
+    func testANewMessageInALongConversationOnlyMakesViewsForItself() {
+        let view = view()
+        view.show(book(exchanges: 200))
+        view.select(.channel(.direct(steve)))
+        let before = Set(view.pane.shownMessageRows.map(ObjectIdentifier.init))
+
+        // The book keeps the newest 200 exchanges, so the oldest goes as this one comes in, and every row moves up.
+        view.show(book(exchanges: 201))
+        let made = view.pane.shownMessageRows.filter { !before.contains(ObjectIdentifier($0)) }
+        XCTAssertEqual(made.count, 2, "only the new ask and reply are new views")
+        XCTAssertEqual(view.pane.distanceFromBottom, 0, accuracy: 1)
     }
 
     func testClosingForgetsEveryWordButKeepsTheSelection() {

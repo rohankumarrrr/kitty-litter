@@ -21,6 +21,8 @@ final class ChannelFeed {
         var isDirty = true
         var loop: Task<Void, Never>?
         var published: ChannelBook?
+        /// What each of the cat's replies came to, since working that out is slow and a reply doesn't change.
+        var said: [String: String?] = [:]
 
         init(threads: [AgentThread]) {
             self.threads = threads
@@ -32,6 +34,7 @@ final class ChannelFeed {
             transcripts = [:]
             sent = []
             published = nil
+            said = [:]
         }
     }
 
@@ -108,9 +111,9 @@ final class ChannelFeed {
     /// The threads behind what you're looking at whose words are on the screen as they are now, so they can count as read.
     func threads(in selection: ChannelSelection) -> [AgentThread] {
         guard let session, let id = selection.channelID else { return [] }
-        let kittens = kittens()
+        let owners = KittenBoard.Owners(kittens())
         return session.threads.filter { thread in
-            guard !isWithShades(thread), let owner = KittenBoard.owner(of: thread, among: kittens), session.readStamps[thread.id] == thread.updatedAt else { return false }
+            guard session.readStamps[thread.id] == thread.updatedAt, !isWithShades(thread), let owner = owners.of(thread) else { return false }
             if case .thread(let shown, _) = selection {
                 // Its latest words have to be the ones showing here, not only older ones while the latest are between kittens.
                 guard thread.id == shown, let book = session.published else { return false }
@@ -153,9 +156,9 @@ final class ChannelFeed {
             return
         }
 
-        let kittens = kittens()
+        let owners = KittenBoard.Owners(kittens())
         let talks = listed.filter(isWithShades)
-        let byOwner = Dictionary(grouping: listed.filter { !isWithShades($0) }) { KittenBoard.owner(of: $0, among: kittens)?.id }
+        let byOwner = Dictionary(grouping: listed.filter { !isWithShades($0) }) { owners.of($0)?.id }
         let mine = alsoInEveryone()
         let owned = byOwner.filter { $0.key != nil }.values.flatMap { threads in
             threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
@@ -209,7 +212,10 @@ final class ChannelFeed {
     }
 
     private func book(of session: Session) -> ChannelBook {
-        ChannelBook.build(
+        // Only what this build asks about is kept, so replies that have gone don't stay in memory.
+        var said: [String: String?] = [:]
+        defer { session.said = said }
+        return ChannelBook.build(
             kittens: kittens(),
             threads: session.threads,
             transcripts: session.transcripts,
@@ -220,7 +226,12 @@ final class ChannelFeed {
             sent: session.sent,
             isUnread: isUnread,
             inEveryone: alsoInEveryone(),
-            withShades: Set(session.threads.filter(isWithShades).map(\.id))
+            withShades: Set(session.threads.filter(isWithShades).map(\.id)),
+            said: { reply in
+                let words = session.said[reply] ?? ChannelBook.said(reply)
+                said[reply] = words
+                return words
+            }
         )
     }
 }

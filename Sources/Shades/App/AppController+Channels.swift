@@ -59,12 +59,12 @@ extension AppController {
 
     /// From the live list, the one place that has the words of approvals and questions.
     var waiting: Waiting {
-        let kittens = loadKittens()
+        let owners = KittenBoard.Owners(loadKittens())
         var waiting = Waiting(approvals: approvals.pending, reports: inbox.entries)
         // What used to be the dashboard: work the cat started outside any kitten, while it's going or just finished.
-        waiting.shadesWork = watch.rows(at: now()).filter { !hiddenThreads.contains($0.id) && KittenBoard.owner(of: $0, among: kittens) == nil }
+        waiting.shadesWork = watch.rows(at: now()).filter { !hiddenThreads.contains($0.id) && owners.of($0) == nil }
         for thread in latestThreads where !hiddenThreads.contains(thread.id) {
-            let owner = KittenBoard.owner(of: thread, among: kittens)?.id
+            let owner = owners.of(thread)?.id
             for request in thread.pendingApprovals {
                 waiting.owners[request.id] = owner
                 waiting.listed[request.id] = thread.id
