@@ -241,13 +241,15 @@ final class ChannelFeed {
     /// Hands each read over as it lands, in the order asked, and returns how many could be read.
     private func read(_ threads: [AgentThread], landed: (AgentThread, [Exchange]?) -> Void) async -> Int {
         let backend = backend
+        // With nobody looking there's no hurry, so reading ahead takes one at a time and leaves T3 room for the rest.
+        let atOnce = isOpen ? Self.readsAtOnce : 1
         return await withTaskGroup(of: (AgentThread, [Exchange]?).self) { group in
             var waiting = threads.makeIterator()
             func readNext() {
                 guard !Task.isCancelled, let thread = waiting.next() else { return }
                 group.addTask { (thread, await backend.exchanges(threadID: thread.id)) }
             }
-            for _ in 0..<Self.readsAtOnce { readNext() }
+            for _ in 0..<atOnce { readNext() }
 
             var read = 0
             while let (thread, exchanges) = await group.next() {

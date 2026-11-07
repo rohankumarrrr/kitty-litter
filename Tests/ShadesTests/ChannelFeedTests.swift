@@ -347,6 +347,14 @@ final class ChannelFeedTests: XCTestCase {
         XCTAssertEqual(words(in: book), ["Ready"])
     }
 
+    func testReadingAheadTakesOneThreadAtATime() async {
+        backend.threads = (0..<8).map { thread("t\($0)", age: TimeInterval($0)) }
+        backend.readDuration = .milliseconds(10)
+        feed.warm(threads: [])
+        await eventually { self.feed.threadsHeld == 8 }
+        XCTAssertEqual(backend.mostAtOnce, 1, "with nobody looking, T3 keeps room for everything else")
+    }
+
     func testWhatsOnTheScreenIsReadFirst() async {
         let pepper = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper")
         feed = ChannelFeed(backend: backend, kittens: { [steve] in [steve, pepper] }, gap: .milliseconds(20))
