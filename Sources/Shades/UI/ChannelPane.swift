@@ -131,6 +131,8 @@ final class ChannelPane: QuietView {
     private static let overscan: CGFloat = 600
     /// How far a refresh looks ahead for a row it already has a view for, which covers rows coming and going at the top.
     private static let reuseReach = 64
+    /// How many messages' laid-out words are kept between looks before only what's showing is.
+    private static let wordsKept = 2_000
 
     var onOpenThread: ((String) -> Void)?
     var onCopy: ((String) -> Void)?
@@ -256,6 +258,13 @@ final class ChannelPane: QuietView {
         previous.filter { !kept.contains(ObjectIdentifier($0)) }.forEach { $0.removeFromSuperview() }
         first = start
         shown = rows
+        if words.count > Self.wordsKept {
+            let showing = Set(rows.compactMap { row -> String? in
+                if case .message(let message) = row { return message.id }
+                return nil
+            })
+            words = words.filter { showing.contains($0.key) }
+        }
         stack()
 
         if isNewSelection {
@@ -285,22 +294,6 @@ final class ChannelPane: QuietView {
         stack()
         scrollOffset = offset
         attach()
-    }
-
-    /// Nothing on the screen is kept once the window closes.
-    func forget() {
-        views.forEach { $0.removeFromSuperview() }
-        views = []
-        shown = []
-        first = 0
-        words = [:]
-        expanded = []
-        book = nil
-        partAnswers = [:]
-        replyingTo = nil
-        spokenTo = nil
-        composer.clear()
-        stack()
     }
 
     /// Opens a thread on its own, where the box goes only into it. Choosing to reply means you're about to type, so

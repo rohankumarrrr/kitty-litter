@@ -162,6 +162,8 @@ final class AppController {
     var reportDelay: TimeInterval = 5
     /// How long a question waits for the first list of sessions, so one asked right after launch can still be routed.
     var threadListWait: TimeInterval = 2
+    /// How long after T3's first list Messages reads ahead, so it never competes with everything else a launch asks T3.
+    var warmDelay: Duration = .seconds(15)
     /// Whether the quick thread is on its first turn, with no conversation worth keeping yet.
     var quickIsFresh = false
     var lineCounter = 0
