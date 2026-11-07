@@ -5569,3 +5569,30 @@ extension FlowTests {
         XCTAssertEqual(shadesSaid, ["Find me a cheaper flight", CatWords.handedOff("Search for cheaper flights")], "and the DM says where it went")
     }
 }
+
+extension FlowTests {
+    /// Reply on a report about a thread Messages hasn't read, which a phone sends the same way, then a reply in
+    /// another project's thread that a question in Activity led to. Neither was also sent.
+    func testAnUntickedReplyToAThreadMessagesHasntReadStaysOutOfEveryChannel() async throws {
+        kittens = [steve, penny]
+        backend.projects["/k/penny"] = "project-penny"
+        let old = AgentThread(id: "old", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: penny.folder)
+        let other = AgentThread(id: "other", title: "Deploy billing", projectTitle: "billing", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/elsewhere/billing")
+        backend.listed = [old, other]
+        controller.threadsChanged([old, other])
+        controller.channelsPressed()
+        await settle()
+        XCTAssertNil(shownBook?.threads["old"], "Messages hasn't read it")
+
+        await messages("Yes, ship it", to: .thread(id: "old", title: "Budget", report: "r"), in: .of(penny))
+        XCTAssertEqual(backend.sent.last?.threadID, "old")
+        XCTAssertEqual(shownBook?.channel(.of(penny))?.posts ?? [], [], "Also send was unticked, so #penny gets nothing new")
+        XCTAssertEqual(shownBook?.threads["old"]?.messages.map(\.text), ["Yes, ship it"], "the thread shows just what you sent there")
+        XCTAssertEqual(shownBook.map { ChannelRows.thread("old", in: $0) }?.first, shownBook?.threads["old"].map { .message($0.parent) })
+
+        await messages("Hold off until Monday", to: .thread(id: "other", title: "Deploy billing"), in: .general)
+        XCTAssertEqual(backend.sent.last?.threadID, "other")
+        XCTAssertEqual(shownBook?.channel(.general)?.posts ?? [], [], "and #general gets nothing for another project's thread")
+        XCTAssertEqual(shownBook?.threads["other"]?.messages.map(\.text), ["Hold off until Monday"])
+    }
+}

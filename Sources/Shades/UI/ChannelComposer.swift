@@ -17,6 +17,8 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     var onEscape: (() -> Void)?
 
     private(set) var target: MessageTarget?
+    /// Words typed for somewhere that's gone wait in the box, and Return doesn't send them anywhere else.
+    var isHeld = false
     /// A thread's "Also send to #channel", under its box, as Slack has it.
     let alsoSend = QuietCheckbox()
     private let label = NSTextField(labelWithString: "")
@@ -144,9 +146,16 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
 
     var hasDraft: Bool { textView.string.contains { !$0.isWhitespace } }
 
+    /// Puts another place's or thread's draft in the box, with nothing to undo back into the one it replaced.
+    func showDraft(_ text: String) {
+        textView.string = text
+        textView.undoManager?.removeAllActions()
+        needsLayout = true
+    }
+
     private func send() {
         let words = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let target, !words.isEmpty, target.isReady else {
+        guard let target, !words.isEmpty, target.isReady, !isHeld else {
             NSSound.beep()
             return
         }

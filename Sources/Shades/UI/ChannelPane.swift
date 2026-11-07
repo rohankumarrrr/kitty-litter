@@ -144,6 +144,18 @@ final class ChannelPane: QuietView {
         case thread
     }
 
+    /// Whose box it is: a place's, or a thread's.
+    private enum Box: Hashable {
+        case place(ChannelPlace)
+        case thread(String)
+    }
+
+    /// Words typed in a box you've moved away from, and where they were going.
+    private struct Draft {
+        var text: String
+        var target: MessageTarget
+    }
+
     private static let stickyDistance: CGFloat = 40
     private static let topPad: CGFloat = 6
     private static let bottomPad: CGFloat = 14
@@ -182,6 +194,12 @@ final class ChannelPane: QuietView {
     private var replyingTo: InboxEntry?
     /// Where the box pointed when the talk key went down, so nothing arriving meanwhile can move what you say.
     private var spokenTo: (selection: ChannelSelection, target: MessageTarget, answered: Int)?
+    /// What you'd typed in each place or thread you've moved away from, as Slack keeps a draft in each, so words only
+    /// ever go where they were typed. It's in memory only.
+    private var drafts: [Box: Draft] = [:]
+    /// Words brought back to a box whose target went meanwhile, such as a question answered in T3. They wait there,
+    /// and Return sends them nowhere else, until the box is cleared.
+    private var held: MessageTarget?
     private(set) var shown: [ChannelRow] = []
     /// Views for the rows from `first` on. Each is only in the window while it's near what you can see.
     private var views: [ChannelRowView] = []
@@ -234,7 +252,7 @@ final class ChannelPane: QuietView {
                 self.arrange(force: true)
             }
         }
-        composer.onResize = { [weak self] in self?.arrange(force: true) }
+        composer.onResize = { [weak self] in self?.typed() }
         scroll.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
     }
@@ -261,8 +279,17 @@ final class ChannelPane: QuietView {
     }
 
     /// What this pane shows of a selection: the place, or the thread.
-    private func shows(_ selection: ChannelSelection) -> AnyHashable {
-        role == .place ? AnyHashable(selection.place) : AnyHashable(selection.thread)
+    private func shows(_ selection: ChannelSelection) -> Box? {
+        switch role {
+        case .place: return .place(selection.place)
+        case .thread: return selection.thread.map(Box.thread)
+        }
+    }
+
+    /// Whose box a selection has. A new topic's is still its own once T3 has started its thread.
+    private func box(of selection: ChannelSelection, in book: ChannelBook) -> Box? {
+        guard role == .thread, let thread = selection.thread else { return shows(selection) }
+        return .thread(book.started[thread] ?? thread)
     }
 
     /// Showing something new shows its latest. A refresh only follows along if you were already at the bottom.
@@ -270,9 +297,15 @@ final class ChannelPane: QuietView {
         let isNewSelection = isNewSelection || shows(selection) != shows(self.selection)
         if let thread = selection.thread, thread == replyingTo?.threadID {} else { replyingTo = nil }
         parts.answers = parts.answers.filter { id, _ in book.waiting.questions.contains { $0.id == id } }
+        // What you'd typed in a new topic waits in the thread T3 started for it.
+        for (topic, thread) in book.started {
+            if let draft = drafts.removeValue(forKey: .thread(topic)) { drafts[.thread(thread)] = draft }
+        }
+        let isNewBox = box(of: selection, in: book) != box(of: self.selection, in: book)
+        let restored = isNewBox ? swapDraft(for: selection, in: book) : nil
         self.selection = selection
         self.book = book
-        updateComposer(keepingDraft: !isNewSelection)
+        updateComposer(keepingDraft: !isNewBox, typedFor: restored)
         arrange()
         let rows: [ChannelRow]
         switch role {
@@ -364,15 +397,18 @@ final class ChannelPane: QuietView {
         window?.makeFirstResponder(composer.textView)
     }
 
-    /// Coming to a thread some other way than Reply on its report is just the thread.
-    func forgetReport() {
+    /// Another thread, or none, is open now. Coming back some other way than Reply on its report is just the thread,
+    /// and Also send was for a reply in this one.
+    func leaveThread() {
         replyingTo = nil
+        composer.alsoSends = false
     }
 
-    /// What you send here stops that report asking and gets its answer.
+    /// What you send here stops that report asking and gets its answer. Words already in the box still go where they
+    /// were going.
     func replying(to entry: InboxEntry?) {
         replyingTo = entry
-        updateComposer()
+        updateComposer(keepingDraft: true)
         arrange(force: true)
     }
 
@@ -381,7 +417,29 @@ final class ChannelPane: QuietView {
         onOpen?(entry.threadID, .channel(book?.home(of: book?.kitten(of: entry.id)) ?? .general), true, entry)
     }
 
-    private func updateComposer(keepingDraft: Bool = false) {
+    /// Leaves what you'd typed where you typed it, and brings back what you'd typed in `selection`'s box, still going
+    /// where it was then. That's `nil` if there's nothing to bring back.
+    private func swapDraft(for selection: ChannelSelection, in book: ChannelBook) -> MessageTarget? {
+        if let left = box(of: self.selection, in: book) {
+            drafts[left] = composer.hasDraft ? composer.target.map { Draft(text: composer.textView.string, target: $0) } : nil
+        }
+        held = nil
+        let draft = box(of: selection, in: book).flatMap { drafts.removeValue(forKey: $0) }
+        composer.showDraft(draft?.text ?? "")
+        guard let draft else { return nil }
+        // A new topic that's started moves on to its thread. Anything else that's gone keeps your words waiting.
+        if case .starting = draft.target {} else if !draft.target.isStill(in: book) { held = draft.target }
+        return draft.target
+    }
+
+    /// Once held words are cleared away, the box points wherever it would now.
+    private func typed() {
+        if held != nil, !composer.hasDraft { updateComposer() }
+        arrange(force: true)
+    }
+
+    /// `typedFor` is where a draft that's just been brought back was going.
+    private func updateComposer(keepingDraft: Bool = false, typedFor restored: MessageTarget? = nil) {
         var target: MessageTarget?
         var also: String?
         if let book {
@@ -402,15 +460,19 @@ final class ChannelPane: QuietView {
         }
         // Words already typed go where the box said when you started, so a refresh can't send them somewhere else.
         if let spokenTo, spokenTo.selection == selection { target = spokenTo.target }
-        if keepingDraft, composer.hasDraft, let current = composer.target, let book, current.isStill(in: book) {
-            target = current
+        if composer.hasDraft, let typedFor = restored ?? (keepingDraft ? composer.target : nil), let book, typedFor.isStill(in: book) {
+            target = typedFor
         }
+        if !composer.hasDraft { held = nil }
+        if let held { target = held }
         if case .thread(let id, _, _)? = target, let home = book?.home(ofThread: id), home != .shades {
             also = book.map { CatWords.alsoSendTo($0.title(of: home)) }
         }
         var label: String?
         if case .question(let question)? = target, let part = part(of: question) { label = CatWords.answering(part.part.text) }
+        if held != nil { label = CatWords.heldDraft }
         let channel = selection.channelID
+        composer.isHeld = held != nil
         composer.show(target, label: label, in: channel, name: channel.flatMap { book?.name(of: $0) }, alsoSendTo: also)
     }
 
@@ -425,10 +487,17 @@ final class ChannelPane: QuietView {
     /// What you said goes after anything you'd typed, and is sent where the box pointed when you started, as if you'd
     /// pressed Return. If that's gone, such as a question answered meanwhile, it waits in the box instead.
     func spoke(_ text: String) {
-        let typed = composer.textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        let words = typed.isEmpty ? text : "\(typed) \(text)"
         let spot = spokenTo
         spokenTo = nil
+        // Said for a box you've since moved away from, it waits there after whatever you'd typed.
+        if let spot, let book, let away = box(of: spot.selection, in: book), away != box(of: selection, in: book) {
+            let typed = drafts[away]?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            drafts[away] = Draft(text: typed.isEmpty ? text : "\(typed) \(text)", target: drafts[away]?.target ?? spot.target)
+            NSSound.beep()
+            return
+        }
+        let typed = composer.textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = typed.isEmpty ? text : "\(typed) \(text)"
         // A question in parts has to be on the same part, or what you said would answer the next one.
         let samePart = if case .question(let question) = spot?.target { parts.answers[question.id]?.count ?? 0 == spot?.answered } else { true }
         guard let spot, spot.selection == selection, let book, spot.target.isReady, spot.target.isStill(in: book), samePart else {

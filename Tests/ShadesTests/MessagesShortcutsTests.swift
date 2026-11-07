@@ -20,12 +20,13 @@ final class MessagesShortcutsTests: XCTestCase {
     }
 
     /// Steve has three threads, oldest first, and Pepper one you haven't seen.
-    private func book() -> ChannelBook {
+    private func book(waiting: Waiting = Waiting()) -> ChannelBook {
         ChannelBook.build(
             kittens: [steve, pepper],
             threads: [thread("s1", of: steve, title: "Resume"), thread("s2", of: steve, title: "Cover letter"), thread("s3", of: steve, title: "Interview prep"), thread("p1", of: pepper, title: "Budget")],
             transcripts: ["s1": said("e1", "Tidy my resume", at: 0), "s2": said("e2", "Write a cover letter", at: 10), "s3": said("e3", "Prep me for the interview", at: 20), "p1": said("e4", "Check my budget", at: 5)],
             isReading: false, unreadable: 0, cantReachT3: false,
+            waiting: waiting,
             isUnread: { $0.id == "p1" }
         )
     }
@@ -62,7 +63,7 @@ final class MessagesShortcutsTests: XCTestCase {
         XCTAssertNil(key(40, "k", [.command, .control]))
         XCTAssertNil(key(11, "b", [.control, .command]), "⌃⌘B, which opens and closes Messages, is left alone")
         XCTAssertTrue(MessagesShortcut.previousPlace.movesInText, "a box with words keeps ⌥ and the arrows")
-        XCTAssertFalse(MessagesShortcut.nextThread.movesInText)
+        XCTAssertFalse(MessagesShortcut.nextThread.movesInText, "a thread key still works with words in the box, which stay in their own thread's")
     }
 
     func testNoShortcutDoesAnythingWhileMessagesDoesntHaveTheKeyboard() {
@@ -275,5 +276,236 @@ final class MessagesShortcutsTests: XCTestCase {
         XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel), "so the app you were in stays active")
         XCTAssertTrue(panel.canBecomeKey)
         XCTAssertFalse(panel.canBecomeMain)
+    }
+}
+
+// MARK: - Drafts
+
+/// Words typed in a box stay with the place or thread they were typed in, as Slack keeps a draft in each, so no
+/// shortcut, click or question arriving can send them anywhere else.
+extension MessagesShortcutsTests {
+    private func question(_ id: String, in thread: String, _ text: String) -> AgentQuestion {
+        AgentQuestion(id: id, threadID: thread, threadTitle: "Cover letter", text: text, form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: text, options: [], values: [], takesOwnWords: true)]))
+    }
+
+    func testAQuestionThatArrivesNeverTakesWordsTypedBeforeIt() {
+        let ways: [(String, (ChannelsView) -> Void)] = [
+            ("⌘⇧] then ⌘⇧[", { $0.perform(.nextThread); $0.perform(.previousThread) }),
+            ("⌘[ then ⌘]", { $0.perform(.back); $0.perform(.forward) }),
+            ("Esc, then opening it again", { $0.perform(.escape); $0.open(thread: "s2") }),
+        ]
+        let asked = question("q", in: "s2", "Delete the old version?")
+        for (way, roundTrip) in ways {
+            let view = view()
+            var sent: [MessagesAction] = []
+            view.onAction = { sent.append($0) }
+            view.select(.channel(.of(steve)))
+            view.open(thread: "s2")
+            let composer = view.threadPane.composer
+            composer.textView.string = "Make it shorter"
+            view.show(book(waiting: Waiting(questions: [asked], owners: ["q": steve.id])))
+            XCTAssertEqual(composer.target, .thread(id: "s2", title: "Cover letter"), way)
+
+            roundTrip(view)
+            XCTAssertEqual(view.selection.thread, "s2", way)
+            XCTAssertEqual(composer.textView.string, "Make it shorter", way)
+            XCTAssertEqual(composer.target, .thread(id: "s2", title: "Cover letter"), "\(way) still replies in the thread")
+            composer.send(composer.textView.string)
+            XCTAssertEqual(sent, [.send("Make it shorter", to: .thread(id: "s2", title: "Cover letter"), shownIn: .of(steve))], way)
+        }
+    }
+
+    func testAThreadKeyLeavesADraftInItsThread() {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.select(.channel(.of(steve)))
+        view.perform(.nextThread)
+        let composer = view.threadPane.composer
+        composer.textView.string = "Yes, delete every old draft"
+        view.perform(.previousThread)
+        XCTAssertEqual(view.selection.thread, "s2")
+        XCTAssertEqual(composer.textView.string, "", "the thread above has a box of its own")
+        composer.send(composer.textView.string)
+        XCTAssertEqual(sent, [])
+
+        view.perform(.nextThread)
+        XCTAssertEqual(composer.textView.string, "Yes, delete every old draft", "and it's waiting back where it was typed")
+        composer.send(composer.textView.string)
+        XCTAssertEqual(sent, [.send("Yes, delete every old draft", to: .thread(id: "s3", title: "Interview prep"), shownIn: .of(steve))])
+    }
+
+    func testAThreadKeyInThreadsLeavesADraftWithItsKitten() {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.select(.threads)
+        view.perform(.nextThread)
+        XCTAssertEqual(view.selection.thread, "p1")
+        let composer = view.threadPane.composer
+        composer.textView.string = "Cancel the card"
+        view.perform(.nextThread)
+        XCTAssertEqual(view.selection.thread, "s3", "Steve's")
+        XCTAssertEqual(composer.textView.string, "")
+        composer.send(composer.textView.string)
+        XCTAssertEqual(sent, [], "Pepper's words never reach Steve")
+
+        view.perform(.previousThread)
+        composer.send(composer.textView.string)
+        XCTAssertEqual(sent, [.send("Cancel the card", to: .thread(id: "p1", title: "Budget"), shownIn: .of(pepper))])
+    }
+
+    func testAPlaceKeyLeavesADraftInItsPlace() {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.select(.channel(.general))
+        let composer = view.pane.composer
+        composer.textView.string = "What's on my calendar?"
+        view.perform(.place(4))
+        XCTAssertEqual(view.selection, .channel(.of(steve)))
+        XCTAssertEqual(composer.textView.string, "")
+        XCTAssertEqual(composer.target, .newThread(steve))
+        composer.send(composer.textView.string)
+        XCTAssertEqual(sent, [], "what was for the router never starts work in Steve's folder")
+
+        view.perform(.place(3))
+        XCTAssertEqual(composer.textView.string, "What's on my calendar?")
+        composer.send(composer.textView.string)
+        XCTAssertEqual(sent, [.send("What's on my calendar?", to: .router, shownIn: .general)])
+    }
+
+    func testAReplyLeftInAClosedThreadStaysThere() {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.open(thread: "s3", from: .channel(.of(steve)), typing: true)
+        let composer = view.threadPane.composer
+        composer.textView.string = "Yes, delete every old draft"
+        view.perform(.escape)
+        XCTAssertNil(view.selection.thread)
+
+        view.open(thread: "p1", from: .channel(.of(pepper)), typing: true)
+        XCTAssertEqual(composer.target, .thread(id: "p1", title: "Budget"))
+        XCTAssertEqual(composer.textView.string, "", "Pepper's thread has a box of its own")
+        composer.send(composer.textView.string)
+        XCTAssertEqual(sent, [])
+
+        view.open(thread: "s3", from: .channel(.of(steve)), typing: true)
+        composer.send(composer.textView.string)
+        XCTAssertEqual(sent, [.send("Yes, delete every old draft", to: .thread(id: "s3", title: "Interview prep"), shownIn: .of(steve))])
+    }
+
+    func testAlsoSendIsOnlyForTheThreadItWasTickedIn() {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.select(.thread("s3", in: .channel(.of(steve))))
+        let composer = view.threadPane.composer
+        composer.alsoSend.toggle()
+        XCTAssertTrue(composer.alsoSends)
+        view.perform(.previousThread)
+        XCTAssertFalse(composer.alsoSends, "the thread above is another thread")
+
+        view.perform(.nextThread)
+        composer.alsoSend.toggle()
+        view.perform(.place(5))
+        view.perform(.nextThread)
+        XCTAssertEqual(view.selection, .thread("p1", in: .channel(.of(pepper))))
+        XCTAssertFalse(composer.alsoSends, "and so is one in another channel")
+        composer.send("Pay the rent")
+        XCTAssertEqual(sent, [.send("Pay the rent", to: .thread(id: "p1", title: "Budget"), shownIn: .of(pepper), alsoSent: false)])
+    }
+
+    func testWordsForAQuestionAnsweredWhileYouWereAwayWaitAndSendNowhereElse() {
+        let first = question("q1", in: "s2", "Which font?")
+        let next = question("q2", in: "s2", "Delete the old version?")
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.show(book(waiting: Waiting(questions: [first], owners: ["q1": steve.id])))
+        view.select(.thread("s2", in: .channel(.of(steve))))
+        let composer = view.threadPane.composer
+        XCTAssertEqual(composer.target, .question(first))
+        composer.textView.string = "Yes"
+        view.perform(.nextThread)
+
+        // Meanwhile the font question is answered in T3, and another arrives.
+        view.show(book(waiting: Waiting(questions: [next], owners: ["q2": steve.id])))
+        view.perform(.previousThread)
+        XCTAssertEqual(composer.textView.string, "Yes", "your words are still there")
+        XCTAssertNotEqual(composer.target, .question(next))
+        composer.send(composer.textView.string)
+        XCTAssertEqual(sent, [], "but they don't answer the new question, or go to the thread instead")
+        view.show(book(waiting: Waiting(questions: [next], owners: ["q2": steve.id])))
+        composer.send(composer.textView.string)
+        XCTAssertEqual(sent, [], "even after a refresh")
+
+        composer.textView.string = ""
+        composer.textDidChange(Notification(name: NSText.didChangeNotification))
+        XCTAssertEqual(composer.target, .question(next), "cleared, the box points where it would now")
+    }
+
+    func testWhatYouSayForAThreadYouMovedAwayFromWaitsThere() {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.select(.thread("s3", in: .channel(.of(steve))))
+        let composer = view.threadPane.composer
+        composer.textView.string = "Keep it"
+        view.threadPane.startSpeaking()
+        view.perform(.previousThread)
+        view.threadPane.spoke("to one page")
+        XCTAssertEqual(sent, [])
+        XCTAssertEqual(composer.textView.string, "", "nothing said for that thread lands in this one")
+
+        view.perform(.nextThread)
+        XCTAssertEqual(composer.textView.string, "Keep it to one page")
+        XCTAssertEqual(composer.target, .thread(id: "s3", title: "Interview prep"))
+    }
+}
+
+// MARK: - Activity
+
+extension MessagesShortcutsTests {
+    func testActivitysThreadKeysOnlyGoWhereAClickThereOpensABox() {
+        // Another project of yours that Messages hasn't read, with an approval and a question with only choices.
+        var other = AgentThread(id: "other", title: "Deploy billing", projectTitle: "billing", status: .running, model: "m", updatedAt: at, projectPath: "/elsewhere/billing")
+        other.status = .waitingForApproval
+        let approval = ApprovalRequest(id: "ap", threadID: "other", threadTitle: "Deploy billing", kind: .command, summary: "Run: deploy", createdAt: at)
+        let choices = AgentQuestion(id: "q", threadID: "other", threadTitle: "Deploy billing", text: "Deploy now?", form: AnswerForm(parts: [AnswerForm.Part(key: "go", text: "Deploy now?", options: ["Yes", "No"], values: ["y", "n"], takesOwnWords: false)]))
+        let book = ChannelBook.build(
+            kittens: [steve, pepper], threads: [thread("s1", of: steve, title: "Resume"), other],
+            transcripts: ["s1": said("e1", "Tidy my resume", at: 0)],
+            isReading: false, unreadable: 0, cantReachT3: false,
+            waiting: Waiting(approvals: [approval], questions: [choices])
+        )
+        let view = ChannelsView(frame: NSRect(origin: .zero, size: ChannelsWindow.size))
+        view.show(book)
+        XCTAssertEqual(view.threadOrder(in: book), [], "an approval and a question with only choices open in T3")
+        XCTAssertFalse(view.perform(.nextThread))
+        XCTAssertNil(view.selection.thread)
+        XCTAssertTrue(view.threadPane.isHidden)
+    }
+
+    func testActivitysThreadKeysFollowTypeAnAnswerReplyAndWhatsInProgress() {
+        var going = thread("s2", of: steve, title: "Cover letter")
+        going.status = .running
+        var unread = thread("s9", of: steve, title: "Not read yet")
+        unread.status = .running
+        let words = AgentQuestion(id: "q", threadID: "p1", threadTitle: "Budget", text: "Which account?", form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which account?", options: [], values: [], takesOwnWords: true)]))
+        let report = InboxEntry(id: "r", kind: .decision, text: "Ship it?", threadID: "s1", threadTitle: "Resume", at: at)
+        let book = ChannelBook.build(
+            kittens: [steve, pepper],
+            threads: [thread("s1", of: steve, title: "Resume"), going, unread, thread("p1", of: pepper, title: "Budget")],
+            transcripts: ["s1": said("e1", "Tidy my resume", at: 0), "s2": said("e2", "Write a cover letter", at: 10), "p1": said("e4", "Check my budget", at: 5)],
+            isReading: false, unreadable: 0, cantReachT3: false,
+            waiting: Waiting(questions: [words], owners: ["q": pepper.id], reports: [report])
+        )
+        let view = ChannelsView(frame: NSRect(origin: .zero, size: ChannelsWindow.size))
+        view.show(book)
+        XCTAssertEqual(view.threadOrder(in: book), ["p1", "s1", "s2"], "Type an answer, Reply, then what's in progress that's been read")
+        view.perform(.nextThread)
+        XCTAssertEqual(view.threadPane.composer.target, .question(words))
     }
 }

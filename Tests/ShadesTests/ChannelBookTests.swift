@@ -49,6 +49,15 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertTrue(more.channels.allSatisfy(\.posts.isEmpty))
     }
 
+    /// A thread that carries a kitten's name from working in another project, before any of its words are read.
+    func testAListedThreadNothingsBeenReadOfLivesWithTheKittenItsTitleNames() {
+        let elsewhere = thread("fix", project: "Shades", title: "Steve: Fix login")
+        let built = book(threads: [elsewhere])
+        XCTAssertEqual(built.listed["fix"]?.title, "Fix login")
+        XCTAssertEqual(built.home(ofThread: "fix"), .of(steve), "so Also send names #steve, not #general")
+        XCTAssertEqual(book(threads: [elsewhere], inGeneral: ["fix": at]).home(ofThread: "fix"), .general, "unless it was started in #general")
+    }
+
     func testAChannelIsNamedTheWaySlackNamesOne() {
         let named = Kitten(name: "Steve Pawsniak", role: "", covers: "", folder: "/k/sp")
         let built = book(kittens: [named, Kitten(name: "Dr. Mew  2", role: "", covers: "", folder: "/k/m")])
@@ -431,6 +440,18 @@ final class ChannelBookTests: XCTestCase {
         let built = book(threads: [thread("t")], transcripts: ["t": [exchange("e", asked: 0)]], sent: [reply])
         XCTAssertEqual(built.channel(.of(steve))?.posts, [.thread("t")])
         XCTAssertEqual(built.threads["t"]?.latest.text, "Keep the FAQ")
+    }
+
+    func testAReplyToAThreadMessagesHasntReadOnlyShowsInItsThreadUnlessItsAlsoSent() throws {
+        var reply = echo("Ship it", at: 10, in: .of(steve), thread: "t")
+        reply.isReply = true
+        let built = book(threads: [thread("t")], sent: [reply])
+        XCTAssertEqual(built.channel(.of(steve))?.posts, [], "the channel gets no new post")
+        XCTAssertEqual(try XCTUnwrap(built.threads["t"]).messages.map(\.text), ["Ship it"], "and the thread shows just what you sent there")
+        XCTAssertEqual(built.home(ofThread: "t"), .of(steve))
+
+        reply.alsoSent = true
+        XCTAssertEqual(book(threads: [thread("t")], sent: [reply]).channel(.of(steve))?.posts.count, 1, "ticked, it shows in the channel too")
     }
 
     func testWhatYouSentShowsAtOnceAndGoesOnceT3HasIt() {

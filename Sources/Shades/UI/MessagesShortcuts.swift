@@ -408,16 +408,8 @@ extension ChannelsView {
         case .threads:
             return book.yours.map(\.id)
         case .activity:
-            var seen: Set<String> = []
-            return ChannelRows.rows(.activity, in: book).compactMap { row -> String? in
-                switch row {
-                case .approval(let request): return book.thread(holding: request.id, else: request.threadID)
-                case .question(let question): return book.thread(holding: question.id, else: question.threadID)
-                case .report(let entry): return entry.threadID
-                case .issue(let thread): return thread.id
-                default: return nil
-                }
-            }.filter { seen.insert($0).inserted }
+            // Only those a click there opens beside a channel. Anything else opens in T3, so no key leads a box to it.
+            return ChannelRows.activityThreads(in: book, answered: pane.parts.answers.mapValues(\.count))
         }
     }
 

@@ -131,6 +131,7 @@ enum CatWords {
     static let answerInWords = "Type an answer"
     static let didntStart = "That didn't start. Try again?"
     static let answerInT3 = "This one's answered in T3."
+    static let heldDraft = "That question was answered meanwhile, so this won't send"
     static func part(_ index: Int, of count: Int, _ text: String) -> String { count > 1 ? "\(index + 1) of \(count): \(text)" : text }
     static let unreadableQuestion = "They asked something I couldn't read."
     static let directMessages = "Direct messages"

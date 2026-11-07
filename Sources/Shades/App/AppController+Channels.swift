@@ -104,10 +104,10 @@ extension AppController {
     /// Each way of sending passes on your words and nothing else: no screen, and nothing anyone else said. What's shown
     /// meanwhile, and a reply also sent to a channel, is kept in memory only.
     func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, alsoSent: Bool = false, echoID: String = "sent-\(UUID().uuidString)") {
-        func echo(threadID: String = "", title: String = "", startsThread: Bool = false) {
+        func echo(threadID: String = "", title: String = "", startsThread: Bool = false, isReply: Bool = false) {
             guard let channel else { return }
             let message = ChannelMessage(exchangeID: echoID, kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: title)
-            channels.sent(message, in: channel, startsThread: startsThread, alsoSent: alsoSent && !threadID.isEmpty)
+            channels.sent(message, in: channel, startsThread: startsThread, alsoSent: alsoSent && !threadID.isEmpty, isReply: isReply)
         }
         switch target {
         case .router:
@@ -129,7 +129,7 @@ extension AppController {
                 self?.channels.started(echoID, in: threadID, title: title)
             }
         case .thread(let id, let title, let report):
-            echo(threadID: id, title: title)
+            echo(threadID: id, title: title, isReply: true)
             reply(words, toThread: id, title: title, marking: report)
         case .starting:
             break

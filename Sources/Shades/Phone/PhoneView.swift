@@ -51,8 +51,9 @@ struct PhonePlace: Equatable {
         return true
     }
 
-    /// Whether anything the window shows for this place opens this thread: a channel's parents and the replies also
-    /// sent to it, the threads you're in, or what's waiting and in progress in Activity.
+    /// Whether anything the window shows for this place opens this thread beside it: a channel's parents and the
+    /// replies also sent to it, the threads you're in, or in Activity, Type an answer, Reply or Ask, and what's in
+    /// progress that Messages has read.
     static func leadsTo(_ id: String, from place: ChannelPlace, in book: ChannelBook) -> Bool {
         switch place {
         case .channel(let channel):
@@ -65,12 +66,7 @@ struct PhonePlace: Equatable {
         case .threads:
             return book.yours.contains { $0.id == id }
         case .activity:
-            let waiting = book.waiting
-            return waiting.approvals.contains { book.thread(holding: $0.id, else: $0.threadID) == id }
-                || waiting.questions.contains { book.thread(holding: $0.id, else: $0.threadID) == id }
-                || waiting.reports.contains { $0.threadID == id }
-                || book.issues.contains { $0.threads.contains { $0.id == id } }
-                || waiting.shadesWork.contains { $0.id == id }
+            return ChannelRows.activityThreads(in: book).contains(id)
         }
     }
 
@@ -364,11 +360,12 @@ struct PhoneView: Encodable, Equatable {
             )
         case .issue(let thread):
             let details = [CatWords.age(of: thread.updatedAt, now: now), CatWords.status(thread), thread.pullRequest.map(CatWords.pullRequest)]
+            // As in the window, only a thread Messages has read opens. A phone has no T3 to open the rest in.
             return Row(
                 kind: "issue",
                 title: thread.title,
                 detail: details.compactMap { $0 }.joined(separator: " · "),
-                open: PhonePlace.key(.thread(thread.id, in: .activity))
+                open: book.threads[thread.id] == nil ? nil : PhonePlace.key(.thread(thread.id, in: .activity))
             )
         case .approval(let request):
             let kitten = book.kitten(of: request.id)

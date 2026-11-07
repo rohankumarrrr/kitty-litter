@@ -165,7 +165,7 @@ final class ChannelsView: QuietView {
     func select(_ selection: ChannelSelection) {
         let old = self.selection
         self.selection = selection
-        if selection.thread != old.thread { threadPane.forgetReport() }
+        if selection.thread != old.thread { threadPane.leaveThread() }
         if !isTravelling, selection != history[historyIndex] {
             history = Array(history[...historyIndex].suffix(Self.historyKept - 1)) + [selection]
             historyIndex = history.count - 1

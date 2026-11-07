@@ -123,15 +123,17 @@ enum MessageTarget: Equatable {
             return thread.parent.failure == nil ? .starting(kitten) : .newThread(kitten)
         }
         if case .kitten(let owner)? = book.home(ofThread: id), book.statuses.first(where: { $0.id == owner })?.state == .notSetUp { return nil }
-        let takesWords = { (question: AgentQuestion) -> Bool in
-            guard let parts = question.form?.parts, parts.indices.contains(answered[question.id] ?? 0) else { return false }
-            return parts[answered[question.id] ?? 0].takesOwnWords
-        }
-        if let question = book.waiting.questions.first(where: { book.thread(holding: $0.id, else: $0.threadID) == id && takesWords($0) }) {
+        if let question = book.waiting.questions.first(where: { book.thread(holding: $0.id, else: $0.threadID) == id && takesWords($0, answered: answered) }) {
             return .question(question)
         }
         guard book.knows(thread: id) else { return nil }
         return .thread(id: id, title: book.title(ofThread: id))
+    }
+
+    /// Whether the part of a question that's next to answer takes your own words.
+    static func takesWords(_ question: AgentQuestion, answered: [String: Int]) -> Bool {
+        guard let parts = question.form?.parts, parts.indices.contains(answered[question.id] ?? 0) else { return false }
+        return parts[answered[question.id] ?? 0].takesOwnWords
     }
 }
 
@@ -184,6 +186,22 @@ enum ChannelRows {
         }
         let approvals = book.waiting.approvals.filter { book.thread(holding: $0.id, else: $0.threadID) == id }.map(ChannelRow.approval)
         return rows + approvals + book.waiting.questions.filter { book.thread(holding: $0.id, else: $0.threadID) == id }.map(ChannelRow.question)
+    }
+
+    /// The threads Activity opens beside a channel, top to bottom: a question's Type an answer, a report's Reply or
+    /// Ask, and what's in progress that Messages has read. An approval, and anything else, only opens in T3. `answered`
+    /// is how many parts of each question have their answer so far.
+    static func activityThreads(in book: ChannelBook, answered: [String: Int] = [:]) -> [String] {
+        var seen: Set<String> = []
+        return activity(in: book).compactMap { row -> String? in
+            switch row {
+            case .question(let question):
+                return MessageTarget.takesWords(question, answered: answered) ? book.thread(holding: question.id, else: question.threadID) : nil
+            case .report(let entry): return entry.threadID
+            case .issue(let thread): return book.threads[thread.id] == nil ? nil : thread.id
+            default: return nil
+            }
+        }.filter { seen.insert($0).inserted }
     }
 
     /// Whether something's waiting on you in this thread, which its reply bar says.

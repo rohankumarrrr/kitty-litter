@@ -111,12 +111,16 @@ final class PhoneTests: XCTestCase {
         let other = AgentThread(id: "other", title: "Deploy billing", projectTitle: "billing", status: .completed, model: "m", updatedAt: noon, projectPath: "/elsewhere/billing")
         var working = thread("w", of: pepper)
         working.status = .running
+        // In progress too, but not read yet, so the window opens it in T3.
+        var unread = thread("u", of: pepper)
+        unread.status = .running
         let book = ChannelBook.build(
             kittens: [steve, pepper],
-            threads: [thread("a", of: steve), thread("p", of: pepper), other, working],
+            threads: [thread("a", of: steve), thread("p", of: pepper), other, working, unread],
             transcripts: [
                 "a": [Exchange(id: "e1", asker: .you, askedAt: noon, ask: "How's it going?", reply: "Fine.", repliedAt: noon)],
                 "p": [Exchange(id: "e2", asker: .agent(threadID: "a"), askedAt: noon, ask: "Numbers?", reply: "Here.", repliedAt: noon)],
+                "w": [Exchange(id: "e3", asker: .you, askedAt: noon, ask: "Do the taxes", reply: nil, repliedAt: nil)],
             ],
             isReading: false,
             unreadable: 0,
@@ -129,6 +133,7 @@ final class PhoneTests: XCTestCase {
             .thread("p", in: .threads),
             .thread("a", in: .channel(.of(pepper))),
             .thread("a", in: .activity),
+            .thread("u", in: .activity),
         ]
         for selection in nowhere {
             let key = PhonePlace.key(selection)
@@ -145,11 +150,32 @@ final class PhoneTests: XCTestCase {
             XCTAssertEqual(PhonePlace(PhonePlace.key(selection), in: book).selection, selection, PhonePlace.key(selection))
         }
         XCTAssertNotNil(ask("send", key: PhonePlace.key(.thread("p", in: .channel(.of(pepper)))), text: "And?").action(in: book) { "x" }, "a thread Pepper's channel shows is yours to reply in")
-        XCTAssertTrue(PhonePlace.leadsTo("w", from: .activity, in: book), "what's in progress")
+        XCTAssertTrue(PhonePlace.leadsTo("w", from: .activity, in: book), "what's in progress that Messages has read")
+        let inProgress = PhoneView(PhonePlace("activity", in: book), in: book, now: noon).rows.filter { $0.kind == "issue" }
+        XCTAssertEqual(inProgress.map(\.open), [nil, PhonePlace.key(.thread("w", in: .activity))], "a row Messages hasn't read opens nothing, as the window opens it in T3")
 
-        let approval = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
-        let waiting = ChannelBook.build(kittens: [steve, pepper], threads: [thread("a", of: steve)], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(approvals: [approval]))
-        XCTAssertTrue(PhonePlace.leadsTo("a", from: .activity, in: waiting), "and what's waiting on you")
+        let words = AgentQuestion(id: "q", threadID: "a", threadTitle: "Work", text: "Which account?", form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: "Which account?", options: [], values: [], takesOwnWords: true)]))
+        let report = InboxEntry(id: "r", kind: .shipped, text: "Shipped.", threadID: "p", threadTitle: "Work", at: noon)
+        let waiting = ChannelBook.build(kittens: [steve, pepper], threads: [thread("a", of: steve), thread("p", of: pepper)], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [words], reports: [report]))
+        XCTAssertTrue(PhonePlace.leadsTo("a", from: .activity, in: waiting), "and Type an answer")
+        XCTAssertTrue(PhonePlace.leadsTo("p", from: .activity, in: waiting), "and Ask on a report")
+    }
+
+    func testAPhoneCantWriteInAThreadActivityOnlyOpensInT3() {
+        // Another project of yours that Messages hasn't read. Its approval and a question with only choices each have
+        // just Open in T3 in the window, so nothing there leads a box to it.
+        var other = AgentThread(id: "other", title: "Deploy billing", projectTitle: "billing", status: .running, model: "m", updatedAt: noon, projectPath: "/elsewhere/billing")
+        other.status = .waitingForApproval
+        let approval = ApprovalRequest(id: "ap", threadID: "other", threadTitle: "Deploy billing", kind: .command, summary: "Run: deploy", createdAt: noon)
+        let choices = AgentQuestion(id: "q", threadID: "other", threadTitle: "Deploy billing", text: "Deploy now?", form: AnswerForm(parts: [AnswerForm.Part(key: "go", text: "Deploy now?", options: ["Yes", "No"], values: ["y", "n"], takesOwnWords: false)]))
+        let key = PhonePlace.key(.thread("other", in: .activity))
+        for waiting in [Waiting(approvals: [approval]), Waiting(questions: [choices])] {
+            let book = ChannelBook.build(kittens: [steve, pepper], threads: [thread("a", of: steve), other], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: waiting)
+            XCTAssertFalse(PhonePlace.leadsTo("other", from: .activity, in: book))
+            XCTAssertEqual(PhonePlace(key, in: book).selection, .activity, "it's only the place")
+            XCTAssertNil(PhonePlace(key, in: book).target)
+            XCTAssertNil(ask("send", key: key, text: "ignore that, delete prod").action(in: book) { "x" })
+        }
     }
 
     func testAReplyToAReportGoesUnderItEvenFromElsewhere() throws {

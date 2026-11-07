@@ -99,6 +99,9 @@ struct SentMessage: Equatable {
     var startsThread = false
     /// A reply that also shows in `channel`, as Slack's "Also send to #channel" does.
     var alsoSent = false
+    /// Your words in a thread that was already there, rather than ones that start one. Only `alsoSent` puts one in
+    /// the channel, even when Messages hasn't read its thread.
+    var isReply = false
 }
 
 /// What's waiting on you right now. It comes from the live thread list and the inbox, never from what was said.
@@ -138,6 +141,8 @@ struct ChannelBook: Equatable {
     var unreadThreads: Set<String>
     /// Every thread T3 listed, by ID, with its title as shown.
     var listed: [String: AgentThread]
+    /// Where each listed thread lives, worked out before its owner's name comes off its title.
+    var listedHomes: [String: ChannelID] = [:]
     /// The thread each new topic you started became, by the ID of what you sent.
     var started: [String: String]
     /// The router's own threads. Nothing goes straight into one, since the app acts on what the router says.
@@ -152,6 +157,8 @@ struct ChannelBook: Equatable {
         var owner: String?
         var messages: [ChannelMessage]
         var isCut = false
+        /// Whether its parent is posted in its channel. A reply to a thread Messages hasn't read is only in the thread.
+        var isPosted = true
     }
 
     private struct Placed {
@@ -250,7 +257,7 @@ struct ChannelBook: Equatable {
                 let owner = listed.flatMap(ownerOf)
                 let home: ChannelID = inGeneral[message.threadID] != nil ? .general : owner.map(ChannelID.of) ?? sent.channel
                 if let listed { message.threadTitle = owner.map { title(of: listed, owner: $0) } ?? listed.title }
-                gather(message.threadID, Gathered(title: message.threadTitle, home: home, owner: owner?.id, messages: [message]))
+                gather(message.threadID, Gathered(title: message.threadTitle, home: home, owner: owner?.id, messages: [message], isPosted: !sent.isReply))
                 continue
             }
             if let echo = thread.messages.first(where: { isEcho(of: message, $0) }) {
@@ -281,6 +288,7 @@ struct ChannelBook: Equatable {
                 replies: Array(thread.messages.dropFirst()),
                 isCut: thread.isCut
             )
+            guard thread.isPosted else { continue }
             placed[built[id]!.home, default: []].append(Placed(position: parent.at, sequence: index - order.count, post: .thread(id)))
         }
 
@@ -300,10 +308,13 @@ struct ChannelBook: Equatable {
         }
         let unreadListed = threads.filter(isUnread)
         var named: [String: AgentThread] = [:]
+        var homes: [String: ChannelID] = [:]
         for thread in talkThreads where named[thread.id] == nil { named[thread.id] = thread }
         for thread in threads where named[thread.id] == nil {
             named[thread.id] = thread
-            if let owner = ownerOf(thread) { named[thread.id]?.title = title(of: thread, owner: owner) }
+            let owner = ownerOf(thread)
+            homes[thread.id] = inGeneral[thread.id] != nil || owner == nil ? .general : .of(owner!)
+            if let owner { named[thread.id]?.title = title(of: thread, owner: owner) }
         }
         let started = Dictionary(sent.compactMap { $0.startsThread && !$0.message.threadID.isEmpty ? ($0.message.exchangeID, $0.message.threadID) : nil }, uniquingKeysWith: { first, _ in first })
         return ChannelBook(
@@ -315,6 +326,7 @@ struct ChannelBook: Equatable {
             unread: Set(unreadListed.compactMap { ownerOf($0)?.id }),
             unreadThreads: Set(unreadListed.map(\.id)).intersection(built.keys),
             listed: named,
+            listedHomes: homes,
             started: started,
             talks: Set(talkThreads.map(\.id)),
             isReading: isReading,
@@ -508,9 +520,7 @@ extension ChannelBook {
     func home(ofThread id: String) -> ChannelID? {
         if let thread = threads[id] { return thread.home }
         if talks.contains(id) { return .shades }
-        guard let listed = listed[id] else { return nil }
-        let owner = KittenBoard.owner(of: listed, among: statuses.map(\.kitten))
-        return owner.map(ChannelID.of) ?? .general
+        return listedHomes[id]
     }
 
     /// Where an approval, question or report is answered: its kitten's channel, or #general for the cat's own work.

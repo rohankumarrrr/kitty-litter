@@ -107,10 +107,10 @@ final class ChannelFeed {
         if isOpen { publish() }
     }
 
-    /// Shows it at once, until T3 has it. A reply that's `alsoSent` shows in `channel` as well as its thread, from
+    /// Shows it at once, until T3 has it. A reply only shows in `channel` as well as its thread if it's `alsoSent`, from
     /// memory only, as Slack's "Also send to #channel" does.
-    func sent(_ message: ChannelMessage, in channel: ChannelID, startsThread: Bool = false, alsoSent: Bool = false) {
-        sent.append(SentMessage(channel: channel, message: message, startsThread: startsThread, alsoSent: alsoSent))
+    func sent(_ message: ChannelMessage, in channel: ChannelID, startsThread: Bool = false, alsoSent: Bool = false, isReply: Bool = false) {
+        sent.append(SentMessage(channel: channel, message: message, startsThread: startsThread, alsoSent: alsoSent, isReply: isReply))
         sent = sent.suffix(Self.sentKept)
         isDirty = true
         publish()
