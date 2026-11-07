@@ -30,17 +30,27 @@ extension AppController {
     @discardableResult
     func runHealthCheck() async -> [HealthFinding] {
         var facts = systemFacts()
-        facts.reachedT3 = threadListArrived
         facts.inboxSaves = !inboxSaveFailed
         facts.shortcutsTaken = takenShortcuts
-        facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
+        var frontDoorError: Error?
         do {
             _ = try await routerProjectID(for: settings.quickModel)
-        } catch let problem as FrontDoorProblem {
-            facts.frontDoorProblem = problem
         } catch {
-            // With T3 out of reach, that's the finding.
-            if facts.reachedT3 { facts.frontDoorProjectTrouble = CatWords.problem(error, while: .agents) }
+            frontDoorError = error
+        }
+        // Right after a launch T3 can take some seconds to send its first list. Finding the front door waits for it,
+        // so whether T3 is there is only judged once that's done.
+        await waitForThreadList()
+        facts.reachedT3 = threadListArrived
+        facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
+        switch frontDoorError {
+        case let problem as FrontDoorProblem:
+            facts.frontDoorProblem = problem
+        // With T3 out of reach, that's the finding.
+        case let error? where facts.reachedT3:
+            facts.frontDoorProjectTrouble = CatWords.problem(error, while: .agents)
+        default:
+            break
         }
 
         for kitten in loadKittens() where !kitten.planned {
