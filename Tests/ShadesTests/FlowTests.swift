@@ -2599,6 +2599,13 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(finding?.problem?.hasSuffix("That folder is taken.") == true)
     }
 
+    /// What two installs reported: T3 sent its first list a few seconds after launch, and the report said it couldn't be reached.
+    func testAListThatComesWhileFindingTheFrontDoorCountsAsReachingT3() async {
+        backend.whileFindingAProject = { [unowned self] in self.controller.threadsChanged([]) }
+        let finding = await controller.runHealthCheck().first { $0.check == "T3 Code" }
+        XCTAssertEqual(finding?.ok, true)
+    }
+
     func testAFrontDoorThatCanRunIsFine() async {
         controller.threadListArrived = true
         let finding = await controller.runHealthCheck().first { $0.check == "front door" }
