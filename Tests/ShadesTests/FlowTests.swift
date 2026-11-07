@@ -2698,7 +2698,7 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(log.all.contains("snapshot"))
         XCTAssertTrue(backend.sent.isEmpty)
         controller.channelsClosed()
-        XCTAssertEqual(controller.channels.threadsHeld, 0)
+        XCTAssertFalse(controller.channels.isOpen)
     }
 
     func testAKittenThatIsntInT3SaysSo() async {

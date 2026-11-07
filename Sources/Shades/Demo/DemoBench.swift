@@ -16,11 +16,18 @@ enum DemoBench {
         if !stage.isChannelsVisible {
             report("open", [time(window) { controller.channelsPressed() }])
         }
-        let started = Date()
-        while controller.channels.open(threads: []).isReading, Date().timeIntervalSince(started) < 10 {
-            try? await Task.sleep(nanoseconds: 20_000_000)
-        }
+        await finishReading(controller)
         guard let steve = Demo.kittens.first, let clawde = Demo.kittens.first(where: { $0.name == "Clawde" }) else { return }
+        view.select(.channel(.direct(steve)))
+        var reopens: [Double] = []
+        for _ in 0..<rounds {
+            stage.hideChannels()
+            settle(window)
+            reopens.append(time(window) { controller.channelsPressed() })
+        }
+        // What a reopen shows straight away: the conversation, or a note that it's still reading.
+        report("reopen", reopens, "reading=\(controller.channels.open(threads: []).isReading) rows=\(pane.shown.count)")
+        await finishReading(controller)
         let places: [(String, ChannelSelection)] = [
             ("dm", .channel(.direct(steve))),
             ("everyone", .channel(.everyone)),
@@ -104,6 +111,13 @@ enum DemoBench {
         let phoneView = PhoneView(PhonePlace(PhonePlace.key(.channel(.direct(steve))), in: book), in: book, now: Date())
         report("phone-view", phones, "rows=\(phoneView.rows.count) bytes=\((try? JSONEncoder().encode(phoneView))?.count ?? 0)")
         print("perf done")
+    }
+
+    private static func finishReading(_ controller: AppController) async {
+        let started = Date()
+        while controller.channels.open(threads: []).isReading, Date().timeIntervalSince(started) < 10 {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
     }
 
     /// Rows that are views in the window, rather than only in the list.

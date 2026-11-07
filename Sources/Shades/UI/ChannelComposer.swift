@@ -134,8 +134,4 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         onResize?()
         onSend?(words, target)
     }
-
-    func clear() {
-        textView.string = ""
-    }
 }
