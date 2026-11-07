@@ -9,11 +9,16 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     private static let maxLines: CGFloat = 5
     private static let labelHeight: CGFloat = 22
     private static let fieldPad: CGFloat = 8
+    private static let checkboxHeight: CGFloat = 24
 
     var onSend: ((String, MessageTarget) -> Void)?
     var onResize: (() -> Void)?
+    /// Esc in the box, which closes a thread's pane as it does anywhere else in the window.
+    var onEscape: (() -> Void)?
 
     private(set) var target: MessageTarget?
+    /// A thread's "Also send to #channel", under its box, as Slack has it.
+    let alsoSend = QuietCheckbox()
     private let label = NSTextField(labelWithString: "")
     private let scroll = NSScrollView()
     let textView = PlaceholderTextView()
@@ -45,32 +50,44 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         scroll.scrollerStyle = .overlay
         scroll.documentView = textView
         addSubview(scroll)
+        alsoSend.isHidden = true
+        addSubview(alsoSend)
         restyle()
     }
 
     func restyle() {
         label.textColor = MessagesInk.soft
         textView.textColor = MessagesInk.text
+        alsoSend.needsDisplay = true
         needsDisplay = true
+    }
+
+    /// Whether what you send next also shows in the thread's channel.
+    var alsoSends: Bool {
+        get { !alsoSend.isHidden && alsoSend.isOn }
+        set { alsoSend.isOn = newValue }
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// `channel` is where the box is, which says who the router's answers come from.
-    func show(_ target: MessageTarget?, label: String? = nil, in channel: ChannelID? = nil) {
-        let changed = target != self.target
+    /// `channel` is where the box is, which says who the router's answers come from, and `name` is its name as the
+    /// sidebar writes it. `alsoSendTo` offers a thread's reply to its channel too.
+    func show(_ target: MessageTarget?, label: String? = nil, in channel: ChannelID? = nil, name: String? = nil, alsoSendTo: String? = nil) {
+        let changed = target != self.target || (alsoSendTo == nil) != alsoSend.isHidden
         self.target = target
         isHidden = target == nil
+        alsoSend.isHidden = alsoSendTo == nil
+        if let alsoSendTo { alsoSend.title = alsoSendTo }
         guard let target else { return }
         self.label.stringValue = label ?? CatWords.target(target, in: channel)
-        textView.placeholder = CatWords.placeholder(target, in: channel)
+        textView.placeholder = CatWords.placeholder(target, in: channel, name: name)
         if changed { needsLayout = true }
     }
 
     var height: CGFloat {
         guard target != nil else { return 0 }
-        return Self.pad + Self.labelHeight + textHeight + Self.fieldPad * 2 + Self.pad
+        return Self.pad + Self.labelHeight + textHeight + Self.fieldPad * 2 + (alsoSend.isHidden ? 0 : Self.checkboxHeight) + Self.pad
     }
 
     private var textHeight: CGFloat {
@@ -88,6 +105,8 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         scroll.frame = field.insetBy(dx: 10, dy: Self.fieldPad)
         textView.minSize = NSSize(width: scroll.frame.width, height: 0)
         textView.maxSize = NSSize(width: scroll.frame.width, height: .greatestFiniteMagnitude)
+        alsoSend.sizeToFit()
+        alsoSend.frame.origin = NSPoint(x: ChannelRowView.margin - 2, y: field.maxY + 4)
         needsDisplay = true
     }
 
@@ -110,6 +129,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
             send()
             return true
         case #selector(NSResponder.cancelOperation(_:)):
+            onEscape?()
             return true
         default:
             return false
@@ -134,8 +154,75 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         onResize?()
         onSend?(words, target)
     }
+}
 
-    func clear() {
-        textView.string = ""
+/// A checkbox you can only press with the mouse, in Messages' colours. Like `QuietButton`, it never takes the keyboard,
+/// so pressing it leaves the keyboard where it was.
+final class QuietCheckbox: NSView {
+    private static let box: CGFloat = 14
+
+    var title = "" { didSet { needsDisplay = true; setAccessibilityLabel(title) } }
+    var isOn = false { didSet { if isOn != oldValue { needsDisplay = true; setAccessibilityValue(isOn) } } }
+    var onChange: ((Bool) -> Void)?
+
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: 160, height: 20))
+        setAccessibilityElement(true)
+        setAccessibilityRole(.checkBox)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var isFlipped: Bool { true }
+    override var acceptsFirstResponder: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override var needsPanelToBecomeKey: Bool { false }
+
+    private var label: NSAttributedString {
+        NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: MessagesInk.soft])
+    }
+
+    func sizeToFit() {
+        setFrameSize(NSSize(width: Self.box + 8 + ceil(label.size().width) + 4, height: 20))
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let box = NSRect(x: 1, y: (bounds.height - Self.box) / 2, width: Self.box, height: Self.box)
+        let shape = NSBezierPath(roundedRect: box, xRadius: 3.5, yRadius: 3.5)
+        if isOn {
+            MessagesInk.link.setFill()
+            shape.fill()
+            let tick = NSBezierPath()
+            tick.move(to: NSPoint(x: box.minX + 3.5, y: box.midY))
+            tick.line(to: NSPoint(x: box.minX + 6, y: box.maxY - 3.5))
+            tick.line(to: NSPoint(x: box.maxX - 3, y: box.minY + 3.5))
+            tick.lineWidth = 1.8
+            ChannelSpeakerLook.readable(on: MessagesInk.theme?.accent ?? ChannelSpeakerLook.yours).setStroke()
+            tick.stroke()
+        } else {
+            MessagesInk.line.setStroke()
+            shape.lineWidth = 1.2
+            shape.stroke()
+        }
+        let text = label
+        text.draw(at: NSPoint(x: box.maxX + 7, y: (bounds.height - text.size().height) / 2))
+    }
+
+    override func mouseDown(with event: NSEvent) {}
+
+    override func mouseUp(with event: NSEvent) {
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        toggle()
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        toggle()
+        return true
+    }
+
+    func toggle() {
+        isOn.toggle()
+        onChange?(isOn)
     }
 }

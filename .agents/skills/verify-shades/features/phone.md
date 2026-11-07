@@ -1,14 +1,14 @@
 # Phone
 
-With **Messages on my phone** on in Settings, the cat shows a code and a picture of it. A phone that scans it, or types the code into the page, gets Messages in its browser: the list of places, Needs you, Everyone, each DM and each thread, with the same buttons as the window.
+With **Messages on my phone** on in Settings, the cat shows a code and a picture of it. A phone that scans it, or types the code into the page, gets Messages in its browser, laid out the way Slack's phone app is: the list of places, Activity, Threads, #general, each kitten's channel, and each thread on a page of its own, with the same buttons as the window.
 
 ## Sub-features
 
 - `phone-pair` shows the one-time code, and a phone that sends it is paired.
-- `phone-places` lists Needs you, Everyone and Done, each kitten's DM and each pair that's talked.
+- `phone-places` lists Activity and Threads, then #general and each kitten's channel, with the window's counts and bold. The cat's DM stays on the Mac.
 - `phone-answer` allows or denies an approval, answers a question from its card, and replies to a report.
-- `phone-send` sends in Everyone through the router, and starts a new topic from a DM, which opens on its own.
-- `phone-notify` sends each new thing in Needs you to a subscribed phone, encrypted for it, saying only who and what kind.
+- `phone-send` sends in #general through the router, starts a new thread from a kitten's channel, which opens on its own page, and replies in a thread, with its Also send to #channel.
+- `phone-notify` sends each new thing in Activity to a subscribed phone, encrypted for it, saying only who and what kind.
 - `phone-theme` gives the page Messages' theme, and holds back what's new while you're selecting words.
 
 ## How to get to it (user POV)
@@ -28,9 +28,9 @@ Journey: `journeys/phone.txt`.
 
 - **Pair.** `phone on`, `phone pair` and `draw`. The output says `[demo] phone page on http://127.0.0.1:<port>`, and `pairing.png` in `1-pairing` shows the code and its picture.
 - **Places.** `phone open`, which opens the page with the code that's showing, as scanning its picture does. `phone.png` in `2-home` lists the places, each kitten in its colour.
-- **Approve.** `approval command ...`, `report decision`, `phone go needs`, then `phone press Allow`. The output says `[demo] accept: npm run build && npm test` and `[demo] took back 1 notification`, and `4-allowed` shows only Clawde's decision left.
-- **Everyone.** `phone go everyone` and `phone send Hello from my phone`. The output says `[demo] started demo-3`, the router's turn, and `phone text` ends with Shades' answer.
-- **New topic.** `phone go steve` and `phone send ...`. The output says `[demo] started demo-4` with your words, and `7-topic` shows them in the new topic's own thread.
+- **Approve.** `approval command ...`, `report decision`, `phone go activity`, then `phone press Allow`. The output says `[demo] accept: npm run build && npm test` and `[demo] took back 1 notification`, and `4-allowed` shows only Clawde's decision left.
+- **#general.** `phone go general` and `phone send Hello from my phone`. The output says `[demo] started demo-3`, the router's turn, and `phone text` ends with Shades' answer.
+- **New thread.** `phone go steve` and `phone send ...`. `6-dm` is Steve's channel, each thread's parent with its reply bar. The output says `[demo] started demo-4` with your words, and `7-topic` shows them on the new thread's own page, with "Also send to #steve-pawsniak" under its box.
 
 Journey: `journeys/phone-answers.txt`, in light mode.
 
@@ -45,7 +45,7 @@ Journey: `journeys/phone-notifications.txt`.
 Journey: `journeys/phone-theme.txt`.
 
 - **Theme.** `colors Cursor/Opal Horizon` before `phone on`, then `phone open steve`. `1-opal` shows the page dark, your bubbles in the violet tint, a violet Send button, and Steve's still his own colour.
-- **Selecting.** `phone select the new grid` does what dragging over those words does, and prints `[phone] selected [the new grid]`. A new topic sent from the window doesn't reach the page's `phone text` while they're selected, and does after `phone unselect`. The web view's pictures don't show a selection.
+- **Selecting.** `phone select feels cramped` does what dragging over those words, in a parent on Steve's channel, does, and prints `[phone] selected [feels cramped]`. A new thread started from the window doesn't reach the page's `phone text` while they're selected, and does after `phone unselect`. The web view's pictures don't show a selection.
 
 End every journey with `front` and `windows`. The app in front stays whatever it was, and `active=false`.
 

@@ -7,7 +7,7 @@ wait 1
 phone open steve
 wait 4
 draw .verify/shades/phone-theme/1-opal
-phone select the new grid
+phone select feels cramped
 wait 1
 channels
 wait 2

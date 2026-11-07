@@ -36,6 +36,7 @@ enum PhonePage {
             <textarea id="words" rows="1" enterkeyhint="send"></textarea>
             <button id="send" type="submit">Send</button>
           </div>
+          <label id="alsolabel" hidden><input type="checkbox" id="also"> <span id="alsotext"></span></label>
         </form>
         <section id="pair" hidden>
           <h1>Pair this phone</h1>
@@ -53,7 +54,7 @@ enum PhonePage {
     static let style = """
         :root {
           --paper: #f9f9f9; --text: #1d1d1f; --soft: #6e6e73; --line: #d2d2d7; --grey: #e9e9eb;
-          --you: #0071e3; --on-you: #ffffff; --card: #ffffff; --warn: #c9341c;
+          --you: #0071e3; --on-you: #ffffff; --card: #ffffff; --warn: #c9341c; --badge: #ff3b5c;
           font: 17px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
           -webkit-text-size-adjust: 100%;
         }
@@ -82,19 +83,18 @@ enum PhonePage {
         main { flex: 1; padding: 8px 12px 16px; }
         .group { color: var(--soft); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 22px 4px 6px; }
         .place { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 8px; border-radius: 12px; text-align: left; }
-        .place:active, .issue:active, .subject:active { background: var(--grey); }
+        .place:active, .issue:active { background: var(--grey); }
         .place .name { flex: 1; font-size: 17px; }
         .place.unread .name { font-weight: 600; }
         .place.asleep { opacity: .45; }
-        .count { color: var(--soft); font-variant-numeric: tabular-nums; }
+        .count { background: var(--badge); color: #fff; border-radius: 999px; padding: 1px 8px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .icon { width: 30px; height: 30px; flex: none; display: grid; place-items: center; color: var(--soft); font-size: 18px; font-weight: 600; }
         .dot { width: 9px; height: 9px; border-radius: 50%; background: #ff5f1f; flex: none; }
         .cat { width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center;
           font-size: 14px; font-weight: 700; color: #fff; background: #8e8e93; }
         .cat.small { width: 22px; height: 22px; font-size: 11px; }
 
         .day { text-align: center; color: var(--soft); font-size: 12px; margin: 18px 0 6px; }
-        .subject { display: block; width: 100%; text-align: left; color: var(--soft); font-size: 14px; padding: 10px 4px 2px; }
-        .subject b { color: var(--text); font-weight: 600; }
         .msg { margin: 6px 0; display: flex; flex-direction: column; align-items: flex-start; }
         .msg.mine { align-items: flex-end; }
         .meta { color: var(--soft); font-size: 12px; margin: 4px 12px 3px; }
@@ -106,6 +106,23 @@ enum PhonePage {
         .bubble.cut { max-height: 16.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); }
         .more { color: var(--soft); font-size: 14px; margin: 4px 12px 0; }
         .failure { color: var(--warn); font-size: 13px; margin: 3px 12px 0; }
+        .context { color: var(--soft); font-size: 12px; margin: 6px 12px 0; text-align: left; }
+        .replybar { display: flex; align-items: center; gap: 6px; margin: 4px 6px 0; padding: 4px 8px; border-radius: 10px; font-size: 13px; }
+        .replybar:active { background: var(--grey); }
+        .replybar b { color: var(--you); }
+        .replybar .face { width: 16px; height: 16px; border-radius: 5px; background: #8e8e93; flex: none; }
+        .replybar .waiting { color: var(--badge); font-weight: 600; }
+        .replybar span { color: var(--soft); }
+        .replies { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: 13px; margin: 12px 4px 4px; }
+        .replies::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
+        .digest { display: block; width: 100%; text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--line); }
+        .digest:active { background: var(--grey); }
+        .digest h3 { margin: 0 0 6px; font-size: 14px; }
+        .digest.unread h3::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--badge); margin-right: 6px; }
+        .digest p { margin: 2px 0 6px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .digest small { color: var(--soft); }
+        .digest .more { color: var(--you); font-weight: 600; margin: 0; }
+        #alsolabel { display: flex; align-items: center; gap: 6px; color: var(--soft); font-size: 13px; margin: 6px 4px 0; }
         .section { display: flex; justify-content: space-between; align-items: baseline; margin: 22px 4px 6px; }
         .section span { color: var(--soft); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
         .section button { color: var(--you); font-size: 14px; }
@@ -163,7 +180,7 @@ enum PhonePage {
     static let script = #"""
         'use strict';
         const $ = (id) => document.getElementById(id);
-        const conversation = (key) => key === 'everyone' || /^(c|t|r):/.test(key);
+        const conversation = (key) => key === 'general' || /^(c|t|r):/.test(key);
         const words = {
           unreachable: "Can't reach your Mac. Shades has to be running, and your Mac awake.",
           gone: "That's changed since. Have another look.",
@@ -392,6 +409,9 @@ enum PhonePage {
             $('label').textContent = next.box.label;
             $('words').placeholder = next.box.placeholder;
             $('send').disabled = !next.box.ready;
+            $('alsolabel').hidden = !next.box.also;
+            $('alsotext').textContent = next.box.also || '';
+            if (fresh) $('also').checked = false;
           }
           $('rows').replaceChildren(...(key === 'home' ? places(next.places) : next.rows.map(row)));
           $('notify').hidden = key !== 'home' || !$('notifytext').textContent;
@@ -412,11 +432,11 @@ enum PhonePage {
           for (const place of list) {
             if (place.group && place.group !== group) nodes.push(el('h2', 'group', place.group));
             group = place.group;
-            const button = el('button', 'place' + (place.unread ? ' unread' : '') + (place.asleep ? ' asleep' : ''));
+            const button = el('button', 'place' + (place.unread || place.count ? ' unread' : '') + (place.asleep ? ' asleep' : ''));
             button.type = 'button';
-            if (place.group) button.append(cat(place.color, place.title));
+            if (place.icon) button.append(el('span', 'icon', icons[place.icon] || '#'));
+            else button.append(cat(place.color, place.title.replace(/^#/, '')));
             button.append(el('span', 'name', place.title));
-            if (place.unread) button.append(el('span', 'dot'));
             if (place.count) button.append(el('span', 'count', String(place.count)));
             button.onclick = () => go(place.key);
             nodes.push(button);
@@ -425,19 +445,48 @@ enum PhonePage {
         }
 
         const time = (at) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const icons = { activity: '🔔', threads: '💬', channel: '#' };
+
+        // Slack's reply bar under a thread's parent: who replied, how many, and when the last one was.
+        function replybar(item) {
+          if (!item.replies && !item.going && !item.waiting) return null;
+          const bar = el('button', 'replybar');
+          bar.type = 'button';
+          for (const face of item.faces || []) {
+            const node = el('span', 'face');
+            node.style.background = face;
+            bar.append(node);
+          }
+          if (item.waiting) bar.append(el('span', 'waiting', 'Needs you'));
+          if (item.replies) bar.append(el('b', null, item.replies === 1 ? '1 reply' : item.replies + ' replies'));
+          if (item.replies && item.last) bar.append(el('span', null, 'Last reply ' + time(item.last)));
+          if (item.going) bar.append(el('span', null, 'Working on it'));
+          bar.onclick = () => go(item.open);
+          return bar;
+        }
 
         function row(item) {
           switch (item.kind) {
             case 'day': return el('div', 'day', item.text);
             case 'note': return el('p', 'note', item.text);
-            case 'subject': {
-              const node = el('button', 'subject');
-              node.type = 'button';
-              node.append(el('b', null, item.title), item.detail ? ' · ' + item.detail : '', item.open ? ' ›' : '');
-              if (item.open) node.onclick = () => go(item.open);
+            case 'message': return message(item);
+            case 'parent': {
+              const node = message(item);
+              const bar = replybar(item);
+              if (bar) node.append(bar);
+              node.querySelector('.bubble')?.addEventListener('click', () => { if (!selecting()) go(item.open); });
               return node;
             }
-            case 'message': return message(item);
+            case 'replies': return el('div', 'replies', item.text);
+            case 'digest': {
+              const node = el('button', 'digest' + (item.unread ? ' unread' : ''));
+              node.type = 'button';
+              node.append(el('h3', null, item.title), el('small', null, item.name + ' · ' + time(item.at)), el('p', null, item.text || ''));
+              if (item.reply) node.append(el('small', null, item.reply.name + ' · ' + time(item.reply.at)), el('p', null, item.reply.text || ''));
+              if (item.more) node.append(el('p', 'more', item.more === 1 ? '1 more reply' : item.more + ' more replies'));
+              node.onclick = () => go(item.open);
+              return node;
+            }
             case 'section': {
               const node = el('div', 'section');
               node.append(el('span', null, item.title));
@@ -469,6 +518,12 @@ enum PhonePage {
 
         function message(item) {
           const node = el('div', 'msg' + (item.mine ? ' mine' : ''));
+          if (item.context) {
+            const context = el('button', 'context', item.context);
+            context.type = 'button';
+            context.onclick = () => go(item.open);
+            node.append(context);
+          }
           const meta = item.mine ? [time(item.at)] : [item.name, item.detail, time(item.at)];
           node.append(el('div', 'meta', meta.filter(Boolean).join(' · ')));
           if (item.text) {
@@ -609,10 +664,11 @@ enum PhonePage {
           const text = $('words').value.trim();
           if (!text) return;
           $('send').disabled = true;
-          const done = await act({ act: 'send', key, text });
+          const done = await act({ act: 'send', key, text, also: !$('alsolabel').hidden && $('also').checked });
           $('send').disabled = false;
           if (!done) return;
           $('words').value = '';
+          $('also').checked = false;
           fit();
           if (done.open) go(done.open);
         };
@@ -642,7 +698,7 @@ enum PhonePage {
         """
 
     /// Runs on the phone even with the page closed. Each push says only who and what kind, and tapping it opens
-    /// Needs you, where it is.
+    /// Activity, where it is.
     static let worker = #"""
         'use strict';
         self.addEventListener('push', (event) => {
@@ -654,10 +710,10 @@ enum PhonePage {
           event.notification.close();
           event.waitUntil((async () => {
             for (const client of await clients.matchAll({ type: 'window', includeUncontrolled: true })) {
-              await client.navigate('/?key=needs');
+              await client.navigate('/?key=activity');
               return client.focus();
             }
-            return clients.openWindow('/?key=needs');
+            return clients.openWindow('/?key=activity');
           })());
         });
         """#

@@ -137,8 +137,10 @@ final class AppController {
     var messagesTurn: Task<Void, Never>?
     /// Messages' own conversation with the router, apart from the Ask box's, which can hold your screen.
     var messagesQuick = QuickSession()
-    /// Threads no kitten owns that Messages passed your words to, and when, so their answers show in Everyone.
-    /// shortcut: kept only while the app runs, so a restart takes them out of Everyone. Save the IDs with the inbox if that matters.
+    /// Sessions the router started for what you wrote in Messages, and threads no kitten owns that it passed your words
+    /// to, and when. Each is a thread in #general.
+    /// shortcut: kept only while the app runs, so a restart moves them to their kitten's channel, or out of #general for
+    /// the cat's own work. Save the IDs with the inbox if that matters.
     var messagesThreads: [String: Date] = [:]
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
@@ -231,7 +233,7 @@ final class AppController {
         channels.onChange = { [weak self] in self?.channelsChanged($0) }
         channels.waiting = { [weak self] in self?.waiting ?? Waiting() }
         channels.isUnread = { [weak self] in self?.inbox.isUnread($0) ?? false }
-        channels.alsoInEveryone = { [weak self] in self?.messagesThreads ?? [:] }
+        channels.inGeneral = { [weak self] in self?.messagesThreads ?? [:] }
         channels.isWithShades = { [weak self] in self?.isWithShades($0) ?? false }
     }
 
@@ -309,7 +311,7 @@ final class AppController {
         case .approval(let request, let decision):
             answer(request, decision)
         case .openMessages:
-            channelsPressed(selecting: .needsYou)
+            channelsPressed(selecting: .activity)
         }
     }
 

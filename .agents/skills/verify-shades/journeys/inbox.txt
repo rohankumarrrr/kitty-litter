@@ -11,7 +11,7 @@ draw .verify/shades/inbox/2-reply
 send Go ahead
 wait 2
 draw .verify/shades/inbox/3-sent
-channel needs
+channel activity
 inbox done
 wait 1
 draw .verify/shades/inbox/4-done

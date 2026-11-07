@@ -44,7 +44,14 @@ enum ChannelImages {
             unreadable: unreadable,
             cantReachT3: cantReachT3,
             waiting: DemoChannels.waiting,
-            isUnread: { $0.id == "demo-steve-yesterday" },
+            sent: [
+                SentMessage(channel: .of(Demo.kittens[0]), message: DemoChannels.alsoSentEcho, alsoSent: true),
+                SentMessage(channel: .general, message: ChannelMessage(exchangeID: "demo-general", kind: .ask, speaker: .you, text: "What day is the launch?", at: Date().addingTimeInterval(-300), threadID: "", threadTitle: "")),
+                SentMessage(channel: .general, message: ChannelMessage(exchangeID: "demo-general-cat", kind: .reply, speaker: .cat, text: "Thursday, the 12th.", at: Date().addingTimeInterval(-290), threadID: "", threadTitle: "")),
+            ],
+            isUnread: { $0.id == "demo-steve-yesterday" || $0.id == "demo-steve-copy" },
+            // As if you'd asked for the plan names in #general, which gave them to Pepper.
+            inGeneral: ["demo-pepper-plans": Date().addingTimeInterval(-1_300)],
             withShades: DemoChannels.talks
         )
     }
@@ -65,46 +72,41 @@ enum ChannelImages {
 
     private static func shots() -> [Shot] {
         let full = book()
+        let steve = ChannelID.of(Demo.kittens[0])
         var shots = [
-            Shot(name: "needs-you", selection: .needsYou, book: full),
-            Shot(name: "done", selection: .done, book: full),
-            Shot(name: "everyone", selection: .channel(.everyone), book: full),
+            Shot(name: "activity", selection: .activity, book: full),
+            Shot(name: "threads", selection: .threads, book: full),
+            Shot(name: "general", selection: .channel(.general), book: full),
             Shot(name: "shades", selection: .channel(.shades), book: full),
-            Shot(name: "shades-thread", selection: .thread("demo-shades-plans", in: .shades), book: full),
+            Shot(name: "shades-thread", selection: .thread("demo-shades-plans", in: .channel(.shades)), book: full),
         ]
         for status in full.statuses {
-            shots.append(Shot(name: "dm-\(slug(status.kitten.name))", selection: .channel(.direct(status.kitten)), book: full))
-        }
-        for channel in full.between {
-            shots.append(Shot(name: "between-\(slug(full.title(of: channel.id)))", selection: .channel(channel.id), book: full))
+            shots.append(Shot(name: "channel-\(slug(status.kitten.name))", selection: .channel(.of(status.kitten)), book: full))
         }
 
-        let steve = ChannelSelection.channel(.direct(Demo.kittens[0]))
         // Each crowded kitten's thread has the kitten's own ID.
         let longNamed = crowded().statuses[0].kitten
-        if let latest = full.channel(.direct(Demo.kittens[0]))?.messages.last(where: { !$0.threadID.isEmpty })?.threadID {
-            let thread = ChannelSelection.thread(latest, in: .direct(Demo.kittens[0]))
-            shots += [
-                Shot(name: "thread", selection: thread, book: full),
-                Shot(name: "narrow-thread", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
-            ]
-        }
+        let thread = ChannelSelection.thread("demo-steve-copy", in: .channel(steve))
         shots += [
-            Shot(name: "dm-expanded", selection: steve, book: full, expandsLongMessage: true),
-            Shot(name: "dm-hover", selection: steve, book: full, hoversLastMessage: true),
-            Shot(name: "crowded", selection: .needsYou, book: crowded(), height: ChannelsWindow.minimumSize.height),
-            Shot(name: "crowded-thread", selection: .thread(longNamed.id, in: .direct(longNamed)), book: crowded(), width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
-            Shot(name: "narrow-dm", selection: steve, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
-            Shot(name: "narrow-needs-you", selection: .needsYou, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
-            Shot(name: "reading", selection: steve, book: book(threads: [], transcripts: [:], isReading: true)),
-            Shot(name: "reading-needs-you", selection: .needsYou, book: book(threads: [], transcripts: [:], isReading: true)),
-            Shot(name: "cant-reach", selection: steve, book: book(threads: [], transcripts: [:], isReading: true, cantReachT3: true)),
-            Shot(name: "cant-reach-needs-you", selection: .needsYou, book: book(threads: [], transcripts: [:], isReading: true, cantReachT3: true)),
-            Shot(name: "cant-reach-with-words", selection: steve, book: book(cantReachT3: true)),
-            Shot(name: "unreadable", selection: steve, book: book(unreadable: 2)),
-            Shot(name: "nothing-said", selection: steve, book: book(threads: [], transcripts: [:])),
-            Shot(name: "nothing-open", selection: .needsYou, book: book(threads: [], transcripts: [:])),
-            Shot(name: "nothing-done", selection: .done, book: book(threads: [], transcripts: [:])),
+            Shot(name: "thread", selection: thread, book: full),
+            Shot(name: "thread-from-threads", selection: .thread("demo-steve-copy", in: .threads), book: full),
+            Shot(name: "thread-waiting", selection: .thread("demo-pepper-plans", in: .channel(.general)), book: full),
+            Shot(name: "narrow-thread", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
+            Shot(name: "channel-expanded", selection: thread, book: full, expandsLongMessage: true),
+            Shot(name: "channel-hover", selection: .channel(steve), book: full, hoversLastMessage: true),
+            Shot(name: "crowded", selection: .activity, book: crowded(), height: ChannelsWindow.minimumSize.height),
+            Shot(name: "crowded-thread", selection: .thread(longNamed.id, in: .channel(.of(longNamed))), book: crowded(), width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
+            Shot(name: "narrow-channel", selection: .channel(steve), book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
+            Shot(name: "narrow-activity", selection: .activity, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
+            Shot(name: "reading", selection: .channel(steve), book: book(threads: [], transcripts: [:], isReading: true)),
+            Shot(name: "reading-activity", selection: .activity, book: book(threads: [], transcripts: [:], isReading: true)),
+            Shot(name: "cant-reach", selection: .channel(steve), book: book(threads: [], transcripts: [:], isReading: true, cantReachT3: true)),
+            Shot(name: "cant-reach-activity", selection: .activity, book: book(threads: [], transcripts: [:], isReading: true, cantReachT3: true)),
+            Shot(name: "cant-reach-with-words", selection: .channel(steve), book: book(cantReachT3: true)),
+            Shot(name: "unreadable", selection: .channel(steve), book: book(unreadable: 2)),
+            Shot(name: "nothing-said", selection: .channel(steve), book: book(threads: [], transcripts: [:])),
+            Shot(name: "nothing-open", selection: .activity, book: book(threads: [], transcripts: [:])),
+            Shot(name: "no-threads", selection: .threads, book: book(threads: [], transcripts: [:])),
         ]
         return shots
     }
@@ -118,7 +120,7 @@ enum ChannelImages {
         panel.appearance = appearance
         view.show(shot.book)
         view.select(shot.selection)
-        if shot.expandsLongMessage { view.pane.longMessageRow?.pressShowMore() }
+        if shot.expandsLongMessage { (view.threadPane.longMessageRow ?? view.pane.longMessageRow)?.pressShowMore() }
         if shot.hoversLastMessage { view.pane.shownMessageRows.last?.hovering = true }
         hideScrollers(in: view)
         return png(of: view.superview ?? view)

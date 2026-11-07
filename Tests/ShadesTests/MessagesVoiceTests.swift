@@ -27,8 +27,8 @@ final class MessagesVoiceTests: XCTestCase {
         AgentThread(id: id, title: "Work", projectTitle: kitten.name, status: .completed, model: "m", updatedAt: at, projectPath: kitten.folder)
     }
 
-    private func book(questions: [AgentQuestion] = [], between: Bool = false) -> ChannelBook {
-        let exchange = Exchange(id: "e", asker: between ? .agent(threadID: "p") : .you, askedAt: at, ask: "Choose a font", reply: "Ready", repliedAt: at)
+    private func book(questions: [AgentQuestion] = []) -> ChannelBook {
+        let exchange = Exchange(id: "e", asker: .you, askedAt: at, ask: "Choose a font", reply: "Ready", repliedAt: at)
         return ChannelBook.build(
             kittens: [steve, pepper],
             threads: [thread("t", kitten: steve), thread("p", kitten: pepper)],
@@ -94,31 +94,32 @@ final class MessagesVoiceTests: XCTestCase {
         ]))
         let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: 820, height: 560))
         var sent: [MessagesAction] = []
-        view.pane.onAction = { sent.append($0) }
+        view.onAction = { sent.append($0) }
         view.show(book(questions: [question]))
-        view.select(.thread("t", in: .direct(steve)))
-        view.pane.startSpeaking()
+        view.select(.thread("t", in: .channel(.of(steve))))
+        view.threadPane.startSpeaking()
 
         let january = try XCTUnwrap(subviews(of: view).compactMap { $0 as? QuietButton }.first { $0.accessibilityLabel() == "January" })
         XCTAssertTrue(january.accessibilityPerformPress())
-        view.pane.spoke("February")
+        view.threadPane.spoke("February")
         XCTAssertTrue(sent.isEmpty, "February was said for the month, not the currency")
-        XCTAssertEqual(view.pane.composer.textView.string, "February")
+        XCTAssertEqual(view.threadPane.composer.textView.string, "February")
     }
 
     func testABoxThatGoesAwayAfterYouStopTalkingLeavesNoGap() throws {
         let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: 820, height: 560))
-        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [thread("t", kitten: steve), thread("p", kitten: pepper)], transcripts: [:], isReading: true, unreadable: 0, cantReachT3: false))
-        view.select(.thread("t", in: .direct(steve)))
-        view.pane.startSpeaking()
-        view.show(book(between: true))
-        XCTAssertNotNil(view.pane.composer.target, "held while you talk")
+        view.show(book())
+        view.select(.thread("t", in: .channel(.of(steve))))
+        view.threadPane.startSpeaking()
+        // T3 stops listing the thread while you talk, as when it's archived.
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [thread("p", kitten: pepper)], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false))
+        XCTAssertNotNil(view.threadPane.composer.target, "held while you talk")
 
-        view.pane.stopSpeaking()
+        view.threadPane.stopSpeaking()
         view.layoutSubtreeIfNeeded()
-        XCTAssertNil(view.pane.composer.target, "a thread between kittens is only read")
-        let scroll = try XCTUnwrap(view.pane.subviews.compactMap { $0 as? QuietScrollView }.first)
-        XCTAssertEqual(scroll.frame.maxY, view.pane.bounds.height, accuracy: 1)
+        XCTAssertNil(view.threadPane.composer.target, "a thread nothing is known of has nowhere to send")
+        let scroll = try XCTUnwrap(view.threadPane.subviews.compactMap { $0 as? QuietScrollView }.first)
+        XCTAssertEqual(scroll.frame.maxY, view.threadPane.bounds.height, accuracy: 1)
     }
 }
 

@@ -1,87 +1,96 @@
 import AppKit
 import ShadesCore
 
-/// The top of the pane: who you're looking at, and a way to what they've got open. In a thread, a way back to its
-/// channel, and which thread and project it is.
+/// The top of a pane: the place you're looking at and a way to what its kitten has open, or for a thread, which
+/// channel it's in, a way to T3 and a way to close it.
 final class ChannelHeader: QuietView {
     static let height: CGFloat = 66
     /// What's under the title bar, so nothing clickable has to compete with dragging the window.
     private static let top: CGFloat = 24
 
     var onIssues: (() -> Void)?
-    var onBack: (() -> Void)?
+    var onClose: (() -> Void)?
     var onOpen: (() -> Void)?
     private var title = ""
     private var subtitle: String?
     private var cats: [ChannelSpeakerLook] = []
-    private var rightButton: QuietButton?
-    private var backButton: QuietButton?
+    private var buttons: [QuietButton] = []
 
-    /// What the header says for a selection, which a phone shows too.
-    static func words(for selection: ChannelSelection, in book: ChannelBook) -> (title: String, subtitle: String?) {
-        switch selection {
-        case .needsYou:
-            return (CatWords.needsYouTitle, CatWords.needsYouSubtitle)
-        case .done:
-            return (CatWords.doneTitle, CatWords.doneSubtitle)
-        case .channel(.everyone):
-            return (CatWords.everyone, CatWords.everyoneSubtitle)
+    /// What the header says for a place, which a phone shows too.
+    static func words(for place: ChannelPlace, in book: ChannelBook) -> (title: String, subtitle: String?) {
+        switch place {
+        case .activity:
+            return (CatWords.activityTitle, CatWords.activitySubtitle)
+        case .threads:
+            return (CatWords.threadsTitle, CatWords.threadsSubtitle)
+        case .channel(.general):
+            return (book.title(of: .general), CatWords.generalSubtitle)
         case .channel(.shades):
             return (CatWords.shades, CatWords.shadesSubtitle)
         case .channel(let id):
-            let others = book.others(in: id)
-            let status = others.count == 1 ? book.status(of: others[0]) : nil
+            let status = book.statuses.first { .of($0.kitten) == id }
             return (book.title(of: id), status.map { "\($0.kitten.role) · \(CatWords.kittenState($0.state))" })
-        case .thread(let id, .shades):
-            // The router's own folder isn't a project you'd know.
-            return (book.title(ofThread: id, in: .shades), nil)
-        case .thread(let id, let channel):
-            let name = book.title(ofThread: id, in: channel)
-            return (name.isEmpty ? CatWords.newTopic : name, book.threads[id].map(CatWords.threadDetails))
         }
     }
 
-    func show(_ selection: ChannelSelection, in book: ChannelBook) {
-        var right: (title: String, action: () -> Void)?
-        var back: String?
-        (title, subtitle) = Self.words(for: selection, in: book)
+    /// For a thread: which channel it's in, then its title, project and how it's going.
+    static func words(forThread id: String, in book: ChannelBook) -> (title: String, subtitle: String?) {
+        let home = book.home(ofThread: id).map(book.title) ?? ""
+        let name = book.title(ofThread: id)
+        // The router's own folder isn't a project you'd know.
+        let details = book.talks.contains(id) ? nil : book.listed[id].map(CatWords.threadDetails)
+        let about = [name.isEmpty ? CatWords.newThread : name, details].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        return (CatWords.threadTitle, [home, about].filter { !$0.isEmpty }.joined(separator: "  ·  "))
+    }
+
+    func show(_ place: ChannelPlace, in book: ChannelBook) {
+        (title, subtitle) = Self.words(for: place, in: book)
         cats = []
-        switch selection {
-        case .needsYou, .done, .channel(.everyone):
-            break
-        case .channel(let id):
-            let others = book.others(in: id)
-            cats = others.map { ChannelSpeakerLook($0, in: book) }
-            let status = others.count == 1 ? book.status(of: others[0]) : nil
-            if let count = status.flatMap({ status in book.issues.first { $0.kitten == status.kitten }?.threads.count }), count > 0 {
-                right = (CatWords.issues(count), { [weak self] in self?.onIssues?() })
+        var right: [(String, () -> Void)] = []
+        switch place {
+        case .channel(.shades):
+            cats = [ChannelSpeakerLook(.cat, in: book)]
+        case .channel(.kitten(let kitten)):
+            cats = [ChannelSpeakerLook(.kitten(kitten), in: book)]
+            if let count = book.issues.first(where: { $0.kitten.id == kitten })?.threads.count, count > 0 {
+                right = [(CatWords.issues(count), { [weak self] in self?.onIssues?() })]
             }
-        case .thread(let id, let channel):
-            back = CatWords.back(to: book.title(of: channel))
-            if book.knows(thread: id, in: channel) { right = (CatWords.openInT3, { [weak self] in self?.onOpen?() }) }
+        case .activity, .threads, .channel(.general):
+            break
         }
-        setButtons(right: right, back: back)
+        setButtons(right)
+        describe()
+    }
+
+    func show(thread id: String, in book: ChannelBook) {
+        (title, subtitle) = Self.words(forThread: id, in: book)
+        cats = []
+        var right: [(String, () -> Void)] = []
+        if book.knows(thread: id) { right.append((CatWords.openInT3, { [weak self] in self?.onOpen?() })) }
+        right.append(("✕", { [weak self] in self?.onClose?() }))
+        setButtons(right)
+        buttons.last?.setAccessibilityLabel(CatWords.closeThread)
+        describe()
+    }
+
+    private func describe() {
         setAccessibilityElement(true)
         setAccessibilityRole(.staticText)
         setAccessibilityLabel([title, subtitle].compactMap { $0 }.joined(separator: ", "))
         needsDisplay = true
     }
 
-    private func setButtons(right: (title: String, action: () -> Void)?, back: String?) {
-        rightButton?.removeFromSuperview()
-        backButton?.removeFromSuperview()
-        rightButton = right.map { right in
-            let button = QuietButton(right.title, style: .text, onPress: right.action)
-            button.frame.origin = NSPoint(x: bounds.width - ChannelRowView.margin - button.frame.width + 6, y: Self.top + 3)
+    private func setButtons(_ right: [(String, () -> Void)]) {
+        buttons.forEach { $0.removeFromSuperview() }
+        var edge = bounds.width - ChannelRowView.margin + 6
+        buttons = right.reversed().map { title, action in
+            let button = QuietButton(title, style: .text, onPress: action)
+            edge -= button.frame.width
+            button.frame.origin = NSPoint(x: edge, y: Self.top + 3)
             button.autoresizingMask = [.minXMargin]
             return button
-        }
-        backButton = back.map { back in
-            let button = QuietButton(back, style: .text) { [weak self] in self?.onBack?() }
-            button.frame.origin = NSPoint(x: ChannelRowView.catLeft - 6, y: Self.top + 3)
-            return button
-        }
-        for button in [rightButton, backButton].compactMap({ $0 }) { addSubview(button) }
+        }.reversed()
+        buttons.forEach(addSubview)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -92,17 +101,16 @@ final class ChannelHeader: QuietView {
             CatStamp.draw(CatPose(frame: .sit), jacket: cat.jacket, in: frame, on: self)
         }
         left = cats.isEmpty ? left : left + side + CGFloat(cats.count - 1) * side / 2 + 12
-        if let backButton { left = backButton.frame.maxX + 6 }
 
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
-        let room = (rightButton?.frame.minX ?? bounds.width - ChannelRowView.margin) - left - 8
+        let room = (buttons.first?.frame.minX ?? bounds.width - ChannelRowView.margin) - left - 8
         let name = NSAttributedString(string: title, attributes: [
             .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
             .foregroundColor: MessagesInk.text,
             .paragraphStyle: truncating,
         ])
-        if let subtitle {
+        if let subtitle, !subtitle.isEmpty {
             name.draw(in: NSRect(x: left, y: Self.top - 1, width: room, height: 18))
             NSAttributedString(string: subtitle, attributes: [
                 .font: NSFont.systemFont(ofSize: 11),
@@ -118,34 +126,58 @@ final class ChannelHeader: QuietView {
     }
 }
 
-/// The right side of the window: a header, then rows measured at the current width. Only the rows near what you can
-/// see are views in the window, and a conversation lays out its newest rows first and older ones as you scroll up to
-/// them, so a long one opens, scrolls and updates as quickly as a short one.
+/// Answers to the parts of a question so far, by its ID, shared by both panes, since a question shows in Activity and
+/// in its thread. Nothing goes until every part has one, as T3 wants.
+final class PartAnswers {
+    var answers: [String: [String]] = [:]
+}
+
+/// One side of the window: a header, then rows measured at the current width, then a box. The main pane shows a place
+/// from the sidebar, and the thread pane beside it shows one thread, as Slack does. Only the rows near what you can
+/// see are views in the window, and a long one lays out its newest rows first and older ones as you scroll up to
+/// them, so it opens, scrolls and updates as quickly as a short one.
 final class ChannelPane: QuietView {
+    enum Role {
+        /// Activity, Threads, a channel or the DM.
+        case place
+        /// One thread, beside the place it was opened from.
+        case thread
+    }
+
     private static let stickyDistance: CGFloat = 40
     private static let topPad: CGFloat = 6
     private static let bottomPad: CGFloat = 14
-    /// How many of a conversation's rows are laid out at a time.
+    /// How many rows are laid out at a time.
     static let page = 60
     /// How far past what you can see rows are kept in the window, so scrolling finds them ready.
     private static let overscan: CGFloat = 600
+    /// How many of a thread's newest rows its pane lays out when it opens. It's narrow, so that's still more than
+    /// fills it, and opening one from the keyboard never waits on the rest.
+    private var firstPage: Int { role == .thread ? Self.page / 2 : Self.page }
     /// How far a refresh looks ahead for a row it already has a view for, which covers rows coming and going at the top.
     private static let reuseReach = 64
+    /// How many messages' laid-out words are kept between looks before only what's showing is.
+    private static let wordsKept = 2_000
 
+    let role: Role
+    /// Opens a thread in T3.
     var onOpenThread: ((String) -> Void)?
     var onCopy: ((String) -> Void)?
     var onSelect: ((ChannelSelection) -> Void)?
+    /// Opens a thread in the thread pane: from `place`, or where you are with `nil`. `typing` puts the keyboard in its
+    /// box, and `report` is the inbox row whose Reply or Ask opened it.
+    var onOpen: ((_ thread: String, _ place: ChannelPlace?, _ typing: Bool, _ report: InboxEntry?) -> Void)?
+    var onClose: (() -> Void)?
     var onAction: ((MessagesAction) -> Void)?
+    var parts = PartAnswers()
 
     private let now: () -> Date = Date.init
     private let header = ChannelHeader()
     private let scroll = QuietScrollView()
     private let document = QuietView()
     let composer = ChannelComposer()
-    private var selection: ChannelSelection = .needsYou
+    private(set) var selection: ChannelSelection = .activity
     private var book: ChannelBook?
-    /// Answers to the parts of a question so far, by its ID. Nothing goes until every part has one, as T3 wants.
-    private var partAnswers: [String: [String]] = [:]
     /// The inbox row whose Reply or Ask opened this thread, until you look elsewhere. All you send here is about it.
     private var replyingTo: InboxEntry?
     /// Where the box pointed when the talk key went down, so nothing arriving meanwhile can move what you say.
@@ -161,19 +193,17 @@ final class ChannelPane: QuietView {
     private var stackedSize = NSSize.zero
     private var isPaging = false
 
-    override init(frame: NSRect) {
-        super.init(frame: frame)
+    init(role: Role) {
+        self.role = role
+        super.init(frame: .zero)
         scroll.documentView = document
         addSubview(scroll)
         addSubview(header)
         addSubview(composer)
-        header.onIssues = { [weak self] in self?.onSelect?(.needsYou) }
-        header.onBack = { [weak self] in
-            guard let self else { return }
-            self.onSelect?(self.selection.place)
-        }
+        header.onIssues = { [weak self] in self?.onSelect?(.activity) }
+        header.onClose = { [weak self] in self?.onClose?() }
         header.onOpen = { [weak self] in
-            guard let self, case .thread(let id, _) = self.selection else { return }
+            guard let self, let id = self.selection.thread else { return }
             self.onOpenThread?(id)
         }
         composer.onSend = { [weak self] words, target in
@@ -187,10 +217,17 @@ final class ChannelPane: QuietView {
                 }
                 self.answer(question, with: words)
             case .newThread(let kitten):
-                // The new topic opens on its own, so what you add next goes into it too.
+                // The new thread opens in the pane, and the keyboard goes with it if you were typing.
                 let topic = "sent-\(UUID().uuidString)"
+                let typing = self.window?.firstResponder === self.composer.textView
                 self.onAction?(.startTopic(words, with: kitten, id: topic))
-                self.onSelect?(.thread(topic, in: .direct(kitten)))
+                self.onOpen?(topic, nil, typing, nil)
+            case .thread(let id, _, _):
+                let alsoSent = self.composer.alsoSends
+                self.composer.alsoSends = false
+                self.onAction?(.send(words, to: target, shownIn: self.book?.home(ofThread: id), alsoSent: alsoSent))
+                self.updateComposer()
+                self.arrange(force: true)
             default:
                 self.onAction?(.send(words, to: target, shownIn: self.selection.channelID))
                 self.updateComposer()
@@ -223,23 +260,36 @@ final class ChannelPane: QuietView {
         attach()
     }
 
-    /// Selecting something shows its latest. A refresh only follows along if you were already at the bottom.
+    /// What this pane shows of a selection: the place, or the thread.
+    private func shows(_ selection: ChannelSelection) -> AnyHashable {
+        role == .place ? AnyHashable(selection.place) : AnyHashable(selection.thread)
+    }
+
+    /// Showing something new shows its latest. A refresh only follows along if you were already at the bottom.
     func show(_ selection: ChannelSelection, in book: ChannelBook, isNewSelection: Bool) {
-        let isNew = isNewSelection || selection != self.selection
-        if case .thread(let id, _) = selection, id == replyingTo?.threadID {} else { replyingTo = nil }
-        partAnswers = partAnswers.filter { id, _ in book.waiting.questions.contains { $0.id == id } }
+        let isNewSelection = isNewSelection || shows(selection) != shows(self.selection)
+        if let thread = selection.thread, thread == replyingTo?.threadID {} else { replyingTo = nil }
+        parts.answers = parts.answers.filter { id, _ in book.waiting.questions.contains { $0.id == id } }
         self.selection = selection
         self.book = book
-        updateComposer(keepingDraft: !isNew)
+        updateComposer(keepingDraft: !isNewSelection)
         arrange()
-        header.show(selection, in: book)
-        let rows = ChannelRows.rows(selection, in: book)
+        let rows: [ChannelRow]
+        switch role {
+        case .place:
+            header.show(selection.place, in: book)
+            rows = ChannelRows.rows(selection.place, in: book)
+        case .thread:
+            guard let thread = selection.thread else { return }
+            header.show(thread: thread, in: book)
+            rows = ChannelRows.thread(thread, in: book)
+        }
         guard isNewSelection || rows != shown else { return }
 
         let wasAtBottom = isNearBottom
         let anchor = isNewSelection ? nil : firstInSight
         // Following along at the bottom goes back to the newest page, so what's laid out doesn't keep growing.
-        let start = followsLatest ? (isNewSelection || wasAtBottom ? max(rows.count - Self.page, 0) : refreshedStart(in: rows)) : 0
+        let start = followsLatest ? (isNewSelection || wasAtBottom ? max(rows.count - firstPage, 0) : refreshedStart(in: rows)) : 0
         // A refresh keeps the view of each row that's still there, wherever it's moved to.
         var old: [(row: ChannelRow, view: ChannelRowView?)] = isNewSelection ? [] : zip(shown[first...], views).map { ($0, $1) }
         var cursor = rows.indices.contains(start) ? old.firstIndex { $0.row == rows[start] } ?? 0 : 0
@@ -250,16 +300,26 @@ final class ChannelPane: QuietView {
                 cursor = match + 1
                 return kept
             }
-            return view(for: row, in: book, among: rows, selection: selection)
+            return view(for: row, in: book, among: rows)
         }
         let kept = Set(views.map(ObjectIdentifier.init))
         previous.filter { !kept.contains(ObjectIdentifier($0)) }.forEach { $0.removeFromSuperview() }
         first = start
         shown = rows
+        if words.count > Self.wordsKept {
+            let showing = Set(rows.compactMap { row -> String? in
+                switch row {
+                case .message(let message), .alsoSent(let message, _, _): return message.id
+                case .parent(let post): return post.parent.id
+                default: return nil
+                }
+            })
+            words = words.filter { showing.contains($0.key) }
+        }
         stack()
 
         if isNewSelection {
-            scrollOffset = selection.channelID == nil ? 0 : bottomOffset
+            scrollOffset = followsLatest ? bottomOffset : 0
         } else if wasAtBottom, followsLatest {
             scrollToBottom()
         } else if followsLatest, let anchor {
@@ -274,77 +334,90 @@ final class ChannelPane: QuietView {
         return rows.firstIndex(of: shown[first]) ?? max(rows.count - (shown.count - first), 0)
     }
 
-    /// Makes every row again in the colours there are now, where you were.
+    /// Makes every row again in the colours there are now, where you were. A pane that's closed lets its rows go
+    /// instead, and makes them when it next opens.
     func restyle() {
         composer.restyle()
         header.needsDisplay = true
+        if isHidden {
+            views.forEach { $0.removeFromSuperview() }
+            views = []
+            frames = []
+            shown = []
+            first = 0
+            return
+        }
         guard let book else { return }
         let offset = scrollOffset
         views.forEach { $0.removeFromSuperview() }
-        views = shown[first...].map { view(for: $0, in: book, among: shown, selection: selection) }
+        views = shown[first...].map { view(for: $0, in: book, among: shown) }
         stack()
         scrollOffset = offset
         attach()
     }
 
-    /// Nothing on the screen is kept once the window closes.
-    func forget() {
-        views.forEach { $0.removeFromSuperview() }
-        views = []
-        shown = []
-        first = 0
-        words = [:]
-        expanded = []
-        book = nil
-        partAnswers = [:]
-        replyingTo = nil
-        spokenTo = nil
-        composer.clear()
-        stack()
-    }
-
-    /// Opens a thread on its own, where the box goes only into it. Choosing to reply means you're about to type, so
-    /// the box takes the keyboard then. The panel never activates Shades, so your app stays in front.
-    func open(thread id: String, in channel: ChannelID, typing: Bool) {
-        onSelect?(.thread(id, in: channel))
-        guard typing else { return }
+    /// Puts the keyboard in the box, since choosing to reply means you're about to type. The panel never activates
+    /// Shades, so your app stays in front.
+    func focusComposer() {
+        guard composer.target != nil else { return }
         window?.makeKey()
         window?.makeFirstResponder(composer.textView)
     }
 
-    /// Opens a report's thread, ready to type, and what you send there stops that report asking and gets its answer.
-    func reply(to entry: InboxEntry) {
-        replyingTo = entry
-        open(thread: entry.threadID, in: channel(of: book?.kitten(of: entry.id)), typing: true)
+    /// Coming to a thread some other way than Reply on its report is just the thread.
+    func forgetReport() {
+        replyingTo = nil
     }
 
-    /// Where an approval, question or report is talked about: its kitten's DM, or Everyone for the cat's own work.
-    private func channel(of kitten: Kitten?) -> ChannelID {
-        kitten.map(ChannelID.direct) ?? .everyone
+    /// What you send here stops that report asking and gets its answer.
+    func replying(to entry: InboxEntry?) {
+        replyingTo = entry
+        updateComposer()
+        arrange(force: true)
+    }
+
+    /// Opens a report's thread beside its channel, ready to type.
+    func reply(to entry: InboxEntry) {
+        onOpen?(entry.threadID, .channel(book?.home(of: book?.kitten(of: entry.id)) ?? .general), true, entry)
     }
 
     private func updateComposer(keepingDraft: Bool = false) {
-        var target = book.flatMap { MessageTarget.standard(for: selection, in: $0, answered: partAnswers.mapValues(\.count)) }
-        // Words already typed go where the box said when you started, so a refresh can't send them somewhere else.
-        if let replyingTo, case .thread(let id, _) = selection, replyingTo.threadID == id, book?.talks.contains(id) != true {
-            // Even a thread T3 no longer lists, such as an archived one, takes a reply to its report.
-            // A question waiting in the same thread doesn't take words meant for the report. Type an answer is for that.
-            let title = book?.title(ofThread: id, in: selection.channelID ?? .everyone) ?? ""
-            target = .thread(id: id, title: title.isEmpty ? replyingTo.threadTitle : title, report: replyingTo.id)
+        var target: MessageTarget?
+        var also: String?
+        if let book {
+            switch role {
+            case .place:
+                target = MessageTarget.standard(for: selection.place, in: book)
+            case .thread:
+                if let thread = selection.thread {
+                    target = MessageTarget.reply(in: thread, of: book, answered: parts.answers.mapValues(\.count))
+                    // Even a thread T3 no longer lists, such as an archived one, takes a reply to its report.
+                    // A question waiting in the same thread doesn't take words meant for the report. Type an answer is for that.
+                    if let replyingTo, replyingTo.threadID == thread, !book.talks.contains(thread) {
+                        let title = book.title(ofThread: thread)
+                        target = .thread(id: thread, title: title.isEmpty ? replyingTo.threadTitle : title, report: replyingTo.id)
+                    }
+                }
+            }
         }
+        // Words already typed go where the box said when you started, so a refresh can't send them somewhere else.
         if let spokenTo, spokenTo.selection == selection { target = spokenTo.target }
         if keepingDraft, composer.hasDraft, let current = composer.target, let book, current.isStill(in: book) {
             target = current
         }
+        if case .thread(let id, _, _)? = target, let home = book?.home(ofThread: id), home != .shades {
+            also = book.map { CatWords.alsoSendTo($0.title(of: home)) }
+        }
         var label: String?
         if case .question(let question)? = target, let part = part(of: question) { label = CatWords.answering(part.part.text) }
-        composer.show(target, label: label, in: selection.channelID)
+        let channel = selection.channelID
+        composer.show(target, label: label, in: channel, name: channel.flatMap { book?.name(of: $0) }, alsoSendTo: also)
     }
 
     /// The talk key went down while you were typing here.
     func startSpeaking() {
         spokenTo = composer.target.map { target in
-            let answered = if case .question(let question) = target { partAnswers[question.id]?.count ?? 0 } else { 0 }
+            let answered = if case .question(let question) = target { parts.answers[question.id]?.count ?? 0 } else { 0 }
             return (selection, target, answered)
         }
     }
@@ -357,7 +430,7 @@ final class ChannelPane: QuietView {
         let spot = spokenTo
         spokenTo = nil
         // A question in parts has to be on the same part, or what you said would answer the next one.
-        let samePart = if case .question(let question) = spot?.target { partAnswers[question.id]?.count ?? 0 == spot?.answered } else { true }
+        let samePart = if case .question(let question) = spot?.target { parts.answers[question.id]?.count ?? 0 == spot?.answered } else { true }
         guard let spot, spot.selection == selection, let book, spot.target.isReady, spot.target.isStill(in: book), samePart else {
             composer.textView.string = words
             updateComposer(keepingDraft: true)
@@ -379,17 +452,17 @@ final class ChannelPane: QuietView {
     /// The part of a question that's next to answer.
     private func part(of question: AgentQuestion) -> (index: Int, part: AnswerForm.Part)? {
         guard let parts = question.form?.parts else { return nil }
-        let index = partAnswers[question.id]?.count ?? 0
+        let index = self.parts.answers[question.id]?.count ?? 0
         return parts.indices.contains(index) ? (index, parts[index]) : nil
     }
 
     private func answer(_ question: AgentQuestion, with answer: String) {
-        let answers = (partAnswers[question.id] ?? []) + [answer]
+        let answers = (parts.answers[question.id] ?? []) + [answer]
         if answers.count >= question.form?.parts.count ?? 1 {
-            partAnswers[question.id] = nil
+            parts.answers[question.id] = nil
             onAction?(.answer(question, answers))
         } else {
-            partAnswers[question.id] = answers
+            parts.answers[question.id] = answers
             rebuild(.question(question))
         }
         updateComposer()
@@ -399,18 +472,11 @@ final class ChannelPane: QuietView {
     /// For a row whose look changed while its value didn't.
     private func rebuild(_ row: ChannelRow) {
         guard let book, let index = shown.firstIndex(of: row), index >= first else { return }
-        let fresh = view(for: row, in: book, among: shown, selection: selection)
+        let fresh = view(for: row, in: book, among: shown)
         views[index - first].removeFromSuperview()
         views[index - first] = fresh
         stack()
         attach()
-    }
-
-    /// Replying in a thread is offered from a channel you can write in. In the thread itself, the box already does it.
-    /// The cat's own threads take nothing straight in, so Shades' box is the way to say more.
-    private var canReply: Bool {
-        guard case .channel(let id) = selection, id != .shades, let book else { return false }
-        return MessageTarget.standard(for: selection, in: book) != nil
     }
 
     /// Times are worked out as they're drawn, so a redraw brings them up to date. Rows out of the window are drawn
@@ -442,38 +508,46 @@ final class ChannelPane: QuietView {
 
     // MARK: Rows
 
-    private func view(for row: ChannelRow, in book: ChannelBook, among rows: [ChannelRow], selection: ChannelSelection) -> ChannelRowView {
+    private func view(for row: ChannelRow, in book: ChannelBook, among rows: [ChannelRow]) -> ChannelRowView {
         switch row {
         case .day(let date):
             return DayRowView(date: date, now: now)
-        case .subject(let title, let project, let threadID):
-            let view = SubjectRowView(title: title, project: project)
-            if let channel = selection.channelID { view.onPress = { [weak self] in self?.open(thread: threadID, in: channel, typing: false) } }
+        case .parent(let post):
+            let view = messageView(post.parent, in: book)
+            view.replyBar = ReplyBar(post, in: book)
+            view.onPress = { [weak self] in self?.onOpen?(post.threadID, nil, false, nil) }
+            if MessageTarget.reply(in: post.threadID, of: book) != nil {
+                view.onReply = { [weak self] in self?.onOpen?(post.threadID, nil, true, nil) }
+            }
+            if book.knows(thread: post.threadID) { view.onOpen = { [weak self] in self?.onOpenThread?(post.threadID) } }
             return view
         case .message(let message):
-            let look = ChannelSpeakerLook(message.speaker, in: book)
-            let laidOut = words[message.id].flatMap { $0.message == message ? $0 : nil } ?? MessageWords(message, look: look)
-            laidOut.paint(for: look)
-            words[message.id] = laidOut
-            let view = MessageRowView(message: message, look: look, words: laidOut)
-            view.isExpanded = expanded.contains(message.id)
-            if canReply, !message.threadID.isEmpty, let channel = selection.channelID {
-                view.onReply = { [weak self] in self?.open(thread: message.threadID, in: channel, typing: true) }
-            }
-            if !message.threadID.isEmpty { view.onOpen = { [weak self] in self?.onOpenThread?(message.threadID) } }
-            view.onCopy = { [weak self] in self?.onCopy?($0) }
-            view.onShowMore = { [weak self, weak view] in
-                self?.expanded.insert(message.id)
-                view?.isExpanded = true
-                self?.stack()
-                self?.attach()
+            let view = messageView(message, in: book)
+            if !message.threadID.isEmpty, book.knows(thread: message.threadID) {
+                view.onOpen = { [weak self] in self?.onOpenThread?(message.threadID) }
             }
             return view
+        case .alsoSent(let message, let threadID, let parent):
+            let view = messageView(message, in: book)
+            view.context = CatWords.repliedToThread(parent)
+            view.onPress = { [weak self] in self?.onOpen?(threadID, nil, false, nil) }
+            return view
+        case .digest(let digest):
+            let view = ThreadDigestRowView(digest: digest, in: book, now: now)
+            view.onPress = { [weak self] in self?.onOpen?(digest.threadID, nil, false, nil) }
+            return view
+        case .replies(let count):
+            return RepliesRowView(count: count)
         case .heading(let status):
             return HeadingRowView(status: status)
         case .issue(let thread):
             let view = IssueRowView(thread: thread, now: now)
-            view.onPress = { [weak self] in self?.onOpenThread?(thread.id) }
+            // A thread Messages has read opens beside its channel, and anything else in T3.
+            if let home = book.threads[thread.id]?.home {
+                view.onPress = { [weak self] in self?.onOpen?(thread.id, .channel(home), false, nil) }
+            } else {
+                view.onPress = { [weak self] in self?.onOpenThread?(thread.id) }
+            }
             return view
         case .section(let title, let kind):
             return SectionRowView(title: title, onClear: kind.map { kind in { [weak self] in self?.onAction?(.inbox(.clear(kind))) } })
@@ -484,9 +558,25 @@ final class ChannelPane: QuietView {
         case .report(let entry):
             return card(for: entry, in: book)
         case .note(let text):
-            let isConversation = selection.channelID != nil
-            return NoteRowView(text: text, isCentered: isConversation || rows.count == 1)
+            return NoteRowView(text: text, isCentered: followsLatest || rows.count == 1)
         }
+    }
+
+    private func messageView(_ message: ChannelMessage, in book: ChannelBook) -> MessageRowView {
+        let look = ChannelSpeakerLook(message.speaker, in: book)
+        let laidOut = words[message.id].flatMap { $0.message == message ? $0 : nil } ?? MessageWords(message, look: look)
+        laidOut.paint(for: look)
+        words[message.id] = laidOut
+        let view = MessageRowView(message: message, look: look, words: laidOut)
+        view.isExpanded = expanded.contains(message.id)
+        view.onCopy = { [weak self] in self?.onCopy?($0) }
+        view.onShowMore = { [weak self, weak view] in
+            self?.expanded.insert(message.id)
+            view?.isExpanded = true
+            self?.stack()
+            self?.attach()
+        }
+        return view
     }
 
     private func look(_ kitten: Kitten?, in book: ChannelBook) -> ChannelSpeakerLook {
@@ -522,10 +612,9 @@ final class ChannelPane: QuietView {
             }
             if part.takesOwnWords {
                 let thread = book.thread(holding: question.id, else: question.threadID)
+                let home = book.home(ofThread: thread) ?? book.home(of: kitten)
                 buttons.append(CardRowView.Button(title: CatWords.answerInWords) { [weak self] in
-                    guard let self else { return }
-                    self.replyingTo = nil
-                    self.open(thread: thread, in: self.channel(of: kitten), typing: true)
+                    self?.onOpen?(thread, .channel(home), true, nil)
                 })
             }
         }
@@ -607,7 +696,7 @@ final class ChannelPane: QuietView {
         while first > 0, scroll.contentView.bounds.minY < scroll.contentSize.height {
             let anchor = firstInSight
             let start = max(first - Self.page, 0)
-            views = shown[start..<first].map { view(for: $0, in: book, among: shown, selection: selection) } + views
+            views = shown[start..<first].map { view(for: $0, in: book, among: shown) } + views
             first = start
             stack()
             if let anchor { keep(anchor) }
@@ -632,8 +721,8 @@ final class ChannelPane: QuietView {
 
     // MARK: Scrolling
 
-    /// A conversation keeps its latest in view, as a chat does. Needs you and Done read from the top.
-    private var followsLatest: Bool { selection.channelID != nil }
+    /// A conversation keeps its latest in view, as a chat does. Activity and Threads read from the top.
+    private var followsLatest: Bool { role == .thread || selection.channelID != nil }
 
     private var isNearBottom: Bool {
         distanceFromBottom <= Self.stickyDistance

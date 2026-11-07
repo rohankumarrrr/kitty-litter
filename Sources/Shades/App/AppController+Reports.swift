@@ -58,7 +58,7 @@ extension AppController {
     func passedOn(_ thread: AgentThread, to next: String) {
         dispatchers.insert(next)
         moveScreenWarnings(from: thread.id, to: next)
-        // Work that came from Everyone keeps answering there from wherever it moves, and what it said before stays.
+        // Work that came from #general keeps living there from wherever it moves, and what it said before stays.
         if let since = messagesThreads[thread.id] { messagesThreads[next] = min(since, messagesThreads[next] ?? since) }
         hiddenThreads.insert(thread.id)
         watch.markQuick(thread.id)

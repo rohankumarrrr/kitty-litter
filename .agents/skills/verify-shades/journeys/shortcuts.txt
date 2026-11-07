@@ -1,0 +1,50 @@
+front
+channels
+wait 1.5
+colors Cursor/Opal Horizon
+channel steve
+wait 0.5
+key next-thread
+wait 0.5
+draw .verify/shades/shortcuts/0-newest-thread
+key previous-thread
+wait 0.5
+draw .verify/shades/shortcuts/1-thread-above
+key esc
+key next-place
+key previous-place
+approval command swift test
+report decision
+wait 7
+key next-unread
+wait 0.5
+draw .verify/shades/shortcuts/2-next-unread
+key previous-unread
+key 3
+key threads
+wait 0.5
+draw .verify/shades/shortcuts/3-threads
+key activity
+key back
+key back
+wait 0.5
+draw .verify/shades/shortcuts/4-back
+key forward
+key jump
+jump pricing
+wait 0.5
+draw .verify/shades/shortcuts/5-jump
+jump-down
+jump-open
+wait 0.5
+draw .verify/shades/shortcuts/6-jumped
+key shortcuts
+wait 0.5
+draw .verify/shades/shortcuts/7-shortcuts
+key esc
+key 4
+key new
+windows
+key close
+front
+windows

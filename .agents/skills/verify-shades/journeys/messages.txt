@@ -1,24 +1,40 @@
 front
 channels
 wait 1
-draw .verify/shades/messages/0-needs-you
-channel everyone
+colors Cursor/Opal Horizon
+draw .verify/shades/messages/0-activity
+channel general
 send I need help with my resume
 wait 4
-draw .verify/shades/messages/1-everyone
+draw .verify/shades/messages/1-general
+thread resume
+wait 1
+draw .verify/shades/messages/2-general-thread
 channel steve
+wait 1
+draw .verify/shades/messages/3-channel
 send How did the interview prep go?
 wait 2
-draw .verify/shades/messages/2-new-topic
-channel steve
-thread
-wait 1
+draw .verify/shades/messages/4-new-thread
 send Make the checkout button bigger too
 wait 2
-draw .verify/shades/messages/3-thread
+draw .verify/shades/messages/5-reply
+channel steve
+thread pricing copy
+also on
+send Keep the testimonials as they are
+wait 2
+draw .verify/shades/messages/6-also-sent
 back
-channel done
+wait 0.5
+draw .verify/shades/messages/7-channel-again
+channel threads
 wait 1
-draw .verify/shades/messages/4-done
+draw .verify/shades/messages/8-threads
+approval command swift test
+wait 1
+channel activity
+wait 1
+draw .verify/shades/messages/9-activity
 front
 windows

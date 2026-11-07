@@ -4,7 +4,7 @@ phone on
 wait 3
 phone pair
 wait 1
-phone open needs
+phone open activity
 wait 4
 question
 report decision

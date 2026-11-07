@@ -133,11 +133,11 @@ final class PhoneServerTests: XCTestCase {
         let page = try await call("GET", "/")
         XCTAssertEqual(page.statusCode, 200, "the page itself holds nothing")
         XCTAssertTrue(page.value(forHTTPHeaderField: "Content-Security-Policy")?.contains("script-src 'self'") == true)
-        for path in ["/hello", "/events?key=everyone"] {
+        for path in ["/hello", "/events?key=general"] {
             let refused = try await call("GET", path, headers: ["Tailscale-User-Login": "someone@example.com"])
             XCTAssertEqual(refused.statusCode, 401, "\(path): Tailscale's header is easy to fake from this Mac, so it counts for nothing")
         }
-        let (status, _) = try await self.page(#"{"act":"send","key":"everyone","text":"ship it"}"#, key: "made-up")
+        let (status, _) = try await self.page(#"{"act":"send","key":"general","text":"ship it"}"#, key: "made-up")
         XCTAssertEqual(status, 401)
         XCTAssertEqual(backend.sent.count, 0)
 
@@ -169,11 +169,11 @@ final class PhoneServerTests: XCTestCase {
 
     func testWhatAPhoneSendsIsYourWordsAndNothingElse() async throws {
         let key = try await pair()
-        let dm = PhonePlace.key(.channel(.direct(penny)))
+        let dm = PhonePlace.key(.channel(.of(penny)))
         let (first, stream) = try await watch(dm, key: key)
         defer { stream.cancel() }
-        XCTAssertEqual(first["title"] as? String, "Penny")
-        XCTAssertEqual((first["box"] as? [String: Any])?["label"] as? String, "New topic with Penny")
+        XCTAssertEqual(first["title"] as? String, "#penny")
+        XCTAssertEqual((first["box"] as? [String: Any])?["label"] as? String, "Starts a new thread with Penny")
 
         let (status, body) = try await page(#"{"act":"send","key":"\#(dm)","text":"How's December looking?"}"#, key: key)
         XCTAssertEqual(status, 200)
@@ -186,14 +186,14 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertTrue(started.prompt.attachments.isEmpty)
         XCTAssertFalse(log.all.contains("snapshot"), "nothing was captured")
 
-        let (refused, _) = try await page(#"{"act":"send","key":"t:made-up@everyone","text":"ship it"}"#, key: key)
+        let (refused, _) = try await page(#"{"act":"send","key":"t:made-up@general","text":"ship it"}"#, key: key)
         XCTAssertEqual(refused, 409, "a thread Messages doesn't know isn't somewhere words can go")
         XCTAssertEqual(backend.sent.count, 1)
     }
 
     func testMovingAroundThePhoneKeepsWhatYouJustSent() async throws {
         let key = try await pair()
-        let dm = PhonePlace.key(.channel(.direct(penny)))
+        let dm = PhonePlace.key(.channel(.of(penny)))
         let (_, stream) = try await watch(dm, key: key)
         let (_, body) = try await page(#"{"act":"send","key":"\#(dm)","text":"How's December looking?"}"#, key: key)
         let opens = try XCTUnwrap((try JSONSerialization.jsonObject(with: body) as? [String: Any])?["open"] as? String)
@@ -206,10 +206,10 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertTrue(said.contains("How's December looking?"), "each place is its own stream, and moving between them mustn't forget what you sent: \(said)")
     }
 
-    func testAPhoneKeepsMessagesOpenAndClosingForgetsIt() async throws {
+    func testAPhoneKeepsMessagesOpenUntilItStopsLookingToo() async throws {
         let key = try await pair()
         controller.channelsPressed()
-        let (_, stream) = try await watch("everyone", key: key)
+        let (_, stream) = try await watch("general", key: key)
         stage.hideChannels()
         controller.channelsClosed()
         XCTAssertTrue(controller.channels.isOpen, "closing the window doesn't take Messages from the phone")
@@ -219,7 +219,7 @@ final class PhoneServerTests: XCTestCase {
 
         stream.cancel()
         await until { !controller.channels.isOpen }
-        XCTAssertFalse(controller.channels.isOpen, "once the phone stops looking too, every word is forgotten")
+        XCTAssertFalse(controller.channels.isOpen, "once the phone stops looking too, nothing reads until someone looks again")
     }
 
     func testTurningItOffForgetsEveryPhone() async throws {

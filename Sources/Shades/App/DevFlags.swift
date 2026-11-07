@@ -70,28 +70,49 @@ enum DevFlags {
         }
     }
 
-    /// One real pass over what's been said. It never prints a name, a title or a word of text.
+    /// One real pass over what's been said, then Messages closed and opened again a second later, the way you'd hide it
+    /// and bring it back. It never prints a name, a title or a word of text.
     static func checkChannels() -> Never {
         let backend = T3Backend(credentials: MemoryCredentialStore(), label: "Shades channels check", sessionTTL: "1h", renewBefore: 0)
         let feed = ChannelFeed(backend: backend, kittens: { Kittens.load() })
-        let started = Date()
-        feed.onChange = { book in
-            guard !book.isReading || book.cantReachT3 else { return }
+        let router = Settings.directory.appendingPathComponent("router", isDirectory: true).standardizedFileURL.path
+        feed.isWithShades = { $0.projectPath.map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.path } == router }
+        Task { @MainActor in
+            func milliseconds(since start: Date) -> Int { Int(Date().timeIntervalSince(start) * 1000) }
+            @MainActor func until(_ done: (ChannelBook) -> Bool) async -> ChannelBook {
+                while true {
+                    let book = feed.open(threads: [])
+                    if done(book) || book.cantReachT3 { return book }
+                    try? await Task.sleep(for: .milliseconds(5))
+                }
+            }
+            let started = Date()
+            _ = await until { !$0.threads.isEmpty }
+            let firstWords = milliseconds(since: started)
+            let book = await until { !$0.isReading }
+            let cold = milliseconds(since: started)
             let held = feed.threadsHeld
             feed.close()
-            print(checkLine(book, threadsRead: held, milliseconds: Int(Date().timeIntervalSince(started) * 1000)))
-            Task {
-                await backend.signOut()
-                await backend.disconnect()
-                exit(book.cantReachT3 ? 1 : 0)
-            }
+            try? await Task.sleep(for: .seconds(1))
+            let passes = feed.passes
+            let reopened = Date()
+            _ = await until { !$0.isReading }
+            let shown = milliseconds(since: reopened)
+            _ = await until { _ in feed.passes > passes }
+            let caughtUp = milliseconds(since: reopened)
+            feed.close()
+            print(checkLine(book, threadsRead: held, milliseconds: cold))
+            print("first words: \(firstWords) ms\nreopened and shown: \(shown) ms\nreopened and caught up: \(caughtUp) ms")
+            await backend.signOut()
+            await backend.disconnect()
+            exit(book.cantReachT3 ? 1 : 0)
         }
-        _ = feed.open(threads: [])
         dispatchMain()
     }
 
     static func checkLine(_ book: ChannelBook, threadsRead: Int, milliseconds: Int) -> String {
-        let all = (book.directs + book.between).flatMap(\.messages)
+        let threads = Array(book.threads.values)
+        let all = threads.flatMap(\.messages)
         let asks = all.filter { $0.kind == .ask }
         let askIDs = Set(asks.map(\.exchangeID))
         let unasked = all.filter { $0.kind == .reply && !askIDs.contains($0.exchangeID) }
@@ -100,15 +121,15 @@ enum DevFlags {
             "reached T3: \(!book.cantReachT3)",
             "threads read: \(threadsRead)",
             "unreadable: \(book.unreadable)",
-            "DMs with messages: \(book.directs.filter { !$0.messages.isEmpty }.count)",
-            "between channels: \(book.between.count)",
+            "channels with threads: \(book.channels.filter { !$0.posts.isEmpty }.count)",
+            "threads: \(threads.count)",
+            "replies: \(threads.reduce(0) { $0 + $1.replies.count })",
             "messages: \(all.count)",
             "asked by you: \(asked { $0 == .you })",
             "asked by a kitten: \(asked { if case .kitten = $0 { return true } else { return false } })",
             "asked by someone else: \(asked { $0 == .someoneElse })",
             "replies with no ask: \(unasked.count)",
             "issues: \(book.issueCount)",
-            "done: \(book.issues.reduce(0) { $0 + $1.done.count })",
             "milliseconds: \(milliseconds)",
         ].joined(separator: "\n")
     }

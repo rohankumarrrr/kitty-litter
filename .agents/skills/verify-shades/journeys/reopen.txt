@@ -1,0 +1,13 @@
+front
+messages
+wait 1
+channel steve
+thread pricing copy
+wait 1
+draw .verify/shades/reopen/0-open
+messages
+wait 1
+messages
+draw .verify/shades/reopen/1-reopened
+front
+windows

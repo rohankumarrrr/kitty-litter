@@ -54,7 +54,7 @@ final class ShadesConversationTests: XCTestCase {
                 kittens: [steve], threads: [talk(status: .running)], transcripts: ["r": said("Where is it?", partial)],
                 isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r"]
             )
-            let reply = built.shades.messages.last
+            let reply = built.shadesMessages.last
             XCTAssertEqual(reply?.kind, .reply, partial)
             // What the bubble shows for the same text so far.
             var holdback = ReplyHoldback()
@@ -75,11 +75,11 @@ final class ShadesConversationTests: XCTestCase {
             kittens: [], threads: [thread], transcripts: ["r": said("Which plan is cheapest here?", "Starter.")],
             isReading: false, unreadable: 0, cantReachT3: false, waiting: waiting, withShades: ["r"]
         )
-        XCTAssertEqual(built.shades.messages.first?.text, "Which plan is cheapest here?")
+        XCTAssertEqual(built.shadesMessages.first?.text, "Which plan is cheapest here?")
         XCTAssertFalse(waiting.shadesWork.contains { $0.id == "r" }, "a talk with the cat isn't work")
-        let needs = PhoneView(PhonePlace("needs", in: built), in: built, now: at)
+        let needs = PhoneView(PhonePlace("activity", in: built), in: built, now: at)
         XCTAssertFalse(needs.rows.contains { $0.title == "Which plan is cheapest here?" }, "what you asked the cat stays off the phone")
-        let opened = PhonePlace(PhonePlace.key(.thread("r", in: .everyone)), in: built)
+        let opened = PhonePlace(PhonePlace.key(.thread("r", in: .activity)), in: built)
         XCTAssertNil(opened.target, "it has no box")
         XCTAssertNil(send(opened.key, in: built), "and nothing goes into the router's thread")
     }
@@ -92,12 +92,12 @@ final class ShadesConversationTests: XCTestCase {
             kittens: [steve], threads: [thread], transcripts: ["r": said(question, "KITTEN: 1")],
             isReading: false, unreadable: 0, cantReachT3: false, isUnread: { $0.id == "r" }, withShades: ["r"]
         )
-        XCTAssertEqual(built.shades.messages.first?.text, question, "it's in Shades")
-        XCTAssertEqual(built.channel(.direct(steve))?.messages, [], "and not in Steve's DM")
-        let done = PhoneView(PhonePlace("done", in: built), in: built, now: at)
-        XCTAssertFalse(done.rows.contains { $0.open == PhonePlace.key(.thread("r", in: .direct(steve))) }, "it isn't in Steve's Done")
-        XCTAssertNil(PhonePlace(PhonePlace.key(.thread("r", in: .direct(steve))), in: built).target, "it has no box")
-        XCTAssertNil(send(PhonePlace.key(.thread("r", in: .direct(steve))), in: built), "and nothing goes into the router's thread")
+        XCTAssertEqual(built.shadesMessages.first?.text, question, "it's in Shades")
+        XCTAssertEqual(built.channel(.of(steve))?.posts, [], "and not in Steve's channel")
+        let channel = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: built), in: built, now: at)
+        XCTAssertFalse(channel.rows.contains { $0.open == PhonePlace.key(.thread("r", in: .channel(.of(steve)))) }, "nothing in Steve's channel leads to it")
+        XCTAssertNil(PhonePlace(PhonePlace.key(.thread("r", in: .channel(.of(steve)))), in: built).target, "it has no box")
+        XCTAssertNil(send(PhonePlace.key(.thread("r", in: .channel(.of(steve)))), in: built), "and nothing goes into the router's thread")
         XCTAssertEqual(built.unread, [], "and Steve gets no dot for it")
     }
 
@@ -122,7 +122,7 @@ final class ShadesConversationTests: XCTestCase {
         }
         feed.close()
         let read = try XCTUnwrap(books.first { !$0.isReading })
-        XCTAssertEqual(read.shades.messages.first?.text, question)
+        XCTAssertEqual(read.shadesMessages.first?.text, question)
         XCTAssertEqual(read.unreadable, 0, "read once, and nothing it couldn't read")
         XCTAssertFalse(ChannelRows.rows(.channel(.shades), in: read).contains(.note(CatWords.couldntRead(1))))
     }
