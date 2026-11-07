@@ -48,8 +48,10 @@ final class ChannelSidebar: QuietView {
     var onSelect: ((ChannelPlace) -> Void)?
     /// Theme was pressed, so its menu can open under it.
     var onTheme: ((NSView) -> Void)?
+    var onShortcuts: (() -> Void)?
     private(set) var rows: [ChannelSidebarRow] = []
     let themeButton = QuietButton(CatWords.themeButton, style: .text)
+    let shortcutsButton = QuietButton(CatWords.shortcutsButton, style: .text)
 
     private let scroll = QuietScrollView()
     private let list = QuietView()
@@ -61,10 +63,12 @@ final class ChannelSidebar: QuietView {
         scroll.documentView = list
         addSubview(scroll)
         addSubview(themeButton)
+        addSubview(shortcutsButton)
         themeButton.onPress = { [weak self] in
             guard let self else { return }
             self.onTheme?(self.themeButton)
         }
+        shortcutsButton.onPress = { [weak self] in self?.onShortcuts?() }
     }
 
     @available(*, unavailable)
@@ -129,6 +133,7 @@ final class ChannelSidebar: QuietView {
         super.layout()
         scroll.frame = NSRect(x: 0, y: Self.top, width: bounds.width - 1, height: max(bounds.height - Self.top - Self.footerHeight, 0))
         themeButton.frame.origin = NSPoint(x: 10, y: bounds.height - Self.footerHeight + (Self.footerHeight - themeButton.frame.height) / 2)
+        shortcutsButton.frame.origin = NSPoint(x: themeButton.frame.maxX + 4, y: themeButton.frame.minY)
     }
 
     override func draw(_ dirtyRect: NSRect) {
