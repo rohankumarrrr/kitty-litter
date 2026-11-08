@@ -11,6 +11,7 @@ final class DemoDriver {
     private let stage: AppStage
     private var phone: DemoPhone?
     private var recorder: DemoRecorder?
+    private var cover: NSWindow?
 
     init(parts: Demo.Parts, controller: AppController, stage: AppStage) {
         self.parts = parts
@@ -279,7 +280,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -325,7 +326,7 @@ final class DemoDriver {
         case "channels":
             controller.channelsPressed()
         case "messages":
-            // The same as pressing ⌃⌘B: it opens Messages, or closes it if it's open.
+            // The same as pressing ⌃⌘B: it brings Messages in front of you, or closes it if it's already there.
             controller.messagesHotkeyPressed()
         case "channel":
             // channel activity | threads | general | shades | the start of a kitten's name, the same as clicking it in the sidebar.
@@ -530,6 +531,16 @@ final class DemoDriver {
             stage.menuBar.popUpMenu(at: NSPoint(x: 0, y: 64), in: stage.cat.view)
         case "menuclose":
             stage.menuBar.closeMenu()
+        case "cover":
+            // A window standing in for your work, over Messages as clicking back into another app leaves it, or beside it.
+            // Borderless, since AppKit pulls a titled window back over Messages when beside it would go off the screen.
+            let window = cover ?? NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
+            let frame = stage.channels.panel.frame
+            window.isReleasedWhenClosed = false
+            window.setFrame(rest == "beside" ? frame.offsetBy(dx: -frame.width - 1, dy: 0) : frame, display: false)
+            window.orderFrontRegardless()
+            cover = window
+            print("cover \(NSStringFromRect(window.frame))")
         case "front":
             print("front \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nothing")")
         case "quit":

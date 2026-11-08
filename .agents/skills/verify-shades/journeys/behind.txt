@@ -1,0 +1,19 @@
+front
+channels
+wait 1
+cover beside
+wait 1
+messages
+wait 1
+windows
+channels
+wait 1
+cover
+wait 1
+messages
+wait 1
+windows
+messages
+wait 1
+windows
+front
