@@ -53,7 +53,7 @@ enum CatStamp {
     /// The same cat as a PNG for the phone, each art pixel `scale` pixels square, so it scales up crisply there.
     @MainActor
     static func png(_ pose: CatPose, jacket: UInt32?, dark: Bool, scale: Int) -> Data? {
-        let art = renderer.image(for: pose, theme: dark ? .dark : .light, jacket: jacket)
+        let art = CatRenderer.uncached(for: pose, theme: dark ? .dark : .light, jacket: jacket)
         let side = art.width * scale
         guard let context = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
         else { return nil }

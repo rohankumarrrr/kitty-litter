@@ -21,6 +21,11 @@ final class CatRenderer {
         return image
     }
 
+    /// Drawn fresh and kept nowhere, for a picture asked for by anyone, which no cache should grow by or answer faster from.
+    nonisolated static func uncached(for pose: CatPose, theme: CatTheme, jacket: UInt32? = nil) -> CGImage {
+        render(pixels(for: pose, theme: theme, jacket: jacket))
+    }
+
     /// Premultiplied RGBA, row by row from the top.
     nonisolated static func pixels(for pose: CatPose, theme: CatTheme, jacket: UInt32? = nil) -> [UInt8] {
         var palette = theme.palette
@@ -73,7 +78,7 @@ final class CatRenderer {
         (10, 1, 0.45), (11, 1, 1), (11, 0, 0.7), (12, 0, 0.3),
     ]
 
-    private static func render(_ pixels: [UInt8]) -> CGImage {
+    private nonisolated static func render(_ pixels: [UInt8]) -> CGImage {
         let size = CatArt.grid
         let provider = CGDataProvider(data: Data(pixels) as CFData)!
         return CGImage(

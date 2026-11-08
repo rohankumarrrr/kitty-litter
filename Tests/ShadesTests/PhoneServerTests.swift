@@ -1,3 +1,4 @@
+import Darwin
 import AppKit
 import CryptoKit
 @testable import Shades
@@ -216,13 +217,39 @@ final class PhoneServerTests: XCTestCase {
         }
         let posted = try await call("POST", "/cat/dark/sit/7458e8.png", json: "{}", headers: ["X-Shades": "1"])
         XCTAssertNotEqual(posted.statusCode, 200)
+    }
 
-        // They're kept in memory, and only so many, however many colours are asked for.
-        for n in 0..<(PhoneLink.catsKept + 8) {
-            let (each, _) = try await send("GET", "/cat/light/sit/\(String(format: "%06x", n)).png")
-            XCTAssertEqual(each.statusCode, 200)
+    /// What review found: anyone who can reach the page could fill the Mac's memory by asking for colours, and tell which
+    /// cats a phone had just loaded by how fast they came back.
+    func testACatsAddressKeepsNothingSoStrangersCantFillMemoryOrTellWhatAPhoneLoaded() {
+        let link = PhoneLink(keys: MemoryPhoneKeys(), grace: 0, hold: { nil }, release: {}, act: { _ in }, sendPush: { _ in nil }, now: { Date() })
+        func get(_ path: String) -> (status: Int, seconds: TimeInterval) {
+            let started = DispatchTime.now().uptimeNanoseconds
+            let response = link.respond(to: PhoneServer.Request(method: "GET", path: path, query: [:], headers: [:], body: Data()))
+            let seconds = Double(DispatchTime.now().uptimeNanoseconds - started) / 1e9
+            guard case .full(let status, _, _) = response else { return (-1, seconds) }
+            return (status, seconds)
         }
-        XCTAssertLessThanOrEqual(try XCTUnwrap(controller.phone?.catsDrawn), PhoneLink.catsKept)
+        func median(_ times: [TimeInterval]) -> TimeInterval { times.sorted()[times.count / 2] }
+        let loaded = (0..<21).map { "/cat/light/work/\(String(format: "%06x", 0x100000 + $0)).png" }
+        loaded.forEach { _ = get($0) }
+        let again = median(loaded.map { get($0).seconds })
+        let fresh = median((0..<21).map { get("/cat/light/work/\(String(format: "%06x", 0x200000 + $0)).png").seconds })
+        XCTAssertGreaterThan(again, fresh / 2, "a cat a phone just loaded comes back no faster than one it didn't")
+
+        let before = footprint()
+        // Each request drains its own autorelease pool, as the server's run loop does between requests.
+        for n in 0..<20_000 { autoreleasepool { XCTAssertEqual(get("/cat/dark/sit/\(String(format: "%06x", 0x300000 + n)).png").status, 200) } }
+        XCTAssertLessThan(footprint() - before, 4 << 20, "asking for colours doesn't fill memory")
+    }
+
+    private func footprint() -> Int {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
+        }
+        return result == KERN_SUCCESS ? Int(info.phys_footprint) : 0
     }
 
     func testTheKeyIsntACookieSoNoOtherPortOnTheMacsNameGetsIt() async throws {

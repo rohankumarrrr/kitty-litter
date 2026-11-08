@@ -37,9 +37,6 @@ final class PhoneLink {
     private var watchers: [Watcher] = []
     private var book: ChannelBook?
     private var letting: Task<Void, Never>?
-    /// Cats already drawn, by address, in memory only. Any colour gets one, so only so many are kept.
-    private var cats: [String: Data] = [:]
-    static let catsKept = 128
 
     init(
         keys: PhoneKeyStoring,
@@ -77,7 +74,6 @@ final class PhoneLink {
     /// Whether a phone is holding Messages open, because it's looking or has only just stopped.
     var isHolding: Bool { book != nil }
 
-    var catsDrawn: Int { cats.count }
 
     /// Messages changed, so each phone gets what its place shows now, if that's different.
     func publish(_ book: ChannelBook) {
@@ -94,7 +90,7 @@ final class PhoneLink {
         watcher.stream.send(json)
     }
 
-    private func respond(to request: PhoneServer.Request) -> PhoneServer.Response {
+    func respond(to request: PhoneServer.Request) -> PhoneServer.Response {
         switch (request.method, request.path) {
         case ("GET", "/"):
             return .full(status: 200, type: "text/html; charset=utf-8", body: Data(PhonePage.html.utf8))
@@ -185,11 +181,10 @@ final class PhoneLink {
         return pushes.subscribe(subscription) ? .status(204) : .status(400)
     }
 
+    /// Drawn fresh every time and kept nowhere. Anyone who can reach the page can ask for any colour, so a cache would
+    /// grow with what strangers ask for, and answer faster for the cats a phone just loaded, which would give them away.
     private func cat(at path: String) -> PhoneServer.Response {
-        if let drawn = cats[path] { return .full(status: 200, type: "image/png", body: drawn) }
         guard let drawn = PhoneCat.png(at: path) else { return .status(404) }
-        if cats.count >= Self.catsKept { cats = [:] }
-        cats[path] = drawn
         return .full(status: 200, type: "image/png", body: drawn)
     }
 
