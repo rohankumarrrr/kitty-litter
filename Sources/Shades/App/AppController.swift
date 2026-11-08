@@ -269,7 +269,7 @@ final class AppController {
         channels.isCatsWork = { [weak self] in self?.isCatsWork($0) ?? false }
         channels.answersInGeneral = { [weak self] in Set(self?.inbox.answersInGeneral.keys ?? [:].keys) }
         channels.alsoSent = { [weak self] in Set(self?.inbox.alsoSent.keys ?? [:].keys) }
-        channels.alsoSentToGeneral = { [weak self] in Set(self?.inbox.alsoSentToGeneral.keys ?? [:].keys) }
+        channels.alsoSentToGeneral = { [weak self] in self?.inbox.alsoSentToGeneral.mapValues(\.thread) ?? [:] }
         channels.keepAlsoSent = { [weak self] in self?.keepAlsoSent($0) }
     }
 

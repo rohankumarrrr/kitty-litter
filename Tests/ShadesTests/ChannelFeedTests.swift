@@ -709,7 +709,7 @@ extension ChannelFeedTests {
     }
 
     func testAReplyAlsoSentToTheChannelIsHandedOverToKeepOnceT3HasIt() async {
-        var kept: [String: ChannelID] = [:]
+        var kept: [String: ChannelBook.HeardAlsoSent] = [:]
         feed.keepAlsoSent = { kept.merge($0) { first, _ in first } }
         backend.threads = [thread("work")]
         backend.set([Exchange(id: "first", asker: .you, askedAt: start.addingTimeInterval(-100), ask: "Draft the budget")], in: "work")
@@ -723,6 +723,43 @@ extension ChannelFeedTests {
         ], in: "work")
         backend.threads = [moved(thread("work"), by: 5)]
         feed.threadsChanged(backend.threads!)
-        await eventually { kept == ["second:ask": .of(steve)] }
+        await eventually { kept == ["second:ask": .init(thread: "work", channel: .of(steve))] }
+    }
+}
+
+extension ChannelFeedTests {
+    func testWhatYouWroteInGeneralIntoAKittensOlderThreadIsStillThereAfterARestart() async {
+        backend.threads = (0..<31).map { thread("t\($0)", age: TimeInterval($0)) }
+        for index in 0..<30 { backend.say("Ask \(index)", in: "t\(index)") }
+        backend.set([
+            Exchange(id: "e", asker: .you, askedAt: start.addingTimeInterval(-500), ask: "Rewrite it"),
+            Exchange(id: "f", asker: .you, askedAt: start.addingTimeInterval(-400), ask: "and the FAQ?"),
+        ], in: "t30")
+
+        await openAndRead()
+        feed.sent(ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "and the FAQ?", at: start.addingTimeInterval(-401), threadID: "t30", threadTitle: "Work"), in: .general, alsoSent: true)
+        XCTAssertEqual(latest?.channel(.general)?.posts.count, 1)
+        feed.close()
+
+        books = []
+        makeFeed(gap: .milliseconds(20))
+        feed.alsoSentToGeneral = { ["f:ask": "t30"] }
+        await openAndRead()
+        XCTAssertTrue(backend.reads.contains("t30"), "its thread is read, though it's older than Steve's newest 30")
+        guard case .alsoSent(let message, "t30")? = latest?.channel(.general)?.posts.first else { return XCTFail("\(String(describing: latest?.channel(.general)?.posts))") }
+        XCTAssertEqual(message.text, "and the FAQ?", "#general shows after a restart what it showed before")
+    }
+}
+
+extension ChannelFeedTests {
+    func testAThreadThatCantBeReadElsewhereLeavesLoadOlderWhereThereAreOlderThreads() async {
+        backend.threads = (0..<40).map { thread("t\($0)", age: TimeInterval($0)) } + [thread("broken", project: nil)]
+        for index in 0..<40 { backend.say("Ask \(index)", in: "t\(index)") }
+        backend.failing = ["broken"]
+        feed.inGeneral = { ["broken": Date(timeIntervalSince1970: 0)] }
+        await openAndRead()
+        await holdOn()
+        XCTAssertEqual(ChannelRows.rows(.channel(.of(steve)), in: latest!).first, .older(isLoading: false), "Steve's channel still has 10 older threads to load")
+        XCTAssertEqual(latest?.channel(.general)?.isCut, false, "and the one that couldn't be read isn't older, just unread")
     }
 }

@@ -153,11 +153,15 @@ extension AppController {
 
     /// A reply also sent to a channel is only words while T3 doesn't have it, so it's kept once T3 does, as the ID of
     /// T3's copy, and read back from its thread after a restart.
-    func keepAlsoSent(_ heard: [String: ChannelID]) {
+    func keepAlsoSent(_ heard: [String: ChannelBook.HeardAlsoSent]) {
         let new = heard.filter { inbox.alsoSent[$0.key] == nil && inbox.alsoSentToGeneral[$0.key] == nil }
         guard !new.isEmpty else { return }
-        for (id, channel) in new {
-            if channel == .general { inbox.alsoSentToGeneral[id] = now() } else { inbox.alsoSent[id] = now() }
+        for (id, line) in new {
+            if line.channel == .general {
+                inbox.alsoSentToGeneral[id] = Inbox.ShownInGeneral(thread: line.thread, at: now())
+            } else {
+                inbox.alsoSent[id] = now()
+            }
         }
         keepInbox()
     }

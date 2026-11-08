@@ -175,7 +175,10 @@ final class ChannelBookTests: XCTestCase {
         let threads = [thread("read"), thread("missing")]
         let said = ["read": [exchange("e")]]
         func notes(unreadable: Int, cantReachT3: Bool) -> [String] {
-            let built = ChannelBook.build(kittens: [steve], threads: threads, transcripts: said, isReading: false, unreadable: unreadable, cantReachT3: cantReachT3)
+            let built = ChannelBook.build(
+                kittens: [steve], threads: threads, transcripts: said, isReading: false, unreadable: unreadable, cantReachT3: cantReachT3,
+                couldntRead: unreadable > 0 ? ["missing"] : []
+            )
             return ChannelRows.rows(.channel(.of(steve)), in: built).compactMap { row in
                 switch row {
                 case .note(let text): return text
@@ -514,7 +517,7 @@ final class ChannelBookTests: XCTestCase {
         let reply = echo("Keep the FAQ", at: 10, in: .of(steve), thread: "t", alsoSent: true)
         let said = ["t": [exchange("e", ask: "Rewrite it", asked: 0), exchange("f", ask: "Keep the FAQ", reply: "Kept.", asked: 11)]]
         let heard = book(threads: [thread("t")], transcripts: said, sent: [reply])
-        XCTAssertEqual(heard.alsoSentHeard, ["f:ask": .of(steve)], "only the ID of T3's copy, and where it shows")
+        XCTAssertEqual(heard.alsoSentHeard, ["f:ask": .init(thread: "t", channel: .of(steve))], "only the IDs of T3's copy and its thread, and where it shows")
 
         let restarted = ChannelBook.build(kittens: [steve, pepper], threads: [thread("t")], transcripts: said, isReading: false, unreadable: 0, cantReachT3: false, alsoSent: ["f:ask"])
         let echoed = try XCTUnwrap(restarted.threads["t"]?.replies.first { $0.id == "f:ask" })
@@ -529,7 +532,7 @@ final class ChannelBookTests: XCTestCase {
         let said = ["t": [exchange("e", ask: "Rewrite it", asked: 0), exchange("f", ask: "and the FAQ?", reply: "Done.", asked: 11)]]
         var routed = echo("and the FAQ?", at: 10, in: .general, thread: "t", alsoSent: true)
         routed.message.threadTitle = "Work"
-        XCTAssertEqual(book(threads: [thread("t")], transcripts: said, sent: [routed]).alsoSentHeard, ["f:ask": .general])
+        XCTAssertEqual(book(threads: [thread("t")], transcripts: said, sent: [routed]).alsoSentHeard, ["f:ask": .init(thread: "t", channel: .general)])
 
         let restarted = ChannelBook.build(kittens: [steve], threads: [thread("t")], transcripts: said, isReading: false, unreadable: 0, cantReachT3: false, alsoSentToGeneral: ["f:ask"])
         let echoed = try XCTUnwrap(restarted.threads["t"]?.replies.first { $0.id == "f:ask" })
@@ -705,7 +708,7 @@ extension ChannelBookTests {
         let thread = try XCTUnwrap(read.threads["r"])
         XCTAssertEqual(thread.messages.compactMap(\.text), ["Earlier", "Earlier answer.", "What day is it?", "Friday."], "once T3 has it, only T3's copy")
         XCTAssertEqual(read.channel(.shades)?.posts, [.thread("r"), .alsoSent(thread.replies[1], thread: "r"), .alsoSent(thread.replies[2], thread: "r")])
-        XCTAssertEqual(read.alsoSentHeard, ["2:ask": .shades, "2:reply": .shades])
+        XCTAssertEqual(read.alsoSentHeard, ["2:ask": .init(thread: "r", channel: .shades), "2:reply": .init(thread: "r", channel: .shades)])
 
         let restarted = ChannelBook.build(
             kittens: [steve], threads: [talk("r")], transcripts: ["r": [exchange("1", ask: "Earlier", reply: "Earlier answer."), exchange("2", ask: "What day is it?", reply: "Friday.", asked: 21)]],
@@ -745,5 +748,21 @@ extension ChannelBook {
     /// Everything said in the cat's DM, talk by talk, for tests that read it as one conversation.
     var shadesMessages: [ChannelMessage] {
         threads(in: .shades).flatMap { threads[$0]?.messages ?? [] }
+    }
+}
+
+extension ChannelBookTests {
+    func testNothingIsKeptWhileT3OnlyHasTheSameWordsFromBefore() {
+        // You said "Yes" in the thread, not also sent, and 30 seconds later "Yes" again, also sent. T3 only has the first.
+        let said = ["t": [exchange("e", ask: "Rewrite it", asked: 0), exchange("f", ask: "Yes", reply: nil, asked: 100)]]
+        let second = echo("Yes", at: 130, in: .of(steve), thread: "t", alsoSent: true)
+        let built = book(threads: [thread("t")], transcripts: said, sent: [second])
+        XCTAssertEqual(built.alsoSentHeard, [:], "T3 doesn't have the second Yes yet")
+
+        // The same when the second never reached T3 at all.
+        var failed = second
+        failed.message.failure = "Couldn't send."
+        let broken = book(threads: [thread("t")], transcripts: said, sent: [failed])
+        XCTAssertEqual(broken.alsoSentHeard, [:], "a send that failed is kept nowhere")
     }
 }

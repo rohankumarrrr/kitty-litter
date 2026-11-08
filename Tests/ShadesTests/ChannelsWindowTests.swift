@@ -1213,3 +1213,85 @@ extension ChannelsWindowTests {
         XCTAssertFalse(Self.isVioletStandIn(there), "no picture there, was \(there)")
     }
 }
+
+extension ChannelsWindowTests {
+    func testOlderPostsFromTheSameDayComeInWithoutMovingWhatYoureReading() throws {
+        func work(_ id: String, at offset: TimeInterval) -> (AgentThread, [Exchange]) {
+            let thread = AgentThread(id: id, title: "Work \(id)", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at.addingTimeInterval(offset), projectPath: "/k/steve")
+            return (thread, [Exchange(id: "e-\(id)", asker: .you, askedAt: at.addingTimeInterval(offset), ask: "Ask \(id)", reply: "Reply", repliedAt: at.addingTimeInterval(offset))])
+        }
+        let newer = (0..<30).map { work("n\($0)", at: TimeInterval($0) * 60) }
+        // Earlier the same morning, rather than a day before.
+        let older = (0..<30).map { work("o\($0)", at: -TimeInterval($0 + 1) * 60) }
+        func build(_ read: [(AgentThread, [Exchange])]) -> ChannelBook {
+            ChannelBook.build(
+                kittens: [steve, pepper], threads: (newer + older).map(\.0),
+                transcripts: Dictionary(uniqueKeysWithValues: read.map { ($0.0.id, $0.1) }), isReading: false, unreadable: 0, cantReachT3: false
+            )
+        }
+        let view = view()
+        view.show(build(newer))
+        view.select(.channel(.of(steve)))
+        let pane = view.pane
+        for _ in 0..<20 { pane.scrollOffset = 0 }
+        let reading = try XCTUnwrap(pane.shownMessageRows.first { $0.superview != nil })
+        let onScreen = reading.frame.minY - pane.scrollOffset
+
+        view.show(build(newer + older))
+        let now = reading.frame.minY - pane.scrollOffset
+        XCTAssertTrue(reading.superview != nil, "the same row is still there")
+        XCTAssertEqual(now, onScreen, accuracy: 1, "where it was")
+    }
+}
+
+extension ChannelsWindowTests {
+    func testTypingInTheBoxNeverLoadsOlderPosts() throws {
+        for height: CGFloat in [560, 800, 1000, 1200] {
+            let threads = (0..<31).map { AgentThread(id: "t\($0)", title: "Work \($0)", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve") }
+            let said = Dictionary(uniqueKeysWithValues: (1..<31).map { ("t\($0)", [Exchange(id: "e\($0)", asker: .you, askedAt: at.addingTimeInterval(TimeInterval($0)), ask: "Ask \($0)", reply: "Reply", repliedAt: at.addingTimeInterval(TimeInterval($0)))]) })
+            let cut = ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: said, isReading: false, unreadable: 0, cantReachT3: false)
+            let view = view(height: height)
+            var sent: [MessagesAction] = []
+            view.onAction = { sent.append($0) }
+            view.show(cut)
+            view.select(.channel(.of(steve)))
+            view.pane.composer.textView.string = "Line one\nLine two\nLine three"
+            view.pane.composer.onResize?()
+            XCTAssertFalse(sent.contains(.older(.of(steve))), "typing three lines in the box at height \(height) asked for older posts")
+        }
+    }
+}
+
+extension ChannelsWindowTests {
+    func testOlderThreadsThatStartedAmongWhatYoureReadingDontPushItDown() throws {
+        func work(_ id: String, asked: TimeInterval, updated: TimeInterval) -> (AgentThread, [Exchange]) {
+            let thread = AgentThread(id: id, title: "Work \(id)", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at.addingTimeInterval(updated), projectPath: "/k/steve")
+            return (thread, [Exchange(id: "e-\(id)", asker: .you, askedAt: at.addingTimeInterval(asked), ask: "Ask \(id)", reply: "Reply", repliedAt: at.addingTimeInterval(updated))])
+        }
+        let day: TimeInterval = 86_400
+        // A long thread started two days ago that you're still in, and 29 from today.
+        let newer = [work("long", asked: -2 * day, updated: 3_600)] + (0..<29).map { work("n\($0)", asked: TimeInterval($0) * 60, updated: TimeInterval($0) * 60) }
+        // Yesterday's threads, which are older by when they last moved, and newer than the long thread's start.
+        let older = (0..<30).map { work("o\($0)", asked: -day + TimeInterval($0) * 60, updated: -day + TimeInterval($0) * 60) }
+        func build(_ read: [(AgentThread, [Exchange])]) -> ChannelBook {
+            ChannelBook.build(
+                kittens: [steve, pepper], threads: (newer + older).map(\.0),
+                transcripts: Dictionary(uniqueKeysWithValues: read.map { ($0.0.id, $0.1) }), isReading: false, unreadable: 0, cantReachT3: false
+            )
+        }
+        let view = view()
+        view.show(build(newer))
+        view.select(.channel(.of(steve)))
+        let pane = view.pane
+        for _ in 0..<20 { pane.scrollOffset = 0 }
+        // Reading from the long thread's parent down.
+        let long = try XCTUnwrap(pane.shownMessageRows.first { $0.accessibilityLabel()?.contains("Ask long") == true })
+        pane.scrollOffset = long.frame.minY
+        let next = try XCTUnwrap(pane.shownMessageRows.first { $0.accessibilityLabel()?.contains("Ask n0") == true })
+        let onScreen = next.frame.minY - pane.scrollOffset
+
+        view.show(build(newer + older))
+        let now = next.frame.minY - pane.scrollOffset
+        XCTAssertEqual(now, onScreen, accuracy: 1, "what you were reading stays where it was")
+    }
+}

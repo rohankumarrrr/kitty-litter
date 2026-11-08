@@ -64,7 +64,7 @@ public struct Inbox: Codable, Equatable, Sendable {
     /// What came in while Do Not Disturb was on. Only IDs, and files from before don't have it.
     private var missed: [Missed]?
     private var alsoShown: [String: Date]?
-    private var alsoShownInGeneral: [String: Date]?
+    private var alsoShownInGeneral: [String: ShownInGeneral]?
 
     /// How many of each place's IDs are kept, newest first. More than Messages reads.
     public static let placesKept = 300
@@ -106,15 +106,31 @@ public struct Inbox: Codable, Equatable, Sendable {
         set { alsoShown = Self.newest(newValue) }
     }
 
-    /// The same for what you wrote in #general that went into a thread living somewhere else, which shows in #general.
-    public var alsoSentToGeneral: [String: Date] {
+    /// The same for what you wrote in #general that went into a thread living somewhere else, which shows in #general,
+    /// with that thread, so #general reads it whoever's it is.
+    public var alsoSentToGeneral: [String: ShownInGeneral] {
         get { alsoShownInGeneral ?? [:] }
-        set { alsoShownInGeneral = Self.newest(newValue) }
+        set { alsoShownInGeneral = Self.newest(newValue) { $0.at } }
+    }
+
+    /// The thread a message Messages also showed in #general is in, and when. Only IDs.
+    public struct ShownInGeneral: Codable, Equatable, Sendable {
+        public var thread: String
+        public var at: Date
+
+        public init(thread: String, at: Date) {
+            self.thread = thread
+            self.at = at
+        }
     }
 
     private static func newest(_ ids: [String: Date]) -> [String: Date] {
+        newest(ids) { $0 }
+    }
+
+    private static func newest<Kept>(_ ids: [String: Kept], at: (Kept) -> Date) -> [String: Kept] {
         guard ids.count > placesKept else { return ids }
-        let kept = ids.sorted { ($0.value, $0.key) > ($1.value, $1.key) }.prefix(placesKept)
+        let kept = ids.sorted { (at($0.value), $0.key) > (at($1.value), $1.key) }.prefix(placesKept)
         return Dictionary(uniqueKeysWithValues: kept.map { ($0.key, $0.value) })
     }
 

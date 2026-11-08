@@ -169,8 +169,14 @@ struct ChannelBook: Equatable {
     var talks: Set<String>
     /// Work the cat started for you outside Messages, which lives in its DM, and which you can reply to.
     var catsWork: Set<String> = []
-    /// Replies also sent to a channel that T3 has now, by the ID of T3's copy, and the channel each shows in.
-    var alsoSentHeard: [String: ChannelID] = [:]
+    /// Replies also sent to a channel that T3 has now, by the ID of T3's copy.
+    var alsoSentHeard: [String: HeardAlsoSent] = [:]
+
+    struct HeardAlsoSent: Equatable {
+        var thread: String
+        /// Where it shows.
+        var channel: ChannelID
+    }
     var isReading: Bool
     var unreadable: Int
     var cantReachT3: Bool
@@ -217,6 +223,7 @@ struct ChannelBook: Equatable {
         alsoSentToGeneral: Set<String> = [],
         olderPages: [ChannelID: Int] = [:],
         loadingOlder: Set<ChannelID> = [],
+        couldntRead: Set<String> = [],
         said: (String) -> String? = ChannelBook.said
     ) -> ChannelBook {
         // A talk with the cat is titled with your question, which can start with a kitten's name, so it's kept apart
@@ -248,7 +255,7 @@ struct ChannelBook: Equatable {
         }
         for thread in talkThreads where !thread.isLiveTest {
             guard let exchanges = transcripts[thread.id] else {
-                leftOut.insert(.shades)
+                if !couldntRead.contains(thread.id) { leftOut.insert(.shades) }
                 continue
             }
             let messages = talk(in: thread, exchanges, said: said)
@@ -266,7 +273,7 @@ struct ChannelBook: Equatable {
             // outside Messages, which keeps to its DM. Anything else can hold your screen.
             guard owner != nil || inGeneral[thread.id] != nil || catsWork.contains(thread.id) else { continue }
             guard let exchanges = transcripts[thread.id] else {
-                leftOut.insert(home(of: thread.id, owner: owner, inGeneral: inGeneral, catsWork: catsWork))
+                if !couldntRead.contains(thread.id) { leftOut.insert(home(of: thread.id, owner: owner, inGeneral: inGeneral, catsWork: catsWork)) }
                 continue
             }
             let replier = owner.map { Speaker.kitten($0.id) } ?? .cat
@@ -291,7 +298,7 @@ struct ChannelBook: Equatable {
         }
         let heard = Set(answered.map(\.exchangeID))
         let ours = Set(sent.map(\.message.id))
-        var alsoSentHeard: [String: ChannelID] = [:]
+        var alsoSentHeard: [String: HeardAlsoSent] = [:]
         for (sequence, sent) in sent.enumerated() {
             if let turn = sent.heardAs, heard.contains(turn) { continue }
             var message = sent.message
@@ -327,7 +334,11 @@ struct ChannelBook: Equatable {
                 let echo = thread.messages[index]
                 if sent.alsoSent, echo.id != thread.messages.first?.id {
                     post(.alsoSent(echo, thread: message.threadID))
-                    if !ours.contains(echo.id) { alsoSentHeard[echo.id] = sent.channel }
+                    // Only T3's copy of these very words is kept: not the same words said before them, nor any for a send
+                    // that went nowhere.
+                    if !ours.contains(echo.id), message.failure == nil, echo.at >= message.at.addingTimeInterval(-2) {
+                        alsoSentHeard[echo.id] = HeardAlsoSent(thread: message.threadID, channel: sent.channel)
+                    }
                 }
                 continue
             }
@@ -370,8 +381,7 @@ struct ChannelBook: Equatable {
             }
         }
 
-        // Threads with nothing read are older than Messages has read so far, or couldn't be read, so don't say you've
-        // never talked.
+        // Threads with nothing read are older than Messages has read so far, so there's more to load.
         let channels = channelIDs.map { id in
             channel(id, placed[id] ?? [], leavesOutThreads: !isReading && leftOut.contains(id), pages: olderPages[id] ?? 0, isLoadingOlder: loadingOlder.contains(id))
         }

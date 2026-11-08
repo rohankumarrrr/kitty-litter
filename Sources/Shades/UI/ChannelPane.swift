@@ -345,7 +345,7 @@ final class ChannelPane: QuietView {
         guard isNewSelection || rows != shown else { return }
 
         let wasAtBottom = isNearBottom
-        let anchor = isNewSelection ? nil : firstInSight
+        let anchors = isNewSelection ? [] : inSight
         // Following along at the bottom goes back to the newest page, so what's laid out doesn't keep growing.
         let start = followsLatest ? (isNewSelection || wasAtBottom ? max(rows.count - firstPage, 0) : refreshedStart(in: rows)) : 0
         // A refresh keeps the view of each row that's still there, wherever it's moved to.
@@ -380,8 +380,8 @@ final class ChannelPane: QuietView {
             scrollOffset = followsLatest ? bottomOffset : 0
         } else if wasAtBottom, followsLatest {
             scrollToBottom()
-        } else if followsLatest, let anchor {
-            keep(anchor)
+        } else if followsLatest, !anchors.isEmpty {
+            keep(anchors)
         }
         attach()
         // Older posts that came in above what you're reading are laid out the way scrolling up to them would.
@@ -831,9 +831,9 @@ final class ChannelPane: QuietView {
         guard !isPaging, book != nil else { return }
         isPaging = true
         while first > 0, scroll.contentView.bounds.minY < scroll.contentSize.height {
-            let anchor = firstInSight
+            let anchors = inSight
             layOutPageAbove()
-            if let anchor { keep(anchor) }
+            keep(anchors)
         }
         attach()
         isPaging = false
@@ -846,11 +846,14 @@ final class ChannelPane: QuietView {
         onAction?(.older(channel))
     }
 
-    /// The first row you can see, and how far above the top of the pane it starts. Never Load older, which goes once
-    /// it has.
-    private var firstInSight: (view: ChannelRowView, above: CGFloat)? {
-        let top = scroll.contentView.bounds.minY
-        return frames.indices.first { frames[$0].maxY > top && !(views[$0] is OlderRowView) }.map { (views[$0], top - frames[$0].minY) }
+    /// The rows you can see, lowest first, and how far above the top of the pane each starts. Never Load older, which
+    /// goes once it has. An older thread comes in where it started, which can be among what you're reading, so keeping
+    /// the lowest row moves the least of it.
+    private var inSight: [(view: ChannelRowView, above: CGFloat)] {
+        let seen = scroll.contentView.bounds
+        return frames.indices.reversed()
+            .filter { frames[$0].maxY > seen.minY && frames[$0].minY < seen.maxY && !(views[$0] is OlderRowView) }
+            .map { (views[$0], seen.minY - frames[$0].minY) }
     }
 
     private func layOutPageAbove() {
@@ -861,8 +864,9 @@ final class ChannelPane: QuietView {
         stack()
     }
 
-    /// Rows that came in above it are laid out first, so it can stay where it was.
-    private func keep(_ anchor: (view: ChannelRowView, above: CGFloat)) {
+    /// The lowest of them that's still there stays where it was, with rows that came in above it laid out first.
+    private func keep(_ anchors: [(view: ChannelRowView, above: CGFloat)]) {
+        guard let anchor = anchors.first(where: { anchor in views.contains { $0 === anchor.view } }) else { return }
         while first > 0, let index = views.firstIndex(where: { $0 === anchor.view }), frames[index].minY + anchor.above < 0 {
             layOutPageAbove()
         }

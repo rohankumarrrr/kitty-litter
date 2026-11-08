@@ -29,11 +29,12 @@ final class ChannelFeed {
     var isCatsWork: (AgentThread) -> Bool = { _ in false }
     /// The turns of Messages' talk with the router that the cat answered in #general, by T3's ID for each.
     var answersInGeneral: () -> Set<String> = { [] }
-    /// Replies also sent to their thread's channel, and to #general, by the ID of T3's copy of each.
+    /// Replies also sent to their thread's channel by the ID of T3's copy of each, and to #general with the thread each
+    /// is in.
     var alsoSent: () -> Set<String> = { [] }
-    var alsoSentToGeneral: () -> Set<String> = { [] }
+    var alsoSentToGeneral: () -> [String: String] = { [:] }
     /// Hands over the replies also sent to a channel that T3 has now, so their IDs can be kept.
-    var keepAlsoSent: ([String: ChannelID]) -> Void = { _ in }
+    var keepAlsoSent: ([String: ChannelBook.HeardAlsoSent]) -> Void = { _ in }
     /// What's on the screen, whose threads are read before the rest.
     var lookingAt: ChannelSelection?
 
@@ -47,6 +48,8 @@ final class ChannelFeed {
     private var readStamps: [String: Date] = [:]
     /// Listed threads this pass hasn't read yet and nothing was ever read of, kept back so they don't look cut short.
     private var unreadNew: Set<String> = []
+    /// Threads nothing could be read of last time, which aren't older than what's been read, just unread.
+    private var couldntRead: Set<String> = []
     private var sent: [SentMessage] = []
     /// How many pages of older threads and posts you've scrolled back to in each channel, while the app runs.
     private var olderPages: [ChannelID: Int] = [:]
@@ -269,9 +272,11 @@ final class ChannelFeed {
         let owners = KittenBoard.Owners(kittens())
         let talks = listed.filter(isWithShades)
         let mine = inGeneral()
-        // Everything that lives in #general is read, since only so many are kept, whoever's thread it is.
-        let general = listed.filter { !isWithShades($0) && mine[$0.id] != nil }
-        let byOwner = Dictionary(grouping: listed.filter { !isWithShades($0) && mine[$0.id] == nil }) { owners.of($0)?.id }
+        let shownInGeneral = Set(alsoSentToGeneral().values)
+        // Everything that shows in #general is read, since only so many are kept, whoever's thread it is.
+        let isGeneral = { (thread: AgentThread) in mine[thread.id] != nil || shownInGeneral.contains(thread.id) }
+        let general = listed.filter { !isWithShades($0) && isGeneral($0) }
+        let byOwner = Dictionary(grouping: listed.filter { !isWithShades($0) && !isGeneral($0) }) { owners.of($0)?.id }
         let loading = loadingOlder
         func newest(_ threads: [AgentThread], in channel: ChannelID) -> [AgentThread] {
             let pages = (olderPages[channel] ?? 0) + 1
@@ -316,6 +321,7 @@ final class ChannelFeed {
         loadingOlder.subtract(loading)
         passes += 1
         unreadable = moved.count - read
+        couldntRead = Set(moved.map(\.id)).subtracting(transcripts.keys)
         if unreadable > 0 { isDirty = true }
         publish()
     }
@@ -392,9 +398,10 @@ final class ChannelFeed {
             catsWork: Set(threads.filter(isCatsWork).map(\.id)),
             answersInGeneral: answersInGeneral(),
             alsoSent: alsoSent(),
-            alsoSentToGeneral: alsoSentToGeneral(),
+            alsoSentToGeneral: Set(alsoSentToGeneral().keys),
             olderPages: olderPages,
             loadingOlder: loadingOlder,
+            couldntRead: couldntRead,
             said: { reply in
                 let words = self.said[reply] ?? ChannelBook.said(reply)
                 said[reply] = words

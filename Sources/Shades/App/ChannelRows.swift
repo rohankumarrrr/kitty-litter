@@ -309,8 +309,7 @@ enum ChannelRows {
 
     private static func channel(_ id: ChannelID, of book: ChannelBook) -> [ChannelRow] {
         guard let channel = book.channel(id), !channel.posts.isEmpty else { return [emptyNote(id, in: book)] }
-        // A thread that couldn't be read looks like one too old to read, and it could be the newest.
-        var rows: [ChannelRow] = channel.isCut && !book.cantReachT3 && book.unreadable == 0 ? [.older(isLoading: channel.isLoadingOlder)] : []
+        var rows: [ChannelRow] = channel.isCut && !book.cantReachT3 ? [.older(isLoading: channel.isLoadingOlder)] : []
         var lastDay = Date.distantPast
         for post in channel.posts {
             let row: ChannelRow
