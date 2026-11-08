@@ -216,6 +216,7 @@ final class AppStage: CatStage {
     // MARK: - Messages
 
     var isChannelsVisible: Bool { channels.panel.isVisible }
+    var isChannelsInFront: Bool { channels.isInFront }
 
     func showChannels(_ book: ChannelBook, selecting selection: ChannelSelection?) {
         channels.show(book, centeredIn: cat.visibleFrame)

@@ -82,6 +82,8 @@ protocol CatStage: AnyObject {
 
     // Messages
     var isChannelsVisible: Bool { get }
+    /// Open where you can see it, rather than behind your work or on another Space.
+    var isChannelsInFront: Bool { get }
     /// Opens the window, or brings it to the front if it's open, at `selection` if it's given.
     func showChannels(_ book: ChannelBook, selecting selection: ChannelSelection?)
     func updateChannels(_ book: ChannelBook)

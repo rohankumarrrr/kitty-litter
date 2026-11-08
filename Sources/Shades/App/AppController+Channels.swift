@@ -48,9 +48,10 @@ extension AppController {
         channelsPressed(selecting: .thread(threadID, in: .channel(home)))
     }
 
-    /// The hotkey opens it from anywhere, and closes it if it's already open.
+    /// The hotkey brings it in front of you from anywhere, and closes it if it's already there. Open isn't enough,
+    /// since it can be behind your work, and closing it then would take a second press to see it.
     func messagesHotkeyPressed() {
-        if stage.isChannelsVisible {
+        if stage.isChannelsInFront {
             stage.hideChannels()
         } else {
             channelsPressed()

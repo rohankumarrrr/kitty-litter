@@ -297,6 +297,11 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         view.show(book)
     }
 
+    /// Open where you can see it, since clicking back into your work leaves it open behind.
+    var isInFront: Bool {
+        panel.isVisible && panel.isOnActiveSpace && FrontWindow.isOnTop(panel.windowNumber)
+    }
+
     /// Messages in a theme's colours, or Shades' own with `nil`. Its buttons, scrollers and cats follow the theme's
     /// light or dark.
     func apply(_ theme: ColorTheme?) {
