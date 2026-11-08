@@ -148,15 +148,31 @@ struct PhonePlace: Equatable {
 struct PhoneView: Encodable, Equatable {
     struct Place: Encodable, Equatable {
         var key: String
+        /// As the window's sidebar writes it.
         var title: String
         var group: String?
         /// What's waiting on you there.
         var count: Int?
         var unread: Bool
-        var color: String?
+        /// Its kitten, posed for what it's doing, as `PhoneCat.key` writes it.
+        var cat: String?
+        /// The window's dot for a kitten that's working or needs you.
+        var dot: String?
         var asleep: Bool
         /// `activity`, `threads` or `channel`, for the ones without a cat.
         var icon: String?
+    }
+
+    /// A way to another place, such as a kitten's "4 open", which goes to Activity as the window's does.
+    struct Link: Encodable, Equatable {
+        var label: String
+        var open: String
+    }
+
+    /// Someone in a reply bar: their cat, or for you, a square in your colour, as the window draws them.
+    struct Face: Encodable, Equatable {
+        var cat: String?
+        var color: String?
     }
 
     struct Box: Encodable, Equatable {
@@ -173,6 +189,7 @@ struct PhoneView: Encodable, Equatable {
         var name: String
         var text: String?
         var color: String?
+        var cat: String?
         var at: Double
     }
 
@@ -199,6 +216,10 @@ struct PhoneView: Encodable, Equatable {
         var footer: String?
         var color: String?
         var ink: String?
+        /// Whoever it's from, or what a heading's kitten is doing, as `PhoneCat.key` writes it. Yours have none.
+        var cat: String?
+        /// The colour of an issue's dot. `nil` is the soft grey.
+        var dot: String?
         var mine: Bool?
         var going: Bool?
         var failure: String?
@@ -212,10 +233,10 @@ struct PhoneView: Encodable, Equatable {
         var parts: [Part]?
         /// Over a reply also sent to a channel: which thread it's in.
         var context: String?
-        /// A thread's reply bar: how many replies, the last one's time, and the colours of who replied.
+        /// A thread's reply bar: how many replies, when the last one was, and who replied.
         var replies: Int?
-        var last: Double?
-        var faces: [String]?
+        var lastReply: String?
+        var faces: [Face]?
         var waiting: Bool?
         var reply: Reply?
         var more: Int?
@@ -225,6 +246,9 @@ struct PhoneView: Encodable, Equatable {
     var key: String
     var title: String
     var subtitle: String?
+    /// The kitten whose channel it is, or whose channel a thread is in.
+    var cat: String?
+    var link: Link?
     var back: String?
     var backTitle: String?
     var places: [Place]
@@ -248,11 +272,16 @@ struct PhoneView: Encodable, Equatable {
         }
         if let thread = selection.thread {
             (title, subtitle) = ChannelHeader.words(forThread: thread, in: book)
+            cat = book.home(ofThread: thread).flatMap { Self.cat(of: $0, in: book) }
             back = PhonePlace.key(selection.closed)
             backTitle = ChannelHeader.words(for: selection.place, in: book).title
             rows = ChannelRows.thread(thread, in: book).map { Self.row($0, at: selection.place, in: book, now: now) }
         } else {
             (title, subtitle) = ChannelHeader.words(for: selection.place, in: book)
+            cat = selection.channelID.flatMap { Self.cat(of: $0, in: book) }
+            if case .channel(.kitten(let kitten)) = selection.place, let count = book.issues.first(where: { $0.kitten.id == kitten })?.threads.count, count > 0 {
+                link = Link(label: CatWords.issues(count), open: PhonePlace.key(.activity))
+            }
             back = PhonePlace.home
             backTitle = CatWords.messagesTitle
             rows = ChannelRows.rows(selection.place, in: book).map { Self.row($0, at: selection.place, in: book, now: now) }
@@ -262,12 +291,14 @@ struct PhoneView: Encodable, Equatable {
     private static func places(in book: ChannelBook) -> [Place] {
         ChannelSidebarItem.groups(in: book).flatMap { group in
             group.items.filter { $0.place.channelID != .shades }.map { item in
-                var color: UInt32?
+                var cat: String?
+                var dot: UInt32?
                 var asleep = false
                 var icon: String?
                 switch item.icon {
                 case .kitten(let status):
-                    color = ChannelSpeakerLook.color(of: status.kitten)
+                    cat = PhoneCat.key(PhoneCat.Pose(status.state), jacket: ChannelSpeakerLook.color(of: status.kitten))
+                    dot = status.state.dot
                     asleep = status.state == .notSetUp
                 case .activity: icon = "activity"
                 case .threads: icon = "threads"
@@ -275,16 +306,27 @@ struct PhoneView: Encodable, Equatable {
                 }
                 return Place(
                     key: PhonePlace.key(ChannelSelection(item.place)),
-                    title: item.place.channelID.map(book.title) ?? item.title,
+                    title: item.title,
                     group: group.heading,
                     count: item.badge > 0 ? item.badge : nil,
                     unread: item.isUnread,
-                    color: color.map(hex),
+                    cat: cat,
+                    dot: dot.map(hex),
                     asleep: asleep,
                     icon: icon
                 )
             }
         }
+    }
+
+    /// The header's cat: a kitten's channel has its kitten, sitting, as the window's header draws it.
+    private static func cat(of channel: ChannelID, in book: ChannelBook) -> String? {
+        guard case .kitten(let kitten) = channel, book.kitten(kitten) != nil else { return nil }
+        return cat(of: ChannelSpeakerLook(.kitten(kitten), in: book))
+    }
+
+    private static func cat(of look: ChannelSpeakerLook, _ pose: PhoneCat.Pose = .sit) -> String? {
+        look.hasCat ? PhoneCat.key(pose, jacket: look.jacket) : nil
     }
 
     private static func message(_ message: ChannelMessage, in book: ChannelBook) -> Row {
@@ -297,6 +339,7 @@ struct PhoneView: Encodable, Equatable {
             text: message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil),
             color: look.bubble.map(hex),
             ink: look.words.map(hex),
+            cat: cat(of: look),
             mine: look.isYou,
             going: message.isStillGoing,
             failure: message.failure,
@@ -315,10 +358,10 @@ struct PhoneView: Encodable, Equatable {
             row.kind = "parent"
             row.open = PhonePlace.key(.thread(post.threadID, in: place))
             row.replies = post.replies
-            row.last = post.lastReply.map(millis)
+            row.lastReply = post.replies > 0 ? post.lastReply.map { CatWords.lastReply($0, now: now) } : nil
             row.faces = post.repliers.prefix(4).map { speaker in
                 let look = ChannelSpeakerLook(speaker, in: book)
-                return hex(look.jacket ?? look.bubble ?? 0x1d1d1f)
+                return Face(cat: cat(of: look), color: look.hasCat ? nil : look.bubble.map(hex))
             }
             row.waiting = post.needsYou ? true : nil
             row.going = post.isGoing
@@ -332,7 +375,7 @@ struct PhoneView: Encodable, Equatable {
             let look = ChannelSpeakerLook(digest.parent.speaker, in: book)
             let reply = digest.latest.map { latest in
                 let look = ChannelSpeakerLook(latest.speaker, in: book)
-                return Reply(name: look.name, text: latest.text ?? latest.failure, color: look.bubble.map(hex), at: millis(latest.at))
+                return Reply(name: look.name, text: latest.text ?? latest.failure, color: look.bubble.map(hex), cat: cat(of: look), at: millis(latest.at))
             }
             return Row(
                 kind: "digest",
@@ -341,6 +384,7 @@ struct PhoneView: Encodable, Equatable {
                 name: look.name,
                 text: digest.parent.text,
                 color: look.bubble.map(hex),
+                cat: cat(of: look),
                 at: millis(digest.parent.at),
                 open: PhonePlace.key(.thread(digest.threadID, in: .threads)),
                 reply: reply,
@@ -356,7 +400,7 @@ struct PhoneView: Encodable, Equatable {
                 kind: "heading",
                 name: status.kitten.name,
                 detail: "\(status.kitten.role) · \(CatWords.kittenState(status.state))",
-                color: ChannelSpeakerLook.color(of: status.kitten).map(hex)
+                cat: PhoneCat.key(PhoneCat.Pose(status.state), jacket: ChannelSpeakerLook.color(of: status.kitten))
             )
         case .issue(let thread):
             let details = [CatWords.age(of: thread.updatedAt, now: now), CatWords.status(thread), thread.pullRequest.map(CatWords.pullRequest)]
@@ -365,6 +409,7 @@ struct PhoneView: Encodable, Equatable {
                 kind: "issue",
                 title: thread.title,
                 detail: details.compactMap { $0 }.joined(separator: " · "),
+                dot: thread.dot.map(hex),
                 open: book.threads[thread.id] == nil ? nil : PhonePlace.key(.thread(thread.id, in: .activity))
             )
         case .approval(let request):
@@ -408,7 +453,7 @@ struct PhoneView: Encodable, Equatable {
             title: kitten.map { "\($0.name) · \(ChannelBook.title(of: title, owner: $0))" } ?? title,
             name: look.name,
             text: text,
-            color: look.jacket.map(hex),
+            cat: cat(of: look, .alert),
             at: at.map(millis)
         )
         fill(&row)

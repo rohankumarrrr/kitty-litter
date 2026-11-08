@@ -21,8 +21,14 @@ enum PhonePage {
         <body>
         <header id="top">
           <button id="back" type="button" hidden></button>
-          <h1 id="title">Shades</h1>
-          <p id="subtitle"></p>
+          <div id="head">
+            <span id="headcat" hidden></span>
+            <div id="names">
+              <h1 id="title">Shades</h1>
+              <p id="subtitle"></p>
+            </div>
+            <button id="link" type="button" hidden></button>
+          </div>
         </header>
         <div id="banner" role="status" hidden></div>
         <div id="notify" hidden>
@@ -54,12 +60,12 @@ enum PhonePage {
     static let style = """
         :root {
           --paper: #f9f9f9; --text: #1d1d1f; --soft: #6e6e73; --line: #d2d2d7; --grey: #e9e9eb;
-          --you: #0071e3; --on-you: #ffffff; --card: #ffffff; --warn: #c9341c; --badge: #ff3b5c;
+          --you: #0071e3; --on-you: #ffffff; --card: #ffffff; --warn: #c9341c; --badge: #ff3b5c; --cats: light;
           font: 17px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
           -webkit-text-size-adjust: 100%;
         }
         @media (prefers-color-scheme: dark) {
-          :root { --paper: #1d1d1f; --text: #f5f5f7; --soft: #98989d; --line: #3a3a3c; --grey: #3a3a3c; --card: #2c2c2e; --warn: #ff6b55; }
+          :root { --paper: #1d1d1f; --text: #f5f5f7; --soft: #98989d; --line: #3a3a3c; --grey: #3a3a3c; --card: #2c2c2e; --warn: #ff6b55; --cats: dark; }
         }
         * { box-sizing: border-box; }
         html, body { margin: 0; background: var(--paper); color: var(--text); }
@@ -71,6 +77,9 @@ enum PhonePage {
           padding: calc(env(safe-area-inset-top) + 10px) 16px 10px; }
         #back { color: var(--you); font-size: 15px; margin-bottom: 4px; display: block; max-width: 100%;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+        #head { display: flex; align-items: center; gap: 10px; }
+        #names { flex: 1; min-width: 0; }
+        #link { color: var(--you); font-size: 15px; flex: none; }
         #title { font-size: 20px; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
         #subtitle { margin: 2px 0 0; color: var(--soft); font-size: 13px; }
         #subtitle:empty { display: none; }
@@ -88,15 +97,22 @@ enum PhonePage {
         .place.unread .name { font-weight: 600; }
         .place.asleep { opacity: .45; }
         .count { background: var(--badge); color: #fff; border-radius: 999px; padding: 1px 8px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
-        .icon { width: 30px; height: 30px; flex: none; display: grid; place-items: center; color: var(--soft); font-size: 18px; font-weight: 600; }
-        .dot { width: 9px; height: 9px; border-radius: 50%; background: #ff5f1f; flex: none; }
-        .cat { width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center;
-          font-size: 14px; font-weight: 700; color: #fff; background: #8e8e93; }
-        .cat.small { width: 22px; height: 22px; font-size: 11px; }
+        .icon { width: 32px; height: 32px; flex: none; display: grid; place-items: center; color: var(--soft); }
+        .icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .place.unread .icon { color: var(--text); }
+        .dot { width: 8px; height: 8px; flex: none; background: var(--soft); }
+        /* The window's pixel art, kept crisp: each of its pixels is a whole number of the phone's at 16 and 32. */
+        .cat { width: 32px; height: 32px; flex: none; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
+        .cat.small { width: 16px; height: 16px; }
+        .face { width: 16px; height: 16px; flex: none; border-radius: 4px; background: var(--you); }
 
         .day { text-align: center; color: var(--soft); font-size: 12px; margin: 18px 0 6px; }
         .msg { margin: 6px 0; display: flex; flex-direction: column; align-items: flex-start; }
         .msg.mine { align-items: flex-end; }
+        .msg.withcat { padding-left: 40px; }
+        .said { display: flex; align-items: flex-end; gap: 8px; align-self: stretch; }
+        .msg.mine .said { justify-content: flex-end; }
+        .said .cat { margin-left: -40px; }
         .meta { color: var(--soft); font-size: 12px; margin: 4px 12px 3px; }
         .bubble { max-width: 86%; padding: 9px 14px; border-radius: 18px; background: var(--grey); color: var(--text);
           white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -110,7 +126,6 @@ enum PhonePage {
         .replybar { display: flex; align-items: center; gap: 6px; margin: 4px 6px 0; padding: 4px 8px; border-radius: 10px; font-size: 13px; }
         .replybar:active { background: var(--grey); }
         .replybar b { color: var(--you); }
-        .replybar .face { width: 16px; height: 16px; border-radius: 5px; background: #8e8e93; flex: none; }
         .replybar .waiting { color: var(--badge); font-weight: 600; }
         .replybar span { color: var(--soft); }
         .replies { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: 13px; margin: 12px 4px 4px; }
@@ -121,6 +136,7 @@ enum PhonePage {
         .digest.unread h3::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--badge); margin-right: 6px; }
         .digest p { margin: 2px 0 6px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         .digest small { color: var(--soft); }
+        .digest .who { display: flex; align-items: center; gap: 6px; }
         .digest .more { color: var(--you); font-weight: 600; margin: 0; }
         #alsolabel { display: flex; align-items: center; gap: 6px; color: var(--soft); font-size: 13px; margin: 6px 4px 0; }
         .section { display: flex; justify-content: space-between; align-items: baseline; margin: 22px 4px 6px; }
@@ -128,13 +144,14 @@ enum PhonePage {
         .section button { color: var(--you); font-size: 14px; }
         .heading { display: flex; align-items: center; gap: 10px; margin: 16px 4px 4px; }
         .heading p { margin: 0; color: var(--soft); font-size: 13px; }
-        .issue { display: block; width: 100%; text-align: left; padding: 8px 4px 8px 36px; border-radius: 10px; }
-        .issue small { display: block; color: var(--soft); font-size: 13px; }
+        .issue { display: block; width: 100%; text-align: left; padding: 8px 4px 8px 46px; border-radius: 10px; }
+        .issue .line { display: flex; align-items: center; gap: 8px; }
+        .issue small { display: block; color: var(--soft); font-size: 13px; margin-left: 16px; }
         .note { color: var(--soft); text-align: center; font-size: 15px; margin: 24px 16px; }
 
         .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 10px 0; }
-        .card header { display: flex; align-items: center; gap: 8px; color: var(--soft); font-size: 13px; }
-        .card header .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .card header { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: 13px; }
+        .card header .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 600; font-size: 15px; }
         .card .text { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
         .card.approval .text { font: 14px/1.4 ui-monospace, Menlo, monospace; }
         .card .answer { margin: 8px 0 0; padding-left: 10px; border-left: 3px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -170,7 +187,7 @@ enum PhonePage {
         let hex = ColorTheme.hex
         return """
 
-            :root { color-scheme: \(theme.isDark ? "dark" : "light");
+            :root { color-scheme: \(theme.isDark ? "dark" : "light"); --cats: \(theme.isDark ? "dark" : "light");
               --paper: \(hex(theme.paper)); --text: \(hex(theme.text)); --soft: \(hex(theme.soft)); --line: \(hex(theme.line));
               --grey: \(hex(theme.bubble)); --card: \(hex(theme.hover)); --you: \(hex(theme.accent)); --on-you: \(hex(theme.words(on: theme.accent))); }
 
@@ -402,6 +419,10 @@ enum PhonePage {
           view = next;
           $('title').textContent = next.title;
           $('subtitle').textContent = next.subtitle || '';
+          $('headcat').replaceChildren(...(next.cat ? [cat(next.cat)] : []));
+          $('headcat').hidden = !next.cat;
+          $('link').hidden = !next.link;
+          $('link').textContent = next.link ? next.link.label : '';
           $('back').hidden = !next.back;
           $('back').textContent = next.back ? '‹ ' + next.backTitle : '';
           $('box').hidden = !next.box;
@@ -420,8 +441,46 @@ enum PhonePage {
           if (conversation(key) && document.visibilityState === 'visible') act({ act: 'seen', key }, true);
         }
 
-        function cat(color, name, small) {
-          const node = el('span', small ? 'cat small' : 'cat', (name || '?').slice(0, 1).toUpperCase());
+        // The window's own cats, drawn on the Mac. The outline is light on a dark page, so it follows the page.
+        const scheme = () => getComputedStyle(document.documentElement).getPropertyValue('--cats').trim() === 'dark' ? 'dark' : 'light';
+        function cat(key, small) {
+          const node = el('img', small ? 'cat small' : 'cat');
+          node.alt = '';
+          node.src = '/cat/' + scheme() + '/' + key + '.png';
+          return node;
+        }
+        matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (view) show(view); });
+
+        // You, where the window draws a square in your colour.
+        function face(color) {
+          const node = el('span', 'face');
+          if (color) node.style.background = color;
+          return node;
+        }
+
+        // Drawn to match the window's symbols for Activity, Threads and #general.
+        const icons = {
+          activity: ['M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z', 'M10 21h4'],
+          threads: ['M4 4h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z',
+            'M19 9h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-1v3l-4-3h-4a1 1 0 0 1-1-1v-1'],
+          channel: ['M10 4 8 20', 'M16 4l-2 16', 'M4 9h16', 'M3 15h16'],
+        };
+        function icon(name) {
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('viewBox', '0 0 24 24');
+          svg.setAttribute('aria-hidden', 'true');
+          for (const d of icons[name] || icons.channel) {
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', d);
+            svg.append(path);
+          }
+          const node = el('span', 'icon');
+          node.append(svg);
+          return node;
+        }
+
+        function dot(color) {
+          const node = el('span', 'dot');
           if (color) node.style.background = color;
           return node;
         }
@@ -434,10 +493,10 @@ enum PhonePage {
             group = place.group;
             const button = el('button', 'place' + (place.unread || place.count ? ' unread' : '') + (place.asleep ? ' asleep' : ''));
             button.type = 'button';
-            if (place.icon) button.append(el('span', 'icon', icons[place.icon] || '#'));
-            else button.append(cat(place.color, place.title.replace(/^#/, '')));
+            button.append(place.icon ? icon(place.icon) : cat(place.cat));
             button.append(el('span', 'name', place.title));
             if (place.count) button.append(el('span', 'count', String(place.count)));
+            if (place.dot) button.append(dot(place.dot));
             button.onclick = () => go(place.key);
             nodes.push(button);
           }
@@ -445,21 +504,16 @@ enum PhonePage {
         }
 
         const time = (at) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-        const icons = { activity: '🔔', threads: '💬', channel: '#' };
 
         // Slack's reply bar under a thread's parent: who replied, how many, and when the last one was.
         function replybar(item) {
           if (!item.replies && !item.going && !item.waiting) return null;
           const bar = el('button', 'replybar');
           bar.type = 'button';
-          for (const face of item.faces || []) {
-            const node = el('span', 'face');
-            node.style.background = face;
-            bar.append(node);
-          }
+          for (const person of item.faces || []) bar.append(person.cat ? cat(person.cat, true) : face(person.color));
           if (item.waiting) bar.append(el('span', 'waiting', 'Needs you'));
           if (item.replies) bar.append(el('b', null, item.replies === 1 ? '1 reply' : item.replies + ' replies'));
-          if (item.replies && item.last) bar.append(el('span', null, 'Last reply ' + time(item.last)));
+          if (item.lastReply) bar.append(el('span', null, item.lastReply));
           if (item.going) bar.append(el('span', null, 'Working on it'));
           bar.onclick = () => go(item.open);
           return bar;
@@ -481,8 +535,8 @@ enum PhonePage {
             case 'digest': {
               const node = el('button', 'digest' + (item.unread ? ' unread' : ''));
               node.type = 'button';
-              node.append(el('h3', null, item.title), el('small', null, item.name + ' · ' + time(item.at)), el('p', null, item.text || ''));
-              if (item.reply) node.append(el('small', null, item.reply.name + ' · ' + time(item.reply.at)), el('p', null, item.reply.text || ''));
+              node.append(el('h3', null, item.title), who(item, item.at), el('p', null, item.text || ''));
+              if (item.reply) node.append(who(item.reply, item.reply.at), el('p', null, item.reply.text || ''));
               if (item.more) node.append(el('p', 'more', item.more === 1 ? '1 more reply' : item.more + ' more replies'));
               node.onclick = () => go(item.open);
               return node;
@@ -502,13 +556,15 @@ enum PhonePage {
               const node = el('div', 'heading');
               const name = el('div');
               name.append(el('b', null, item.name), el('p', null, item.detail));
-              node.append(cat(item.color, item.name), name);
+              node.append(cat(item.cat), name);
               return node;
             }
             case 'issue': {
               const node = el('button', 'issue');
               node.type = 'button';
-              node.append(el('span', null, item.title), el('small', null, item.detail));
+              const line = el('span', 'line');
+              line.append(dot(item.dot), el('span', null, item.title));
+              node.append(line, el('small', null, item.detail));
               node.onclick = () => go(item.open);
               return node;
             }
@@ -516,8 +572,15 @@ enum PhonePage {
           }
         }
 
+        // Who said something in Threads, with their cat, or your square.
+        function who(item, at) {
+          const node = el('small', 'who');
+          node.append(item.cat ? cat(item.cat, true) : face(item.color), item.name + ' · ' + time(at));
+          return node;
+        }
+
         function message(item) {
-          const node = el('div', 'msg' + (item.mine ? ' mine' : ''));
+          const node = el('div', 'msg' + (item.mine ? ' mine' : '') + (item.cat ? ' withcat' : ''));
           if (item.context) {
             const context = el('button', 'context', item.context);
             context.type = 'button';
@@ -526,11 +589,15 @@ enum PhonePage {
           }
           const meta = item.mine ? [time(item.at)] : [item.name, item.detail, time(item.at)];
           node.append(el('div', 'meta', meta.filter(Boolean).join(' · ')));
+          // As in the window, their cat sits beside the bottom of what they said.
+          const said = el('div', 'said');
+          if (item.cat) said.append(cat(item.cat));
+          if (said.childElementCount || item.text) node.append(said);
           if (item.text) {
             const bubble = el('div', 'bubble' + (item.going ? ' going' : ''));
             bubble.append(...marked(item.text));
             if (item.color) { bubble.style.background = item.color; bubble.style.color = item.ink; }
-            node.append(bubble);
+            said.append(bubble);
             if (item.text.length > 600) {
               const open = expanded.has(item.id);
               bubble.classList.toggle('cut', !open);
@@ -580,7 +647,7 @@ enum PhonePage {
         function card(item) {
           const node = el('article', 'card ' + item.kind);
           const header = el('header');
-          header.append(cat(item.color, item.name, true), el('span', 'title', item.title));
+          header.append(cat(item.cat), el('span', 'title', item.title));
           if (item.at) header.append(el('time', null, time(item.at)));
           node.append(header, el('p', 'text', item.text));
           if (item.answer) node.append(el('p', 'answer', item.answer));
@@ -658,6 +725,7 @@ enum PhonePage {
         }
 
         $('back').onclick = () => { if (view && view.back) go(view.back); };
+        $('link').onclick = () => { if (view && view.link) go(view.link.open); };
 
         $('box').onsubmit = async (event) => {
           event.preventDefault();

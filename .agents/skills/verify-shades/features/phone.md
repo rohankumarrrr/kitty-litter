@@ -1,11 +1,12 @@
 # Phone
 
-With **Messages on my phone** on in Settings, the cat shows a code and a picture of it. A phone that scans it, or types the code into the page, gets Messages in its browser, laid out the way Slack's phone app is: the list of places, Activity, Threads, #general, each kitten's channel, and each thread on a page of its own, with the same buttons as the window.
+With **Messages on my phone** on in Settings, the cat shows a code and a picture of it. A phone that scans it, or types the code into the page, gets Messages in its browser, laid out the way Slack's phone app is: the list of places, Activity, Threads, #general, each kitten's channel, and each thread on a page of its own, with the same buttons as the window. Each kitten is the window's own pixel cat, from `/cat/<light|dark>/<pose>/<jacket>.png`.
 
 ## Sub-features
 
 - `phone-pair` shows the one-time code, and a phone that sends it is paired.
-- `phone-places` lists Activity and Threads, then #general and each kitten's channel, with the window's counts and bold. The cat's DM stays on the Mac.
+- `phone-places` lists Activity and Threads, then #general and each kitten's channel, with the window's counts, bold and dots, each kitten's cat posed for what it's doing, and icons drawn to match the window's. The cat's DM stays on the Mac.
+- `phone-cats` draws the window's cats wherever a kitten or the cat appears: the places, a channel's and a thread's header, beside each message, in reply bars, in Threads, and on Activity's headings and cards.
 - `phone-answer` allows or denies an approval, answers a question from its card, and replies to a report.
 - `phone-send` sends in #general through the router, starts a new thread from a kitten's channel, which opens on its own page, and replies in a thread, with its Also send to #channel.
 - `phone-notify` sends each new thing in Activity to a subscribed phone, encrypted for it, saying only who and what kind.
@@ -27,10 +28,10 @@ Preconditions:
 Journey: `journeys/phone.txt`.
 
 - **Pair.** `phone on`, `phone pair` and `draw`. The output says `[demo] phone page on http://127.0.0.1:<port>`, and `pairing.png` in `1-pairing` shows the code and its picture.
-- **Places.** `phone open`, which opens the page with the code that's showing, as scanning its picture does. `phone.png` in `2-home` lists the places, each kitten in its colour.
-- **Approve.** `approval command ...`, `report decision`, `phone go activity`, then `phone press Allow`. The output says `[demo] accept: npm run build && npm test` and `[demo] took back 1 notification`, and `4-allowed` shows only Clawde's decision left.
-- **#general.** `phone go general` and `phone send Hello from my phone`. The output says `[demo] started demo-3`, the router's turn, and `phone text` ends with Shades' answer.
-- **New thread.** `phone go steve` and `phone send ...`. `6-dm` is Steve's channel, each thread's parent with its reply bar. The output says `[demo] started demo-4` with your words, and `7-topic` shows them on the new thread's own page, with "Also send to #steve-pawsniak" under its box.
+- **Places.** `phone open`, which opens the page with the code that's showing, as scanning its picture does. `phone.png` in `2-home` lists the places: a bell, two bubbles and a # drawn like the window's, then each kitten as its pixel cat in its jacket, Steve running with a yellow dot, Pepper and Clawde sitting with a red dot, and Cali and Furbit faded.
+- **Approve.** `approval command ...`, `report decision`, `phone go activity`, then `phone press Allow`. `3-needs` shows the approval's card with Steve's cat, its eyes lit, and under In progress each kitten's cat as the window's rows draw it, with each issue's coloured dot. The output says `[demo] accept: npm run build && npm test` and `[demo] took back 1 notification`, and `4-allowed` shows only Clawde's decision left.
+- **#general.** `phone go general` and `phone send Hello from my phone`. The output says `[demo] started demo-3`, the router's turn, and `phone text` ends with Shades' answer, which `5-everyone` shows beside the cat in its own black jacket.
+- **New thread.** `phone go steve` and `phone send ...`. `6-dm` is Steve's channel, with Steve's cat and "1 open" in its header, each thread's parent beside its cat, and its reply bar with small cats for who replied and your blue square. The output says `[demo] started demo-4` with your words, and `7-topic` shows them on the new thread's own page, with Steve's cat at the top and "Also send to #steve-pawsniak" under its box.
 
 Journey: `journeys/phone-answers.txt`, in light mode.
 
@@ -44,7 +45,7 @@ Journey: `journeys/phone-notifications.txt`.
 
 Journey: `journeys/phone-theme.txt`.
 
-- **Theme.** `colors Cursor/Opal Horizon` before `phone on`, then `phone open steve`. `1-opal` shows the page dark, your bubbles in the violet tint, a violet Send button, and Steve's still his own colour.
+- **Theme.** `colors Cursor/Opal Horizon` before `phone on`, then `phone open steve`. `1-opal` shows the page dark, your bubbles and your squares in reply bars in the violet tint, a violet Send button and "1 open", and Steve's bubbles and every cat still in their own colours, drawn with the light outline the window uses on a dark page.
 - **Selecting.** `phone select feels cramped` does what dragging over those words, in a parent on Steve's channel, does, and prints `[phone] selected [feels cramped]`. A new thread started from the window doesn't reach the page's `phone text` while they're selected, and does after `phone unselect`. The web view's pictures don't show a selection.
 
 End every journey with `front` and `windows`. The app in front stays whatever it was, and `active=false`.
@@ -52,5 +53,8 @@ End every journey with `front` and `windows`. The app in front stays whatever it
 ## Gotchas
 
 - Each place is a stream of its own, so moving between them reconnects. Give `phone go` and `phone send` two or three seconds before drawing.
+- `phone go` takes a key as it is, so `phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve` opens Steve's "Rewrite the pricing copy" thread with its replies, and `t:demo-tidy@c:%2Fdemo%2Fsteve` opens the one an `approval` waits in.
+- `phone text` doesn't show the cats, since they're pictures. `swift test --filter PhoneServerTests` checks their address gives the window's art pixel for pixel, and nothing for any other address.
+- A `draw` just before the file runs out can miss the phone, whose picture comes back a moment later. End with a `wait 2`.
 - Tailscale itself isn't in the demo. `swift test --filter PhoneServerTests` runs the server on a free port and checks pairing and what it turns away over HTTP, and checks the helper that takes the page off with a stand-in for the `tailscale` tool.
 - Neither a real push service nor a real phone is in the demo. `swift test --filter WebPushTests` checks the encryption against RFC 8291's own example, and the signature as a push service checks it.

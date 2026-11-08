@@ -281,7 +281,7 @@ final class PhoneTests: XCTestCase {
         let book = book(waiting: waiting)
 
         let home = PhoneView(PhonePlace("home", in: book), in: book, now: noon)
-        XCTAssertEqual(home.places.map(\.title), ["Activity", "Threads", "#general", "#steve-pawsniak", "#pepper"])
+        XCTAssertEqual(home.places.map(\.title), ["Activity", "Threads", "general", "steve-pawsniak", "pepper"])
         XCTAssertEqual(home.places.map(\.group), [nil, nil, CatWords.channelsHeading, CatWords.channelsHeading, CatWords.channelsHeading])
         XCTAssertEqual(home.places[0].count, 1)
         XCTAssertEqual(home.places[3].count, 1, "Steve's channel has its badge")
@@ -359,5 +359,151 @@ extension PhoneTests {
         XCTAssertNil(PhonePlace(PhonePlace.key(.channel(.shades)), in: book).selection, "and a link to it is the list of places")
         XCTAssertNil(PhonePlace(PhonePlace.key(.thread("r", in: .channel(.shades))), in: book).selection)
         XCTAssertNil(PhonePlace("shades", in: book).selection)
+    }
+}
+
+// MARK: - The window's own cats, and the rest of its layout
+
+extension PhoneTests {
+    private func cat(_ pose: PhoneCat.Pose, _ kitten: Kitten) -> String {
+        PhoneCat.key(pose, jacket: ChannelSpeakerLook.color(of: kitten))
+    }
+
+    func testAPhoneCatIsTheWindowsStillCatForEachState() {
+        let states: [KittenStatus.State] = [.working(sessions: 2), .needsYou, .idle, .notSetUp]
+        for state in states {
+            let status = KittenStatus(kitten: steve, state: state)
+            XCTAssertEqual(PhoneCat.Pose(state).art, status.pose(tick: 0), "\(state)")
+        }
+        XCTAssertEqual(PhoneCat.Pose.alert.art, CatPose(frame: .sit, glint: .attention(bright: true)), "as a card draws it")
+        XCTAssertEqual(PhoneCat.key(.sit, jacket: 0x7458e8), "sit/7458e8")
+        XCTAssertEqual(PhoneCat.key(.sleep, jacket: 0x0000ff), "sleep/0000ff")
+        XCTAssertEqual(PhoneCat.key(.sit, jacket: nil), "sit/shades", "the cat keeps its own jacket")
+    }
+
+    func testEachPlaceHasItsKittensCatPosedAndItsDotAsTheSidebarDrawsThem() throws {
+        let cali = Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)
+        var working = thread("p", of: pepper)
+        working.status = .running
+        var waiting = thread("a", of: steve)
+        waiting.status = .waitingForApproval
+        let book = ChannelBook.build(kittens: [steve, pepper, cali], threads: [waiting, working], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        let places = PhoneView(PhonePlace("home", in: book), in: book, now: noon).places
+        XCTAssertEqual(places.map(\.title), ["Activity", "Threads", "general", "steve-pawsniak", "pepper", "cali"], "as the sidebar writes them, beside their icon or cat")
+        XCTAssertEqual(places.map(\.icon), ["activity", "threads", "channel", nil, nil, nil])
+        XCTAssertEqual(places.map(\.cat), [nil, nil, nil, cat(.alert, steve), cat(.work, pepper), cat(.sit, cali)])
+        XCTAssertEqual(places.map(\.dot), [nil, nil, nil, ColorTheme.hex(0xff3b5c), ColorTheme.hex(0xffc02e), nil], "needs you, then working")
+        XCTAssertEqual(places.map(\.asleep), [false, false, false, false, false, true])
+
+        let idle = ChannelBook.build(kittens: [steve], threads: [thread("a", of: steve)], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        XCTAssertEqual(PhoneView(PhonePlace("home", in: idle), in: idle, now: noon).places.last?.cat, cat(.sleep, steve), "an idle kitten sleeps")
+    }
+
+    func testAChannelsHeaderHasItsKittenAndAWayToWhatItHasOpen() throws {
+        var open = thread("a", of: steve)
+        open.status = .running
+        let book = ChannelBook.build(kittens: [steve, pepper], threads: [open], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        let channel = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon)
+        XCTAssertEqual(channel.cat, cat(.sit, steve))
+        XCTAssertEqual(channel.link, PhoneView.Link(label: "1 open", open: "activity"), "as the window's header goes to Activity")
+        XCTAssertNil(PhoneView(PhonePlace(PhonePlace.key(.channel(.of(pepper))), in: book), in: book, now: noon).link, "nothing open, no link")
+        let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
+        XCTAssertNil(general.cat)
+        XCTAssertNil(general.link)
+        XCTAssertNil(PhoneView(PhonePlace("activity", in: book), in: book, now: noon).cat)
+    }
+
+    func testAThreadsPageHasTheCatOfTheChannelItsIn() {
+        let book = book(sentBetween: true)
+        let fromThreads = PhoneView(PhonePlace(PhonePlace.key(.thread("a", in: .threads)), in: book), in: book, now: noon)
+        XCTAssertEqual(fromThreads.cat, cat(.sit, steve), "wherever it was opened from")
+        let peppers = PhoneView(PhonePlace(PhonePlace.key(.thread("p", in: .channel(.of(pepper)))), in: book), in: book, now: noon)
+        XCTAssertEqual(peppers.cat, cat(.sit, pepper), "Pepper's thread, though Steve started it")
+    }
+
+    func testEveryoneButYouSaysThingsBesideTheirCat() throws {
+        let book = book(sentBetween: true)
+        let channel = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(pepper))), in: book), in: book, now: noon)
+        let parent = try XCTUnwrap(channel.rows.first { $0.kind == "parent" })
+        XCTAssertEqual(parent.text, "Numbers?")
+        XCTAssertEqual(parent.cat, cat(.sit, steve), "Steve asked")
+
+        let thread = PhoneView(PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book), in: book, now: noon)
+        let said = thread.rows.filter { $0.kind == "message" }
+        XCTAssertEqual(said.map(\.text), ["How's it going?", "Fine."])
+        XCTAssertEqual(said.map(\.cat), [nil, cat(.sit, steve)], "yours have no cat, as in the window")
+
+        let cats = ChannelBook.build(
+            kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false,
+            sent: [SentMessage(channel: .general, message: ChannelMessage(exchangeID: "c", kind: .reply, speaker: .cat, text: "Hi.", at: noon, threadID: "", threadTitle: ""))]
+        )
+        let general = PhoneView(PhonePlace("general", in: cats), in: cats, now: noon)
+        XCTAssertEqual(general.rows.first { $0.kind == "message" }?.cat, "sit/shades", "the cat answers as itself, in its own jacket")
+    }
+
+    func testAReplyBarHasWhoRepliedAsTheWindowDrawsThemAndWhenTheLastWas() throws {
+        let earlier = noon.addingTimeInterval(-86_400 * 3)
+        let book = ChannelBook.build(
+            kittens: [steve, pepper],
+            threads: [thread("a", of: steve)],
+            transcripts: ["a": [
+                Exchange(id: "e1", asker: .you, askedAt: earlier, ask: "How's it going?", reply: "Fine.", repliedAt: earlier),
+                Exchange(id: "e2", asker: .agent(threadID: nil), askedAt: earlier, ask: "And the numbers?", reply: "Here.", repliedAt: earlier),
+                Exchange(id: "e3", asker: .you, askedAt: earlier, ask: "Thanks", reply: nil, repliedAt: nil),
+            ]],
+            isReading: false, unreadable: 0, cantReachT3: false
+        )
+        let parent = try XCTUnwrap(PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon).rows.first { $0.kind == "parent" })
+        let you = ChannelSpeakerLook(.you, in: book).bubble.map(ColorTheme.hex)
+        XCTAssertEqual(parent.faces, [
+            PhoneView.Face(cat: cat(.sit, steve), color: nil),
+            PhoneView.Face(cat: PhoneCat.key(.sit, jacket: ChannelSpeakerLook.otherJacket), color: nil),
+            PhoneView.Face(cat: nil, color: you),
+        ], "each one's cat, and you as a square in your colour")
+        XCTAssertEqual(parent.lastReply, CatWords.lastReply(earlier, now: noon), "with its day, since it wasn't today")
+        XCTAssertTrue(parent.lastReply?.hasPrefix("Last reply ") == true)
+        XCTAssertFalse(parent.lastReply == "Last reply \(earlier.formatted(date: .omitted, time: .shortened))")
+    }
+
+    func testThreadsHasEachOnesCat() throws {
+        let book = book(sentBetween: true)
+        let digest = try XCTUnwrap(PhoneView(PhonePlace("threads", in: book), in: book, now: noon).rows.first)
+        XCTAssertNil(digest.cat, "you asked")
+        XCTAssertEqual(digest.color, ChannelSpeakerLook(.you, in: book).bubble.map(ColorTheme.hex), "so it's your square")
+        XCTAssertEqual(digest.reply?.cat, cat(.sit, steve))
+    }
+
+    func testActivityHasEachKittensCatAsItIsAndEachIssuesDot() throws {
+        var working = thread("w", of: pepper)
+        working.status = .running
+        working.title = "Build"
+        var failed = thread("f", of: pepper)
+        failed.status = .failed
+        failed.title = "Deploy"
+        let approval = ApprovalRequest(id: "ap", threadID: "w", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
+        let report = InboxEntry(id: "r", kind: .decision, text: "Ship it?", threadID: "w", threadTitle: "Work", at: noon)
+        let book = ChannelBook.build(
+            kittens: [steve, pepper], threads: [working, failed], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false,
+            waiting: Waiting(approvals: [approval], owners: ["ap": pepper.id], reports: [report])
+        )
+        let rows = PhoneView(PhonePlace("activity", in: book), in: book, now: noon).rows
+        let headings = Dictionary(uniqueKeysWithValues: rows.filter { $0.kind == "heading" }.map { ($0.name ?? "", $0.cat) })
+        XCTAssertEqual(headings, ["Pepper": cat(.work, pepper), "Steve Pawsniak": cat(.sleep, steve)], "as each one's row in the window draws it")
+        let dots = Dictionary(uniqueKeysWithValues: rows.filter { $0.kind == "issue" }.map { ($0.title ?? "", $0.dot) })
+        XCTAssertEqual(dots, ["Build": ColorTheme.hex(0xffc02e), "Deploy": ColorTheme.hex(0xff3b30)], "working, and failed")
+        let cards = rows.filter { ["approval", "report"].contains($0.kind) }
+        XCTAssertEqual(cards.map(\.cat), [cat(.alert, pepper), cat(.alert, pepper)], "a card's cat has its eyes lit")
+        XCTAssertEqual(cards.map(\.choices), [
+            [PhoneView.Choice(label: "Deny", value: "decline"), PhoneView.Choice(label: "Allow", value: "accept"), PhoneView.Choice(label: "Allow for this session", value: "acceptForSession")],
+            [PhoneView.Choice(label: "Reply", value: "reply")],
+        ], "the window's buttons, but Open in T3")
+        XCTAssertEqual(cards.last?.done, true, "and Done on a decision")
+    }
+
+    func testThePageDrawsTheWindowsCatsAndIcons() {
+        XCTAssertTrue(PhonePage.script.contains("'/cat/' + scheme() + '/' + key + '.png'"))
+        XCTAssertTrue(PhonePage.style.contains("--cats: light") && PhonePage.style.contains("--cats: dark"), "light or dark, as the page is")
+        XCTAssertTrue(PhonePage.colors(ColorTheme(name: "Opal", isDark: true, paper: 0x0c0a10, text: 0xe7e4ec, accent: 0x7458e8)).contains("--cats: dark"), "and as the theme is")
+        for emoji in ["🔔", "💬"] { XCTAssertFalse(PhonePage.script.contains(emoji), "drawn to match the window instead") }
     }
 }
