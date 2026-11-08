@@ -16,6 +16,15 @@ struct NeedsYouAlert: Equatable {
     var who: String?
     /// The listed thread it's about, which clicking it opens.
     var threadID: String
+
+    /// What Do Not Disturb keeps of it for the catch-up.
+    var missed: Missed {
+        switch kind {
+        case .approval: .approval(id)
+        case .question: .question(id)
+        case .decision, .finished: .thread(threadID)
+        }
+    }
 }
 
 /// One notification for each new thing waiting on you, so Messages doesn't have to be open to know. Clicking one
@@ -40,11 +49,13 @@ extension AppController {
         guard !fresh.isEmpty else { return }
         let kittens = loadKittens()
         for item in fresh {
+            // One Do Not Disturb holds isn't sent late. The catch-up covers it.
+            notified.insert(item.id)
             let thread = latestThreads.first { $0.id == item.threadID }
             let owner = waiting.owners[item.id] ?? thread.flatMap { KittenBoard.owner(of: $0, among: kittens) }?.id
-            tell(NeedsYouAlert(id: item.id, kind: item.kind, who: kittens.first { $0.id == owner }?.name, threadID: item.threadID))
-            notified.insert(item.id)
-            showing.insert(item.id)
+            if tell(NeedsYouAlert(id: item.id, kind: item.kind, who: kittens.first { $0.id == owner }?.name, threadID: item.threadID)) {
+                showing.insert(item.id)
+            }
         }
     }
 
@@ -56,11 +67,15 @@ extension AppController {
     }
 
     /// On the Mac, and on each phone, where a tap opens the thread's own page. A phone can't show a thread Messages
-    /// doesn't, or one in the cat's DM, so those open Activity there.
-    private func tell(_ alert: NeedsYouAlert) {
+    /// doesn't, or one in the cat's DM, so those open Activity there. Every one asks Do Not Disturb first, and says
+    /// whether it went.
+    @discardableResult
+    private func tell(_ alert: NeedsYouAlert) -> Bool {
+        guard mayPopUp(alert.missed) else { return false }
         notify(alert)
         let home = messagesHome(ofThread: alert.threadID).flatMap { $0 == .shades ? nil : $0 }
         let opens = home.map { ChannelSelection.thread(alert.threadID, in: .channel($0)) } ?? .activity
         phone?.pushes.push(alert, opening: PhonePlace.key(opens), now: now())
+        return true
     }
 }

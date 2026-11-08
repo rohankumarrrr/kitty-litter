@@ -118,6 +118,7 @@ final class ChannelsView: QuietView {
         cheatsheet.onClose = { [weak self] in self?.cheatsheet.isHidden = true }
         sidebar.onSelect = { [weak self] in self?.select(ChannelSelection($0)) }
         sidebar.onShortcuts = { [weak self] in self?.perform(.cheatsheet) }
+        sidebar.onDoNotDisturb = { [weak self] in self?.onAction?(.doNotDisturb) }
         for pane in panes {
             pane.onSelect = { [weak self] in self?.select($0) }
             pane.onOpen = { [weak self] thread, place, typing, report in self?.open(thread: thread, from: place, typing: typing, replyingTo: report) }

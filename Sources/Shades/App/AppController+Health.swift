@@ -12,7 +12,7 @@ extension AppController {
             // Your permissions are your business, and the caption says so when it matters.
             // A bad signature isn't something you'd ever think to look for, so it gets said.
             if let bad = findings.first(where: { $0.check == HealthCheck.signature && !$0.ok }) {
-                say(CatWords.finding(bad), seconds: 20)
+                say(CatWords.finding(bad), seconds: 20, unasked: true)
             }
         }
     }

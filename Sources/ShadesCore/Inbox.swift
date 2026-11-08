@@ -61,6 +61,8 @@ public struct Inbox: Codable, Equatable, Sendable {
     private var general: [String: Date]?
     private var withShades: [String: Date]?
     private var answeredInGeneral: [String: Date]?
+    /// What came in while Do Not Disturb was on. Only IDs, and files from before don't have it.
+    private var missed: [Missed]?
 
     /// How many of each place's IDs are kept, newest first. More than Messages reads.
     public static let placesKept = 300
@@ -86,6 +88,13 @@ public struct Inbox: Codable, Equatable, Sendable {
     public var answersInGeneral: [String: Date] {
         get { answeredInGeneral ?? [:] }
         set { answeredInGeneral = Self.newest(newValue) }
+    }
+
+    /// What came in while Do Not Disturb was on that you haven't caught up on, in the order it came. The cat's own
+    /// lines aren't kept, since they're words and not IDs.
+    public var away: [Missed] {
+        get { missed ?? [] }
+        set { missed = newValue.filter { if case .line = $0 { false } else { true } } }
     }
 
     private static func newest(_ ids: [String: Date]) -> [String: Date] {
@@ -291,4 +300,15 @@ public struct SortedReport: Equatable, Sendable {
         // A reply of nothing but "none" would otherwise lose the report without a word.
         if !hasLines, !passedOn { return nil }
     }
+}
+
+/// Something that would have popped up while Do Not Disturb was on. It's read again from T3 or the inbox when you
+/// catch up, so all that's kept is what it was about.
+public enum Missed: Codable, Hashable, Sendable {
+    /// A thread that finished, or that work moved to. What it said is in the thread, or in its inbox rows.
+    case thread(String)
+    case approval(String)
+    case question(String)
+    /// One of the cat's own lines, which is never saved.
+    case line(String)
 }

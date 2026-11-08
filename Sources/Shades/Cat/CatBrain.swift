@@ -35,6 +35,8 @@ struct CatBrain {
     private static let scratchEnd = 56
     private static let blinkEvery = 37
     private static let sleepAfter = 90
+    /// How soon it curls up again under Do Not Disturb, once you're done with it.
+    private static let dozeAfter = 10
     private static let celebrateTicks = 20
 
     private(set) var state: State = .sit
@@ -45,6 +47,7 @@ struct CatBrain {
     private(set) var idle = 0
     private(set) var agentsBusy = false
     private(set) var status: CatStatus = .none
+    private(set) var doNotDisturb = false
     private var celebrating = 0
     private var celebrateOnArrival = false
     var level: Float = 0
@@ -120,14 +123,14 @@ struct CatBrain {
     }
 
     private mutating func sitStep() {
-        if status != .none {
+        if staysUp {
             // Busy with you, so no scratching and no nodding off.
             if idle > Self.sleepAfter { idle = 0 }
             pose = CatPose(frame: idle % Self.blinkEvery == 0 ? .blink : .sit, lift: hop, glint: glint)
             return
         }
-        if idle > Self.sleepAfter {
-            if agentsBusy {
+        if idle > (doNotDisturb ? Self.dozeAfter : Self.sleepAfter) {
+            if agentsBusy && !doNotDisturb {
                 idle = 0
             } else {
                 state = .sleep
@@ -155,6 +158,11 @@ struct CatBrain {
             lift: celebrating % 2,
             glint: .party
         )
+    }
+
+    /// Listening or thinking keeps it up. So does something needing you, unless Do Not Disturb says it can wait.
+    private var staysUp: Bool {
+        status != .none && !(doNotDisturb && status == .attention)
     }
 
     private var hop: Int {
@@ -196,16 +204,27 @@ struct CatBrain {
 
     mutating func setStatus(_ status: CatStatus) {
         self.status = status
-        if status != .none { wake() }
+        if staysUp { wake() }
         if state == .sit { pose.glint = glint }
     }
 
     mutating func setAgentsBusy(_ busy: Bool) {
         agentsBusy = busy
-        if busy { wake() }
+        if busy && !doNotDisturb { wake() }
+    }
+
+    /// It curls up and sleeps through everything but you, and wakes when it's turned off.
+    mutating func setDoNotDisturb(_ on: Bool) {
+        doNotDisturb = on
+        if !on {
+            wake()
+        } else if state == .sit, !staysUp {
+            state = .sleep
+        }
     }
 
     mutating func celebrate() {
+        guard !doNotDisturb else { return }
         switch state {
         case .held:
             return

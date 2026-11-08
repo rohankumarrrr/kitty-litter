@@ -1,0 +1,35 @@
+front
+notify-finished on
+menuitems
+menupress Do Not Disturb
+wait 1
+menuitems
+dnd
+draw .verify/shades/dnd/0-on
+finish demo-tidy
+wait 8
+approval command npm test
+wait 4
+report decision
+wait 7
+question
+wait 2
+dnd
+windows
+draw .verify/shades/dnd/1-held
+channels
+wait 1
+channel general
+wait 2
+draw .verify/shades/dnd/2-switch
+sidebar Do Not Disturb is on
+wait 1
+dnd
+menuitems
+buttons
+draw .verify/shades/dnd/3-catch-up
+bubble Open
+wait 2
+draw .verify/shades/dnd/4-activity
+front
+windows

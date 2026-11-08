@@ -255,7 +255,7 @@ extension AppController {
                         reportOn(thread, failed: false)
                     case .failed(let message):
                         if let warning { takeBackNotice(warning) }
-                        if isQuick { say(message) }
+                        if isQuick { say(message, unasked: true) }
                     default:
                         break
                     }
@@ -267,7 +267,7 @@ extension AppController {
                 reached = heardBack
                 let problem = CatWords.problem(error, while: .agents)
                 if !heardBack { unheard?(problem) }
-                say(problem)
+                say(problem, unasked: heardBack)
             }
             if correction, let before = correctionSends.end(thread.id, reached: reached) {
                 if before.wasDispatcher { dispatchers.insert(thread.id) }

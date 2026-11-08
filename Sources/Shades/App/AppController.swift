@@ -88,6 +88,7 @@ final class AppController {
         var text: String
         var threadID: String?
         var id: Int
+        var unasked = false
     }
     var heard: String?
     var approvalsOnShow = false
@@ -118,6 +119,18 @@ final class AppController {
     var inboxNudge = false
     /// Something came in while Messages was open, so the bubble mentions it once it's closed.
     var nudgeOnClose = false
+    /// What Do Not Disturb kept from popping up, in order, saved with the inbox as IDs until you've caught up.
+    var away: [Missed] = [] {
+        didSet {
+            inbox.away = away
+            keepInbox()
+            channels.refresh()
+        }
+    }
+    /// Do Not Disturb just went off, so the bubble says what came in.
+    var catchingUp = false
+    /// Activity's shown what came in, so closing Messages means you've caught up.
+    var awaySeen = false
     /// Counts the boxes that take what you say, so words meant for one can't land in the next.
     var boxesOpened = 0
     /// The box what's being said belongs in, fixed when the key goes down.
@@ -231,6 +244,7 @@ final class AppController {
         fileExists = dependencies.fileExists
         reportHealth = dependencies.reportHealth
         inbox = dependencies.inbox
+        away = dependencies.inbox.away
         saveInbox = dependencies.saveInbox
         hidesTestThreads = dependencies.hidesTestThreads
         notify = dependencies.notify
@@ -285,6 +299,9 @@ final class AppController {
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.keyReleased(key) } }
         }
         stage.showTheme(theme)
+        stage.catDoNotDisturb(settings.doNotDisturb)
+        // Turned off before you caught up, it still has that to say.
+        catchingUp = !settings.doNotDisturb && !away.isEmpty
         startKeys()
         startInbox()
         // Anything from before may have been answered since, and the cat says again whatever's still waiting.
@@ -297,13 +314,13 @@ final class AppController {
         do {
             try keys.start(keys: held)
         } catch {
-            say(CatWords.problem(error, while: .keys))
+            say(CatWords.problem(error, while: .keys), unasked: true)
         }
     }
 
     func shortcutTaken(_ label: String) {
         if !takenShortcuts.contains(label) { takenShortcuts.append(label) }
-        say(CatWords.shortcutTaken(label))
+        say(CatWords.shortcutTaken(label), unasked: true)
     }
 
     func prepareVoice() {
@@ -363,9 +380,10 @@ final class AppController {
         case .line:
             line = nil
         case .inbox:
-            // Clicking elsewhere shouldn't lose something that needs you.
-            guard !byClick || !inboxEntries.contains(where: \.needsYou) else { return }
+            // Clicking elsewhere shouldn't lose something that needs you, or the one word on what came in while you were away.
+            guard !byClick || !catchingUp && !inboxEntries.contains(where: \.needsYou) else { return }
             inboxNudge = false
+            catchingUp = false
         }
         renderBubble()
     }
@@ -382,6 +400,10 @@ final class AppController {
         if let line { return .line(line.text, threadID: line.threadID) }
         if let notice = notices.first {
             return .notice(caption: notice.caption, text: notice.text, threadID: notice.threadID)
+        }
+        if catchingUp {
+            let missed = awayNow
+            if !missed.isEmpty { return .inbox(CatWords.whileAway(missed)) }
         }
         if inboxNudge {
             let words = CatWords.inboxBubble(inboxEntries)
@@ -411,11 +433,13 @@ final class AppController {
         stage.catStatus(status)
     }
 
-    /// One short line from the cat, which clears itself unless `seconds` is `nil`.
-    func say(_ text: String, threadID: String? = nil, seconds: TimeInterval? = AppController.lineSeconds) {
+    /// One short line from the cat, which clears itself unless `seconds` is `nil`. One that's `unasked` comes by
+    /// itself rather than answering something you did, so Do Not Disturb holds it.
+    func say(_ text: String, threadID: String? = nil, seconds: TimeInterval? = AppController.lineSeconds, unasked: Bool = false) {
+        if unasked, !mayPopUp(missed(thread: threadID, text: text)) { return }
         lineCounter += 1
         let id = lineCounter
-        line = Line(text: String(text.prefix(Self.longestLine)), threadID: threadID, id: id)
+        line = Line(text: String(text.prefix(Self.longestLine)), threadID: threadID, id: id, unasked: unasked)
         renderBubble()
         guard let seconds else { return }
         Task { [weak self] in
@@ -434,13 +458,18 @@ final class AppController {
 
     func settingsPressed() {
         stage.showSettings(settings) { [weak self] updated in
-            self?.apply(updated)
+            guard let self else { return }
+            // The switch isn't in the panel, so a panel opened before it was flipped can't flip it back.
+            var updated = updated
+            updated.doNotDisturb = self.settings.doNotDisturb
+            self.apply(updated)
         }
     }
 
     func apply(_ updated: Settings) {
         let keysChanged = updated.talkKey != settings.talkKey || updated.dictateKey != settings.dictateKey
         let phoneChanged = updated.phone != settings.phone
+        let quietChanged = updated.doNotDisturb != settings.doNotDisturb
         settings = updated
         saveSettings(updated)
         updateVocabulary(watch.threads)
@@ -449,5 +478,6 @@ final class AppController {
             startKeys()
         }
         if phoneChanged { updated.phone ? startPhone() : stopPhone() }
+        if quietChanged { doNotDisturbChanged() }
     }
 }

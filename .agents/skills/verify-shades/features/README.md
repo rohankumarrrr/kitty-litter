@@ -29,4 +29,5 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 - [Approvals](./approvals.md) covers an agent asking to run something, and allowing it.
 - [Phone](./phone.md) covers Messages on your phone: turning it on, pairing, reading and answering from the page, and its theme.
 - [Notifications](./notifications.md) covers the macOS notification for something new in Activity or a finished session, clicking or tapping it to open its thread, and taking it back.
+- [Do Not Disturb](./dnd.md) covers the switch, the cat asleep, every pop-up staying quiet, and catching up in Activity.
 - [Kittens](./kittens.md) covers the view of every kitten and how each is doing.

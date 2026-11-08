@@ -66,7 +66,7 @@ extension AppController {
         // A reply can say it passed work on and name nowhere it went, and that doesn't get to lose a report.
         let lines = sorted.flatMap { $0.hasLines ? $0 : nil } ?? unsorted(report)
         let owed = inbox.owes(thread)
-        if inbox.file(lines, from: thread, at: now(), id: { UUID().uuidString }) { nudgeInbox() }
+        if inbox.file(lines, from: thread, at: now(), id: { UUID().uuidString }) { nudgeInbox(about: [.thread(thread.id)]) }
         keepInbox()
         inboxChanged()
         if owed, lines.decision == nil { notifyFinished(thread, by: kitten(of: thread)) }
@@ -124,13 +124,15 @@ extension AppController {
     /// the point the inbox started from, so a run that ends before the next launch still counts.
     func startInbox() {
         keepInbox()
-        if !CatWords.inboxHeadline(inboxEntries).isEmpty { inboxNudge = true }
+        let news = inboxEntries.filter { $0.needsYou || $0.kind == .shipped }
+        if !news.isEmpty { nudgeInbox(about: news.map { .thread($0.threadID) }) }
         renderBubble()
     }
 
     /// Says there's something new, unless Messages is open. Being open isn't the same as having looked, since it can
-    /// sit behind your work, so the bubble comes once it's closed.
-    func nudgeInbox() {
+    /// sit behind your work, so the bubble comes once it's closed. Every one asks, so Do Not Disturb keeps them all.
+    func nudgeInbox(about missed: [Missed]) {
+        guard missed.map(mayPopUp).contains(true) else { return }
         if stage.isChannelsVisible {
             nudgeOnClose = true
         } else {

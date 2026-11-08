@@ -57,6 +57,8 @@ final class FakeStage: CatStage {
     func catAgentsBusy(_ busy: Bool) { self.busy = busy }
     func catCelebrate() { celebrated += 1 }
     func catPet() {}
+    var doNotDisturb = false
+    func catDoNotDisturb(_ on: Bool) { doNotDisturb = on }
     func catComeToYou(arrived: @escaping () -> Void) {
         came += 1
         if arriveImmediately { arrived() } else { pendingArrival = arrived }
@@ -114,7 +116,9 @@ final class FakeStage: CatStage {
     func releaseMessagesBox() { messagesBoxHeld = false }
     var themes: [ColorTheme?] = []
     func showTheme(_ theme: ColorTheme?) { themes.append(theme) }
-    func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {}
+    /// What pressing Save in the settings panel does.
+    var saveSettings: ((Settings) -> Void)?
+    func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) { saveSettings = onSave }
     var pairings: [PhonePairingCard?] = []
     func showPairing(_ card: PhonePairingCard?) { pairings.append(card) }
     func copyToPasteboard(_ text: String) { copied = text }

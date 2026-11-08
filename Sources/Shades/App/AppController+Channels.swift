@@ -16,6 +16,7 @@ enum MessagesAction: Equatable {
     case seen(ChannelSelection)
     /// Words you sent that went nowhere, by their exchange ID, sent again as they were.
     case tryAgain(String)
+    case doNotDisturb
 }
 
 /// Messages, laid out like Slack: Activity, your threads, #general, a channel for each kitten and a DM with the cat. Each
@@ -25,6 +26,7 @@ extension AppController {
     /// Opens it, at `selection` if it's given. Looking at it covers whatever the cat was nudging you about.
     func channelsPressed(selecting selection: ChannelSelection? = nil) {
         inboxNudge = false
+        catchingUp = false
         // Shown Activity, you've seen what came in while it was open, so closing it has nothing new to say.
         if selection == .activity { nudgeOnClose = false }
         stage.showChannels(channels.open(threads: latestThreads), selecting: selection)
@@ -85,6 +87,10 @@ extension AppController {
         // A phone that's looking keeps it reading. Once it stops too, what's been read waits for the next look.
         if phone?.isHolding != true { channels.close() }
         messagesClosings += 1
+        if awaySeen {
+            awaySeen = false
+            away = []
+        }
         guard nudgeOnClose else { return }
         nudgeOnClose = false
         // Only if something's still there to say. Otherwise a note later on would bring it up, which notes don't.
@@ -96,7 +102,7 @@ extension AppController {
     /// From the live list, the one place that has the words of approvals and questions.
     var waiting: Waiting {
         let owners = KittenBoard.Owners(loadKittens())
-        var waiting = Waiting(approvals: approvals.pending, reports: inbox.entries)
+        var waiting = Waiting(approvals: approvals.pending, reports: inbox.entries, away: away, doNotDisturb: settings.doNotDisturb)
         // What used to be the dashboard: work the cat started outside any kitten, while it's going or just finished.
         waiting.shadesWork = watch.rows(at: now()).filter { !hiddenThreads.contains($0.id) && owners.of($0) == nil }
         for thread in latestThreads where !hiddenThreads.contains(thread.id) {
@@ -126,7 +132,10 @@ extension AppController {
             answer(question, with: answers)
         case .inbox(let action):
             inboxAction(action)
+        case .doNotDisturb:
+            doNotDisturbPressed()
         case .seen(let selection):
+            if selection.place == .activity, !away.isEmpty { awaySeen = true }
             channels.lookingAt = selection
             if inbox.markRead(channels.threads(in: selection)) {
                 keepInbox()

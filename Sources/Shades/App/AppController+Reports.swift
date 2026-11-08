@@ -40,12 +40,15 @@ extension AppController {
                 passedOn(thread, to: link)
                 return
             }
+            // Held by Do Not Disturb, it's read again from the thread, so there's nothing to sum up.
+            guard mayPopUp(.thread(thread.id)) else { return }
             let words = await words(for: report, of: thread, failed: failed)
             let kitten = kitten(of: thread)
             post(
                 caption: failed ? CatWords.failedCaption(thread) : CatWords.finishedCaption(thread, kitten: kitten),
                 text: words,
-                threadID: thread.id
+                threadID: thread.id,
+                unasked: true
             )
             if !failed { notifyFinished(thread, by: kitten) }
         }
@@ -68,12 +71,12 @@ extension AppController {
         Task { [backend] in try? await backend.settle(threadID: thread.id) }
         stage.showStatus(watch.summary, needsYou: watch.needsYouCount > 0)
         let title = latestThreads.first { $0.id == next }?.title
-        say(CatWords.passedOn(to: title), threadID: next)
+        say(CatWords.passedOn(to: title), threadID: next, unasked: true)
     }
 
     func announce(_ question: AgentQuestion) {
         if let thread = latestThreads.first(where: { $0.pendingQuestion?.id == question.id }), goesToInbox(thread) {
-            nudgeInbox()
+            nudgeInbox(about: [.question(question.id)])
             renderBubble()
             return
         }
@@ -81,7 +84,8 @@ extension AppController {
             caption: CatWords.questionCaption(question),
             text: CatWords.question(question),
             threadID: question.threadID,
-            questionID: question.id
+            questionID: question.id,
+            unasked: true
         )
     }
 
@@ -155,8 +159,10 @@ extension AppController {
         return trimmed?.isEmpty == false ? trimmed : nil
     }
 
-    /// Notices wait their turn behind each other and anything more urgent, so none get lost.
-    func post(caption: String, text: String, threadID: String?, questionID: String? = nil, first: Bool = false) {
+    /// Notices wait their turn behind each other and anything more urgent, so none get lost. One that's `unasked` comes
+    /// by itself, so Do Not Disturb holds it.
+    func post(caption: String, text: String, threadID: String?, questionID: String? = nil, first: Bool = false, unasked: Bool = false) {
+        if unasked, !mayPopUp(missed(question: questionID, thread: threadID, text: text)) { return }
         lineCounter += 1
         notices.insert(Notice(id: lineCounter, caption: caption, text: text, threadID: threadID, questionID: questionID), at: first ? 0 : notices.count)
         renderBubble()
