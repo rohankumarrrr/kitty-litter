@@ -4231,6 +4231,30 @@ final class FlowTests: XCTestCase {
         XCTAssertNil(stage.bubble)
     }
 
+    /// A report's only button used to be Open in T3. Messages comes first, and T3 is only for what it doesn't show.
+    func testOpenInTheBubbleShowsTheThreadInMessages() {
+        kittens = [steve]
+        let steves = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, projectPath: "/k/steve")
+        let fix = AgentThread(id: "f", title: "Fix: the logo is squashed", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
+        let yours = AgentThread(id: "t3", title: "Something you started in T3", projectTitle: "site", status: .completed, model: "m", updatedAt: clock, projectPath: "/code/site")
+        controller.threadsChanged([steves, fix, yours])
+        XCTAssertEqual(controller.messagesHome(ofThread: "s"), .of(steve))
+        XCTAssertEqual(controller.messagesHome(ofThread: "f"), .shades)
+        XCTAssertNil(controller.messagesHome(ofThread: "t3"))
+
+        controller.post(caption: "Steve finished", text: "The site's tidy.", threadID: "s")
+        controller.bubbleAction(.show(threadID: "s"))
+        XCTAssertEqual(stage.selections.last, .thread("s", in: .channel(.of(steve))), "beside Steve's channel")
+        XCTAssertTrue(backend.opened.isEmpty, "not T3")
+        XCTAssertNil(stage.bubble, "and the bubble's done with it")
+
+        controller.bubbleAction(.show(threadID: "f"))
+        XCTAssertEqual(stage.selections.last, .thread("f", in: .channel(.shades)), "the cat's own work is in its DM")
+
+        controller.bubbleAction(.show(threadID: "t3"))
+        XCTAssertEqual(backend.opened, ["t3"], "only what Messages doesn't show opens in T3")
+    }
+
     func testOpenInT3AndCopy() async {
         controller.bubbleAction(.open(threadID: "t"))
         XCTAssertEqual(backend.opened, ["t"])

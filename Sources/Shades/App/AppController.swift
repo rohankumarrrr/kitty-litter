@@ -321,6 +321,8 @@ final class AppController {
         switch action {
         case .open(let threadID):
             backend.open(threadID: threadID)
+        case .show(let threadID):
+            showInMessages(threadID)
         case .copy(let text):
             stage.copyToPasteboard(text)
         case .replace(let text):

@@ -27,6 +27,25 @@ extension AppController {
         renderBubble()
     }
 
+    /// Where Messages shows a thread, if it does: #general, its kitten's channel or the cat's DM. It's worked out from
+    /// the live list, so the bubble can offer it before Messages has read a word.
+    func messagesHome(ofThread id: String) -> ChannelID? {
+        if messagesThreads[id] != nil { return .general }
+        guard let thread = latestThreads.first(where: { $0.id == id }) else { return nil }
+        if isWithShades(thread) { return thread.isLiveTest ? nil : .shades }
+        if let kitten = KittenBoard.owner(of: thread, among: loadKittens()) { return .of(kitten) }
+        return isCatsWork(thread) ? .shades : nil
+    }
+
+    /// The bubble's Open: the thread beside where it lives, and the bubble's done with it. T3 is only for a thread
+    /// Messages doesn't show.
+    func showInMessages(_ threadID: String) {
+        guard let home = messagesHome(ofThread: threadID) else { return backend.open(threadID: threadID) }
+        if notices.first?.threadID == threadID, notices.first?.questionID == nil { notices.removeFirst() }
+        if line?.threadID == threadID { line = nil }
+        channelsPressed(selecting: .thread(threadID, in: .channel(home)))
+    }
+
     /// The hotkey opens it from anywhere, and closes it if it's already open.
     func messagesHotkeyPressed() {
         if stage.isChannelsVisible {

@@ -666,7 +666,7 @@ final class ChannelPane: QuietView {
         if ApprovalPolicy.offersSessionAllow(request.kind) {
             buttons.append(CardRowView.Button(title: "Allow for this session") { [weak self] in self?.onAction?(.approval(request, .acceptForSession)) })
         }
-        buttons.append(openButton(request.threadID))
+        buttons.append(openButton(book.thread(holding: request.id, else: request.threadID), in: book))
         return CardRowView(look: look(kitten, in: book), heading: heading(kitten, title: request.threadTitle), at: request.createdAt, text: request.summary, buttons: buttons)
     }
 
@@ -687,7 +687,7 @@ final class ChannelPane: QuietView {
                 })
             }
         }
-        buttons.append(openButton(question.threadID))
+        buttons.append(openButton(book.thread(holding: question.id, else: question.threadID), in: book))
         text = text.isEmpty ? CatWords.unreadableQuestion : text
         let footer = question.form == nil ? CatWords.answerInT3 : nil
         return CardRowView(look: look(kitten, in: book), heading: heading(kitten, title: question.threadTitle), at: nil, text: text, footer: footer, buttons: buttons)
@@ -700,7 +700,7 @@ final class ChannelPane: QuietView {
         if entry.kind == .decision {
             buttons.append(CardRowView.Button(title: "Done") { [weak self] in self?.onAction?(.inbox(.done(id: entry.id))) })
         }
-        buttons.append(openButton(entry.threadID))
+        buttons.append(openButton(entry.threadID, in: book))
         return CardRowView(
             look: look(kitten, in: book),
             heading: heading(kitten, title: entry.threadTitle),
@@ -712,8 +712,12 @@ final class ChannelPane: QuietView {
         )
     }
 
-    private func openButton(_ threadID: String) -> CardRowView.Button {
-        CardRowView.Button(title: CatWords.openInT3, isWayOut: true) { [weak self] in self?.onOpenThread?(threadID) }
+    /// The thread beside where it lives, once Messages has read it. T3 is only for the rest.
+    private func openButton(_ threadID: String, in book: ChannelBook) -> CardRowView.Button {
+        guard book.threads[threadID] != nil, let home = book.home(ofThread: threadID) else {
+            return CardRowView.Button(title: CatWords.openInT3, isWayOut: true) { [weak self] in self?.onOpenThread?(threadID) }
+        }
+        return CardRowView.Button(title: CatWords.viewThread, isWayOut: true) { [weak self] in self?.onOpen?(threadID, .channel(home), false, nil) }
     }
 
     /// Lays out every row that has a view. A row only draws again when its size changes or it comes back into the window.
