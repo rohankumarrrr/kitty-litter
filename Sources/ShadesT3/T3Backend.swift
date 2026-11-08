@@ -167,7 +167,7 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, command)
     }
 
-    public func answer(_ question: AgentQuestion, with answers: [String]) async throws {
+    public func answer(_ question: AgentQuestion, with answers: [[String]]) async throws {
         guard let form = question.form, let answers = T3Wire.answers(answers, to: form) else { throw T3Error.rejected("That question can't be answered from here.") }
         let command = T3Wire.RespondToRequest(
             commandId: Self.newID(),

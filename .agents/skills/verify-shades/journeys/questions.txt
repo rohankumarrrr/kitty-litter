@@ -1,0 +1,20 @@
+front
+theme light
+channels
+channel activity
+question
+wait 2
+draw .verify/shades/questions/1-asked
+card Press Start 2P
+wait 1
+card Send
+draw .verify/shades/questions/2-pages
+card Blog
+card Home
+wait 1
+draw .verify/shades/questions/3-picked
+card Send
+wait 2
+draw .verify/shades/questions/4-answered
+front
+windows

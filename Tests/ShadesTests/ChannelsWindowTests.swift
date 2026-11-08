@@ -655,10 +655,13 @@ final class ChannelsWindowTests: XCTestCase {
         try XCTUnwrap(subviews(of: view).compactMap { $0 as? CardRowView }.first)
     }
 
-    private func press(_ title: String, in view: NSView) throws {
+    @discardableResult
+    private func press(_ title: String, in view: NSView, expecting pressed: Bool = true) throws -> Bool {
         let buttons = try card(in: view).buttons
         let button = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == title }, "no \(title) in \(buttons.compactMap { $0.accessibilityLabel() })")
-        XCTAssertTrue(button.accessibilityPerformPress())
+        let didPress = button.accessibilityPerformPress()
+        XCTAssertEqual(didPress, pressed)
+        return didPress
     }
 
     func testAQuestionInSeveralPartsIsAnsweredOneAtATimeAndSentWhole() throws {
@@ -675,7 +678,30 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.selection, inThread, "answering in words opens the thread it's in")
         XCTAssertEqual(view.threadPane.composer.target, .question(question))
         view.threadPane.composer.send("Pounds, please")
-        XCTAssertEqual(sent, [.answer(question, ["jan", "Pounds, please"])])
+        XCTAssertEqual(sent, [.answer(question, [["jan"], ["Pounds, please"]])])
+    }
+
+    func testPickingSeveralChoicesSendsOnlyThoseOnceYouSaySo() throws {
+        let question = AgentQuestion(id: "q", threadID: "t", threadTitle: "Work", text: "Which month?", form: AnswerForm(parts: [
+            AnswerForm.Part(key: "month", text: "Which month?", options: ["December", "January"], values: ["dec", "jan"], takesOwnWords: true),
+            AnswerForm.Part(key: "days", text: "Which days?", options: ["Mon", "Tue", "Wed"], values: ["1", "2", "3"], takesOwnWords: true, picksSeveral: true),
+        ]))
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(questions: [question], owners: ["q": steve.id])))
+        try press("January", in: view)
+        XCTAssertEqual(try card(in: view).buttons.compactMap { $0.accessibilityLabel() }.prefix(4), ["Mon", "Tue", "Wed", CatWords.sendPicked])
+        XCTAssertFalse(try press(CatWords.sendPicked, in: view, expecting: false), "nothing's picked yet")
+
+        try press("Wed", in: view)
+        try press("Mon", in: view)
+        try press("Tue", in: view)
+        try press("Tue", in: view)
+        XCTAssertEqual(sent, [], "picking says nothing")
+        XCTAssertEqual(try card(in: view).buttons.filter { $0.accessibilityRole() == .checkBox }.map { $0.accessibilityValue() as? Int }, [1, 0, 1])
+        try press(CatWords.sendPicked, in: view)
+        XCTAssertEqual(sent, [.answer(question, [["jan"], ["1", "3"]])], "in the order they're offered")
     }
 
     func testAThreadAnotherKittenStartedTakesYourReplyOnlyIntoIt() {
@@ -877,7 +903,7 @@ extension ChannelsWindowTests {
         XCTAssertEqual(view.selection, .thread("asked", in: .channel(.of(steve))))
         XCTAssertEqual(view.threadPane.composer.target, .question(question))
         view.threadPane.composer.send("Warm but brief")
-        XCTAssertEqual(sent, [.answer(question, ["Warm but brief"])])
+        XCTAssertEqual(sent, [.answer(question, [["Warm but brief"]])])
 
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: [between, pepperThread], transcripts: ["asked": [asked], "p": []], isReading: false, unreadable: 0, cantReachT3: false))
         XCTAssertEqual(view.threadPane.composer.target, .thread(id: "asked", title: "From Pepper"), "once it's answered, the box replies in that thread, as Slack's does")

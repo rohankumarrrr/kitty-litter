@@ -154,7 +154,7 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
     }
 }
 
-/// How to answer a request: every one of its questions, each with one option's value or your own words where it takes them.
+/// How to answer a request: every one of its questions, each with its options' values or your own words where it takes them.
 public struct AnswerForm: Sendable, Hashable {
     public struct Part: Sendable, Hashable {
         /// The question's own ID, which its answer is filed under.
@@ -164,7 +164,7 @@ public struct AnswerForm: Sendable, Hashable {
         /// What each option sends, in the order of `options`.
         public var values: [String]
         public var takesOwnWords: Bool
-        /// T3 takes several choices for it. From Shades it gets one, or your own words.
+        /// It takes as many of its options as you pick.
         public var picksSeveral: Bool
 
         public init(key: String, text: String, options: [String], values: [String], takesOwnWords: Bool, picksSeveral: Bool = false) {
@@ -174,6 +174,12 @@ public struct AnswerForm: Sendable, Hashable {
             self.values = values
             self.takesOwnWords = takesOwnWords
             self.picksSeveral = picksSeveral
+        }
+
+        /// One of its options, several where it picks several, or your own words where it takes them.
+        public func takes(_ answer: [String]) -> Bool {
+            if answer.count == 1, takesOwnWords, !answer[0].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+            return !answer.isEmpty && (answer.count == 1 || picksSeveral) && Set(answer).count == answer.count && answer.allSatisfy(values.contains)
         }
     }
 
@@ -331,8 +337,9 @@ public protocol AgentBackend: AnyObject, Sendable {
     /// The current threads, sent again whenever anything changes.
     func watchThreads() -> AsyncStream<[AgentThread]>
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws
-    /// Answers a question that has a `form`, with one answer for each of its parts, in order.
-    func answer(_ question: AgentQuestion, with answers: [String]) async throws
+    /// Answers a question that has a `form`, with one answer for each of its parts, in order: the values of the
+    /// options picked, or your own words alone.
+    func answer(_ question: AgentQuestion, with answers: [[String]]) async throws
     /// Shows the thread in T3 Code.
     func open(threadID: String)
     /// The project registered at this folder, if any.
@@ -362,7 +369,7 @@ public extension AgentBackend {
     func addProject(atPath path: String, title: String) async throws -> String { throw CocoaError(.featureUnsupported) }
     func archive(threadID: String) async throws {}
     func settle(threadID: String) async throws {}
-    func answer(_ question: AgentQuestion, with answers: [String]) async throws {}
+    func answer(_ question: AgentQuestion, with answers: [[String]]) async throws {}
     func allThreads() async -> [AgentThread]? { nil }
     func exchanges(threadID: String) async -> [Exchange]? { nil }
     func report(threadID: String, run: String?) async throws -> String? { nil }

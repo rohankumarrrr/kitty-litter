@@ -90,8 +90,8 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    func answer(_ question: AgentQuestion, with answers: [String]) async throws {
-        print("[demo] answered: \(answers.joined(separator: " | "))")
+    func answer(_ question: AgentQuestion, with answers: [[String]]) async throws {
+        print("[demo] answered: \(answers.map { $0.joined(separator: ", ") }.joined(separator: " | "))")
         update { threads in
             guard let index = threads.firstIndex(where: { $0.id == question.threadID }) else { return }
             threads[index].pendingQuestion = nil
@@ -145,13 +145,24 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
                 threadTitle: threads[index].title,
                 text: "Which pixel font should the headings use?",
                 options: ["Silkscreen (Recommended)", "Press Start 2P", "Keep the system font"],
-                form: AnswerForm(parts: [AnswerForm.Part(
-                    key: "font",
-                    text: "Which pixel font should the headings use?",
-                    options: ["Silkscreen (Recommended)", "Press Start 2P", "Keep the system font"],
-                    values: ["Silkscreen", "Press Start 2P", "Keep the system font"],
-                    takesOwnWords: true
-                )])
+                moreCount: 1,
+                form: AnswerForm(parts: [
+                    AnswerForm.Part(
+                        key: "font",
+                        text: "Which pixel font should the headings use?",
+                        options: ["Silkscreen (Recommended)", "Press Start 2P", "Keep the system font"],
+                        values: ["Silkscreen", "Press Start 2P", "Keep the system font"],
+                        takesOwnWords: true
+                    ),
+                    AnswerForm.Part(
+                        key: "pages",
+                        text: "Which pages should get it?",
+                        options: ["Home", "Pricing", "Blog"],
+                        values: ["home", "pricing", "blog"],
+                        takesOwnWords: true,
+                        picksSeveral: true
+                    ),
+                ])
             )
         }
     }

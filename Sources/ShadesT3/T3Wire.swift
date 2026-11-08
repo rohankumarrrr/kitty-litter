@@ -740,31 +740,39 @@ enum T3Wire {
         return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
     }
 
-    /// `nil` if any question has no ID of its own to file its answer under, so it can only be answered in T3.
+    /// `nil` if any question has no ID to file its answer under, so it can only be answered in T3. T3 files one answer
+    /// under each ID, so different questions sharing one are a single part, answered in your own words.
     static func answerForm(_ questions: [TurnItem.Question]?) -> AnswerForm? {
         guard let questions, !questions.isEmpty else { return nil }
         var parts: [AnswerForm.Part] = []
         for question in questions {
             guard let key = question.id else { return nil }
             let options = question.options ?? []
-            parts.append(AnswerForm.Part(
+            let part = AnswerForm.Part(
                 key: key,
                 text: question.question,
                 options: options.map(\.label),
                 values: options.map { $0.value ?? $0.label },
                 takesOwnWords: question.allowCustomAnswer != false,
                 picksSeveral: question.multiSelect == true
-            ))
+            )
+            guard let shared = parts.firstIndex(where: { $0.key == key }) else {
+                parts.append(part)
+                continue
+            }
+            if parts[shared] != part {
+                parts[shared] = AnswerForm.Part(key: key, text: parts[shared].text + "\n" + part.text, options: [], values: [], takesOwnWords: true)
+            }
         }
-        guard Set(parts.map(\.key)).count == parts.count else { return nil }
         return AnswerForm(parts: parts)
     }
 
-    /// One answer per part, in order. An option for a question that takes several goes as a list of one.
-    static func answers(_ answers: [String], to form: AnswerForm) -> [String: RespondToRequest.Answer]? {
-        guard answers.count == form.parts.count else { return nil }
+    /// One answer per part, in order, or `nil` if any doesn't fit its part. Options for a question that takes several
+    /// go as a list, even of one.
+    static func answers(_ answers: [[String]], to form: AnswerForm) -> [String: RespondToRequest.Answer]? {
+        guard answers.count == form.parts.count, zip(form.parts, answers).allSatisfy({ $0.takes($1) }) else { return nil }
         let filed = zip(form.parts, answers).map { part, answer in
-            (part.key, part.picksSeveral && part.values.contains(answer) ? RespondToRequest.Answer.several([answer]) : .one(answer))
+            (part.key, part.picksSeveral && answer.allSatisfy(part.values.contains) ? RespondToRequest.Answer.several(answer) : .one(answer[0]))
         }
         return Dictionary(filed) { first, _ in first }
     }

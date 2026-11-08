@@ -222,6 +222,7 @@ enum PhonePage {
           gone: "That's changed since. Have another look.",
           wrongCode: "That code didn't work. Turn pairing on again in Shades on your Mac for a new one.",
           answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear',
+          several: 'Pick as many as you like.',
           notifyAsk: 'Get a notification when something needs you.',
           cantRead: 'Shades can only read photos and PDFs.',
           tooBig: "That's too big to send. Try something under 10 MB.",
@@ -706,14 +707,14 @@ enum PhonePage {
         function question(item, node) {
           const parts = item.parts || [];
           if (!parts.length) return;
-          const picked = answers.get(item.id) || parts.map(() => '');
+          const picked = answers.get(item.id) || parts.map(() => []);
           answers.set(item.id, picked);
           const send = button(words.answer, () => {
             send.disabled = true;
             act({ act: 'answer', id: item.id, answers: picked }).then((done) => { if (done) answers.delete(item.id); else send.disabled = false; });
           }, 'go');
-          const ready = () => { send.disabled = picked.some((answer) => !answer.trim()); };
-          const instant = parts.length === 1 && !parts[0].words;
+          const ready = () => { send.disabled = picked.some((answer) => !answer.join('').trim()); };
+          const instant = parts.length === 1 && !parts[0].words && !parts[0].several;
           parts.forEach((part, index) => {
             const box = el('div', 'part');
             if (parts.length > 1 || part.text !== item.text) box.append(el('p', 'text', (parts.length > 1 ? (index + 1) + ' of ' + parts.length + ': ' : '') + part.text));
@@ -722,29 +723,32 @@ enum PhonePage {
               const pick = button(choice.label, () => {
                 if (instant) {
                   choices.querySelectorAll('button').forEach((b) => { b.disabled = true; });
-                  act({ act: 'answer', id: item.id, answers: [choice.value] });
+                  act({ act: 'answer', id: item.id, answers: [[choice.value]] });
                   return;
                 }
-                picked[index] = choice.value;
-                choices.querySelectorAll('button').forEach((b) => b.classList.toggle('picked', b === pick));
+                const was = chosen(part, picked[index]);
+                const now = !part.several ? [choice.value] : was.includes(choice.value) ? was.filter((value) => value !== choice.value) : was.concat(choice.value);
+                picked[index] = part.choices.map((c) => c.value).filter((value) => now.includes(value));
+                choices.querySelectorAll('button').forEach((b, i) => mark(b, picked[index].includes(part.choices[i].value)));
                 if (input) input.value = '';
                 ready();
               });
-              if (picked[index] === choice.value) pick.classList.add('picked');
+              if (!instant) mark(pick, chosen(part, picked[index]).includes(choice.value));
               choices.append(pick);
             }
             let input = null;
             if (part.words) {
               input = el('input');
               input.placeholder = 'Your answer';
-              if (!part.choices.some((choice) => choice.value === picked[index])) input.value = picked[index];
+              if (!chosen(part, picked[index]).length) input.value = picked[index][0] || '';
               input.oninput = () => {
-                picked[index] = input.value;
-                choices.querySelectorAll('button').forEach((b) => b.classList.remove('picked'));
+                picked[index] = [input.value];
+                choices.querySelectorAll('button').forEach((b) => mark(b, false));
                 ready();
               };
             }
             if (choices.childElementCount) box.append(choices);
+            if (part.several) box.append(el('p', 'footer', words.several));
             if (input) box.append(input);
             node.append(box);
           });
@@ -754,6 +758,16 @@ enum PhonePage {
             row.append(send);
             node.append(row);
           }
+        }
+
+        // What's picked of a part's choices, which is nothing while it holds your own words.
+        function chosen(part, answer) {
+          return answer.every((value) => part.choices.some((choice) => choice.value === value)) ? answer : [];
+        }
+
+        function mark(button, picked) {
+          button.classList.toggle('picked', picked);
+          button.setAttribute('aria-pressed', String(picked));
         }
 
         $('back').onclick = () => { if (view && view.back) go(view.back); };

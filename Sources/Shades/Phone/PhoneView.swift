@@ -204,6 +204,8 @@ struct PhoneView: Encodable, Equatable {
         var text: String
         var choices: [Choice]
         var words: Bool
+        /// It takes as many of its choices as you pick.
+        var several = false
     }
 
     /// One row, by `kind`, with only the fields that kind uses.
@@ -432,7 +434,7 @@ struct PhoneView: Encodable, Equatable {
         case .question(let question):
             let kitten = book.kitten(of: question.id)
             let parts = (question.form?.parts ?? []).map { part in
-                Part(text: part.text, choices: zip(part.options, part.values).map { Choice(label: $0, value: $1) }, words: part.takesOwnWords)
+                Part(text: part.text, choices: zip(part.options, part.values).map { Choice(label: $0, value: $1) }, words: part.takesOwnWords, several: part.picksSeveral)
             }
             let text = question.text.isEmpty ? CatWords.unreadableQuestion : question.text
             return card("question", id: question.id, kitten: kitten, title: question.threadTitle, text: text, at: nil, in: book) {

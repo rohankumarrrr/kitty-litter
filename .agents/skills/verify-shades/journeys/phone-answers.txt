@@ -13,6 +13,8 @@ phone text
 draw .verify/shades/phone-answers/1-waiting
 wait 2
 phone press Press Start 2P
+phone press Home
+phone press Blog
 wait 1
 draw .verify/shades/phone-answers/2-picked
 wait 2

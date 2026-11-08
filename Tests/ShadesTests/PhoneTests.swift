@@ -30,7 +30,7 @@ final class PhoneTests: XCTestCase {
         )
     }
 
-    private func ask(_ act: String, key: String? = nil, text: String? = nil, id: String? = nil, value: String? = nil, answers: [String]? = nil, kind: String? = nil) -> PhoneAsk {
+    private func ask(_ act: String, key: String? = nil, text: String? = nil, id: String? = nil, value: String? = nil, answers: [[String]]? = nil, kind: String? = nil) -> PhoneAsk {
         PhoneAsk(act: act, key: key, text: text, id: id, value: value, answers: answers, kind: kind)
     }
 
@@ -210,12 +210,27 @@ final class PhoneTests: XCTestCase {
         let question = AgentQuestion(id: "q", threadID: "a", threadTitle: "Work", text: "Which month?", form: form)
         let unreadable = AgentQuestion(id: "u", threadID: "a", threadTitle: "Work", text: "Hmm?", form: nil)
         let book = book(waiting: Waiting(questions: [question, unreadable]))
-        XCTAssertEqual(ask("answer", id: "q", answers: ["7", "It's warmer"]).action(in: book) { "x" }?.action, .answer(question, ["7", "It's warmer"]))
-        XCTAssertNil(ask("answer", id: "q", answers: ["August", "It's warmer"]).action(in: book) { "x" }, "only its own choices where it doesn't take words")
-        XCTAssertNil(ask("answer", id: "q", answers: ["7", " "]).action(in: book) { "x" })
-        XCTAssertNil(ask("answer", id: "q", answers: ["7"]).action(in: book) { "x" }, "T3 takes every part at once")
-        XCTAssertNil(ask("answer", id: "u", answers: ["Yes"]).action(in: book) { "x" }, "one Shades can't read is answered in T3")
-        XCTAssertNil(ask("answer", id: "gone", answers: ["7", "x"]).action(in: book) { "x" })
+        XCTAssertEqual(ask("answer", id: "q", answers: [["7"], ["It's warmer"]]).action(in: book) { "x" }?.action, .answer(question, [["7"], ["It's warmer"]]))
+        XCTAssertNil(ask("answer", id: "q", answers: [["August"], ["It's warmer"]]).action(in: book) { "x" }, "only its own choices where it doesn't take words")
+        XCTAssertNil(ask("answer", id: "q", answers: [["6", "7"], ["It's warmer"]]).action(in: book) { "x" }, "one choice where it takes one")
+        XCTAssertNil(ask("answer", id: "q", answers: [["7"], [" "]]).action(in: book) { "x" })
+        XCTAssertNil(ask("answer", id: "q", answers: [["7"], ["Hot", "Dry"]]).action(in: book) { "x" }, "your own words are one answer")
+        XCTAssertNil(ask("answer", id: "q", answers: [["7"]]).action(in: book) { "x" }, "T3 takes every part at once")
+        XCTAssertNil(ask("answer", id: "u", answers: [["Yes"]]).action(in: book) { "x" }, "one Shades can't read is answered in T3")
+        XCTAssertNil(ask("answer", id: "gone", answers: [["7"], ["x"]]).action(in: book) { "x" })
+    }
+
+    func testAQuestionThatTakesSeveralChoicesTakesThemFromThePhone() throws {
+        let form = AnswerForm(parts: [
+            AnswerForm.Part(key: "days", text: "Which days?", options: ["Mon", "Tue", "Wed"], values: ["1", "2", "3"], takesOwnWords: false, picksSeveral: true),
+        ])
+        let question = AgentQuestion(id: "q", threadID: "a", threadTitle: "Work", text: "Which days?", form: form)
+        let book = book(waiting: Waiting(questions: [question]))
+        XCTAssertEqual(ask("answer", id: "q", answers: [["1", "3"]]).action(in: book) { "x" }?.action, .answer(question, [["1", "3"]]))
+        XCTAssertEqual(ask("answer", id: "q", answers: [["2"]]).action(in: book) { "x" }?.action, .answer(question, [["2"]]))
+        XCTAssertNil(ask("answer", id: "q", answers: [[]]).action(in: book) { "x" }, "at least one")
+        XCTAssertNil(ask("answer", id: "q", answers: [["1", "1"]]).action(in: book) { "x" })
+        XCTAssertNil(ask("answer", id: "q", answers: [["1", "Fri"]]).action(in: book) { "x" }, "only its own choices")
     }
 
     func testTheInboxOnlyTakesWhatItsButtonsDo() {

@@ -318,10 +318,10 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         lock.withLock { _responses.append((request.id, decision)) }
     }
 
-    private var _answers: [(String, [String])] = []
-    var answers: [(String, [String])] { lock.withLock { _answers } }
+    private var _answers: [(String, [[String]])] = []
+    var answers: [(String, [[String]])] { lock.withLock { _answers } }
 
-    func answer(_ question: AgentQuestion, with answers: [String]) async throws {
+    func answer(_ question: AgentQuestion, with answers: [[String]]) async throws {
         if failResponses { throw URLError(.notConnectedToInternet) }
         lock.withLock { _answers.append((question.id, answers)) }
     }

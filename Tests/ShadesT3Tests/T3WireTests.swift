@@ -163,15 +163,18 @@ final class T3WireTests: XCTestCase {
     }
 
     func testEveryQuestionInARequestCanBeAnsweredFromShades() throws {
-        let item = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"plan","header":"Pick","question":"Which plan?","options":[{"label":"Starter","description":"","value":"starter-v2"},{"label":"Basic","description":""}]},{"id":"extras","header":"More","question":"Which extras?","options":[{"label":"Support","description":""}],"multiSelect":true,"allowCustomAnswer":false}]}"#)
+        let item = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"plan","header":"Pick","question":"Which plan?","options":[{"label":"Starter","description":"","value":"starter-v2"},{"label":"Basic","description":""}]},{"id":"extras","header":"More","question":"Which extras?","options":[{"label":"Support","description":""},{"label":"Backups","description":""}],"multiSelect":true}]}"#)
         let form = try XCTUnwrap(T3Wire.answerForm(item.questions))
         XCTAssertEqual(form.parts, [
             AnswerForm.Part(key: "plan", text: "Which plan?", options: ["Starter", "Basic"], values: ["starter-v2", "Basic"], takesOwnWords: true),
-            AnswerForm.Part(key: "extras", text: "Which extras?", options: ["Support"], values: ["Support"], takesOwnWords: false, picksSeveral: true),
+            AnswerForm.Part(key: "extras", text: "Which extras?", options: ["Support", "Backups"], values: ["Support", "Backups"], takesOwnWords: true, picksSeveral: true),
         ], "an option sends its value, or its label without one")
-        XCTAssertEqual(T3Wire.answers(["starter-v2", "Support"], to: form), ["plan": .one("starter-v2"), "extras": .several(["Support"])], "a choice for a question that takes several goes as a list")
-        XCTAssertEqual(T3Wire.answers(["My own words", "Something else"], to: form), ["plan": .one("My own words"), "extras": .one("Something else")])
-        XCTAssertNil(T3Wire.answers(["starter-v2"], to: form), "every part needs an answer")
+        XCTAssertEqual(T3Wire.answers([["starter-v2"], ["Support"]], to: form), ["plan": .one("starter-v2"), "extras": .several(["Support"])], "a choice for a question that takes several goes as a list")
+        XCTAssertEqual(T3Wire.answers([["Basic"], ["Support", "Backups"]], to: form), ["plan": .one("Basic"), "extras": .several(["Support", "Backups"])], "and so do several")
+        XCTAssertEqual(T3Wire.answers([["My own words"], ["Something else"]], to: form), ["plan": .one("My own words"), "extras": .one("Something else")])
+        XCTAssertNil(T3Wire.answers([["starter-v2"]], to: form), "every part needs an answer")
+        XCTAssertNil(T3Wire.answers([["starter-v2", "Basic"], ["Support"]], to: form), "one choice where it takes one")
+        XCTAssertNil(T3Wire.answers([["starter-v2"], []], to: form))
     }
 
     func testAQuestionWithNoIDCanOnlyBeAnsweredInT3() throws {
@@ -312,13 +315,19 @@ final class T3WireTests: XCTestCase {
 }
 
 extension T3WireTests {
-    func testQuestionsSharingAnIDAreAnsweredInT3() throws {
-        let item = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"choice","header":"A","question":"Which colour?","options":[{"label":"Red","description":""}]},{"id":"choice","header":"B","question":"Which size?","options":[{"label":"Large","description":""}]}]}"#)
-        XCTAssertNil(T3Wire.answerForm(item.questions), "one ID can't hold two answers")
-        let shared = AnswerForm(parts: [
-            AnswerForm.Part(key: "choice", text: "Which colour?", options: [], values: [], takesOwnWords: true),
-            AnswerForm.Part(key: "choice", text: "Which size?", options: [], values: [], takesOwnWords: true),
-        ])
-        XCTAssertEqual(T3Wire.answers(["Red", "Large"], to: shared), ["choice": .one("Red")], "and answering one anyway can't crash")
+    func testQuestionsSharingAnIDTakeOneAnswerInYourOwnWords() throws {
+        let item = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"choice","header":"A","question":"Which colour?","options":[{"label":"Red","description":""}],"allowCustomAnswer":false},{"id":"size","header":"S","question":"How many?","options":[]},{"id":"choice","header":"B","question":"Which size?","options":[{"label":"Large","description":""}]}]}"#)
+        let form = try XCTUnwrap(T3Wire.answerForm(item.questions), "T3 files one answer under the ID they share")
+        XCTAssertEqual(form.parts, [
+            AnswerForm.Part(key: "choice", text: "Which colour?\nWhich size?", options: [], values: [], takesOwnWords: true),
+            AnswerForm.Part(key: "size", text: "How many?", options: [], values: [], takesOwnWords: true),
+        ], "no option answers both, so it's your words")
+        XCTAssertEqual(T3Wire.answers([["Red, and large"], ["Two"]], to: form), ["choice": .one("Red, and large"), "size": .one("Two")])
+        XCTAssertNil(T3Wire.answers([["Red"]], to: form), "every part still needs an answer")
+
+        let twice = try turnItem(#"{"id":"q","type":"user_input_request","status":"running","requestId":"r","questions":[{"id":"Which colour?","header":"A","question":"Which colour?","options":[{"label":"Red","description":""}]},{"id":"Which colour?","header":"A","question":"Which colour?","options":[{"label":"Red","description":""}]}]}"#)
+        XCTAssertEqual(T3Wire.answerForm(twice.questions)?.parts, [
+            AnswerForm.Part(key: "Which colour?", text: "Which colour?", options: ["Red"], values: ["Red"], takesOwnWords: true),
+        ], "the same question twice, as Claude's IDs are their words, is asked once")
     }
 }

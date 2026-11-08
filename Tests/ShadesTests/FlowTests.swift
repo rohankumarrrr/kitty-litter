@@ -4532,14 +4532,14 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(controller.waiting.questions, [question])
         XCTAssertEqual(controller.waiting.owners["q"], penny.id)
 
-        controller.messagesAction(.answer(question, ["jan"]))
+        controller.messagesAction(.answer(question, [["jan"]]))
         for _ in 0..<20 { await Task.yield() }
-        XCTAssertEqual(backend.answers.map(\.1), [["jan"]])
+        XCTAssertEqual(backend.answers.map(\.1), [[["jan"]]])
         XCTAssertTrue(controller.waiting.questions.isEmpty, "it goes once answered, before the list catches up")
 
         controller.answeredQuestions = []
         await messages("Both, please", to: .question(question), in: .of(penny))
-        XCTAssertEqual(backend.answers.map(\.1), [["jan"], ["Both, please"]])
+        XCTAssertEqual(backend.answers.map(\.1), [[["jan"]], [["Both, please"]]])
         XCTAssertFalse(log.all.contains("snapshot"))
     }
 

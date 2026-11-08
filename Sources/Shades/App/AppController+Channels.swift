@@ -10,8 +10,8 @@ enum MessagesAction: Equatable {
     /// A new thread in the kitten's folder. `id` is what Messages calls it until T3 has its thread.
     case startTopic(String, with: Kitten, id: String, file: Drop? = nil)
     case approval(ApprovalRequest, ApprovalDecision)
-    /// Every part of a question's answer, in order.
-    case answer(AgentQuestion, [String])
+    /// Every part of a question's answer, in order: the options picked, or your own words alone.
+    case answer(AgentQuestion, [[String]])
     case inbox(InboxAction)
     case seen(ChannelSelection)
 }
@@ -199,7 +199,7 @@ extension AppController {
             break
         case .question(let question):
             guard snapshot == nil else { return channels.failed(echoID, because: CatWords.answersTakeNoFiles) }
-            answer(question, with: [words])
+            answer(question, with: [[words]])
         }
     }
 
@@ -388,7 +388,7 @@ extension AppController {
         channels.heard(sent, as: turn.id)
     }
 
-    func answer(_ question: AgentQuestion, with answers: [String]) {
+    func answer(_ question: AgentQuestion, with answers: [[String]]) {
         answeredQuestions.insert(question.id)
         channels.refresh()
         Task { [backend] in
