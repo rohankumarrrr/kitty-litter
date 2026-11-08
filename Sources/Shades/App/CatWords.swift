@@ -135,6 +135,7 @@ enum CatWords {
     static func alsoSendTo(_ channel: String) -> String { "Also send to \(channel)" }
     static let answerInWords = "Type an answer"
     static let didntStart = "That didn't start. Try again?"
+    static let sending = "Sending..."
     static let answerInT3 = "This one's answered in T3."
     static let picksSeveral = "Pick as many as you like."
     static let sendPicked = "Send"

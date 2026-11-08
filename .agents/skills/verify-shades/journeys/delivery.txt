@@ -1,0 +1,45 @@
+front
+channels
+wait 1
+colors Cursor/Opal Horizon
+channel steve
+wait 1
+thread pricing copy
+wait 1
+send Keep the pricing table as it is
+draw .verify/shades/delivery/1-sending
+wait 4
+draw .verify/shades/delivery/2-delivered
+t3 off
+send And the FAQ too
+wait 2
+draw .verify/shades/delivery/3-failed
+t3 on
+retry
+draw .verify/shades/delivery/4-again
+wait 4
+draw .verify/shades/delivery/5-delivered
+back
+phone on
+wait 3
+phone pair
+wait 1
+phone open t:demo-steve-copy@c:%2Fdemo%2Fsteve
+wait 4
+t3 off
+phone send One more thing
+wait 3
+phone text
+draw .verify/shades/delivery/6-phone-failed
+t3 on
+phone press Try again
+wait 0.5
+phone text
+draw .verify/shades/delivery/7-phone-sending
+wait 4
+phone text
+draw .verify/shades/delivery/8-phone-delivered
+wait 3
+phone close
+front
+windows

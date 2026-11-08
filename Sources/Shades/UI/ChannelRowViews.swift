@@ -362,7 +362,7 @@ final class MessageWords {
     }
 
     private static func color(of message: ChannelMessage, look: ChannelSpeakerLook) -> NSColor {
-        message.isStillGoing ? look.text(fadedTo: MessageRowView.stillGoingAlpha) : look.bubbleText
+        message.isStillGoing || message.isSending ? look.text(fadedTo: MessageRowView.stillGoingAlpha) : look.bubbleText
     }
 }
 
@@ -385,6 +385,8 @@ final class MessageRowView: ChannelRowView {
     var onReply: (() -> Void)?
     var onCopy: ((String) -> Void)?
     var onShowMore: (() -> Void)?
+    /// Sends your words again, under ones that went nowhere.
+    var onTryAgain: (() -> Void)?
     /// Opens its thread: a parent, or a reply also sent to the channel.
     var onPress: (() -> Void)?
     var isExpanded = false
@@ -398,6 +400,7 @@ final class MessageRowView: ChannelRowView {
     private let words: ChannelTextBlock?
     private let failure: ChannelTextBlock?
     private var showMore: QuietButton?
+    private var tryAgain: QuietButton?
     /// Made the first time you hover, since most messages never are.
     private var hoverButtons: (open: QuietButton, copy: QuietButton, reply: QuietButton)?
     private(set) var bubble = NSRect.zero
@@ -441,6 +444,12 @@ final class MessageRowView: ChannelRowView {
                 return self != nil
             })
         }
+        if onTryAgain != nil {
+            actions.append(NSAccessibilityCustomAction(name: "Try again") { [weak self] in
+                self?.onTryAgain?()
+                return self != nil
+            })
+        }
         if onReply != nil {
             actions.append(NSAccessibilityCustomAction(name: "Reply") { [weak self] in
                 self?.onReply?()
@@ -469,7 +478,7 @@ final class MessageRowView: ChannelRowView {
 
     func pressShowMore() { onShowMore?() }
 
-    private var time: String { message.at.formatted(date: .omitted, time: .shortened) }
+    private var time: String { message.isSending ? CatWords.sending : message.at.formatted(date: .omitted, time: .shortened) }
 
     private func copyPressed() {
         guard let text = message.text else { return }
@@ -535,6 +544,13 @@ final class MessageRowView: ChannelRowView {
             failure.place(at: NSPoint(x: look.isYou ? bubble.maxX - failure.width : bubble.minX, y: failureTop), in: self)
             bottom = failureTop + failure.height
         }
+        if onTryAgain != nil {
+            let tryAgain = tryAgain ?? QuietButton("Try again", style: .text) { [weak self] in self?.onTryAgain?() }
+            if tryAgain.superview == nil { addSubview(tryAgain) }
+            self.tryAgain = tryAgain
+            tryAgain.frame.origin = NSPoint(x: look.isYou ? bubble.maxX - tryAgain.frame.width + 6 : bubble.minX - 6, y: bottom + 1)
+            bottom += tryAgain.frame.height + 2
+        }
         showMore?.isHidden = !isCut
         if isCut {
             let showMore = showMore ?? QuietButton("Show more", style: .text) { [weak self] in self?.onShowMore?() }
@@ -579,7 +595,7 @@ final class MessageRowView: ChannelRowView {
         drawHead()
         if bubble.height > 0 {
             let radius = min(16, bubble.height / 2)
-            (message.isStillGoing ? look.fill(fadedTo: Self.stillGoingAlpha) : fill).setFill()
+            (message.isStillGoing || message.isSending ? look.fill(fadedTo: Self.stillGoingAlpha) : fill).setFill()
             NSBezierPath(roundedRect: bubble, xRadius: radius, yRadius: radius).fill()
         }
         if let file = message.file, fileFrame.width > 0 { drawFile(file) }

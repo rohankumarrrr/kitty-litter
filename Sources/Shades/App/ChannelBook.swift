@@ -42,8 +42,12 @@ struct ChannelMessage: Equatable, Identifiable {
     var failure: String?
     /// A file or picture that came with it.
     var file: ChannelFile?
+    /// Yours, on its way, until T3 has it.
+    var isSending = false
 
     var id: String { "\(exchangeID):\(kind.rawValue)" }
+    /// Yours, and it went nowhere. One with a file has to be sent again by hand, since the file isn't kept.
+    var canTryAgain: Bool { speaker == .you && failure != nil && file == nil }
 }
 
 /// A file or picture on a message: its name, and for a picture you sent while Shades has been running, a small copy.
@@ -112,6 +116,8 @@ struct SentMessage: Equatable {
     var isReply = false
     /// The turn T3 has it as, which shows instead once it's been read, such as the cat's answer in #general.
     var heardAs: String?
+    /// Where your words were going, so they can go there again if they went nowhere.
+    var target: MessageTarget?
 }
 
 /// What's waiting on you right now. It comes from the live thread list and the inbox, never from what was said.
@@ -553,6 +559,14 @@ extension ChannelBook {
         if let title = listed[id]?.title { return title }
         guard let thread = threads[id] else { return "" }
         return thread.title.isEmpty ? ChannelRows.firstWords(of: thread.parent.text ?? "") : thread.title
+    }
+
+    /// A message it shows, by `ChannelMessage.id`.
+    func message(_ id: String) -> ChannelMessage? {
+        let loose = channels.flatMap(\.posts).compactMap { post -> ChannelMessage? in
+            if case .message(let message) = post { message } else { nil }
+        }
+        return (threads.values.flatMap(\.messages) + loose).first { $0.id == id }
     }
 
     /// Whether anything is known of this thread, so there's somewhere for words to go.

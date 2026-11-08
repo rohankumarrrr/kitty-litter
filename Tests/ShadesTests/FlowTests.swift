@@ -4260,6 +4260,59 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(log.all.contains("snapshot"), "and nothing looked at the screen")
     }
 
+    /// A reply that never got to T3 only flashed the cat's bubble, so in Messages it looked delivered.
+    func testAReplyThatNeverGotThereSaysSoUnderItAndGoesAgainWithOnePress() async throws {
+        kittens = [steve]
+        controller.threadsChanged([AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/k/steve")])
+        controller.channelsPressed()
+        backend.forwardError = URLError(.notConnectedToInternet)
+        controller.messagesAction(.send("Make it shorter", to: .thread(id: "s", title: "Tidy the site"), shownIn: .of(steve)))
+        await settle()
+        let failed = try XCTUnwrap(shownBook?.threads["s"]?.latest)
+        XCTAssertEqual(failed.text, "Make it shorter")
+        XCTAssertEqual(failed.failure, CatWords.problem(URLError(.notConnectedToInternet), while: .agents), "it says why, under what you sent")
+        XCTAssertFalse(failed.isSending)
+        XCTAssertTrue(failed.canTryAgain)
+
+        backend.forwardError = nil
+        controller.messagesAction(.tryAgain(failed.exchangeID))
+        await settle()
+        let sent = try XCTUnwrap(backend.sent.last { $0.mode == .forward })
+        XCTAssertEqual(sent.threadID, "s")
+        XCTAssertTrue(sent.prompt.text.hasPrefix("Make it shorter\n\n---\n"), "only your words, as they were")
+        let again = try XCTUnwrap(shownBook?.threads["s"])
+        XCTAssertEqual(again.messages.map(\.exchangeID), [failed.exchangeID], "the same message, not a second one")
+        XCTAssertNil(again.latest.failure)
+        XCTAssertTrue(again.latest.isSending, "on its way until T3 echoes it")
+
+        controller.messagesAction(.tryAgain(failed.exchangeID))
+        await settle()
+        XCTAssertEqual(backend.sent.filter { $0.mode == .forward }.count, 1, "a second press sends nothing more")
+    }
+
+    func testWordsTheCatNeverGotSaySoUnderThemAndGoAgain() async throws {
+        controller.channelsPressed()
+        backend.streamError = URLError(.notConnectedToInternet)
+        await messages("What day is it?", to: .router)
+        let failed = try XCTUnwrap(said(in: .general, of: shownBook).last)
+        XCTAssertEqual(failed.text, "What day is it?")
+        XCTAssertEqual(failed.failure, CatWords.noReply)
+        XCTAssertEqual(said(in: .general, of: shownBook).count, 1, "the cat doesn't say it again under it")
+
+        backend.streamError = nil
+        backend.routerSays = ["What day is it?": "It's Tuesday."]
+        backend.holdQuestion = "What day is it?"
+        controller.messagesAction(.tryAgain(failed.exchangeID))
+        await settle()
+        let asked = said(in: .general, of: shownBook).first
+        XCTAssertNil(asked?.failure)
+        XCTAssertEqual(asked?.isSending, false, "the cat has it while it thinks")
+        backend.releaseHeld()
+        await controller.messagesTurn?.value
+        await settle()
+        XCTAssertEqual(everyoneSaid, ["What day is it?", "It's Tuesday."])
+    }
+
     /// A file counts as your screen, so it only goes where your screen may, as one dropped onto the cat does.
     func testAFileForAKittenThatDoesntSeeYourScreenGoesNowhereAndSaysWhy() async {
         let pepper = Kitten(name: "Pepper", role: "Finance", covers: "their money", folder: "/k/pepper", seesScreen: false)
@@ -4518,7 +4571,9 @@ final class FlowTests: XCTestCase {
         controller.channelsPressed()
         await messages("What day is it?", to: .router)
         XCTAssertTrue(backend.sent.isEmpty)
-        XCTAssertEqual(everyoneSaid, ["What day is it?", CatWords.frontDoorNoFolder])
+        XCTAssertEqual(everyoneSaid, ["What day is it?"])
+        XCTAssertEqual(said(in: .general, of: shownBook).first?.failure, CatWords.frontDoorNoFolder, "it says why under your words")
+        XCTAssertEqual(said(in: .general, of: shownBook).first?.canTryAgain, true)
     }
 
     func testAQuestionIsAnsweredFromMessagesWithAnOptionOrYourWords() async {
@@ -4631,7 +4686,7 @@ final class FlowTests: XCTestCase {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")
         backend.streamError = URLError(.notConnectedToInternet)
-        controller.reply("Yes, ship it", toThread: rows[0].threadID, title: rows[0].threadTitle, marking: rows[0].id)
+        controller.reply("Yes, ship it", toThread: rows[0].threadID, title: rows[0].threadTitle, marking: rows[0].id, echoID: "sent-1")
         await controller.forwardTask?.value
         XCTAssertTrue(rows[0].needsYou, "it's back")
         XCTAssertEqual(notified.count, 1)

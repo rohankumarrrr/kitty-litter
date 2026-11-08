@@ -117,9 +117,10 @@ final class ChannelFeed {
     }
 
     /// Shows it at once, until T3 has it. A reply only shows in `channel` as well as its thread if it's `alsoSent`, from
-    /// memory only, as Slack's "Also send to #channel" does.
-    func sent(_ message: ChannelMessage, in channel: ChannelID, startsThread: Bool = false, alsoSent: Bool = false, isReply: Bool = false) {
-        sent.append(SentMessage(channel: channel, message: message, startsThread: startsThread, alsoSent: alsoSent, isReply: isReply))
+    /// memory only, as Slack's "Also send to #channel" does. The same message sent again takes its old one's place.
+    func sent(_ message: ChannelMessage, in channel: ChannelID, startsThread: Bool = false, alsoSent: Bool = false, isReply: Bool = false, target: MessageTarget? = nil) {
+        sent.removeAll { $0.message.exchangeID == message.exchangeID }
+        sent.append(SentMessage(channel: channel, message: message, startsThread: startsThread, alsoSent: alsoSent, isReply: isReply, target: target))
         sent = sent.suffix(Self.sentKept)
         isDirty = true
         publish()
@@ -129,14 +130,29 @@ final class ChannelFeed {
     func failed(_ exchangeID: String, because reason: String) {
         guard let index = sent.firstIndex(where: { $0.message.exchangeID == exchangeID }) else { return }
         sent[index].message.failure = reason
+        sent[index].message.isSending = false
         isDirty = true
         publish()
+    }
+
+    /// T3 has what you sent, for words whose own copy Messages can't count on reading back, such as a question the
+    /// cat is still thinking about.
+    func delivered(_ exchangeID: String) {
+        guard let index = sent.firstIndex(where: { $0.message.exchangeID == exchangeID }), sent[index].message.isSending else { return }
+        sent[index].message.isSending = false
+        publish()
+    }
+
+    /// What you sent that went nowhere, to send again as it was, where it was going.
+    func toTryAgain(_ exchangeID: String) -> SentMessage? {
+        sent.first { $0.message.exchangeID == exchangeID && $0.message.canTryAgain && $0.target != nil }
     }
 
     /// What you sent is a turn T3 has now, so once that's read it shows instead.
     func heard(_ exchangeIDs: [String], as turn: String) {
         for index in sent.indices where exchangeIDs.contains(sent[index].message.exchangeID) {
             sent[index].heardAs = turn
+            sent[index].message.isSending = false
         }
         isDirty = true
         publish()
@@ -146,6 +162,7 @@ final class ChannelFeed {
     /// else stays where you said it.
     func started(_ exchangeID: String, in threadID: String?, title: String = "", alsoSent: Bool? = nil) {
         guard let index = sent.firstIndex(where: { $0.message.exchangeID == exchangeID }) else { return }
+        sent[index].message.isSending = false
         if let threadID {
             sent[index].message.threadID = threadID
             sent[index].message.threadTitle = title

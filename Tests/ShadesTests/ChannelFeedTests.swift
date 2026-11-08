@@ -609,3 +609,52 @@ extension ChannelFeedTests {
         XCTAssertEqual(feed.threads(in: .channel(.of(steve))).map(\.id), ["work"], "its latest is in the channel too")
     }
 }
+
+// MARK: - Delivery
+
+extension ChannelFeedTests {
+    func testYourWordsShowAsSendingUntilT3HasThem() async {
+        let work = thread("a")
+        backend.threads = [work]
+        let first = Exchange(id: "e1", asker: .you, askedAt: start, ask: "Tidy the page")
+        backend.set([first], in: "a")
+        await openAndRead()
+        feed.sent(ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Shorter", at: start, threadID: "a", threadTitle: "", isSending: true), in: .of(steve), isReply: true)
+        XCTAssertEqual(latest?.threads["a"]?.latest.isSending, true, "on its way")
+
+        backend.set([first, Exchange(id: "e2", asker: .you, askedAt: start, ask: "Shorter")], in: "a")
+        backend.threads = [moved(work, by: 1)]
+        feed.threadsChanged(backend.threads ?? [])
+        await eventually { self.latest?.threads["a"]?.latest.exchangeID == "e2" }
+        XCTAssertEqual(latest?.threads["a"]?.latest.isSending, false, "delivered, once T3 echoes it")
+        XCTAssertEqual(latest?.threads["a"]?.replies.count, 1, "and only once")
+    }
+
+    func testWordsThatWentNowhereCanGoAgainAsTheSameMessage() async {
+        await openAndRead()
+        let echo = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Shorter", at: start, threadID: "a", threadTitle: "", isSending: true)
+        feed.sent(echo, in: .of(steve), isReply: true, target: .thread(id: "a", title: "Work"))
+        XCTAssertNil(feed.toTryAgain("sent-1"), "nothing to try again while it's on its way")
+
+        feed.failed("sent-1", because: "I can't reach T3 Code. Is it running?")
+        let failed = latest?.threads["a"]?.latest
+        XCTAssertEqual(failed?.failure, "I can't reach T3 Code. Is it running?")
+        XCTAssertEqual(failed?.isSending, false)
+        XCTAssertEqual(failed?.canTryAgain, true)
+        XCTAssertEqual(feed.toTryAgain("sent-1")?.target, .thread(id: "a", title: "Work"), "where it was going")
+
+        feed.sent(echo, in: .of(steve), isReply: true, target: .thread(id: "a", title: "Work"))
+        XCTAssertEqual(latest?.threads["a"]?.messages.map(\.exchangeID), ["sent-1"], "trying again takes its place")
+        XCTAssertEqual(latest?.threads["a"]?.latest.isSending, true)
+        XCTAssertNil(latest?.threads["a"]?.latest.failure)
+    }
+
+    func testOnlyWordsYouSentCanGoAgain() {
+        var failed = ChannelMessage(exchangeID: "x", kind: .ask, speaker: .you, text: "Shorter", at: start, threadID: "a", threadTitle: "", failure: "Not sent")
+        XCTAssertTrue(failed.canTryAgain)
+        failed.file = ChannelFile(name: "plan.pdf")
+        XCTAssertFalse(failed.canTryAgain, "a file isn't kept, and what stops one going is still there next time")
+        let theirs = ChannelMessage(exchangeID: "x", kind: .reply, speaker: .kitten(steve.id), text: nil, at: start, threadID: "a", threadTitle: "", failure: "Ran out of quota")
+        XCTAssertFalse(theirs.canTryAgain, "a kitten's failed turn is its own")
+    }
+}

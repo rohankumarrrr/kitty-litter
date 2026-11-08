@@ -19,8 +19,10 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     private var counter = 0
     /// What sorting a thread's report comes to, by the thread's title.
     private var sortedReplies: [String: String] = [:]
-    /// What was said in the threads it started, as T3 keeps it.
+    /// What was said in the threads it started, and in any you replied in, as T3 keeps it.
     private var said: [String: [Exchange]] = [:]
+    /// When each canned thread last moved, which a reply into it does.
+    private var moved: [String: Date] = [:]
     var connectFails = false
     var onOpen: ((String) -> Void)?
 
@@ -60,10 +62,20 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     }
 
     func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+        if connectFails {
+            return AsyncThrowingStream { $0.finish(throwing: DemoError(errorDescription: "T3 Code isn't running. Open it and try again.")) }
+        }
         print("[demo] forwarded to \(threadID) with \(attachments.count) attachments: \(Self.oneLine(text))")
+        // Kept as T3 keeps it, so Messages reads your words back from the thread once it's moved.
+        let asked = Exchange(id: UUID().uuidString, asker: .you, askedAt: Date(), ask: Prompts.ownWords(in: text))
+        lock.withLock {
+            said[threadID, default: DemoChannels.transcripts[threadID] ?? DemoBusy.transcripts[threadID] ?? []].append(asked)
+            moved[threadID] = Date()
+        }
         update { threads in
             guard let index = threads.firstIndex(where: { $0.id == threadID }) else { return }
             threads[index].status = .running
+            threads[index].updatedAt = Date()
         }
         return AsyncThrowingStream { continuation in
             continuation.yield(.started(threadID: threadID))
@@ -111,7 +123,13 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     func allThreads() async -> [AgentThread]? {
         if connectFails { return nil }
-        return lock.withLock { threads } + DemoChannels.threads
+        return lock.withLock {
+            threads + DemoChannels.threads.map { thread in
+                var thread = thread
+                thread.updatedAt = moved[thread.id] ?? thread.updatedAt
+                return thread
+            }
+        }
     }
 
     /// Who started each thread, so passing a file on can check it, as T3 can. The ones a kitten asked another
@@ -123,7 +141,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     }
 
     func exchanges(threadID: String) async -> [Exchange]? {
-        DemoChannels.transcripts[threadID] ?? DemoBusy.transcripts[threadID] ?? lock.withLock { said[threadID] } ?? []
+        lock.withLock { said[threadID] } ?? DemoChannels.transcripts[threadID] ?? DemoBusy.transcripts[threadID] ?? []
     }
 
     /// Hundreds more threads, with long conversations, as T3 would list them for someone who uses it all day.
