@@ -368,6 +368,74 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertNil(built.threads["ask-box"], "anything else the cat started can hold your screen")
     }
 
+    /// A fix or a hand-off from the Ask box used to show nowhere in Messages, so asking the cat about a keyboard with
+    /// Fix left nothing in its DM.
+    func testWorkYouStartedWithTheCatLivesInItsDMUnderYourWords() throws {
+        let built = ChannelBook.build(
+            kittens: [steve], threads: [thread("fix", project: nil, title: "Fix: Where could I find a keyboard like this?"), thread("steve-work")],
+            transcripts: [
+                "fix": [exchange("f", ask: "Where could I find a keyboard like this?", reply: "Try a Keychron K3.")],
+                "steve-work": [exchange("s")],
+            ],
+            isReading: false, unreadable: 0, cantReachT3: false, isUnread: { $0.id == "fix" }, catsWork: ["fix", "steve-work"]
+        )
+        let fix = try XCTUnwrap(built.threads["fix"])
+        XCTAssertEqual(fix.home, .shades)
+        XCTAssertEqual(said(fix), ["you: Where could I find a keyboard like this?", "cat: Try a Keychron K3."])
+        XCTAssertEqual(built.channel(.shades)?.posts, [.thread("fix")])
+        XCTAssertEqual(built.home(ofThread: "fix"), .shades)
+        XCTAssertTrue(built.isUnread(.shades), "a finished fix you haven't seen makes the DM bold")
+        XCTAssertFalse(built.yours.contains { $0.id == "fix" }, "it stays in the DM")
+        XCTAssertEqual(built.threads["steve-work"]?.home, .of(steve), "a kitten's work stays in its channel")
+        XCTAssertEqual(MessageTarget.reply(in: "fix", of: built), .thread(id: "fix", title: "Fix: Where could I find a keyboard like this?"), "you can follow it up in Messages, not only in T3")
+    }
+
+    func testWorkStartedFromGeneralStaysThereEvenIfTheCatAlsoKnowsIt() {
+        let built = ChannelBook.build(
+            kittens: [steve], threads: [thread("handed", project: nil)], transcripts: ["handed": [exchange("h")]],
+            isReading: false, unreadable: 0, cantReachT3: false, inGeneral: ["handed": at], catsWork: ["handed"]
+        )
+        XCTAssertEqual(built.threads["handed"]?.home, .general)
+    }
+
+    /// The cat's answers in #general were kept in memory only, so every restart, such as each install, emptied it.
+    func testTheCatsAnswersInGeneralAreReadBackFromItsTalkAfterARestart() {
+        let talk = talk("r")
+        let transcript = [
+            exchange("asked-in-dm", ask: "Hi", reply: "Hello."),
+            exchange("asked-in-general", ask: "What day is it?", reply: "Friday.", asked: 10),
+        ]
+        let built = ChannelBook.build(
+            kittens: [steve], threads: [talk], transcripts: ["r": transcript],
+            isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r"], answersInGeneral: ["asked-in-general"]
+        )
+        let general = built.channel(.general)?.posts.compactMap { post -> String? in
+            guard case .message(let message) = post else { return nil }
+            XCTAssertEqual(message.threadID, "", "a plain message, not the router's thread")
+            return "\(message.speaker == .you ? "you" : "cat"): \(message.text ?? "-")"
+        }
+        XCTAssertEqual(general, ["you: What day is it?", "cat: Friday."])
+        XCTAssertEqual(built.channel(.shades)?.posts, [.thread("r")], "the talk is still in the DM")
+    }
+
+    func testTheCatsAnswerInGeneralShowsOnceWhenT3HasIt() {
+        var asked = echo("What day is it?", at: 9, in: .general)
+        var answered = echo("Friday.", at: 12, in: .general, speaker: .cat)
+        asked.heardAs = "turn"
+        answered.heardAs = "turn"
+        let waiting = ChannelBook.build(
+            kittens: [steve], threads: [talk("r")], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false,
+            sent: [asked, answered], withShades: ["r"], answersInGeneral: ["turn"]
+        )
+        XCTAssertEqual(waiting.channel(.general)?.posts, [.message(asked.message), .message(answered.message)], "it shows at once")
+        let read = ChannelBook.build(
+            kittens: [steve], threads: [talk("r")], transcripts: ["r": [exchange("turn", ask: "What day is it?", reply: "Friday.", asked: 10)]],
+            isReading: false, unreadable: 0, cantReachT3: false, sent: [asked, answered], withShades: ["r"], answersInGeneral: ["turn"]
+        )
+        XCTAssertEqual(read.channel(.general)?.posts.count, 2, "and once T3 has it, only T3's copy")
+        XCTAssertFalse(read.channel(.general)?.posts.contains(.message(asked.message)) ?? true)
+    }
+
     func testWorkTheCatPassedOnFromGeneralSpeaksAsTheCat() throws {
         let built = book(
             threads: [thread("dispatcher", project: nil), thread("worker", project: "Pepper")],

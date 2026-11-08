@@ -138,10 +138,23 @@ final class AppController {
     /// Messages' own conversation with the router, apart from the Ask box's, which can hold your screen.
     var messagesQuick = QuickSession()
     /// Sessions the router started for what you wrote in Messages, and threads no kitten owns that it passed your words
-    /// to, and when. Each is a thread in #general.
-    /// shortcut: kept only while the app runs, so a restart moves them to their kitten's channel, or out of #general for
-    /// the cat's own work. Save the IDs with the inbox if that matters.
-    var messagesThreads: [String: Date] = [:]
+    /// to, and when. Each is a thread in #general, kept as IDs with the inbox so a restart leaves it there.
+    var messagesThreads: [String: Date] {
+        get { inbox.inGeneral }
+        set {
+            inbox.inGeneral = newValue
+            keepInbox()
+        }
+    }
+    /// Work the cat started for you from the Ask box, out loud, a drop or Fix, which no kitten owns. Each is a thread
+    /// in its DM, kept as IDs with the inbox, like `messagesThreads`.
+    var catsWork: [String: Date] {
+        get { inbox.catsWork }
+        set {
+            inbox.catsWork = newValue
+            keepInbox()
+        }
+    }
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
     /// Everything that's had a notification since the app started, so an answer that didn't go through can't bring a second.
@@ -237,6 +250,8 @@ final class AppController {
         channels.isUnread = { [weak self] in self?.inbox.isUnread($0) ?? false }
         channels.inGeneral = { [weak self] in self?.messagesThreads ?? [:] }
         channels.isWithShades = { [weak self] in self?.isWithShades($0) ?? false }
+        channels.isCatsWork = { [weak self] in self?.isCatsWork($0) ?? false }
+        channels.answersInGeneral = { [weak self] in Set(self?.inbox.answersInGeneral.keys ?? [:].keys) }
     }
 
     func start() {

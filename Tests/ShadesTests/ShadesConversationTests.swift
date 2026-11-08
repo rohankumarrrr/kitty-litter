@@ -84,6 +84,23 @@ final class ShadesConversationTests: XCTestCase {
         XCTAssertNil(send(opened.key, in: built), "and nothing goes into the router's thread")
     }
 
+    /// A fix can hold your screen, so in the DM it stays on the Mac, as every talk with the cat does.
+    func testWorkYouStartedWithTheCatNeverReachesThePhone() {
+        let fix = AgentThread(id: "fix", title: "Fix: Where could I find a keyboard like this?", projectTitle: nil, status: .completed, model: "m", updatedAt: at)
+        let built = ChannelBook.build(
+            kittens: [steve], threads: [fix], transcripts: ["fix": said("Where could I find a keyboard like this?", "Try a Keychron K3.")],
+            isReading: false, unreadable: 0, cantReachT3: false, catsWork: ["fix"]
+        )
+        XCTAssertEqual(built.threads["fix"]?.home, .shades)
+        for place in [PhonePlace.key(.thread("fix", in: .channel(.shades))), PhonePlace.key(.thread("fix", in: .activity)), PhonePlace.key(.thread("fix", in: .channel(.general)))] {
+            let opened = PhonePlace(place, in: built)
+            XCTAssertNil(opened.target, "\(place) has no box on the phone")
+            XCTAssertNil(send(place, in: built), "and nothing goes into it from the phone")
+            let shown = PhoneView(opened, in: built, now: at)
+            XCTAssertFalse(shown.rows.contains { $0.title?.contains("Keychron") == true || $0.text?.contains("Keychron") == true }, "\(place) doesn't show it")
+        }
+    }
+
     /// A router thread's title is the first line of your question, and "Name: ..." makes a thread that kitten's.
     func testATalkTitledForAKittenIsntThatKittens() {
         let question = "Steve: which font did you pick for my site?"

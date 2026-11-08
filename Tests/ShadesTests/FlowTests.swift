@@ -4655,6 +4655,73 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(book.threads[handedTo]?.replies.first?.speaker, .cat)
     }
 
+    /// What lived in #general was only remembered while the app ran, so every restart, such as each install, emptied it.
+    func testGeneralKeepsItsThreadsAndTheCatsAnswersAcrossARestart() async throws {
+        backend.routerSays = ["What day is it?": "It's Tuesday.", "Find me a cheaper flight": "HANDOFF: Search for cheaper flights"]
+        let asked = Exchange(id: "turn-1", asker: .you, askedAt: clock, ask: "What day is it?", reply: "It's Tuesday.", repliedAt: clock)
+        backend.said["thread-1"] = [asked]
+        controller.channelsPressed()
+        await messages("What day is it?", to: .router)
+        await messages("Find me a cheaper flight", to: .router)
+        let handedTo = try XCTUnwrap(controller.messagesThreads.keys.first)
+        let saved = try XCTUnwrap(savedInbox)
+        XCTAssertEqual(Set(saved.inGeneral.keys), [handedTo], "only IDs are kept")
+        XCTAssertEqual(Set(saved.answersInGeneral.keys), ["turn-1"])
+
+        let talk = AgentThread(id: "thread-1", title: "What day is it?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: clock, projectPath: "/shades/router")
+        let work = AgentThread(id: handedTo, title: "Search for cheaper flights", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
+        backend.listed = [talk, work]
+        backend.said[handedTo] = [Exchange(id: "w", asker: .you, askedAt: clock, ask: "Find me a cheaper flight", reply: "Found one for $212.", repliedAt: clock)]
+        backend.said["thread-1"] = [asked, Exchange(id: "turn-2", asker: .you, askedAt: clock, ask: "Find me a cheaper flight", reply: "HANDOFF: Search for cheaper flights", repliedAt: clock)]
+        controller.channelsClosed()
+        stage.channelsUpdated = []
+        controller = makeController(inbox: saved)
+        controller.channelsPressed()
+        var book: ChannelBook?
+        for _ in 0..<400 {
+            book = stage.channelsUpdated.last { !$0.isReading }
+            if book != nil { break }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        controller.channelsClosed()
+        let general = try XCTUnwrap(book?.channel(.general)?.posts)
+        XCTAssertEqual(general.count, 3, "the cat's answer, and the work under your words")
+        XCTAssertEqual(said(in: .general, of: book).compactMap(\.text), ["What day is it?", "It's Tuesday.", "Find me a cheaper flight", "Found one for $212."])
+        XCTAssertEqual(book?.threads[handedTo]?.home, .general)
+    }
+
+    /// A fix showed nowhere in Messages, so a question asked with Fix left nothing in the cat's DM.
+    func testWorkYouStartWithTheCatOutsideMessagesLivesInItsDM() async throws {
+        await controller.beginFix()
+        stage.type("Where could I find a keyboard like this?")
+        await settle()
+        let fix = try XCTUnwrap(controller.catsWork.keys.first)
+        XCTAssertEqual(savedInbox?.catsWork.keys.first, fix, "kept with the inbox, as its ID")
+        XCTAssertTrue(controller.messagesThreads.isEmpty)
+        let thread = AgentThread(id: fix, title: "Fix: Where could I find a keyboard like this?", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
+        XCTAssertTrue(controller.isCatsWork(thread))
+        // A fix from before Shades kept these is known by its title, in T3's folder for work with no project.
+        let older = AgentThread(id: "older", title: "Fix: the logo is squashed", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
+        XCTAssertTrue(controller.isCatsWork(older))
+        var elsewhere = older
+        elsewhere.projectPath = "/code/site"
+        XCTAssertFalse(controller.isCatsWork(elsewhere), "only in T3's own folder")
+    }
+
+    /// The DM shows work that can hold your screen, so Messages' router, whose talk goes to your phone, never sees it.
+    func testWorkYouStartedWithTheCatIsntOfferedToMessagesRouter() async throws {
+        await controller.beginFix()
+        stage.type("Where could I find a keyboard like this?")
+        await settle()
+        let fix = try XCTUnwrap(controller.catsWork.keys.first)
+        controller.threadsChanged([AgentThread(id: fix, title: "Fix: Where could I find a keyboard like this?", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)])
+        backend.routerSays = ["and a cheaper one?": "It's Tuesday."]
+        controller.channelsPressed()
+        await messages("and a cheaper one?", to: .router)
+        let routed = try XCTUnwrap(backend.sent.last { $0.prompt.text.contains("Their question: and a cheaper one?") })
+        XCTAssertFalse(routed.prompt.text.contains("keyboard"), "not in its sessions")
+    }
+
     /// Messages never sends your screen, so even a kitten that sees it can't tell what "this thread" is.
     /// A reply straight to a thread is only what you typed.
     func testMessagesSaysWhenYourWordsPointAtAScreenItWontSend() async {

@@ -57,9 +57,41 @@ public struct Inbox: Codable, Equatable, Sendable {
     private var read: [String: String]?
     /// Threads given a correction. Only IDs, and files from before corrections don't have it.
     private var corrections: Set<String>?
+    /// Where Messages put what you said, so a restart leaves it there. Only IDs, and files from before don't have it.
+    private var general: [String: Date]?
+    private var withShades: [String: Date]?
+    private var answeredInGeneral: [String: Date]?
+
+    /// How many of each place's IDs are kept, newest first. More than Messages reads.
+    public static let placesKept = 300
 
     public init(since: Date) {
         self.since = since
+    }
+
+    /// Threads that live in #general, since Messages started them or passed your words to them there, and when.
+    public var inGeneral: [String: Date] {
+        get { general ?? [:] }
+        set { general = Self.newest(newValue) }
+    }
+
+    /// The cat's own work you started from the Ask box, out loud, by dropping something or with Fix, which lives in
+    /// its DM, and when.
+    public var catsWork: [String: Date] {
+        get { withShades ?? [:] }
+        set { withShades = Self.newest(newValue) }
+    }
+
+    /// T3's ID for each turn of Messages' talk with the router that the cat answered itself in #general, and when.
+    public var answersInGeneral: [String: Date] {
+        get { answeredInGeneral ?? [:] }
+        set { answeredInGeneral = Self.newest(newValue) }
+    }
+
+    private static func newest(_ ids: [String: Date]) -> [String: Date] {
+        guard ids.count > placesKept else { return ids }
+        let kept = ids.sorted { ($0.value, $0.key) > ($1.value, $1.key) }.prefix(placesKept)
+        return Dictionary(uniqueKeysWithValues: kept.map { ($0.key, $0.value) })
     }
 
     /// Finished, has a run ID, that run isn't handled, and it ended at or after `since`.

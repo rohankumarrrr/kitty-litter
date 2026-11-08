@@ -24,6 +24,10 @@ final class ChannelFeed {
     var inGeneral: () -> [String: Date] = { [:] }
     /// Whether a thread is a conversation with the cat itself, which is any in the router's folder.
     var isWithShades: (AgentThread) -> Bool = { _ in false }
+    /// Whether a thread is work the cat started for you outside Messages, which lives in its DM.
+    var isCatsWork: (AgentThread) -> Bool = { _ in false }
+    /// The turns of Messages' talk with the router that the cat answered in #general, by T3's ID for each.
+    var answersInGeneral: () -> Set<String> = { [] }
     /// What's on the screen, whose threads are read before the rest.
     var lookingAt: ChannelSelection?
 
@@ -112,6 +116,15 @@ final class ChannelFeed {
     func sent(_ message: ChannelMessage, in channel: ChannelID, startsThread: Bool = false, alsoSent: Bool = false, isReply: Bool = false) {
         sent.append(SentMessage(channel: channel, message: message, startsThread: startsThread, alsoSent: alsoSent, isReply: isReply))
         sent = sent.suffix(Self.sentKept)
+        isDirty = true
+        publish()
+    }
+
+    /// What you sent is a turn T3 has now, so once that's read it shows instead.
+    func heard(_ exchangeIDs: [String], as turn: String) {
+        for index in sent.indices where exchangeIDs.contains(sent[index].message.exchangeID) {
+            sent[index].heardAs = turn
+        }
         isDirty = true
         publish()
     }
@@ -206,10 +219,14 @@ final class ChannelFeed {
         let talks = listed.filter(isWithShades)
         let byOwner = Dictionary(grouping: listed.filter { !isWithShades($0) }) { owners.of($0)?.id }
         let mine = inGeneral()
-        let owned = byOwner.filter { $0.key != nil }.values.flatMap { threads in
-            threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
-        } + (byOwner[nil] ?? []).filter { mine[$0.id] != nil }
-            + talks.filter { !$0.isLiveTest }.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten)
+        let unowned = byOwner[nil] ?? []
+        func newest(_ threads: [AgentThread]) -> [AgentThread] {
+            Array(threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten))
+        }
+        let kittens: [AgentThread] = byOwner.filter { $0.key != nil }.values.flatMap(newest)
+        let owned: [AgentThread] = kittens + unowned.filter { mine[$0.id] != nil }
+            + newest(unowned.filter { mine[$0.id] == nil && isCatsWork($0) })
+            + newest(talks.filter { !$0.isLiveTest })
         let onScreen = isOnScreen(owners)
         // What you're looking at first, then the newest, so the top of each conversation fills in first.
         let moved = owned
@@ -251,14 +268,15 @@ final class ChannelFeed {
     /// Whether a thread's words are part of what's on the screen.
     private func isOnScreen(_ owners: KittenBoard.Owners) -> (AgentThread) -> Bool {
         let isWithShades = isWithShades
+        let isCatsWork = isCatsWork
         let open = lookingAt?.thread
         let inGeneral = inGeneral()
         let place: (AgentThread) -> Bool
         switch lookingAt?.place {
         case .channel(.shades)?:
-            place = isWithShades
+            place = { isWithShades($0) || isCatsWork($0) }
         case .channel(.general)?:
-            place = { inGeneral[$0.id] != nil || (!isWithShades($0) && owners.of($0) == nil) }
+            place = { inGeneral[$0.id] != nil || (!isWithShades($0) && owners.of($0) == nil && !isCatsWork($0)) }
         case .channel(.kitten(let kitten))?:
             place = { thread in owners.of(thread)?.id == kitten }
         case .threads?:
@@ -315,6 +333,8 @@ final class ChannelFeed {
             isUnread: isUnread,
             inGeneral: inGeneral(),
             withShades: Set(threads.filter(isWithShades).map(\.id)),
+            catsWork: Set(threads.filter(isCatsWork).map(\.id)),
+            answersInGeneral: answersInGeneral(),
             said: { reply in
                 let words = self.said[reply] ?? ChannelBook.said(reply)
                 said[reply] = words

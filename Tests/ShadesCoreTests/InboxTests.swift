@@ -382,6 +382,37 @@ final class InboxTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
     }
 
+    /// Messages kept where things lived only while the app ran, so every restart emptied #general.
+    func testWhereMessagesPutThingsIsSavedAsIDsAndAFileFromBeforeItStillLoads() throws {
+        let file = try folder().appendingPathComponent("inbox.json")
+        var inbox = Inbox(since: start)
+        inbox.inGeneral["handed"] = start
+        inbox.catsWork["fix"] = start
+        inbox.answersInGeneral["turn"] = start
+        try inbox.save(to: file)
+        let loaded = Inbox.load(from: file, now: start)
+        XCTAssertEqual(loaded.inGeneral, ["handed": start])
+        XCTAssertEqual(loaded.catsWork, ["fix": start])
+        XCTAssertEqual(loaded.answersInGeneral, ["turn": start])
+
+        let older = #"{"entries":[],"handled":{},"since":-999999999}"#
+        try older.write(to: file, atomically: true, encoding: .utf8)
+        let before = Inbox.load(from: file, now: start)
+        XCTAssertEqual(before.inGeneral, [:])
+        XCTAssertEqual(before.catsWork, [:])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
+    }
+
+    func testOnlyTheNewestPlacesAreKept() {
+        var inbox = Inbox(since: start)
+        for index in 0...Inbox.placesKept {
+            inbox.inGeneral["t\(index)"] = start.addingTimeInterval(TimeInterval(index))
+        }
+        XCTAssertEqual(inbox.inGeneral.count, Inbox.placesKept)
+        XCTAssertNil(inbox.inGeneral["t0"], "the oldest goes")
+        XCTAssertNotNil(inbox.inGeneral["t\(Inbox.placesKept)"])
+    }
+
     func testOnlyYouCanReadIt() throws {
         let file = try folder().appendingPathComponent("inbox.json")
         try Inbox(since: start).save(to: file)

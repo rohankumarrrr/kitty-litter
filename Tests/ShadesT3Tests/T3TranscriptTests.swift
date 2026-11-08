@@ -45,10 +45,10 @@ final class T3TranscriptTests: XCTestCase {
         XCTAssertFalse(String(describing: exchanges).contains(sentinel))
     }
 
-    func testAPromptWithAScreenAndNoRuleLineShowsNoWordsButKeepsItsReply() throws {
+    func testWorkTheCatStartedShowsOnlyYourWordsAndItsReply() throws {
         let frontier = Prompts.frontier(request: "do this", snapshot: ScreenSnapshot(pageText: sentinel), screenshotPath: nil)
         let exchanges = fold([try user(frontier, at: 0), try spoken("Done.", at: 1)])
-        XCTAssertNil(exchanges.first?.ask)
+        XCTAssertEqual(exchanges.first?.ask, "do this")
         XCTAssertEqual(exchanges.first?.reply, "Done.")
         XCTAssertFalse(String(describing: exchanges).contains(sentinel))
     }
@@ -182,8 +182,11 @@ final class T3TranscriptTests: XCTestCase {
             XCTAssertEqual(exchanges[0].ask, expected)
             XCTAssertFalse(String(describing: exchanges).contains(sentinel))
         }
+        // A fix says your words before the screen, so nothing on the page can close a tag in them.
         let fix = Prompts.fix(description: "why is <my-card> so wide?", snapshot: snapshot, screenshotPath: nil)
-        XCTAssertNil(fold([try user(fix, at: 0)])[0].ask)
+        let fixed = fold([try user(fix, at: 0)])
+        XCTAssertEqual(fixed[0].ask, "why is <my-card> so wide?")
+        XCTAssertFalse(String(describing: fixed).contains(sentinel))
     }
 
     func testAReplyAfterASteerAnswersTheSteer() throws {

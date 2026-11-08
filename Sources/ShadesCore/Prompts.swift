@@ -206,6 +206,11 @@ public enum Prompts {
         return kept.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    static let askedForLabel = "What they asked for: "
+    static let saidAboutLabel = "What they said about it: "
+    /// A hand-off's request is the router's reading of what they said, then this and their own words.
+    public static let ownWordsLabel = "Their own words: "
+
     public static func frontier(request: String, snapshot: ScreenSnapshot?, screenshotPath: String?) -> String {
         """
         \(dispatchPreamble)
@@ -214,13 +219,34 @@ public enum Prompts {
 
         \(screenBlock(snapshot, screenshotPath: screenshotPath))
 
-        What they asked for: \(request)
+        \(askedForLabel)\(request)
         """
+    }
+
+    /// What was asked in a prompt from `frontier` or `fix`, which is only the person's words: never the screen, and
+    /// never the router's reading of it. `nil` for any other prompt, or a fix they didn't describe.
+    public static func dispatched(in prompt: String) -> String? {
+        guard prompt.hasPrefix(dispatchPreamble) else { return nil }
+        let words: Substring
+        // A fix says it before the screen, so only what comes before the screen's warning counts.
+        let beforeScreen = prompt.range(of: "\n\n" + untrusted).map { prompt[..<$0.lowerBound] } ?? prompt[...]
+        if let said = beforeScreen.range(of: "\n" + saidAboutLabel) {
+            words = beforeScreen[said.upperBound...]
+        } else {
+            // A hand-off asks after the screen, whose own tags are taken out of what it says.
+            let afterScreen = prompt.range(of: "</screen>", options: .backwards).map { prompt[$0.upperBound...] } ?? prompt[...]
+            guard let asked = afterScreen.range(of: "\n" + askedForLabel) else { return nil }
+            let request = afterScreen[asked.upperBound...]
+            words = request.range(of: "\n\n" + ownWordsLabel).map { request[$0.upperBound...] } ?? request
+        }
+        let trimmed = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, withoutScreenBlocks(trimmed) == trimmed else { return nil }
+        return trimmed
     }
 
     /// The user pointed at something broken. The marked area is what they mean.
     public static func fix(description: String?, snapshot: ScreenSnapshot?, screenshotPath: String?) -> String {
-        let said = description.map { "What they said about it: \($0)" }
+        let said = description.map { "\(saidAboutLabel)\($0)" }
             ?? "They didn't describe it, so work out what's wrong from the screenshot."
         let pointedAt = snapshot == nil
             ? "The user says something is wrong. You can't see their screen, so work from what they said."

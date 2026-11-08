@@ -412,7 +412,7 @@ extension AppController {
         }
         let path = saveScreenshot(of: snapshot)
         // The task is the quick agent's reading of it, and the question is what you really said.
-        let request = "\(task)\n\nTheir own words: \(question)"
+        let request = "\(task)\n\n\(Prompts.ownWordsLabel)\(question)"
         startFrontier(
             title: task,
             text: Prompts.frontier(request: request, snapshot: snapshot, screenshotPath: path),
@@ -485,6 +485,8 @@ extension AppController {
                         startedThread = threadID
                         if errand == .work { dispatchers.insert(threadID) } else { noteCorrection(in: threadID) }
                         onStarted?(threadID)
+                        // Your work with the cat itself, outside Messages and any kitten's folder, lives in its DM.
+                        if errand == .work, projectID == nil, messagesThreads[threadID] == nil { catsWork[threadID] = now() }
                         let said = errand == .correctionCopy ? CatWords.correctionSent(to: name) : CatWords.onIt(modelName: name)
                         if missesScreen {
                             warning = sayPassedOn(said, threadID: threadID, missesScreen: true, asked: asked)

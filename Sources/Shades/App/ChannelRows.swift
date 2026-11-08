@@ -116,8 +116,9 @@ enum MessageTarget: Equatable {
     /// The box in a thread's pane, which goes only into that thread. `answered` is how many parts of each question
     /// have their answer so far, since your words answer the next one.
     static func reply(in id: String, of book: ChannelBook, answered: [String: Int] = [:]) -> MessageTarget? {
-        // The router answers in lines the app acts on, so nothing goes straight into one of its threads.
-        guard !book.talks.contains(id), book.home(ofThread: id) != .shades else { return nil }
+        // The router answers in lines the app acts on, so nothing goes straight into one of its threads. Work the cat
+        // started for you is a session like any other, so its DM takes a reply into it.
+        guard !book.talks.contains(id), book.home(ofThread: id) != .shades || book.catsWork.contains(id) else { return nil }
         let thread = book.threads[id]
         if let thread, thread.isStarting, let kitten = thread.owner.flatMap({ book.kitten($0) }) {
             return thread.parent.failure == nil ? .starting(kitten) : .newThread(kitten)
