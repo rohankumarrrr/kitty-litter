@@ -11,6 +11,7 @@ With **Messages on my phone** on in Settings, the cat shows a code and a picture
 - `phone-answer` allows or denies an approval, answers a question from its card, and replies to a report.
 - `phone-send` sends in #general through the router, starts a new thread from a kitten's channel, which opens on its own page, and replies in a thread, with its Also send to #channel. What you send says "Sending..." until T3 has it, and what never got there has Try again. `journeys/delivery.txt` ends with it, as [Messages](./messages.md) describes under Delivery.
 - `phone-notify` sends each new thing in Activity to a subscribed phone, encrypted for it, saying only who and what kind.
+- `phone-formatting` draws a message's lists, tables, quotes, code blocks with Copy and pull request chips from what the Mac read, and tapping a link shows its whole address before Open. See `messages-formatting` in [messages.md](messages.md), whose journey covers both.
 - `phone-theme` gives the page Messages' theme, and holds back what's new while you're selecting words.
 
 ## How to get to it (user POV)

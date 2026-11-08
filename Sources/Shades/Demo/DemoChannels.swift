@@ -27,7 +27,7 @@ enum DemoChannels {
         AgentThread(id: id, title: title, projectTitle: "Shades router", status: .completed, model: "claude-opus-5-5", updatedAt: ago(minutes: minutes), isSettled: true, projectPath: routerFolder)
     }
 
-    private static let clawdeMain = thread("demo-clawde-main", "Tidy the settings panel", project: "Clawde", minutes: 95, pullRequest: ThreadPullRequest(number: 31, state: "merged"))
+    private static let clawdeMain = thread("demo-clawde-main", "Tidy the settings panel", project: "Clawde", minutes: 95, pullRequest: ThreadPullRequest(number: 31, state: "merged", url: "https://github.com/example/kittens/pull/31"))
     private static let steveFonts = thread("demo-steve-fonts", "Choose the heading font", project: "Steve Pawsniak", settled: false, minutes: 200)
     private static let pepperPlans = thread("demo-pepper-plans", "Compare the plan names", project: "Pepper", status: .waitingForAnswer, settled: false, minutes: 18)
     private static let clawdeAsksSteve = thread("demo-steve-from-clawde", "Check the button labels", project: "Steve Pawsniak", minutes: 60)
@@ -259,7 +259,24 @@ enum DemoChannels {
                 "settings-1",
                 minutes: 100,
                 ask: "The settings panel looks crowded. Can you space it out?",
-                reply: "Spaced it out and lined up the labels. That one's merged.",
+                reply: """
+                Spaced it out and lined up the labels. That one's merged: https://github.com/example/kittens/pull/31
+
+                - Each group has more room above it
+                - The labels line up on one edge
+                  - including the ones beside a switch
+
+                | Setting | Before | After |
+                | --- | --- | --- |
+                | Gap between groups | 4 pt | 12 pt |
+                | Label width | ragged | 140 pt |
+
+                To see it in the demo:
+
+                ```
+                swift run shades --demo
+                ```
+                """,
                 repliedMinutes: 95
             ),
         ],

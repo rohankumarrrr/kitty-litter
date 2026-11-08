@@ -169,6 +169,14 @@ struct ChannelBook: Equatable {
     var unreadable: Int
     var cantReachT3: Bool
 
+    /// The state of each pull request a listed thread opened, by `Markup.pull`'s key, for the chips in messages.
+    var pulls: [String: String] {
+        Dictionary(listed.values.compactMap { thread in
+            guard let pull = thread.pullRequest, let key = pull.url.flatMap(URL.init(string:)).flatMap(Markup.pull)?.key else { return nil }
+            return (key, pull.state)
+        }, uniquingKeysWith: { first, _ in first })
+    }
+
     private struct Gathered {
         var title: String
         var home: ChannelID

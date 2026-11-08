@@ -137,6 +137,9 @@ final class DemoDriver {
         case "select":
             // The same as pressing and dragging over those words on the page.
             runOnPhone("(() => { const words = \(DemoPhone.quoted(rest)); const walk = document.createTreeWalker($('rows'), NodeFilter.SHOW_TEXT); for (let node = walk.nextNode(); node; node = walk.nextNode()) { const at = node.data.indexOf(words); if (at < 0) continue; const range = document.createRange(); range.setStart(node, at); range.setEnd(node, at + words.length); getSelection().removeAllRanges(); getSelection().addRange(range); return 'selected [' + getSelection().toString() + ']'; } return 'no such words' })()")
+        case "link":
+            // The same as tapping a link in a message: the page shows where it goes, and opens nothing.
+            runOnPhone("(() => { const a = [...$('rows').querySelectorAll('a')].find((a) => a.textContent.includes(\(DemoPhone.quoted(rest)))); if (!a) return 'no link'; a.click(); return 'asks to open ' + $('linkaddress').textContent })()")
         case "unselect":
             // The same as tapping somewhere else on the page.
             runOnPhone("getSelection().removeAllRanges(); 'unselected'")
@@ -144,7 +147,7 @@ final class DemoDriver {
             phone?.close()
             phone = nil
         default:
-            print("phone on | off | pair | open [place] | go [place] | attach | send [words] | press [button] | answer [words] | subscribe | text | select [words] | unselect | close")
+            print("phone on | off | pair | open [place] | go [place] | attach | send [words] | press [button] | answer [words] | subscribe | text | select [words] | link [words] | unselect | close")
         }
     }
 
@@ -202,6 +205,19 @@ final class DemoDriver {
             return print("highlighted [\(words)] key=\(panel.isKeyWindow) front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nothing")")
         }
         print("no message shows [\(words)]")
+    }
+
+    /// The same as pressing a link in Messages whose words include these: the pane shows where it goes, and nothing opens.
+    private func pressLink(_ words: String) {
+        for view in allSubviews(of: stage.channels.panel.contentView) {
+            guard let text = view as? ChannelTextView, let storage = text.textStorage else { continue }
+            let range = (text.string as NSString).range(of: words)
+            guard range.location != NSNotFound, let link = storage.attribute(.link, at: range.location, effectiveRange: nil) as? URL else { continue }
+            text.tryToPerform(#selector(ChannelPane.ask(toOpen:)), with: link)
+            let bars = allSubviews(of: stage.channels.panel.contentView).compactMap { $0 as? LinkBar }.filter { !$0.isHidden }
+            return print("link bar shows \(bars.map { $0.link?.absoluteString ?? "" })")
+        }
+        print("no link shows [\(words)]")
     }
 
     private func allSubviews(of view: NSView?) -> [NSView] {
@@ -281,7 +297,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -383,6 +399,11 @@ final class DemoDriver {
             let composer = stage.channels.view.threadPane.composer
             composer.alsoSends = rest == "on"
             print("also \(composer.alsoSend.isHidden ? "isn't offered" : "\(composer.alsoSend.title) \(composer.alsoSends ? "on" : "off")")")
+        case "more":
+            // The same as pressing Show more under the first cut message in the thread pane, or the place without one.
+            let view = stage.channels.view
+            let pane = view.threadPane.isHidden ? view.pane : view.threadPane
+            if let row = pane.longMessageRow { row.pressShowMore() } else { print("no message is cut") }
         case "scroll":
             // Moves what Messages shows by that many points, up if it's negative, the way scrolling would.
             let pane = stage.channels.view.pane
@@ -502,6 +523,8 @@ final class DemoDriver {
             print("picture \(MessagesInk.picture == nil ? "off" : "on")")
         case "highlight":
             highlight(rest)
+        case "link":
+            pressLink(rest)
         case "copy":
             // Where ⌘C in Messages would go and what it would copy, without copying, so your pasteboard is left alone.
             let target = NSApp.target(forAction: #selector(NSText.copy(_:)), to: nil, from: stage.channels.panel)

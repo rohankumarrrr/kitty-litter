@@ -257,6 +257,8 @@ struct PhoneView: Encodable, Equatable {
         /// A file or picture on a message: its name, and for a picture sent while Shades has been running, a small copy.
         var file: String?
         var picture: String?
+        /// A message's words as the Mac read them, for the page to build without reading any markdown itself.
+        var markup: [Markup.Block]?
     }
 
     var key: String
@@ -351,12 +353,13 @@ struct PhoneView: Encodable, Equatable {
 
     private static func message(_ message: ChannelMessage, in book: ChannelBook) -> Row {
         let look = ChannelSpeakerLook(message.speaker, in: book)
+        let text = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
         return Row(
             kind: "message",
             id: message.id,
             name: look.name,
             detail: message.earlierNotes > 0 ? CatWords.earlierNotes(message.earlierNotes) : nil,
-            text: message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil),
+            text: text,
             color: look.bubble.map(hex),
             ink: look.words.map(hex),
             cat: cat(of: look),
@@ -368,7 +371,8 @@ struct PhoneView: Encodable, Equatable {
             at: millis(message.at),
             file: message.file?.name,
             // Only ever a JPEG Shades made, as base64.
-            picture: message.file?.thumbnail.map { "data:image/jpeg;base64,\($0.base64EncodedString())" }
+            picture: message.file?.thumbnail.map { "data:image/jpeg;base64,\($0.base64EncodedString())" },
+            markup: text.map { Markup($0, pulls: book.pulls).blocks }
         )
     }
 

@@ -89,6 +89,7 @@ final class AppStage: CatStage {
         channels.onClose = { [weak self] in self?.controller?.channelsClosed() }
         channels.view.onOpenThread = { [weak self] id in self?.controller?.openThread(id) }
         channels.view.onCopy = { [weak self] text in self?.copyToPasteboard(text) }
+        channels.view.onOpenLink = { NSWorkspace.shared.open($0) }
         channels.view.onAction = { [weak self] action in self?.controller?.messagesAction(action) }
         channels.view.onSeen = { [weak self] selection in self?.controller?.messagesAction(.seen(selection)) }
         channels.view.sidebar.onTheme = { [weak self] anchor in self?.showThemeMenu(under: anchor) }

@@ -53,6 +53,14 @@ enum PhonePage {
           <input id="snap" type="file" accept="image/*" capture="environment" hidden>
           <label id="alsolabel" hidden><input type="checkbox" id="also"> <span id="alsotext"></span></label>
         </form>
+        <div id="linksheet" role="dialog" aria-labelledby="linktitle" hidden>
+          <p id="linktitle">Open this link?</p>
+          <p id="linkaddress"></p>
+          <div class="buttons">
+            <button id="linkcancel" type="button">Cancel</button>
+            <a id="linkopen" class="go" target="_blank" rel="noopener noreferrer">Open</a>
+          </div>
+        </div>
         <section id="pair" hidden>
           <h1>Pair this phone</h1>
           <p>Turn on Messages on your phone in Shades' Settings on your Mac, and it shows a code. Scan it with your camera, or type it here.</p>
@@ -132,6 +140,32 @@ enum PhonePage {
         .bubble.going { opacity: .55; }
         .bubble code { font: .9em ui-monospace, Menlo, monospace; }
         .bubble a { color: inherit; }
+        .bubble p, .bubble h4, .bubble blockquote { margin: 0; }
+        .bubble > * + * { margin-top: .5em; }
+        .bubble > .item + .item { margin-top: .15em; }
+        .bubble h4 { font-size: 1em; }
+        .bubble blockquote { padding-left: 10px; border-left: 3px solid color-mix(in srgb, currentColor 35%, transparent); }
+        .bubble .item { display: flex; gap: .4em; }
+        .bubble .marker { flex: none; min-width: .8em; }
+        .bubble .code { border-radius: 10px; background: color-mix(in srgb, currentColor 9%, transparent); }
+        .bubble pre { margin: 0; padding: 8px 10px; font: 14px/1.4 ui-monospace, Menlo, monospace; white-space: pre; overflow-x: auto; }
+        .bubble .copy { display: block; margin: 0 0 -6px auto; padding: 4px 10px 0; font-size: 13px; opacity: .7; }
+        .bubble .table { overflow-x: auto; }
+        .bubble table { border-collapse: collapse; font-size: 15px; white-space: normal; }
+        .bubble th, .bubble td { overflow-wrap: normal; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); padding: 3px 8px; text-align: left; vertical-align: top; }
+        .bubble th { background: color-mix(in srgb, currentColor 6%, transparent); }
+        .bubble hr { border: 0; border-top: 1px solid color-mix(in srgb, currentColor 25%, transparent); margin: .6em 0; }
+        /* GitHub's own colours for a pull request's state, as the window draws them. */
+        .chip { display: inline-block; border-radius: 999px; padding: 0 8px; font-size: 14px; font-weight: 600; color: #fff; background: #6e7781; white-space: nowrap; }
+        .chip[data-state=open] { background: #1f883d; }
+        .chip[data-state=merged] { background: #8250df; }
+        .chip[data-state=closed] { background: #cf222e; }
+        #linksheet { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 12px); z-index: 3;
+          background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
+        #linktitle { margin: 0; color: var(--soft); font-size: 13px; }
+        #linkaddress { margin: 6px 0 0; font: 14px/1.4 ui-monospace, Menlo, monospace; overflow-wrap: anywhere; }
+        #linksheet .buttons { justify-content: flex-end; }
+        #linksheet .buttons a { background: var(--you); color: var(--on-you); border-radius: 999px; padding: 8px 16px; font-size: 15px; text-decoration: none; }
         .bubble.cut { max-height: 16.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); }
         .more { color: var(--soft); font-size: 14px; margin: 4px 12px 0; }
         .failure { color: var(--warn); font-size: 13px; margin: 3px 12px 0; }
@@ -226,7 +260,7 @@ enum PhonePage {
           unreachable: "Can't reach your Mac. Shades has to be running, and your Mac awake.",
           gone: "That's changed since. Have another look.",
           wrongCode: "That code didn't work. Turn pairing on again in Shades on your Mac for a new one.",
-          answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear',
+          answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied',
           several: 'Pick as many as you like.',
           sending: 'Sending...', retry: 'Try again',
           notifyAsk: 'Get a notification when something needs you.',
@@ -634,7 +668,7 @@ enum PhonePage {
           if (said.childElementCount || item.text || yours) node.append(said);
           if (item.text) {
             const bubble = el('div', 'bubble' + (item.going || item.sending ? ' going' : ''));
-            bubble.append(...marked(item.text));
+            bubble.append(...(item.markup ? markup(item.markup) : [item.text]));
             if (item.color) { bubble.style.background = item.color; bubble.style.color = item.ink; }
             said.append(bubble);
             if (item.text.length > 600) {
@@ -669,26 +703,77 @@ enum PhonePage {
           return node;
         }
 
-        // The little markdown kittens write, as nodes and never markup: bold, italics, code and web links.
-        function marked(text) {
-          const nodes = [];
-          const pattern = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\*([^*\s][^*]*)\*/g;
-          let at = 0;
-          for (const found of text.matchAll(pattern)) {
-            nodes.push(text.slice(at, found.index));
-            if (found[1]) nodes.push(el('strong', null, found[1]));
-            else if (found[2]) nodes.push(el('code', null, found[2]));
-            else if (found[3]) {
-              const link = el('a', null, found[3]);
-              link.href = found[4];
-              link.rel = 'noopener noreferrer';
-              link.target = '_blank';
-              nodes.push(link);
-            } else nodes.push(el('em', null, found[5]));
-            at = found.index + found[0].length;
+        // A kitten's markdown as the Mac read it, built as nodes and never markup. Only web addresses are links, and
+        // tapping one shows where it goes, in full, before anything opens it.
+        function markup(blocks) {
+          return blocks.map((block) => {
+            if (block.kind === 'code') return code(block.code);
+            if (block.kind === 'table') return table(block.rows);
+            if (block.kind === 'rule') return el('hr');
+            const node = el({ heading: 'h4', quote: 'blockquote', item: 'div' }[block.kind] || 'p', block.kind === 'item' ? 'item' : null);
+            let words = node;
+            if (block.kind === 'item') {
+              node.style.paddingLeft = (block.depth - 1) * 1.2 + 'em';
+              words = el('span');
+              node.append(el('span', 'marker', block.marker), words);
+            }
+            words.append(...block.spans.map(span));
+            return node;
+          });
+        }
+
+        function span(part) {
+          let node = document.createTextNode(part.text);
+          for (const [on, tag] of [[part.code, 'code'], [part.strike, 's'], [part.italic, 'em'], [part.bold, 'strong']]) {
+            if (!on) continue;
+            const wrap = el(tag);
+            wrap.append(node);
+            node = wrap;
           }
-          nodes.push(text.slice(at));
-          return nodes;
+          if (part.pull) {
+            node = el('span', 'chip', part.pull.state ? part.text + ' · ' + part.pull.state : part.text);
+            node.dataset.state = part.pull.state || '';
+          }
+          if (!part.link || !/^https?:\/\//i.test(part.link)) return node;
+          const link = el('a');
+          link.href = part.link;
+          link.append(node);
+          link.onclick = (event) => { event.preventDefault(); ask(part.link); };
+          return link;
+        }
+
+        function code(text) {
+          const node = el('div', 'code');
+          const copy = button(words.copy, async () => {
+            try { await navigator.clipboard.writeText(text); } catch (error) { return; }
+            copy.textContent = words.copied;
+            setTimeout(() => { copy.textContent = words.copy; }, 1200);
+          }, 'copy');
+          node.append(copy, el('pre', null, text));
+          return node;
+        }
+
+        function table(rows) {
+          const node = el('div', 'table');
+          const grid = el('table');
+          rows.forEach((row, index) => {
+            const line = el('tr');
+            for (const cell of row) {
+              const box = el(index ? 'td' : 'th');
+              box.append(...cell.map(span));
+              line.append(box);
+            }
+            grid.append(line);
+          });
+          node.append(grid);
+          return node;
+        }
+
+        // Only Open, a link you tap yourself, goes anywhere.
+        function ask(link) {
+          $('linkaddress').textContent = link;
+          $('linkopen').href = link;
+          $('linksheet').hidden = false;
         }
 
         function button(label, onclick, className) {
@@ -793,6 +878,8 @@ enum PhonePage {
 
         $('back').onclick = () => { if (view && view.back) go(view.back); };
         $('link').onclick = () => { if (view && view.link) go(view.link.open); };
+        $('linkcancel').onclick = () => { $('linksheet').hidden = true; };
+        $('linkopen').onclick = () => { $('linksheet').hidden = true; };
 
         $('box').onsubmit = async (event) => {
           event.preventDefault();
