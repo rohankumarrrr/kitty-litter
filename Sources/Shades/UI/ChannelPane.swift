@@ -129,7 +129,9 @@ final class ChannelHeader: QuietView {
 /// Answers to the parts of a question so far, by its ID, shared by both panes, since a question shows in Activity and
 /// in its thread. Nothing goes until every part has one, as T3 wants.
 final class PartAnswers {
-    var answers: [String: [String]] = [:]
+    var answers: [String: [[String]]] = [:]
+    /// The options picked so far for the part that's next, where it takes several.
+    var picked: [String: [String]] = [:]
 }
 
 /// One side of the window: a header, then rows measured at the current width, then a box. The main pane shows a place
@@ -233,7 +235,7 @@ final class ChannelPane: QuietView {
                     self.composer.textView.string = words
                     return
                 }
-                self.answer(question, with: words)
+                self.answer(question, with: [words])
             case .newThread(let kitten):
                 // The new thread opens in the pane, and the keyboard goes with it if you were typing.
                 let topic = "sent-\(UUID().uuidString)"
@@ -297,6 +299,7 @@ final class ChannelPane: QuietView {
         let isNewSelection = isNewSelection || shows(selection) != shows(self.selection)
         if let thread = selection.thread, thread == replyingTo?.threadID {} else { replyingTo = nil }
         parts.answers = parts.answers.filter { id, _ in book.waiting.questions.contains { $0.id == id } }
+        parts.picked = parts.picked.filter { id, _ in book.waiting.questions.contains { $0.id == id } }
         // What you'd typed in a new topic waits in the thread T3 started for it.
         for (topic, thread) in book.started {
             if let draft = drafts.removeValue(forKey: .thread(topic)) { drafts[.thread(thread)] = draft }
@@ -525,7 +528,8 @@ final class ChannelPane: QuietView {
         return parts.indices.contains(index) ? (index, parts[index]) : nil
     }
 
-    private func answer(_ question: AgentQuestion, with answer: String) {
+    private func answer(_ question: AgentQuestion, with answer: [String]) {
+        parts.picked[question.id] = nil
         let answers = (parts.answers[question.id] ?? []) + [answer]
         if answers.count >= question.form?.parts.count ?? 1 {
             parts.answers[question.id] = nil
@@ -536,6 +540,13 @@ final class ChannelPane: QuietView {
         }
         updateComposer()
         arrange(force: true)
+    }
+
+    private func toggle(_ value: String, of question: AgentQuestion) {
+        var picked = parts.picked[question.id] ?? []
+        if let at = picked.firstIndex(of: value) { picked.remove(at: at) } else { picked.append(value) }
+        parts.picked[question.id] = picked
+        rebuild(.question(question))
     }
 
     /// For a row whose look changed while its value didn't.
@@ -674,10 +685,25 @@ final class ChannelPane: QuietView {
         let kitten = book.kitten(of: question.id)
         var buttons: [CardRowView.Button] = []
         var text = question.text
+        var footer = question.form == nil ? CatWords.answerInT3 : nil
         if let (index, part) = part(of: question) {
-            text = CatWords.part(index, of: question.form?.parts.count ?? 1, part.text)
+            let count = question.form?.parts.count ?? 1
+            text = CatWords.part(index, of: count, part.text)
+            let picked = parts.picked[question.id] ?? []
             buttons = part.options.indices.filter { part.values.indices.contains($0) }.map { option in
-                CardRowView.Button(title: part.options[option]) { [weak self] in self?.answer(question, with: part.values[option]) }
+                let value = part.values[option]
+                guard part.picksSeveral else {
+                    return CardRowView.Button(title: part.options[option]) { [weak self] in self?.answer(question, with: [value]) }
+                }
+                return CardRowView.Button(title: part.options[option], isPicked: picked.contains(value)) { [weak self] in self?.toggle(value, of: question) }
+            }
+            // Picking only marks an option, so nothing goes until you press this.
+            if part.picksSeveral, !buttons.isEmpty {
+                buttons.append(CardRowView.Button(title: index + 1 < count ? CatWords.nextPart : CatWords.sendPicked, isArmed: !picked.isEmpty) { [weak self] in
+                    guard let self, let picked = self.parts.picked[question.id], !picked.isEmpty else { return }
+                    self.answer(question, with: part.values.filter(picked.contains))
+                })
+                footer = CatWords.picksSeveral
             }
             if part.takesOwnWords {
                 let thread = book.thread(holding: question.id, else: question.threadID)
@@ -689,7 +715,6 @@ final class ChannelPane: QuietView {
         }
         buttons.append(openButton(book.thread(holding: question.id, else: question.threadID), in: book))
         text = text.isEmpty ? CatWords.unreadableQuestion : text
-        let footer = question.form == nil ? CatWords.answerInT3 : nil
         return CardRowView(look: look(kitten, in: book), heading: heading(kitten, title: question.threadTitle), at: nil, text: text, footer: footer, buttons: buttons)
     }
 

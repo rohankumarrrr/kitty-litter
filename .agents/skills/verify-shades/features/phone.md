@@ -35,7 +35,7 @@ Journey: `journeys/phone.txt`.
 
 Journey: `journeys/phone-answers.txt`, in light mode.
 
-- **Question.** `question`, then `phone press Press Start 2P`, `2-picked` showing it picked, and `phone press Send answer`. The output says `[demo] answered: Press Start 2P`.
+- **Question.** `question`, which asks the font and then which pages, picking several. `phone press Press Start 2P`, `phone press Home` and `phone press Blog`, with `2-picked` showing all three picked and "Pick as many as you like." under the pages, then `phone press Send answer`. The output says `[demo] answered: Press Start 2P | home, blog`.
 - **Reply.** `phone press Reply` on Clawde's decision, then `phone send Yes, ship it`. The output says `[demo] forwarded to demo-login` with your words, and `4-replied` shows them in that thread.
 
 Journey: `journeys/phone-notifications.txt`.

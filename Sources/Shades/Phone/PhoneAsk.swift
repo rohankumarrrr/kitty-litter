@@ -10,7 +10,8 @@ struct PhoneAsk: Decodable {
     var text: String?
     var id: String?
     var value: String?
-    var answers: [String]?
+    /// One for each part: the values of the choices picked, or your own words alone.
+    var answers: [[String]]?
     var kind: String?
     /// A thread's "Also send to #channel".
     var also: Bool?
@@ -49,7 +50,7 @@ struct PhoneAsk: Decodable {
         case "answer":
             guard let question = book.waiting.questions.first(where: { $0.id == id }),
                   let parts = question.form?.parts, let answers, answers.count == parts.count,
-                  zip(parts, answers).allSatisfy(Self.fits)
+                  zip(parts, answers).allSatisfy({ $0.takes($1) })
             else { return nil }
             return (.answer(question, answers), nil)
         case "done":
@@ -64,10 +65,5 @@ struct PhoneAsk: Decodable {
         default:
             return nil
         }
-    }
-
-    /// One of its choices, or your own words where it takes them.
-    private static func fits(_ part: AnswerForm.Part, _ answer: String) -> Bool {
-        part.values.contains(answer) || (part.takesOwnWords && !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 }

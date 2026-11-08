@@ -40,7 +40,6 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - Send the phone only what changed in Messages. It gets every row of the place it's on each time anything changes, about 170 KB for a conversation of 580 rows, and draws them all again, where the window only lays out what's near what you can see.
 - Work out what Messages shows off the main thread, or only for the threads that changed. It's about 12 ms each time anything changes with hundreds of threads, which is most of what's left when a message arrives.
 - A theme for the rest of the cat. Only Messages and its phone page take one now, so the bubble, the Ask box and the kitten view keep Shades' own colours, and a phone that's already open takes a new theme the next time it opens the page.
-- Several choices at once for a question that takes them, from Messages. It takes one choice or your own words for now.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
 - Remember project nicknames, so the frontier agent can skip the search next time.
 - Replace a rewrite in place in apps that only take paste, such as browsers, Slack and VS Code. Today the rewrite is copied there, since a paste can't be read back to prove it landed.

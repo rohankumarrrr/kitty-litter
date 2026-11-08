@@ -280,7 +280,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -443,6 +443,12 @@ final class DemoDriver {
             default:
                 controller.channelsPressed(selecting: .activity)
             }
+        case "card":
+            // The same as clicking the button with these words on a card in Messages' main pane.
+            let cards = allSubviews(of: stage.channels.view.pane).compactMap { $0 as? CardRowView }
+            let button = cards.lazy.flatMap(\.buttons).first { $0.accessibilityLabel() == rest }
+            guard let button else { return print("no card button [\(rest)]") }
+            print(button.accessibilityPerformPress() ? "pressed \(rest)" : "didn't press \(rest)")
         case "notification":
             // The same as clicking the last notification.
             controller.notificationClicked()

@@ -931,6 +931,9 @@ final class CardRowView: ChannelRowView {
         var title: String
         /// Somewhere else to go rather than an answer, so it stays quiet.
         var isWayOut = false
+        /// An option you can pick several of, and whether it's picked. `nil` for a button that just does something.
+        var isPicked: Bool? = nil
+        var isArmed = true
         var action: () -> Void
     }
 
@@ -956,7 +959,15 @@ final class CardRowView: ChannelRowView {
         words = ChannelTextBlock(ChannelMarkdown.attributed(text, color: MessagesInk.text))
         self.answer = answer.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: MessagesInk.text)) }
         self.footer = footer
-        self.buttons = buttons.map { QuietButton($0.title, style: $0.isWayOut ? .text : .plain, onPress: $0.action) }
+        self.buttons = buttons.map { button in
+            let view = QuietButton(button.title, style: button.isWayOut ? .text : button.isPicked == true ? .filled : .plain, onPress: button.action)
+            view.isArmed = button.isArmed
+            if let picked = button.isPicked {
+                view.setAccessibilityRole(.checkBox)
+                view.setAccessibilityValue(picked ? 1 : 0)
+            }
+            return view
+        }
         super.init(frame: .zero)
         self.buttons.forEach(addSubview)
         setAccessibilityElement(true)

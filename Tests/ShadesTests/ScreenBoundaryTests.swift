@@ -512,7 +512,7 @@ private final class World {
             }
         }
         let answers = backend.answers.map { id, words in
-            Send(place: .thread(askedIn[id] ?? id), title: "", prompt: AgentPrompt(text: words.joined(separator: "\n"), attachments: [], model: .quick, runtimeMode: .auto))
+            Send(place: .thread(askedIn[id] ?? id), title: "", prompt: AgentPrompt(text: words.joined().joined(separator: "\n"), attachments: [], model: .quick, runtimeMode: .auto))
         }
         return prompts + answers
     }
