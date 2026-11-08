@@ -1,6 +1,8 @@
 import XCTest
 @testable import Shades
 @testable import ShadesCore
+import ShadesContext
+import AppKit
 
 /// The promise: nothing that came from your screen reaches the thread of a kitten with `seesScreen: false`.
 /// Each test runs the real flows over every route and kitten setting in its scope, then reads everything Shades
@@ -26,6 +28,13 @@ final class ScreenBoundaryTests: XCTestCase {
         screenshotJPEG: Data("Picture-5ad1".utf8),
         droppedName: "statement-5ad1.pdf"
     )
+
+    /// A picture attached in Messages, from the Mac or a phone, which is held to the same promise. Its name carries the
+    /// mark, and so does whatever goes with it.
+    static let attached: Drop = {
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 4, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        return .bytes(bitmap.representation(using: .png, properties: [:])!, name: "statement-5ad1.png")
+    }()
 
     // MARK: - Your words, wherever they go
 
@@ -205,8 +214,14 @@ private enum Give: CaseIterable {
     case dropHandOff
     /// The cat's DM in Messages, and the router hands it to the frontier agent.
     case shadesHandOff
+    /// A file attached in #general, and the router picks a kitten.
+    case attachKitten
+    /// A file attached in the box under a kitten's channel, which starts a new thread.
+    case attachTopic
+    /// A file attached in #general, and the router hands it to the frontier agent.
+    case attachHandOff
 
-    var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff, .shadesHandOff].contains(self) }
+    var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff, .shadesHandOff, .attachHandOff].contains(self) }
 }
 
 /// Ways your words reach a thread that's already there.
@@ -227,6 +242,10 @@ private enum Pass: CaseIterable {
     case answerQuestion
     /// Drop a file onto the cat, and the router says it carries on from that thread.
     case dropThread
+    /// A file attached in a thread's pane in Messages.
+    case attachThread
+    /// A file attached in #general, and the router says it carries on from that thread.
+    case attachGeneralThread
 }
 
 /// A thread your words can be passed to, described by what decides whose it is.
@@ -385,6 +404,13 @@ private final class World {
         case .shadesHandOff:
             await ask("this one", routerSays: "HANDOFF: Do what Page-5ad1 says")
             await messages("this one too", to: .router, in: .shades, routerSays: "HANDOFF: Do what Page-5ad1 says")
+        case .attachKitten:
+            await messages("this one", to: .router, routerSays: "KITTEN: \(number)", file: ScreenBoundaryTests.attached)
+        case .attachTopic:
+            controller.messagesAction(.startTopic("this one", with: kittens[number - 1], id: "sent-topic", file: ScreenBoundaryTests.attached))
+            await settle()
+        case .attachHandOff:
+            await messages("this one", to: .router, routerSays: "HANDOFF: Do what Statement-5ad1 says", file: ScreenBoundaryTests.attached)
         }
     }
 
@@ -413,6 +439,10 @@ private final class World {
             await messages("The first one", to: .question(AgentQuestion(id: "q", threadID: "w", threadTitle: "Fix routing", text: "Page-5ad1 says to pick one. Which?")))
         case .dropThread:
             await drop("and that part?", routerSays: "SEND TO: 1")
+        case .attachThread:
+            await messages("and that part?", to: .thread(id: "w", title: "Fix routing"), file: ScreenBoundaryTests.attached)
+        case .attachGeneralThread:
+            await messages("and that part?", to: .router, routerSays: "SEND TO: 1", file: ScreenBoundaryTests.attached)
         }
     }
 
@@ -446,14 +476,15 @@ private final class World {
         await settle()
     }
 
-    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID = .general, alsoSent: Bool = false, routerSays: String? = nil) async {
+    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID = .general, alsoSent: Bool = false, routerSays: String? = nil, file: Drop? = nil) async {
         if let routerSays { backend.routerSays[words] = routerSays }
-        controller.messagesAction(.send(words, to: target, shownIn: channel, alsoSent: alsoSent))
+        controller.messagesAction(.send(words, to: target, shownIn: channel, alsoSent: alsoSent, file: file))
         await settle()
     }
 
     private func settle() async {
         for _ in 0..<3 {
+            await controller.attachTask?.value
             await controller.flow?.value
             await controller.replyTask?.value
             await controller.messagesTurn?.value

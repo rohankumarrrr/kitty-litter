@@ -364,7 +364,7 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.pane.composer.target, .newThread(steve), "the box under the channel never guesses a thread")
 
         view.pane.composer.send("  Write a cover letter  ")
-        guard case .startTopic("Write a cover letter", steve, let topic)? = sent.last else { return XCTFail("\(sent)") }
+        guard case .startTopic("Write a cover letter", steve, let topic, _)? = sent.last else { return XCTFail("\(sent)") }
         XCTAssertEqual(view.selection, .thread(topic, in: .channel(.of(steve))), "so what you add next goes into it")
         XCTAssertFalse(view.threadPane.isHidden)
         XCTAssertEqual(view.pane.composer.textView.string, "")
@@ -582,7 +582,7 @@ final class ChannelsWindowTests: XCTestCase {
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false))
         view.select(.channel(.of(steve)))
         view.pane.composer.send("Write a cover letter")
-        guard case .startTopic(_, _, let topic)? = sent.last else { return XCTFail("\(sent)") }
+        guard case .startTopic(_, _, let topic, _)? = sent.last else { return XCTFail("\(sent)") }
 
         var echo = ChannelMessage(exchangeID: topic, kind: .ask, speaker: .you, text: "Write a cover letter", at: at.addingTimeInterval(60), threadID: "", threadTitle: "")
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .of(steve), message: echo, startsThread: true)]))

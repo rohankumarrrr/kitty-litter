@@ -1,5 +1,7 @@
+import AppKit
 import CoreGraphics
 @testable import Shades
+import ShadesContext
 import ShadesCore
 import XCTest
 
@@ -87,6 +89,7 @@ final class FlowTests: XCTestCase {
     }
 
     private func settle() async {
+        await controller.attachTask?.value
         await controller.flow?.value
         await controller.replyTask?.value
         await controller.frontierTask?.value
@@ -4229,6 +4232,76 @@ final class FlowTests: XCTestCase {
         await ask("hello")
         controller.bubbleDismissed(byClick: true)
         XCTAssertNil(stage.bubble)
+    }
+
+    private var picture: Drop {
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 8, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        return .bytes(bitmap.representation(using: .png, properties: [:])!, name: "keyboard.png")
+    }
+
+    /// Messages only took words, so a photo or file had to go through T3.
+    func testAPictureAttachedInAThreadGoesWithYourWords() async throws {
+        kittens = [steve]
+        let thread = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/k/steve")
+        backend.origins["s"] = ThreadOrigin(title: thread.title, projectPath: thread.projectPath, startedBy: .person)
+        controller.threadsChanged([thread])
+        controller.channelsPressed()
+        controller.messagesAction(.send("Like this?", to: .thread(id: "s", title: "Tidy the site"), shownIn: .of(steve), file: picture))
+        await settle()
+        let sent = try XCTUnwrap(backend.sent.last { $0.mode == .forward })
+        XCTAssertEqual(sent.threadID, "s")
+        XCTAssertEqual(sent.prompt.attachments.count, 1, "the picture")
+        XCTAssertTrue(sent.prompt.text.hasPrefix("Like this?"), "your words first")
+        XCTAssertEqual(Prompts.droppedName(in: sent.prompt.text), "keyboard.png")
+        let shown = shownBook?.threads["s"]?.messages.last
+        XCTAssertEqual(shown?.file?.name, "keyboard.png")
+        XCTAssertNotNil(shown?.file?.thumbnail, "a small copy shows while Shades runs")
+        XCTAssertNil(shown?.failure)
+        XCTAssertFalse(log.all.contains("snapshot"), "and nothing looked at the screen")
+    }
+
+    /// A file counts as your screen, so it only goes where your screen may, as one dropped onto the cat does.
+    func testAFileForAKittenThatDoesntSeeYourScreenGoesNowhereAndSaysWhy() async {
+        let pepper = Kitten(name: "Pepper", role: "Finance", covers: "their money", folder: "/k/pepper", seesScreen: false)
+        kittens = [pepper]
+        controller.threadsChanged([AgentThread(id: "p", title: "Budget", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/k/pepper")])
+        controller.channelsPressed()
+        controller.messagesAction(.send("What's this?", to: .thread(id: "p", title: "Budget"), shownIn: .of(pepper), file: picture))
+        await settle()
+        XCTAssertTrue(backend.sent.isEmpty, "nothing went, not even your words without it")
+        XCTAssertEqual(shownBook?.threads["p"]?.messages.last?.failure, CatWords.cantTakeFiles("Budget"), "and Messages says why, under what you sent")
+
+        controller.messagesAction(.startTopic("And this?", with: pepper, id: "sent-topic", file: picture))
+        await settle()
+        XCTAssertTrue(backend.sent.isEmpty, "nor a new thread with it")
+        XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.didntStart)
+    }
+
+    /// Messages' talk with the router goes to your phone and never holds your screen, so a file gets a router thread of its own.
+    func testAFileInGeneralGoesOnARouterThreadOfItsOwn() async throws {
+        backend.routerSays = ["What day is it?": "It's Tuesday.", "What's this?": "A keyboard."]
+        controller.channelsPressed()
+        await messages("What day is it?", to: .router)
+        let conversation = controller.messagesQuick.thread(at: clock)
+        XCTAssertNotNil(conversation)
+        controller.messagesAction(.send("What's this?", to: .router, shownIn: .general, file: picture))
+        await settle()
+        await controller.messagesTurn?.value
+        let routed = try XCTUnwrap(backend.sent.last { $0.prompt.text.contains("Their question: What's this?") })
+        XCTAssertEqual(routed.mode, .start, "a thread of its own")
+        XCTAssertEqual(routed.prompt.attachments.count, 1)
+        XCTAssertEqual(controller.messagesQuick.thread(at: clock), conversation, "and Messages' talk carries on without it")
+        XCTAssertTrue(everyoneSaid.contains("A keyboard."))
+
+        var fullAccess = settings
+        fullAccess.quickMode = .fullAccess
+        controller.apply(fullAccess)
+        let before = backend.sent.count
+        controller.messagesAction(.send("And this?", to: .router, shownIn: .general, file: picture))
+        await settle()
+        await controller.messagesTurn?.value
+        XCTAssertEqual(backend.sent.count, before, "a router with full access gets no file")
+        XCTAssertNotNil(shownBook?.channel(.general)?.posts.last.flatMap { if case .message(let message) = $0 { message.failure } else { nil } })
     }
 
     /// A report's only button used to be Open in T3. Messages comes first, and T3 is only for what it doesn't show.

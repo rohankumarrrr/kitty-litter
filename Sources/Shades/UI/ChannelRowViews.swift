@@ -378,6 +378,8 @@ final class MessageRowView: ChannelRowView {
     /// Of the pane's width, so a long message still reads as a bubble.
     private static let widest: CGFloat = 0.7
     static let stillGoingAlpha = 0.55
+    private static let pictureSide: CGFloat = 180
+    private static let fileHeight: CGFloat = 36
 
     var onOpen: (() -> Void)?
     var onReply: (() -> Void)?
@@ -399,6 +401,9 @@ final class MessageRowView: ChannelRowView {
     /// Made the first time you hover, since most messages never are.
     private var hoverButtons: (open: QuietButton, copy: QuietButton, reply: QuietButton)?
     private(set) var bubble = NSRect.zero
+    /// A file or picture that came with it, under its words.
+    private var fileFrame = NSRect.zero
+    private lazy var picture: NSImage? = message.file?.thumbnail.flatMap(NSImage.init(data:))
     private var failureTop: CGFloat = 0
     private var replyBarFrame = NSRect.zero
     private var headTop: CGFloat { context == nil ? Self.pad : Self.pad + Self.contextHeight }
@@ -422,7 +427,7 @@ final class MessageRowView: ChannelRowView {
     // Worked out when VoiceOver asks, rather than for every row of a long conversation as it's laid out.
     override func accessibilityLabel() -> String? {
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
-        return [context, look.name, time, said, message.failure, replyBar?.accessibilityWords(now: Date())].compactMap { $0 }.joined(separator: ", ")
+        return [context, look.name, time, said, message.file.map { CatWords.attached($0.name) }, message.failure, replyBar?.accessibilityWords(now: Date())].compactMap { $0 }.joined(separator: ", ")
     }
 
     override var isPressable: Bool { onPress != nil }
@@ -512,6 +517,18 @@ final class MessageRowView: ChannelRowView {
         } else {
             bubble = NSRect(x: look.isYou ? width - Self.margin : Self.textLeft, y: bottom, width: 0, height: 0)
         }
+        if let file = message.file {
+            var size = NSSize(width: min(Self.fileWidth(file.name), room + Self.insetX * 2), height: Self.fileHeight)
+            if let picture, picture.size.width > 0, picture.size.height > 0 {
+                let scale = min(Self.pictureSide / picture.size.width, Self.pictureSide / picture.size.height)
+                size = NSSize(width: floor(picture.size.width * scale), height: floor(picture.size.height * scale))
+            }
+            let top = bottom + (words == nil ? 0 : 4)
+            fileFrame = NSRect(x: look.isYou ? width - Self.margin - size.width : Self.textLeft, y: top, width: size.width, height: size.height)
+            bottom = fileFrame.maxY
+        } else {
+            fileFrame = .zero
+        }
         if let failure {
             failure.fit(width: room + Self.insetX * 2)
             failureTop = bottom + (words == nil ? 0 : 4)
@@ -565,6 +582,44 @@ final class MessageRowView: ChannelRowView {
             (message.isStillGoing ? look.fill(fadedTo: Self.stillGoingAlpha) : fill).setFill()
             NSBezierPath(roundedRect: bubble, xRadius: radius, yRadius: radius).fill()
         }
+        if let file = message.file, fileFrame.width > 0 { drawFile(file) }
+    }
+
+    private static let fileFont = NSFont.systemFont(ofSize: 13)
+
+    private static func fileWidth(_ name: String) -> CGFloat {
+        ceil(NSAttributedString(string: name, attributes: [.font: fileFont]).size().width) + 46
+    }
+
+    /// A picture as itself, and any other file as its mark and name.
+    private func drawFile(_ file: ChannelFile) {
+        let shape = NSBezierPath(roundedRect: fileFrame, xRadius: 10, yRadius: 10)
+        if let picture {
+            NSGraphicsContext.saveGraphicsState()
+            shape.addClip()
+            picture.draw(in: fileFrame, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            NSGraphicsContext.restoreGraphicsState()
+            return
+        }
+        MessagesInk.hover.setFill()
+        shape.fill()
+        MessagesInk.line.setStroke()
+        shape.stroke()
+        let mark = NSImage(systemSymbolName: "doc.fill", accessibilityDescription: nil)?.withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
+        mark?.isTemplate = true
+        if let mark {
+            let tinted = NSImage(size: mark.size, flipped: false) { rect in
+                mark.draw(in: rect)
+                MessagesInk.soft.set()
+                rect.fill(using: .sourceAtop)
+                return true
+            }
+            tinted.draw(in: NSRect(x: fileFrame.minX + 11, y: fileFrame.midY - mark.size.height / 2, width: mark.size.width, height: mark.size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        }
+        let truncating = NSMutableParagraphStyle()
+        truncating.lineBreakMode = .byTruncatingMiddle
+        NSAttributedString(string: file.name, attributes: [.font: Self.fileFont, .foregroundColor: MessagesInk.text, .paragraphStyle: truncating])
+            .draw(in: NSRect(x: fileFrame.minX + 34, y: fileFrame.midY - 9, width: fileFrame.width - 42, height: 18))
     }
 
     /// Who said it and when, over the bubble. Yours only needs the time.

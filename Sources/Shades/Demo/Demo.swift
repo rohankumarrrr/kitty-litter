@@ -114,6 +114,14 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         return lock.withLock { threads } + DemoChannels.threads
     }
 
+    /// Who started each thread, so passing a file on can check it, as T3 can. The ones a kitten asked another
+    /// kitten in were started by that kitten's thread.
+    func origin(of threadID: String) async -> ThreadOrigin? {
+        guard let thread = await allThreads()?.first(where: { $0.id == threadID }) else { return nil }
+        let askedBy = ["demo-steve-from-clawde": "demo-clawde-main", "demo-clawde-from-steve": "demo-steve-fonts", "demo-steve-from-pepper": "demo-pepper-plans"]
+        return ThreadOrigin(title: thread.title, projectPath: thread.projectPath, startedBy: askedBy[threadID].map(ThreadOrigin.Starter.thread) ?? .person)
+    }
+
     func exchanges(threadID: String) async -> [Exchange]? {
         DemoChannels.transcripts[threadID] ?? DemoBusy.transcripts[threadID] ?? lock.withLock { said[threadID] } ?? []
     }
@@ -469,6 +477,25 @@ enum Demo {
     }
 
     /// A made-up one-page syllabus in a temporary file, for dropping onto the cat.
+    /// A made-up picture to attach: a keyboard, drawn.
+    static func samplePicture() -> Data? {
+        let image = NSImage(size: NSSize(width: 800, height: 500), flipped: false) { rect in
+            NSColor(srgbRed: 0.18, green: 0.44, blue: 0.37, alpha: 1).setFill()
+            rect.fill()
+            NSColor(srgbRed: 0.96, green: 0.94, blue: 0.9, alpha: 1).setFill()
+            NSBezierPath(roundedRect: NSRect(x: 80, y: 150, width: 640, height: 200), xRadius: 24, yRadius: 24).fill()
+            NSColor(white: 0.15, alpha: 1).setFill()
+            for row in 0..<3 {
+                for key in 0..<10 {
+                    NSBezierPath(roundedRect: NSRect(x: 110 + key * 60, y: 180 + row * 55, width: 48, height: 42), xRadius: 6, yRadius: 6).fill()
+                }
+            }
+            return true
+        }
+        guard let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+        return bitmap.representation(using: .png, properties: [:])
+    }
+
     static func samplePDF() -> URL? {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("syllabus.pdf")
         var page = CGRect(x: 0, y: 0, width: 612, height: 792)

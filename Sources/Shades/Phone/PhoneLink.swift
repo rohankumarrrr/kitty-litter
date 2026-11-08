@@ -1,4 +1,5 @@
 import AppKit
+import ShadesContext
 import ShadesCore
 
 /// Messages on your phone: the page, a stream of what one place in Messages shows, and what you do there, which goes
@@ -37,6 +38,10 @@ final class PhoneLink {
     private var watchers: [Watcher] = []
     private var book: ChannelBook?
     private var letting: Task<Void, Never>?
+    /// Photos and files a phone sent ahead of its message, by the ID it was given, in memory only and briefly.
+    private var files: [String: (file: Drop, at: Date)] = [:]
+    private static let filesKept = 6
+    private static let fileMinutes: TimeInterval = 10
 
     init(
         keys: PhoneKeyStoring,
@@ -63,6 +68,7 @@ final class PhoneLink {
     }
 
     func stop() {
+        files = [:]
         server.stop()
         watchers.forEach { $0.stream.close() }
         letting?.cancel()
@@ -116,11 +122,13 @@ final class PhoneLink {
             return door.admits(request) ? watch(request.query["key"] ?? PhonePlace.home) : .status(401)
         case ("POST", "/act"):
             return door.admits(request) ? perform(request) : .status(401)
+        case ("POST", "/file"):
+            return door.admits(request) ? keep(request) : .status(401)
         case ("GET", "/push"):
             return door.admits(request) ? .json(["key": pushes.publicKey]) : .status(401)
         case ("POST", "/push"):
             return door.admits(request) ? subscribe(request) : .status(401)
-        case (_, "/"), (_, "/hello"), (_, "/pair"), (_, "/events"), (_, "/act"), (_, "/push"):
+        case (_, "/"), (_, "/hello"), (_, "/pair"), (_, "/events"), (_, "/act"), (_, "/file"), (_, "/push"):
             return .status(405)
         default:
             return .status(404)
@@ -208,8 +216,25 @@ final class PhoneLink {
     private func perform(_ request: PhoneServer.Request) -> PhoneServer.Response {
         guard Self.isFromPage(request), let ask = try? JSONDecoder().decode(PhoneAsk.self, from: request.body) else { return .status(400) }
         // Messages is only open while a phone is looking, and what's done is checked against what it shows.
-        guard let book, let (action, opens) = ask.action(in: book, newTopic: { "sent-\(UUID().uuidString)" }) else { return .status(409) }
+        guard let book, let (action, opens) = ask.action(in: book, newTopic: { "sent-\(UUID().uuidString)" }, file: { [files] in files[$0]?.file }) else { return .status(409) }
+        if let id = ask.file { files[id] = nil }
         act(action)
         return .json(Opened(open: opens))
+    }
+
+    private struct Kept: Encodable {
+        var id: String
+    }
+
+    /// A photo or file, sent ahead so the message itself stays small. Only the page sends the header, as with `/act`.
+    private func keep(_ request: PhoneServer.Request) -> PhoneServer.Response {
+        guard request.headers["x-shades"] == "1", !request.body.isEmpty else { return .status(400) }
+        let named = request.headers["x-name"]?.removingPercentEncoding?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let name = named.isEmpty ? CatWords.aFile : String(named.prefix(120))
+        files = files.filter { now().timeIntervalSince($0.value.at) < Self.fileMinutes * 60 }
+        while files.count >= Self.filesKept, let oldest = files.min(by: { $0.value.at < $1.value.at })?.key { files[oldest] = nil }
+        let id = UUID().uuidString
+        files[id] = (.bytes(request.body, name: name), now())
+        return .json(Kept(id: id))
     }
 }

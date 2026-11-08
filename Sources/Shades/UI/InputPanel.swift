@@ -185,7 +185,7 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
     }
 }
 
-final class PlaceholderTextView: NSTextView {
+class PlaceholderTextView: NSTextView {
     var placeholder = "" { didSet { needsDisplay = true } }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }

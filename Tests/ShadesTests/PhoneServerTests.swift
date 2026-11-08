@@ -285,6 +285,52 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(backend.sent.count, 1)
     }
 
+    /// A phone's photo goes up first, to a paired phone's own request, then with its words to a new thread.
+    func testAPhotoFromAPhoneGoesWithItsWordsOnly() async throws {
+        let key = try await pair()
+        let dm = PhonePlace.key(.channel(.of(penny)))
+        let (first, stream) = try await watch(dm, key: key)
+        defer { stream.cancel() }
+        XCTAssertEqual((first["box"] as? [String: Any])?["files"] as? Bool, true)
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 8, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        let photo = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+
+        func upload(_ body: Data, key: String?, headers: [String: String] = ["X-Shades": "1"]) async throws -> (status: Int, id: String?) {
+            var request = URLRequest(url: URL(string: "/file", relativeTo: base)!)
+            request.httpMethod = "POST"
+            request.httpBody = body
+            request.setValue("image/png", forHTTPHeaderField: "Content-Type")
+            request.setValue("receipt%20photo.png", forHTTPHeaderField: "X-Name")
+            if let key { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+            for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+            let (data, response) = try await session.data(for: request)
+            return ((response as! HTTPURLResponse).statusCode, (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["id"] as? String)
+        }
+        let stranger = try await upload(photo, key: "made-up")
+        XCTAssertEqual(stranger.status, 401, "only a paired phone")
+        let unmarked = try await upload(photo, key: key, headers: [:])
+        XCTAssertEqual(unmarked.status, 400, "only the page's own request")
+        let tooBig = try await upload(Data(count: PhoneServer.biggestFile + 1), key: key)
+        XCTAssertEqual(tooBig.status, 413)
+        let kept = try await upload(photo, key: key)
+        XCTAssertEqual(kept.status, 200)
+        let id = try XCTUnwrap(kept.id)
+
+        let (made, _) = try await page(#"{"act":"send","key":"\#(dm)","text":"Can I expense this?","file":"made-up"}"#, key: key)
+        XCTAssertEqual(made, 409, "only a file this phone sent")
+        let (status, _) = try await page(#"{"act":"send","key":"\#(dm)","text":"Can I expense this?","file":"\#(id)"}"#, key: key)
+        XCTAssertEqual(status, 200)
+        await until { backend.sent.contains { $0.mode == .start } }
+        let started = try XCTUnwrap(backend.sent.first { $0.mode == .start })
+        XCTAssertEqual(started.prompt.projectID, "project-penny")
+        XCTAssertTrue(started.prompt.text.hasPrefix("Can I expense this?"))
+        XCTAssertEqual(Prompts.droppedName(in: started.prompt.text), "receipt photo.png")
+        XCTAssertEqual(started.prompt.attachments.count, 1)
+        XCTAssertFalse(log.all.contains("snapshot"), "nothing was captured")
+        let (again, _) = try await page(#"{"act":"send","key":"\#(dm)","text":"And again","file":"\#(id)"}"#, key: key)
+        XCTAssertEqual(again, 409, "a file goes once")
+    }
+
     func testMovingAroundThePhoneKeepsWhatYouJustSent() async throws {
         let key = try await pair()
         let dm = PhonePlace.key(.channel(.of(penny)))

@@ -40,8 +40,16 @@ struct ChannelMessage: Equatable, Identifiable {
     var earlierNotes = 0
     var isStillGoing = false
     var failure: String?
+    /// A file or picture that came with it.
+    var file: ChannelFile?
 
     var id: String { "\(exchangeID):\(kind.rawValue)" }
+}
+
+/// A file or picture on a message: its name, and for a picture you sent while Shades has been running, a small copy.
+struct ChannelFile: Equatable {
+    var name: String
+    var thumbnail: Data?
 }
 
 /// One T3 session, the way Slack shows a thread: the message that started it, then every reply, oldest first.
@@ -281,7 +289,13 @@ struct ChannelBook: Equatable {
                 gather(message.threadID, Gathered(title: message.threadTitle, home: home, owner: owner?.id, messages: [message], isPosted: !sent.isReply))
                 continue
             }
-            if let echo = thread.messages.first(where: { isEcho(of: message, $0) }) {
+            if let index = thread.messages.firstIndex(where: { isEcho(of: message, $0) }) {
+                // T3 keeps the file but not a picture of it, so the one shown meanwhile stays while Shades runs.
+                if thread.messages[index].file?.name == message.file?.name, thread.messages[index].file?.thumbnail == nil {
+                    thread.messages[index].file = message.file
+                    gathered[message.threadID] = thread
+                }
+                let echo = thread.messages[index]
                 if sent.alsoSent, echo.id != thread.messages.first?.id { post(.alsoSent(echo, thread: message.threadID)) }
                 continue
             }
@@ -384,7 +398,7 @@ struct ChannelBook: Equatable {
         let talkingToItself = asker == replier
         var messages: [ChannelMessage] = []
         if let ask = exchange.ask, !talkingToItself {
-            messages.append(ChannelMessage(exchangeID: exchange.id, kind: .ask, speaker: asker, text: ask, at: exchange.askedAt, threadID: threadID, threadTitle: title))
+            messages.append(ChannelMessage(exchangeID: exchange.id, kind: .ask, speaker: asker, text: ask, at: exchange.askedAt, threadID: threadID, threadTitle: title, file: exchange.file.map { ChannelFile(name: $0) }))
         }
         if exchange.reply != nil || exchange.failure != nil || (isStillGoing && !talkingToItself) {
             messages.append(ChannelMessage(
@@ -418,7 +432,7 @@ struct ChannelBook: Equatable {
             let isStillGoing = thread.status.isActive && index == exchanges.count - 1
             var messages: [ChannelMessage] = []
             if exchange.asker == .you, let ask = exchange.ask {
-                messages.append(ChannelMessage(exchangeID: exchange.id, kind: .ask, speaker: .you, text: ask, at: exchange.askedAt, threadID: thread.id, threadTitle: thread.title))
+                messages.append(ChannelMessage(exchangeID: exchange.id, kind: .ask, speaker: .you, text: ask, at: exchange.askedAt, threadID: thread.id, threadTitle: thread.title, file: exchange.file.map { ChannelFile(name: $0) }))
             }
             // A reply still being written is read the way the bubble reads it, so a half-written marker never shows.
             let reply = exchange.reply.flatMap { isStillGoing ? saidSoFar($0) : said($0) }

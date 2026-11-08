@@ -1,0 +1,44 @@
+front
+channels
+wait 1
+channel steve
+wait 1
+thread cramped
+wait 1
+attach picture
+wait 0.5
+draw .verify/shades/attach/1-attached
+send Can the plans look as tidy as this keyboard?
+wait 2
+draw .verify/shades/attach/2-sent
+back
+channel pepper
+wait 1
+thread plan names
+wait 1
+attach pdf
+send What does this say about plan names?
+wait 2
+draw .verify/shades/attach/3-pepper
+channel general
+wait 1
+attach pdf
+send
+wait 5
+draw .verify/shades/attach/4-general
+phone on
+wait 3
+phone open general
+wait 4
+phone attach
+wait 2
+draw .verify/shades/attach/5-phone-attached
+wait 2
+phone send What is this?
+wait 6
+phone text
+draw .verify/shades/attach/6-phone-sent
+wait 3
+phone close
+front
+windows

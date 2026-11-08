@@ -38,6 +38,10 @@ enum CatWords {
     static let askAboutDrop = "Ask about it, or just press Return"
     static let summarize = "Summarize this."
     static let cantReadThat = "I can only read PDFs, pictures and links."
+    static let answersTakeNoFiles = "An answer to a question can only be words."
+    static let removeAttachment = "Remove attachment"
+    static let aFile = "a file"
+    static func attached(_ name: String) -> String { "Attached: \(name)" }
     static func cantTakeFiles(_ name: String) -> String {
         "\(name) can't take files. Put a link or the text in your message instead."
     }

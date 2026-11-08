@@ -36,15 +36,22 @@ final class PhoneServer {
     }
 
     private static let biggestRequest = 64 * 1024
+    /// A photo or file a phone sends ahead of its message, which is the only request this big.
+    static let biggestFile = 12 * 1024 * 1024
+    private static let fileRequest = Data("POST /file ".utf8)
     private static let mostConnections = 32
     /// Long enough for a slow phone, short enough that a half-sent request can't hold a connection.
     private static let requestSeconds: TimeInterval = 10
+    /// A file takes longer to send, so its request gets longer.
+    private static let fileSeconds: TimeInterval = 90
 
     var respond: (Request) -> Response = { _ in .status(404) }
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: NWConnection] = [:]
     /// Connections that have become a stream, which the request timeout leaves alone.
     private var streaming: Set<ObjectIdentifier> = []
+    /// Connections sending a file, which get `fileSeconds` instead.
+    private var sendingFiles: Set<ObjectIdentifier> = []
     private var starting: CheckedContinuation<UInt16, Error>?
 
     /// Listens on loopback only, and returns the port, which is a free one for 0.
@@ -97,6 +104,7 @@ final class PhoneServer {
                 MainActor.assumeIsolated {
                     self?.connections[id] = nil
                     self?.streaming.remove(id)
+                    self?.sendingFiles.remove(id)
                 }
             default:
                 break
@@ -104,9 +112,14 @@ final class PhoneServer {
         }
         connection.start(queue: .main)
         read(connection, Data())
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.requestSeconds) { [weak self, weak connection] in
+        giveUp(on: connection, after: Self.requestSeconds) { [weak self] in self?.sendingFiles.contains(id) != true }
+    }
+
+    private func giveUp(on connection: NWConnection, after seconds: TimeInterval, unless: @escaping () -> Bool = { true }) {
+        let id = ObjectIdentifier(connection)
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self, weak connection] in
             MainActor.assumeIsolated {
-                guard let self, let connection, self.connections[id] != nil, !self.streaming.contains(id) else { return }
+                guard let self, let connection, self.connections[id] != nil, !self.streaming.contains(id), unless() else { return }
                 connection.cancel()
             }
         }
@@ -118,7 +131,11 @@ final class PhoneServer {
                 guard let self else { return }
                 var buffer = buffer
                 if let data { buffer.append(data) }
-                guard buffer.count <= Self.biggestRequest else { return self.send(.status(413), on: connection) }
+                let isFile = buffer.starts(with: Self.fileRequest)
+                if isFile, self.sendingFiles.insert(ObjectIdentifier(connection)).inserted {
+                    self.giveUp(on: connection, after: Self.fileSeconds)
+                }
+                guard buffer.count <= (isFile ? Self.biggestFile : Self.biggestRequest) else { return self.send(.status(413), on: connection) }
                 switch Self.parse(buffer) {
                 case .request(let request):
                     self.answer(request, on: connection)

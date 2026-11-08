@@ -244,6 +244,18 @@ public enum Prompts {
         return trimmed
     }
 
+    private static let droppedLabel = "Dropped onto the cat instead of a look at the screen: "
+
+    /// The name of what was dropped or attached, from the line Shades writes first in its own screen block, which is
+    /// the last one, since what's on a screen has its tags taken out. Never anything in the file.
+    public static func droppedName(in prompt: String) -> String? {
+        guard let block = prompt.range(of: "<screen>\n", options: .backwards) else { return nil }
+        let first = prompt[block.upperBound...].prefix { !$0.isNewline }
+        guard first.hasPrefix(droppedLabel) else { return nil }
+        let name = first.dropFirst(droppedLabel.count).trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? nil : name
+    }
+
     /// The user pointed at something broken. The marked area is what they mean.
     public static func fix(description: String?, snapshot: ScreenSnapshot?, screenshotPath: String?) -> String {
         let said = description.map { "\(saidAboutLabel)\($0)" }
@@ -378,7 +390,7 @@ public enum Prompts {
         if snapshot.isPrivate { return "<screen>Hidden: the user keeps this app private.</screen>" }
 
         var lines: [String] = []
-        if let name = snapshot.droppedName { lines.append("Dropped onto the cat instead of a look at the screen: \(name)") }
+        if let name = snapshot.droppedName { lines.append("\(droppedLabel)\(name)") }
         if let app = snapshot.appName { lines.append("App: \(app)") }
         if let title = snapshot.windowTitle { lines.append("Window: \(title)") }
         if let url = snapshot.url { lines.append("URL: \(url.absoluteString)") }

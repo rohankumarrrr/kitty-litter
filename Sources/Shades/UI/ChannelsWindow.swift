@@ -1,4 +1,5 @@
 import AppKit
+import ShadesContext
 import ShadesCore
 
 /// A window that stays open beside your work without ever activating Shades, so the app you were in
@@ -122,7 +123,7 @@ final class ChannelsView: QuietView {
             pane.onClose = { [weak self] in self?.closeThread() }
             pane.composer.onEscape = { [weak self] in self?.perform(.escape) }
         }
-        registerForDraggedTypes([.fileURL])
+        registerForDraggedTypes(Drop.types)
     }
 
     @available(*, unavailable)
@@ -213,14 +214,31 @@ final class ChannelsView: QuietView {
         return file
     }
 
+    /// A theme file dresses the window. Any other file or picture goes with what you type in the pane it's let go
+    /// over, as Slack's does.
+    private func box(for drag: NSDraggingInfo) -> ChannelComposer? {
+        let point = convert(drag.draggingLocation, from: nil)
+        let pane = [threadPane, pane].first { !$0.isHidden && $0.frame.contains(point) }
+        guard let composer = pane?.composer, !composer.isHidden else { return nil }
+        return composer
+    }
+
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        themeFile(in: sender) == nil ? [] : .copy
+        if themeFile(in: sender) != nil { return .copy }
+        return Drop(sender.draggingPasteboard)?.isFile == true && box(for: sender) != nil ? .copy : []
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        draggingEntered(sender)
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        guard let file = themeFile(in: sender) else { return false }
-        onDropTheme?(file)
-        return true
+        if let file = themeFile(in: sender) {
+            onDropTheme?(file)
+            return true
+        }
+        guard let drop = Drop(sender.draggingPasteboard), let box = box(for: sender) else { return false }
+        return box.attach(drop)
     }
 
     override func draw(_ dirtyRect: NSRect) {
