@@ -9,7 +9,7 @@ struct NeedsYouAlert: Equatable {
         case approval, question, decision, finished
     }
 
-    /// The approval's, question's or report's own ID, or for a session that reports in the bubble, its thread's.
+    /// The approval's, question's or decision's own ID, or for a finished session, its thread's.
     var id: String
     var kind: Kind
     /// A kitten's name, or `nil` for work no kitten owns.
@@ -19,16 +19,14 @@ struct NeedsYouAlert: Equatable {
 }
 
 /// One notification for each new thing waiting on you, so Messages doesn't have to be open to know. Clicking one
-/// opens its thread.
+/// opens its thread, the same as the bubble's Open.
 extension AppController {
     func notifyNeedsYou() {
         let waiting = waiting
-        // Replying stops a report asking, and means you've seen it.
-        let reports = waiting.reports.filter { $0.repliedAt == nil && ($0.kind == .decision || settings.notifyFinished) }
         let items: [(kind: NeedsYouAlert.Kind, id: String, threadID: String, title: String, at: Date?)] =
             waiting.approvals.map { (.approval, $0.id, waiting.listed[$0.id] ?? $0.threadID, $0.threadTitle, $0.createdAt) }
             + waiting.questions.map { (.question, $0.id, waiting.listed[$0.id] ?? $0.threadID, $0.threadTitle, $0.askedAt) }
-            + reports.map { ($0.kind == .decision ? .decision : .finished, $0.id, $0.threadID, $0.threadTitle, $0.at) }
+            + waiting.reports.filter(\.needsYou).map { (.decision, $0.id, $0.threadID, $0.threadTitle, $0.at) }
         let current = items.filter { item in
             !AgentThread.isLiveTest(title: item.title) && latestThreads.first { $0.id == item.threadID }?.isLiveTest != true
         }
@@ -41,19 +39,17 @@ extension AppController {
         let fresh = current.filter { ($0.at ?? launchedAt) >= launchedAt && !notified.contains($0.id) }
         guard !fresh.isEmpty else { return }
         let kittens = loadKittens()
-        // One report can file a row of each kind at once, and a decision already says it's done.
-        var told: Set<String> = []
-        for item in fresh.filter({ $0.kind != .finished }) + fresh.filter({ $0.kind == .finished }) {
-            notified.insert(item.id)
-            guard told.insert(item.threadID).inserted || item.kind != .finished else { continue }
+        for item in fresh {
             let thread = latestThreads.first { $0.id == item.threadID }
             let owner = waiting.owners[item.id] ?? thread.flatMap { KittenBoard.owner(of: $0, among: kittens) }?.id
             tell(NeedsYouAlert(id: item.id, kind: item.kind, who: kittens.first { $0.id == owner }?.name, threadID: item.threadID))
+            notified.insert(item.id)
             showing.insert(item.id)
         }
     }
 
-    /// A session that reports in the bubble, rather than the inbox, finished.
+    /// A session's run finished, with a report that doesn't need a decision, since a decision has its own. There's
+    /// nothing to answer, so it stays until it's clicked, and a later run's takes its place.
     func notifyFinished(_ thread: AgentThread, by kitten: Kitten?) {
         guard settings.notifyFinished, !thread.isLiveTest else { return }
         tell(NeedsYouAlert(id: thread.id, kind: .finished, who: kitten?.name, threadID: thread.id))
@@ -66,11 +62,5 @@ extension AppController {
         let home = messagesHome(ofThread: alert.threadID).flatMap { $0 == .shades ? nil : $0 }
         let opens = home.map { ChannelSelection.thread(alert.threadID, in: .channel($0)) } ?? .activity
         phone?.pushes.push(alert, opening: PhonePlace.key(opens), now: now())
-    }
-
-    /// Clicking one is looking at what came in, so closing Messages has nothing new to say.
-    func notificationClicked(_ threadID: String) {
-        nudgeOnClose = false
-        showInMessages(threadID)
     }
 }

@@ -458,7 +458,7 @@ final class DemoDriver {
             print(button.accessibilityPerformPress() ? "pressed \(rest)" : "didn't press \(rest)")
         case "notification":
             // The same as clicking a notification about that thread.
-            controller.notificationClicked(rest.isEmpty ? "demo-tidy" : rest)
+            controller.showInMessages(rest.isEmpty ? "demo-tidy" : rest)
         case "notify-finished":
             // The same as ticking Also when a session finishes in Settings.
             var settings = controller.settings

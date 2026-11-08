@@ -491,6 +491,32 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(shown.last, page, "and opened it once it had")
     }
 
+    func testTappingANotificationForAThreadYouRepliedToBeforeMessagesReadItStillOpensIt() async throws {
+        let key = try await pair()
+        _ = try await subscribe(key: key)
+        backend.said["w"] = [Exchange(id: "turn", asker: .you, askedAt: Date(), ask: "Check the budget", reply: "On it.", repliedAt: Date())]
+        approvalNow()
+        // Sent from Messages before it had read the thread, so the thread is known without anything leading to it.
+        controller.messagesAction(.send("Use last month's numbers", to: .thread(id: "w", title: "Budget"), shownIn: .of(penny)))
+        await until { !pushed.isEmpty }
+        let opened = try WebPush.decrypt(XCTUnwrap(pushed.first?.httpBody), with: phone, auth: phoneAuth)
+        let page = try XCTUnwrap((try JSONSerialization.jsonObject(with: opened) as? [String: String])?["key"])
+
+        var request = URLRequest(url: URL(string: "/events?key=\(page.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)", relativeTo: base)!)
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let (bytes, _) = try await session.bytes(for: request)
+        var shown: [String] = []
+        let stream = Task { @MainActor in
+            for try await line in bytes.lines where line.hasPrefix("data: ") {
+                let view = try JSONSerialization.jsonObject(with: Data(line.dropFirst(6).utf8)) as? [String: Any]
+                shown.append(view?["key"] as? String ?? "")
+            }
+        }
+        defer { stream.cancel() }
+        await until { shown.last == page }
+        XCTAssertEqual(shown.last, page, "the tap ends on the thread once it's read: \(shown)")
+    }
+
     func testOnlyAPairedPhoneSubscribesAndOnlyToAPushService() async throws {
         let refused = try await subscribe(key: "made-up")
         XCTAssertEqual(refused, 401)

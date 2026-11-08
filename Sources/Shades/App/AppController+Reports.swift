@@ -52,7 +52,7 @@ extension AppController {
     }
 
     /// Which kitten a thread belongs to, by the project it's in or the name it starts with.
-    private func kitten(of thread: AgentThread) -> Kitten? {
+    func kitten(of thread: AgentThread) -> Kitten? {
         loadKittens().first { KittenBoard.belongs(thread, to: $0) }
     }
 

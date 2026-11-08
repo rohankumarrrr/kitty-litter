@@ -441,8 +441,6 @@ final class AppController {
     func apply(_ updated: Settings) {
         let keysChanged = updated.talkKey != settings.talkKey || updated.dictateKey != settings.dictateKey
         let phoneChanged = updated.phone != settings.phone
-        // Turning them on isn't news about what had already finished.
-        if updated.notifyFinished, !settings.notifyFinished { notified.formUnion(inbox.entries.map(\.id)) }
         settings = updated
         saveSettings(updated)
         updateVocabulary(watch.threads)
