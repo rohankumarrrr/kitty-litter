@@ -1,0 +1,36 @@
+front
+channels
+wait 1
+colors Cursor/Opal Horizon
+channel steve
+thread pricing copy
+wait 1
+draw .verify/shades/picture/0-none
+picture on
+wait 1
+draw .verify/shades/picture/1-channel
+channel threads
+wait 1
+draw .verify/shades/picture/2-threads
+colors shades
+theme light
+channel steve
+wait 1
+draw .verify/shades/picture/3-light
+picture off
+wait 1
+draw .verify/shades/picture/4-off
+picture on
+phone on
+wait 3
+phone pair
+wait 1
+phone open steve
+wait 4
+draw .verify/shades/picture/5-phone
+phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve
+wait 3
+draw .verify/shades/picture/6-phone-thread
+wait 2
+front
+windows

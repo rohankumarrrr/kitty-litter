@@ -169,7 +169,7 @@ struct PhoneView: Encodable, Equatable {
         var open: String
     }
 
-    /// Someone in a reply bar: their cat, or for you, a square in your colour, as the window draws them.
+    /// Someone in a reply bar: their cat, or for you, a square in your colour or your picture, as the window draws them.
     struct Face: Encodable, Equatable {
         var cat: String?
         var color: String?
@@ -266,6 +266,9 @@ struct PhoneView: Encodable, Equatable {
     var rows: [Row]
     var box: Box?
     var cantReachT3: Bool
+    /// Your picture, beside yours and for you in reply bars. Unlike a cat's, it comes only in what a paired phone is
+    /// sent, never from an address of its own.
+    var you: String?
 
     init(_ place: PhonePlace, in book: ChannelBook, now: Date) {
         key = place.key
@@ -281,6 +284,7 @@ struct PhoneView: Encodable, Equatable {
             rows = []
             return
         }
+        you = MessagesInk.picture.map { "data:image/jpeg;base64,\($0.base64EncodedString())" }
         if let thread = selection.thread {
             (title, subtitle) = ChannelHeader.words(forThread: thread, in: book)
             cat = book.home(ofThread: thread).flatMap { Self.cat(of: $0, in: book) }

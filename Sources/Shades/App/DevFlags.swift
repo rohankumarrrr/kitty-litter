@@ -23,6 +23,10 @@ import ShadesT3
 ///     shades --demo --channels-image out    # draws it to PNGs from canned data, then quits
 ///     shades --channels-check               # reads real T3 once, prints only counts, then signs out
 ///
+/// And for your picture beside your messages, which the app shows from its next start:
+///
+///     shades --picture photo.jpg            # keeps a small copy in the app's folder, then quits
+///
 /// And for driving the demo from a file of its commands, one a line, such as `wait 2` or `draw out`:
 ///
 ///     shades --demo --no-script --commands steps.txt
@@ -33,6 +37,18 @@ enum DevFlags {
     static var wantsChannelsCheck: Bool { CommandLine.arguments.contains("--channels-check") }
     static var channelsImageFolder: String? { value(after: "--channels-image") }
     static var commandsFile: String? { value(after: "--commands") }
+    static var pictureFile: String? { value(after: "--picture") }
+
+    static func savePicture(from path: String) -> Never {
+        do {
+            try YourPicture.save(from: URL(fileURLWithPath: (path as NSString).expandingTildeInPath))
+            print("Saved your picture. It shows from the app's next start.")
+            exit(0)
+        } catch {
+            print("Couldn't use that as your picture. Try a photo or picture file.")
+            exit(1)
+        }
+    }
 
     static func run(on controller: AppController) {
         if let question = value(after: "--ask") {

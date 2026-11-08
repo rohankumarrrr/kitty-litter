@@ -114,6 +114,8 @@ enum PhonePage {
         .cat { width: 32px; height: 32px; flex: none; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
         .cat.small { width: 16px; height: 16px; }
         .face { width: 16px; height: 16px; flex: none; border-radius: 4px; background: var(--you); }
+        .you { width: 32px; height: 32px; flex: none; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 .5px var(--line); }
+        .you.small { width: 16px; height: 16px; }
 
         .day { text-align: center; color: var(--soft); font-size: 12px; margin: 18px 0 6px; }
         .msg { margin: 6px 0; display: flex; flex-direction: column; align-items: flex-start; }
@@ -122,6 +124,8 @@ enum PhonePage {
         .said { display: flex; align-items: flex-end; gap: 8px; align-self: stretch; }
         .msg.mine .said { justify-content: flex-end; }
         .said .cat { margin-left: -40px; }
+        .msg.withyou { padding-right: 40px; }
+        .said .you { margin-right: -40px; }
         .meta { color: var(--soft); font-size: 12px; margin: 4px 12px 3px; }
         .bubble { max-width: 86%; padding: 9px 14px; border-radius: 18px; background: var(--grey); color: var(--text);
           white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -478,8 +482,15 @@ enum PhonePage {
         }
         matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (view) show(view); });
 
-        // You, where the window draws a square in your colour.
+        // You, where the window draws your picture, or a square in your colour.
+        function you(small) {
+          const node = el('img', small ? 'you small' : 'you');
+          node.alt = '';
+          node.src = view.you;
+          return node;
+        }
         function face(color) {
+          if (view.you) return you(true);
           const node = el('span', 'face');
           if (color) node.style.background = color;
           return node;
@@ -607,7 +618,8 @@ enum PhonePage {
         }
 
         function message(item) {
-          const node = el('div', 'msg' + (item.mine ? ' mine' : '') + (item.cat ? ' withcat' : ''));
+          const yours = item.mine && view.you;
+          const node = el('div', 'msg' + (item.mine ? ' mine' : '') + (item.cat ? ' withcat' : '') + (yours ? ' withyou' : ''));
           if (item.context) {
             const context = el('button', 'context', item.context);
             context.type = 'button';
@@ -616,10 +628,10 @@ enum PhonePage {
           }
           const meta = item.mine ? [item.sending ? words.sending : time(item.at)] : [item.name, item.detail, time(item.at)];
           node.append(el('div', 'meta', meta.filter(Boolean).join(' · ')));
-          // As in the window, their cat sits beside the bottom of what they said.
+          // As in the window, their cat sits beside the bottom of what they said, and your picture beside yours.
           const said = el('div', 'said');
           if (item.cat) said.append(cat(item.cat));
-          if (said.childElementCount || item.text) node.append(said);
+          if (said.childElementCount || item.text || yours) node.append(said);
           if (item.text) {
             const bubble = el('div', 'bubble' + (item.going || item.sending ? ' going' : ''));
             bubble.append(...marked(item.text));
@@ -638,6 +650,7 @@ enum PhonePage {
               node.append(more);
             }
           }
+          if (yours) said.append(you());
           if (item.picture) {
             const picture = el('img', 'picture');
             picture.src = item.picture;

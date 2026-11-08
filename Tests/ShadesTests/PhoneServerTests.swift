@@ -131,6 +131,21 @@ final class PhoneServerTests: XCTestCase {
         for _ in 0..<2000 where !condition() { try? await Task.sleep(nanoseconds: 2_000_000) }
     }
 
+    /// Your face is yours, so unlike a cat it has no address of its own, and only comes in what a paired phone is sent.
+    func testYourPictureGoesOnlyToAPairedPhone() async throws {
+        MessagesInk.picture = DemoPicture.jpeg
+        defer { MessagesInk.picture = nil }
+        let picture = DemoPicture.jpeg.base64EncodedString()
+        for path in ["/", "/app.js", "/app.css", "/manifest.json", "/sw.js", "/icon.png", "/picture.jpg", "/you", "/cat/light/sit/shades.png", "/events?key=general"] {
+            let (_, body) = try await send("GET", path)
+            XCTAssertFalse(String(decoding: body, as: UTF8.self).contains(picture), path)
+        }
+        let key = try await pair()
+        let (view, stream) = try await watch("general", key: key)
+        stream.cancel()
+        XCTAssertEqual(view["you"] as? String, "data:image/jpeg;base64,\(picture)")
+    }
+
     func testOnlyAPairedPhoneGetsPastThePage() async throws {
         let page = try await call("GET", "/")
         XCTAssertEqual(page.statusCode, 200, "the page itself holds nothing")

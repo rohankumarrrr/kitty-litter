@@ -6,6 +6,9 @@ import ShadesCore
 enum MessagesInk {
     /// Set when the app starts and when you pick one, and read as Messages draws, all on the main thread.
     static var theme: ColorTheme?
+    /// Your picture, as the small JPEG `YourPicture` keeps, set when the app starts. `nil` keeps your blue square.
+    static var picture: Data? { didSet { pictureImage = picture.flatMap(NSImage.init(data:)) } }
+    private(set) static var pictureImage: NSImage?
 
     static var paper: NSColor { themed(\.paper) ?? Ink.paper }
     static var sidebar: NSColor { themed(\.sidebar) ?? Ink.hover }

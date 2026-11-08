@@ -10,6 +10,7 @@ MainActor.assumeIsolated {
 
     let wantsDemo = CommandLine.arguments.contains("--demo")
     if DevFlags.wantsChannelsCheck { DevFlags.checkChannels() }
+    if let picture = DevFlags.pictureFile { DevFlags.savePicture(from: picture) }
     // Only with --demo, so real messages can't reach an image.
     if wantsDemo, let folder = DevFlags.channelsImageFolder {
         ChannelImages.draw(to: folder)
@@ -32,6 +33,7 @@ MainActor.assumeIsolated {
         // A copy trying a flow out sees your real threads too, and the real app already says.
         let notifications = DevFlags.wantsFlow ? nil : NeedsYouNotifications()
         var settings = Settings.load()
+        MessagesInk.picture = YourPicture.load()
         if DevFlags.wantsFlow { settings.phone = false }
         let tailscale = DevFlags.wantsFlow ? nil : TailscaleServe(port: PhoneLink.port)
         let real = AppController(
