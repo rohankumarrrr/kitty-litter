@@ -1,29 +1,31 @@
 import Foundation
 import ShadesCore
 
-/// A macOS notification that something needs you. It says who and what kind, and nothing anyone said, since
-/// Notification Center keeps its own copy, out of reach of what keeps a kitten's words to itself, and can show
-/// it on the lock screen.
+/// A macOS notification about a thread: something it needs from you, or if you asked for them, that it finished. It
+/// says who and what kind, and nothing anyone said, since Notification Center keeps its own copy, out of reach of what
+/// keeps a kitten's words to itself, and can show it on the lock screen.
 struct NeedsYouAlert: Equatable {
     enum Kind: Equatable {
-        case approval, question, decision
+        case approval, question, decision, finished
     }
 
-    /// The approval's, question's or report's own ID.
+    /// The approval's, question's or decision's own ID, or for a finished session, its thread's.
     var id: String
     var kind: Kind
     /// A kitten's name, or `nil` for work no kitten owns.
     var who: String?
+    /// The listed thread it's about, which clicking it opens.
+    var threadID: String
 }
 
 /// One notification for each new thing waiting on you, so Messages doesn't have to be open to know. Clicking one
-/// opens Activity, where it is.
+/// opens its thread, the same as the bubble's Open.
 extension AppController {
     func notifyNeedsYou() {
         let waiting = waiting
         let items: [(kind: NeedsYouAlert.Kind, id: String, threadID: String, title: String, at: Date?)] =
-            waiting.approvals.map { (.approval, $0.id, $0.threadID, $0.threadTitle, $0.createdAt) }
-            + waiting.questions.map { (.question, $0.id, $0.threadID, $0.threadTitle, $0.askedAt) }
+            waiting.approvals.map { (.approval, $0.id, waiting.listed[$0.id] ?? $0.threadID, $0.threadTitle, $0.createdAt) }
+            + waiting.questions.map { (.question, $0.id, waiting.listed[$0.id] ?? $0.threadID, $0.threadTitle, $0.askedAt) }
             + waiting.reports.filter(\.needsYou).map { (.decision, $0.id, $0.threadID, $0.threadTitle, $0.at) }
         let current = items.filter { item in
             !AgentThread.isLiveTest(title: item.title) && latestThreads.first { $0.id == item.threadID }?.isLiveTest != true
@@ -40,15 +42,25 @@ extension AppController {
         for item in fresh {
             let thread = latestThreads.first { $0.id == item.threadID }
             let owner = waiting.owners[item.id] ?? thread.flatMap { KittenBoard.owner(of: $0, among: kittens) }?.id
-            let alert = NeedsYouAlert(id: item.id, kind: item.kind, who: kittens.first { $0.id == owner }?.name)
-            notify(alert)
-            phone?.pushes.push(alert, now: now())
+            tell(NeedsYouAlert(id: item.id, kind: item.kind, who: kittens.first { $0.id == owner }?.name, threadID: item.threadID))
             notified.insert(item.id)
             showing.insert(item.id)
         }
     }
 
-    func notificationClicked() {
-        channelsPressed(selecting: .activity)
+    /// A session's run finished, with a report that doesn't need a decision, since a decision has its own. There's
+    /// nothing to answer, so it stays until it's clicked, and a later run's takes its place.
+    func notifyFinished(_ thread: AgentThread, by kitten: Kitten?) {
+        guard settings.notifyFinished, !thread.isLiveTest else { return }
+        tell(NeedsYouAlert(id: thread.id, kind: .finished, who: kitten?.name, threadID: thread.id))
+    }
+
+    /// On the Mac, and on each phone, where a tap opens the thread's own page. A phone can't show a thread Messages
+    /// doesn't, or one in the cat's DM, so those open Activity there.
+    private func tell(_ alert: NeedsYouAlert) {
+        notify(alert)
+        let home = messagesHome(ofThread: alert.threadID).flatMap { $0 == .shades ? nil : $0 }
+        let opens = home.map { ChannelSelection.thread(alert.threadID, in: .channel($0)) } ?? .activity
+        phone?.pushes.push(alert, opening: PhonePlace.key(opens), now: now())
     }
 }

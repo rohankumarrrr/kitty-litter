@@ -1,10 +1,11 @@
 import Foundation
 import UserNotifications
 
-/// Puts what needs you in Notification Center. That only works for a bundled app, so a plain `swift run` posts nothing.
+/// Puts what needs you, and if you asked, what finished, in Notification Center. That only works for a bundled app, so a plain `swift run` posts nothing.
 @MainActor
 final class NeedsYouNotifications: NSObject, UNUserNotificationCenterDelegate {
-    var onClick: (() -> Void)?
+    /// Given the thread a notification is about.
+    var onClick: ((String) -> Void)?
     private let center: UNUserNotificationCenter?
 
     override init() {
@@ -19,10 +20,12 @@ final class NeedsYouNotifications: NSObject, UNUserNotificationCenterDelegate {
         guard let center else { return }
         let title = CatWords.notification(alert)
         let id = alert.id
+        let thread = alert.threadID
         center.requestAuthorization(options: [.alert, .sound]) { allowed, _ in
             guard allowed else { return }
             let content = UNMutableNotificationContent()
             content.title = title
+            content.userInfo = ["thread": thread]
             content.sound = .default
             center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
         }
@@ -41,7 +44,10 @@ final class NeedsYouNotifications: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.onClick?() } }
+        // Starting takes back every notification from before, so each one there is says which thread.
+        if let thread = response.notification.request.content.userInfo["thread"] as? String {
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.onClick?(thread) } }
+        }
         completionHandler()
     }
 

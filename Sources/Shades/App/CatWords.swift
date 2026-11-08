@@ -66,6 +66,7 @@ enum CatWords {
         case .approval: return "\(who) needs an approval"
         case .question: return "\(who) has a question"
         case .decision: return "\(who) needs a decision"
+        case .finished: return "\(who) finished"
         }
     }
     static func kittenState(_ state: KittenStatus.State) -> String {

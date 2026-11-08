@@ -13,10 +13,14 @@ final class PhoneLink {
         let stream: PhoneStream
         var key: String
         var shown: PhoneView?
+        /// A notification can open a thread Messages hasn't read yet, so a stream asks for the thread it opened with
+        /// until it shows.
+        var opening: Bool
 
         init(stream: PhoneStream, key: String) {
             self.stream = stream
             self.key = key
+            opening = PhonePlace.thread(in: key) != nil
         }
     }
 
@@ -89,8 +93,10 @@ final class PhoneLink {
     }
 
     private func show(_ book: ChannelBook, to watcher: Watcher) {
-        let view = PhoneView(PhonePlace(watcher.key, in: book), in: book, now: now())
-        watcher.key = view.key
+        let place = PhonePlace(watcher.key, in: book)
+        let view = PhoneView(place, in: book, now: now())
+        if place.selection?.thread != nil { watcher.opening = false }
+        if !watcher.opening { watcher.key = view.key }
         guard view != watcher.shown, let json = try? JSONEncoder().encode(view) else { return }
         watcher.shown = view
         watcher.stream.send(json)

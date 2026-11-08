@@ -35,15 +35,16 @@ final class PhonePushes {
         return true
     }
 
-    /// Fire and forget. A phone whose push service says it's gone stops getting them.
+    /// Fire and forget, with the page a tap opens. A phone whose push service says it's gone stops getting them.
     @discardableResult
-    func push(_ alert: NeedsYouAlert, now: Date) -> Task<Void, Never>? {
+    func push(_ alert: NeedsYouAlert, opening key: String, now: Date) -> Task<Void, Never>? {
         guard !subscriptions.isEmpty else { return nil }
         struct Payload: Encodable {
             var title: String
             var tag: String
+            var key: String
         }
-        guard let payload = try? JSONEncoder().encode(Payload(title: CatWords.notification(alert), tag: alert.id)) else { return nil }
+        guard let payload = try? JSONEncoder().encode(Payload(title: CatWords.notification(alert), tag: alert.id, key: key)) else { return nil }
         let requests = subscriptions.compactMap { subscription in
             (try? WebPush.request(payload, to: subscription, key: signing, now: now)).map { (subscription.endpoint, $0) }
         }

@@ -65,9 +65,11 @@ extension AppController {
         }
         // A reply can say it passed work on and name nowhere it went, and that doesn't get to lose a report.
         let lines = sorted.flatMap { $0.hasLines ? $0 : nil } ?? unsorted(report)
+        let owed = inbox.owes(thread)
         if inbox.file(lines, from: thread, at: now(), id: { UUID().uuidString }) { nudgeInbox() }
         keepInbox()
         inboxChanged()
+        if owed, lines.decision == nil { notifyFinished(thread, by: kitten(of: thread)) }
     }
 
     /// Never for a thread given a correction. Otherwise the model's call, and with no answer from it, a thread the cat started whose report is one sentence and a link,

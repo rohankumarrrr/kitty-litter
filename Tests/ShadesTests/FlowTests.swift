@@ -4629,11 +4629,11 @@ final class FlowTests: XCTestCase {
         var asking = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .waitingForApproval, model: "m", updatedAt: clock, pendingApprovals: [newRequest()], projectPath: penny.folder)
         controller.threadsChanged([asking])
         controller.threadsChanged([asking])
-        XCTAssertEqual(notified, [NeedsYouAlert(id: "r1", kind: .approval, who: "Penny")], "once, however often the list comes")
+        XCTAssertEqual(notified, [NeedsYouAlert(id: "r1", kind: .approval, who: "Penny", threadID: "w")], "once, however often the list comes")
 
         asking.pendingQuestion = AgentQuestion(id: "q", threadID: "w", threadTitle: "Budget", text: "Which month?", askedAt: clock)
         controller.threadsChanged([asking])
-        XCTAssertEqual(notified.last, NeedsYouAlert(id: "q", kind: .question, who: "Penny"))
+        XCTAssertEqual(notified.last, NeedsYouAlert(id: "q", kind: .question, who: "Penny", threadID: "w"))
         XCTAssertEqual(notified.map(CatWords.notification), ["Penny needs an approval", "Penny has a question"])
         XCTAssertTrue(withdrawn.isEmpty)
     }
@@ -4642,7 +4642,7 @@ final class FlowTests: XCTestCase {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")
         let id = rows[0].id
-        XCTAssertEqual(notified, [NeedsYouAlert(id: id, kind: .decision, who: "Clawde")])
+        XCTAssertEqual(notified, [NeedsYouAlert(id: id, kind: .decision, who: "Clawde", threadID: "w")])
         controller.messagesAction(.inbox(.done(id: id)))
         XCTAssertEqual(withdrawn, [id])
     }
@@ -4699,10 +4699,103 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(notified.isEmpty)
     }
 
-    func testClickingANotificationOpensNeedsYouInMessages() async {
-        controller.notificationClicked()
+    func testClickingANotificationOpensItsThreadBesideItsChannel() async throws {
+        kittens = [penny]
+        controller.threadsChanged([AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .waitingForApproval, model: "m", updatedAt: clock, pendingApprovals: [newRequest()], projectPath: penny.folder)])
+        controller.showInMessages(try XCTUnwrap(notified.first?.threadID))
         XCTAssertEqual(stage.channelsShown.count, 1)
-        XCTAssertEqual(stage.selections.last ?? nil, .activity)
+        XCTAssertEqual(stage.selections.last ?? nil, .thread("w", in: .channel(.of(penny))))
+    }
+
+    func testClickingANotificationForAThreadMessagesDoesntShowOpensItInT3() async throws {
+        controller.threadsChanged([thread(.waitingForApproval, approvals: [newRequest()])])
+        controller.showInMessages(try XCTUnwrap(notified.first?.threadID))
+        XCTAssertEqual(backend.opened, ["w"])
+        XCTAssertTrue(stage.channelsShown.isEmpty)
+    }
+
+    func testASubagentsApprovalOpensTheThreadItHoldsUp() async {
+        kittens = [penny]
+        controller.threadsChanged([AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .waitingForApproval, model: "m", updatedAt: clock, pendingApprovals: [newRequest(thread: "subagent")], projectPath: penny.folder)])
+        XCTAssertEqual(notified.map(\.threadID), ["w"])
+    }
+
+    private func notifyingWhenFinished() {
+        var settings = controller.settings
+        settings.notifyFinished = true
+        controller.apply(settings)
+    }
+
+    func testAFinishedSessionOnlyNotifiesIfYouAskedAndSaysOnlyWho() async {
+        kittens = [inboxKitten]
+        await finish(work(), sorted: "SHIPPED: The fix is live.")
+        XCTAssertTrue(notified.isEmpty, "off until you turn it on")
+
+        notifyingWhenFinished()
+        await finish(work(run: "run-2"), sorted: "SHIPPED: The login works again.")
+        XCTAssertEqual(notified, [NeedsYouAlert(id: "w", kind: .finished, who: "Clawde", threadID: "w")], "and not the report from before it was on")
+        XCTAssertEqual(notified.map(CatWords.notification), ["Clawde finished"])
+    }
+
+    func testARunThatShipsAndAsksGetsOneNotification() async {
+        kittens = [inboxKitten]
+        notifyingWhenFinished()
+        await finish(work(), sorted: "SHIPPED: The fix is live.\nNOTE: Two tests were slow.\nDECISION: Install it now?")
+        XCTAssertEqual(Set(rows.map(\.kind)), [.decision, .shipped])
+        XCTAssertEqual(notified.map(\.kind), [.decision], "a decision already says it's done")
+        await finish(work(run: "run-2"), sorted: "SHIPPED: Installed.")
+        XCTAssertEqual(notified.map(\.kind), [.decision, .finished], "the next run is news of its own")
+    }
+
+    func testReplyingToADecisionTakesItsNotificationBackEvenWhenFinishedOnesAreOn() async {
+        kittens = [inboxKitten]
+        notifyingWhenFinished()
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        controller.reply("Yes, ship it", toThread: rows[0].threadID, title: rows[0].threadTitle, marking: rows[0].id, echoID: "sent-1")
+        await controller.forwardTask?.value
+        XCTAssertEqual(withdrawn, [rows[0].id])
+        XCTAssertEqual(notified.count, 1)
+    }
+
+    func testAnAnswerToYourFollowUpNotifiesWhenFinishedOnesAreOn() async {
+        kittens = [inboxKitten]
+        notifyingWhenFinished()
+        await finish(work(), sorted: "SHIPPED: The fix is live.")
+        XCTAssertEqual(notified.map(\.kind), [.finished])
+        controller.bubbleDismissed(byClick: false)
+        await replyInMessages("Did you check the rollback?", to: rows[0])
+        controller.line = nil
+        await finish(work(run: "run-2"), sorted: "NOTE: Yes, it rolled back cleanly.")
+        XCTAssertEqual(rows[0].answer, "Yes, it rolled back cleanly.")
+        XCTAssertEqual(notified.map(\.kind), [.finished, .finished], "run-2 finished, with a report that isn't a decision")
+    }
+
+    func testASecondRunThatOnlyLeavesANoteNotifies() async {
+        kittens = [inboxKitten]
+        notifyingWhenFinished()
+        await finish(work(run: "r1"), sorted: "SHIPPED: The fix is live.")
+        await finish(work(run: "r2"), sorted: "NOTE: Two tests were slow.")
+        XCTAssertEqual(rows.map(\.answer), ["Two tests were slow."])
+        XCTAssertEqual(notified.map(\.kind), [.finished, .finished], "r2 finished, with a report that isn't a decision")
+    }
+
+    func testASessionThatReportsInTheBubbleNotifiesWhenItsDoneIfYouAsked() async {
+        kittens = [steve]
+        let steves = { (status: AgentStatus) in AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: status, model: "m", updatedAt: self.clock, projectPath: "/k/steve") }
+        controller.threadsChanged([steves(.running)])
+        controller.threadsChanged([steves(.completed)])
+        await controller.reportTask?.value
+        XCTAssertTrue(notified.isEmpty, "off until you turn it on")
+
+        notifyingWhenFinished()
+        controller.threadsChanged([steves(.running)])
+        controller.threadsChanged([steves(.completed)])
+        await controller.reportTask?.value
+        XCTAssertEqual(notified, [NeedsYouAlert(id: "s", kind: .finished, who: "Steve Pawsniak", threadID: "s")])
+        controller.threadsChanged([steves(.running)])
+        controller.threadsChanged([steves(.failed)])
+        await controller.reportTask?.value
+        XCTAssertEqual(notified.count, 1, "a failure isn't finishing")
     }
 
     func testReplyingInAThreadStopsItsReportAsking() async {
@@ -5626,25 +5719,40 @@ extension FlowTests {
         await finish(work(), sorted: "DECISION: Ship the fix?")
         XCTAssertEqual(notified.map(\.kind), [.decision])
         XCTAssertEqual(stage.bubble, .inbox("1 decision"))
-        controller.notificationClicked()
-        XCTAssertEqual(stage.selections.last ?? nil, .activity)
+        controller.showInMessages("w")
+        XCTAssertEqual(stage.selections.last ?? nil, .thread("w", in: .channel(.of(inboxKitten))))
         controller.messagesHotkeyPressed()
         controller.channelsClosed()
         XCTAssertNil(stage.bubble)
     }
 
-    /// Messages open behind your work: the click brings it up at Needs you, which is looking at it.
-    func testANotificationClickWithMessagesOpenCoversTheNudge() async {
+    /// Messages open behind your work: the click brings it up at the thread, and closing it again still nudges, as
+    /// the bubble's Open does, since the decision's still waiting.
+    func testANotificationClickWithMessagesOpenStillNudgesOnClose() async {
         kittens = [inboxKitten]
         controller.channelsPressed()
         await finish(work(), sorted: "DECISION: Ship the fix?")
         XCTAssertEqual(notified.map(\.kind), [.decision])
         XCTAssertNil(stage.bubble)
-        controller.notificationClicked()
-        XCTAssertEqual(stage.selections.last ?? nil, .activity)
+        controller.showInMessages("w")
+        XCTAssertEqual(stage.selections.last ?? nil, .thread("w", in: .channel(.of(inboxKitten))))
         controller.messagesHotkeyPressed()
         controller.channelsClosed()
-        XCTAssertNil(stage.bubble, "you clicked the notification and were shown Needs you")
+        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+    }
+
+    /// One notification is one thread, so the others that came in while Messages sat open still get the bubble.
+    func testClickingOneNotificationLeavesTheNudgeForTheOthers() async {
+        kittens = [inboxKitten]
+        controller.channelsPressed()
+        await finish(work(), sorted: "DECISION: Ship the fix?")
+        await finish(work("w2", title: "Clawde: Tidy logs"), sorted: "DECISION: Delete the old logs?")
+        XCTAssertEqual(notified.map(\.threadID), ["w", "w2"])
+        controller.showInMessages("w")
+        XCTAssertEqual(stage.selections.last ?? nil, .thread("w", in: .channel(.of(inboxKitten))))
+        controller.messagesHotkeyPressed()
+        controller.channelsClosed()
+        XCTAssertNotNil(stage.bubble, "you were shown w, and never w2's decision")
     }
 
     /// #1 for #12's new topic: it warns, and asking the cat before it starts takes that back.

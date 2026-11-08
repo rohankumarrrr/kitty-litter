@@ -909,22 +909,23 @@ enum PhonePage {
         """
 
     /// Runs on the phone even with the page closed. Each push says only who and what kind, and tapping it opens
-    /// Activity, where it is.
+    /// the page of the thread it's about.
     static let worker = #"""
         'use strict';
         self.addEventListener('push', (event) => {
           let message = {};
           try { message = event.data ? event.data.json() : {}; } catch (error) {}
-          event.waitUntil(self.registration.showNotification(message.title || 'Shades', { tag: message.tag, icon: '/icon.png' }));
+          event.waitUntil(self.registration.showNotification(message.title || 'Shades', { tag: message.tag, icon: '/icon.png', data: { key: message.key } }));
         });
         self.addEventListener('notificationclick', (event) => {
           event.notification.close();
+          const url = '/?key=' + encodeURIComponent((event.notification.data && event.notification.data.key) || 'activity');
           event.waitUntil((async () => {
             for (const client of await clients.matchAll({ type: 'window', includeUncontrolled: true })) {
-              await client.navigate('/?key=activity');
+              await client.navigate(url);
               return client.focus();
             }
-            return clients.openWindow('/?key=activity');
+            return clients.openWindow(url);
           })());
         });
         """#
