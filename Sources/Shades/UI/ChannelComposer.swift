@@ -1,8 +1,10 @@
 import AppKit
+import ShadesContext
 import ShadesCore
 
 /// The box at the bottom of Messages, and the only thing in the window that takes the keyboard. What's typed goes
-/// where the line above it says, and carries nothing but your words.
+/// where the line above it says, and carries nothing but your words, and a file or picture if you drop or paste one in.
+/// There's no file picker, since one would make Shades the active app.
 final class ChannelComposer: QuietView, NSTextViewDelegate {
     private static let pad: CGFloat = 12
     private static let lineHeight: CGFloat = 18
@@ -10,8 +12,9 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     private static let labelHeight: CGFloat = 22
     private static let fieldPad: CGFloat = 8
     private static let checkboxHeight: CGFloat = 24
+    private static let fileHeight: CGFloat = 52
 
-    var onSend: ((String, MessageTarget) -> Void)?
+    var onSend: ((String, MessageTarget, Drop?) -> Void)?
     var onResize: (() -> Void)?
     /// Esc in the box, which closes a thread's pane as it does anywhere else in the window.
     var onEscape: (() -> Void)?
@@ -23,7 +26,10 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     let alsoSend = QuietCheckbox()
     private let label = NSTextField(labelWithString: "")
     private let scroll = NSScrollView()
-    let textView = PlaceholderTextView()
+    let textView = ComposerTextView()
+    /// What goes with your words, until you send them or take it off.
+    private(set) var attachment: Drop?
+    private let file = AttachmentChip()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -54,7 +60,40 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         addSubview(scroll)
         alsoSend.isHidden = true
         addSubview(alsoSend)
+        file.isHidden = true
+        file.onRemove = { [weak self] in self?.attach(nil) }
+        addSubview(file)
+        textView.onAttach = { [weak self] in self?.attach($0) ?? false }
+        registerForDraggedTypes(Drop.types)
         restyle()
+    }
+
+    /// Puts a file or picture with what you're typing, or takes it off. Only words go to a question, so it can't take one.
+    @discardableResult
+    func attach(_ drop: Drop?) -> Bool {
+        if let drop {
+            guard let target, target.takesFiles, drop.isFile else { return false }
+            file.show(name: drop.name, thumbnail: drop.thumbnail(side: 96).flatMap(NSImage.init(data:)))
+        }
+        attachment = drop
+        file.isHidden = drop == nil
+        needsLayout = true
+        onResize?()
+        return true
+    }
+
+    /// What was attached, which goes with what's sent now.
+    func takeAttachment() -> Drop? {
+        defer { attach(nil) }
+        return attachment
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        Drop(sender.draggingPasteboard).map { target?.takesFiles == true && $0.isFile } == true ? .copy : []
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        Drop(sender.draggingPasteboard).map { attach($0) } ?? false
     }
 
     func restyle() {
@@ -77,6 +116,8 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     /// sidebar writes it. `alsoSendTo` offers a thread's reply to its channel too.
     func show(_ target: MessageTarget?, label: String? = nil, in channel: ChannelID? = nil, name: String? = nil, alsoSendTo: String? = nil) {
         let changed = target != self.target || (alsoSendTo == nil) != alsoSend.isHidden
+        // A file is for where you attached it, so it never follows the box anywhere else.
+        if target != self.target, attachment != nil { attach(nil) }
         self.target = target
         isHidden = target == nil
         alsoSend.isHidden = alsoSendTo == nil
@@ -89,7 +130,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
 
     var height: CGFloat {
         guard target != nil else { return 0 }
-        return Self.pad + Self.labelHeight + textHeight + Self.fieldPad * 2 + (alsoSend.isHidden ? 0 : Self.checkboxHeight) + Self.pad
+        return Self.pad + Self.labelHeight + (file.isHidden ? 0 : Self.fileHeight) + textHeight + Self.fieldPad * 2 + (alsoSend.isHidden ? 0 : Self.checkboxHeight) + Self.pad
     }
 
     private var textHeight: CGFloat {
@@ -103,7 +144,8 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         super.layout()
         let inner = bounds.width - ChannelRowView.margin * 2
         label.frame = NSRect(x: ChannelRowView.margin - 2, y: Self.pad + 2, width: inner, height: 16)
-        let field = NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight, width: inner, height: textHeight + Self.fieldPad * 2)
+        file.frame = NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight, width: min(inner, 320), height: Self.fileHeight - 8)
+        let field = NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight + (file.isHidden ? 0 : Self.fileHeight), width: inner, height: textHeight + Self.fieldPad * 2)
         scroll.frame = field.insetBy(dx: 10, dy: Self.fieldPad)
         textView.minSize = NSSize(width: scroll.frame.width, height: 0)
         textView.maxSize = NSSize(width: scroll.frame.width, height: .greatestFiniteMagnitude)
@@ -115,7 +157,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     override func draw(_ dirtyRect: NSRect) {
         MessagesInk.line.setFill()
         NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
-        let field = NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight, width: bounds.width - ChannelRowView.margin * 2, height: textHeight + Self.fieldPad * 2)
+        let field = NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight + (file.isHidden ? 0 : Self.fileHeight), width: bounds.width - ChannelRowView.margin * 2, height: textHeight + Self.fieldPad * 2)
         MessagesInk.hover.setFill()
         NSBezierPath(roundedRect: field, xRadius: 9, yRadius: 9).fill()
     }
@@ -144,7 +186,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         send()
     }
 
-    var hasDraft: Bool { textView.string.contains { !$0.isWhitespace } }
+    var hasDraft: Bool { textView.string.contains { !$0.isWhitespace } || attachment != nil }
 
     /// Puts another place's or thread's draft in the box, with nothing to undo back into the one it replaced.
     func showDraft(_ text: String) {
@@ -155,13 +197,88 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
 
     private func send() {
         let words = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let target, !words.isEmpty, target.isReady, !isHeld else {
+        guard let target, !words.isEmpty || attachment != nil, target.isReady, !isHeld else {
             NSSound.beep()
             return
         }
         textView.string = ""
+        let file = takeAttachment()
         onResize?()
-        onSend?(words, target)
+        onSend?(words, target, file)
+    }
+}
+
+/// The box's text, which takes a file or picture dropped or pasted into it as an attachment rather than as its path.
+final class ComposerTextView: PlaceholderTextView {
+    var onAttach: ((Drop) -> Bool)?
+
+    override func paste(_ sender: Any?) {
+        let pasteboard = NSPasteboard.general
+        // A copied file is attached rather than its name pasted, but words copied with a picture, as from a web page,
+        // paste as words.
+        let hasFile = pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+        if hasFile || pasteboard.string(forType: .string) == nil, let drop = Drop(pasteboard), drop.isFile, onAttach?(drop) == true { return }
+        super.paste(sender)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard let drop = Drop(sender.draggingPasteboard), drop.isFile else { return super.draggingEntered(sender) }
+        return .copy
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard let drop = Drop(sender.draggingPasteboard), drop.isFile else { return super.performDragOperation(sender) }
+        return onAttach?(drop) ?? false
+    }
+}
+
+/// What's attached, over the box: a small picture or a file's mark, its name, and ✕ to take it off.
+final class AttachmentChip: NSView {
+    var onRemove: (() -> Void)?
+    private let picture = NSImageView()
+    private let name = NSTextField(labelWithString: "")
+    private let remove = QuietButton("✕", style: .text)
+
+    init() {
+        super.init(frame: .zero)
+        wantsLayer = true
+        picture.imageScaling = .scaleProportionallyUpOrDown
+        picture.wantsLayer = true
+        picture.layer?.cornerRadius = 6
+        picture.layer?.masksToBounds = true
+        name.font = .systemFont(ofSize: 13)
+        name.lineBreakMode = .byTruncatingMiddle
+        remove.onPress = { [weak self] in self?.onRemove?() }
+        remove.setAccessibilityLabel(CatWords.removeAttachment)
+        [picture, name, remove].forEach(addSubview)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var isFlipped: Bool { true }
+
+    func show(name: String, thumbnail: NSImage?) {
+        self.name.stringValue = name
+        self.name.textColor = MessagesInk.text
+        picture.image = thumbnail ?? NSImage(systemSymbolName: "doc.fill", accessibilityDescription: nil)
+        picture.contentTintColor = MessagesInk.soft
+        setAccessibilityLabel(CatWords.attached(name))
+        needsLayout = true
+        needsDisplay = true
+    }
+
+    override func layout() {
+        super.layout()
+        let side = bounds.height - 8
+        picture.frame = NSRect(x: 4, y: 4, width: side, height: side)
+        remove.setFrameOrigin(NSPoint(x: bounds.width - remove.frame.width - 2, y: (bounds.height - remove.frame.height) / 2))
+        name.frame = NSRect(x: picture.frame.maxX + 8, y: (bounds.height - 18) / 2, width: remove.frame.minX - picture.frame.maxX - 12, height: 18)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        MessagesInk.hover.setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 9, yRadius: 9).fill()
     }
 }
 

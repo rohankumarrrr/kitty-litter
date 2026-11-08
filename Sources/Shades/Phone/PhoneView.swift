@@ -182,6 +182,8 @@ struct PhoneView: Encodable, Equatable {
         var ready = true
         /// A thread's "Also send to #channel".
         var also: String?
+        /// Whether a photo or file can go with your words, which an answer to a question can't.
+        var files = true
     }
 
     /// The latest reply under a thread in Threads.
@@ -241,6 +243,9 @@ struct PhoneView: Encodable, Equatable {
         var reply: Reply?
         var more: Int?
         var unread: Bool?
+        /// A file or picture on a message: its name, and for a picture sent while Shades has been running, a small copy.
+        var file: String?
+        var picture: String?
     }
 
     var key: String
@@ -263,7 +268,7 @@ struct PhoneView: Encodable, Equatable {
         let channel = place.selection?.channelID
         let also = place.alsoSendTo(in: book).map { CatWords.alsoSendTo(book.title(of: $0)) }
         box = place.target.map { target in
-            Box(label: CatWords.target(target, in: channel), placeholder: CatWords.placeholder(target, in: channel, name: channel.map(book.name)), ready: target.isReady, also: also)
+            Box(label: CatWords.target(target, in: channel), placeholder: CatWords.placeholder(target, in: channel, name: channel.map(book.name)), ready: target.isReady, also: also, files: target.takesFiles)
         }
         guard let selection = place.selection else {
             title = CatWords.messagesTitle
@@ -343,7 +348,10 @@ struct PhoneView: Encodable, Equatable {
             mine: look.isYou,
             going: message.isStillGoing,
             failure: message.failure,
-            at: millis(message.at)
+            at: millis(message.at),
+            file: message.file?.name,
+            // Only ever a JPEG Shades made, as base64.
+            picture: message.file?.thumbnail.map { "data:image/jpeg;base64,\($0.base64EncodedString())" }
         )
     }
 

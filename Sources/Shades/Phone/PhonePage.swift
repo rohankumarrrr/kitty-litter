@@ -38,10 +38,19 @@ enum PhonePage {
         <main id="rows"></main>
         <form id="box" hidden>
           <label id="label" for="words"></label>
+          <div id="attached" hidden>
+            <img id="attachedpicture" alt="">
+            <span id="attachedname"></span>
+            <button id="unattach" type="button" aria-label="Remove attachment">✕</button>
+          </div>
           <div class="field">
+            <button id="attach" class="tool" type="button" aria-label="Attach a photo or file">📎</button>
+            <button id="camera" class="tool" type="button" aria-label="Take a photo">📷</button>
             <textarea id="words" rows="1" enterkeyhint="send"></textarea>
             <button id="send" type="submit">Send</button>
           </div>
+          <input id="pick" type="file" accept="image/*,application/pdf" hidden>
+          <input id="snap" type="file" accept="image/*" capture="environment" hidden>
           <label id="alsolabel" hidden><input type="checkbox" id="also"> <span id="alsotext"></span></label>
         </form>
         <section id="pair" hidden>
@@ -172,6 +181,16 @@ enum PhonePage {
         #words { flex: 1; resize: none; font: inherit; color: inherit; background: var(--grey); border: 0; border-radius: 18px;
           padding: 8px 14px; max-height: 40vh; }
         #send { background: var(--you); color: var(--on-you); border-radius: 18px; padding: 8px 14px; font-weight: 600; }
+        .tool { font-size: 20px; padding: 6px 2px; line-height: 1; }
+        .tool:disabled { opacity: .4; }
+        #attached { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 8px; border-radius: 12px; background: var(--grey); }
+        #attached img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex: none; }
+        #attached img:not([src]) { display: none; }
+        #attachedname { flex: 1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #unattach { color: var(--soft); padding: 4px 8px; }
+        .picture { max-width: 66%; max-height: 240px; border-radius: 14px; margin-top: 4px; display: block; }
+        .file { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 8px 12px; border-radius: 12px;
+          background: var(--card); border: 1px solid var(--line); font-size: 14px; max-width: 86%; overflow-wrap: anywhere; }
 
         #pair { padding: calc(env(safe-area-inset-top) + 40px) 24px 24px; }
         #pair h1 { font-size: 24px; margin: 0 0 8px; }
@@ -204,6 +223,8 @@ enum PhonePage {
           wrongCode: "That code didn't work. Turn pairing on again in Shades on your Mac for a new one.",
           answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear',
           notifyAsk: 'Get a notification when something needs you.',
+          cantRead: 'Shades can only read photos and PDFs.',
+          tooBig: "That's too big to send. Try something under 10 MB.",
           homeScreen: 'For notifications on an iPhone, add this page to your Home Screen with Share, then pair it there.',
         };
 
@@ -426,10 +447,13 @@ enum PhonePage {
           $('back').hidden = !next.back;
           $('back').textContent = next.back ? '‹ ' + next.backTitle : '';
           $('box').hidden = !next.box;
+          // A file is for where you attached it, so it never follows you anywhere else.
+          if (fresh || !next.box || !next.box.files) unattach();
           if (next.box) {
             $('label').textContent = next.box.label;
             $('words').placeholder = next.box.placeholder;
-            $('send').disabled = !next.box.ready;
+            $('send').disabled = !next.box.ready || uploading;
+            for (const id of ['attach', 'camera']) $(id).hidden = !next.box.files;
             $('alsolabel').hidden = !next.box.also;
             $('alsotext').textContent = next.box.also || '';
             if (fresh) $('also').checked = false;
@@ -611,6 +635,14 @@ enum PhonePage {
               node.append(more);
             }
           }
+          if (item.picture) {
+            const picture = el('img', 'picture');
+            picture.src = item.picture;
+            picture.alt = item.file || '';
+            node.append(picture);
+          } else if (item.file) {
+            node.append(el('div', 'file', '📄 ' + item.file));
+          }
           if (item.failure) node.append(el('div', 'failure', item.failure));
           return node;
         }
@@ -730,16 +762,92 @@ enum PhonePage {
         $('box').onsubmit = async (event) => {
           event.preventDefault();
           const text = $('words').value.trim();
-          if (!text) return;
+          if ((!text && !attached) || uploading) return;
           $('send').disabled = true;
-          const done = await act({ act: 'send', key, text, also: !$('alsolabel').hidden && $('also').checked });
+          const done = await act({ act: 'send', key, text, also: !$('alsolabel').hidden && $('also').checked, file: attached && attached.id });
           $('send').disabled = false;
           if (!done) return;
           $('words').value = '';
           $('also').checked = false;
+          unattach();
           fit();
           if (done.open) go(done.open);
         };
+
+        // A photo or file goes to the Mac first, so the message itself stays small. A photo is made smaller here,
+        // since the Mac only ever sends a picture the size of a screenshot.
+        let attached = null;
+        let uploading = false;
+        $('attach').onclick = () => $('pick').click();
+        $('camera').onclick = () => $('snap').click();
+        for (const id of ['pick', 'snap']) {
+          $(id).onchange = () => {
+            const file = $(id).files[0];
+            $(id).value = '';
+            if (file) attach(file);
+          };
+        }
+        $('unattach').onclick = unattach;
+        $('words').addEventListener('paste', (event) => {
+          const file = [...(event.clipboardData ? event.clipboardData.files : [])][0];
+          if (!file || !view || !view.box || !view.box.files) return;
+          event.preventDefault();
+          attach(file);
+        });
+
+        async function attach(file) {
+          const isPicture = file.type.startsWith('image/');
+          if (!isPicture && file.type !== 'application/pdf') return banner(words.cantRead);
+          uploading = true;
+          $('send').disabled = true;
+          try {
+            const blob = isPicture ? await shrink(file) : file;
+            const name = isPicture ? (file.name || 'photo').replace(/\.[^.]*$/, '') + '.jpg' : file.name;
+            if (blob.size > 10 * 1024 * 1024) return banner(words.tooBig);
+            const response = await fetch('/file', {
+              method: 'POST', cache: 'no-store', body: blob,
+              headers: headers({ 'Content-Type': blob.type || 'application/octet-stream', 'X-Shades': '1', 'X-Name': encodeURIComponent(name) }),
+            });
+            if (response.status === 401) return pairing();
+            if (!response.ok) return banner(response.status === 413 ? words.tooBig : words.unreachable);
+            unattach();
+            attached = { id: (await response.json()).id, name, picture: isPicture ? await preview(blob) : null };
+            $('attachedname').textContent = name;
+            if (attached.picture) $('attachedpicture').src = attached.picture; else $('attachedpicture').removeAttribute('src');
+            $('attached').hidden = false;
+            banner('');
+          } catch (error) {
+            banner(words.unreachable);
+          } finally {
+            uploading = false;
+            $('send').disabled = !(view && view.box && view.box.ready);
+          }
+        }
+
+        function preview(blob) {
+          return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        }
+
+        function unattach() {
+          attached = null;
+          $('attached').hidden = true;
+          $('attachedpicture').removeAttribute('src');
+        }
+
+        async function shrink(file) {
+          const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+          const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(bitmap.width * scale);
+          canvas.height = Math.round(bitmap.height * scale);
+          canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('no picture')), 'image/jpeg', 0.85));
+        }
 
         function fit() {
           const words = $('words');

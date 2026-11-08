@@ -224,7 +224,7 @@ final class ChannelPane: QuietView {
             guard let self, let id = self.selection.thread else { return }
             self.onOpenThread?(id)
         }
-        composer.onSend = { [weak self] words, target in
+        composer.onSend = { [weak self] words, target, file in
             guard let self else { return }
             switch target {
             case .question(let question):
@@ -238,16 +238,16 @@ final class ChannelPane: QuietView {
                 // The new thread opens in the pane, and the keyboard goes with it if you were typing.
                 let topic = "sent-\(UUID().uuidString)"
                 let typing = self.window?.firstResponder === self.composer.textView
-                self.onAction?(.startTopic(words, with: kitten, id: topic))
+                self.onAction?(.startTopic(words, with: kitten, id: topic, file: file))
                 self.onOpen?(topic, nil, typing, nil)
             case .thread(let id, _, _):
                 let alsoSent = self.composer.alsoSends
                 self.composer.alsoSends = false
-                self.onAction?(.send(words, to: target, shownIn: self.book?.home(ofThread: id), alsoSent: alsoSent))
+                self.onAction?(.send(words, to: target, shownIn: self.book?.home(ofThread: id), alsoSent: alsoSent, file: file))
                 self.updateComposer()
                 self.arrange(force: true)
             default:
-                self.onAction?(.send(words, to: target, shownIn: self.selection.channelID))
+                self.onAction?(.send(words, to: target, shownIn: self.selection.channelID, file: file))
                 self.updateComposer()
                 self.arrange(force: true)
             }
@@ -508,7 +508,7 @@ final class ChannelPane: QuietView {
             return
         }
         composer.textView.string = ""
-        composer.onSend?(words, spot.target)
+        composer.onSend?(words, spot.target, composer.takeAttachment())
         arrange(force: true)
     }
 

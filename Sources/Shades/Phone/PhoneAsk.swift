@@ -1,4 +1,5 @@
 import Foundation
+import ShadesContext
 import ShadesCore
 
 /// What a phone asks Messages to do, as it arrives. None of it is trusted: the phone names a place by its key and
@@ -13,24 +14,29 @@ struct PhoneAsk: Decodable {
     var kind: String?
     /// A thread's "Also send to #channel".
     var also: Bool?
+    /// A photo or file the page sent ahead, by the ID the Mac gave it.
+    var file: String?
 
     /// The same action the window would take, and the key of where the phone goes next, or `nil` if the window
     /// couldn't do it either.
-    func action(in book: ChannelBook, newTopic: () -> String) -> (action: MessagesAction, opens: String?)? {
+    /// `file` finds what the page sent ahead, which is only ever something it uploaded itself.
+    func action(in book: ChannelBook, newTopic: () -> String, file uploaded: (String) -> Drop? = { _ in nil }) -> (action: MessagesAction, opens: String?)? {
         switch act {
         case "send":
-            guard let key, let words = text?.trimmingCharacters(in: .whitespacesAndNewlines), !words.isEmpty else { return nil }
+            let words = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let attached = file.flatMap(uploaded)
+            guard let key, !words.isEmpty || attached != nil, file == nil || attached != nil else { return nil }
             let place = PhonePlace(key, in: book)
-            guard let target = place.target else { return nil }
+            guard let target = place.target, attached == nil || target.takesFiles else { return nil }
             switch target {
             case .router:
-                return (.send(words, to: target, shownIn: place.selection?.channelID), nil)
+                return (.send(words, to: target, shownIn: place.selection?.channelID, file: attached), nil)
             case .thread(let id, _, _):
                 let home = book.home(ofThread: id)
-                return (.send(words, to: target, shownIn: home, alsoSent: also == true && place.alsoSendTo(in: book) != nil), nil)
+                return (.send(words, to: target, shownIn: home, alsoSent: also == true && place.alsoSendTo(in: book) != nil, file: attached), nil)
             case .newThread(let kitten):
                 let topic = newTopic()
-                return (.startTopic(words, with: kitten, id: topic), PhonePlace.key(.thread(topic, in: .channel(.of(kitten)))))
+                return (.startTopic(words, with: kitten, id: topic, file: attached), PhonePlace.key(.thread(topic, in: .channel(.of(kitten)))))
             case .starting, .question:
                 return nil
             }

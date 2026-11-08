@@ -68,6 +68,11 @@ final class ChannelFeed {
 
     var threadsHeld: Int { transcripts.count }
 
+    /// A thread as T3 last listed it, title and all.
+    func listed(_ id: String) -> AgentThread? {
+        threads.first { $0.id == id }
+    }
+
     /// Returns at once with whatever's known, and catches up on what moved while nobody was looking.
     func open(threads: [AgentThread]) -> ChannelBook {
         if isOpen, let published { return published }
@@ -116,6 +121,14 @@ final class ChannelFeed {
     func sent(_ message: ChannelMessage, in channel: ChannelID, startsThread: Bool = false, alsoSent: Bool = false, isReply: Bool = false) {
         sent.append(SentMessage(channel: channel, message: message, startsThread: startsThread, alsoSent: alsoSent, isReply: isReply))
         sent = sent.suffix(Self.sentKept)
+        isDirty = true
+        publish()
+    }
+
+    /// What you sent went nowhere, and why, which shows under it.
+    func failed(_ exchangeID: String, because reason: String) {
+        guard let index = sent.firstIndex(where: { $0.message.exchangeID == exchangeID }) else { return }
+        sent[index].message.failure = reason
         isDirty = true
         publish()
     }

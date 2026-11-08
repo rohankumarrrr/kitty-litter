@@ -78,4 +78,17 @@ final class DemoPhone {
     static func quoted(_ text: String) -> String {
         (try? JSONSerialization.data(withJSONObject: text, options: .fragmentsAllowed)).map { String(decoding: $0, as: UTF8.self) } ?? "''"
     }
+
+    /// A made-up photo, drawn on the page and attached the way its camera button attaches one.
+    static let attachPicture = """
+        const canvas = document.createElement('canvas');
+        canvas.width = 1600; canvas.height = 1200;
+        const pen = canvas.getContext('2d');
+        pen.fillStyle = '#2f6f5e'; pen.fillRect(0, 0, 1600, 1200);
+        pen.fillStyle = '#f4efe6'; pen.fillRect(200, 450, 1200, 360);
+        pen.fillStyle = '#1d1d1f'; pen.font = 'bold 120px sans-serif'; pen.fillText('keyboard', 520, 670);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+        await attach(new File([blob], 'keyboard.png', { type: 'image/png' }));
+        return attached ? 'attached ' + attached.name : 'not attached';
+        """
 }

@@ -210,6 +210,8 @@ final class AppController {
     var healthTask: Task<Void, Never>?
     var health: [HealthFinding]?
     var forwardTask: Task<Void, Never>?
+    /// Reading a file attached in Messages before it goes anywhere.
+    var attachTask: Task<Void, Never>?
     var voiceTask: Task<Void, Never>?
     private var listeners: [Task<Void, Never>] = []
 

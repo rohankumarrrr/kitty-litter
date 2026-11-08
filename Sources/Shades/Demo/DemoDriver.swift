@@ -1,4 +1,5 @@
 import AppKit
+import ShadesContext
 import ShadesCore
 
 /// Plays the demo: a little script when it starts, a few menu items, and commands typed
@@ -106,6 +107,13 @@ final class DemoDriver {
             phone.open(URL(string: "\(address)/?key=\(key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")\(code)")!)
         case "go":
             runOnPhone("go(\(DemoPhone.quoted(phoneKey(rest))))")
+        case "attach":
+            // The same as taking a photo with the page's camera button: a made-up picture goes up, as the page sends one.
+            guard let phone else { return print("The page isn't open. Try: phone open") }
+            Task {
+                print("[phone] \(await phone.runAsync(DemoPhone.attachPicture))")
+                fflush(stdout)
+            }
         case "send":
             // The same as typing into the page's box and pressing Send.
             runOnPhone("$('words').value = \(DemoPhone.quoted(rest)); $('box').requestSubmit(); 'sent'")
@@ -135,7 +143,7 @@ final class DemoDriver {
             phone?.close()
             phone = nil
         default:
-            print("phone on | off | pair | open [place] | go [place] | send [words] | press [button] | answer [words] | subscribe | text | select [words] | unselect | close")
+            print("phone on | off | pair | open [place] | go [place] | attach | send [words] | press [button] | answer [words] | subscribe | text | select [words] | unselect | close")
         }
     }
 
@@ -271,7 +279,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -381,6 +389,16 @@ final class DemoDriver {
             // The same as typing into a box in Messages and pressing Return: the open thread's, or the place's.
             let view = stage.channels.view
             (view.selection.thread == nil ? view.pane : view.threadPane).composer.send(rest)
+        case "attach":
+            // The same as dropping a file onto that box: `attach pdf` makes up a syllabus, `attach picture` a picture.
+            let view = stage.channels.view
+            let drop: Drop? = switch rest {
+            case "pdf": Demo.samplePDF().map(Drop.file)
+            case "picture": Demo.samplePicture().map(Drop.picture)
+            default: rest.isEmpty ? nil : .file(URL(fileURLWithPath: rest))
+            }
+            let taken = drop.map { (view.selection.thread == nil ? view.pane : view.threadPane).composer.attach($0) } ?? false
+            print("attached \(drop?.name ?? rest), taken: \(taken)")
         case "settings":
             controller.settingsPressed()
         case "phone":

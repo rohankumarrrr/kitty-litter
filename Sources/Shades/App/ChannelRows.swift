@@ -139,6 +139,13 @@ enum MessageTarget: Equatable {
 }
 
 extension MessageTarget {
+    /// Whether a file or picture can go with your words. An answer to a question is only words.
+    var takesFiles: Bool {
+        switch self {
+        case .router, .newThread, .thread: return true
+        case .starting, .question: return false
+        }
+    }
     /// Whether words already typed can still go here. An answered question can't take them, and a new topic
     /// that's started moves on to its thread.
     var isReady: Bool {

@@ -272,6 +272,8 @@ public struct Exchange: Sendable, Equatable, Identifiable {
     /// How many things it said on the way to that reply.
     public var earlierNotes: Int
     public var failure: String?
+    /// The name of a file or picture that came with what was asked, never what's in it.
+    public var file: String?
 
     public init(
         id: String,
@@ -281,7 +283,8 @@ public struct Exchange: Sendable, Equatable, Identifiable {
         reply: String? = nil,
         repliedAt: Date? = nil,
         earlierNotes: Int = 0,
-        failure: String? = nil
+        failure: String? = nil,
+        file: String? = nil
     ) {
         self.id = id
         self.asker = asker
@@ -291,6 +294,7 @@ public struct Exchange: Sendable, Equatable, Identifiable {
         self.repliedAt = repliedAt
         self.earlierNotes = earlierNotes
         self.failure = failure
+        self.file = file
     }
 }
 

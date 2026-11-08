@@ -1,12 +1,14 @@
 import Foundation
+import ShadesContext
 import ShadesCore
 
-/// What Messages can ask for. Nothing in it can say anything for you: sending takes words you typed.
+/// What Messages can ask for. Nothing in it can say anything for you: sending takes words you typed, and a file only
+/// goes with them if you attached it.
 enum MessagesAction: Equatable {
     /// `alsoSent` is a thread's "Also send to #channel", which shows your reply in `shownIn` as well.
-    case send(String, to: MessageTarget, shownIn: ChannelID?, alsoSent: Bool = false)
+    case send(String, to: MessageTarget, shownIn: ChannelID?, alsoSent: Bool = false, file: Drop? = nil)
     /// A new thread in the kitten's folder. `id` is what Messages calls it until T3 has its thread.
-    case startTopic(String, with: Kitten, id: String)
+    case startTopic(String, with: Kitten, id: String, file: Drop? = nil)
     case approval(ApprovalRequest, ApprovalDecision)
     /// Every part of a question's answer, in order.
     case answer(AgentQuestion, [String])
@@ -111,10 +113,10 @@ extension AppController {
 
     func messagesAction(_ action: MessagesAction) {
         switch action {
-        case .send(let words, let target, let channel, let alsoSent):
-            send(words, to: target, shownIn: channel, alsoSent: alsoSent)
-        case .startTopic(let words, let kitten, let id):
-            send(words, to: .newThread(kitten), shownIn: .of(kitten), echoID: id)
+        case .send(let words, let target, let channel, let alsoSent, let file):
+            send(words, to: target, shownIn: channel, alsoSent: alsoSent, file: file)
+        case .startTopic(let words, let kitten, let id, let file):
+            send(words, to: .newThread(kitten), shownIn: .of(kitten), echoID: id, file: file)
         case .approval(let request, let decision):
             answer(request, decision)
         case .answer(let question, let answers):
@@ -131,11 +133,36 @@ extension AppController {
     }
 
     /// Each way of sending passes on your words and nothing else: no screen, and nothing anyone else said. What's shown
-    /// meanwhile, and a reply also sent to a channel, is kept in memory only.
-    func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, alsoSent: Bool = false, echoID: String = "sent-\(UUID().uuidString)") {
+    /// meanwhile, and a reply also sent to a channel, is kept in memory only. A file you attached goes the way one
+    /// dropped onto the cat does, only where your screen may, and where it can't, nothing goes and Messages says why.
+    func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, alsoSent: Bool = false, echoID: String = "sent-\(UUID().uuidString)", file: Drop? = nil) {
+        guard let file else { return send(words, to: target, shownIn: channel, alsoSent: alsoSent, echoID: echoID, snapshot: nil) }
+        let words = words.isEmpty ? CatWords.summarize : words
+        let shown = ChannelFile(name: file.name, thumbnail: file.thumbnail())
+        // It's read off the main thread, since a long PDF takes a moment.
+        attachTask = Task {
+            let snapshot = await Task.detached { file.snapshot() }.value
+            guard let snapshot else {
+                showSent(words, echoID: echoID, file: shown, to: target, in: channel)
+                return channels.failed(echoID, because: CatWords.cantReadThat)
+            }
+            send(words, to: target, shownIn: channel, alsoSent: alsoSent, echoID: echoID, snapshot: snapshot, file: shown)
+        }
+    }
+
+    /// A file that couldn't be read still shows where you sent it, with why it went nowhere.
+    private func showSent(_ words: String, echoID: String, file: ChannelFile, to target: MessageTarget, in channel: ChannelID?) {
+        guard let channel else { return }
+        var threadID = ""
+        if case .thread(let id, _, _) = target { threadID = id }
+        let message = ChannelMessage(exchangeID: echoID, kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: "", file: file)
+        channels.sent(message, in: channel, startsThread: { if case .newThread = target { true } else { false } }(), isReply: !threadID.isEmpty)
+    }
+
+    private func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, alsoSent: Bool, echoID: String, snapshot: ScreenSnapshot?, file: ChannelFile? = nil) {
         func echo(threadID: String = "", title: String = "", startsThread: Bool = false, isReply: Bool = false) {
             guard let channel else { return }
-            let message = ChannelMessage(exchangeID: echoID, kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: title)
+            let message = ChannelMessage(exchangeID: echoID, kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: title, file: file)
             channels.sent(message, in: channel, startsThread: startsThread, alsoSent: alsoSent && !threadID.isEmpty, isReply: isReply)
         }
         switch target {
@@ -148,21 +175,29 @@ extension AppController {
             let asked = questionsAsked
             messagesTurn = Task {
                 await previous?.value
-                await route(words, sentAt: sentAt, asked: asked, answeringIn: channel ?? .general, echoID: echoID)
+                await route(words, sentAt: sentAt, asked: asked, answeringIn: channel ?? .general, echoID: echoID, file: snapshot)
             }
         case .newThread(let kitten):
             echo(startsThread: true)
             // The box waits for the new thread, so what you add next goes there too.
             let title = String(words.prefix { !$0.isNewline }.prefix(60))
-            give(words, to: kitten, snapshot: nil) { [weak self] threadID in
+            give(words, to: kitten, snapshot: snapshot) { [weak self] threadID in
                 self?.channels.started(echoID, in: threadID, title: title)
             }
         case .thread(let id, let title, let report):
             echo(threadID: id, title: title, isReply: true)
-            reply(words, toThread: id, title: title, marking: report)
+            guard let snapshot else { return reply(words, toThread: id, title: title, marking: report) }
+            // The same as carrying on in a thread from the Ask box, which only takes what you dropped where your screen may go.
+            guard let thread = latestThreads.first(where: { $0.id == id }) ?? channels.listed(id) else {
+                return channels.failed(echoID, because: CatWords.cantTakeFiles(title))
+            }
+            forward(words, to: thread, snapshot: snapshot) { [weak self] in
+                self?.channels.failed(echoID, because: CatWords.cantTakeFiles(title))
+            }
         case .starting:
             break
         case .question(let question):
+            guard snapshot == nil else { return channels.failed(echoID, because: CatWords.answersTakeNoFiles) }
             answer(question, with: [words])
         }
     }
@@ -171,7 +206,8 @@ extension AppController {
     /// your screen is in what it can see, and asking the cat meanwhile can't cut it short. #general and the cat's DM
     /// share that conversation, and the cat answers in whichever you wrote in. `echoID` is what Messages shows of your
     /// words meanwhile, which goes with them into whatever thread they start or land in.
-    private func route(_ words: String, sentAt: Date, asked: Int, answeringIn place: ChannelID, echoID: String) async {
+    /// A file goes on a router thread of its own, so Messages' conversation with it never holds one.
+    private func route(_ words: String, sentAt: Date, asked: Int, answeringIn place: ChannelID, echoID: String, file: ScreenSnapshot? = nil) async {
         var talk: String?
         // In #general, whoever takes your words answers in their thread. The DM only has the cat, so it says where
         // they went, in the words it uses for the same thing once T3 has the thread.
@@ -190,7 +226,7 @@ extension AppController {
             }
         }
         await waitForThreadList()
-        let current = messagesQuick.thread(at: now())
+        let current = file == nil ? messagesQuick.thread(at: now()) : nil
         // Only Messages' own world: the kittens' threads, and work it passed your words to. Anything the Ask box
         // started can hold your screen, and that has to hold after a restart too.
         let owners = loadKittens()
@@ -200,6 +236,10 @@ extension AppController {
         let briefs = await briefs(for: sessions)
         let kittens = owners.filter { !$0.planned }
         let model = settings.quickModel
+        // As in the Ask box, a router with full access doesn't get what you dropped.
+        if file != nil, settings.quickMode == .fullAccess {
+            return channels.failed(echoID, because: CatWords.cantTakeFiles(ModelNames.friendly(model)))
+        }
         let projectID: String
         do {
             projectID = try await routerProjectID(for: model)
@@ -209,7 +249,8 @@ extension AppController {
         }
         let prompt = AgentPrompt(
             title: String(words.prefix { !$0.isNewline }.prefix(60)),
-            text: Prompts.quick(question: words, snapshot: nil, sessions: briefs, kittens: kittens, notSetUp: owners.filter(\.planned)),
+            text: Prompts.quick(question: words, snapshot: file, sessions: briefs, kittens: kittens, notSetUp: owners.filter(\.planned)),
+            attachments: attachments(for: file),
             model: model,
             runtimeMode: settings.quickMode,
             projectID: projectID
@@ -219,8 +260,8 @@ extension AppController {
         // The old thread might have gone, so it starts fresh.
         let isFresh = turn == nil
         if turn == nil {
-            messagesQuick.reset()
-            turn = await routerTurn(backend.start(prompt))
+            if file == nil { messagesQuick.reset() }
+            turn = await routerTurn(backend.start(prompt), joins: file == nil)
         }
         guard let (reading, threadID) = turn else {
             catSays(CatWords.noReply, in: place)
@@ -253,7 +294,7 @@ extension AppController {
             }
             if !reading.wentNowhere, !corrected.isEmpty { passedOn(CatWords.passedOnCorrection) }
         case .handoff(let task):
-            handOff(task: task, question: words, snapshot: nil, asked: asked, onStarted: startedHere)
+            handOff(task: task, question: words, snapshot: file, asked: asked, onStarted: startedHere)
             passedOn(CatWords.handedOff(task))
         case .route(let session):
             guard sessions.indices.contains(session - 1) else {
@@ -266,7 +307,9 @@ extension AppController {
             // A reply in that thread, also sent to #general, as Slack's "Also send to #general" does.
             if place == .general { channels.started(echoID, in: thread.id, title: thread.title, alsoSent: true) }
             let home = corrected.first { KittenBoard.isInFolder(thread.projectPath, of: $0) }
-            forward(words, to: thread, snapshot: nil, correction: home != nil, asked: asked)
+            forward(words, to: thread, snapshot: file, correction: home != nil, asked: asked) { [weak self] in
+                self?.channels.failed(echoID, because: CatWords.cantTakeFiles(thread.title))
+            }
             copies.removeAll { $0 == home }
             passedOn(CatWords.passedOnToSession)
         case .kitten(let number):
@@ -275,13 +318,13 @@ extension AppController {
                 return
             }
             let kitten = kittens[number - 1]
-            give(words, to: kitten, snapshot: nil, as: corrected.contains(kitten) ? .correction : .work, asked: asked, onStarted: startedHere)
+            give(words, to: kitten, snapshot: file, as: corrected.contains(kitten) ? .correction : .work, asked: asked, onStarted: startedHere)
             copies.removeAll { $0 == kitten }
             passedOn(CatWords.passedOnToKitten)
         }
         // A new thread that only passed something on has nothing worth keeping.
         if isFresh {
-            messagesQuick.reset()
+            if file == nil { messagesQuick.reset() }
             Task { [backend] in try? await backend.archive(threadID: threadID) }
         } else {
             Task { [backend] in try? await backend.settle(threadID: threadID) }
@@ -290,7 +333,8 @@ extension AppController {
 
     /// `nil` if the turn didn't work out. The thread is the one it ran in, since a turn that waited on an approval
     /// can outlast the conversation, and its reply still counts.
-    private func routerTurn(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>) async -> (reading: ReplyHoldback.Reading, threadID: String)? {
+    /// `joins` makes it Messages' conversation with the router, which a turn carrying a file never does.
+    private func routerTurn(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>, joins: Bool = true) async -> (reading: ReplyHoldback.Reading, threadID: String)? {
         var holdback = ReplyHoldback()
         var fullText: String?
         var thread: String?
@@ -299,7 +343,7 @@ extension AppController {
                 switch event {
                 case .started(let threadID):
                     thread = threadID
-                    messagesQuick.use(threadID, at: now())
+                    if joins { messagesQuick.use(threadID, at: now()) }
                     watch.markQuick(threadID)
                 case .text(let delta):
                     _ = holdback.add(delta)
