@@ -968,6 +968,26 @@ final class NoteRowView: ChannelRowView {
     }
 }
 
+/// The top of a channel with older posts. Scrolling back to it loads them, and so does pressing it.
+final class OlderRowView: ChannelRowView {
+    private let button: QuietButton
+
+    init(isLoading: Bool, onPress: @escaping () -> Void) {
+        button = QuietButton(isLoading ? CatWords.loadingOlder : CatWords.loadOlder, style: .text, onPress: onPress)
+        button.isArmed = !isLoading
+        super.init(frame: .zero)
+        addSubview(button)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func fit(width: CGFloat) -> CGFloat {
+        button.frame.origin = NSPoint(x: ((width - button.frame.width) / 2).rounded(), y: 6)
+        return button.frame.height + 12
+    }
+}
+
 /// A heading in Needs you, with a way to clear a section of reports.
 final class SectionRowView: ChannelRowView {
     private let title: String

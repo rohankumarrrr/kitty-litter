@@ -85,6 +85,8 @@ enum ChannelRow: Equatable {
     case question(AgentQuestion)
     case report(InboxEntry)
     case note(String)
+    /// At the top of a channel with older posts, which scrolling back to it loads.
+    case older(isLoading: Bool)
 }
 
 /// Where what you type in Messages goes. None of them carry your screen, and each carries only your words.
@@ -308,7 +310,7 @@ enum ChannelRows {
     private static func channel(_ id: ChannelID, of book: ChannelBook) -> [ChannelRow] {
         guard let channel = book.channel(id), !channel.posts.isEmpty else { return [emptyNote(id, in: book)] }
         // A thread that couldn't be read looks like one too old to read, and it could be the newest.
-        var rows: [ChannelRow] = channel.isCut && !book.cantReachT3 && book.unreadable == 0 ? [.note(CatWords.olderMessages)] : []
+        var rows: [ChannelRow] = channel.isCut && !book.cantReachT3 && book.unreadable == 0 ? [.older(isLoading: channel.isLoadingOlder)] : []
         var lastDay = Date.distantPast
         for post in channel.posts {
             let row: ChannelRow
@@ -352,14 +354,15 @@ enum ChannelRows {
     }
 
     private static func emptyNote(_ id: ChannelID, in book: ChannelBook) -> ChannelRow {
-        let isCut = book.channel(id)?.isCut == true
+        let channel = book.channel(id)
+        let isCut = channel?.isCut == true
         if !isCut, case .kitten(let kitten) = id, let status = book.statuses.first(where: { $0.id == kitten }), status.state == .notSetUp {
             return .note(CatWords.notSetUpYet(status.kitten))
         }
         if book.cantReachT3 { return .note(CatWords.cantReachT3Yet) }
         if book.isReading { return .note(CatWords.readingMessages) }
         if book.unreadable > 0 { return .note(CatWords.couldntRead(book.unreadable)) }
-        if isCut { return .note(CatWords.olderMessages) }
+        if isCut { return .older(isLoading: channel?.isLoadingOlder == true) }
         switch id {
         case .general: return .note(CatWords.generalEmpty)
         case .shades: return .note(CatWords.shadesEmpty)

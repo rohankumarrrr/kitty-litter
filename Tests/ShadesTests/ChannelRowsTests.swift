@@ -162,10 +162,10 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(parents(rows).count, 1)
     }
 
-    func testTheOlderMessagesNoteOpensACutChannel() {
+    func testLoadOlderOpensACutChannel() {
         let threads = (0..<201).map { thread("t\($0)") }
         let rows = channel(steve, in: book(threads: threads, transcripts: Dictionary(uniqueKeysWithValues: threads.enumerated().map { ($1.id, [exchange("e\($0)", asked: TimeInterval($0))]) })))
-        XCTAssertEqual(rows.first, .note("Older messages are in T3."))
+        XCTAssertEqual(rows.first, .older(isLoading: false))
     }
 
     func testWhatEachKittenIsOnSitsUnderWhatsWaitingInActivity() {

@@ -471,6 +471,8 @@ struct PhoneView: Encodable, Equatable {
             }
         case .note(let text):
             return Row(kind: "note", text: text)
+        case .older(let isLoading):
+            return Row(kind: "older", text: isLoading ? CatWords.loadingOlder : CatWords.loadOlder, done: isLoading)
         }
     }
 

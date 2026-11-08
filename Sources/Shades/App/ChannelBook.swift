@@ -98,12 +98,13 @@ enum ChannelPost: Equatable {
 struct Channel: Equatable, Identifiable {
     var id: ChannelID
     var posts: [ChannelPost]
-    /// Some older posts were left out.
+    /// Some older posts were left out, which scrolling back to the top loads.
     var isCut: Bool
+    var isLoadingOlder = false
 }
 
 /// Something said in Messages that T3 doesn't have yet, or never will, like the cat's own answer. It's kept in memory
-/// only, and never written to disk.
+/// only, and never written to disk, since it's words. A reply also sent to a channel is kept by its ID once T3 has it.
 struct SentMessage: Equatable {
     var channel: ChannelID
     var message: ChannelMessage
@@ -168,6 +169,8 @@ struct ChannelBook: Equatable {
     var talks: Set<String>
     /// Work the cat started for you outside Messages, which lives in its DM, and which you can reply to.
     var catsWork: Set<String> = []
+    /// Replies also sent to a channel that T3 has now, by the ID of T3's copy, and the channel each shows in.
+    var alsoSentHeard: [String: ChannelID] = [:]
     var isReading: Bool
     var unreadable: Int
     var cantReachT3: Bool
@@ -210,6 +213,10 @@ struct ChannelBook: Equatable {
         withShades: Set<String> = [],
         catsWork: Set<String> = [],
         answersInGeneral: Set<String> = [],
+        alsoSent: Set<String> = [],
+        alsoSentToGeneral: Set<String> = [],
+        olderPages: [ChannelID: Int] = [:],
+        loadingOlder: Set<ChannelID> = [],
         said: (String) -> String? = ChannelBook.said
     ) -> ChannelBook {
         // A talk with the cat is titled with your question, which can start with a kitten's name, so it's kept apart
@@ -232,7 +239,7 @@ struct ChannelBook: Equatable {
 
         var gathered: [String: Gathered] = [:]
         var order: [String] = []
-        var leftOut: Set<String> = []
+        var leftOut: Set<ChannelID> = []
         // What the cat answered you in #general, read back from its talk with you, as plain messages in no thread.
         var answered: [ChannelMessage] = []
         func gather(_ id: String, _ thread: Gathered) {
@@ -240,7 +247,10 @@ struct ChannelBook: Equatable {
             gathered[id] = thread
         }
         for thread in talkThreads where !thread.isLiveTest {
-            guard let exchanges = transcripts[thread.id] else { continue }
+            guard let exchanges = transcripts[thread.id] else {
+                leftOut.insert(.shades)
+                continue
+            }
             let messages = talk(in: thread, exchanges, said: said)
             gather(thread.id, Gathered(title: thread.title, home: .shades, messages: messages, isCut: exchanges.count >= keptExchanges))
             answered += messages.filter { answersInGeneral.contains($0.exchangeID) && $0.text != nil }.map { message in
@@ -256,7 +266,7 @@ struct ChannelBook: Equatable {
             // outside Messages, which keeps to its DM. Anything else can hold your screen.
             guard owner != nil || inGeneral[thread.id] != nil || catsWork.contains(thread.id) else { continue }
             guard let exchanges = transcripts[thread.id] else {
-                if let owner { leftOut.insert(owner.id) }
+                leftOut.insert(home(of: thread.id, owner: owner, inGeneral: inGeneral, catsWork: catsWork))
                 continue
             }
             let replier = owner.map { Speaker.kitten($0.id) } ?? .cat
@@ -280,6 +290,8 @@ struct ChannelBook: Equatable {
             placed[.general, default: []].append(Placed(position: message.at, sequence: index - answered.count - order.count, post: .message(message)))
         }
         let heard = Set(answered.map(\.exchangeID))
+        let ours = Set(sent.map(\.message.id))
+        var alsoSentHeard: [String: ChannelID] = [:]
         for (sequence, sent) in sent.enumerated() {
             if let turn = sent.heardAs, heard.contains(turn) { continue }
             var message = sent.message
@@ -313,7 +325,10 @@ struct ChannelBook: Equatable {
                     gathered[message.threadID] = thread
                 }
                 let echo = thread.messages[index]
-                if sent.alsoSent, echo.id != thread.messages.first?.id { post(.alsoSent(echo, thread: message.threadID)) }
+                if sent.alsoSent, echo.id != thread.messages.first?.id {
+                    post(.alsoSent(echo, thread: message.threadID))
+                    if !ours.contains(echo.id) { alsoSentHeard[echo.id] = sent.channel }
+                }
                 continue
             }
             message.threadTitle = thread.title
@@ -343,11 +358,22 @@ struct ChannelBook: Equatable {
             guard thread.isPosted else { continue }
             placed[built[id]!.home, default: []].append(Placed(position: parent.at, sequence: index - order.count, post: .thread(id)))
         }
+        // A reply also sent before is read back from its thread by its ID, so it's still there after a restart.
+        if !alsoSent.isEmpty || !alsoSentToGeneral.isEmpty {
+            for (index, id) in order.enumerated() {
+                guard let thread = built[id] else { continue }
+                for message in thread.replies where alsoSentHeard[message.id] == nil {
+                    let channel: ChannelID? = alsoSentToGeneral.contains(message.id) ? .general : alsoSent.contains(message.id) ? thread.home : nil
+                    guard let channel else { continue }
+                    placed[channel, default: []].append(Placed(position: message.at, sequence: sent.count + index, post: .alsoSent(message, thread: id)))
+                }
+            }
+        }
 
-        // Threads with an owner and nothing read are too old to read, or couldn't be read, so don't say you've never talked.
-        let channels = channelIDs.map { id -> Channel in
-            let leavesOut: Bool = if case .kitten(let kitten) = id { !isReading && leftOut.contains(kitten) } else { false }
-            return channel(id, placed[id] ?? [], leavesOutThreads: leavesOut)
+        // Threads with nothing read are older than Messages has read so far, or couldn't be read, so don't say you've
+        // never talked.
+        let channels = channelIDs.map { id in
+            channel(id, placed[id] ?? [], leavesOutThreads: !isReading && leftOut.contains(id), pages: olderPages[id] ?? 0, isLoadingOlder: loadingOlder.contains(id))
         }
         let issues = statuses.compactMap { status -> KittenIssues? in
             let mine = owned(by: status.kitten, in: threads, owner: ownerOf)
@@ -382,6 +408,7 @@ struct ChannelBook: Equatable {
             started: started,
             talks: Set(talkThreads.map(\.id)),
             catsWork: catsWork.intersection(threadsByID.keys),
+            alsoSentHeard: alsoSentHeard,
             isReading: isReading,
             unreadable: unreadable,
             cantReachT3: cantReachT3
@@ -434,12 +461,14 @@ struct ChannelBook: Equatable {
         return messages
     }
 
-    private static func channel(_ id: ChannelID, _ placed: [Placed], leavesOutThreads: Bool = false) -> Channel {
+    /// Each page of older posts you've scrolled back to shows as many again.
+    private static func channel(_ id: ChannelID, _ placed: [Placed], leavesOutThreads: Bool, pages: Int, isLoadingOlder: Bool) -> Channel {
         let ordered = placed.sorted { a, b in
             if a.position != b.position { return a.position < b.position }
             return a.sequence < b.sequence
         }
-        return Channel(id: id, posts: ordered.suffix(keptExchanges).map(\.post), isCut: leavesOutThreads || ordered.count > keptExchanges)
+        let kept = keptExchanges * (pages + 1)
+        return Channel(id: id, posts: ordered.suffix(kept).map(\.post), isCut: leavesOutThreads || ordered.count > kept, isLoadingOlder: isLoadingOlder)
     }
 
     /// A conversation with the cat: what you asked, and what it said or did about it, since the router answers in

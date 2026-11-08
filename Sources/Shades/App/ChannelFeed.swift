@@ -4,7 +4,8 @@ import ShadesCore
 /// The one owner of what's been said. What's been read stays in memory while the app runs, and never goes to disk,
 /// since a copy in Shades' folder would let any kitten read every other kitten's threads. So Messages opens at once
 /// and then reads only the threads that have moved since. It reads once soon after launch, then only while the window
-/// or a phone is looking.
+/// or a phone is looking. Each kitten's channel and the cat's DM read their newest threads, and older ones a page at a
+/// time as you scroll back to them.
 @MainActor
 final class ChannelFeed {
     private static let newestReadPerKitten = 30
@@ -28,6 +29,11 @@ final class ChannelFeed {
     var isCatsWork: (AgentThread) -> Bool = { _ in false }
     /// The turns of Messages' talk with the router that the cat answered in #general, by T3's ID for each.
     var answersInGeneral: () -> Set<String> = { [] }
+    /// Replies also sent to their thread's channel, and to #general, by the ID of T3's copy of each.
+    var alsoSent: () -> Set<String> = { [] }
+    var alsoSentToGeneral: () -> Set<String> = { [] }
+    /// Hands over the replies also sent to a channel that T3 has now, so their IDs can be kept.
+    var keepAlsoSent: ([String: ChannelID]) -> Void = { _ in }
     /// What's on the screen, whose threads are read before the rest.
     var lookingAt: ChannelSelection?
 
@@ -42,6 +48,9 @@ final class ChannelFeed {
     /// Listed threads this pass hasn't read yet and nothing was ever read of, kept back so they don't look cut short.
     private var unreadNew: Set<String> = []
     private var sent: [SentMessage] = []
+    /// How many pages of older threads and posts you've scrolled back to in each channel, while the app runs.
+    private var olderPages: [ChannelID: Int] = [:]
+    private var loadingOlder: Set<ChannelID> = []
     private var hasRead = false
     private var unreadable = 0
     private var cantReachT3 = false
@@ -116,8 +125,9 @@ final class ChannelFeed {
         if isOpen { publish() }
     }
 
-    /// Shows it at once, until T3 has it. A reply only shows in `channel` as well as its thread if it's `alsoSent`, from
-    /// memory only, as Slack's "Also send to #channel" does. The same message sent again takes its old one's place.
+    /// Shows it at once, until T3 has it. A reply only shows in `channel` as well as its thread if it's `alsoSent`, as
+    /// Slack's "Also send to #channel" does, and once T3 has it, it's kept by the ID of T3's copy. The same message sent
+    /// again takes its old one's place.
     func sent(_ message: ChannelMessage, in channel: ChannelID, startsThread: Bool = false, alsoSent: Bool = false, isReply: Bool = false, target: MessageTarget? = nil) {
         sent.removeAll { $0.message.exchangeID == message.exchangeID }
         sent.append(SentMessage(channel: channel, message: message, startsThread: startsThread, alsoSent: alsoSent, isReply: isReply, target: target))
@@ -171,6 +181,17 @@ final class ChannelFeed {
             sent[index].message.failure = CatWords.didntStart
         }
         isDirty = true
+        publish()
+    }
+
+    /// Scrolled back past the top of a channel, it reads the next page of that channel's older threads, and shows as
+    /// many more of its posts. One page at a time.
+    func older(in channel: ChannelID) {
+        guard !loadingOlder.contains(channel), published?.channel(channel)?.isCut == true else { return }
+        olderPages[channel, default: 0] += 1
+        loadingOlder.insert(channel)
+        isDirty = true
+        nap?.cancel()
         publish()
     }
 
@@ -247,16 +268,19 @@ final class ChannelFeed {
 
         let owners = KittenBoard.Owners(kittens())
         let talks = listed.filter(isWithShades)
-        let byOwner = Dictionary(grouping: listed.filter { !isWithShades($0) }) { owners.of($0)?.id }
         let mine = inGeneral()
-        let unowned = byOwner[nil] ?? []
-        func newest(_ threads: [AgentThread]) -> [AgentThread] {
-            Array(threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten))
+        // Everything that lives in #general is read, since only so many are kept, whoever's thread it is.
+        let general = listed.filter { !isWithShades($0) && mine[$0.id] != nil }
+        let byOwner = Dictionary(grouping: listed.filter { !isWithShades($0) && mine[$0.id] == nil }) { owners.of($0)?.id }
+        let loading = loadingOlder
+        func newest(_ threads: [AgentThread], in channel: ChannelID) -> [AgentThread] {
+            let pages = (olderPages[channel] ?? 0) + 1
+            return Array(threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten * pages))
         }
-        let kittens: [AgentThread] = byOwner.filter { $0.key != nil }.values.flatMap(newest)
-        let owned: [AgentThread] = kittens + unowned.filter { mine[$0.id] != nil }
-            + newest(unowned.filter { mine[$0.id] == nil && isCatsWork($0) })
-            + newest(talks.filter { !$0.isLiveTest })
+        let kittens: [AgentThread] = byOwner.flatMap { owner, threads in owner.map { newest(threads, in: .kitten($0)) } ?? [] }
+        let owned: [AgentThread] = kittens + general
+            + newest((byOwner[nil] ?? []).filter(isCatsWork), in: .shades)
+            + newest(talks.filter { !$0.isLiveTest }, in: .shades)
         let onScreen = isOnScreen(owners)
         // What you're looking at first, then the newest, so the top of each conversation fills in first.
         let moved = owned
@@ -289,6 +313,7 @@ final class ChannelFeed {
         threads = listed
         unreadNew = []
         hasRead = true
+        loadingOlder.subtract(loading)
         passes += 1
         unreadable = moved.count - read
         if unreadable > 0 { isDirty = true }
@@ -342,6 +367,7 @@ final class ChannelFeed {
 
     private func publish() {
         let book = book()
+        if !book.alsoSentHeard.isEmpty { keepAlsoSent(book.alsoSentHeard) }
         guard book != published else { return }
         published = book
         onChange?(book)
@@ -365,6 +391,10 @@ final class ChannelFeed {
             withShades: Set(threads.filter(isWithShades).map(\.id)),
             catsWork: Set(threads.filter(isCatsWork).map(\.id)),
             answersInGeneral: answersInGeneral(),
+            alsoSent: alsoSent(),
+            alsoSentToGeneral: alsoSentToGeneral(),
+            olderPages: olderPages,
+            loadingOlder: loadingOlder,
             said: { reply in
                 let words = self.said[reply] ?? ChannelBook.said(reply)
                 said[reply] = words

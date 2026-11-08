@@ -63,6 +63,8 @@ public struct Inbox: Codable, Equatable, Sendable {
     private var answeredInGeneral: [String: Date]?
     /// What came in while Do Not Disturb was on. Only IDs, and files from before don't have it.
     private var missed: [Missed]?
+    private var alsoShown: [String: Date]?
+    private var alsoShownInGeneral: [String: Date]?
 
     /// How many of each place's IDs are kept, newest first. More than Messages reads.
     public static let placesKept = 300
@@ -95,6 +97,19 @@ public struct Inbox: Codable, Equatable, Sendable {
     public var away: [Missed] {
         get { missed ?? [] }
         set { missed = newValue.filter { if case .line = $0 { false } else { true } } }
+    }
+
+    /// Messages T3 has that Messages also showed in their thread's channel, as Slack's "Also send to #channel" does,
+    /// and when. Each is T3's ID for the turn and whether it's what was asked or the answer, never the words.
+    public var alsoSent: [String: Date] {
+        get { alsoShown ?? [:] }
+        set { alsoShown = Self.newest(newValue) }
+    }
+
+    /// The same for what you wrote in #general that went into a thread living somewhere else, which shows in #general.
+    public var alsoSentToGeneral: [String: Date] {
+        get { alsoShownInGeneral ?? [:] }
+        set { alsoShownInGeneral = Self.newest(newValue) }
     }
 
     private static func newest(_ ids: [String: Date]) -> [String: Date] {

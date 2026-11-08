@@ -217,6 +217,8 @@ final class ChannelPane: QuietView {
     private var expanded: Set<String> = []
     private var stackedSize = NSSize.zero
     private var isPaging = false
+    /// Showing something scrolls it too, but only you scrolling back to the top loads what's older.
+    private var isShowing = false
 
     init(role: Role) {
         self.role = role
@@ -309,6 +311,8 @@ final class ChannelPane: QuietView {
 
     /// Showing something new shows its latest. A refresh only follows along if you were already at the bottom.
     func show(_ selection: ChannelSelection, in book: ChannelBook, isNewSelection: Bool) {
+        isShowing = true
+        defer { isShowing = false }
         let isNewSelection = isNewSelection || shows(selection) != shows(self.selection)
         if let thread = selection.thread, thread == replyingTo?.threadID {} else { replyingTo = nil }
         parts.answers = parts.answers.filter { id, _ in book.waiting.questions.contains { $0.id == id } }
@@ -380,6 +384,8 @@ final class ChannelPane: QuietView {
             keep(anchor)
         }
         attach()
+        // Older posts that came in above what you're reading are laid out the way scrolling up to them would.
+        pageIfNeeded()
         if pullsChanged, !isNewSelection { restyle() }
     }
 
@@ -395,10 +401,10 @@ final class ChannelPane: QuietView {
         arrange()
     }
 
-    /// Where the laid-out rows start after a refresh: at the same row as before, or as many from the end.
+    /// Where the laid-out rows start after a refresh: at the first row still there, or as many from the end.
     private func refreshedStart(in rows: [ChannelRow]) -> Int {
         guard shown.indices.contains(first) else { return max(rows.count - Self.page, 0) }
-        return rows.firstIndex(of: shown[first]) ?? max(rows.count - (shown.count - first), 0)
+        return shown[first...].prefix(Self.reuseReach).lazy.compactMap { rows.firstIndex(of: $0) }.first ?? max(rows.count - (shown.count - first), 0)
     }
 
     /// Makes every row again in the colours there are now, where you were. A pane that's closed lets its rows go
@@ -670,6 +676,8 @@ final class ChannelPane: QuietView {
             return card(for: entry, in: book)
         case .note(let text):
             return NoteRowView(text: text, isCentered: followsLatest || rows.count == 1)
+        case .older(let isLoading):
+            return OlderRowView(isLoading: isLoading) { [weak self] in self?.loadOlder() }
         }
     }
 
@@ -820,27 +828,44 @@ final class ChannelPane: QuietView {
 
     /// Scrolling up near the oldest row laid out lays out the page before it, without moving what you're looking at.
     private func pageIfNeeded() {
-        guard !isPaging, let book else { return }
+        guard !isPaging, book != nil else { return }
         isPaging = true
-        defer { isPaging = false }
         while first > 0, scroll.contentView.bounds.minY < scroll.contentSize.height {
             let anchor = firstInSight
-            let start = max(first - Self.page, 0)
-            views = shown[start..<first].map { view(for: $0, in: book, among: shown) } + views
-            first = start
-            stack()
+            layOutPageAbove()
             if let anchor { keep(anchor) }
         }
         attach()
+        isPaging = false
+        if !isShowing, first == 0, views.first is OlderRowView, views.first?.superview === document { loadOlder() }
     }
 
-    /// The first row you can see, and how far above the top of the pane it starts.
+    /// Scrolled back near the top of a channel with older posts, it loads them, as Slack does.
+    private func loadOlder() {
+        guard case .older(isLoading: false)? = shown.first, let channel = selection.channelID else { return }
+        onAction?(.older(channel))
+    }
+
+    /// The first row you can see, and how far above the top of the pane it starts. Never Load older, which goes once
+    /// it has.
     private var firstInSight: (view: ChannelRowView, above: CGFloat)? {
         let top = scroll.contentView.bounds.minY
-        return frames.firstIndex { $0.maxY > top }.map { (views[$0], top - frames[$0].minY) }
+        return frames.indices.first { frames[$0].maxY > top && !(views[$0] is OlderRowView) }.map { (views[$0], top - frames[$0].minY) }
     }
 
+    private func layOutPageAbove() {
+        guard let book else { return }
+        let start = max(first - Self.page, 0)
+        views = shown[start..<first].map { view(for: $0, in: book, among: shown) } + views
+        first = start
+        stack()
+    }
+
+    /// Rows that came in above it are laid out first, so it can stay where it was.
     private func keep(_ anchor: (view: ChannelRowView, above: CGFloat)) {
+        while first > 0, let index = views.firstIndex(where: { $0 === anchor.view }), frames[index].minY + anchor.above < 0 {
+            layOutPageAbove()
+        }
         guard let index = views.firstIndex(where: { $0 === anchor.view }) else { return }
         scrollOffset = min(max(frames[index].minY + anchor.above, 0), bottomOffset)
     }

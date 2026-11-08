@@ -269,6 +269,12 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(hello.retry)
     }
 
+    func testScrollingBackOnThePhoneLoadsAChannelsOlderPostsButNeverTheCatsDM() {
+        let book = book()
+        XCTAssertEqual(ask("older", key: PhonePlace.key(.channel(.of(steve)))).action(in: book) { "x" }?.action, .older(.of(steve)))
+        XCTAssertNil(ask("older", key: PhonePlace.key(.channel(.shades))).action(in: book) { "x" })
+    }
+
     // MARK: - The door
 
     func testOnlyTheCodeShowingPairsAndOnlyOnce() throws {
@@ -385,6 +391,7 @@ final class PhoneTests: XCTestCase {
         case .question: return "question"
         case .report: return "report"
         case .note: return "note"
+        case .older: return "older"
         }
     }
 }

@@ -98,6 +98,8 @@ enum DevFlags {
         feed.inGeneral = { inbox?.inGeneral ?? [:] }
         feed.isCatsWork = { AppController.isCatsWork($0, kept: inbox?.catsWork ?? [:]) }
         feed.answersInGeneral = { Set(inbox?.answersInGeneral.keys ?? [:].keys) }
+        feed.alsoSent = { Set(inbox?.alsoSent.keys ?? [:].keys) }
+        feed.alsoSentToGeneral = { Set(inbox?.alsoSentToGeneral.keys ?? [:].keys) }
         Task { @MainActor in
             func milliseconds(since start: Date) -> Int { Int(Date().timeIntervalSince(start) * 1000) }
             @MainActor func until(_ done: (ChannelBook) -> Bool) async -> ChannelBook {

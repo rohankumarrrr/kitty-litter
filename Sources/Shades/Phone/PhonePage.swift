@@ -199,6 +199,7 @@ enum PhonePage {
         .issue .line { display: flex; align-items: center; gap: 8px; }
         .issue small { display: block; color: var(--soft); font-size: 13px; margin-left: 16px; }
         .note { color: var(--soft); text-align: center; font-size: 15px; margin: 24px 16px; }
+        .older { display: block; width: calc(100% - 32px); background: none; border: 0; font: inherit; }
 
         .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 10px 0; }
         .card header { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: 13px; }
@@ -599,6 +600,13 @@ enum PhonePage {
           switch (item.kind) {
             case 'day': return el('div', 'day', item.text);
             case 'note': return el('p', 'note', item.text);
+            case 'older': {
+              const node = el('button', 'note older', item.text);
+              node.type = 'button';
+              node.disabled = !!item.done;
+              node.onclick = () => act({ act: 'older', key }, true);
+              return node;
+            }
             case 'message': return message(item);
             case 'parent': {
               const node = message(item);
