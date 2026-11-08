@@ -271,6 +271,7 @@ final class DemoDriver {
             ("kittens", stage.kittens.panel),
             ("channels", stage.channels.panel),
             ("pairing", stage.pairing.panel),
+            ("settings", stage.settingsPanel.panel),
         ]
     }
 
@@ -280,7 +281,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -456,8 +457,13 @@ final class DemoDriver {
             guard let button else { return print("no card button [\(rest)]") }
             print(button.accessibilityPerformPress() ? "pressed \(rest)" : "didn't press \(rest)")
         case "notification":
-            // The same as clicking the last notification.
-            controller.notificationClicked()
+            // The same as clicking a notification about that thread.
+            controller.notificationClicked(rest.isEmpty ? "demo-tidy" : rest)
+        case "notify-finished":
+            // The same as ticking Also when a session finishes in Settings.
+            var settings = controller.settings
+            settings.notifyFinished = rest != "off"
+            controller.apply(settings)
         case "finish":
             parts.backend.finish(threadID: rest.isEmpty ? "demo-tidy" : rest)
         case "quiet":

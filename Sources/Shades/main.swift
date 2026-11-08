@@ -85,7 +85,7 @@ MainActor.assumeIsolated {
             stage: stage
         )
         controller = real
-        notifications?.onClick = { [weak real] in real?.notificationClicked() }
+        notifications?.onClick = { [weak real] in real?.notificationClicked($0) }
         keys.onCancel = { [weak real] _ in
             MainActor.assumeIsolated { real?.cancelListening() }
         }

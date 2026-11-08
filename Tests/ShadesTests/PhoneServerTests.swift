@@ -437,6 +437,7 @@ final class PhoneServerTests: XCTestCase {
             pendingApprovals: [ApprovalRequest(id: "r1", threadID: "w", threadTitle: "Budget", kind: .command, summary: "rm -rf build", createdAt: Date())],
             projectPath: penny.folder
         )
+        backend.listed = [asking]
         controller.threadsChanged([asking])
     }
 
@@ -455,12 +456,39 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Encoding"), "aes128gcm")
         XCTAssertTrue(request.value(forHTTPHeaderField: "Authorization")?.hasSuffix(", k=\(signing)") == true, "signed with the key the phone subscribed with")
         let opened = try WebPush.decrypt(XCTUnwrap(request.httpBody), with: phone, auth: phoneAuth)
-        XCTAssertEqual(try JSONSerialization.jsonObject(with: opened) as? [String: String], ["title": "Penny needs an approval", "tag": "r1"], "and nothing they asked")
+        let page = PhonePlace.key(.thread("w", in: .channel(.of(penny))))
+        XCTAssertEqual(try JSONSerialization.jsonObject(with: opened) as? [String: String], ["title": "Penny needs an approval", "tag": "r1", "key": page], "and nothing they asked")
         XCTAssertFalse(String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self).contains("Penny"), "the push service only sees that Shades sent something")
 
         approvalNow()
         for _ in 0..<20 { await Task.yield() }
         XCTAssertEqual(pushed.count, 1, "once, as on the Mac")
+    }
+
+    func testTappingANotificationOpensItsThreadEvenBeforeMessagesHasReadIt() async throws {
+        let key = try await pair()
+        _ = try await subscribe(key: key)
+        backend.said["w"] = [Exchange(id: "turn", asker: .you, askedAt: Date(), ask: "Check the budget", reply: "On it.", repliedAt: Date())]
+        approvalNow()
+        await until { !pushed.isEmpty }
+        let opened = try WebPush.decrypt(XCTUnwrap(pushed.first?.httpBody), with: phone, auth: phoneAuth)
+        let page = try XCTUnwrap((try JSONSerialization.jsonObject(with: opened) as? [String: String])?["key"])
+        XCTAssertEqual(page, PhonePlace.key(.thread("w", in: .channel(.of(penny)))))
+
+        var request = URLRequest(url: URL(string: "/events?key=\(page.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)", relativeTo: base)!)
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let (bytes, _) = try await session.bytes(for: request)
+        var shown: [String] = []
+        let stream = Task { @MainActor in
+            for try await line in bytes.lines where line.hasPrefix("data: ") {
+                let view = try JSONSerialization.jsonObject(with: Data(line.dropFirst(6).utf8)) as? [String: Any]
+                shown.append(view?["key"] as? String ?? "")
+            }
+        }
+        defer { stream.cancel() }
+        await until { shown.last == page }
+        XCTAssertEqual(shown.first, PhonePlace.key(.channel(.of(penny))), "Messages hadn't read it, so it showed where it lives")
+        XCTAssertEqual(shown.last, page, "and opened it once it had")
     }
 
     func testOnlyAPairedPhoneSubscribesAndOnlyToAPushService() async throws {

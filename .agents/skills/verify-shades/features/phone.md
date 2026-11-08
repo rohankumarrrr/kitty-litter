@@ -42,7 +42,7 @@ Journey: `journeys/phone-answers.txt`, in light mode.
 Journey: `journeys/phone-notifications.txt`.
 
 - **Subscribe.** `phone open` and `draw`. `1-home` shows the page's note that an iPhone needs it on the Home Screen, since the web view, like Safari on an iPhone, has no push. `phone subscribe` stands in for **Turn on**: the page sends a stand-in phone's subscription with its own `/push` request, and the output says `[phone] subscribed: 204`.
-- **Notify.** `approval command ...` and `question`. The output says `[demo] notified: Steve Pawsniak needs an approval`, then `[demo] pushed to web.push.apple.com: {"title":"Steve Pawsniak needs an approval","tag":"demo-1"}`, which is what the stand-in phone opened from the encrypted push. The same follows for the question, and nothing says what was asked.
+- **Notify.** `approval command ...` and `question`. The output says `[demo] notified: Steve Pawsniak needs an approval`, then `[demo] pushed to web.push.apple.com: {"title":"Steve Pawsniak needs an approval","tag":"demo-1","key":"t:demo-tidy@c:%2Fdemo%2Fsteve"}`, which is what the stand-in phone opened from the encrypted push, with `"key"`, the thread's page a tap opens. The same follows for the question, and nothing says what was asked. Tapping one is in [Notifications](./notifications.md), under `journeys/notify-finished.txt`.
 
 Journey: `journeys/phone-theme.txt`.
 

@@ -97,6 +97,11 @@ struct PhonePlace: Equatable {
         return "t:\(escape(thread))@\(place)"
     }
 
+    /// The thread a key asks for, if it asks for one.
+    static func thread(in key: String) -> String? {
+        selection(key)?.thread
+    }
+
     static func reply(to entry: InboxEntry) -> String {
         "r:\(escape(entry.id))"
     }

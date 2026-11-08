@@ -594,7 +594,7 @@ enum Demo {
             saveSettings: { _ in print("[demo] settings aren't saved in demo mode") },
             kittens: { Demo.kittens },
             routerFolder: { DemoChannels.routerFolder },
-            notify: { print("[demo] notified: \(CatWords.notification($0))") },
+            notify: { print("[demo] notified: \(CatWords.notification($0)), which opens \($0.threadID)") },
             withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") },
             // The page stays on loopback, on a free port, so it's never on your tailnet or in the real app's way.
             servePhone: { "http://127.0.0.1:\($0)" },

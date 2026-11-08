@@ -8,7 +8,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     private static let padding: CGFloat = 18
     private static let labelWidth: CGFloat = 96
 
-    private let panel = QuietPanel(allowsKey: true)
+    let panel = QuietPanel(allowsKey: true)
     private var fields: Form?
     private var onSave: ((Settings) -> Void)?
     private var current = Settings()
@@ -24,6 +24,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         var privateApps: NSTextField
         var vocabulary: NSTextField
         var phone: NSButton
+        var notifyFinished: NSButton
     }
 
     func show(_ settings: Settings, near corner: NSPoint, onSave: @escaping (Settings) -> Void) {
@@ -98,10 +99,13 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             dictateKey: popup(HoldKey.allCases, settings.dictateKey, title: Self.keyName),
             privateApps: field(settings.privateApps.joined(separator: ", "), "Bundle IDs, comma separated"),
             vocabulary: field(settings.vocabulary.joined(separator: ", "), "Words I should know"),
-            phone: NSButton(checkboxWithTitle: "Messages on my phone, over Tailscale", target: nil, action: nil)
+            phone: NSButton(checkboxWithTitle: "Messages on my phone, over Tailscale", target: nil, action: nil),
+            notifyFinished: NSButton(checkboxWithTitle: "Also when a session finishes", target: nil, action: nil)
         )
         form.phone.font = .systemFont(ofSize: 12)
         form.phone.state = settings.phone ? .on : .off
+        form.notifyFinished.font = .systemFont(ofSize: 12)
+        form.notifyFinished.state = settings.notifyFinished ? .on : .off
         fields = form
 
         for view in [
@@ -115,6 +119,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             row("Private apps", form.privateApps),
             row("Extra words", form.vocabulary),
             row("Phone", form.phone),
+            row("Notifications", form.notifyFinished),
         ] { stack.addArrangedSubview(view) }
 
         let save = QuietButton("Save", style: .filled) { [weak self] in self?.save() }
@@ -157,6 +162,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         settings.privateApps = Self.list(form.privateApps.stringValue)
         settings.vocabulary = Self.list(form.vocabulary.stringValue)
         settings.phone = form.phone.state == .on
+        settings.notifyFinished = form.notifyFinished.state == .on
         onSave?(settings)
         hide()
     }

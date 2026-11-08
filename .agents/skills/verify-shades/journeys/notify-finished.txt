@@ -1,0 +1,37 @@
+front
+phone on
+wait 3
+phone pair
+wait 1
+phone open
+wait 4
+phone subscribe
+wait 2
+finish demo-research
+wait 8
+notify-finished on
+wait 1
+finish demo-tidy
+wait 8
+report shipped
+wait 7
+channels
+wait 1
+channel general
+wait 1
+draw .verify/shades/notify-finished/0-elsewhere
+notification demo-tidy
+wait 2
+draw .verify/shades/notify-finished/1-clicked
+phone open t:demo-tidy@c:%2Fdemo%2Fsteve
+wait 4
+phone text
+wait 2
+draw .verify/shades/notify-finished/2-tapped
+wait 3
+settings
+wait 2
+draw .verify/shades/notify-finished/3-settings
+wait 1
+front
+windows

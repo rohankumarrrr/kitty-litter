@@ -41,11 +41,13 @@ extension AppController {
                 return
             }
             let words = await words(for: report, of: thread, failed: failed)
+            let kitten = kitten(of: thread)
             post(
-                caption: failed ? CatWords.failedCaption(thread) : CatWords.finishedCaption(thread, kitten: kitten(of: thread)),
+                caption: failed ? CatWords.failedCaption(thread) : CatWords.finishedCaption(thread, kitten: kitten),
                 text: words,
                 threadID: thread.id
             )
+            if !failed { notifyFinished(thread, by: kitten) }
         }
     }
 

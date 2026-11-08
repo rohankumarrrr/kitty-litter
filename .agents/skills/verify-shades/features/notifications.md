@@ -1,31 +1,40 @@
 # Notifications
 
-Each new approval, question or decision in Activity posts one macOS notification that says only who and what kind, such as "Steve Pawsniak needs an approval". Clicking it opens Messages on Activity, and answering takes it back.
+Each new approval, question or decision in Activity posts one macOS notification that says only who and what kind, such as "Steve Pawsniak needs an approval". With **Also when a session finishes** on in Settings, a finished session posts one too, such as "Steve Pawsniak finished". Clicking one opens its thread beside where it lives in Messages, and answering takes it back.
 
 ## Sub-features
 
 - `notify-new` posts one for each new thing waiting on you, and never for what was asked before the app started.
-- `notify-click` opens Messages on Activity, from whichever place it was on.
+- `notify-click` opens the thread it's about beside its channel, from whichever place Messages was on, or in T3 for a thread Messages doesn't show.
+- `notify-finished` posts one for each finished session once it's turned on, and never says what it said. An inbox kitten's run that ships and asks gets one notification, the decision.
 - `notify-withdraw` takes a notification back once what it was about is answered, and starting takes back every one from before.
 - `bubble-open` is the cat's own report when a session ends. Its **Open** shows the thread in Messages, and only a thread Messages doesn't follow says Open in T3. Activity's cards say **View thread** the same way.
 
 ## How to get to it (user POV)
 
-- A notification comes by itself when an agent asks for something.
+- A notification comes by itself when an agent asks for something, and once **Also when a session finishes** is on in Settings, when a session finishes.
 - Click it.
 
 ## Driving it with the demo
 
 Preconditions:
 
-- A fresh demo, with nothing waiting. Demo mode prints notifications instead of posting them, and `notification` stands in for clicking one.
+- A fresh demo, with nothing waiting. Demo mode prints notifications instead of posting them, and `notification [thread]` stands in for clicking one about that thread, `demo-tidy` if it's left out. `notify-finished on` stands in for ticking the box in Settings.
 
 Journey: `journeys/notifications.txt`.
 
 - **Elsewhere.** `channels`, then `channel general`. `channels.png` in `0-elsewhere` shows #general selected.
-- **New.** `approval command npm test`, `report decision` and `question`, with their waits. The output says `[demo] notified: Steve Pawsniak needs an approval`, `[demo] notified: Clawde needs a decision` and `[demo] notified: An agent has a question`, with nothing about the command, the report or the question.
-- **Click.** `notification`, then `wait 2`. `channels.png` in `1-clicked` shows Activity selected, with a count of 3: the approval, the question and the decision.
+- **New.** `approval command npm test`, `report decision` and `question`, with their waits. The output says `[demo] notified: Steve Pawsniak needs an approval, which opens demo-tidy`, `[demo] notified: Clawde needs a decision, which opens demo-login` and `[demo] notified: An agent has a question, which opens demo-research`, with nothing about the command, the report or the question.
+- **Click.** `notification`, then `wait 2`. It stands in for clicking a notification about `demo-tidy`, the approval's thread. `channels.png` in `1-clicked` shows "Tidy up the pricing page" open beside #steve-pawsniak with the approval's Deny and Allow in it, and Activity's count of 3 in the sidebar: the approval, the question and the decision.
 - **Withdraw.** `allow`, then `wait 1`. The output says `[demo] took back 1 notification` before `[demo] accept: npm test`, and `channels.png` in `2-answered` has a count of 2.
+
+Journey: `journeys/notify-finished.txt`, which also covers the phone.
+
+- **Off.** `finish demo-research` before `notify-finished on`. The output has the cat's report and no `[demo] notified`.
+- **On.** `notify-finished on`, then `finish demo-tidy`. The output says `[demo] notified: Steve Pawsniak finished, which opens demo-tidy`, then `[demo] pushed to web.push.apple.com: {"title":"Steve Pawsniak finished","tag":"demo-tidy","key":"t:demo-tidy@c:%2Fdemo%2Fsteve"}`, with nothing from the report. `report shipped` says `[demo] notified: Clawde finished, which opens demo-icon`.
+- **Click.** `notification demo-tidy` from #general. `1-clicked/channels.png` shows "Tidy up the pricing page" open beside #steve-pawsniak.
+- **Tap.** `phone open t:demo-tidy@c:%2Fdemo%2Fsteve` opens the page the push names, as tapping it does. `phone text` and `2-tapped` show the thread's own page, with Steve at the top and its conversation.
+- **Settings.** `settings`, then `draw`. `3-settings/settings.png` shows Notifications with Also when a session finishes ticked, since `notify-finished on` ticked it. The panel has the keyboard, so the last `windows` says `active=true`.
 
 - **Open.** Journey `journeys/open.txt`. `finish demo-tidy`, `wait 8`, then `buttons` prints `button Open`, and nothing about T3. `1-report/bubble.png` shows Steve's report with Open under it. `bubble Open` presses it and prints `pressed Open`, and `2-opened/channels.png` shows "Tidy up the pricing page" open beside #steve-pawsniak, with no bubble left. `approval command swift test` and `report decision` put cards in Activity, and `3-activity/channels.png` shows the approval with Deny, Allow, Allow for this session and View thread, and Clawde's decision with Reply, Done and Open in T3, since the demo has nothing for Messages to read in that thread.
 

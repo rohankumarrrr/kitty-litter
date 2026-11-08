@@ -34,7 +34,7 @@ enum WebPush {
         _ plaintext: Data,
         for phone: P256.KeyAgreement.PublicKey,
         auth: Data,
-        blocks: Int = 256,
+        blocks: Int = 512,
         sender: P256.KeyAgreement.PrivateKey = P256.KeyAgreement.PrivateKey(),
         salt: Data = Data((0..<16).map { _ in UInt8.random(in: .min ... .max) })
     ) throws -> Data {

@@ -37,9 +37,15 @@ final class WebPushTests: XCTestCase {
 
     func testEveryNotificationIsTheSameSizeSoItsLengthSaysNothing() throws {
         let phone = P256.KeyAgreement.PrivateKey()
-        let titles = ["Pepper needs an approval", "Pepper has a question", "Pepper needs a decision", "Steve Pawsniak needs an approval", "An agent needs an approval"]
-        let sizes = try titles.map { title in
-            try WebPush.encrypt(Data(#"{"title":"\#(title)","tag":"11111111-1111-1111-1111-111111111111"}"#.utf8), for: phone.publicKey, auth: auth).count
+        let titles = ["Pepper needs an approval", "Pepper has a question", "Pepper needs a decision", "Steve Pawsniak needs an approval", "An agent needs an approval", "Steve Pawsniak finished"]
+        // As long as T3's thread IDs get, in the tag and in the page a tap opens, which names its kitten by folder.
+        let thread = "mcp:launch:" + String(repeating: "f", count: 64)
+        let page = PhonePlace.key(.thread(thread, in: .channel(.kitten("/Users/someone/kittens/steve-pawsniak"))))
+        let sizes = try titles.flatMap { title in
+            try [
+                #"{"title":"\#(title)","tag":"11111111-1111-1111-1111-111111111111","key":"activity"}"#,
+                #"{"title":"\#(title)","tag":"\#(thread)","key":"\#(page)"}"#,
+            ].map { try WebPush.encrypt(Data($0.utf8), for: phone.publicKey, auth: auth).count }
         }
         XCTAssertEqual(Set(sizes).count, 1, "\(sizes)")
         let padded = try WebPush.encrypt(plaintext, for: phone.publicKey, auth: auth)

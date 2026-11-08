@@ -90,7 +90,8 @@ final class PhoneLink {
 
     private func show(_ book: ChannelBook, to watcher: Watcher) {
         let view = PhoneView(PhonePlace(watcher.key, in: book), in: book, now: now())
-        watcher.key = view.key
+        // A notification can open a thread Messages hasn't read yet, so it's asked for again until it has.
+        if PhonePlace.thread(in: watcher.key).map({ book.threads[$0] != nil || book.started[$0] != nil }) != false { watcher.key = view.key }
         guard view != watcher.shown, let json = try? JSONEncoder().encode(view) else { return }
         watcher.shown = view
         watcher.stream.send(json)
