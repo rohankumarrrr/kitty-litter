@@ -5226,6 +5226,16 @@ extension FlowTests {
         XCTAssertNil(stage.input, "it never takes the keyboard by itself")
     }
 
+    func testTheHotkeyBringsMessagesOutFromBehindYourWorkInOnePress() async {
+        controller.messagesHotkeyPressed()
+        stage.isChannelsCovered = true
+        controller.messagesHotkeyPressed()
+        XCTAssertTrue(stage.isChannelsVisible, "open behind your work isn't showing, so the press shows it")
+        XCTAssertEqual(stage.channelsShown.count, 2, "brought in front")
+        controller.messagesHotkeyPressed()
+        XCTAssertFalse(stage.isChannelsVisible, "and once it's in front, the next press closes it")
+    }
+
     func testMessagesCoversWhatTheCatWasNudgingAbout() async {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")

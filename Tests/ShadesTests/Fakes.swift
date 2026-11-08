@@ -91,11 +91,15 @@ final class FakeStage: CatStage {
     func showKittens(_ statuses: [KittenStatus]) { kittens = statuses }
     func hideKittens() { kittens = nil }
     var isChannelsVisible = false
+    /// Your work is over it, as clicking back into another app leaves it.
+    var isChannelsCovered = false
+    var isChannelsInFront: Bool { isChannelsVisible && !isChannelsCovered }
     var selections: [ChannelSelection?] = []
     func showChannels(_ book: ChannelBook, selecting selection: ChannelSelection?) {
         channelsShown.append(book)
         selections.append(selection)
         isChannelsVisible = true
+        isChannelsCovered = false
     }
     func updateChannels(_ book: ChannelBook) { channelsUpdated.append(book) }
     func hideChannels() { isChannelsVisible = false }
