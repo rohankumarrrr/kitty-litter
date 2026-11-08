@@ -299,6 +299,8 @@ struct ChannelBook: Equatable {
         let heard = Set(answered.map(\.exchangeID))
         let ours = Set(sent.map(\.message.id))
         var alsoSentHeard: [String: HeardAlsoSent] = [:]
+        // Each message in a thread is what one thing you sent came to, so the same words said twice are two messages.
+        var claimed: Set<String> = []
         for (sequence, sent) in sent.enumerated() {
             if let turn = sent.heardAs, heard.contains(turn) { continue }
             var message = sent.message
@@ -325,7 +327,8 @@ struct ChannelBook: Equatable {
                 gather(message.threadID, Gathered(title: message.threadTitle, home: home, owner: owner?.id, messages: [message], isPosted: !sent.isReply))
                 continue
             }
-            if let index = thread.messages.firstIndex(where: { isEcho(of: message, $0) }) {
+            if let index = thread.messages.firstIndex(where: { !claimed.contains($0.id) && isEcho(of: message, $0) }) {
+                claimed.insert(thread.messages[index].id)
                 // T3 keeps the file but not a picture of it, so the one shown meanwhile stays while Shades runs.
                 if thread.messages[index].file?.name == message.file?.name, thread.messages[index].file?.thumbnail == nil {
                     thread.messages[index].file = message.file
@@ -343,6 +346,7 @@ struct ChannelBook: Equatable {
                 continue
             }
             message.threadTitle = thread.title
+            claimed.insert(message.id)
             // Your words that start a thread come before anything said in it.
             if let first = thread.messages.first, message.at < first.at {
                 thread.messages.insert(message, at: 0)

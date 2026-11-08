@@ -474,6 +474,14 @@ enum PhonePage {
           show(next);
         });
 
+        function lowestInSight() {
+          const seen = [...$('rows').children].filter(child => {
+            const box = child.getBoundingClientRect();
+            return child.dataset.id && box.bottom > 0 && box.top < window.innerHeight;
+          }).pop();
+          return seen ? { id: seen.dataset.id, top: seen.getBoundingClientRect().top } : null;
+        }
+
         function show(next) {
           if (view && view.key === next.key && selecting()) { held = next; return; }
           held = null;
@@ -504,10 +512,21 @@ enum PhonePage {
             $('alsotext').textContent = next.box.also || '';
             if (fresh) $('also').checked = false;
           }
-          $('rows').replaceChildren(...(key === 'home' ? places(next.places) : next.rows.map(row)));
+          // Older posts come in where each thread started, which can be among what you're reading, so the lowest
+          // message on the screen stays where it was.
+          const kept = fresh || nearBottom || !conversation(key) ? null : lowestInSight();
+          $('rows').replaceChildren(...(key === 'home' ? places(next.places) : next.rows.map(item => {
+            const node = row(item);
+            if (item.id) node.dataset.id = item.id;
+            return node;
+          })));
           $('notify').hidden = key !== 'home' || !$('notifytext').textContent;
           if (conversation(key) && (fresh || nearBottom)) window.scrollTo(0, document.body.scrollHeight);
           else if (fresh) window.scrollTo(0, 0);
+          else if (kept) {
+            const node = [...$('rows').children].find(child => child.dataset.id === kept.id);
+            if (node) window.scrollBy(0, node.getBoundingClientRect().top - kept.top);
+          }
           if (conversation(key) && document.visibilityState === 'visible') act({ act: 'seen', key }, true);
         }
 

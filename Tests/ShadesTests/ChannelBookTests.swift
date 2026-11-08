@@ -540,6 +540,24 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(restarted.channel(.of(steve))?.posts, [.thread("t")], "the thread stays its kitten's")
     }
 
+    func testTheSameWordsAlsoSentTwiceAreKeptAsTwoMessages() {
+        let said = ["t": [
+            exchange("first", ask: "Rewrite it", asked: 0),
+            exchange("a", ask: "ok", reply: "Sure.", asked: 10),
+            exchange("b", ask: "ok", reply: "Sure.", asked: 30),
+        ]]
+        var first = echo("ok", at: 10, in: .of(steve), thread: "t", alsoSent: true)
+        first.message.exchangeID = "sent-1"
+        let second = echo("ok", at: 30, in: .of(steve), thread: "t", alsoSent: true)
+        let live = book(threads: [thread("t")], transcripts: said, sent: [first, second])
+        XCTAssertEqual(Set(live.alsoSentHeard.keys), ["a:ask", "b:ask"], "each kept by its own copy's ID")
+
+        let restarted = ChannelBook.build(kittens: [steve, pepper], threads: [thread("t")], transcripts: said, isReading: false, unreadable: 0, cantReachT3: false, alsoSent: ["a:ask", "b:ask"])
+        let shown = restarted.channel(.of(steve))?.posts.compactMap { post -> String? in if case .alsoSent(let message, _) = post { message.id } else { nil } }
+        XCTAssertEqual(shown, ["a:ask", "b:ask"], "both are still in the channel after a restart")
+        XCTAssertEqual(live.channel(.of(steve))?.posts, restarted.channel(.of(steve))?.posts, "as they were before it")
+    }
+
     func testAReplyThatsntAlsoSentStaysInItsThread() {
         let reply = echo("Keep the FAQ", at: 10, in: .of(steve), thread: "t")
         let built = book(threads: [thread("t")], transcripts: ["t": [exchange("e", asked: 0)]], sent: [reply])

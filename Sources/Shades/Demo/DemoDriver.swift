@@ -108,6 +108,9 @@ final class DemoDriver {
             phone.open(URL(string: "\(address)/?key=\(key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")\(code)")!)
         case "go":
             runOnPhone("go(\(DemoPhone.quoted(phoneKey(rest))))")
+        case "js":
+            // Runs a line of script on the page and prints what it comes to, such as where its rows are.
+            runOnPhone(rest)
         case "attach":
             // The same as taking a photo with the page's camera button: a made-up picture goes up, as the page sends one.
             guard let phone else { return print("The page isn't open. Try: phone open") }
