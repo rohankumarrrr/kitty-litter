@@ -209,7 +209,7 @@ enum CatWords {
         }
     }
     static func pullRequest(_ pullRequest: ThreadPullRequest) -> String { "PR #\(pullRequest.number) \(pullRequest.state)" }
-    static let openLinkQuestion = "Open this link?"
+    static func openLink(to host: String) -> String { "Open a link to \(host)?" }
     static let openLink = "Open"
 
     static func day(_ date: Date, now: Date, calendar: Calendar = .current) -> String {

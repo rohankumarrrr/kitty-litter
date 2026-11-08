@@ -6,6 +6,10 @@ enum ChannelMarkdown {
     static let font = NSFont.systemFont(ofSize: 13)
     private static let codeFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
     static let copyRoom: CGFloat = 22
+    /// More cells than this take seconds to lay out as a table, so a bigger one is drawn as text, the way code is.
+    static let largestTable = 400
+    /// How many lists deep an item's indent goes, so a deep one still has room for its words.
+    private static let deepestIndent = 3
 
     /// GitHub's own colours for a pull request's state, which read the same on any bubble and any theme.
     static func chipColor(_ state: String?) -> NSColor {
@@ -35,7 +39,7 @@ enum ChannelMarkdown {
             case .heading:
                 result.append(line(block.spans ?? [], color: color, style: style, font: .systemFont(ofSize: 14, weight: .semibold)))
             case .item:
-                let indent = CGFloat((block.depth ?? 1) - 1) * 14
+                let indent = CGFloat(min((block.depth ?? 1) - 1, deepestIndent)) * 14
                 let marker = block.marker ?? ""
                 let markerWidth: CGFloat = marker.hasSuffix(".") ? 20 : 14
                 style.firstLineHeadIndent = indent
@@ -54,18 +58,15 @@ enum ChannelMarkdown {
                 style.textBlocks = [quote]
                 result.append(line(block.spans ?? [], color: color, style: style))
             case .code:
-                let code = block.code ?? ""
-                let block = NSTextBlock(fill: color.withAlphaComponent(0.08), padding: 8, color: color)
-                // Room above the code for its Copy button.
-                block.setWidth(ChannelMarkdown.copyRoom, type: .absoluteValueType, for: .padding, edge: .minY)
-                style.textBlocks = [block]
-                style.paragraphSpacing = 0
-                style.lineSpacing = 1
-                result.append(NSAttributedString(string: code + "\n", attributes: [
-                    .font: codeFont, .foregroundColor: color, .paragraphStyle: style, .channelCode: ChannelCode(code),
-                ]))
+                result.append(code(block.code ?? "", color: color, style: style))
             case .table:
-                result.append(table(block.rows ?? [], color: color))
+                let rows = block.rows ?? []
+                if rows.map(\.count).reduce(0, +) > largestTable {
+                    let text = rows.map { $0.map { $0.map(\.text).joined() }.joined(separator: " | ") }.joined(separator: "\n")
+                    result.append(code(text, color: color, style: style))
+                } else {
+                    result.append(table(rows, color: color))
+                }
             case .rule:
                 let rule = NSTextBlock(fill: nil, padding: 0, color: color)
                 rule.setWidth(1, type: .absoluteValueType, for: .border, edge: .minY)
@@ -78,6 +79,18 @@ enum ChannelMarkdown {
         // Each block ends its own paragraph, and the last one ends the message.
         if result.string.hasSuffix("\n") { result.deleteCharacters(in: NSRange(location: result.length - 1, length: 1)) }
         return result
+    }
+
+    private static func code(_ code: String, color: NSColor, style: NSMutableParagraphStyle) -> NSAttributedString {
+        let block = NSTextBlock(fill: color.withAlphaComponent(0.08), padding: 8, color: color)
+        // Room above the code for its Copy button.
+        block.setWidth(copyRoom, type: .absoluteValueType, for: .padding, edge: .minY)
+        style.textBlocks = [block]
+        style.paragraphSpacing = 0
+        style.lineSpacing = 1
+        return NSAttributedString(string: code + "\n", attributes: [
+            .font: codeFont, .foregroundColor: color, .paragraphStyle: style, .channelCode: ChannelCode(code),
+        ])
     }
 
     /// Words ending in a newline, so the next block starts a paragraph of its own.
@@ -342,7 +355,20 @@ final class ChannelTextView: NSTextView {
     /// Pressing a link asks the pane to show where it goes, and opens nothing, as `ChannelPane.ask(toOpen:)` says.
     override func mouseDown(with event: NSEvent) {
         guard let link = link(at: convert(event.locationInWindow, from: nil)) else { return super.mouseDown(with: event) }
+        clicked(onLink: link, at: 0)
+    }
+
+    /// However else AppKit uses a link, such as VoiceOver pressing it, it only shows where it goes too.
+    override func clicked(onLink link: Any, at charIndex: Int) {
+        guard let link = link as? URL else { return }
         tryToPerform(#selector(ChannelPane.ask(toOpen:)), with: link)
+    }
+
+    /// Copy is all a right-click offers. AppKit's own menu has Open Link and Open With, which open a link at once.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "")
+        return menu
     }
 
     /// The link drawn at a point in the view, if there is one.

@@ -139,7 +139,7 @@ final class DemoDriver {
             runOnPhone("(() => { const words = \(DemoPhone.quoted(rest)); const walk = document.createTreeWalker($('rows'), NodeFilter.SHOW_TEXT); for (let node = walk.nextNode(); node; node = walk.nextNode()) { const at = node.data.indexOf(words); if (at < 0) continue; const range = document.createRange(); range.setStart(node, at); range.setEnd(node, at + words.length); getSelection().removeAllRanges(); getSelection().addRange(range); return 'selected [' + getSelection().toString() + ']'; } return 'no such words' })()")
         case "link":
             // The same as tapping a link in a message: the page shows where it goes, and opens nothing.
-            runOnPhone("(() => { const a = [...$('rows').querySelectorAll('a')].find((a) => a.textContent.includes(\(DemoPhone.quoted(rest)))); if (!a) return 'no link'; a.click(); return 'asks to open ' + $('linkaddress').textContent })()")
+            runOnPhone("(() => { const a = [...$('rows').querySelectorAll('[role=link]')].find((a) => a.textContent.includes(\(DemoPhone.quoted(rest)))); if (!a) return 'no link'; a.click(); return $('linktitle').textContent + ' ' + $('linkaddress').textContent })()")
         case "unselect":
             // The same as tapping somewhere else on the page.
             runOnPhone("getSelection().removeAllRanges(); 'unselected'")

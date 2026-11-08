@@ -1,7 +1,8 @@
 import AppKit
 
-/// Where a link you pressed in Messages goes, over the box, written out in full. Nothing opens until you press Open, so
-/// a link's words can't hide where it leads, and nothing in a message can open anything by itself.
+/// Where a link you pressed in Messages goes, over the box: its host, then its whole address, as much of it as fits.
+/// Nothing opens until you press Open, so a link's words can't hide where it leads, and nothing in a message can open
+/// anything by itself.
 final class LinkBar: QuietView {
     private static let pad: CGFloat = 12
     private static let titleHeight: CGFloat = 18
@@ -23,6 +24,8 @@ final class LinkBar: QuietView {
         cancel.onPress = { [weak self] in self?.onCancel?() }
         addSubview(open)
         addSubview(cancel)
+        // An address too long for the pane stops at the buttons, never over the box below.
+        clipsToBounds = true
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
     }
@@ -33,10 +36,13 @@ final class LinkBar: QuietView {
     func show(_ link: URL?) {
         self.link = link
         isHidden = link == nil
-        setAccessibilityLabel(link.map { "\(CatWords.openLinkQuestion) \($0.absoluteString)" })
+        setAccessibilityLabel(link.map { "\(title) \($0.absoluteString)" })
         needsLayout = true
         needsDisplay = true
     }
+
+    /// The host it opens, which shows whatever room the address has.
+    var title: String { CatWords.openLink(to: link?.host ?? "") }
 
     private var address: NSAttributedString {
         let wrapping = NSMutableParagraphStyle()
@@ -70,11 +76,15 @@ final class LinkBar: QuietView {
         bounds.fill()
         MessagesInk.line.setFill()
         NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
-        NSAttributedString(string: CatWords.openLinkQuestion, attributes: [
-            .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+        let truncating = NSMutableParagraphStyle()
+        truncating.lineBreakMode = .byTruncatingMiddle
+        NSAttributedString(string: title, attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
             .foregroundColor: MessagesInk.soft,
-        ]).draw(at: NSPoint(x: Self.pad, y: Self.pad))
-        let width = bounds.width - Self.pad * 2
-        address.draw(with: NSRect(x: Self.pad, y: Self.pad + Self.titleHeight, width: width, height: addressHeight(width: bounds.width)), options: [.usesLineFragmentOrigin])
+            .paragraphStyle: truncating,
+        ]).draw(in: NSRect(x: Self.pad, y: Self.pad, width: bounds.width - Self.pad * 2, height: Self.titleHeight))
+        let top = Self.pad + Self.titleHeight
+        let room = max(open.frame.minY - Self.buttonGap - top, 0)
+        address.draw(with: NSRect(x: Self.pad, y: top, width: bounds.width - Self.pad * 2, height: min(addressHeight(width: bounds.width), room)), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
     }
 }

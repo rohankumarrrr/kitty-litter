@@ -50,7 +50,6 @@ struct Markup: Equatable {
         var item: Int?
         var table: Int?
         var row: Int?
-        var cell: Int?
         var rows: [[[Span]]] = []
         func endTable() {
             guard !rows.isEmpty else { return }
@@ -63,16 +62,15 @@ struct Markup: Equatable {
             if let tableIntent = intents.first(where: { if case .table = $0.kind { true } else { false } }) {
                 if table != tableIntent.identity { endTable() }
                 table = tableIntent.identity
+                guard case .table(let columns) = tableIntent.kind else { continue }
                 let rowIntent = intents.first { if case .tableRow = $0.kind { true } else { $0.kind == .tableHeaderRow } }
-                let cellIntent = intents.first { if case .tableCell = $0.kind { true } else { false } }
-                if rows.isEmpty || row != rowIntent?.identity {
-                    rows.append([])
-                    cell = nil
-                }
-                if rows[rows.count - 1].isEmpty || cell != cellIntent?.identity { rows[rows.count - 1].append([]) }
+                // Each cell goes in its own column, so an empty one keeps its place rather than letting the rest move left.
+                var column = 0
+                for intent in intents { if case .tableCell(let index) = intent.kind { column = index } }
+                if rows.isEmpty || row != rowIntent?.identity { rows.append(Array(repeating: [], count: columns.count)) }
                 row = rowIntent?.identity
-                cell = cellIntent?.identity
-                rows[rows.count - 1][rows[rows.count - 1].count - 1].append(span)
+                while rows[rows.count - 1].count <= column { rows[rows.count - 1].append([]) }
+                rows[rows.count - 1][column].append(span)
                 inner = nil
                 continue
             }
@@ -129,24 +127,28 @@ struct Markup: Equatable {
         if intent.contains(.strikethrough) { span.strike = true }
         guard let link = run.link, opens(link) else { return span }
         span.link = link
-        if let pull = pull(link) {
+        // Only a bare address is a chip, labelled from the address itself, so a link's own words can't pass for one.
+        if text == link.absoluteString, let pull = pull(link) {
             span.pull = Pull(state: pulls[pull.key])
-            // A bare address reads better as the pull request it is. Words someone chose for a link stay theirs.
-            if text == link.absoluteString { span.text = pull.label }
+            span.text = pull.label
         }
         return span
     }
 
-    /// Only web addresses open, so a message can't point at a file, a script or another app.
+    /// Only web addresses open, so a message can't point at a file, a script or another app. One with a name before
+    /// its host, as in `https://github.com@example.com`, could hide where it goes, so it stays words too.
     static func opens(_ url: URL) -> Bool {
-        ["http", "https"].contains(url.scheme?.lowercased()) && url.host?.isEmpty == false
+        ["http", "https"].contains(url.scheme?.lowercased()) && url.host?.isEmpty == false && url.user == nil && url.password == nil
     }
 
-    /// A link to a pull request on GitHub: `owner/repo#number` in lower case, which finds its state, and `repo #number`.
+    /// A link that's exactly a pull request on GitHub: `owner/repo#number` in lower case, which finds its state, and
+    /// `owner/repo #number` to show. Anything more on the path, such as `..`, could lead somewhere else.
     static func pull(_ url: URL) -> (key: String, label: String)? {
         guard url.host?.lowercased() == "github.com" else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
-        guard parts.count >= 4, parts[2] == "pull", let number = Int(parts[3]) else { return nil }
-        return ("\(parts[0])/\(parts[1])#\(number)".lowercased(), "\(parts[1]) #\(number)")
+        guard parts.count == 4, parts[2] == "pull", let number = Int(parts[3]),
+              parts[0...1].allSatisfy({ $0.range(of: "^[A-Za-z0-9_.-]+$", options: .regularExpression) != nil && $0 != "." && $0 != ".." })
+        else { return nil }
+        return ("\(parts[0])/\(parts[1])#\(number)".lowercased(), "\(parts[0])/\(parts[1]) #\(number)")
     }
 }

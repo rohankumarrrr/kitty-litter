@@ -54,7 +54,7 @@ enum PhonePage {
           <label id="alsolabel" hidden><input type="checkbox" id="also"> <span id="alsotext"></span></label>
         </form>
         <div id="linksheet" role="dialog" aria-labelledby="linktitle" hidden>
-          <p id="linktitle">Open this link?</p>
+          <p id="linktitle"></p>
           <p id="linkaddress"></p>
           <div class="buttons">
             <button id="linkcancel" type="button">Cancel</button>
@@ -139,7 +139,8 @@ enum PhonePage {
           white-space: pre-wrap; overflow-wrap: anywhere; }
         .bubble.going { opacity: .55; }
         .bubble code { font: .9em ui-monospace, Menlo, monospace; }
-        .bubble a { color: inherit; }
+        .bubble a, .bubble .link { color: inherit; }
+        .bubble .link { text-decoration: underline; cursor: pointer; }
         .bubble p, .bubble h4, .bubble blockquote { margin: 0; }
         .bubble > * + * { margin-top: .5em; }
         .bubble > .item + .item { margin-top: .15em; }
@@ -160,10 +161,12 @@ enum PhonePage {
         .chip[data-state=open] { background: #1f883d; }
         .chip[data-state=merged] { background: #8250df; }
         .chip[data-state=closed] { background: #cf222e; }
+        /* However long the address, the sheet stays on screen and the address scrolls inside it. */
         #linksheet { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 12px); z-index: 3;
+          max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); display: flex; flex-direction: column;
           background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
-        #linktitle { margin: 0; color: var(--soft); font-size: 13px; }
-        #linkaddress { margin: 6px 0 0; font: 14px/1.4 ui-monospace, Menlo, monospace; overflow-wrap: anywhere; }
+        #linktitle { margin: 0; color: var(--soft); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+        #linkaddress { margin: 6px 0 0; font: 14px/1.4 ui-monospace, Menlo, monospace; overflow-wrap: anywhere; overflow-y: auto; min-height: 0; }
         #linksheet .buttons { justify-content: flex-end; }
         #linksheet .buttons a { background: var(--you); color: var(--on-you); border-radius: 999px; padding: 8px 16px; font-size: 15px; text-decoration: none; }
         .bubble.cut { max-height: 16.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); }
@@ -261,6 +264,7 @@ enum PhonePage {
           gone: "That's changed since. Have another look.",
           wrongCode: "That code didn't work. Turn pairing on again in Shades on your Mac for a new one.",
           answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied',
+          openLink: (host) => 'Open a link to ' + host + '?',
           several: 'Pick as many as you like.',
           sending: 'Sending...', retry: 'Try again',
           notifyAsk: 'Get a notification when something needs you.',
@@ -735,10 +739,13 @@ enum PhonePage {
             node.dataset.state = part.pull.state || '';
           }
           if (!part.link || !/^https?:\/\//i.test(part.link)) return node;
-          const link = el('a');
-          link.href = part.link;
+          // No href, so nothing but ask() can follow it: not a long press, a middle click or a second window.
+          const link = el('span', 'link');
+          link.setAttribute('role', 'link');
+          link.tabIndex = 0;
           link.append(node);
-          link.onclick = (event) => { event.preventDefault(); ask(part.link); };
+          link.onclick = () => ask(part.link);
+          link.onkeydown = (event) => { if (event.key === 'Enter') ask(part.link); };
           return link;
         }
 
@@ -771,7 +778,9 @@ enum PhonePage {
 
         // Only Open, a link you tap yourself, goes anywhere.
         function ask(link) {
+          $('linktitle').textContent = words.openLink(new URL(link).host);
           $('linkaddress').textContent = link;
+          $('linkaddress').scrollTop = 0;
           $('linkopen').href = link;
           $('linksheet').hidden = false;
         }

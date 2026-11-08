@@ -330,6 +330,38 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(pane.linkBar.isHidden, "only web addresses, even if one got this far")
     }
 
+    func testRightClickingWordsOffersOnlyCopy() throws {
+        let view = view()
+        view.show(book(text: "Read [the docs](https://example.invalid/docs) first."))
+        view.select(inThread)
+        let row = try XCTUnwrap(view.threadPane.shownMessageRows.first { !$0.isYours })
+        let words = try XCTUnwrap(subviews(of: row).compactMap { $0 as? ChannelTextView }.first)
+        let at = (words.string as NSString).range(of: "the docs")
+        let rect = words.layoutManager!.boundingRect(forGlyphRange: words.layoutManager!.glyphRange(forCharacterRange: at, actualCharacterRange: nil), in: words.textContainer!)
+        // An event made here and handed straight to the view, never posted, so nothing reaches the desktop.
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: words.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil), modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        XCTAssertEqual(words.menu(for: event)?.items.map(\.title), ["Copy"], "no Open Link or Open With, which would skip the bar")
+
+        // What AppKit does with a link any other way, such as VoiceOver pressing it.
+        var opened: [URL] = []
+        view.onOpenLink = { opened.append($0) }
+        words.clicked(onLink: URL(string: "https://example.invalid/docs")!, at: at.location)
+        XCTAssertEqual(view.threadPane.linkBar.link?.absoluteString, "https://example.invalid/docs", "it only shows where it goes")
+        XCTAssertEqual(opened, [])
+    }
+
+    func testTheBarAlwaysShowsTheHostAndStaysOffTheBox() throws {
+        let view = view(height: 400)
+        view.show(book())
+        view.select(inThread)
+        let pane = view.threadPane
+        let long = URL(string: "https://evil.example/" + String(repeating: "a", count: 6_000))!
+        pane.ask(toOpen: long)
+        XCTAssertEqual(pane.linkBar.title, "Open a link to evil.example?", "the host, however long the rest is")
+        XCTAssertLessThanOrEqual(pane.linkBar.frame.maxY, pane.composer.frame.minY, "and never over the box")
+        XCTAssertTrue(pane.linkBar.clipsToBounds)
+    }
+
     func testACodeBlocksCopyCopiesItsCode() throws {
         let view = view()
         var copied: [String] = []
@@ -357,9 +389,9 @@ final class ChannelsWindowTests: XCTestCase {
         let view = view()
         view.show(book("open"))
         view.select(inThread)
-        XCTAssertTrue(try chip(in: view).contains("r\u{00A0}#3\u{00A0}·\u{00A0}open"))
+        XCTAssertTrue(try chip(in: view).contains("o/r\u{00A0}#3\u{00A0}·\u{00A0}open"))
         view.show(book("merged"))
-        XCTAssertTrue(try chip(in: view).contains("r\u{00A0}#3\u{00A0}·\u{00A0}merged"), "drawn again once it's merged")
+        XCTAssertTrue(try chip(in: view).contains("o/r\u{00A0}#3\u{00A0}·\u{00A0}merged"), "drawn again once it's merged")
     }
 
     func testTextThatIsntMarkdownStillComesThrough() {

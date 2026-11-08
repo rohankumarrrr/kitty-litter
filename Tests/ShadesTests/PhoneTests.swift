@@ -502,8 +502,11 @@ extension PhoneTests {
 
     func testThePageBuildsMarkupAsNodesAndAsksBeforeALinkOpens() {
         XCTAssertFalse(PhonePage.script.contains("innerHTML"), "every word is text, never markup")
-        XCTAssertTrue(PhonePage.script.contains("event.preventDefault(); ask(part.link);"), "tapping a link only shows where it goes")
-        XCTAssertTrue(PhonePage.html.contains(#"<a id="linkopen" class="go" target="_blank" rel="noopener noreferrer">Open</a>"#))
+        XCTAssertFalse(PhonePage.script.contains("link.href"), "a message's link has no address of its own, so a long press or a middle click can't follow it")
+        XCTAssertTrue(PhonePage.script.contains("link.onclick = () => ask(part.link);"), "tapping it only shows where it goes")
+        XCTAssertTrue(PhonePage.script.contains("$('linktitle').textContent = words.openLink(new URL(link).host);"), "naming its host")
+        XCTAssertTrue(PhonePage.style.contains("max-height: calc(100dvh"), "and the sheet stays on screen however long the address is")
+        XCTAssertTrue(PhonePage.html.contains(#"<a id="linkopen" class="go" target="_blank" rel="noopener noreferrer">Open</a>"#), "Open is the one link")
     }
 
     func testAReplyBarHasWhoRepliedAsTheWindowDrawsThemAndWhenTheLastWas() throws {
