@@ -4751,7 +4751,7 @@ final class FlowTests: XCTestCase {
         kittens = [inboxKitten]
         notifyingWhenFinished()
         await finish(work(), sorted: "DECISION: Ship the fix?")
-        controller.reply("Yes, ship it", toThread: rows[0].threadID, title: rows[0].threadTitle, marking: rows[0].id)
+        controller.reply("Yes, ship it", toThread: rows[0].threadID, title: rows[0].threadTitle, marking: rows[0].id, echoID: "sent-1")
         await controller.forwardTask?.value
         XCTAssertEqual(withdrawn, [rows[0].id])
         XCTAssertEqual(notified.count, 1)
