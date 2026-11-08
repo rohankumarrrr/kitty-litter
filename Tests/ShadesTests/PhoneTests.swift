@@ -245,6 +245,30 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(ask("seen", key: "home").action(in: book) { "x" })
     }
 
+    func testOnlyWordsOfYoursThatWentNowhereCanBeTriedAgain() throws {
+        var failed = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "And then?", at: noon, threadID: "a", threadTitle: "Work")
+        failed.failure = "I can't reach T3 Code. Is it running?"
+        let sending = ChannelMessage(exchangeID: "sent-2", kind: .ask, speaker: .you, text: "Hello?", at: noon, threadID: "", threadTitle: "", isSending: true)
+        let book = ChannelBook.build(
+            kittens: [steve], threads: [thread("a", of: steve)], transcripts: ["a": [Exchange(id: "e1", asker: .you, askedAt: noon, ask: "How's it going?")]],
+            isReading: false, unreadable: 0, cantReachT3: false,
+            sent: [SentMessage(channel: .of(steve), message: failed, isReply: true), SentMessage(channel: .general, message: sending)]
+        )
+        XCTAssertEqual(ask("retry", id: failed.id).action(in: book) { "x" }?.action, .tryAgain("sent-1"))
+        XCTAssertNil(ask("retry", id: sending.id).action(in: book) { "x" }, "nothing to try again while it's on its way")
+        XCTAssertNil(ask("retry", id: "e1:ask").action(in: book) { "x" }, "nor anything that got there")
+        XCTAssertNil(ask("retry", id: "made-up").action(in: book) { "x" })
+
+        let thread = PhoneView(PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book), in: book, now: noon)
+        let shown = try XCTUnwrap(thread.rows.last { $0.kind == "message" })
+        XCTAssertEqual(shown.failure, "I can't reach T3 Code. Is it running?")
+        XCTAssertEqual(shown.retry, true)
+        let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
+        let hello = try XCTUnwrap(general.rows.first { $0.kind == "message" })
+        XCTAssertEqual(hello.sending, true)
+        XCTAssertNil(hello.retry)
+    }
+
     // MARK: - The door
 
     func testOnlyTheCodeShowingPairsAndOnlyOnce() throws {

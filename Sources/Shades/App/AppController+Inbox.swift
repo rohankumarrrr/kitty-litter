@@ -158,8 +158,8 @@ extension AppController {
 
     /// Takes no snapshot, so no caller can pass one, and doesn't go near the router, whose thread is what would carry the screen.
     /// The report you replied to, if you picked one, stops asking and gets the answer. Otherwise that thread's report
-    /// waiting on you does, or failing that its latest one.
-    func reply(_ words: String, toThread threadID: String, title: String, marking report: String? = nil) {
+    /// waiting on you does, or failing that its latest one. `echoID` is what Messages shows of your words meanwhile.
+    func reply(_ words: String, toThread threadID: String, title: String, marking report: String? = nil, echoID: String) {
         let text = Prompts.forwarded(words: words, snapshot: nil, screenshotPath: nil, screenLeftOut: false)
         let own = inbox.entries.filter { $0.threadID == threadID }
         let entryID = (own.first { $0.id == report } ?? own.last(where: \.needsYou) ?? own.last)?.id
@@ -184,7 +184,9 @@ extension AppController {
                     keepInbox()
                     inboxChanged()
                 }
-                say(CatWords.problem(error, while: .agents))
+                let problem = CatWords.problem(error, while: .agents)
+                channels.failed(echoID, because: problem)
+                say(problem)
             }
         }
     }

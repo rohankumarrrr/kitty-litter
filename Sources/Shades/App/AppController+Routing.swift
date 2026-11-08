@@ -198,14 +198,15 @@ extension AppController {
 
     /// Passes your words to a session that already has the context. The session's reply comes
     /// back the usual way, as a notice when it finishes.
-    /// `refused` hears if it couldn't take what you dropped, so nothing went.
+    /// `refused` hears if it couldn't take what you dropped, so nothing went, and `unheard` why T3 never heard your words.
     func forward(
         _ words: String,
         to thread: AgentThread,
         snapshot: ScreenSnapshot?,
         correction: Bool = false,
         asked: Int? = nil,
-        refused: (() -> Void)? = nil
+        refused: (() -> Void)? = nil,
+        unheard: ((String) -> Void)? = nil
     ) {
         // Quick chats are left out of the thread list's news, so their replies are picked up here.
         let isQuick = watch.isQuick(thread.id)
@@ -264,7 +265,9 @@ extension AppController {
                 // After that, losing the connection doesn't take them back, the same as with a new thread.
                 if !heardBack, let warning { takeBackNotice(warning) }
                 reached = heardBack
-                say(CatWords.problem(error, while: .agents))
+                let problem = CatWords.problem(error, while: .agents)
+                if !heardBack { unheard?(problem) }
+                say(problem)
             }
             if correction, let before = correctionSends.end(thread.id, reached: reached) {
                 if before.wasDispatcher { dispatchers.insert(thread.id) }

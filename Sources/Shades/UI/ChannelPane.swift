@@ -650,6 +650,7 @@ final class ChannelPane: QuietView {
         let view = MessageRowView(message: message, look: look, words: laidOut)
         view.isExpanded = expanded.contains(message.id)
         view.onCopy = { [weak self] in self?.onCopy?($0) }
+        if message.canTryAgain { view.onTryAgain = { [weak self] in self?.onAction?(.tryAgain(message.exchangeID)) } }
         view.onShowMore = { [weak self, weak view] in
             self?.expanded.insert(message.id)
             view?.isExpanded = true

@@ -227,6 +227,10 @@ struct PhoneView: Encodable, Equatable {
         var mine: Bool?
         var going: Bool?
         var failure: String?
+        /// Yours, on its way to T3.
+        var sending: Bool?
+        /// Yours, which went nowhere and can go again.
+        var retry: Bool?
         /// Milliseconds since 1970.
         var at: Double?
         /// The key of the place it opens.
@@ -350,6 +354,8 @@ struct PhoneView: Encodable, Equatable {
             mine: look.isYou,
             going: message.isStillGoing,
             failure: message.failure,
+            sending: message.isSending ? true : nil,
+            retry: message.canTryAgain ? true : nil,
             at: millis(message.at),
             file: message.file?.name,
             // Only ever a JPEG Shades made, as base64.

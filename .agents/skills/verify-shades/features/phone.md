@@ -8,7 +8,7 @@ With **Messages on my phone** on in Settings, the cat shows a code and a picture
 - `phone-places` lists Activity and Threads, then #general and each kitten's channel, with the window's counts, bold and dots, each kitten's cat posed for what it's doing, and icons drawn to match the window's. The cat's DM stays on the Mac.
 - `phone-cats` draws the window's cats wherever a kitten or the cat appears: the places, a channel's and a thread's header, beside each message, in reply bars, in Threads, and on Activity's headings and cards.
 - `phone-answer` allows or denies an approval, answers a question from its card, and replies to a report.
-- `phone-send` sends in #general through the router, starts a new thread from a kitten's channel, which opens on its own page, and replies in a thread, with its Also send to #channel.
+- `phone-send` sends in #general through the router, starts a new thread from a kitten's channel, which opens on its own page, and replies in a thread, with its Also send to #channel. What you send says "Sending..." until T3 has it, and what never got there has Try again. `journeys/delivery.txt` ends with it, as [Messages](./messages.md) describes under Delivery.
 - `phone-notify` sends each new thing in Activity to a subscribed phone, encrypted for it, saying only who and what kind.
 - `phone-theme` gives the page Messages' theme, and holds back what's new while you're selecting words.
 

@@ -131,6 +131,7 @@ enum PhonePage {
         .bubble.cut { max-height: 16.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); }
         .more { color: var(--soft); font-size: 14px; margin: 4px 12px 0; }
         .failure { color: var(--warn); font-size: 13px; margin: 3px 12px 0; }
+        .retry { color: var(--you); font-size: 14px; font-weight: 600; margin: 4px 12px 0; }
         .context { color: var(--soft); font-size: 12px; margin: 6px 12px 0; text-align: left; }
         .replybar { display: flex; align-items: center; gap: 6px; margin: 4px 6px 0; padding: 4px 8px; border-radius: 10px; font-size: 13px; }
         .replybar:active { background: var(--grey); }
@@ -223,6 +224,7 @@ enum PhonePage {
           wrongCode: "That code didn't work. Turn pairing on again in Shades on your Mac for a new one.",
           answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear',
           several: 'Pick as many as you like.',
+          sending: 'Sending...', retry: 'Try again',
           notifyAsk: 'Get a notification when something needs you.',
           cantRead: 'Shades can only read photos and PDFs.',
           tooBig: "That's too big to send. Try something under 10 MB.",
@@ -612,14 +614,14 @@ enum PhonePage {
             context.onclick = () => go(item.open);
             node.append(context);
           }
-          const meta = item.mine ? [time(item.at)] : [item.name, item.detail, time(item.at)];
+          const meta = item.mine ? [item.sending ? words.sending : time(item.at)] : [item.name, item.detail, time(item.at)];
           node.append(el('div', 'meta', meta.filter(Boolean).join(' · ')));
           // As in the window, their cat sits beside the bottom of what they said.
           const said = el('div', 'said');
           if (item.cat) said.append(cat(item.cat));
           if (said.childElementCount || item.text) node.append(said);
           if (item.text) {
-            const bubble = el('div', 'bubble' + (item.going ? ' going' : ''));
+            const bubble = el('div', 'bubble' + (item.going || item.sending ? ' going' : ''));
             bubble.append(...marked(item.text));
             if (item.color) { bubble.style.background = item.color; bubble.style.color = item.ink; }
             said.append(bubble);
@@ -645,6 +647,12 @@ enum PhonePage {
             node.append(el('div', 'file', '📄 ' + item.file));
           }
           if (item.failure) node.append(el('div', 'failure', item.failure));
+          if (item.retry) {
+            node.append(button(words.retry, (event) => {
+              event.target.disabled = true;
+              act({ act: 'retry', id: item.id }).then((done) => { if (!done) event.target.disabled = false; });
+            }, 'retry'));
+          }
           return node;
         }
 
