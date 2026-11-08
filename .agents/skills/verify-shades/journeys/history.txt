@@ -1,0 +1,20 @@
+front
+fix
+wait 1
+submit Where could I find a keyboard like this?
+wait 2
+channels
+wait 1
+channel shades
+wait 2
+draw .verify/shades/history/1-working
+wait 12
+draw .verify/shades/history/2-done
+thread keyboard
+wait 1
+draw .verify/shades/history/3-thread
+send And one under $100?
+wait 2
+draw .verify/shades/history/4-reply
+front
+windows

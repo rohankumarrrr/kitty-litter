@@ -102,6 +102,8 @@ struct SentMessage: Equatable {
     /// Your words in a thread that was already there, rather than ones that start one. Only `alsoSent` puts one in
     /// the channel, even when Messages hasn't read its thread.
     var isReply = false
+    /// The turn T3 has it as, which shows instead once it's been read, such as the cat's answer in #general.
+    var heardAs: String?
 }
 
 /// What's waiting on you right now. It comes from the live thread list and the inbox, never from what was said.
@@ -147,6 +149,8 @@ struct ChannelBook: Equatable {
     var started: [String: String]
     /// The router's own threads. Nothing goes straight into one, since the app acts on what the router says.
     var talks: Set<String>
+    /// Work the cat started for you outside Messages, which lives in its DM, and which you can reply to.
+    var catsWork: Set<String> = []
     var isReading: Bool
     var unreadable: Int
     var cantReachT3: Bool
@@ -179,6 +183,8 @@ struct ChannelBook: Equatable {
         isUnread: (AgentThread) -> Bool = { _ in false },
         inGeneral: [String: Date] = [:],
         withShades: Set<String> = [],
+        catsWork: Set<String> = [],
+        answersInGeneral: Set<String> = [],
         said: (String) -> String? = ChannelBook.said
     ) -> ChannelBook {
         // A talk with the cat is titled with your question, which can start with a kitten's name, so it's kept apart
@@ -202,18 +208,28 @@ struct ChannelBook: Equatable {
         var gathered: [String: Gathered] = [:]
         var order: [String] = []
         var leftOut: Set<String> = []
+        // What the cat answered you in #general, read back from its talk with you, as plain messages in no thread.
+        var answered: [ChannelMessage] = []
         func gather(_ id: String, _ thread: Gathered) {
             if gathered[id] == nil { order.append(id) }
             gathered[id] = thread
         }
         for thread in talkThreads where !thread.isLiveTest {
             guard let exchanges = transcripts[thread.id] else { continue }
-            gather(thread.id, Gathered(title: thread.title, home: .shades, messages: talk(in: thread, exchanges, said: said), isCut: exchanges.count >= keptExchanges))
+            let messages = talk(in: thread, exchanges, said: said)
+            gather(thread.id, Gathered(title: thread.title, home: .shades, messages: messages, isCut: exchanges.count >= keptExchanges))
+            answered += messages.filter { answersInGeneral.contains($0.exchangeID) && $0.text != nil }.map { message in
+                var plain = message
+                plain.threadID = ""
+                plain.threadTitle = ""
+                return plain
+            }
         }
         for thread in threads {
             let owner = ownerOf(thread)
-            // The cat's own work only shows if Messages passed your words to it, since anything else can hold your screen.
-            guard owner != nil || inGeneral[thread.id] != nil else { continue }
+            // The cat's own work only shows if Messages passed your words to it, or you started it with the cat
+            // outside Messages, which keeps to its DM. Anything else can hold your screen.
+            guard owner != nil || inGeneral[thread.id] != nil || catsWork.contains(thread.id) else { continue }
             guard let exchanges = transcripts[thread.id] else {
                 if let owner { leftOut.insert(owner.id) }
                 continue
@@ -222,20 +238,25 @@ struct ChannelBook: Equatable {
             let title = owner.map { Self.title(of: thread, owner: $0) } ?? thread.title
             var messages: [ChannelMessage] = []
             for (index, exchange) in exchanges.enumerated() {
-                let asker = speaker(of: exchange.asker, replier: replier, threads: threadsByID, owner: ownerOf, inGeneral: inGeneral)
+                let asker = speaker(of: exchange.asker, replier: replier, threads: threadsByID, owner: ownerOf, inGeneral: inGeneral, catsWork: catsWork)
                 // Waiting on you isn't working, so what it last said reads as said.
                 let isStillGoing = thread.status.isActive && !KittenBoard.needsYou(thread) && index == exchanges.count - 1
                 messages += self.messages(of: exchange, in: thread.id, title: title, asker: asker, replier: replier, isStillGoing: isStillGoing)
             }
             guard !messages.isEmpty else { continue }
-            // Started from #general, it lives there, wherever it's passed after that. Otherwise it's its kitten's.
-            let home: ChannelID = inGeneral[thread.id] != nil || owner == nil ? .general : .of(owner!)
+            let home = home(of: thread.id, owner: owner, inGeneral: inGeneral, catsWork: catsWork)
             gather(thread.id, Gathered(title: title, home: home, owner: owner?.id, messages: messages, isCut: exchanges.count >= keptExchanges))
         }
 
         // What you just sent waits where you sent it until T3 has it. A reply also sent to a channel shows there too.
         var placed: [ChannelID: [Placed]] = [:]
+        // Ahead of what you sent at the same moment, and an answer after its question.
+        for (index, message) in answered.enumerated() {
+            placed[.general, default: []].append(Placed(position: message.at, sequence: index - answered.count - order.count, post: .message(message)))
+        }
+        let heard = Set(answered.map(\.exchangeID))
         for (sequence, sent) in sent.enumerated() {
+            if let turn = sent.heardAs, heard.contains(turn) { continue }
             var message = sent.message
             let post = { (post: ChannelPost) in placed[sent.channel, default: []].append(Placed(position: message.at, sequence: sequence, post: post)) }
             if message.threadID.isEmpty {
@@ -313,7 +334,7 @@ struct ChannelBook: Equatable {
         for thread in threads where named[thread.id] == nil {
             named[thread.id] = thread
             let owner = ownerOf(thread)
-            homes[thread.id] = inGeneral[thread.id] != nil || owner == nil ? .general : .of(owner!)
+            homes[thread.id] = home(of: thread.id, owner: owner, inGeneral: inGeneral, catsWork: catsWork)
             if let owner { named[thread.id]?.title = title(of: thread, owner: owner) }
         }
         let started = Dictionary(sent.compactMap { $0.startsThread && !$0.message.threadID.isEmpty ? ($0.message.exchangeID, $0.message.threadID) : nil }, uniquingKeysWith: { first, _ in first })
@@ -329,13 +350,22 @@ struct ChannelBook: Equatable {
             listedHomes: homes,
             started: started,
             talks: Set(talkThreads.map(\.id)),
+            catsWork: catsWork.intersection(threadsByID.keys),
             isReading: isReading,
             unreadable: unreadable,
             cantReachT3: cantReachT3
         )
     }
 
-    private static func speaker(of asker: Exchange.Asker, replier: Speaker, threads: [String: AgentThread], owner: (AgentThread) -> Kitten?, inGeneral: [String: Date]) -> Speaker {
+    /// Started from #general, it lives there, wherever it's passed after that. Otherwise it's its kitten's, then the
+    /// cat's DM for work you started with the cat, and #general for the rest of the cat's own.
+    private static func home(of id: String, owner: Kitten?, inGeneral: [String: Date], catsWork: Set<String>) -> ChannelID {
+        if inGeneral[id] != nil { return .general }
+        if let owner { return .of(owner) }
+        return catsWork.contains(id) ? .shades : .general
+    }
+
+    private static func speaker(of asker: Exchange.Asker, replier: Speaker, threads: [String: AgentThread], owner: (AgentThread) -> Kitten?, inGeneral: [String: Date], catsWork: Set<String>) -> Speaker {
         switch asker {
         case .you:
             return .you
@@ -345,8 +375,8 @@ struct ChannelBook: Equatable {
         case .agent(let threadID):
             guard let threadID, let asking = threads[threadID] else { return .someoneElse }
             if let kitten = owner(asking) { return .kitten(kitten.id) }
-            // Work the cat started for you in #general, passing it on.
-            return inGeneral[threadID] != nil ? .cat : .someoneElse
+            // Work the cat started for you, passing it on.
+            return inGeneral[threadID] != nil || catsWork.contains(threadID) ? .cat : .someoneElse
         }
     }
 
@@ -563,12 +593,11 @@ extension ChannelBook {
             + waiting.reports.filter { $0.needsYou && mine($0.id) }.count
     }
 
-    /// A channel's bold: a kitten's with a finished run you haven't seen, or #general with an unread thread of its own.
+    /// A channel's bold: a kitten's with a finished run you haven't seen, or #general or the DM with an unread thread of its own.
     func isUnread(_ id: ChannelID) -> Bool {
         switch id {
         case .kitten(let kitten): return unread.contains(kitten)
-        case .general: return unreadThreads.contains { threads[$0]?.home == .general }
-        case .shades: return false
+        case .general, .shades: return unreadThreads.contains { threads[$0]?.home == id }
         }
     }
 

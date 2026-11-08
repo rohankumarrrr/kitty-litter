@@ -47,6 +47,16 @@ extension AppController {
         URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL.path
     }
 
+    /// Work the cat started for you outside Messages, which lives in its DM. A fix from before Shades kept these is
+    /// known by the title it gave it, in T3's own folder for work with no project.
+    func isCatsWork(_ thread: AgentThread) -> Bool {
+        Self.isCatsWork(thread, kept: catsWork)
+    }
+
+    static func isCatsWork(_ thread: AgentThread, kept: [String: Date]) -> Bool {
+        kept[thread.id] != nil || (thread.projectPath == nil && thread.title.hasPrefix(fixTitle))
+    }
+
     func channelsClosed() {
         // A phone that's looking keeps it reading. Once it stops too, what's been read waits for the next look.
         if phone?.isHolding != true { channels.close() }
@@ -175,7 +185,8 @@ extension AppController {
         do {
             projectID = try await routerProjectID(for: model)
         } catch {
-            return catSays(CatWords.problem(error, while: .agents), in: place)
+            catSays(CatWords.problem(error, while: .agents), in: place)
+            return
         }
         let prompt = AgentPrompt(
             title: String(words.prefix { !$0.isNewline }.prefix(60)),
@@ -209,7 +220,8 @@ extension AppController {
         switch reading.outcome {
         // There's nothing selected in Messages to replace, so a rewrite is only an answer here.
         case .answer(let text, _) where !text.isEmpty || reading.corrections.isEmpty, .rewrite(let text):
-            catSays(text.isEmpty ? CatWords.noReply : text, in: place, thread: talk)
+            let answer = catSays(text.isEmpty ? CatWords.noReply : text, in: place, thread: talk)
+            if place == .general, !text.isEmpty { await keepInGeneral(answerIn: threadID, shownAs: [echoID, answer]) }
             Task { [backend] in try? await backend.settle(threadID: threadID) }
             return
         case .answer:
@@ -225,7 +237,10 @@ extension AppController {
             handOff(task: task, question: words, snapshot: nil, asked: asked, onStarted: startedHere)
             passedOn(CatWords.handedOff(task))
         case .route(let session):
-            guard sessions.indices.contains(session - 1) else { return catSays(CatWords.lostTheSession, in: place) }
+            guard sessions.indices.contains(session - 1) else {
+                catSays(CatWords.lostTheSession, in: place)
+                return
+            }
             let thread = sessions[session - 1]
             // From the first time, so what it said before stays in #general too.
             if KittenBoard.owner(of: thread, among: owners) == nil { messagesThreads[thread.id] = messagesThreads[thread.id] ?? sentAt }
@@ -236,7 +251,10 @@ extension AppController {
             copies.removeAll { $0 == home }
             passedOn(CatWords.passedOnToSession)
         case .kitten(let number):
-            guard kittens.indices.contains(number - 1) else { return catSays(CatWords.lostTheSession, in: place) }
+            guard kittens.indices.contains(number - 1) else {
+                catSays(CatWords.lostTheSession, in: place)
+                return
+            }
             let kitten = kittens[number - 1]
             give(words, to: kitten, snapshot: nil, as: corrected.contains(kitten) ? .correction : .work, asked: asked, onStarted: startedHere)
             copies.removeAll { $0 == kitten }
@@ -283,11 +301,27 @@ extension AppController {
     }
 
     /// The router's own words, where you wrote, or over the cat if you've closed Messages since. In the DM they're a
-    /// reply in the talk, also sent to the DM, and in #general a message of their own.
-    private func catSays(_ text: String, in place: ChannelID, thread: String? = nil) {
-        guard channels.isOpen else { return post(caption: place == .shades ? CatWords.shades : "#\(CatWords.general)", text: text, threadID: nil) }
-        let message = ChannelMessage(exchangeID: "cat-\(UUID().uuidString)", kind: .reply, speaker: .cat, text: text, at: now(), threadID: thread ?? "", threadTitle: "")
+    /// reply in the talk, also sent to the DM, and in #general a message of their own. Returns what Messages calls it.
+    @discardableResult
+    private func catSays(_ text: String, in place: ChannelID, thread: String? = nil) -> String {
+        let id = "cat-\(UUID().uuidString)"
+        guard channels.isOpen else {
+            post(caption: place == .shades ? CatWords.shades : "#\(CatWords.general)", text: text, threadID: nil)
+            return id
+        }
+        let message = ChannelMessage(exchangeID: id, kind: .reply, speaker: .cat, text: text, at: now(), threadID: thread ?? "", threadTitle: "")
         channels.sent(message, in: place, alsoSent: thread != nil)
+        return id
+    }
+
+    /// The cat's answer in #general is a turn of Messages' talk with the router, which T3 keeps, so only which turn
+    /// it was is saved, and #general reads it back from there after a restart. Turns go one at a time, so the latest
+    /// one you asked is this one.
+    private func keepInGeneral(answerIn threadID: String, shownAs sent: [String]) async {
+        guard let turn = await backend.exchanges(threadID: threadID)?.last(where: { $0.asker == .you }) else { return }
+        inbox.answersInGeneral[turn.id] = now()
+        keepInbox()
+        channels.heard(sent, as: turn.id)
     }
 
     func answer(_ question: AgentQuestion, with answers: [String]) {

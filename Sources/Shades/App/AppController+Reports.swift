@@ -60,6 +60,7 @@ extension AppController {
         moveScreenWarnings(from: thread.id, to: next)
         // Work that came from #general keeps living there from wherever it moves, and what it said before stays.
         if let since = messagesThreads[thread.id] { messagesThreads[next] = min(since, messagesThreads[next] ?? since) }
+        if let since = catsWork[thread.id] { catsWork[next] = min(since, catsWork[next] ?? since) }
         hiddenThreads.insert(thread.id)
         watch.markQuick(thread.id)
         Task { [backend] in try? await backend.settle(threadID: thread.id) }

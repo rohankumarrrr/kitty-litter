@@ -4,6 +4,8 @@ import ShadesCore
 
 /// Fix what I'm looking at: point, optionally say what's wrong, and an agent takes it from there.
 extension AppController {
+    static let fixTitle = "Fix: "
+
     func fixPressed() {
         flow = Task { await beginFix() }
     }
@@ -58,7 +60,7 @@ extension AppController {
         let path = saveScreenshot(of: shared)
         let what = said ?? shared?.appName.map { "Something in \($0)" } ?? "Something on screen"
         startFrontier(
-            title: "Fix: \(what)",
+            title: "\(Self.fixTitle)\(what)",
             text: Prompts.fix(description: said, snapshot: shared, screenshotPath: path),
             snapshot: shared
         )

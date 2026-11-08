@@ -19,6 +19,8 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     private var counter = 0
     /// What sorting a thread's report comes to, by the thread's title.
     private var sortedReplies: [String: String] = [:]
+    /// What was said in the threads it started, as T3 keeps it.
+    private var said: [String: [Exchange]] = [:]
     var connectFails = false
     var onOpen: ((String) -> Void)?
 
@@ -113,7 +115,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     }
 
     func exchanges(threadID: String) async -> [Exchange]? {
-        DemoChannels.transcripts[threadID] ?? DemoBusy.transcripts[threadID] ?? []
+        DemoChannels.transcripts[threadID] ?? DemoBusy.transcripts[threadID] ?? lock.withLock { said[threadID] } ?? []
     }
 
     /// Hundreds more threads, with long conversations, as T3 would list them for someone who uses it all day.
@@ -266,10 +268,16 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
                 runtimeMode: .auto
             ), at: 0)
         }
+        let asked = Exchange(id: "\(threadID)-1", asker: .you, askedAt: Date(), ask: Prompts.dispatched(in: prompt.text))
+        lock.withLock { said[threadID] = [asked] }
         return AsyncThrowingStream { continuation in
             Task {
                 continuation.yield(.started(threadID: threadID))
                 try? await Task.sleep(nanoseconds: 12_000_000_000)
+                self.lock.withLock {
+                    self.said[threadID]?[0].reply = "Done."
+                    self.said[threadID]?[0].repliedAt = Date()
+                }
                 self.finish(threadID: threadID)
                 continuation.yield(.finished(fullText: "Done."))
                 continuation.finish()
