@@ -111,6 +111,7 @@ enum CatWords {
     static let threadTitle = "Thread"
     static let newThread = "New thread"
     static let openInT3 = "Open in T3"
+    static let viewThread = "View thread"
     static let closeThread = "Close"
     static let quietThread = "Its messages are in T3."
     static let threadNotListed = "It's archived or deleted in T3, so I can't read it here."

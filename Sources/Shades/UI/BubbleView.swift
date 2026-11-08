@@ -11,6 +11,8 @@ final class BubbleView: BalloonView {
     private static let rowGap: CGFloat = 10
 
     var onAction: ((BubbleAction) -> Void)?
+    /// Whether Messages shows this thread, so Open goes there and T3 is only for what it doesn't.
+    var opensInMessages: (String) -> Bool = { _ in false }
 
     private let scroll = NSScrollView()
     let textView = BubbleTextView()
@@ -18,6 +20,8 @@ final class BubbleView: BalloonView {
     private let counter = NSTextField(labelWithString: "")
     private let heading = NSTextField(wrappingLabelWithString: "")
     private var buttons: [QuietButton] = []
+    /// Whether the buttons showing open their thread in Messages, so they change once Messages can show it.
+    private var opensHere: Bool?
 
     private var content: BubbleContent?
     private var grownWidth: CGFloat = 0
@@ -74,7 +78,7 @@ final class BubbleView: BalloonView {
             grownWidth = 0
             followEnd = true
         }
-        let rebuildButtons = !sameKind || self.content?.buttonKey != content.buttonKey
+        let rebuildButtons = !sameKind || self.content?.buttonKey != content.buttonKey || opensHere != content.threadID.map(opensInMessages)
         self.content = content
 
         var captionText: String?
@@ -243,6 +247,15 @@ final class BubbleView: BalloonView {
             addSubview(button)
             return button
         }
+        // Messages first. T3 is only for a thread Messages doesn't show.
+        opensHere = content.threadID.map(opensInMessages)
+        func open(_ threadID: String, primary: Bool = true) {
+            if opensInMessages(threadID) {
+                add("Open", primary ? .plain : .text, .show(threadID: threadID))
+            } else {
+                add(CatWords.openInT3, .text, .open(threadID: threadID))
+            }
+        }
 
         switch content {
         case .thinking, .listening:
@@ -250,17 +263,15 @@ final class BubbleView: BalloonView {
         case .reply(let text, let done, let threadID, _, let canReplace):
             guard done else { break }
             if canReplace { add("Replace", .plain, .replace(text)) }
-            if let threadID { add("Open in T3", .text, .open(threadID: threadID)) }
+            if let threadID { open(threadID, primary: !canReplace) }
             let copy = add("Copy", .text, .copy(text))
             let copied = copy.onPress
             copy.onPress = { [weak copy] in
                 copied?()
                 copy?.flash("Copied")
             }
-        case .line(_, let threadID):
-            if let threadID { add("Open in T3", .text, .open(threadID: threadID)) }
-        case .notice(_, _, let threadID):
-            if let threadID { add("Open in T3", .text, .open(threadID: threadID)) }
+        case .line(_, let threadID), .notice(_, _, let threadID):
+            if let threadID { open(threadID) }
         case .approval(let request, _, _):
             // The same weight for both: nothing here should lean you toward yes.
             add("Deny", .plain, .approval(request, .decline))
@@ -309,6 +320,13 @@ extension BubbleContent {
         case .notice(_, _, let thread): return "notice|\(thread ?? "")"
         case .approval(let request, _, _): return "approval|\(request.id)"
         case .inbox: return "inbox"
+        }
+    }
+
+    fileprivate var threadID: String? {
+        switch self {
+        case .reply(_, true, let thread, _, _), .line(_, let thread), .notice(_, _, let thread): return thread
+        default: return nil
         }
     }
 

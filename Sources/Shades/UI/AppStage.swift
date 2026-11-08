@@ -36,6 +36,7 @@ final class AppStage: CatStage {
         bubble.onDismiss = { [weak self] byClick in self?.controller?.bubbleDismissed(byClick: byClick) }
         bubble.onVisibilityChange = { [weak self] in self?.updateEscape() }
         bubble.view.onAction = { [weak self] action in self?.controller?.bubbleAction(action) }
+        bubble.view.opensInMessages = { [weak self] in self?.controller?.messagesHome(ofThread: $0) != nil }
 
         input.anchor = { [weak self] in
             guard let self else { return (.zero, .zero) }

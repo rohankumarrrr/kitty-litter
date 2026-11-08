@@ -1,0 +1,16 @@
+front
+finish demo-tidy
+wait 8
+buttons
+draw .verify/shades/open/1-report
+bubble Open
+wait 2
+draw .verify/shades/open/2-opened
+approval command swift test
+report decision
+wait 7
+channel activity
+wait 1
+draw .verify/shades/open/3-activity
+front
+windows

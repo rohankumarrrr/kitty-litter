@@ -16,7 +16,10 @@ enum BubbleContent: Equatable {
 
 /// What the buttons in the bubble can ask for.
 enum BubbleAction: Equatable {
+    /// In T3, for a thread Messages doesn't show.
     case open(threadID: String)
+    /// The thread in Messages, beside the place it lives.
+    case show(threadID: String)
     case copy(String)
     case replace(String)
     case approval(ApprovalRequest, ApprovalDecision)
