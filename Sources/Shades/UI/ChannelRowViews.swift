@@ -63,6 +63,23 @@ enum CatStamp {
     }
 }
 
+/// Your picture as a circle, cropped to fill it, with a hairline so a pale photo keeps its edge on a pale window.
+@MainActor
+enum PictureStamp {
+    static func draw(_ picture: NSImage, in rect: NSRect) {
+        let side = min(picture.size.width, picture.size.height)
+        let middle = NSRect(x: (picture.size.width - side) / 2, y: (picture.size.height - side) / 2, width: side, height: side)
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(ovalIn: rect).addClip()
+        picture.draw(in: rect, from: middle, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSNumber(value: NSImageInterpolation.high.rawValue)])
+        NSGraphicsContext.restoreGraphicsState()
+        let edge = NSBezierPath(ovalIn: rect.insetBy(dx: 0.25, dy: 0.25))
+        edge.lineWidth = 0.5
+        MessagesInk.line.setStroke()
+        edge.stroke()
+    }
+}
+
 /// The same colours as the kitten view. An idle kitten has no dot, which keeps the sidebar calm.
 extension KittenStatus.State {
     var dotColor: NSColor? { dot.map(Ink.hex) }
@@ -87,6 +104,8 @@ struct ChannelSpeakerLook {
     var name: String
     var hasCat: Bool
     var isYou: Bool
+    /// Yours, where a kitten's cat goes, if you've given it one.
+    var picture: NSImage?
     var jacket: UInt32?
     /// `nil` is the grey that the cat and anyone unknown get.
     var bubble: UInt32?
@@ -97,6 +116,7 @@ struct ChannelSpeakerLook {
         name = book.name(of: speaker)
         isYou = speaker == .you
         hasCat = !isYou
+        picture = isYou ? MessagesInk.pictureImage : nil
         let own = book.status(of: speaker).flatMap { Self.color(of: $0.kitten) }
         jacket = own ?? (speaker == .someoneElse ? Self.otherJacket : nil)
         // A theme tints your bubbles, and never a kitten's, so each kitten still looks like itself.
@@ -313,6 +333,7 @@ struct ReplyBar {
             case .cat(let jacket):
                 CatStamp.draw(CatPose(frame: .sit), jacket: jacket, in: frame, on: view)
             case .you:
+                if let picture = MessagesInk.pictureImage { PictureStamp.draw(picture, in: frame); break }
                 Ink.hex(MessagesInk.theme?.yours ?? ChannelSpeakerLook.yours).setFill()
                 NSBezierPath(roundedRect: frame.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4).fill()
             }
@@ -480,6 +501,11 @@ final class MessageRowView: ChannelRowView {
 
     private var time: String { message.isSending ? CatWords.sending : message.at.formatted(date: .omitted, time: .shortened) }
 
+    /// Where yours end on the right: at the margin, or short of your picture, as a kitten's start after its cat.
+    private func end(in width: CGFloat) -> CGFloat {
+        width - (look.picture == nil ? Self.margin : Self.textLeft)
+    }
+
     private func copyPressed() {
         guard let text = message.text else { return }
         onCopy?(text)
@@ -516,15 +542,16 @@ final class MessageRowView: ChannelRowView {
         if let fitted, fitted.width == width, fitted.isExpanded == isExpanded { return fitted.height }
         let room = max(min(width * Self.widest, width - Self.textLeft - Self.margin) - Self.insetX * 2, 60)
         var bottom = headTop + Self.headHeight
+        let right = end(in: width)
         if let words {
             words.fit(width: room, maxLines: isExpanded ? nil : Self.clampedLines)
             let size = NSSize(width: words.width + Self.insetX * 2, height: words.height + Self.insetY * 2)
-            let left = look.isYou ? width - Self.margin - size.width : Self.textLeft
+            let left = look.isYou ? right - size.width : Self.textLeft
             bubble = NSRect(origin: NSPoint(x: left, y: bottom), size: size)
             words.place(at: NSPoint(x: bubble.minX + Self.insetX, y: bubble.minY + Self.insetY), in: self)
             bottom = bubble.maxY
         } else {
-            bubble = NSRect(x: look.isYou ? width - Self.margin : Self.textLeft, y: bottom, width: 0, height: 0)
+            bubble = NSRect(x: look.isYou ? right : Self.textLeft, y: bottom, width: 0, height: 0)
         }
         if let file = message.file {
             var size = NSSize(width: min(Self.fileWidth(file.name), room + Self.insetX * 2), height: Self.fileHeight)
@@ -533,7 +560,7 @@ final class MessageRowView: ChannelRowView {
                 size = NSSize(width: floor(picture.size.width * scale), height: floor(picture.size.height * scale))
             }
             let top = bottom + (words == nil ? 0 : 4)
-            fileFrame = NSRect(x: look.isYou ? width - Self.margin - size.width : Self.textLeft, y: top, width: size.width, height: size.height)
+            fileFrame = NSRect(x: look.isYou ? right - size.width : Self.textLeft, y: top, width: size.width, height: size.height)
             bottom = fileFrame.maxY
         } else {
             fileFrame = .zero
@@ -561,14 +588,14 @@ final class MessageRowView: ChannelRowView {
         }
         if let replyBar, !replyBar.isEmpty {
             let barWidth = min(replyBar.width(now: Date()), width - Self.textLeft - Self.margin)
-            let left = look.isYou ? width - Self.margin - barWidth : Self.textLeft - 4
+            let left = look.isYou ? right - barWidth : Self.textLeft - 4
             replyBarFrame = NSRect(x: left, y: bottom + 3, width: barWidth, height: ReplyBar.height)
             bottom = replyBarFrame.maxY
         } else {
             replyBarFrame = .zero
         }
         placeHoverButtons(width: width)
-        let height = max(bottom + Self.pad, look.hasCat ? headTop + Self.pad + Self.headHeight + Self.catSide : 0)
+        let height = max(bottom + Self.pad, look.hasCat || look.picture != nil ? headTop + Self.pad + Self.headHeight + Self.catSide : 0)
         fitted = (width, isExpanded, height)
         return height
     }
@@ -583,14 +610,16 @@ final class MessageRowView: ChannelRowView {
                 .font: NSFont.systemFont(ofSize: 11),
                 .foregroundColor: hovering ? MessagesInk.text : MessagesInk.soft,
                 .paragraphStyle: paragraph,
-            ]).draw(in: NSRect(x: Self.textLeft + 2, y: Self.pad, width: max(bounds.width - Self.textLeft - Self.margin - 2, 60), height: 15))
+            ]).draw(in: NSRect(x: Self.textLeft + 2, y: Self.pad, width: max((look.isYou ? end(in: bounds.width) : bounds.width - Self.margin) - Self.textLeft - 2, 60), height: 15))
         }
         if let replyBar, replyBarFrame.width > 0 {
             replyBar.draw(in: replyBarFrame, on: self, hovering: hovering && onPress != nil, now: Date())
         }
+        let top = max(headTop + Self.headHeight, bubble.maxY - Self.catSide)
         if look.hasCat {
-            let top = max(headTop + Self.headHeight, bubble.maxY - Self.catSide)
             CatStamp.draw(CatPose(frame: .sit), jacket: look.jacket, in: NSRect(x: Self.catLeft, y: top, width: Self.catSide, height: Self.catSide), on: self)
+        } else if let picture = look.picture {
+            PictureStamp.draw(picture, in: NSRect(x: bounds.width - Self.catLeft - Self.catSide, y: top, width: Self.catSide, height: Self.catSide))
         }
         drawHead()
         if bubble.height > 0 {
@@ -645,7 +674,7 @@ final class MessageRowView: ChannelRowView {
         let timeWidth = ceil(timeLabel.size().width)
         let baseline = headTop + 1
         guard !look.isYou else {
-            if !hovering { timeLabel.draw(at: NSPoint(x: bounds.width - Self.margin - timeWidth, y: baseline)) }
+            if !hovering { timeLabel.draw(at: NSPoint(x: end(in: bounds.width) - timeWidth, y: baseline)) }
             return
         }
         let truncating = NSMutableParagraphStyle()
@@ -770,6 +799,8 @@ final class ThreadDigestRowView: ChannelRowView {
             let cat = NSRect(x: Self.catLeft + 8, y: block.top - 16, width: Self.catSide, height: Self.catSide)
             if look.hasCat {
                 CatStamp.draw(CatPose(frame: .sit), jacket: look.jacket, in: cat, on: self)
+            } else if let picture = look.picture {
+                PictureStamp.draw(picture, in: cat.insetBy(dx: 1, dy: 1))
             } else {
                 look.bubbleFill.setFill()
                 NSBezierPath(roundedRect: cat.insetBy(dx: 3, dy: 3), xRadius: 5, yRadius: 5).fill()

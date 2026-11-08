@@ -1034,3 +1034,46 @@ extension ChannelsWindowTests {
         return zip(channels(a), channels(b)).map { ($0 - $1) * ($0 - $1) }.reduce(0, +).squareRoot()
     }
 }
+
+// MARK: - Your picture
+
+extension ChannelsWindowTests {
+    private func drawn(_ row: MessageRowView, width: CGFloat = 640) throws -> (NSBitmapImageRep, CGFloat) {
+        let host = QuietView(frame: NSRect(x: 0, y: 0, width: width, height: 120))
+        host.appearance = NSAppearance(named: .aqua)
+        host.addSubview(row)
+        row.frame = NSRect(x: 0, y: 0, width: width, height: row.fit(width: width))
+        let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: rep)
+        return (rep, CGFloat(rep.pixelsWide) / host.bounds.width)
+    }
+
+    /// The stand-in's 0x8a6cff, which is neither your blue bubble nor the window.
+    private static func isVioletStandIn(_ color: NSColor) -> Bool {
+        abs(color.redComponent - 0.54) < 0.1 && abs(color.greenComponent - 0.42) < 0.1 && abs(color.blueComponent - 1) < 0.1
+    }
+
+    func testYourPictureSitsBesideYoursWhereAKittensCatSitsBesideTheirs() throws {
+        let book = book()
+        let mine = ChannelMessage(exchangeID: "e", kind: .ask, speaker: .you, text: "Can you tidy the pricing page?", at: at, threadID: "t", threadTitle: "Work")
+        MessagesInk.picture = DemoPicture.jpeg
+        defer { MessagesInk.picture = nil }
+        XCTAssertNil(ChannelSpeakerLook(.kitten(steve.id), in: book).picture, "a kitten keeps its cat")
+
+        let row = MessageRowView(message: mine, look: ChannelSpeakerLook(.you, in: book))
+        let (rep, scale) = try drawn(row)
+        XCTAssertEqual(row.bubble.maxX, 640 - ChannelRowView.textLeft, accuracy: 1, "short of the picture, as a kitten's start after its cat")
+        // Near the top of the picture, where the stand-in is violet, in the cat's spot mirrored onto the right.
+        let x = 640 - ChannelRowView.catLeft - 14
+        let y = max(row.bubble.maxY - 28, 0) + 4
+        let pixel = try XCTUnwrap(rep.colorAt(x: Int(x * scale), y: Int(y * scale))?.usingColorSpace(.sRGB))
+        XCTAssertTrue(Self.isVioletStandIn(pixel), "the picture, not the window or your bubble, was \(pixel)")
+
+        MessagesInk.picture = nil
+        let plain = MessageRowView(message: mine, look: ChannelSpeakerLook(.you, in: book))
+        let (plainRep, _) = try drawn(plain)
+        XCTAssertEqual(plain.bubble.maxX, 640 - ChannelRowView.margin, accuracy: 1, "with none, yours look as they always have")
+        let there = try XCTUnwrap(plainRep.colorAt(x: Int(x * scale), y: Int(y * scale))?.usingColorSpace(.sRGB))
+        XCTAssertFalse(Self.isVioletStandIn(there), "no picture there, was \(there)")
+    }
+}

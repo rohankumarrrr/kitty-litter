@@ -504,6 +504,18 @@ extension PhoneTests {
         XCTAssertFalse(parent.lastReply == "Last reply \(earlier.formatted(date: .omitted, time: .shortened))")
     }
 
+    func testYourPictureComesWithEachPlaceYouSayThingsIn() {
+        let book = book(sentBetween: true)
+        let steveKey = PhonePlace.key(.channel(.of(steve)))
+        XCTAssertNil(PhoneView(PhonePlace(steveKey, in: book), in: book, now: noon).you, "with none, yours are as they were")
+        MessagesInk.picture = DemoPicture.jpeg
+        defer { MessagesInk.picture = nil }
+        XCTAssertEqual(PhoneView(PhonePlace(steveKey, in: book), in: book, now: noon).you, "data:image/jpeg;base64,\(DemoPicture.jpeg.base64EncodedString())")
+        XCTAssertNil(PhoneView(PhonePlace("home", in: book), in: book, now: noon).you, "the list of places has nothing of yours to put it by")
+        XCTAssertTrue(PhonePage.script.contains("node.src = view.you"), "the page draws it from what it was sent")
+        XCTAssertTrue(PhonePage.script.contains("if (view.you) return you(true);"), "and in place of your square")
+    }
+
     func testThreadsHasEachOnesCat() throws {
         let book = book(sentBetween: true)
         let digest = try XCTUnwrap(PhoneView(PhonePlace("threads", in: book), in: book, now: noon).rows.first)

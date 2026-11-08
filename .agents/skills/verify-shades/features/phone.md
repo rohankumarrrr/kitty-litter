@@ -7,6 +7,7 @@ With **Messages on my phone** on in Settings, the cat shows a code and a picture
 - `phone-pair` shows the one-time code, and a phone that sends it is paired.
 - `phone-places` lists Activity and Threads, then #general and each kitten's channel, with the window's counts, bold and dots, each kitten's cat posed for what it's doing, and icons drawn to match the window's. The cat's DM stays on the Mac.
 - `phone-cats` draws the window's cats wherever a kitten or the cat appears: the places, a channel's and a thread's header, beside each message, in reply bars, in Threads, and on Activity's headings and cards.
+- `phone-picture` draws your picture, if you've given Messages one, beside your messages and in place of your square, from what a paired phone is sent rather than an address of its own. `journeys/picture.txt` drives it, as [messages.md](messages.md) says, and `swift test --filter PhoneServerTests/testYourPictureGoesOnlyToAPairedPhone` checks nothing unpaired gets it.
 - `phone-answer` allows or denies an approval, answers a question from its card, and replies to a report.
 - `phone-send` sends in #general through the router, starts a new thread from a kitten's channel, which opens on its own page, and replies in a thread, with its Also send to #channel. What you send says "Sending..." until T3 has it, and what never got there has Try again. `journeys/delivery.txt` ends with it, as [Messages](./messages.md) describes under Delivery.
 - `phone-notify` sends each new thing in Activity to a subscribed phone, encrypted for it, saying only who and what kind.

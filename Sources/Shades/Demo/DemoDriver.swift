@@ -280,7 +280,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification | finish | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -489,6 +489,11 @@ final class DemoDriver {
             let listed = controller.installedThemes().first { "\($0.app)/\($0.theme.name)" == rest }
             controller.themeChosen(rest == "shades" ? .plain : .file(listed?.file ?? URL(fileURLWithPath: (rest as NSString).expandingTildeInPath)))
             print("colors \(controller.theme.map { "\($0.name) paper=\(ColorTheme.hex($0.paper)) text=\(ColorTheme.hex($0.text)) accent=\(ColorTheme.hex($0.accent)) yours=\(ColorTheme.hex($0.yours))" } ?? CatWords.plainTheme)")
+        case "picture":
+            // As if you'd given it a picture with --picture, with a drawn stand-in, and shown at once.
+            MessagesInk.picture = rest == "off" ? nil : DemoPicture.jpeg
+            stage.channels.view.restyle()
+            print("picture \(MessagesInk.picture == nil ? "off" : "on")")
         case "highlight":
             highlight(rest)
         case "copy":
