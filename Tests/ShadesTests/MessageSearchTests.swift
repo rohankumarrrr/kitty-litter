@@ -115,6 +115,27 @@ final class MessageSearchTests: XCTestCase {
         XCTAssertEqual(plainWords.reads, 80, "the search itself read nothing")
     }
 
+    func testAPhoneFindsOnlyTheCatsOwnWorkYouShowedThereAndCallsItByYourWords() throws {
+        let fix = AgentThread(id: "w", title: "Fix: Safari pricing page", projectTitle: nil, status: .completed, model: "m", updatedAt: at)
+        let toCat = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Is the coupon box on this page?", at: at.addingTimeInterval(120), threadID: "", threadTitle: "")
+        func book(onPhone: Set<String>) -> ChannelBook {
+            ChannelBook.build(
+                kittens: [steve], threads: [fix],
+                transcripts: ["w": [exchange("e1", ask: "Move the coupon box", reply: "The coupon box sits under the summary.", minutes: 0)]],
+                isReading: false, unreadable: 0, cantReachT3: false,
+                sent: [SentMessage(channel: .shades, message: toCat)],
+                catsWork: ["w"], onPhone: onPhone
+            )
+        }
+        XCTAssertEqual(MessageSearch.find("coupon", in: book(onPhone: ["w"]), limit: 8).found.map(\.message.id), ["sent-1:ask", "e1:reply", "e1:ask"], "the window has the whole DM")
+
+        let phone = PhoneFound("coupon", in: book(onPhone: ["w"]), now: at)
+        XCTAssertEqual(phone.found.map(\.id), ["e1:reply", "e1:ask"], "a phone has only the work you showed there, never what you said to the cat")
+        XCTAssertFalse(phone.found.contains { $0.detail.contains("Safari") }, "its title came from your screen")
+        XCTAssertTrue(phone.found.allSatisfy { $0.detail.hasPrefix("Move the coupon box") }, "so it's called by your words, as the page calls it")
+        XCTAssertTrue(PhoneFound("coupon", in: book(onPhone: []), now: at).found.isEmpty, "and none of it until you show it")
+    }
+
     func testAPhoneOnlyFindsWhatItCanOpenAndNeverTheCatsDM() throws {
         let book = book([
             "a": [exchange("e1", ask: "Which plan is cheapest?", reply: "Starter.", minutes: 0)],

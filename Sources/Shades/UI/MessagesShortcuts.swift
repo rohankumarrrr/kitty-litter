@@ -108,10 +108,10 @@ struct JumpItem: Equatable {
 extension JumpItem {
     static let limit = 8
 
-    /// Who said it, then where and when, with its words under them.
-    init(_ found: FoundMessage, in book: ChannelBook, now: Date) {
+    /// Who said it, then where and when, with its words under them. A phone names some threads its own way.
+    init(_ found: FoundMessage, in book: ChannelBook, now: Date, threadTitle: ((String) -> String)? = nil) {
         let channel = (found.selection.thread.flatMap(book.home(ofThread:)) ?? found.selection.channelID).map(book.title(of:))
-        let thread = found.selection.thread.map(book.title(ofThread:))
+        let thread = found.selection.thread.map(threadTitle ?? book.title(ofThread:))
         let place = [thread, channel].compactMap { $0 }.filter { !$0.isEmpty }
         self.init(title: book.name(of: found.message.speaker), detail: (place + [CatWords.age(of: found.message.at, now: now)]).joined(separator: " · "), selection: found.selection, found: found)
     }

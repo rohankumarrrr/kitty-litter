@@ -92,13 +92,13 @@ enum MessageSearch {
     }
 
     /// Newest first, at most `limit`, and whether there were more. `opening` says where a message the window opens at
-    /// a selection opens for whoever's searching, or `nil` if they can't see it, as on a phone.
+    /// a selection opens for whoever's searching, or `nil` if they can't see it there, as on a phone.
     static func find(
         _ query: String,
         in book: ChannelBook,
         limit: Int,
         reading plainWords: PlainWords = PlainWords(),
-        opening: (ChannelSelection) -> ChannelSelection? = { $0 }
+        opening: (ChannelMessage, ChannelSelection) -> ChannelSelection? = { $1 }
     ) -> (found: [FoundMessage], more: Bool) {
         let typed = words(in: query)
         guard !typed.isEmpty, limit > 0 else { return ([], false) }
@@ -119,7 +119,7 @@ enum MessageSearch {
                 guard cores.allSatisfy({ $0.allSatisfy { has(text, $0) } }) else { continue }
                 shown = plainWords.read(message.id, text)
             }
-            guard folded.allSatisfy({ shown.folded.range(of: $0, options: .literal) != nil }), let opens = opening(selection) else { continue }
+            guard folded.allSatisfy({ shown.folded.range(of: $0, options: .literal) != nil }), let opens = opening(message, selection) else { continue }
             guard found.count < limit else { return (found, true) }
             let snippet = snippet(of: shown.plain, around: typed)
             foundIDs.insert(message.id)

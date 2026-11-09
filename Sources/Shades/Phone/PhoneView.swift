@@ -331,7 +331,7 @@ struct PhoneView: Encodable, Equatable {
             cat = book.home(ofThread: thread).flatMap { Self.cat(of: $0, in: book) }
             back = PhonePlace.key(selection.closed)
             backTitle = ChannelHeader.words(for: selection.place, in: book).title
-            rows = ChannelRows.thread(thread, in: book, newFrom: newFrom).map { Self.row($0, at: selection.place, in: book, now: now) }
+            rows = Self.shown(selection, in: book, newFrom: newFrom).map { Self.row($0, at: selection.place, in: book, now: now) }
             if book.canMarkUnread(thread), let messages = book.threads[thread]?.messages.filter({ !$0.isSending }) {
                 unread = newFrom[thread].flatMap { first in messages.first { $0.id == first }?.id } ?? (messages.last { $0.speaker != .you } ?? messages.last)?.id
             }
@@ -343,13 +343,16 @@ struct PhoneView: Encodable, Equatable {
             }
             back = PhonePlace.home
             backTitle = CatWords.messagesTitle
-            if selection.place == .channel(.shades) {
-                subtitle = CatWords.shadesOnPhone
-                rows = Self.shownOnPhone(in: book).map { Self.row($0, at: selection.place, in: book, now: now) }
-            } else {
-                rows = ChannelRows.rows(selection.place, in: book, newFrom: newFrom).map { Self.row($0, at: selection.place, in: book, now: now) }
-            }
+            if selection.place == .channel(.shades) { subtitle = CatWords.shadesOnPhone }
+            rows = Self.shown(selection, in: book, newFrom: newFrom).map { Self.row($0, at: selection.place, in: book, now: now) }
         }
+    }
+
+    /// The window's rows a phone shows for a place or thread, which are also all that Search on a phone can find.
+    static func shown(_ selection: ChannelSelection, in book: ChannelBook, newFrom: [String: String] = [:]) -> [ChannelRow] {
+        if let thread = selection.thread { return ChannelRows.thread(thread, in: book, newFrom: newFrom) }
+        if selection.place == .channel(.shades) { return shownOnPhone(in: book) }
+        return ChannelRows.rows(selection.place, in: book, newFrom: newFrom)
     }
 
     /// The cat's DM as a phone has it: only the threads you chose to show there, each under the day it started, and
@@ -549,7 +552,7 @@ struct PhoneView: Encodable, Equatable {
 
     /// The cat's own work is titled from what was on your screen, such as the app or the router's reading of it, so a
     /// phone calls it by your words instead. So is a thread Messages can't place yet, which could be the cat's own work.
-    private static func title(ofThread id: String, _ title: String, in book: ChannelBook) -> String {
+    static func title(ofThread id: String, _ title: String, in book: ChannelBook) -> String {
         if let home = book.home(ofThread: id), home != .shades { return title }
         guard let parent = book.threads[id]?.parent, parent.speaker == .you, let words = parent.text else { return CatWords.shades }
         return ChannelRows.firstWords(of: words)
