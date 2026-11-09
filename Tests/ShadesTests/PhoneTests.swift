@@ -397,6 +397,61 @@ final class PhoneTests: XCTestCase {
         XCTAssertTrue(PhonePage.style.contains("--on-you: #ffffff"), "and without one, the page's own")
     }
 
+    func testEverythingThePageWritesInAColourReads() throws {
+        let opal = ColorTheme(name: "Opal", isDark: true, paper: 0x0c0a10, text: 0xe7e4ec, soft: 0xa09aad, accent: 0x8a6cff, error: 0xff97b1)
+        let teal = ColorTheme(name: "Teal Light", isDark: false, paper: 0xfbfbfb, text: 0x403f53, accent: 0x2aa298)
+        for (look, isDark, theme) in [("light", false, nil), ("dark", true, nil), ("Opal", true, opal), ("Teal Light", false, teal)] {
+            let colors = try Self.colors(isDark: isDark, theme: theme)
+            for (rule, words, under) in try Self.words(in: colors) {
+                XCTAssertGreaterThanOrEqual(ColorTheme.contrast(words, under), 4.5, "\(rule) in \(look)")
+            }
+        }
+    }
+
+    func testEachRuleIsWrittenOnceSoNoneQuietlyOverridesAnother() throws {
+        let selectors = try Self.rules().map(\.selector).filter { $0 != ":root" }
+        let twice = Dictionary(grouping: selectors, by: { $0 }).filter { $0.value.count > 1 }.keys
+        XCTAssertEqual(twice.sorted(), [], "such as a pull request's chip and what's attached over the box")
+    }
+
+    /// Each rule in the page's style, by its selector without the comment over it.
+    private static func rules() throws -> [(selector: String, body: String)] {
+        let style = PhonePage.style
+        return try NSRegularExpression(pattern: "([^{}]+)\\{([^{}]*)\\}").matches(in: style, range: NSRange(style.startIndex..., in: style)).map {
+            (style[Range($0.range(at: 1), in: style)!].components(separatedBy: "*/").last!.trimmingCharacters(in: .whitespacesAndNewlines),
+             String(style[Range($0.range(at: 2), in: style)!]))
+        }
+    }
+
+    /// The page's colours as a browser in light or dark settles them, with Messages' theme over them.
+    private static func colors(isDark: Bool, theme: ColorTheme?) throws -> [String: UInt32] {
+        let sheets = PhonePage.style.components(separatedBy: "@media (prefers-color-scheme: dark)")
+        let pattern = try NSRegularExpression(pattern: "--([a-z-]+): #([0-9a-f]{6})")
+        var colors: [String: UInt32] = [:]
+        for sheet in [sheets[0]] + (isDark ? [sheets[1]] : []) + [PhonePage.colors(theme)] {
+            for match in pattern.matches(in: sheet, range: NSRange(sheet.startIndex..., in: sheet)) {
+                colors[String(sheet[Range(match.range(at: 1), in: sheet)!])] = UInt32(sheet[Range(match.range(at: 2), in: sheet)!], radix: 16)
+            }
+        }
+        return colors
+    }
+
+    /// Each rule that colours words, with the colour they're in and the one they're on: the rule's own background, or the page.
+    private static func words(in colors: [String: UInt32]) throws -> [(rule: String, words: UInt32, under: UInt32)] {
+        func value(_ property: String, in body: String) -> UInt32? {
+            guard let found = body.range(of: "(?<![-\\w])\(property): [^;}]+", options: .regularExpression) else { return nil }
+            let value = body[found].dropFirst(property.count + 2).trimmingCharacters(in: .whitespaces)
+            if value.hasPrefix("var(--") { return colors[String(value.dropFirst(6).prefix { $0 != ")" })] }
+            guard value.hasPrefix("#") else { return nil }
+            let digits = value.dropFirst()
+            return UInt32(digits.count == 3 ? digits.map { "\($0)\($0)" }.joined() : String(digits), radix: 16)
+        }
+        return try rules().compactMap { rule in
+            guard rule.selector != ":root", let words = value("color", in: rule.body) else { return nil }
+            return (rule.selector, words, value("background", in: rule.body) ?? colors["paper"]!)
+        }
+    }
+
     private func request(key: String) -> PhoneServer.Request {
         PhoneServer.Request(method: "GET", path: "/events", query: [:], headers: ["authorization": key], body: Data())
     }
