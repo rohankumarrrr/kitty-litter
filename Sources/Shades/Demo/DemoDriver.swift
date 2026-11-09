@@ -262,6 +262,24 @@ final class DemoDriver {
         settingsShown()
     }
 
+    /// Hands Tab, Shift-Tab, Ctrl-Tab or Space to whichever window has the keyboard, the way the key arrives there, without
+    /// posting anything to the system. Prints what has the keyboard afterwards.
+    private func pressKey(_ characters: String, control: Bool = false) {
+        guard let (name, window) = windows.first(where: { $0.1.isKeyWindow }) else { return print("no window has the keyboard") }
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            let event = NSEvent.keyEvent(
+                with: type, location: .zero, modifierFlags: characters == "\u{19}" ? .shift : control ? .control : [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                isARepeat: false, keyCode: characters == " " ? 49 : 48
+            )
+            event.map(window.sendEvent)
+        }
+        let responder = window.firstResponder
+        let view = (responder as? NSTextView).flatMap { $0.isFieldEditor ? $0.delegate as? NSView : nil } ?? responder as? NSView
+        let label = view?.accessibilityLabel() ?? ""
+        print("focus \(name) \(label.isEmpty ? responder.map { String(describing: type(of: $0)) } ?? "nothing" : label) key=\(window.isKeyWindow) front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nothing")")
+    }
+
     /// Each control on Settings' page as it shows now.
     private func settingsShown() {
         let panel = stage.settingsPanel
@@ -388,7 +406,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -468,6 +486,12 @@ final class DemoDriver {
             panel.makeKey()
             let handled = panel.handle(shortcut)
             print("key \(rest) handled=\(handled) \(whereMessagesIs) key=\(panel.isKeyWindow) front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nothing")")
+        case "keyboard":
+            // Stands in for Keyboard navigation in System Settings, which the demo leaves as it is.
+            QuietFocus.fullKeyboardAccess = { rest != "off" }
+            print("keyboard navigation \(rest == "off" ? "off" : "on")")
+        case "tab", "space":
+            pressKey(word == "space" ? " " : rest == "back" ? "\u{19}" : "\t", control: rest == "control")
         case "jump":
             // The same as typing into ⌘K's box, which opens it first if it isn't open.
             let view = stage.channels.view

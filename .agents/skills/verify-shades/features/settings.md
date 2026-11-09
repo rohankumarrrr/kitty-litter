@@ -35,5 +35,5 @@ Journey: `journeys/settings.txt`. `settings <page>` turns to a page, the same as
 
 ## Gotchas
 
-- Theme, Font and a channel's button open a menu, which waits for a click, so `setting` won't press them. `colors`, `font` and `notifications` stand in for picking from them, and Settings shows the result.
+- Theme, Font and a channel's button open a menu, which waits for a click, so `setting` won't press them. Reaching them with Tab, and pressing Done with Space, is in [keyboard.md](keyboard.md). `colors`, `font` and `notifications` stand in for picking from them, and Settings shows the result.
 - `front` must stay whatever was in front before the run. `window settings ... key=true` and `active=true` are expected while Settings has the keyboard.
