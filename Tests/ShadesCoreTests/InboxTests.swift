@@ -389,17 +389,22 @@ final class InboxTests: XCTestCase {
         inbox.inGeneral["handed"] = start
         inbox.catsWork["fix"] = start
         inbox.answersInGeneral["turn"] = start
+        inbox.alsoSent["turn-2:ask"] = start
+        inbox.alsoSentToGeneral["turn-3:ask"] = Inbox.ShownInGeneral(thread: "steves", at: start)
         try inbox.save(to: file)
         let loaded = Inbox.load(from: file, now: start)
         XCTAssertEqual(loaded.inGeneral, ["handed": start])
         XCTAssertEqual(loaded.catsWork, ["fix": start])
         XCTAssertEqual(loaded.answersInGeneral, ["turn": start])
+        XCTAssertEqual(loaded.alsoSent, ["turn-2:ask": start])
+        XCTAssertEqual(loaded.alsoSentToGeneral, ["turn-3:ask": Inbox.ShownInGeneral(thread: "steves", at: start)], "with the thread it's in")
 
         let older = #"{"entries":[],"handled":{},"since":-999999999}"#
         try older.write(to: file, atomically: true, encoding: .utf8)
         let before = Inbox.load(from: file, now: start)
         XCTAssertEqual(before.inGeneral, [:])
         XCTAssertEqual(before.catsWork, [:])
+        XCTAssertEqual(before.alsoSent, [:])
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
     }
 

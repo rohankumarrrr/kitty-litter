@@ -175,12 +175,21 @@ final class ChannelBookTests: XCTestCase {
         let threads = [thread("read"), thread("missing")]
         let said = ["read": [exchange("e")]]
         func notes(unreadable: Int, cantReachT3: Bool) -> [String] {
-            let built = ChannelBook.build(kittens: [steve], threads: threads, transcripts: said, isReading: false, unreadable: unreadable, cantReachT3: cantReachT3)
-            return ChannelRows.rows(.channel(.of(steve)), in: built).compactMap { if case .note(let text) = $0 { return text } else { return nil } }
+            let built = ChannelBook.build(
+                kittens: [steve], threads: threads, transcripts: said, isReading: false, unreadable: unreadable, cantReachT3: cantReachT3,
+                couldntRead: unreadable > 0 ? ["missing"] : []
+            )
+            return ChannelRows.rows(.channel(.of(steve)), in: built).compactMap { row in
+                switch row {
+                case .note(let text): return text
+                case .older: return CatWords.loadOlder
+                default: return nil
+                }
+            }
         }
         XCTAssertEqual(notes(unreadable: 1, cantReachT3: false), [CatWords.couldntRead(1)])
         XCTAssertEqual(notes(unreadable: 0, cantReachT3: true), [CatWords.cantReachT3Yet])
-        XCTAssertEqual(notes(unreadable: 0, cantReachT3: false), [CatWords.olderMessages], "and once it's only that they're old, it says so")
+        XCTAssertEqual(notes(unreadable: 0, cantReachT3: false), [CatWords.loadOlder], "and once it's only that they're old, they load")
     }
 
     func testALaterAskInAThreadNeverSitsAboveAnEarlierOne() {
@@ -207,7 +216,7 @@ final class ChannelBookTests: XCTestCase {
         let built = book(threads: [thread("old")])
         let channel = try XCTUnwrap(built.channel(.of(steve)))
         XCTAssertTrue(channel.isCut)
-        XCTAssertEqual(ChannelRows.rows(.channel(channel.id), in: built), [.note(CatWords.olderMessages)])
+        XCTAssertEqual(ChannelRows.rows(.channel(channel.id), in: built), [.older(isLoading: false)])
         XCTAssertFalse(try XCTUnwrap(built.channel(.of(pepper))).isCut)
 
         let reading = ChannelBook.build(kittens: [steve], threads: [thread("old")], transcripts: [:], isReading: true, unreadable: 0, cantReachT3: false)
@@ -231,7 +240,7 @@ final class ChannelBookTests: XCTestCase {
 
     func testAPlannedKittensChannelWithUnreadThreadsPointsAtT3() {
         let built = book(kittens: [steve, cali], threads: [thread("t", project: "Cali", status: .completed)])
-        XCTAssertEqual(ChannelRows.rows(.channel(.of(cali)), in: built), [.note(CatWords.olderMessages)])
+        XCTAssertEqual(ChannelRows.rows(.channel(.of(cali)), in: built), [.older(isLoading: false)])
     }
 
     func testAPlannedKittensOpenThreadIsAnIssue() {
@@ -503,6 +512,52 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(heard.threads["t"]?.messages.filter { $0.text == "Keep the FAQ" }.count, 1)
     }
 
+    /// What was also sent to a channel was only remembered while the app ran, so a restart took it out of the channel.
+    func testAReplyAlsoSentToTheChannelIsStillThereAfterARestartByItsID() throws {
+        let reply = echo("Keep the FAQ", at: 10, in: .of(steve), thread: "t", alsoSent: true)
+        let said = ["t": [exchange("e", ask: "Rewrite it", asked: 0), exchange("f", ask: "Keep the FAQ", reply: "Kept.", asked: 11)]]
+        let heard = book(threads: [thread("t")], transcripts: said, sent: [reply])
+        XCTAssertEqual(heard.alsoSentHeard, ["f:ask": .init(thread: "t", channel: .of(steve))], "only the IDs of T3's copy and its thread, and where it shows")
+
+        let restarted = ChannelBook.build(kittens: [steve, pepper], threads: [thread("t")], transcripts: said, isReading: false, unreadable: 0, cantReachT3: false, alsoSent: ["f:ask"])
+        let echoed = try XCTUnwrap(restarted.threads["t"]?.replies.first { $0.id == "f:ask" })
+        XCTAssertEqual(restarted.channel(.of(steve))?.posts, [.thread("t"), .alsoSent(echoed, thread: "t")])
+        XCTAssertEqual(restarted.alsoSentHeard, [:])
+
+        let both = ChannelBook.build(kittens: [steve, pepper], threads: [thread("t")], transcripts: said, isReading: false, unreadable: 0, cantReachT3: false, sent: [reply], alsoSent: ["f:ask"])
+        XCTAssertEqual(both.channel(.of(steve))?.posts.count, 2, "shown once while it's in memory too")
+    }
+
+    func testWhatYouWroteInGeneralThatWentToAKittensThreadStaysInGeneralAfterARestart() throws {
+        let said = ["t": [exchange("e", ask: "Rewrite it", asked: 0), exchange("f", ask: "and the FAQ?", reply: "Done.", asked: 11)]]
+        var routed = echo("and the FAQ?", at: 10, in: .general, thread: "t", alsoSent: true)
+        routed.message.threadTitle = "Work"
+        XCTAssertEqual(book(threads: [thread("t")], transcripts: said, sent: [routed]).alsoSentHeard, ["f:ask": .init(thread: "t", channel: .general)])
+
+        let restarted = ChannelBook.build(kittens: [steve], threads: [thread("t")], transcripts: said, isReading: false, unreadable: 0, cantReachT3: false, alsoSentToGeneral: ["f:ask"])
+        let echoed = try XCTUnwrap(restarted.threads["t"]?.replies.first { $0.id == "f:ask" })
+        XCTAssertEqual(restarted.channel(.general)?.posts, [.alsoSent(echoed, thread: "t")])
+        XCTAssertEqual(restarted.channel(.of(steve))?.posts, [.thread("t")], "the thread stays its kitten's")
+    }
+
+    func testTheSameWordsAlsoSentTwiceAreKeptAsTwoMessages() {
+        let said = ["t": [
+            exchange("first", ask: "Rewrite it", asked: 0),
+            exchange("a", ask: "ok", reply: "Sure.", asked: 10),
+            exchange("b", ask: "ok", reply: "Sure.", asked: 30),
+        ]]
+        var first = echo("ok", at: 10, in: .of(steve), thread: "t", alsoSent: true)
+        first.message.exchangeID = "sent-1"
+        let second = echo("ok", at: 30, in: .of(steve), thread: "t", alsoSent: true)
+        let live = book(threads: [thread("t")], transcripts: said, sent: [first, second])
+        XCTAssertEqual(Set(live.alsoSentHeard.keys), ["a:ask", "b:ask"], "each kept by its own copy's ID")
+
+        let restarted = ChannelBook.build(kittens: [steve, pepper], threads: [thread("t")], transcripts: said, isReading: false, unreadable: 0, cantReachT3: false, alsoSent: ["a:ask", "b:ask"])
+        let shown = restarted.channel(.of(steve))?.posts.compactMap { post -> String? in if case .alsoSent(let message, _) = post { message.id } else { nil } }
+        XCTAssertEqual(shown, ["a:ask", "b:ask"], "both are still in the channel after a restart")
+        XCTAssertEqual(live.channel(.of(steve))?.posts, restarted.channel(.of(steve))?.posts, "as they were before it")
+    }
+
     func testAReplyThatsntAlsoSentStaysInItsThread() {
         let reply = echo("Keep the FAQ", at: 10, in: .of(steve), thread: "t")
         let built = book(threads: [thread("t")], transcripts: ["t": [exchange("e", asked: 0)]], sent: [reply])
@@ -671,6 +726,39 @@ extension ChannelBookTests {
         let thread = try XCTUnwrap(read.threads["r"])
         XCTAssertEqual(thread.messages.compactMap(\.text), ["Earlier", "Earlier answer.", "What day is it?", "Friday."], "once T3 has it, only T3's copy")
         XCTAssertEqual(read.channel(.shades)?.posts, [.thread("r"), .alsoSent(thread.replies[1], thread: "r"), .alsoSent(thread.replies[2], thread: "r")])
+        XCTAssertEqual(read.alsoSentHeard, ["2:ask": .init(thread: "r", channel: .shades), "2:reply": .init(thread: "r", channel: .shades)])
+
+        let restarted = ChannelBook.build(
+            kittens: [steve], threads: [talk("r")], transcripts: ["r": [exchange("1", ask: "Earlier", reply: "Earlier answer."), exchange("2", ask: "What day is it?", reply: "Friday.", asked: 21)]],
+            isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r"], alsoSent: ["2:ask", "2:reply"]
+        )
+        XCTAssertEqual(restarted.channel(.shades)?.posts, read.channel(.shades)?.posts, "and after a restart too")
+    }
+
+    func testTheCatsDMSaysWhenItHasOlderTalksToLoad() {
+        let built = ChannelBook.build(
+            kittens: [steve], threads: [talk("r"), talk("older")], transcripts: ["r": [exchange("1")]],
+            isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r", "older"]
+        )
+        XCTAssertEqual(built.channel(.shades)?.isCut, true)
+        XCTAssertEqual(ChannelRows.rows(.channel(.shades), in: built).first, .older(isLoading: false))
+
+        let loading = ChannelBook.build(
+            kittens: [steve], threads: [talk("r"), talk("older")], transcripts: ["r": [exchange("1")]],
+            isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r", "older"], loadingOlder: [.shades]
+        )
+        XCTAssertEqual(ChannelRows.rows(.channel(.shades), in: loading).first, .older(isLoading: true))
+    }
+
+    func testEachPageOfOlderPostsShowsAsManyAgain() {
+        let threads = (0...ChannelBook.keptExchanges).map { thread("t\($0)", age: TimeInterval($0)) }
+        let transcripts = Dictionary(uniqueKeysWithValues: threads.map { ($0.id, [exchange("e-\($0.id)")]) })
+        let first = ChannelBook.build(kittens: [steve], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false)
+        XCTAssertEqual(first.channel(.of(steve))?.posts.count, ChannelBook.keptExchanges)
+        XCTAssertEqual(first.channel(.of(steve))?.isCut, true)
+        let more = ChannelBook.build(kittens: [steve], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, olderPages: [.of(steve): 1])
+        XCTAssertEqual(more.channel(.of(steve))?.posts.count, ChannelBook.keptExchanges + 1)
+        XCTAssertEqual(more.channel(.of(steve))?.isCut, false)
     }
 }
 
@@ -678,5 +766,21 @@ extension ChannelBook {
     /// Everything said in the cat's DM, talk by talk, for tests that read it as one conversation.
     var shadesMessages: [ChannelMessage] {
         threads(in: .shades).flatMap { threads[$0]?.messages ?? [] }
+    }
+}
+
+extension ChannelBookTests {
+    func testNothingIsKeptWhileT3OnlyHasTheSameWordsFromBefore() {
+        // You said "Yes" in the thread, not also sent, and 30 seconds later "Yes" again, also sent. T3 only has the first.
+        let said = ["t": [exchange("e", ask: "Rewrite it", asked: 0), exchange("f", ask: "Yes", reply: nil, asked: 100)]]
+        let second = echo("Yes", at: 130, in: .of(steve), thread: "t", alsoSent: true)
+        let built = book(threads: [thread("t")], transcripts: said, sent: [second])
+        XCTAssertEqual(built.alsoSentHeard, [:], "T3 doesn't have the second Yes yet")
+
+        // The same when the second never reached T3 at all.
+        var failed = second
+        failed.message.failure = "Couldn't send."
+        let broken = book(threads: [thread("t")], transcripts: said, sent: [failed])
+        XCTAssertEqual(broken.alsoSentHeard, [:], "a send that failed is kept nowhere")
     }
 }

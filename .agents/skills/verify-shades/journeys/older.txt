@@ -1,0 +1,27 @@
+front
+busy
+wait 1
+channels
+wait 3
+channel steve
+wait 2
+draw .verify/shades/older/1-newest
+scroll -100000
+wait 0.05
+draw .verify/shades/older/2-loading
+wait 3
+draw .verify/shades/older/3-loaded
+scroll -100000
+wait 1
+draw .verify/shades/older/4-top
+channel shades
+wait 2
+scroll -100000
+wait 0.05
+draw .verify/shades/older/5-dm-loading
+wait 3
+scroll -100000
+wait 1
+draw .verify/shades/older/6-dm-top
+front
+windows

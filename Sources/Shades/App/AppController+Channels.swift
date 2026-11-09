@@ -17,6 +17,8 @@ enum MessagesAction: Equatable {
     /// Words you sent that went nowhere, by their exchange ID, sent again as they were.
     case tryAgain(String)
     case doNotDisturb
+    /// You've scrolled back past the top of a channel.
+    case older(ChannelID)
 }
 
 /// Messages, laid out like Slack: Activity, your threads, #general, a channel for each kitten and a DM with the cat. Each
@@ -144,12 +146,30 @@ extension AppController {
         case .tryAgain(let id):
             guard let sent = channels.toTryAgain(id), let words = sent.message.text, let target = sent.target else { return }
             send(words, to: target, shownIn: sent.channel, alsoSent: sent.alsoSent, echoID: id)
+        case .older(let channel):
+            channels.older(in: channel)
         }
     }
 
+    /// A reply also sent to a channel is only words while T3 doesn't have it, so it's kept once T3 does, as the ID of
+    /// T3's copy, and read back from its thread after a restart.
+    func keepAlsoSent(_ heard: [String: ChannelBook.HeardAlsoSent]) {
+        let new = heard.filter { inbox.alsoSent[$0.key] == nil && inbox.alsoSentToGeneral[$0.key] == nil }
+        guard !new.isEmpty else { return }
+        for (id, line) in new {
+            if line.channel == .general {
+                inbox.alsoSentToGeneral[id] = Inbox.ShownInGeneral(thread: line.thread, at: now())
+            } else {
+                inbox.alsoSent[id] = now()
+            }
+        }
+        keepInbox()
+    }
+
     /// Each way of sending passes on your words and nothing else: no screen, and nothing anyone else said. What's shown
-    /// meanwhile, and a reply also sent to a channel, is kept in memory only. A file you attached goes the way one
-    /// dropped onto the cat does, only where your screen may, and where it can't, nothing goes and Messages says why.
+    /// meanwhile is kept in memory only, and a reply also sent to a channel is too until T3 has it. A file you attached
+    /// goes the way one dropped onto the cat does, only where your screen may, and where it can't, nothing goes and
+    /// Messages says why.
     func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, alsoSent: Bool = false, echoID: String = "sent-\(UUID().uuidString)", file: Drop? = nil) {
         guard let file else { return send(words, to: target, shownIn: channel, alsoSent: alsoSent, echoID: echoID, snapshot: nil) }
         let words = words.isEmpty ? CatWords.summarize : words

@@ -199,6 +199,7 @@ enum PhonePage {
         .issue .line { display: flex; align-items: center; gap: 8px; }
         .issue small { display: block; color: var(--soft); font-size: 13px; margin-left: 16px; }
         .note { color: var(--soft); text-align: center; font-size: 15px; margin: 24px 16px; }
+        .older { display: block; width: calc(100% - 32px); background: none; border: 0; font: inherit; }
 
         .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 10px 0; }
         .card header { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: 13px; }
@@ -473,6 +474,14 @@ enum PhonePage {
           show(next);
         });
 
+        function lowestInSight() {
+          const seen = [...$('rows').children].filter(child => {
+            const box = child.getBoundingClientRect();
+            return child.dataset.id && box.bottom > 0 && box.top < window.innerHeight;
+          }).pop();
+          return seen ? { id: seen.dataset.id, top: seen.getBoundingClientRect().top } : null;
+        }
+
         function show(next) {
           if (view && view.key === next.key && selecting()) { held = next; return; }
           held = null;
@@ -503,10 +512,21 @@ enum PhonePage {
             $('alsotext').textContent = next.box.also || '';
             if (fresh) $('also').checked = false;
           }
-          $('rows').replaceChildren(...(key === 'home' ? places(next.places) : next.rows.map(row)));
+          // Older posts come in where each thread started, which can be among what you're reading, so the lowest
+          // message on the screen stays where it was.
+          const kept = fresh || nearBottom || !conversation(key) ? null : lowestInSight();
+          $('rows').replaceChildren(...(key === 'home' ? places(next.places) : next.rows.map(item => {
+            const node = row(item);
+            if (item.id) node.dataset.id = item.id;
+            return node;
+          })));
           $('notify').hidden = key !== 'home' || !$('notifytext').textContent;
           if (conversation(key) && (fresh || nearBottom)) window.scrollTo(0, document.body.scrollHeight);
           else if (fresh) window.scrollTo(0, 0);
+          else if (kept) {
+            const node = [...$('rows').children].find(child => child.dataset.id === kept.id);
+            if (node) window.scrollBy(0, node.getBoundingClientRect().top - kept.top);
+          }
           if (conversation(key) && document.visibilityState === 'visible') act({ act: 'seen', key }, true);
         }
 
@@ -599,6 +619,13 @@ enum PhonePage {
           switch (item.kind) {
             case 'day': return el('div', 'day', item.text);
             case 'note': return el('p', 'note', item.text);
+            case 'older': {
+              const node = el('button', 'note older', item.text);
+              node.type = 'button';
+              node.disabled = !!item.done;
+              node.onclick = () => act({ act: 'older', key }, true);
+              return node;
+            }
             case 'message': return message(item);
             case 'parent': {
               const node = message(item);

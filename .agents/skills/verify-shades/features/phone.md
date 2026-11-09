@@ -47,6 +47,7 @@ Journey: `journeys/phone-notifications.txt`.
 
 Journey: `journeys/phone-theme.txt`.
 
+- **Load older.** Journey `journeys/phone-older.txt`. `busy`, then `phone open pepper`, scrolled to the top, where the first row is "Load older messages". `phone js` runs a line of script on the page and prints what it comes to, here each row on the screen with how far down it is. After `phone press Load older messages`, the `after` line has a larger `scrollY`, with the lowest posts at the same heights as in `before`, since the older threads come in above them, and among them where one started between two you could see.
 - **Theme.** `colors Cursor/Opal Horizon` before `phone on`, then `phone open steve`. `1-opal` shows the page dark, your bubbles and your squares in reply bars in the violet tint, a violet Send button and "1 open", and Steve's bubbles and every cat still in their own colours, drawn with the light outline the window uses on a dark page.
 - **Selecting.** `phone select feels cramped` does what dragging over those words, in a parent on Steve's channel, does, and prints `[phone] selected [feels cramped]`. A new thread started from the window doesn't reach the page's `phone text` while they're selected, and does after `phone unselect`. The web view's pictures don't show a selection.
 

@@ -4935,6 +4935,50 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(book?.threads[handedTo]?.home, .general)
     }
 
+    /// A reply also sent to a channel was only remembered while the app ran, so every restart took it out of the channel.
+    func testAReplyAlsoSentToAChannelIsStillThereAfterARestart() async throws {
+        kittens = [steve]
+        var work = AgentThread(id: "w", title: "Resume", projectTitle: "steve", status: .completed, model: "m", updatedAt: clock, projectPath: "/k/steve")
+        let first = Exchange(id: "first", asker: .you, askedAt: clock.addingTimeInterval(-100), ask: "Tighten my resume", reply: "Tightened.", repliedAt: clock.addingTimeInterval(-90))
+        backend.listed = [work]
+        backend.said["w"] = [first]
+        controller.threadsChanged([work])
+        func book(where done: (ChannelBook) -> Bool) async -> ChannelBook? {
+            for _ in 0..<400 {
+                if let book = stage.channelsUpdated.last(where: done) { return book }
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            return nil
+        }
+        controller.channelsPressed()
+        _ = await book { !$0.isReading }
+        await messages("Keep the summary short", to: .thread(id: "w", title: "Resume"), in: .of(steve), alsoSent: true)
+        XCTAssertEqual(savedInbox?.alsoSent ?? [:], [:], "words T3 doesn't have yet aren't kept")
+
+        backend.said["w"] = [first, Exchange(id: "second", asker: .you, askedAt: clock, ask: "Keep the summary short", reply: "Done.", repliedAt: clock)]
+        work.updatedAt = clock.addingTimeInterval(1)
+        backend.listed = [work]
+        controller.threadsChanged([work])
+        controller.channelsClosed()
+        controller.channelsPressed()
+        for _ in 0..<400 where savedInbox?.alsoSent.isEmpty != false { try? await Task.sleep(for: .milliseconds(5)) }
+        let saved = try XCTUnwrap(savedInbox)
+        XCTAssertEqual(Set(saved.alsoSent.keys), ["second:ask"], "only the ID of T3's copy")
+        let written = String(decoding: try JSONEncoder().encode(saved), as: UTF8.self)
+        XCTAssertFalse(written.contains("summary"), "never the words")
+
+        controller.channelsClosed()
+        stage.channelsUpdated = []
+        controller = makeController(inbox: saved)
+        controller.threadsChanged([work])
+        controller.channelsPressed()
+        let read = await book { !$0.isReading }
+        let restarted = try XCTUnwrap(read)
+        controller.channelsClosed()
+        let echoed = try XCTUnwrap(restarted.threads["w"]?.replies.first { $0.text == "Keep the summary short" })
+        XCTAssertEqual(restarted.channel(.of(steve))?.posts, [.thread("w"), .alsoSent(echoed, thread: "w")])
+    }
+
     /// A fix showed nowhere in Messages, so a question asked with Fix left nothing in the cat's DM.
     func testWorkYouStartWithTheCatOutsideMessagesLivesInItsDM() async throws {
         await controller.beginFix()

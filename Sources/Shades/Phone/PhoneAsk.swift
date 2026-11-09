@@ -65,6 +65,9 @@ struct PhoneAsk: Decodable {
         case "retry":
             guard let message = id.flatMap(book.message), message.canTryAgain else { return nil }
             return (.tryAgain(message.exchangeID), nil)
+        case "older":
+            guard let channel = key.flatMap({ PhonePlace($0, in: book).selection?.channelID }) else { return nil }
+            return (.older(channel), nil)
         default:
             return nil
         }

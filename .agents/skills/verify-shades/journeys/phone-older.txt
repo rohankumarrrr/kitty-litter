@@ -1,0 +1,20 @@
+front
+busy
+wait 1
+phone on
+wait 3
+phone open pepper
+wait 6
+phone js window.scrollTo(0, 0); 'scrolled to top'
+wait 1
+phone js (() => { const out = []; for (const r of document.getElementById('rows').children) { const t = r.getBoundingClientRect(); if (t.bottom > 0 && t.top < innerHeight) out.push(Math.round(t.top) + ':' + r.textContent.replace(/\s+/g, ' ').trim().slice(0, 48)); } return 'before scrollY=' + Math.round(scrollY) + ' | ' + out.join(' | '); })()
+wait 1
+phone press Load older messages
+wait 4
+phone js (() => { const out = []; for (const r of document.getElementById('rows').children) { const t = r.getBoundingClientRect(); if (t.bottom > 0 && t.top < innerHeight) out.push(Math.round(t.top) + ':' + r.textContent.replace(/\s+/g, ' ').trim().slice(0, 48)); } return 'after scrollY=' + Math.round(scrollY) + ' | ' + out.join(' | '); })()
+wait 1
+phone close
+phone off
+wait 1
+front
+windows
