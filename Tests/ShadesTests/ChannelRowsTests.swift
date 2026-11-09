@@ -121,6 +121,45 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(rows.filter { if case .day = $0 { true } else { false } }.count, 1, "a day divider once the replies reach a new day")
     }
 
+    // MARK: - What's new
+
+    private func lines(_ rows: [ChannelRow]) -> [ChannelRow] {
+        rows.filter { if case .new = $0 { true } else { false } }
+    }
+
+    func testAThreadsNewLineGoesOverItsFirstNewMessageAndCountsWhatsUnderIt() throws {
+        let built = book(threads: [thread("a")], transcripts: ["a": [exchange("a1", asked: 0), exchange("a2", asked: 10)]])
+        let rows = ChannelRows.thread("a", in: built, newFrom: ["a": "a2:ask"])
+        XCTAssertEqual(lines(rows), [.new(2)])
+        let line = try XCTUnwrap(rows.firstIndex(of: .new(2)))
+        XCTAssertEqual(rows[line + 1], .message(try XCTUnwrap(built.threads["a"]?.replies[1])))
+        XCTAssertEqual(ChannelRows.thread("a", in: built, newFrom: ["a": "a1:ask"]).first, .new(4), "all of it, over its parent")
+        XCTAssertEqual(lines(ChannelRows.thread("a", in: built)), [], "nothing new, no line")
+    }
+
+    func testAChannelsNewLineGoesOverTheFirstThreadThatsAllNew() throws {
+        let built = book(threads: [thread("a"), thread("b"), thread("c")], transcripts: [
+            "a": [exchange("a1", asked: 0), exchange("a2", asked: 50)],
+            "b": [exchange("b1", asked: 20)],
+            "c": [exchange("c1", asked: 30)],
+        ])
+        let rows = ChannelRows.rows(.channel(.of(steve)), in: built, newFrom: ["a": "a2:ask", "b": "b1:ask", "c": "c1:ask"])
+        XCTAssertEqual(lines(rows), [.new(2)], "a has only new replies, which are new in its pane, as in Slack")
+        let line = try XCTUnwrap(rows.firstIndex(of: .new(2)))
+        guard case .parent(let post) = rows[line + 1] else { return XCTFail("\(rows)") }
+        XCTAssertEqual(post.threadID, "b")
+    }
+
+    func testTheBookKnowsWhereEachUnreadThreadsNewMessagesStart() {
+        let built = ChannelBook.build(
+            kittens: [steve], threads: [thread("a"), thread("b")], transcripts: ["a": [exchange("a1")], "b": [exchange("b1")]],
+            isReading: false, unreadable: 0, cantReachT3: false,
+            isUnread: { $0.id == "a" },
+            firstNew: { thread, messages in "\(thread.id) \(messages.map(\.id).joined(separator: " "))" }
+        )
+        XCTAssertEqual(built.newFrom, ["a": "a a1:ask a1:reply"], "only unread threads, given their messages oldest first")
+    }
+
     func testDaysReadTodayYesterdayOrTheDate() {
         let calendar = Calendar.current
         XCTAssertEqual(CatWords.day(noon, now: noon.addingTimeInterval(60)), "Today")

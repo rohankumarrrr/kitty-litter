@@ -62,6 +62,12 @@ struct PhoneAsk: Decodable {
         case "seen":
             guard let selection = key.flatMap({ PhonePlace($0, in: book).selection }) else { return nil }
             return (.seen(selection), nil)
+        case "unread":
+            // Only a message in the thread this page shows, and one Messages can mark.
+            guard let thread = key.flatMap({ PhonePlace($0, in: book).selection?.thread }), book.canMarkUnread(thread),
+                  let id, book.threads[thread]?.messages.contains(where: { $0.id == id }) == true
+            else { return nil }
+            return (.markUnread(thread, from: id), nil)
         case "retry":
             guard let message = id.flatMap(book.message), message.canTryAgain else { return nil }
             return (.tryAgain(message.exchangeID), nil)

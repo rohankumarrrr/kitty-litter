@@ -55,6 +55,10 @@ public struct Inbox: Codable, Equatable, Sendable {
     private var handled: [String: String] = [:]
     /// Each thread's last run you've seen in Messages. Only IDs, and files from before Messages don't have it.
     private var read: [String: String]?
+    /// Each thread's last message you've seen in Messages, so what came after it shows as new, and the threads you
+    /// marked unread to come back to. Only IDs, and files from before don't have them.
+    private var readTo: [String: String]?
+    private var markedUnread: Set<String>?
     /// Threads given a correction. Only IDs, and files from before corrections don't have it.
     private var corrections: Set<String>?
     /// Where Messages put what you said, so a restart leaves it there. Only IDs, and files from before don't have it.
@@ -187,21 +191,69 @@ public struct Inbox: Codable, Equatable, Sendable {
             ?? own.last
     }
 
-    /// A run that ended while you weren't looking. One still going isn't news yet.
+    /// A run that ended while you weren't looking, or one you marked unread. One still going isn't news yet.
     public func isUnread(_ thread: AgentThread) -> Bool {
-        guard !thread.status.isActive, let run = thread.lastRunID, read?[thread.id] != run else { return false }
+        guard !thread.status.isActive else { return false }
+        if markedUnread?.contains(thread.id) == true { return true }
+        guard let run = thread.lastRunID, read?[thread.id] != run else { return false }
         return (thread.lastRunEndedAt ?? thread.updatedAt) >= since
     }
 
-    /// Says whether that changed anything, so it's only saved when it did.
-    /// shortcut: this grows by a short line per thread, prune it if that ever matters.
-    public mutating func markRead(_ threads: [AgentThread]) -> Bool {
-        let unread = threads.filter(isUnread)
-        guard !unread.isEmpty else { return false }
-        var marks = read ?? [:]
-        for thread in unread { marks[thread.id] = thread.lastRunID }
-        read = marks
-        return true
+    /// `upTo` is the last message of each that's on the screen, if there is one. Says whether that changed anything,
+    /// so it's only saved when it did.
+    /// shortcut: these grow by a short line per thread, prune them if that ever matters.
+    public mutating func markRead(_ threads: [AgentThread], upTo last: (String) -> String? = { _ in nil }) -> Bool {
+        var changed = false
+        for thread in threads {
+            if isUnread(thread) {
+                var marks = read ?? [:]
+                marks[thread.id] = thread.lastRunID
+                read = marks
+                markedUnread?.remove(thread.id)
+                changed = true
+            }
+            // Kept as you watch, so a run that ends while you're looking only brings up what you didn't see.
+            if let message = last(thread.id), readTo?[thread.id] != message {
+                var marks = readTo ?? [:]
+                marks[thread.id] = message
+                readTo = marks
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    /// Puts a thread back to unread, with this message and everything after it new, to come back to. `messages` are
+    /// the thread's, oldest first.
+    public mutating func markUnread(_ threadID: String, from message: String, of messages: [String]) {
+        guard let index = messages.firstIndex(of: message) else { return }
+        if index == 0 {
+            readTo?[threadID] = nil
+            read?[threadID] = nil
+        } else {
+            var marks = readTo ?? [:]
+            marks[threadID] = messages[index - 1]
+            readTo = marks
+        }
+        markedUnread = (markedUnread ?? []).union([threadID])
+    }
+
+    /// The first of an unread thread's messages that's new to you, by ID, where Messages draws its line. `messages` are
+    /// the thread's, oldest first. Your own words aren't news, unless you marked them unread yourself.
+    public func firstNew(in thread: AgentThread, among messages: [(id: String, isYours: Bool)]) -> String? {
+        guard isUnread(thread), let latest = messages.last else { return nil }
+        let new: ArraySlice<(id: String, isYours: Bool)>
+        if let seen = readTo?[thread.id] {
+            new = messages.firstIndex { $0.id == seen }.map { messages[($0 + 1)...] } ?? [latest]
+        } else if read?[thread.id] == nil {
+            // Never looked at in Messages, so all of it is.
+            new = messages[...]
+        } else {
+            // Seen before Messages kept where you'd read to, so only its latest is known to be new.
+            new = [latest]
+        }
+        let marked = markedUnread?.contains(thread.id) == true
+        return new.first { marked || !$0.isYours }?.id
     }
 
     /// What a thread says about a correction has to reach you, even if it passes work on, and after a restart too.

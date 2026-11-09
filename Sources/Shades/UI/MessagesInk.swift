@@ -19,6 +19,7 @@ enum MessagesInk {
     static var press: NSColor { themed(\.press) ?? Ink.press }
     /// Reply bars and links, which Slack draws in its accent: the theme's, or the blue of your own messages.
     static var link: NSColor { themed(\.accent) ?? Ink.hex(ChannelSpeakerLook.yours) }
+    static var onLink: NSColor { ChannelSpeakerLook.readable(on: theme?.accent ?? ChannelSpeakerLook.yours) }
     /// A count of what's waiting on you, in the colour the cat glints when something does.
     static var badge: NSColor { Ink.hex(CatGlint.attention(bright: true).color!) }
     static var onBadge: NSColor { ChannelSpeakerLook.readable(on: CatGlint.attention(bright: true).color!) }

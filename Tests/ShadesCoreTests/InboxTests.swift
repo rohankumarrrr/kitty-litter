@@ -368,6 +368,78 @@ final class InboxTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
     }
 
+    // MARK: - Where what's new starts
+
+    private let said: [(id: String, isYours: Bool)] = [("ask-1", true), ("reply-1", false), ("ask-2", true), ("reply-2", false)]
+
+    func testTheNewLineGoesAfterTheLastMessageYouSaw() {
+        var inbox = Inbox(since: start)
+        XCTAssertEqual(inbox.firstNew(in: thread(), among: said), "reply-1", "never looked at, it's all new, from the first words that aren't yours")
+
+        _ = inbox.markRead([thread(status: .running)], upTo: { _ in "reply-1" })
+        XCTAssertFalse(inbox.isUnread(thread(status: .running)), "watching it work isn't seeing a run end")
+        XCTAssertEqual(inbox.firstNew(in: thread(), among: said), "reply-2", "what you said in between is yours, so the line goes over the answer")
+
+        XCTAssertTrue(inbox.markRead([thread()], upTo: { _ in "reply-2" }))
+        XCTAssertNil(inbox.firstNew(in: thread(), among: said), "seen, nothing's new")
+        XCTAssertEqual(inbox.firstNew(in: thread(run: "run-2"), among: said + [("reply-3", false)]), "reply-3")
+    }
+
+    func testAThreadSeenBeforeThisOnlyKnowsItsLatestIsNew() {
+        var inbox = Inbox(since: start)
+        _ = inbox.markRead([thread()])
+        XCTAssertEqual(inbox.firstNew(in: thread(run: "run-2"), among: said), "reply-2")
+        _ = inbox.markRead([thread(run: "run-2")], upTo: { _ in "gone" })
+        XCTAssertEqual(inbox.firstNew(in: thread(run: "run-3"), among: said), "reply-2", "and one it can't find any more is the same")
+    }
+
+    func testMarkingUnreadMakesThatMessageAndAfterNewUntilYouLookAgain() {
+        var inbox = Inbox(since: start)
+        _ = inbox.markRead([thread()], upTo: { _ in "reply-2" })
+
+        inbox.markUnread("t", from: "ask-2", of: said.map(\.id))
+        XCTAssertTrue(inbox.isUnread(thread()), "it waits for you, with no new run")
+        XCTAssertEqual(inbox.firstNew(in: thread(), among: said), "ask-2", "your own words, since you picked them")
+
+        inbox.markUnread("t", from: "ask-1", of: said.map(\.id))
+        XCTAssertEqual(inbox.firstNew(in: thread(), among: said), "ask-1", "from the first, all of it")
+        inbox.markUnread("t", from: "not-here", of: said.map(\.id))
+        XCTAssertEqual(inbox.firstNew(in: thread(), among: said), "ask-1", "a message that isn't in it changes nothing")
+
+        XCTAssertTrue(inbox.markRead([thread()], upTo: { _ in "reply-2" }))
+        XCTAssertFalse(inbox.isUnread(thread()))
+        XCTAssertNil(inbox.firstNew(in: thread(), among: said))
+        let old = thread("old", ended: -1)
+        XCTAssertFalse(inbox.isUnread(old), "one from before since isn't news")
+        inbox.markUnread("old", from: "reply-1", of: said.map(\.id))
+        XCTAssertTrue(inbox.isUnread(old), "unless you mark it")
+        XCTAssertFalse(inbox.isUnread(thread("old", status: .running)), "one still going isn't news yet")
+    }
+
+    func testWhereYouReadToIsSavedAsIDsAndAFileFromBeforeItStillLoads() throws {
+        let file = try folder().appendingPathComponent("inbox.json")
+        var inbox = Inbox(since: start)
+        _ = inbox.markRead([thread(), thread("other")], upTo: { $0 == "t" ? "reply-2" : nil })
+        inbox.markUnread("other", from: "reply-1", of: said.map(\.id))
+        try inbox.save(to: file)
+
+        let loaded = Inbox.load(from: file, now: start.addingTimeInterval(100))
+        XCTAssertEqual(loaded, inbox, "a restart keeps where the line goes")
+        XCTAssertTrue(loaded.isUnread(thread("other")))
+        XCTAssertEqual(loaded.firstNew(in: thread("other"), among: said), "reply-1")
+        let saved = try String(contentsOf: file, encoding: .utf8)
+        XCTAssertTrue(saved.contains(#""t" : "reply-2""#))
+        XCTAssertTrue(saved.contains(#""markedUnread" : ["#))
+        XCTAssertFalse(saved.contains("Clawde"), "no titles or words, only IDs")
+
+        let older = #"{"entries":[],"handled":{},"read":{"t":"run-1"},"since":-999999999}"#
+        try older.write(to: file, atomically: true, encoding: .utf8)
+        let before = Inbox.load(from: file, now: start)
+        XCTAssertFalse(before.isUnread(thread()))
+        XCTAssertEqual(before.firstNew(in: thread(run: "run-2"), among: said), "reply-2")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
+    }
+
     func testCorrectedThreadsAreSavedAsIDsAndAFileFromBeforeThemStillLoads() throws {
         let file = try folder().appendingPathComponent("inbox.json")
         var inbox = Inbox(since: start)

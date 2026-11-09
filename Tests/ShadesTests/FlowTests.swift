@@ -4833,6 +4833,43 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.channelsUpdated.last?.unread, [])
     }
 
+    func testMarkingUnreadBringsBackTheNewLineAcrossARestartUntilYouLookAgain() async throws {
+        kittens = [penny]
+        let finished = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: clock, projectPath: penny.folder, lastRunID: "r1", lastRunEndedAt: clock)
+        backend.listed = [finished]
+        backend.said = ["w": [
+            Exchange(id: "e1", asker: .you, askedAt: clock, ask: "How's December?", reply: "Fine.", repliedAt: clock),
+            Exchange(id: "e2", asker: .you, askedAt: clock, ask: "And January?", reply: "Also fine.", repliedAt: clock),
+        ]]
+        controller.threadsChanged([finished])
+        controller.channelsPressed()
+        await until { stage.channelsUpdated.last?.isReading == false }
+        XCTAssertEqual(stage.channelsUpdated.last?.newFrom, ["w": "e1:reply"], "never looked at, it's new from the first words that aren't yours")
+
+        let pane = ChannelSelection.thread("w", in: .channel(.of(penny)))
+        controller.messagesAction(.seen(pane))
+        XCTAssertEqual(savedInbox?.isUnread(finished), false)
+        XCTAssertEqual(stage.channelsUpdated.last?.newFrom, [:])
+
+        controller.messagesAction(.markUnread("w", from: "e2:ask"))
+        XCTAssertEqual(savedInbox?.isUnread(finished), true)
+        XCTAssertEqual(stage.channelsUpdated.last?.newFrom, ["w": "e2:ask"])
+        XCTAssertEqual(stage.channelsUpdated.last?.unread, [penny.id], "and its channel is bold again")
+
+        let beforeRestart = stage.channelsUpdated.count
+        controller = makeController(inbox: try XCTUnwrap(savedInbox))
+        controller.threadsChanged([finished])
+        controller.channelsPressed()
+        await until { stage.channelsUpdated.count > beforeRestart && stage.channelsUpdated.last?.isReading == false }
+        XCTAssertGreaterThan(stage.channelsUpdated.count, beforeRestart)
+        XCTAssertEqual(stage.channelsUpdated.last?.newFrom, ["w": "e2:ask"], "a restart keeps it, from the IDs it saved")
+
+        controller.messagesAction(.seen(pane, keepingUnread: ["w"]))
+        XCTAssertEqual(savedInbox?.isUnread(finished), true, "marked while you're looking, it stays unread until you move on")
+        controller.messagesAction(.seen(pane))
+        XCTAssertEqual(savedInbox?.isUnread(finished), false, "looked at again, it's read")
+    }
+
     func testNothingCountsAsReadUntilItsWordsAreOnTheScreen() async {
         kittens = [penny]
         let finished = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: clock, projectPath: penny.folder, lastRunID: "r1", lastRunEndedAt: clock)

@@ -300,7 +300,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -407,6 +407,26 @@ final class DemoDriver {
             let view = stage.channels.view
             let pane = view.threadPane.isHidden ? view.pane : view.threadPane
             if let row = pane.longMessageRow { row.pressShowMore() } else { print("no message is cut") }
+        case "unread":
+            // The same as pressing Mark unread on the newest message whose words include these, in the thread's pane if
+            // one's open.
+            let view = stage.channels.view
+            let pane = view.threadPane.isHidden ? view.pane : view.threadPane
+            let row = pane.shownMessageRows.last { $0.onMarkUnread != nil && ($0.accessibilityLabel() ?? "").localizedCaseInsensitiveContains(rest) }
+            print(row == nil ? "no message to mark unread shows [\(rest)]" : "marked unread [\(rest)]")
+            row?.onMarkUnread?()
+        case "new":
+            // Where each pane's New line is, and whether its way up to it shows. `new jump` presses that.
+            let view = stage.channels.view
+            let panes = [("place", view.pane), ("thread", view.threadPane)].filter { !$0.1.isHidden }
+            if rest == "jump", let (name, pane) = panes.last(where: { $0.1.jumpTitle != nil }) {
+                pane.jumpToNew()
+                print("jumped in \(name)")
+            }
+            for (name, pane) in panes {
+                let line = pane.shown.firstIndex { if case .new = $0 { true } else { false } }
+                print("new \(name) line=\(line.map { "\(pane.shown[$0])" } ?? "none") jump=\(pane.jumpTitle ?? "none")")
+            }
         case "scroll":
             // Moves what Messages shows by that many points, up if it's negative, the way scrolling would.
             let pane = stage.channels.view.pane

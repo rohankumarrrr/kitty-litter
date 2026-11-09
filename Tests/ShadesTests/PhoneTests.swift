@@ -245,6 +245,31 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(ask("seen", key: "home").action(in: book) { "x" })
     }
 
+    func testMarkUnreadOnlyTakesAMessageInTheThreadThePageShows() {
+        let book = book(sentBetween: true)
+        let key = PhonePlace.key(.thread("a", in: .channel(.of(steve))))
+        XCTAssertEqual(ask("unread", key: key, id: "e1:reply").action(in: book) { "x" }?.action, .markUnread("a", from: "e1:reply"))
+        XCTAssertNil(ask("unread", key: key, id: "e2:reply").action(in: book) { "x" }, "not a message from another thread")
+        XCTAssertNil(ask("unread", key: PhonePlace.key(.channel(.of(steve))), id: "e1:reply").action(in: book) { "x" }, "only on a thread's page")
+        XCTAssertNil(ask("unread", key: key).action(in: book) { "x" })
+    }
+
+    func testAThreadsPageShowsItsNewLineAndWhatMarkUnreadMakesNew() throws {
+        let book = book()
+        let place = PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book)
+        let opened = PhoneView(place, in: book, now: noon, newFrom: ["a": "e1:reply"])
+        let line = try XCTUnwrap(opened.rows.firstIndex { $0.kind == "new" })
+        XCTAssertEqual(opened.rows[line].text, "New")
+        XCTAssertEqual(opened.rows[line].detail, "↑  1 new message", "what its way up says")
+        XCTAssertEqual(opened.rows[line + 1].id, "e1:reply")
+        XCTAssertEqual(opened.unread, "e1:reply", "back the way it was when it opened")
+
+        let seen = PhoneView(place, in: book, now: noon)
+        XCTAssertFalse(seen.rows.contains { $0.kind == "new" })
+        XCTAssertEqual(seen.unread, "e1:reply", "or from the latest that isn't yours")
+        XCTAssertNil(PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon).unread, "a channel's page has none")
+    }
+
     func testOnlyWordsOfYoursThatWentNowhereCanBeTriedAgain() throws {
         var failed = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "And then?", at: noon, threadID: "a", threadTitle: "Work")
         failed.failure = "I can't reach T3 Code. Is it running?"
@@ -384,6 +409,7 @@ final class PhoneTests: XCTestCase {
         case .message, .alsoSent: return "message"
         case .digest: return "digest"
         case .replies: return "replies"
+        case .new: return "new"
         case .section: return "section"
         case .heading: return "heading"
         case .issue: return "issue"

@@ -1,0 +1,69 @@
+front
+colors Cursor/Opal Horizon
+channels
+wait 1
+channel steve
+wait 1
+thread pricing copy
+wait 1
+draw .verify/shades/unread/0-thread
+unread Done. I went through
+wait 1
+new
+draw .verify/shades/unread/1-marked
+new jump
+draw .verify/shades/unread/2-jumped
+back
+wait 1
+unread Are the plan names on the pricing page final
+wait 1
+new
+draw .verify/shades/unread/3-channel
+channel general
+wait 1
+draw .verify/shades/unread/4-bold
+channel steve
+wait 1
+new
+draw .verify/shades/unread/5-channel-again
+thread pricing copy
+wait 1
+new
+draw .verify/shades/unread/6-thread-again
+finish demo-tidy
+wait 4
+thread tidy
+wait 1
+new
+draw .verify/shades/unread/7-finished
+phone on
+wait 3
+phone pair
+wait 1
+phone open t:demo-steve-copy@c:%2Fdemo%2Fsteve
+wait 4
+phone js 'new=' + document.querySelectorAll('.new').length + ' unread=' + !$('unread').hidden
+phone press Mark unread
+wait 2
+phone js [...document.querySelectorAll('.new')].map((n) => n.textContent + ' / ' + n.dataset.jump).join(' | ') + ' jump=' + !$('jumpnew').hidden
+draw .verify/shades/unread/8-phone-marked
+channel steve
+thread pricing copy
+wait 1
+unread Done. I went through
+wait 1
+phone go steve
+wait 2
+phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve
+wait 3
+phone js [...document.querySelectorAll('.new')].map((n) => n.textContent + ' / ' + n.dataset.jump).join(' | ') + ' jump=' + !$('jumpnew').hidden + ' ' + $('jumpnew').textContent
+draw .verify/shades/unread/9-phone-line-above
+phone js $('jumpnew').click(); 'jumped'
+wait 1
+approval command swift test
+wait 2
+phone js 'jump=' + !$('jumpnew').hidden + ' count=' + $('rows').querySelectorAll('.new').length
+draw .verify/shades/unread/10-phone-jumped
+wait 2
+front
+windows

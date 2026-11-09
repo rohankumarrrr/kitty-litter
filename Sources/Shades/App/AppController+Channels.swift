@@ -13,7 +13,10 @@ enum MessagesAction: Equatable {
     /// Every part of a question's answer, in order: the options picked, or your own words alone.
     case answer(AgentQuestion, [[String]])
     case inbox(InboxAction)
-    case seen(ChannelSelection)
+    /// `keepingUnread` are threads you marked unread while looking, which stay that way until you move on.
+    case seen(ChannelSelection, keepingUnread: Set<String> = [])
+    /// That message in that thread, and everything after it, is new to you again, to come back to.
+    case markUnread(String, from: String)
     /// Words you sent that went nowhere, by their exchange ID, sent again as they were.
     case tryAgain(String)
     case doNotDisturb
@@ -140,13 +143,20 @@ extension AppController {
             inboxAction(action)
         case .doNotDisturb:
             doNotDisturbPressed()
-        case .seen(let selection):
+        case .seen(let selection, let kept):
             if selection.place == .activity, !away.isEmpty { awaySeen = true }
             channels.lookingAt = selection
-            if inbox.markRead(channels.threads(in: selection)) {
+            let seen = channels.threads(in: selection).filter { !kept.contains($0.id) }
+            // A reply still being written, or words on their way, haven't been seen as they'll be.
+            let last = { [channels] in channels.messages(in: $0).last { !$0.isStillGoing && !$0.isSending }?.id }
+            if inbox.markRead(seen, upTo: last) {
                 keepInbox()
                 channels.refresh()
             }
+        case .markUnread(let thread, let message):
+            inbox.markUnread(thread, from: message, of: channels.messages(in: thread).map(\.id))
+            keepInbox()
+            channels.refresh()
         case .tryAgain(let id):
             guard let sent = channels.toTryAgain(id), let words = sent.message.text, let target = sent.target else { return }
             send(words, to: target, shownIn: sent.channel, alsoSent: sent.alsoSent, echoID: id)
