@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 @testable import Shades
 import ShadesCore
@@ -406,6 +407,15 @@ final class AgentWatchTests: XCTestCase {
 
 final class LayoutTests: XCTestCase {
     private let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+
+    /// The app's name is longer than what it says under it, and was cut off as "The Kitty Lit...".
+    @MainActor
+    func testABubblesCaptionIsNeverCutShortOfTheWidthItWasGiven() throws {
+        let view = BubbleView(frame: .zero)
+        _ = view.update(.inbox("1 decision"), keepingWidth: false, limitHeight: 600)
+        let caption = try XCTUnwrap(view.subviews.compactMap { $0 as? NSTextField }.first { $0.stringValue == "The Kitty Litter" })
+        XCTAssertGreaterThanOrEqual(caption.frame.width, try XCTUnwrap(caption.cell).cellSize.width, "its words and the padding either side")
+    }
 
     func testSitsAboveTheCatAndPointsAtIt() {
         let cat = CGRect(x: 1300, y: 20, width: 64, height: 64)

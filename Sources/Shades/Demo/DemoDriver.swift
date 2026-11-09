@@ -566,7 +566,7 @@ final class DemoDriver {
             print("attached \(drop?.name ?? rest), taken: \(taken)")
         case "settings":
             // Opens Settings from the menu, or turns to a page of it: `settings messages`.
-            if let page = SettingsPanel.Page.allCases.first(where: { $0.title.lowercased() == rest.lowercased() }) {
+            if let page = SettingsPanel.Page.allCases.first(where: { [$0.title.lowercased(), "\($0)"].contains(rest.lowercased()) }) {
                 stage.settingsPanel.select(page)
                 print("settings page \(page.title)")
             } else {

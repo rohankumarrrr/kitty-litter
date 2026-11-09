@@ -204,9 +204,10 @@ final class BubbleView: BalloonView {
         var y = body.maxY - padding
         if !caption.isHidden || !counter.isHidden {
             y -= captionHeight
-            // Labels carry 2 points of their own padding, so they sit that much further out.
+            // Labels carry 2 points of their own padding each side, so they sit that much further out.
             let counterWidth = counter.isHidden ? 0 : ceil(counter.intrinsicContentSize.width) + 4
-            caption.frame = NSRect(x: padding - 2, y: y, width: innerWidth - counterWidth - 2, height: captionHeight)
+            let captionWidth = counter.isHidden ? innerWidth + 4 : innerWidth - counterWidth - 2
+            caption.frame = NSRect(x: padding - 2, y: y, width: captionWidth, height: captionHeight)
             counter.frame = NSRect(x: padding + innerWidth - counterWidth, y: y, width: counterWidth + 2, height: captionHeight)
             y -= 4
         }
