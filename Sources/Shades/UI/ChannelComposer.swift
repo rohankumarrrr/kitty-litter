@@ -46,7 +46,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         textView.isRichText = false
         textView.allowsUndo = true
         textView.drawsBackground = false
-        textView.font = .systemFont(ofSize: 14)
+        textView.font = .systemFont(ofSize: 14 + MessagesInk.textStep)
         textView.insertionPointColor = Ink.accent
         textView.textContainerInset = .zero
         textView.textContainer?.lineFragmentPadding = 0
@@ -103,6 +103,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     func restyle() {
         label.textColor = MessagesInk.soft
         textView.textColor = MessagesInk.text
+        textView.font = .systemFont(ofSize: 14 + MessagesInk.textStep)
         alsoSend.needsDisplay = true
         needsDisplay = true
     }

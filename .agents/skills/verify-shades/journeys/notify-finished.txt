@@ -30,6 +30,7 @@ wait 2
 draw .verify/shades/notify-finished/2-tapped
 wait 3
 settings
+settings notifications
 wait 2
 draw .verify/shades/notify-finished/3-settings
 wait 1

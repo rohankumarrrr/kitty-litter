@@ -24,6 +24,7 @@ extension AppController {
         theme = picked
         stage.showTheme(picked)
         phone?.theme = picked
+        stage.settingsChanged(settingsForm)
         do {
             try saveTheme(picked)
         } catch {

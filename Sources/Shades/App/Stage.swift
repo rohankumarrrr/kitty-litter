@@ -105,8 +105,27 @@ protocol CatStage: AnyObject {
     // Everything else
     /// For the menu bar: how things are going, and whether anything needs you.
     func showStatus(_ status: String, needsYou: Bool)
-    func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void)
+    /// Every setting in one place, under the menu bar icon, or over Messages when it was asked for from there.
+    func showSettings(_ form: SettingsForm, overMessages: Bool)
+    /// What Settings shows, if it's open, after a change made anywhere.
+    func settingsChanged(_ form: SettingsForm)
+    /// What's said in Messages, and the box you type in, at this size.
+    func showTextSize(_ size: TextSize)
     /// The code a phone pairs with, or `nil` to take it away.
     func showPairing(_ card: PhonePairingCard?)
     func copyToPasteboard(_ text: String)
+}
+
+/// What Settings shows: everything in the settings file, and the theme and channels that live elsewhere.
+struct SettingsForm: Equatable {
+    struct Channel: Equatable {
+        var id: ChannelID
+        var title: String
+    }
+
+    var settings: Settings
+    /// The theme Messages is in, or `nil` for Shades' own colours.
+    var theme: String?
+    /// Every channel in Messages, in the sidebar's order, for what each tells you.
+    var channels: [Channel]
 }

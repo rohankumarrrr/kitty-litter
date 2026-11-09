@@ -36,7 +36,7 @@ final class AppStage: CatStage {
         bubble.onDismiss = { [weak self] byClick in self?.controller?.bubbleDismissed(byClick: byClick) }
         bubble.onVisibilityChange = { [weak self] in self?.updateEscape() }
         bubble.view.onAction = { [weak self] action in self?.controller?.bubbleAction(action) }
-        bubble.view.opensInMessages = { [weak self] in self?.controller?.messagesHome(ofThread: $0) != nil }
+        bubble.view.opensInMessages = { [weak self] in self?.controller?.opensInMessages($0) == true }
 
         input.anchor = { [weak self] in
             guard let self else { return (.zero, .zero) }
@@ -110,6 +110,14 @@ final class AppStage: CatStage {
         menuBar.isDoNotDisturb = { [weak self] in self?.controller?.settings.doNotDisturb == true }
         menuBar.onDoNotDisturb = { [weak self] in self?.controller?.doNotDisturbPressed() }
         pairing.onClose = { [weak self] in self?.controller?.pairingClosed() }
+
+        channels.view.sidebar.onSettings = { [weak self] in self?.controller?.settingsPressed(overMessages: true) }
+        channels.view.onSettings = { [weak self] in self?.controller?.settingsPressed(overMessages: true) }
+        settingsPanel.onChange = { [weak self] in self?.controller?.settingsEdited($0) }
+        settingsPanel.onDoNotDisturb = { [weak self] in self?.controller?.doNotDisturbPressed() }
+        settingsPanel.onTheme = { [weak self] anchor in self?.showThemeMenu(under: anchor) }
+        settingsPanel.onNotifications = { [weak self] channel, picked in self?.controller?.setNotifications(picked, for: channel) }
+        settingsPanel.onPairPhone = { [weak self] in self?.controller?.pairPhone() }
     }
 
     func start() {
@@ -275,8 +283,20 @@ final class AppStage: CatStage {
         menuBar.show(status: status, needsYou: needsYou)
     }
 
-    func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) {
-        settingsPanel.show(settings, near: menuBar.corner, onSave: onSave)
+    func showSettings(_ form: SettingsForm, overMessages: Bool) {
+        let messages = channels.panel.frame
+        let corner = overMessages && channels.panel.isVisible
+            ? NSPoint(x: messages.midX + SettingsPanel.width / 2, y: messages.maxY - 44)
+            : menuBar.corner
+        settingsPanel.show(form, near: corner)
+    }
+
+    func settingsChanged(_ form: SettingsForm) {
+        settingsPanel.update(form)
+    }
+
+    func showTextSize(_ size: TextSize) {
+        channels.apply(size)
     }
 
     func showPairing(_ card: PhonePairingCard?) {

@@ -154,6 +154,7 @@ enum CatWords {
     static let unreadableQuestion = "They asked something I couldn't read."
     static let directMessages = "Direct messages"
     static let shortcutsButton = "⌘/ Shortcuts"
+    static let settingsButton = "Settings"
     static let shortcutsTitle = "Keyboard shortcuts"
     static let jumpTitle = "Jump to"
     static let jumpPlaceholder = "Jump to a place or thread"
@@ -176,6 +177,7 @@ enum CatWords {
         ("Messages", [
             ("⌘N", "Write here"),
             ("⌘W", "Close Messages"),
+            ("⌘,", "Settings"),
             ("⌘/", "These shortcuts"),
         ]),
     ]
