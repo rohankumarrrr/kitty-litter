@@ -300,7 +300,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -488,6 +488,27 @@ final class DemoDriver {
             var settings = controller.settings
             settings.notifyFinished = rest != "off"
             controller.apply(settings)
+        case "notifications":
+            // notifications <channel> [mute | mac <level> | phone <level>], the same as picking that from the channel's
+            // Notifications menu, which it prints after. The channel is named as `channel` names it.
+            let words = rest.split(separator: " ").map(String.init)
+            let kitten = Demo.kittens.first { $0.name.lowercased().hasPrefix(words.first?.lowercased() ?? "-") }
+            let channel: ChannelID? = words.first == "general" ? .general : words.first == "shades" ? .shades : kitten.map(ChannelID.of)
+            guard let channel else { return print("no channel [\(rest)]") }
+            let book = controller.waiting
+            let current = book.notifications[channel.settingsKey] ?? ChannelNotifications()
+            var items = NotificationsMenu().items(current, phone: book.phone)
+            if words.count > 1 {
+                let section = words[1] == "phone" ? CatWords.notifyOn(.phone) : CatWords.notifyOn(.mac)
+                let level = words.count > 2 ? NotifyLevel(rawValue: words[2]) : nil
+                let picked = words[1] == "mute" ? items.first : items.drop { $0.title != section }.first { $0.title == level.map(CatWords.notifyLevel) }
+                guard let picks = picked?.representedObject as? ChannelNotifications else { return print("no item [\(rest)]") }
+                controller.messagesAction(.notifications(channel, picks))
+                items = NotificationsMenu().items(picks, phone: book.phone)
+            }
+            for item in items {
+                print(item.isSeparatorItem ? "notifications ---" : "notifications \(item.state == .on ? "*" : " ") \(item.title)")
+            }
         case "finish":
             parts.backend.finish(threadID: rest.isEmpty ? "demo-tidy" : rest)
         case "quiet":

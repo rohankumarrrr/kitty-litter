@@ -135,6 +135,9 @@ struct Waiting: Equatable {
     /// What came in while Do Not Disturb was on that you haven't caught up on, in the order it came.
     var away: [Missed] = []
     var doNotDisturb = false
+    /// What each channel tells you, by `ChannelID.settingsKey`, and whether there's a phone to tell.
+    var notifications: [String: ChannelNotifications] = [:]
+    var phone = false
 
     var count: Int { approvals.count + questions.count + reports.filter(\.needsYou).count }
 }

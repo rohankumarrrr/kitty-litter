@@ -530,6 +530,27 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(pushed, [], "the catch-up covers it")
     }
 
+    func testAChannelSaysWhatPushesForItselfWhateverTheMacIsSetTo() async throws {
+        let key = try await pair()
+        _ = try await subscribe(key: key)
+        controller.messagesAction(.notifications(.of(penny), ChannelNotifications(mac: .everything, phone: .nothing)))
+        approvalNow()
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(pushed, [])
+
+        controller.threadsChanged([])
+        controller.messagesAction(.notifications(.of(penny), ChannelNotifications(mac: .nothing, phone: .needsYou)))
+        let asking = AgentThread(
+            id: "w2", title: "Taxes", projectTitle: "Penny", status: .waitingForApproval, model: "m", updatedAt: Date(),
+            pendingApprovals: [ApprovalRequest(id: "r2", threadID: "w2", threadTitle: "Taxes", kind: .command, summary: "ls", createdAt: Date())],
+            projectPath: penny.folder
+        )
+        controller.threadsChanged([asking])
+        await until { !pushed.isEmpty }
+        let opened = try WebPush.decrypt(XCTUnwrap(pushed.first?.httpBody), with: phone, auth: phoneAuth)
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: opened) as? [String: String])?["tag"], "r2")
+    }
+
     func testOnlyAPairedPhoneSubscribesAndOnlyToAPushService() async throws {
         let refused = try await subscribe(key: "made-up")
         XCTAssertEqual(refused, 401)

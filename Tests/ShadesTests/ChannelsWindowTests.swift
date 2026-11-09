@@ -491,6 +491,20 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(button.accessibilityPerformPress())
     }
 
+    func testOnlyAChannelsHeaderHasNotificationsAndItSaysWhenItsMuted() {
+        let view = view()
+        var muted = book()
+        muted.waiting.notifications = [ChannelID.of(steve).settingsKey: ChannelNotifications(muted: true)]
+        view.show(muted)
+        let titles = { self.subviews(of: view.pane).compactMap { ($0 as? QuietButton)?.accessibilityLabel() } }
+        view.select(.channel(.of(steve)))
+        XCTAssertTrue(titles().contains("Muted"), "\(titles())")
+        view.select(.channel(.of(pepper)))
+        XCTAssertTrue(titles().contains("Notifications"), "\(titles())")
+        view.select(.activity)
+        XCTAssertFalse(titles().contains { $0 == "Notifications" || $0 == "Muted" })
+    }
+
     func testAChannelsBoxStartsANewThreadAndOpensItInThePane() {
         let view = view()
         var sent: [MessagesAction] = []

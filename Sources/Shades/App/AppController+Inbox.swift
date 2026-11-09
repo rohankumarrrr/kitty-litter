@@ -132,7 +132,7 @@ extension AppController {
     /// Says there's something new, unless Messages is open. Being open isn't the same as having looked, since it can
     /// sit behind your work, so the bubble comes once it's closed. Every one asks, so Do Not Disturb keeps them all.
     func nudgeInbox(about missed: [Missed]) {
-        guard missed.map(mayPopUp).contains(true) else { return }
+        guard missed.map({ mayPopUp($0) }).contains(true) else { return }
         if stage.isChannelsVisible {
             nudgeOnClose = true
         } else {

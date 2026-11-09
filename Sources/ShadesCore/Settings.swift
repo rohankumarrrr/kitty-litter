@@ -23,6 +23,8 @@ public struct Settings: Codable, Sendable, Equatable {
     public var notifyFinished: Bool
     /// Nothing pops up while it's on, and what came in waits for you to catch up on.
     public var doNotDisturb: Bool
+    /// What each channel in Messages tells you, by its key. Only ones you've changed are here.
+    public var channelNotifications: [String: ChannelNotifications]
 
     public init(
         quickModel: ModelChoice = .quick,
@@ -36,7 +38,8 @@ public struct Settings: Codable, Sendable, Equatable {
         dictateKey: HoldKey = .fn,
         phone: Bool = false,
         notifyFinished: Bool = false,
-        doNotDisturb: Bool = false
+        doNotDisturb: Bool = false,
+        channelNotifications: [String: ChannelNotifications] = [:]
     ) {
         self.quickModel = quickModel
         self.frontierModel = frontierModel
@@ -50,10 +53,11 @@ public struct Settings: Codable, Sendable, Equatable {
         self.phone = phone
         self.notifyFinished = notifyFinished
         self.doNotDisturb = doNotDisturb
+        self.channelNotifications = channelNotifications
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb
+        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb, channelNotifications
     }
 
     /// Anything missing takes its default, so a settings file from an older version keeps working.
@@ -72,6 +76,16 @@ public struct Settings: Codable, Sendable, Equatable {
         phone = try saved.decodeIfPresent(Bool.self, forKey: .phone) ?? defaults.phone
         notifyFinished = try saved.decodeIfPresent(Bool.self, forKey: .notifyFinished) ?? defaults.notifyFinished
         doNotDisturb = try saved.decodeIfPresent(Bool.self, forKey: .doNotDisturb) ?? defaults.doNotDisturb
+        channelNotifications = try saved.decodeIfPresent([String: ChannelNotifications].self, forKey: .channelNotifications) ?? defaults.channelNotifications
+    }
+
+    /// A channel you've never changed tells you everything.
+    public func notifications(for channel: String) -> ChannelNotifications {
+        channelNotifications[channel] ?? ChannelNotifications()
+    }
+
+    public mutating func setNotifications(_ notifications: ChannelNotifications, for channel: String) {
+        channelNotifications[channel] = notifications == ChannelNotifications() ? nil : notifications
     }
 
     public static let defaultPrivateApps = [

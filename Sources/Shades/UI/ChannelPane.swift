@@ -11,6 +11,8 @@ final class ChannelHeader: QuietView {
     var onIssues: (() -> Void)?
     var onClose: (() -> Void)?
     var onOpen: (() -> Void)?
+    var onNotifications: ((ChannelID, ChannelNotifications) -> Void)?
+    private let notificationsMenu = NotificationsMenu()
     private var title = ""
     private var subtitle: String?
     private var cats: [ChannelSpeakerLook] = []
@@ -58,8 +60,19 @@ final class ChannelHeader: QuietView {
         case .activity, .threads, .channel(.general):
             break
         }
+        if case .channel(let id) = place { right.append(notificationsButton(for: id, in: book)) }
         setButtons(right)
         describe()
+    }
+
+    /// Says when the channel's muted, so you know why it's quiet.
+    private func notificationsButton(for id: ChannelID, in book: ChannelBook) -> (String, () -> Void) {
+        let current = book.waiting.notifications[id.settingsKey] ?? ChannelNotifications()
+        let phone = book.waiting.phone
+        return (current.muted ? CatWords.muted : CatWords.notifications, { [weak self] in
+            guard let self, let anchor = self.buttons.last else { return }
+            self.notificationsMenu.show(current, phone: phone, under: anchor) { [weak self] in self?.onNotifications?(id, $0) }
+        })
     }
 
     func show(thread id: String, in book: ChannelBook) {
@@ -235,6 +248,7 @@ final class ChannelPane: QuietView {
         linkBar.onCancel = { [weak self] in self?.showLink(nil) }
         header.onIssues = { [weak self] in self?.onSelect?(.activity) }
         header.onClose = { [weak self] in self?.onClose?() }
+        header.onNotifications = { [weak self] in self?.onAction?(.notifications($0, $1)) }
         header.onOpen = { [weak self] in
             guard let self, let id = self.selection.thread else { return }
             self.onOpenThread?(id)
