@@ -42,6 +42,7 @@ final class SettingsTests: XCTestCase {
     override func tearDown() async throws {
         MessagesInk.textSize = .standard
         MessagesInk.fontFamily = nil
+        MessagesInk.theme = nil
     }
 
     func testAnOlderSettingsFileOpensInMessagesAtTheUsualSize() throws {
@@ -129,17 +130,76 @@ final class SettingsTests: XCTestCase {
     }
 
     private func control<T: NSView>(_ name: String, in panel: SettingsPanel) -> T? {
-        controls(in: panel).first { $0.accessibilityIdentifier() == name || ($0 as? NSButton)?.title == name } as? T
+        controls(in: panel).first { $0.accessibilityIdentifier() == name || ($0 as? QuietCheckbox)?.title == name } as? T
+    }
+
+    /// The same as clicking that choice in the row's menu.
+    private func pick(_ choice: String, in row: String, of panel: SettingsPanel) throws {
+        let button: QuietButton = try XCTUnwrap(control(row, in: panel))
+        let menu = try XCTUnwrap(button.menu)
+        menu.performActionForItem(at: try XCTUnwrap(menu.items.firstIndex { $0.title == choice }))
     }
 
     func testPickingATextSizeTakesAtOnce() throws {
         let (panel, changes) = panel()
         panel.select(.messages)
-        let size: NSPopUpButton = try XCTUnwrap(control("Text size", in: panel))
-        size.selectItem(withTitle: "Larger")
-        size.sendAction(size.action, to: size.target)
+        try pick("Larger", in: "Text size", of: panel)
         XCTAssertEqual(changes().map(\.textSize), [.larger])
         XCTAssertTrue(panel.isVisible, "with nothing to save")
+        let size: QuietButton = try XCTUnwrap(control("Text size", in: panel))
+        XCTAssertEqual(size.accessibilityValue() as? String, "Larger", "its button says what's picked")
+        XCTAssertEqual(size.menu?.items.filter { $0.state == .on }.map(\.title), ["Larger"])
+    }
+
+    func testEveryChoiceFromAMenuIsTheSameQuietButton() {
+        let (panel, _) = panel()
+        var menus: [String] = []
+        for page in SettingsPanel.Page.allCases {
+            panel.select(page)
+            XCTAssertFalse(controls(in: panel).contains { $0 is NSPopUpButton }, "no system pop-up on \(page.title)")
+            menus += controls(in: panel).filter { $0.accessibilityRole() == .popUpButton }.map { view in
+                XCTAssertTrue(view is QuietButton, "\(view.accessibilityIdentifier()) on \(page.title)")
+                return "\(view.accessibilityLabel() ?? ""): \(view.accessibilityValue() as? String ?? "")"
+            }
+        }
+        XCTAssertEqual(menus, [
+            "Front door mode: Auto", "Frontier mode: Auto", "Hold to talk: Right Option", "Hold to dictate: fn",
+            "#general: Everything", "#steve-pawsniak: Everything", "Theme: \(CatWords.plainTheme)", "Font: SF Pro", "Text size: Default",
+            "Open threads: In \(CatWords.appName) first",
+        ])
+    }
+
+    func testSettingsDrawsInTheThemeMessagesUses() throws {
+        let sand: UInt32 = 0xf2e6d0
+        MessagesInk.theme = ColorTheme(name: "Sand", isDark: false, paper: sand, text: 0x3b2f22, accent: 0x2f7d6d)
+        let (panel, _) = panel()
+        XCTAssertEqual(panel.panel.appearance?.isDark, false, "its controls follow the theme's light or dark")
+        let root = try XCTUnwrap(panel.panel.contentView)
+        let picture = try XCTUnwrap(ChannelImages.bitmap(of: root, scale: 1))
+        let corner = try XCTUnwrap(picture.colorAt(x: 12, y: picture.pixelsHigh - 12)?.usingColorSpace(.sRGB))
+        let drawn = [corner.redComponent, corner.greenComponent, corner.blueComponent].map { UInt32(($0 * 255).rounded()) }
+        let want = [sand >> 16 & 0xff, sand >> 8 & 0xff, sand & 0xff]
+        for (got, wanted) in zip(drawn, want) {
+            XCTAssertLessThanOrEqual(abs(Int(got) - Int(wanted)), 2, "its paper is the theme's: drew \(drawn), not \(want)")
+        }
+    }
+
+    func testThePrivacyBoxShowsItsWholeList() throws {
+        var settings = Settings()
+        settings.privateApps += ["com.example.vault", "com.example.diary", "com.example.journal"]
+        let (panel, _) = panel(settings)
+        panel.select(.privacy)
+        let apps: NSTextField = try XCTUnwrap(control("Private apps", in: panel))
+        panel.panel.contentView?.layoutSubtreeIfNeeded()
+        let inside = try XCTUnwrap(apps.cell?.drawingRect(forBounds: apps.bounds))
+        // Laid out the way the box lays it out once you click into it, which wraps a little sooner than its drawing.
+        let storage = NSTextStorage(attributedString: apps.attributedStringValue)
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(size: NSSize(width: inside.width, height: .greatestFiniteMagnitude))
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+        layout.ensureLayout(for: container)
+        XCTAssertGreaterThanOrEqual(inside.height, layout.usedRect(for: container).height, "no app hides past the box's edge")
     }
 
     func testTypingInABoxTakesWhenSettingsCloses() throws {
@@ -158,7 +218,7 @@ final class SettingsTests: XCTestCase {
         settings.setNotifications(ChannelNotifications(mac: .everything, phone: .nothing), for: "general")
         let (panel, _) = panel(settings)
         panel.select(.notifications)
-        let labels = controls(in: panel).compactMap { ($0 as? QuietButton)?.accessibilityLabel() }
+        let labels = controls(in: panel).compactMap { $0 as? QuietButton }.map { "\($0.accessibilityLabel() ?? ""): \($0.accessibilityValue() as? String ?? "")" }
         XCTAssertTrue(labels.contains("#steve-pawsniak: Muted"), "\(labels)")
         XCTAssertTrue(labels.contains("#general: Mac: Everything · Phone: Nothing"), "\(labels)")
         XCTAssertEqual(SettingsPanel.summary(ChannelNotifications(mac: .everything, phone: .nothing), phone: false), "Everything", "no phone, no phone in it")
@@ -169,9 +229,8 @@ final class SettingsTests: XCTestCase {
         var pressed = 0
         panel.onDoNotDisturb = { pressed += 1 }
         panel.select(.notifications)
-        let quiet: NSButton = try XCTUnwrap(control(CatWords.doNotDisturb, in: panel))
-        quiet.state = .on
-        quiet.sendAction(quiet.action, to: quiet.target)
+        let quiet: QuietCheckbox = try XCTUnwrap(control(CatWords.doNotDisturb, in: panel))
+        quiet.toggle()
         XCTAssertEqual(pressed, 1)
         XCTAssertTrue(changes().isEmpty, "it doesn't set the switch itself")
     }
@@ -252,6 +311,7 @@ final class SettingsTests: XCTestCase {
         panel.select(.messages)
         let rows = controls(in: panel).map { $0.accessibilityIdentifier() }.filter { !$0.isEmpty }
         XCTAssertEqual(Array(rows.prefix(2)), [CatWords.themeButton, "Font"])
-        XCTAssertTrue(controls(in: panel).contains { ($0 as? QuietButton)?.accessibilityLabel() == "Georgia ▾" })
+        let font = controls(in: panel).first { $0.accessibilityIdentifier() == "Font" } as? QuietButton
+        XCTAssertEqual(font?.accessibilityValue() as? String, "Georgia")
     }
 }

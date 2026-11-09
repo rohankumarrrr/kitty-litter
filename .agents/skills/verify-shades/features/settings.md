@@ -1,6 +1,6 @@
 # Settings
 
-Every setting in one place, a page at a time: **Agents** (the models and their modes), **Voice** (the hold keys and extra words), **Notifications** (Do Not Disturb, Also when a session finishes, and what each channel tells you), **The Kitty Litter** (theme, font, text size, where Open goes, and the phone) and **Privacy** (the private apps). It opens from Settings... in the cat's menu, under the menu bar icon, or from Settings at the foot of The Kitty Litter's sidebar or ⌘, there, over the window. A change takes as you make it, with nothing to save, and it never makes The Kitty Litter the active app.
+Every setting in one place, a page at a time: **Agents** (the models and their modes), **Voice** (the hold keys and extra words), **Notifications** (Do Not Disturb, Also when a session finishes, and what each channel tells you), **The Kitty Litter** (theme, font, text size, where Open goes, and the phone) and **Privacy** (the private apps). It opens from Settings... in the cat's menu, under the menu bar icon, or from Settings at the foot of The Kitty Litter's sidebar or ⌘, there, over the window. A change takes as you make it, with nothing to save, and it never makes The Kitty Litter the active app. It draws in The Kitty Litter's theme, and every choice from a menu is the same quiet button.
 
 ## Sub-features
 
@@ -10,6 +10,7 @@ Every setting in one place, a page at a time: **Agents** (the models and their m
 - `settings-text-size` draws everything The Kitty Litter says at Small, Default, Large or Larger: messages, who said them and when, reply bars, Activity's cards, Threads, search, the link bar and the box you type in. Who, when and how many grow half as fast as what's said. The sidebar, buttons, files and the ⌘/ list keep their size, and numbers that change, such as ages, reply counts, the sidebar's counts and the bubble's "2 of 3", keep every digit one width. `testWhoSaidItWhenAndWhatsOverItGrowWithTheTextSize` and `testNumbersThatChangeHoldStillInEveryFace` in `ChannelRowsTests` check both.
 - `settings-font` draws The Kitty Litter's words in SF Pro, New York, SF Pro Rounded, SF Mono or any family on the Mac, from a menu with each drawn in itself. Buttons keep the system's, since the cat's other windows share them. A family written into the file by hand that isn't on the Mac draws in the system's, and shows greyed in the menu.
 - `settings-open` sends the bubble's Open, and a click on a notification, to The Kitty Litter wherever it has the thread, or always to T3.
+- `settings-look` draws Settings in The Kitty Litter's theme: its paper, words, lines and light or dark, with a ticked box in the accent and Done in the theme's words. Each choice from a menu is a quiet button saying what's picked, and a plain list, such as Text size, opens over it with its pick ticked, the way a pop-up does. The Privacy box grows to show its whole list, with a line spare for the next.
 
 ## How to get to it (user POV)
 
@@ -31,9 +32,10 @@ Journey: `journeys/settings.txt`. `settings <page>` turns to a page, the same as
 - **Font.** `fonts` prints `font * SF Pro`, New York, SF Pro Rounded and SF Mono, then `All fonts (<n> families)`. `font New York` stands in for picking it from Font's menu. `3b-font/channels.png` shows Steve's channel, its sidebar, header, names and times in New York, and `3b-font/settings.png` shows Font as New York.
 - **From The Kitty Litter.** `setting Done` closes it, then `sidebar Settings` opens it again, centred near the top of The Kitty Litter, as `windows` shows.
 - **Privacy.** `setting Private apps com.example.vault, com.example.diary` prints that list, and `4-privacy/settings.png` shows it in the box with the note under it.
+- **The look.** Journey: `journeys/settings-look.txt`. It draws every page in Shades' dark, two in its light, and four over The Kitty Litter in the demo's T3 Code Opal Horizon, into `.verify/shades/settings-look/`. Every menu row is a quiet `Name ▾` button, with no system pop-up and no system accent anywhere. `opal/23-messages/settings.png` has Opal's near-black paper and the phone ticked in its violet, and `opal/24-privacy/settings.png` shows all five private apps with a line spare. After that it changes a mode, a key, Text size, Open threads and the phone with `setting`, which prints each one.
 - **The one switch.** `setting Do Not Disturb`, then `dnd` prints `dnd on cat=sleep`, and `menuitems` has `menu ✓ Do Not Disturb`.
 
 ## Gotchas
 
-- Theme, Font and a channel's button open a menu, which waits for a click, so `setting` won't press them. Reaching them with Tab, and pressing Done with Space, is in [keyboard.md](keyboard.md). `colors`, `font` and `notifications` stand in for picking from them, and Settings shows the result.
+- A menu waits for a click on the real desktop, so nothing in the demo opens one. `setting Text size Larger` picks from a row's own choices the way a click on that item would. Theme, Font and a channel's button make their menus as they open, so `colors`, `font` and `notifications` stand in for picking from those, and Settings shows the result. Reaching them with Tab, and pressing Done with Space, is in [keyboard.md](keyboard.md).
 - `front` must stay whatever was in front before the run. `window settings ... key=true` and `active=true` are expected while Settings has the keyboard.

@@ -3,7 +3,8 @@ import ShadesCore
 
 /// Every setting in one place, a page at a time, from the menu or from Messages. A change takes as you make it, so
 /// there's nothing to save, and the file itself stays easy to edit by hand. Do Not Disturb, the theme and each channel's
-/// notifications go through the same switch and menus they do everywhere else.
+/// notifications go through the same switch and menus they do everywhere else. It draws in Messages' theme, since it
+/// opens over Messages, and every choice from a menu is the same quiet button.
 @MainActor
 final class SettingsPanel: NSObject, NSWindowDelegate {
     enum Page: Int, CaseIterable {
@@ -113,12 +114,11 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
                         self?.onNotifications?(channel.id, picked)
                     }
                 }
-                button.setAccessibilityLabel("\(channel.title): \(summary)")
                 rows.append(row(channel.title, button))
             }
             return rows
         case .messages:
-            let theme = menuButton(form.theme ?? CatWords.plainTheme) { [weak self] anchor in self?.onTheme?(anchor) }
+            let theme = menuButton(form.theme?.name ?? CatWords.plainTheme) { [weak self] anchor in self?.onTheme?(anchor) }
             let font = menuButton(settings.messagesFont ?? MessagesInk.systemFaces[0].name) { [weak self] anchor in
                 self?.fontMenu.show(current: settings.messagesFont, under: anchor) { [weak self] picked in
                     self?.edit { $0.messagesFont = picked }
@@ -157,6 +157,8 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     // MARK: - Building
 
     private func build() {
+        // A menu Tab reached and Space opened still has the keyboard once its pick makes the page again.
+        let focused = (panel.firstResponder as? NSView)?.accessibilityIdentifier() ?? ""
         // What's typed so far goes in before the page is made again from what's set.
         endEditing()
         guard let form else { return }
@@ -167,6 +169,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         let root = SettingsRootView { [weak self] in self?.hide() }
         panel.contentView = root
         panel.delegate = self
+        panel.appearance = MessagesInk.appearance
         root.wantsLayer = true
 
         let stack = NSStackView()
@@ -191,7 +194,8 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         rows(for: page, form).forEach(stack.addArrangedSubview)
 
         let done = plainButton("Done", style: .filled) { [weak self] in self?.hide() }
-        let reveal = plainButton("Open the file", style: .text) { NSWorkspace.shared.open(Settings.directory) }
+        done.colors = (MessagesInk.text, MessagesInk.paper)
+        let reveal = plainButton("Open settings folder", style: .text) { NSWorkspace.shared.open(Settings.directory) }
         let buttons = NSStackView(views: [done, reveal])
         buttons.spacing = 6
         stack.addArrangedSubview(buttons)
@@ -212,7 +216,9 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         // No box has the keyboard until you click into one, so a stray key can't type over a model.
         panel.initialFirstResponder = root
         panel.recalculateKeyViewLoop()
-        panel.makeFirstResponder(root)
+        func all(_ view: NSView) -> [NSView] { view.subviews + view.subviews.flatMap(all) }
+        let again = focused.isEmpty ? nil : all(root).first { $0.accessibilityIdentifier() == focused && $0.acceptsFirstResponder }
+        panel.makeFirstResponder(again ?? root)
     }
 
     /// Hangs from its corner, kept on the screen.
@@ -229,24 +235,27 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     private func row(_ title: String, _ control: NSView) -> NSView {
         let label = NSTextField(labelWithString: title)
         label.font = .systemFont(ofSize: 12)
-        label.textColor = Ink.soft
+        label.textColor = MessagesInk.soft
         label.alignment = .right
         label.widthAnchor.constraint(equalToConstant: Self.labelWidth).isActive = true
         if !title.isEmpty {
-            // The demo finds a control by what its row is called.
+            // The demo finds a control by what its row is called, and VoiceOver says it before what's picked. A box
+            // says its own words.
             control.setAccessibilityIdentifier(title)
-            if !(control is QuietButton) { control.setAccessibilityLabel(title) }
+            if !(control is QuietCheckbox) { control.setAccessibilityLabel(title) }
         }
         let line = NSStackView(views: [label, control])
         line.spacing = 8
-        line.alignment = control is QuietButton ? .centerY : (control as? NSTextField)?.usesSingleLineMode == false ? .top : .firstBaseline
+        // A box keeps room round it for its ring, so it's moved back to line up with the rest.
+        if control is QuietCheckbox { line.setCustomSpacing(8 - QuietCheckbox.inset, after: label) }
+        line.alignment = (control as? NSTextField)?.usesSingleLineMode == false ? .top : control is NSControl ? .firstBaseline : .centerY
         return line
     }
 
     private func heading(_ text: String) -> NSView {
         let label = NSTextField(labelWithAttributedString: NSAttributedString(string: text.uppercased(), attributes: [
             .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
-            .foregroundColor: Ink.soft,
+            .foregroundColor: MessagesInk.soft,
             .kern: 0.5,
         ]))
         let line = NSStackView(views: [label])
@@ -257,7 +266,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     private func note(_ text: String) -> NSTextField {
         let label = NSTextField(wrappingLabelWithString: text)
         label.font = .systemFont(ofSize: 11)
-        label.textColor = Ink.soft
+        label.textColor = MessagesInk.soft
         label.widthAnchor.constraint(equalToConstant: Self.controlWidth).isActive = true
         return label
     }
@@ -266,11 +275,13 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         field("\(model.provider) / \(model.model) / \(model.effort)", "provider / model / effort", onEnd: onEnd)
     }
 
-    /// Takes what's typed when you press Return or move on, and when Settings closes.
+    /// Takes what's typed when you press Return or move on, and when Settings closes. One of more than one line grows
+    /// to fit what's in it, with a line spare for the next, so nothing in it hides past its edge.
     private func field(_ value: String, _ placeholder: String, lines: Int = 1, onEnd: @escaping (inout Settings, String) -> Void) -> NSTextField {
         let field = NSTextField(string: value)
         field.placeholderString = placeholder
         field.font = .systemFont(ofSize: 12)
+        field.textColor = MessagesInk.text
         field.bezelStyle = .roundedBezel
         field.widthAnchor.constraint(equalToConstant: Self.controlWidth).isActive = true
         if lines > 1 {
@@ -279,7 +290,19 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             field.lineBreakMode = .byWordWrapping
             field.cell?.wraps = true
             field.cell?.isScrollable = false
-            field.heightAnchor.constraint(equalToConstant: CGFloat(lines) * 16 + 6).isActive = true
+            // Its words laid out as a text view does, which wraps a little sooner than the box draws them, where the
+            // cell's own measure of itself can come up a line short.
+            let edge = NSRect(x: 0, y: 0, width: Self.controlWidth, height: 1000)
+            let inside = field.cell?.drawingRect(forBounds: edge) ?? edge
+            let words = NSTextStorage(attributedString: field.attributedStringValue)
+            let layout = NSLayoutManager()
+            let container = NSTextContainer(size: NSSize(width: inside.width, height: .greatestFiniteMagnitude))
+            layout.addTextContainer(container)
+            words.addLayoutManager(layout)
+            layout.ensureLayout(for: container)
+            let spare = layout.defaultLineHeight(for: .systemFont(ofSize: 12))
+            let fits = ceil(layout.usedRect(for: container).height + spare) + edge.height - inside.height
+            field.heightAnchor.constraint(equalToConstant: max(CGFloat(lines) * 16 + 6, fits)).isActive = true
         } else {
             field.usesSingleLineMode = true
             field.lineBreakMode = .byTruncatingTail
@@ -292,31 +315,47 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         return field
     }
 
-    private func popup<T: Equatable>(_ choices: [(String, T)], _ selected: T, onPick: @escaping (inout Settings, T) -> Void) -> NSPopUpButton {
-        let popup = NSPopUpButton()
-        popup.font = .systemFont(ofSize: 12)
-        choices.forEach { popup.addItem(withTitle: $0.0) }
-        popup.selectItem(at: choices.firstIndex { $0.1 == selected } ?? 0)
-        popup.widthAnchor.constraint(equalToConstant: 200).isActive = true
-        bind(popup) { [weak self, weak popup] in
-            guard let index = popup?.indexOfSelectedItem, choices.indices.contains(index) else { return }
-            self?.edit { onPick(&$0, choices[index].1) }
+    /// Choices with the one that's set ticked, opening over the button the way a pop-up's menu does.
+    private func popup<T: Equatable>(_ choices: [(String, T)], _ selected: T, onPick: @escaping (inout Settings, T) -> Void) -> QuietButton {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        for (title, value) in choices {
+            let item = NSMenuItem(title: title, action: #selector(Handler.fire), keyEquivalent: "")
+            item.state = value == selected ? .on : .off
+            item.target = handler { [weak self] in
+                self?.edit { onPick(&$0, value) }
+                // Its button says the choice, and its own change doesn't make the page again by itself.
+                self?.build()
+            }
+            menu.addItem(item)
         }
-        return popup
+        let picked = menu.items.first { $0.state == .on } ?? menu.items[0]
+        let button = menuButton(picked.title) { anchor in
+            menu.popUp(positioning: picked, at: NSPoint(x: 0, y: anchor.bounds.height), in: anchor)
+        }
+        // Where a right-click, VoiceOver's show menu and the demo find it too.
+        button.menu = menu
+        return button
     }
 
-    private func checkbox(_ title: String, _ on: Bool, onToggle: @escaping (Bool) -> Void) -> NSButton {
-        let box = NSButton(checkboxWithTitle: title, target: nil, action: nil)
-        box.font = .systemFont(ofSize: 12)
-        box.state = on ? .on : .off
-        bind(box) { [weak box] in onToggle(box?.state == .on) }
+    /// Messages' own box, ticked in the theme's accent where the system's would be in its own.
+    private func checkbox(_ title: String, _ on: Bool, onToggle: @escaping (Bool) -> Void) -> QuietCheckbox {
+        let box = QuietCheckbox()
+        box.words = (.systemFont(ofSize: 12), MessagesInk.text)
+        box.title = title
+        box.isOn = on
+        box.onChange = onToggle
+        box.sizeToFit()
+        box.widthAnchor.constraint(equalToConstant: min(box.frame.width, Self.controlWidth)).isActive = true
+        box.heightAnchor.constraint(equalToConstant: box.frame.height).isActive = true
         return box
     }
 
-    /// A button that opens a menu under itself, the way Theme and Notifications do in Messages.
+    /// A button that opens a menu, the way Theme and Notifications do in Messages, saying what's picked.
     private func menuButton(_ title: String, onPress: @escaping (NSView) -> Void) -> QuietButton {
         let button = plainButton("\(title) ▾", style: .plain) {}
         button.setAccessibilityRole(.popUpButton)
+        button.setAccessibilityValue(title)
         button.onPress = { [weak button] in
             guard let button else { return }
             onPress(button)
@@ -326,16 +365,21 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
 
     private func plainButton(_ title: String, style: QuietButton.Style, onPress: @escaping () -> Void) -> QuietButton {
         let button = QuietButton(title, style: style, onPress: onPress)
+        button.isThemed = true
         button.widthAnchor.constraint(equalToConstant: min(button.frame.width, Self.controlWidth)).isActive = true
         button.heightAnchor.constraint(equalToConstant: button.frame.height).isActive = true
         return button
     }
 
     private func bind(_ control: NSControl, run: @escaping () -> Void) {
+        control.target = handler(run)
+        control.action = #selector(Handler.fire)
+    }
+
+    private func handler(_ run: @escaping () -> Void) -> Handler {
         let handler = Handler(run)
         handlers.append(handler)
-        control.target = handler
-        control.action = #selector(Handler.fire)
+        return handler
     }
 
     // MARK: - Words
@@ -412,9 +456,9 @@ private final class SettingsRootView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: BalloonView.radius, yRadius: BalloonView.radius)
-        Ink.paper.setFill()
+        MessagesInk.paper.setFill()
         path.fill()
-        Ink.line.setStroke()
+        MessagesInk.line.setStroke()
         path.stroke()
     }
 }

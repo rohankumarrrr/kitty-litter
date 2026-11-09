@@ -127,8 +127,8 @@ struct SettingsForm: Equatable {
     }
 
     var settings: Settings
-    /// The theme Messages is in, or `nil` for Shades' own colours.
-    var theme: String?
+    /// The theme Messages is in, which Settings draws in too, or `nil` for Shades' own colours.
+    var theme: ColorTheme?
     /// Every channel in Messages, in the sidebar's order, for what each tells you.
     var channels: [Channel]
 }

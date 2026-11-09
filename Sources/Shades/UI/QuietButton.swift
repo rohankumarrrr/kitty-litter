@@ -57,6 +57,8 @@ final class QuietButton: NSView {
     var isArmed = true { didSet { needsDisplay = true } }
     /// A filled one's own colours, such as a theme's, in place of the plain pill.
     var colors: (fill: NSColor, ink: NSColor)? { didSet { needsDisplay = true } }
+    /// Draws in the theme Messages uses, as Settings does, where the cat's other windows keep Ink's own.
+    var isThemed = false { didSet { needsDisplay = true } }
 
     let style: Style
     private var title: String
@@ -102,10 +104,13 @@ final class QuietButton: NSView {
     private var ink: NSColor {
         switch style {
         case .filled: colors?.ink ?? Ink.pillText
-        case .plain: Ink.text
-        case .text: Ink.soft
+        case .plain: isThemed ? MessagesInk.text : Ink.text
+        case .text: isThemed ? MessagesInk.soft : Ink.soft
         }
     }
+
+    private var hoverFill: NSColor { isThemed ? MessagesInk.hover : Ink.hover }
+    private var pressFill: NSColor { isThemed ? MessagesInk.press : Ink.press }
 
     private var label: NSAttributedString {
         NSAttributedString(string: flashed ?? title, attributes: [
@@ -123,16 +128,16 @@ final class QuietButton: NSView {
             shape.fill()
             if pressing { NSColor(white: 0.5, alpha: 0.3).setFill(); shape.fill() }
         case .plain:
-            ((hovering || pressing) && isArmed ? Ink.press : Ink.hover).setFill()
+            ((hovering || pressing) && isArmed ? pressFill : hoverFill).setFill()
             shape.fill()
-            // A shade more than hover, so pressing shows.
+            // A shade more than hover, so pressing shows. Ink's is see-through, so it shades a theme's too.
             if pressing && isArmed { Ink.hover.setFill(); shape.fill() }
         case .text:
             if pressing && isArmed {
-                Ink.press.setFill()
+                pressFill.setFill()
                 shape.fill()
             } else if hovering && isArmed {
-                Ink.hover.setFill()
+                hoverFill.setFill()
                 shape.fill()
             }
         }

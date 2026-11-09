@@ -364,6 +364,8 @@ final class QuietCheckbox: NSView {
     var title = "" { didSet { needsDisplay = true; setAccessibilityLabel(title) } }
     var isOn = false { didSet { if isOn != oldValue { needsDisplay = true; setAccessibilityValue(isOn) } } }
     var onChange: ((Bool) -> Void)?
+    /// Its words' own font and colour, such as Settings', where they're the setting itself rather than a soft aside.
+    var words: (font: NSFont, color: NSColor)? { didSet { needsDisplay = true } }
 
     init() {
         super.init(frame: NSRect(x: 0, y: 0, width: 160, height: 20))
@@ -381,7 +383,7 @@ final class QuietCheckbox: NSView {
     override var needsPanelToBecomeKey: Bool { false }
 
     private var label: NSAttributedString {
-        NSAttributedString(string: title, attributes: [.font: MessagesInk.font(ofSize: 12), .foregroundColor: MessagesInk.soft])
+        NSAttributedString(string: title, attributes: [.font: words?.font ?? MessagesInk.font(ofSize: 12), .foregroundColor: words?.color ?? MessagesInk.soft])
     }
 
     /// Room inside it for the ring, which goes round the box and its words.
