@@ -109,8 +109,8 @@ protocol CatStage: AnyObject {
     func showSettings(_ form: SettingsForm, overMessages: Bool)
     /// What Settings shows, if it's open, after a change made anywhere.
     func settingsChanged(_ form: SettingsForm)
-    /// What's said in Messages, and the box you type in, at this size.
-    func showTextSize(_ size: TextSize)
+    /// Messages' words at this size, and in this font, or the system's with `nil`.
+    func showText(size: TextSize, font: String?)
     /// The code a phone pairs with, or `nil` to take it away.
     func showPairing(_ card: PhonePairingCard?)
     func copyToPasteboard(_ text: String)

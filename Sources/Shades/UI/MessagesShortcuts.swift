@@ -184,7 +184,7 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = .systemFont(ofSize: 16)
+        field.font = MessagesInk.font(ofSize: 16)
         field.delegate = self
         addSubview(field)
         setAccessibilityElement(true)
@@ -208,9 +208,10 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
     func show(_ book: ChannelBook, mode: Mode = .jump) {
         self.book = book
         self.mode = mode
+        field.font = MessagesInk.font(ofSize: 16)
         field.textColor = MessagesInk.text
         let placeholder = mode == .search ? CatWords.searchPlaceholder : CatWords.jumpPlaceholder
-        field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [.foregroundColor: MessagesInk.soft, .font: NSFont.systemFont(ofSize: 16)])
+        field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [.foregroundColor: MessagesInk.soft, .font: MessagesInk.font(ofSize: 16)])
         setAccessibilityLabel(mode == .search ? CatWords.searchTitle : CatWords.jumpTitle)
         refilter()
         askSoon()
@@ -347,7 +348,7 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         guard !items.isEmpty else {
-            NSAttributedString(string: nothing, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: MessagesInk.soft])
+            NSAttributedString(string: nothing, attributes: [.font: MessagesInk.font(ofSize: 13), .foregroundColor: MessagesInk.soft])
                 .draw(at: NSPoint(x: card.minX + 16, y: card.minY + Self.fieldHeight + 11))
             return
         }
@@ -357,9 +358,9 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
                 MessagesInk.press.setFill()
                 NSBezierPath(roundedRect: row, xRadius: 7, yRadius: 7).fill()
             }
-            let line = NSMutableAttributedString(string: item.title, attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .medium), .foregroundColor: MessagesInk.text])
+            let line = NSMutableAttributedString(string: item.title, attributes: [.font: MessagesInk.font(ofSize: 14, weight: .medium), .foregroundColor: MessagesInk.text])
             if let detail = item.detail {
-                line.append(NSAttributedString(string: "   \(detail)", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: MessagesInk.soft]))
+                line.append(NSAttributedString(string: "   \(detail)", attributes: [.font: MessagesInk.font(ofSize: 12), .foregroundColor: MessagesInk.soft]))
             }
             line.addAttribute(.paragraphStyle, value: truncating, range: NSRange(location: 0, length: line.length))
             guard let found = item.found else {
@@ -367,14 +368,14 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
                 continue
             }
             line.draw(in: NSRect(x: row.minX + 10, y: row.minY + 7, width: row.width - 20, height: 18))
-            let words = NSMutableAttributedString(string: found.snippet, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: MessagesInk.soft, .paragraphStyle: truncating])
+            let words = NSMutableAttributedString(string: found.snippet, attributes: [.font: MessagesInk.font(ofSize: 13), .foregroundColor: MessagesInk.soft, .paragraphStyle: truncating])
             for mark in found.marks where NSMaxRange(mark) <= words.length {
-                words.addAttributes([.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: MessagesInk.text], range: mark)
+                words.addAttributes([.font: MessagesInk.font(ofSize: 13, weight: .semibold), .foregroundColor: MessagesInk.text], range: mark)
             }
             words.draw(in: NSRect(x: row.minX + 10, y: row.minY + 27, width: row.width - 20, height: 18))
         }
         if let footer {
-            NSAttributedString(string: footer, attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: MessagesInk.soft])
+            NSAttributedString(string: footer, attributes: [.font: MessagesInk.font(ofSize: 12), .foregroundColor: MessagesInk.soft])
                 .draw(at: NSPoint(x: card.minX + 16, y: card.maxY - Self.footerHeight))
         }
     }
@@ -428,15 +429,15 @@ final class CheatsheetView: QuietView {
         MessagesInk.line.setStroke()
         shape.stroke()
 
-        NSAttributedString(string: CatWords.shortcutsTitle, attributes: [.font: NSFont.systemFont(ofSize: 16, weight: .semibold), .foregroundColor: MessagesInk.text])
+        NSAttributedString(string: CatWords.shortcutsTitle, attributes: [.font: MessagesInk.font(ofSize: 16, weight: .semibold), .foregroundColor: MessagesInk.text])
             .draw(at: NSPoint(x: card.minX + 22, y: card.minY + 18))
         var y = card.minY + 56
         for group in CatWords.shortcutGroups {
-            NSAttributedString(string: group.title.uppercased(), attributes: [.font: NSFont.systemFont(ofSize: 10, weight: .semibold), .foregroundColor: MessagesInk.soft, .kern: 0.5])
+            NSAttributedString(string: group.title.uppercased(), attributes: [.font: MessagesInk.font(ofSize: 10, weight: .semibold), .foregroundColor: MessagesInk.soft, .kern: 0.5])
                 .draw(at: NSPoint(x: card.minX + 22, y: y + 14))
             y += Self.headingHeight
             for row in group.rows {
-                NSAttributedString(string: row.does, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: MessagesInk.text])
+                NSAttributedString(string: row.does, attributes: [.font: MessagesInk.font(ofSize: 13), .foregroundColor: MessagesInk.text])
                     .draw(at: NSPoint(x: card.minX + 22, y: y + 4))
                 let keys = NSAttributedString(string: row.keys, attributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .medium), .foregroundColor: MessagesInk.text])
                 let size = keys.size()

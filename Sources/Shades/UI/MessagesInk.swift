@@ -17,6 +17,26 @@ enum MessagesInk {
         case .larger: 4
         }
     }
+    /// The family Messages draws its words in, set the same way. `nil` is the system's.
+    static var fontFamily: String?
+    /// The system's own faces, which no family name reaches, by the names Font Book gives them.
+    static let systemFaces: [(name: String, design: NSFontDescriptor.SystemDesign)] = [
+        ("SF Pro", .default), ("New York", .serif), ("SF Pro Rounded", .rounded), ("SF Mono", .monospaced),
+    ]
+
+    /// A font for Messages' words in the chosen family, at this size and weight. A family that isn't on this Mac, such
+    /// as one written into the settings file by hand, draws in the system's.
+    static func font(ofSize size: CGFloat, weight: NSFont.Weight = .regular, family: String? = MessagesInk.fontFamily) -> NSFont {
+        let system = NSFont.systemFont(ofSize: size, weight: weight)
+        guard let family else { return system }
+        if let face = systemFaces.first(where: { $0.name == family }) {
+            return system.fontDescriptor.withDesign(face.design).flatMap { NSFont(descriptor: $0, size: size) } ?? system
+        }
+        let descriptor = NSFontDescriptor(fontAttributes: [.family: family, .traits: [NSFontDescriptor.TraitKey.weight: weight.rawValue]])
+        guard let font = NSFont(descriptor: descriptor, size: size), font.familyName == family else { return system }
+        return font
+    }
+
     /// Your picture, as the small JPEG `YourPicture` keeps, set when the app starts. `nil` keeps your blue square.
     static var picture: Data? { didSet { pictureImage = picture.flatMap(NSImage.init(data:)) } }
     private(set) static var pictureImage: NSImage?

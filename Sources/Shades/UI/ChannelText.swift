@@ -3,7 +3,7 @@ import AppKit
 /// A message's markdown as Messages draws it. A link is underlined and only says where it goes: pressing it asks
 /// before anything opens, in the pane's link bar.
 enum ChannelMarkdown {
-    static var font: NSFont { .systemFont(ofSize: 13 + MessagesInk.textStep) }
+    static var font: NSFont { MessagesInk.font(ofSize: 13 + MessagesInk.textStep) }
     private static var codeFont: NSFont { .monospacedSystemFont(ofSize: 12 + MessagesInk.textStep, weight: .regular) }
     static let copyRoom: CGFloat = 22
     /// More cells than this take seconds to lay out as a table, so a bigger one is drawn as text, the way code is.
@@ -37,7 +37,7 @@ enum ChannelMarkdown {
             case .paragraph:
                 result.append(line(block.spans ?? [], color: color, style: style))
             case .heading:
-                result.append(line(block.spans ?? [], color: color, style: style, font: .systemFont(ofSize: 14 + MessagesInk.textStep, weight: .semibold)))
+                result.append(line(block.spans ?? [], color: color, style: style, font: MessagesInk.font(ofSize: 14 + MessagesInk.textStep, weight: .semibold)))
             case .item:
                 let indent = CGFloat(min((block.depth ?? 1) - 1, deepestIndent)) * 14
                 let marker = block.marker ?? ""
@@ -73,7 +73,7 @@ enum ChannelMarkdown {
                 rule.setBorderColor(color.withAlphaComponent(0.25), for: .minY)
                 rule.setWidth(4, type: .absoluteValueType, for: .margin, edge: .minY)
                 style.textBlocks = [rule]
-                result.append(NSAttributedString(string: "\u{200B}\n", attributes: [.font: NSFont.systemFont(ofSize: 4), .paragraphStyle: style]))
+                result.append(NSAttributedString(string: "\u{200B}\n", attributes: [.font: MessagesInk.font(ofSize: 4), .paragraphStyle: style]))
             }
         }
         // Each block ends its own paragraph, and the last one ends the message.
@@ -103,7 +103,7 @@ enum ChannelMarkdown {
 
     private static func attributed(_ span: Markup.Span, color: NSColor, style: NSParagraphStyle, font: NSFont) -> NSAttributedString {
         var attributes: [NSAttributedString.Key: Any] = [.foregroundColor: color, .paragraphStyle: style]
-        var runFont = span.bold == true ? NSFont.systemFont(ofSize: font.pointSize, weight: .semibold) : font
+        var runFont = span.bold == true ? MessagesInk.font(ofSize: font.pointSize, weight: .semibold) : font
         if span.italic == true { runFont = NSFontManager.shared.convert(runFont, toHaveTrait: .italicFontMask) }
         if span.code == true {
             runFont = .monospacedSystemFont(ofSize: font.pointSize - 1, weight: .regular)
@@ -118,7 +118,7 @@ enum ChannelMarkdown {
             if let pull = span.pull {
                 // A chip, kept on one line, in its state's colour.
                 text = "\u{00A0}" + ([text] + [pull.state].compactMap { $0 }).joined(separator: " · ").replacingOccurrences(of: " ", with: "\u{00A0}") + "\u{00A0}"
-                runFont = .systemFont(ofSize: font.pointSize - 1, weight: .semibold)
+                runFont = MessagesInk.font(ofSize: font.pointSize - 1, weight: .semibold)
                 attributes[.foregroundColor] = NSColor.white
                 attributes[.channelChip] = chipColor(pull.state)
             } else {
@@ -145,7 +145,7 @@ enum ChannelMarkdown {
                 if rowIndex == 0 { block.backgroundColor = color.withAlphaComponent(0.06) }
                 let style = NSMutableParagraphStyle()
                 style.textBlocks = [block]
-                result.append(line(cell, color: color, style: style, font: rowIndex == 0 ? .systemFont(ofSize: font.pointSize, weight: .semibold) : font))
+                result.append(line(cell, color: color, style: style, font: rowIndex == 0 ? MessagesInk.font(ofSize: font.pointSize, weight: .semibold) : font))
             }
         }
         return result

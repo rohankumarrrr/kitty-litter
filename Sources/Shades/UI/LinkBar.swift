@@ -79,7 +79,7 @@ final class LinkBar: QuietView {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingMiddle
         NSAttributedString(string: title, attributes: [
-            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+            .font: MessagesInk.font(ofSize: 11, weight: .semibold),
             .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: Self.pad, y: Self.pad, width: bounds.width - Self.pad * 2, height: Self.titleHeight))

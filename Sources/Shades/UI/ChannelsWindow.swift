@@ -328,10 +328,11 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         view.restyle()
     }
 
-    /// What's said, and the box you type in, at another size, where you were.
-    func apply(_ size: TextSize) {
-        guard size != MessagesInk.textSize else { return }
+    /// Messages' words at another size or in another font, where you were.
+    func apply(_ size: TextSize, font: String?) {
+        guard size != MessagesInk.textSize || font != MessagesInk.fontFamily else { return }
         MessagesInk.textSize = size
+        MessagesInk.fontFamily = font
         view.restyle()
     }
 

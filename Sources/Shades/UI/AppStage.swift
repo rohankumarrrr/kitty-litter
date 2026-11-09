@@ -295,8 +295,8 @@ final class AppStage: CatStage {
         settingsPanel.update(form)
     }
 
-    func showTextSize(_ size: TextSize) {
-        channels.apply(size)
+    func showText(size: TextSize, font: String?) {
+        channels.apply(size, font: font)
     }
 
     func showPairing(_ card: PhonePairingCard?) {
