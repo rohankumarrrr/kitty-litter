@@ -29,6 +29,9 @@ final class ChannelFeed {
     var isWithShades: (AgentThread) -> Bool = { _ in false }
     /// Whether a thread is work the cat started for you outside Messages, which lives in its DM.
     var isCatsWork: (AgentThread) -> Bool = { _ in false }
+    /// The cat's own work you chose to show on your phone, and whether Messages is on your phone at all.
+    var onPhone: () -> Set<String> = { [] }
+    var hasPhone: () -> Bool = { false }
     /// The turns of Messages' talk with the router that the cat answered in #general, by T3's ID for each.
     var answersInGeneral: () -> Set<String> = { [] }
     /// Replies also sent to their thread's channel by the ID of T3's copy of each, and to #general with the thread each
@@ -404,6 +407,8 @@ final class ChannelFeed {
             inGeneral: inGeneral(),
             withShades: Set(threads.filter(isWithShades).map(\.id)),
             catsWork: Set(threads.filter(isCatsWork).map(\.id)),
+            onPhone: onPhone(),
+            hasPhone: hasPhone(),
             answersInGeneral: answersInGeneral(),
             alsoSent: alsoSent(),
             alsoSentToGeneral: Set(alsoSentToGeneral().keys),

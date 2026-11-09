@@ -101,6 +101,7 @@ final class ChannelsView: QuietView {
     var onCopy: ((String) -> Void)? { didSet { panes.forEach { $0.onCopy = onCopy } } }
     var onAction: ((MessagesAction) -> Void)? { didSet { panes.forEach { $0.onAction = onAction } } }
     var onOpenLink: ((URL) -> Void)? { didSet { panes.forEach { $0.onOpenLink = onOpenLink } } }
+    var onShowOnPhone: ((String) -> Void)? { didSet { panes.forEach { $0.onShowOnPhone = onShowOnPhone } } }
 
     private var panes: [ChannelPane] { [pane, threadPane] }
 

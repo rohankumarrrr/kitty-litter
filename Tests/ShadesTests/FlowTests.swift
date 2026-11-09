@@ -5048,6 +5048,26 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(routed.prompt.text.contains("keyboard"), "not in its sessions")
     }
 
+    /// The cat's own work only ever stayed on the Mac, even work you'd have liked to follow from your phone.
+    func testOnlyItsSwitchShowsTheCatsOwnWorkOnYourPhoneOneThreadAtATime() async throws {
+        kittens = [steve]
+        await controller.beginFix()
+        stage.type("Where could I find a keyboard like this?")
+        await settle()
+        let fix = try XCTUnwrap(controller.catsWork.keys.first)
+        let talk = AgentThread(id: "talk", title: "What's here?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: clock, projectPath: "/shades/router")
+        let steves = AgentThread(id: "w", title: "Resume", projectTitle: "steve", status: .completed, model: "m", updatedAt: clock, projectPath: "/k/steve")
+        controller.threadsChanged([AgentThread(id: fix, title: "Fix: Where could I find a keyboard like this?", projectTitle: nil, status: .completed, model: "m", updatedAt: clock), talk, steves])
+        controller.showOnPhonePressed("talk")
+        controller.showOnPhonePressed("w")
+        XCTAssertTrue(controller.onPhone.isEmpty, "only the cat's own work has the switch")
+        controller.showOnPhonePressed(fix)
+        XCTAssertEqual(savedInbox?.onPhone.keys.first, fix, "kept with the inbox, as its ID")
+        XCTAssertEqual(savedInbox?.onPhone.count, 1)
+        controller.showOnPhonePressed(fix)
+        XCTAssertEqual(savedInbox?.onPhone, [:], "pressed again, it's off")
+    }
+
     /// Messages never sends your screen, so even a kitten that sees it can't tell what "this thread" is.
     /// A reply straight to a thread is only what you typed.
     func testMessagesSaysWhenYourWordsPointAtAScreenItWontSend() async {

@@ -10,6 +10,14 @@ extension AppController {
         phone?.publish(book)
     }
 
+    /// The switch in a thread's pane, the only thing that puts the cat's own work on your phone, one thread at a time.
+    /// Even then the phone gets your words and the agent's replies, never the screen that went with them.
+    func showOnPhonePressed(_ id: String) {
+        guard let thread = latestThreads.first(where: { $0.id == id }), isCatsWork(thread), !isWithShades(thread) else { return }
+        onPhone[id] = onPhone[id] == nil ? now() : nil
+        channels.refresh()
+    }
+
     func startPhone() {
         guard phone == nil else { return }
         let link = PhoneLink(

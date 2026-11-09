@@ -13,6 +13,7 @@ final class ChannelHeader: QuietView {
     var onOpen: (() -> Void)?
     var onNotifications: ((ChannelID, ChannelNotifications) -> Void)?
     private let notificationsMenu = NotificationsMenu()
+    var onPhone: (() -> Void)?
     private var title = ""
     private var subtitle: String?
     private var cats: [ChannelSpeakerLook] = []
@@ -79,6 +80,9 @@ final class ChannelHeader: QuietView {
         (title, subtitle) = Self.words(forThread: id, in: book)
         cats = []
         var right: [(String, () -> Void)] = []
+        if book.hasPhone, book.catsWork.contains(id), book.home(ofThread: id) == .shades {
+            right.append((book.onPhone.contains(id) ? CatWords.hideFromPhone : CatWords.showOnPhone, { [weak self] in self?.onPhone?() }))
+        }
         if book.knows(thread: id) { right.append((CatWords.openInT3, { [weak self] in self?.onOpen?() })) }
         right.append(("✕", { [weak self] in self?.onClose?() }))
         setButtons(right)
@@ -200,6 +204,9 @@ final class ChannelPane: QuietView {
     var onMarkUnread: ((_ thread: String, _ message: String) -> Void)?
     /// Opens a web address, only ever after you've seen it in the link bar and pressed Open.
     var onOpenLink: ((URL) -> Void)?
+    /// Flips whether a thread of the cat's own work shows on your phone. It's apart from `onAction`, which is all a
+    /// phone can reach, so only you on the Mac can flip it.
+    var onShowOnPhone: ((String) -> Void)?
     var parts = PartAnswers()
 
     private let now: () -> Date = Date.init
@@ -262,6 +269,10 @@ final class ChannelPane: QuietView {
         header.onOpen = { [weak self] in
             guard let self, let id = self.selection.thread else { return }
             self.onOpenThread?(id)
+        }
+        header.onPhone = { [weak self] in
+            guard let self, let id = self.selection.thread else { return }
+            self.onShowOnPhone?(id)
         }
         composer.onSend = { [weak self] words, target, file in
             guard let self else { return }

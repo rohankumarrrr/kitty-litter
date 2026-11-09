@@ -168,6 +168,15 @@ final class AppController {
             keepInbox()
         }
     }
+    /// The cat's own work you chose to show on your phone, kept as IDs with the inbox. Only the switch in its thread's
+    /// pane changes it.
+    var onPhone: [String: Date] {
+        get { inbox.onPhone }
+        set {
+            inbox.onPhone = newValue
+            keepInbox()
+        }
+    }
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
     /// Everything that's had a notification since the app started, so an answer that didn't go through can't bring a second.
@@ -270,6 +279,8 @@ final class AppController {
         channels.inGeneral = { [weak self] in self?.messagesThreads ?? [:] }
         channels.isWithShades = { [weak self] in self?.isWithShades($0) ?? false }
         channels.isCatsWork = { [weak self] in self?.isCatsWork($0) ?? false }
+        channels.onPhone = { [weak self] in Set(self?.onPhone.keys ?? [:].keys) }
+        channels.hasPhone = { [weak self] in self?.settings.phone == true }
         channels.answersInGeneral = { [weak self] in Set(self?.inbox.answersInGeneral.keys ?? [:].keys) }
         channels.alsoSent = { [weak self] in Set(self?.inbox.alsoSent.keys ?? [:].keys) }
         channels.alsoSentToGeneral = { [weak self] in self?.inbox.alsoSentToGeneral.mapValues(\.thread) ?? [:] }
@@ -483,7 +494,10 @@ final class AppController {
             keys.stop()
             startKeys()
         }
-        if phoneChanged { updated.phone ? startPhone() : stopPhone() }
+        if phoneChanged {
+            updated.phone ? startPhone() : stopPhone()
+            channels.refresh()
+        }
         if quietChanged { doNotDisturbChanged() }
     }
 }

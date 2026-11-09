@@ -6,6 +6,7 @@ With **Messages on my phone** on in Settings, the cat shows a code and a picture
 
 - `phone-pair` shows the one-time code, and a phone that sends it is paired.
 - `phone-places` lists Activity and Threads, then #general and each kitten's channel, with the window's counts, bold and dots, each kitten's cat posed for what it's doing, and icons drawn to match the window's. The cat's DM stays on the Mac.
+- `phone-switch` shows a thread of the cat's own work, such as a fix, under Shades on the phone once **Show on phone** is pressed at the top of its thread on the Mac, with only your words and the agent's replies, and takes it off again with **Hide from phone**.
 - `phone-cats` draws the window's cats wherever a kitten or the cat appears: the places, a channel's and a thread's header, beside each message, in reply bars, in Threads, and on Activity's headings and cards.
 - `phone-picture` draws your picture, if you've given Messages one, beside your messages and in place of your square, from what a paired phone is sent rather than an address of its own. `journeys/picture.txt` drives it, as [messages.md](messages.md) says, and `swift test --filter PhoneServerTests/testYourPictureGoesOnlyToAPairedPhone` checks nothing unpaired gets it.
 - `phone-answer` allows or denies an approval, answers a question from its card, and replies to a report.
@@ -45,6 +46,13 @@ Journey: `journeys/phone-notifications.txt`.
 - **Subscribe.** `phone open` and `draw`. `1-home` shows the page's note that an iPhone needs it on the Home Screen, since the web view, like Safari on an iPhone, has no push. `phone subscribe` stands in for **Turn on**: the page sends a stand-in phone's subscription with its own `/push` request, and the output says `[phone] subscribed: 204`.
 - **Notify.** `approval command ...` and `question`. The output says `[demo] notified: Steve Pawsniak needs an approval`, then `[demo] pushed to web.push.apple.com: {"title":"Steve Pawsniak needs an approval","tag":"demo-1","key":"t:demo-tidy@c:%2Fdemo%2Fsteve"}`, which is what the stand-in phone opened from the encrypted push, with `"key"`, the thread's page a tap opens. The same follows for the question, and nothing says what was asked. Tapping one is in [Notifications](./notifications.md), under `journeys/notify-finished.txt`.
 
+Journey: `journeys/phone-switch.txt`.
+
+- **Off.** Two fixes, `submit Where could I find a keyboard like this?` and then `submit` with no words, print `[demo] started demo-1` and `[demo] started demo-2`. The first `phone text` is Activity, which calls the first one "Where could I find a keyboard like this?" rather than its "Fix: ..." title. `thread keyboard` opens `demo-1` beside the DM, and `1-off` shows **Show on phone** beside Open in T3. `phone go shades` gets the list of places, with no Direct messages.
+- **On.** `header Show on phone` prints `pressed Show on phone`, and `2-on` shows the button saying **Hide from phone**. `phone go shades` now opens Shades, headed "Work you chose to show here", with only "Where could I find a keyboard like this?" and its reply bar, as `3-phone-dm` shows: none of the demo's talks, and not the second fix. `phone go t:demo-2@shades` gets the list of places, which now has Shades under Direct messages.
+- **Thread.** `phone go t:demo-1@shades` is the thread's own page, headed "Shades" with no title, your words, the cat's "Done." and "Replies in this thread" over its box, in `4-phone-thread`. `phone send Is there a cheaper one?` prints `[demo] forwarded to demo-1 with 0 attachments: Is there a cheaper one?`.
+- **Hide.** `header Hide from phone` sends the page back to the list of places, with no Direct messages, in `5-hidden`.
+
 Journey: `journeys/phone-theme.txt`.
 
 - **Load older.** Journey `journeys/phone-older.txt`. `busy`, then `phone open pepper`, scrolled to the top, where the first row is "Load older messages". `phone js` runs a line of script on the page and prints what it comes to, here each row on the screen with how far down it is. After `phone press Load older messages`, the `after` line has a larger `scrollY`, with the lowest posts at the same heights as in `before`, since the older threads come in above them, and among them where one started between two you could see.
@@ -56,6 +64,7 @@ End every journey with `front` and `windows`. The app in front stays whatever it
 ## Gotchas
 
 - Each place is a stream of its own, so moving between them reconnects. Give `phone go` and `phone send` two or three seconds before drawing.
+- `header` presses a button at the top of the open thread's pane, by its words. It prints `no header button [...]` when there's none, such as **Show on phone** in a kitten's thread, or while Messages isn't on your phone.
 - `phone go` takes a key as it is, so `phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve` opens Steve's "Rewrite the pricing copy" thread with its replies, and `t:demo-tidy@c:%2Fdemo%2Fsteve` opens the one an `approval` waits in.
 - `phone text` doesn't show the cats, since they're pictures. `swift test --filter PhoneServerTests` checks their address gives the window's art pixel for pixel, and nothing for any other address.
 - A `draw` just before the file runs out can miss the phone, whose picture comes back a moment later. End with a `wait 2`.

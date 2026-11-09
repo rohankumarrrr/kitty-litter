@@ -69,6 +69,7 @@ public struct Inbox: Codable, Equatable, Sendable {
     private var missed: [Missed]?
     private var alsoShown: [String: Date]?
     private var alsoShownInGeneral: [String: ShownInGeneral]?
+    private var shownOnPhone: [String: Date]?
 
     /// How many of each place's IDs are kept, newest first. More than Messages reads.
     public static let placesKept = 300
@@ -88,6 +89,13 @@ public struct Inbox: Codable, Equatable, Sendable {
     public var catsWork: [String: Date] {
         get { withShades ?? [:] }
         set { withShades = Self.newest(newValue) }
+    }
+
+    /// The cat's own work you chose to show on your phone, and when. Only the switch in its thread's pane on the Mac
+    /// sets it.
+    public var onPhone: [String: Date] {
+        get { shownOnPhone ?? [:] }
+        set { shownOnPhone = Self.newest(newValue) }
     }
 
     /// T3's ID for each turn of Messages' talk with the router that the cat answered itself in #general, and when.

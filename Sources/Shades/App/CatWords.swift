@@ -100,6 +100,7 @@ enum CatWords {
     static let generalSubtitle = "Goes to whoever it's for"
     static let generalEmpty = "Say something and it goes to whoever it's for."
     static let shadesSubtitle = "What you've asked me"
+    static let shadesOnPhone = "Work you chose to show here"
     static let shadesEmpty = "Say something, or ask me anywhere, and it shows up here."
     static func handedOff(_ task: String) -> String { "I started on that: \(task)" }
     static let passedOnToSession = "I passed that on to the work it carries on from."
@@ -116,6 +117,8 @@ enum CatWords {
     static let threadTitle = "Thread"
     static let newThread = "New thread"
     static let openInT3 = "Open in T3"
+    static let showOnPhone = "Show on phone"
+    static let hideFromPhone = "Hide from phone"
     static let viewThread = "View thread"
     static let closeThread = "Close"
     static let quietThread = "Its messages are in T3."

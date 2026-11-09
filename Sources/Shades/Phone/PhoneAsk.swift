@@ -60,7 +60,12 @@ struct PhoneAsk: Decodable {
             guard let kind = self.kind.flatMap(InboxEntry.Kind.init(rawValue:)), kind != .decision else { return nil }
             return (.inbox(.clear(kind)), nil)
         case "seen":
-            guard let selection = key.flatMap({ PhonePlace($0, in: book).selection }) else { return nil }
+            guard var selection = key.flatMap({ PhonePlace($0, in: book).selection }) else { return nil }
+            // A phone shows only some of the cat's DM, so all it's seen there is the thread it's on.
+            if selection.channelID == .shades {
+                guard let thread = selection.thread else { return nil }
+                selection = .thread(thread, in: .threads)
+            }
             return (.seen(selection), nil)
         case "unread":
             // Only a message in the thread this page shows, and one Messages can mark.
@@ -72,7 +77,7 @@ struct PhoneAsk: Decodable {
             guard let message = id.flatMap(book.message), message.canTryAgain else { return nil }
             return (.tryAgain(message.exchangeID), nil)
         case "older":
-            guard let channel = key.flatMap({ PhonePlace($0, in: book).selection?.channelID }) else { return nil }
+            guard let channel = key.flatMap({ PhonePlace($0, in: book).selection?.channelID }), channel != .shades else { return nil }
             return (.older(channel), nil)
         default:
             return nil
