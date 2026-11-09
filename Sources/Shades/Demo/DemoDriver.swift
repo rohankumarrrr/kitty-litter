@@ -208,7 +208,7 @@ final class DemoDriver {
             panel.makeKey()
             panel.makeFirstResponder(text)
             text.setSelectedRange(range)
-            return print("highlighted [\(words)] key=\(panel.isKeyWindow) front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nothing")")
+            return print("highlighted [\(words)] key=\(panel.isKeyWindow) front=\(front)")
         }
         print("no message shows [\(words)]")
     }
@@ -277,7 +277,7 @@ final class DemoDriver {
         let responder = window.firstResponder
         let view = (responder as? NSTextView).flatMap { $0.isFieldEditor ? $0.delegate as? NSView : nil } ?? responder as? NSView
         let label = view?.accessibilityLabel() ?? ""
-        print("focus \(name) \(label.isEmpty ? responder.map { String(describing: type(of: $0)) } ?? "nothing" : label) key=\(window.isKeyWindow) front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nothing")")
+        print("focus \(name) \(label.isEmpty ? responder.map { String(describing: type(of: $0)) } ?? "nothing" : label) key=\(window.isKeyWindow) front=\(front)")
     }
 
     /// Each control on Settings' page as it shows now.
@@ -375,6 +375,15 @@ final class DemoDriver {
         for number in 1...9 { named["\(number)"] = .place(number) }
         return named
     }()
+
+    /// Whether this copy of The Kitty Litter is in front or another app is, for the output. Never another app's name,
+    /// since what a journey prints goes on public pull requests.
+    static func front(_ app: NSRunningApplication?) -> String {
+        guard let app else { return "nothing" }
+        return app.processIdentifier == NSRunningApplication.current.processIdentifier ? CatWords.appName : "another app"
+    }
+
+    private var front: String { Self.front(NSWorkspace.shared.frontmostApplication) }
 
     /// Which place Messages is on and which thread is open, for the output.
     private var whereMessagesIs: String {
@@ -485,7 +494,7 @@ final class DemoDriver {
             let panel = stage.channels.panel
             panel.makeKey()
             let handled = panel.handle(shortcut)
-            print("key \(rest) handled=\(handled) \(whereMessagesIs) key=\(panel.isKeyWindow) front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nothing")")
+            print("key \(rest) handled=\(handled) \(whereMessagesIs) key=\(panel.isKeyWindow) front=\(front)")
         case "keyboard":
             // Stands in for Keyboard navigation in System Settings, which the demo leaves as it is.
             QuietFocus.fullKeyboardAccess = { rest != "off" }
@@ -820,7 +829,7 @@ final class DemoDriver {
             cover = window
             print("cover \(NSStringFromRect(window.frame))")
         case "front":
-            print("front \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nothing")")
+            print("front \(front)")
         case "quit":
             NSApp.terminate(nil)
         default:
