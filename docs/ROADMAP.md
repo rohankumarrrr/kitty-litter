@@ -36,6 +36,7 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 
 - Answer an agent's question from the bubble. It shows the question and options now, and you answer in Messages or T3.
 - Fold a busy conversation in Messages down to one row per thread, with how many replies it has and the latest, the way a Slack channel shows a thread. Today every thread's messages are shown in order, and its title and project mark where each one starts.
+- Set a channel's notifications from the phone, and see which channels are muted in Messages' sidebar. Both are set from the channel's header on the Mac now, and only its header says it's muted.
 - Read a thread's whole history in Messages when it opens on its own, even past each kitten's newest 30, instead of saying the rest is in T3.
 - Keep a question you asked in the cat's DM that only got passed on after a restart. Its talk with the router is archived, and T3 doesn't list archived threads, so Messages would have to read it by the ID it kept.
 - Send the phone only what changed in Messages. It gets every row of the place it's on each time anything changes, about 170 KB for a conversation of 580 rows, and draws them all again, where the window only lays out what's near what you can see.

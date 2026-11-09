@@ -227,6 +227,13 @@ final class PromptsTests: XCTestCase {
         XCTAssertEqual(settings.vocabulary, ["Pepper"])
         XCTAssertEqual(settings.summaryModel, .summary)
         XCTAssertEqual(settings.frontierModel, .frontier)
+        XCTAssertEqual(settings.channelNotifications, [:])
+    }
+
+    func testAHandEditedChannelTakesDefaultsForWhatItLeavesOut() throws {
+        let edited = #"{"channelNotifications":{"general":{"phone":"nothing"}}}"#
+        let settings = try JSONDecoder().decode(Settings.self, from: Data(edited.utf8))
+        XCTAssertEqual(settings.notifications(for: "general"), ChannelNotifications(mac: .everything, phone: .nothing, muted: false))
     }
 
     func testAPlainShortReportNeedsNoSumming() {

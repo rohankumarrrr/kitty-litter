@@ -19,6 +19,8 @@ enum MessagesAction: Equatable {
     case doNotDisturb
     /// You've scrolled back past the top of a channel.
     case older(ChannelID)
+    /// What a channel tells you, from its header.
+    case notifications(ChannelID, ChannelNotifications)
 }
 
 /// Messages, laid out like Slack: Activity, your threads, #general, a channel for each kitten and a DM with the cat. Each
@@ -105,6 +107,8 @@ extension AppController {
     var waiting: Waiting {
         let owners = KittenBoard.Owners(loadKittens())
         var waiting = Waiting(approvals: approvals.pending, reports: inbox.entries, away: away, doNotDisturb: settings.doNotDisturb)
+        waiting.notifications = settings.channelNotifications
+        waiting.phone = settings.phone
         // What used to be the dashboard: work the cat started outside any kitten, while it's going or just finished.
         waiting.shadesWork = watch.rows(at: now()).filter { !hiddenThreads.contains($0.id) && owners.of($0) == nil }
         for thread in latestThreads where !hiddenThreads.contains(thread.id) {
@@ -148,6 +152,8 @@ extension AppController {
             send(words, to: target, shownIn: sent.channel, alsoSent: sent.alsoSent, echoID: id)
         case .older(let channel):
             channels.older(in: channel)
+        case .notifications(let channel, let notifications):
+            setNotifications(notifications, for: channel)
         }
     }
 

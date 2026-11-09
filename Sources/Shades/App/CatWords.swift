@@ -279,6 +279,22 @@ enum CatWords {
     static let doNotDisturbOn = "Do Not Disturb is on"
     static let whileAwayTitle = "While you were away"
 
+    static let notifications = "Notifications"
+    static let muted = "Muted"
+    static let mute = "Mute"
+
+    static func notifyOn(_ device: NotifyDevice) -> String {
+        device == .mac ? "On this Mac" : "On your phone"
+    }
+
+    static func notifyLevel(_ level: NotifyLevel) -> String {
+        switch level {
+        case .everything: "Everything"
+        case .needsYou: "Only when it needs you"
+        case .nothing: "Nothing"
+        }
+    }
+
     /// What came in while Do Not Disturb was on, by kind, for the one bubble once it's off.
     static func whileAway(_ missed: [Missed]) -> String {
         var threads = 0, approvals = 0, questions = 0, lines = 0

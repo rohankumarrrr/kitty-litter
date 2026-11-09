@@ -1,0 +1,35 @@
+front
+phone on
+wait 3
+phone pair
+wait 1
+phone open
+wait 4
+phone subscribe
+wait 2
+notify-finished on
+wait 1
+notifications clawde
+notifications clawde mac needsYou
+notifications clawde phone nothing
+wait 1
+report shipped
+wait 7
+report decision
+wait 7
+notifications steve mute
+channels
+wait 1
+channel steve
+wait 1
+draw .verify/shades/channel-notifications/0-muted
+finish demo-tidy
+wait 8
+approval command npm test
+wait 4
+draw .verify/shades/channel-notifications/1-quiet
+notifications steve mute
+wait 1
+draw .verify/shades/channel-notifications/2-unmuted
+front
+windows

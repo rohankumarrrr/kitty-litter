@@ -5,8 +5,10 @@ import ShadesCore
 /// would have popped up waits as IDs, read again from T3 or the inbox, for one catch-up once it's off. Anything you
 /// start yourself, such as asking the cat, still answers as usual, since you're there.
 extension AppController {
-    /// The one place everything that comes in by itself asks before it pops up. Told no, it's kept for the catch-up.
-    func mayPopUp(_ missed: Missed) -> Bool {
+    /// The one place everything that comes in by itself asks before it pops up, on the Mac or, for a notification, on
+    /// your phone. Its channel can say no for good, which isn't kept. Do Not Disturb keeps what it holds for the catch-up.
+    func mayPopUp(_ missed: Missed, on device: NotifyDevice = .mac) -> Bool {
+        guard channelAllows(missed, on: device) else { return false }
         guard settings.doNotDisturb else { return true }
         keepForLater(missed)
         return false
