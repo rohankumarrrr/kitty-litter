@@ -25,6 +25,9 @@ final class BubbleController {
     private var thinkingTimer: Timer?
     private var armTimer: Timer?
     private var shownAt = Date.distantPast
+    /// What VoiceOver has said since the bubble showed or you last asked, so an answer that comes back after
+    /// an approval isn't read twice.
+    private var said: Set<String> = []
 
     init() {
         panel.contentView = view
@@ -43,11 +46,17 @@ final class BubbleController {
             nextApproval = shown.id != next.id
         }
         let isNew = !(sameKind && panel.isVisible)
-        if case .notice(_, let shown, _)? = self.content, case .notice(_, let next, _) = content, shown != next {
+        if case .notice(_, let shown, _, _)? = self.content, case .notice(_, let next, _, _) = content, shown != next {
             shownAt = Date()
         }
         if case .inbox(let shown)? = self.content, case .inbox(let next) = content, shown != next {
             shownAt = Date()
+        }
+        if let words = content.spoken, words != self.content?.spoken || nextApproval {
+            if case .thinking = content { said = [] }
+            if said.insert(words).inserted || nextApproval {
+                Self.announce(words, priority: content.isUrgent ? .high : .medium)
+            }
         }
         self.content = content
 
@@ -72,12 +81,25 @@ final class BubbleController {
 
     func hide() {
         content = nil
+        said = []
         thinkingTimer?.invalidate()
         armTimer?.invalidate()
         if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         clickMonitor = nil
         panel.orderOut(nil)
         onVisibilityChange?()
+    }
+
+    /// The demo listens in here, to print what VoiceOver was asked to say.
+    static var onAnnounce: ((String, NSAccessibilityPriorityLevel) -> Void)?
+
+    /// Asks VoiceOver to say this. It's only spoken, never sent anywhere.
+    static func announce(_ words: String, priority: NSAccessibilityPriorityLevel = .medium) {
+        onAnnounce?(words, priority)
+        NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested, userInfo: [
+            .announcement: words,
+            .priority: priority.rawValue,
+        ])
     }
 
     private func relayout(keepingWidth: Bool) {

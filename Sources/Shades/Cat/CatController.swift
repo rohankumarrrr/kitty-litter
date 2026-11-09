@@ -32,7 +32,8 @@ final class CatController {
 
     var onClick: (() -> Void)?
     var onShiftClick: (() -> Void)?
-    var onRightClick: ((NSEvent) -> Void)?
+    /// A right-click, or VoiceOver asking for the menu, at this point in the cat's view.
+    var onMenu: ((NSPoint) -> Void)?
     var onStroke: (() -> Void)?
     /// The cat's window moved, so whatever hangs off it should follow.
     var onMove: (() -> Void)?
@@ -52,7 +53,12 @@ final class CatController {
         view.onMouseDown = { [weak self] _ in self?.mouseDown() }
         view.onMouseDragged = { [weak self] _ in self?.mouseDragged() }
         view.onMouseUp = { [weak self] event in self?.mouseUp(event) }
-        view.onRightMouseDown = { [weak self] event in self?.onRightClick?(event) }
+        view.onRightMouseDown = { [weak self] event in self?.onMenu?(event.locationInWindow) }
+        view.onPress = { [weak self] in self?.onClick?() }
+        view.onShowMenu = { [weak self] in
+            guard let self else { return }
+            self.onMenu?(NSPoint(x: self.view.bounds.midX, y: self.view.bounds.midY))
+        }
         view.onDragEnter = { [weak self] in self?.wake() }
 
         // These events don't need any permission, and only wake us while the mouse moves.

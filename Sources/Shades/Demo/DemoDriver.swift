@@ -32,6 +32,11 @@ final class DemoDriver {
             .init(title: "Ask a question") { [weak self] in self?.parts.backend.askQuestion(threadID: "demo-research") },
             .init(title: "Finish all the work") { [weak self] in self?.parts.backend.stopEverything() },
         ]
+        // What VoiceOver was asked to say, which is only ever spoken.
+        BubbleController.onAnnounce = { words, priority in
+            print("voiceover says\(priority == .high ? " at once" : ""): \(words.replacingOccurrences(of: "\n", with: " / "))")
+            fflush(stdout)
+        }
         // A reply you also sent to Steve's channel, which Messages keeps in memory only.
         if let steve = Demo.kittens.first { controller.channels.sent(DemoChannels.alsoSentEcho, in: .of(steve), alsoSent: true) }
         readCommands()
@@ -409,13 +414,32 @@ final class DemoDriver {
         ]
     }
 
+    /// What VoiceOver can find in each window that's showing, and in The Kitty Litter's sidebar.
+    private var voiceOverElements: [(window: String, view: NSView)] {
+        let roots: [(String, NSView?)] = [
+            ("cat", stage.cat.view),
+            ("bubble", stage.bubble.view),
+            ("kittens", stage.kittens.panel.contentView),
+            ("sidebar", stage.channels.view.sidebar),
+            ("pairing", stage.pairing.panel.contentView),
+        ]
+        func elements(in view: NSView) -> [NSView] {
+            guard !view.isHidden else { return [] }
+            return (view.isAccessibilityElement() ? [view] : []) + view.subviews.flatMap(elements)
+        }
+        return roots.flatMap { name, root -> [(window: String, view: NSView)] in
+            guard let root, root.window?.isVisible == true else { return [] }
+            return elements(in: root).map { (name, $0) }
+        }
+    }
+
     private func handle(_ line: String) {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         let word = trimmed.split(separator: " ").first.map(String.init) ?? ""
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | voiceover [window]|press [label]|menu [label] | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -755,6 +779,24 @@ final class DemoDriver {
             parts.context.fails = rest == "off"
         case "ears":
             parts.voice.downloading = rest == "off"
+        case "voiceover":
+            // voiceover [window] lists what VoiceOver finds. voiceover press|menu [label] is VO-Space or VO-Shift-M on the first it calls that.
+            let action = rest.split(separator: " ", maxSplits: 1).map(String.init)
+            guard let verb = action.first, verb == "press" || verb == "menu" else {
+                for (window, view) in voiceOverElements where rest.isEmpty || window == rest {
+                    let value = view.accessibilityValue().map { " value=\(String(describing: $0).prefix(80))" } ?? ""
+                    let help = view.accessibilityHelp().map { " help=[\($0)]" } ?? ""
+                    print("voiceover \(window) \(view.accessibilityRole()?.rawValue ?? "?") [\(view.accessibilityLabel() ?? "")]\(value)\(help)")
+                }
+                break
+            }
+            let label = action.count > 1 ? action[1] : ""
+            guard let view = voiceOverElements.first(where: { $0.view.accessibilityLabel()?.hasPrefix(label) == true })?.view else {
+                print("voiceover finds nothing called [\(label)]")
+                break
+            }
+            let done = verb == "press" ? view.accessibilityPerformPress() : view.accessibilityPerformShowMenu()
+            print("voiceover \(verb) [\(view.accessibilityLabel() ?? "")] \(done ? "done" : "refused")")
         case "windows":
             for (name, window) in windows {
                 print("window \(name) id=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) frame=\(NSStringFromRect(window.frame)) clicks=\(!window.ignoresMouseEvents)")

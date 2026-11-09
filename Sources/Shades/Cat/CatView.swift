@@ -8,6 +8,9 @@ final class CatView: NSView {
     var onMouseDragged: ((NSEvent) -> Void)?
     var onMouseUp: ((NSEvent) -> Void)?
     var onRightMouseDown: ((NSEvent) -> Void)?
+    /// VoiceOver's press and show menu, which do what a click and a right-click do.
+    var onPress: (() -> Void)?
+    var onShowMenu: (() -> Void)?
     var onDragEnter: (() -> Void)?
     /// Something was let go over the cat. Says whether it was taken.
     var onDrop: ((NSPasteboard) -> Bool)?
@@ -22,7 +25,8 @@ final class CatView: NSView {
         layer?.actions = ["contents": NSNull()]
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
-        setAccessibilityLabel("A cat in sunglasses")
+        setAccessibilityLabel(CatWords.catLabel)
+        setAccessibilityHelp(CatWords.catHelp)
     }
 
     @available(*, unavailable)
@@ -52,6 +56,16 @@ final class CatView: NSView {
     override func mouseDragged(with event: NSEvent) { onMouseDragged?(event) }
     override func mouseUp(with event: NSEvent) { onMouseUp?(event) }
     override func rightMouseDown(with event: NSEvent) { onRightMouseDown?(event) }
+
+    override func accessibilityPerformPress() -> Bool {
+        onPress?()
+        return true
+    }
+
+    override func accessibilityPerformShowMenu() -> Bool {
+        onShowMenu?()
+        return true
+    }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         onDragEnter?()

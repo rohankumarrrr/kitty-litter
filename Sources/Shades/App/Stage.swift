@@ -9,7 +9,8 @@ enum BubbleContent: Equatable {
     /// `canReplace` offers a finished rewrite in place of what you'd selected.
     case reply(text: String, done: Bool, threadID: String?, note: String?, canReplace: Bool = false)
     case line(String, threadID: String?)
-    case notice(caption: String, text: String, threadID: String?)
+    /// `asks` is a kitten's question, waiting on your answer.
+    case notice(caption: String, text: String, threadID: String?, asks: Bool = false)
     case approval(ApprovalRequest, position: Int, total: Int)
     case inbox(String)
 }

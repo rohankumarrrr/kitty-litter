@@ -421,7 +421,7 @@ final class AppController {
         }
         if let line { return .line(line.text, threadID: line.threadID) }
         if let notice = notices.first {
-            return .notice(caption: notice.caption, text: notice.text, threadID: notice.threadID)
+            return .notice(caption: notice.caption, text: notice.text, threadID: notice.threadID, asks: notice.questionID != nil)
         }
         if catchingUp {
             let missed = awayNow

@@ -1,0 +1,40 @@
+front
+voiceover cat
+voiceover press Ask Shades
+wait 2
+draw .verify/shades/voiceover/0-pressed
+windows
+front
+esc
+wait 1
+ask what does this cost
+wait 6
+approval command npm test
+wait 4
+draw .verify/shades/voiceover/1-approval
+deny
+wait 1
+question
+wait 3
+esc
+wait 1
+kittens
+wait 1
+voiceover kittens
+voiceover press Steve
+wait 1
+channels
+wait 2
+voiceover sidebar
+voiceover press Threads
+voiceover press Do Not Disturb
+dnd
+voiceover sidebar
+voiceover press Do Not Disturb is on
+dnd
+voiceover menu Ask Shades
+wait 1
+menuitems
+menuclose
+front
+windows

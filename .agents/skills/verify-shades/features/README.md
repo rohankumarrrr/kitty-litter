@@ -32,4 +32,5 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 - [Do Not Disturb](./dnd.md) covers the switch, the cat asleep, every pop-up staying quiet, and catching up in Activity.
 - [Kittens](./kittens.md) covers the view of every kitten and how each is doing.
 - [Keyboard](./keyboard.md) covers reaching and pressing every button in Settings and The Kitty Litter with Tab and Space while Keyboard navigation is on, the ring on the one Tab is on, and none of it giving a window the keyboard.
+- [VoiceOver](./voiceover.md) covers what VoiceOver says as the bubble changes, and pressing the cat, a kitten and the sidebar with it.
 - [Settings](./settings.md) covers every setting in one place, from the menu or The Kitty Litter: models, keys, notifications, each channel's, theme, font, text size, where Open goes, the phone and the privacy list.

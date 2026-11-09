@@ -74,6 +74,11 @@ final class ChannelSidebar: QuietView {
         addSubview(quietButton)
         addSubview(quietOnButton)
         quietOnButton.isHidden = true
+        // Two buttons look like one switch, so VoiceOver hears a checkbox that's ticked or not.
+        quietButton.setAccessibilityRole(.checkBox)
+        quietButton.setAccessibilityValue(0)
+        quietOnButton.setAccessibilityRole(.checkBox)
+        quietOnButton.setAccessibilityValue(1)
         quietButton.onPress = { [weak self] in self?.onDoNotDisturb?() }
         quietOnButton.onPress = { [weak self] in self?.onDoNotDisturb?() }
         themeButton.onPress = { [weak self] in
@@ -169,14 +174,23 @@ final class ChannelSidebarRow: ChannelRowView {
 
     let item: ChannelSidebarItem
     var onPress: (() -> Void)?
-    var isSelected = false { didSet { if isSelected != oldValue { needsDisplay = true } } }
+    var isSelected = false {
+        didSet {
+            guard isSelected != oldValue else { return }
+            setAccessibilityValue(isSelected ? 1 : 0)
+            NSAccessibility.post(element: self, notification: .valueChanged)
+            needsDisplay = true
+        }
+    }
     private var tick = 0
 
     init(item: ChannelSidebarItem) {
         self.item = item
         super.init(frame: .zero)
         setAccessibilityElement(true)
-        setAccessibilityRole(.button)
+        // One place shows at a time, as with tabs, so VoiceOver says which is selected.
+        setAccessibilityRole(.radioButton)
+        setAccessibilityValue(0)
         setAccessibilityLabel(accessibilityWords)
     }
 

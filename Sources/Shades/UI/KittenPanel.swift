@@ -105,7 +105,7 @@ final class KittenPanel {
     }
 }
 
-private final class KittenRow: NSView {
+final class KittenRow: NSView {
     private static let scale: CGFloat = 2
 
     var onPress: ((String) -> Void)?
@@ -149,6 +149,11 @@ private final class KittenRow: NSView {
     override func mouseUp(with event: NSEvent) {
         guard bounds.contains(convert(event.locationInWindow, from: nil)), let threadID = status.threadID else { return }
         onPress?(threadID)
+    }
+    override func accessibilityPerformPress() -> Bool {
+        guard let threadID = status.threadID else { return false }
+        onPress?(threadID)
+        return true
     }
 
     override func draw(_ dirtyRect: NSRect) {

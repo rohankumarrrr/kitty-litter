@@ -680,7 +680,7 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("Sent that to Work.", threadID: "f"))
 
         await askClawde("Read this file and tell me what it does")
-        guard case .notice(_, sendTheLink, _)? = stage.bubble else { return XCTFail("a new thread has nothing else it could mean") }
+        guard case .notice(_, sendTheLink, _, _)? = stage.bubble else { return XCTFail("a new thread has nothing else it could mean") }
     }
 
     func testASendThatFailsTakesTheWarningBack() async {
@@ -874,7 +874,7 @@ final class FlowTests: XCTestCase {
         controller.ask("Read this x thread", snapshot: ScreenSnapshot(appName: "Signal", isPrivate: true))
         await settle()
         await controller.frontierTask?.value
-        guard case .notice("Steve Pawsniak has this.", sendTheLink, _)? = stage.bubble else { return XCTFail("a private app's screen is only a note") }
+        guard case .notice("Steve Pawsniak has this.", sendTheLink, _, _)? = stage.bubble else { return XCTFail("a private app's screen is only a note") }
     }
 
     func testAHandoffWarnsWhenTheScreenDoesntGo() async {
@@ -890,7 +890,7 @@ final class FlowTests: XCTestCase {
         controller.ask("Read this x thread", snapshot: nil)
         await settle()
         await controller.frontierTask?.value
-        guard case .notice(onIt, sendTheLink, _)? = stage.bubble else { return XCTFail("nothing was captured to send") }
+        guard case .notice(onIt, sendTheLink, _, _)? = stage.bubble else { return XCTFail("nothing was captured to send") }
     }
 
     func testAHandoffThatTakesTheScreenGetsNoWarning() async {
@@ -908,7 +908,7 @@ final class FlowTests: XCTestCase {
         failed.status = .failed
         controller.threadsChanged([failed])
         await controller.reportTask?.value
-        guard case .notice(CatWords.failedCaption(failed), _, _)? = stage.bubble else { return XCTFail("the failure should show") }
+        guard case .notice(CatWords.failedCaption(failed), _, _, _)? = stage.bubble else { return XCTFail("the failure should show") }
         XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
     }
 
@@ -1535,7 +1535,7 @@ final class FlowTests: XCTestCase {
         guard case .reply(let text, _, _, _, _)? = stage.bubble else { return XCTFail("the newer answer should be on show") }
         XCTAssertEqual(text, "Red.")
         controller.bubbleDismissed(byClick: true)
-        guard case .notice(let caption, _, _)? = stage.bubble else { return XCTFail("no notice") }
+        guard case .notice(let caption, _, _, _)? = stage.bubble else { return XCTFail("no notice") }
         XCTAssertEqual(caption, "Your correction")
     }
 
@@ -2662,7 +2662,7 @@ final class FlowTests: XCTestCase {
         controller.threadListArrived = true
         controller.checkMyselfPressed()
         await controller.healthTask?.value
-        guard case .notice(_, let text, _)? = stage.bubble else { return XCTFail("nothing said") }
+        guard case .notice(_, let text, _, _)? = stage.bubble else { return XCTFail("nothing said") }
         XCTAssertTrue(text.contains("Steve Pawsniak has no instructions"))
         XCTAssertTrue(text.contains("Steve Pawsniak isn't a T3 project"))
         XCTAssertFalse(text.contains("Cali"), "a kitten that's only planned isn't a problem")
@@ -2956,7 +2956,7 @@ final class FlowTests: XCTestCase {
     func testAFailedSummaryFallsBackToTheReportsOpening() async {
         let report = "Fixed the bug, and the tests pass. " + String(repeating: "More detail follows here. ", count: 30)
         await finishWork(report: report, summary: [.failed(message: "Nope")])
-        guard case .notice(_, let text, _)? = stage.bubble else { return XCTFail("no notice") }
+        guard case .notice(_, let text, _, _)? = stage.bubble else { return XCTFail("no notice") }
         XCTAssertTrue(text.hasPrefix("Fixed the bug, and the tests pass."))
         XCTAssertLessThan(text.count, 200)
     }
@@ -3011,7 +3011,8 @@ final class FlowTests: XCTestCase {
         let expected = BubbleContent.notice(
             caption: "Asking: Work",
             text: "Which one?\n\n• A (Recommended)\n• B\n\nAnd 1 more question.",
-            threadID: "w"
+            threadID: "w",
+            asks: true
         )
         XCTAssertEqual(stage.bubble, expected)
 
@@ -3868,7 +3869,7 @@ final class FlowTests: XCTestCase {
         controller.threadListArrived = true
         controller.checkMyselfPressed()
         await controller.healthTask?.value
-        guard case .notice(_, let text, _)? = controller.notices.last.map({ BubbleContent.notice(caption: $0.caption, text: $0.text, threadID: $0.threadID) }) else {
+        guard case .notice(_, let text, _, _)? = controller.notices.last.map({ BubbleContent.notice(caption: $0.caption, text: $0.text, threadID: $0.threadID) }) else {
             return XCTFail("nothing said")
         }
         XCTAssertTrue(text.contains("can't save your inbox"))

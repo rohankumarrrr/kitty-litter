@@ -56,6 +56,8 @@ Normally you only see Shades. Shift-click him, or choose Kittens from his menu, 
 
 With **Reduce motion** on in System Settings › Accessibility › Display, each kitten holds still in its state's first drawing, here and in The Kitty Litter, and the cat goes straight to where it's going instead of running, so an approval shows at once. When something needs you, the cat's light blinks for five seconds and then stays on, and under Reduce motion it doesn't blink at all.
 
+With VoiceOver on, the cat asks VoiceOver to say each new thing its bubble shows, in the same words, caption first, which `BubbleWords` gives both the bubble and VoiceOver, so it's never told more of your screen than the bubble shows. It's only spoken, never sent anywhere. An answer is said once it's finished, not as it streams, and nothing is said while you talk, so the microphone doesn't hear it. Approvals and kittens' questions go at VoiceOver's high priority, which interrupts what it's reading, and everything else at medium. Each thing is said once while the bubble stays up, so an answer that comes back after an approval isn't read again, and asking again starts afresh. VoiceOver's press on the cat runs the same code as a click, and its show menu opens the right-click menu, so neither makes The Kitty Litter the active app. Pressing a kitten here opens its thread as a click does.
+
 Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the kitten's folder or its `project`, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
 
 ### The Kitty Litter
