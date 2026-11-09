@@ -2604,6 +2604,23 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(t3?.fix, "If macOS is showing a Keychain dialog, answer it, then choose Check Myself from my menu.")
     }
 
+    /// T3 had answered once, so Check Myself, which the finding says to press, waited on each kitten's project for good.
+    func testCheckMyselfReportsWhileSigningInNeverFinishesAfterT3AnsweredOnce() async {
+        kittens = [steve]
+        controller.threadsChanged([session("w", "Work")])
+        backend.neverAnswers = true
+        controller.t3Wait = 0.2
+        let reported = expectation(description: "Check Myself reported")
+        var findings: [HealthFinding] = []
+        Task {
+            findings = await controller.runHealthCheck()
+            reported.fulfill()
+        }
+        await fulfillment(of: [reported], timeout: 5)
+        XCTAssertEqual(findings.first { $0.check == "T3 Code" }?.fix, "If macOS is showing a Keychain dialog, answer it, then choose Check Myself from my menu.")
+        XCTAssertNil(findings.first { $0.check == "kitten: Steve Pawsniak" && !$0.ok }, "and no kitten is called missing from T3 for it")
+    }
+
     func testAFrontDoorWithoutItsFolderIsFound() async {
         routerFolder = nil
         let finding = await controller.runHealthCheck().first { $0.check == "front door" }

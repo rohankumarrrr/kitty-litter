@@ -53,7 +53,8 @@ extension AppController {
         // Right after a launch T3 can take some seconds to send its first list. Finding the front door waits for it,
         // so whether T3 is there is only judged once that's done.
         await waitForThreadList()
-        facts.reachedT3 = threadListArrived
+        // T3 answering once this run says nothing about now, so a check that went unanswered counts as not reaching it.
+        facts.reachedT3 = threadListArrived && !facts.t3DidntAnswer
         facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
         switch frontDoorError {
         case let problem as FrontDoorProblem:
@@ -67,8 +68,13 @@ extension AppController {
 
         for kitten in loadKittens() where !kitten.planned {
             if !fileExists(kitten.folder + "/CLAUDE.md") { facts.kittensWithoutInstructions.append(kitten.name) }
-            if facts.reachedT3, await backend.projectID(atPath: kitten.workspace) == nil {
-                facts.kittensNotInT3.append(kitten)
+            if facts.reachedT3 {
+                // No answer in time isn't the same as no project.
+                switch await withinT3Wait({ [backend] in await backend.projectID(atPath: kitten.workspace) }) {
+                case .some(nil): facts.kittensNotInT3.append(kitten)
+                case nil: facts.t3DidntAnswer = true
+                default: break
+                }
             }
             // Only Claude Code reads the settings that make up the block.
             if !kitten.seesScreen, settings.frontierModel.provider != "claudeAgent" || !screenBlockGaps(kitten.folder).isEmpty {
