@@ -16,6 +16,7 @@ final class AppStage: CatStage {
     let channels = ChannelsWindow()
     let settingsPanel = SettingsPanel()
     let themeMenu = ThemeMenu()
+    let recentFiles = RecentFiles()
     let pairing = PairingPanel()
     let menuBar = MenuBar()
     weak var controller: AppController?
@@ -96,6 +97,7 @@ final class AppStage: CatStage {
         }
         channels.view.onShowOnPhone = { [weak self] id in self?.controller?.showOnPhonePressed(id) }
         channels.view.sidebar.onTheme = { [weak self] anchor in self?.showThemeMenu(under: anchor) }
+        channels.view.onAttach = { [weak self] composer, anchor in self?.showRecentFiles(for: composer, under: anchor) }
         channels.view.onDropTheme = { [weak self] file in self?.controller?.themeChosen(.file(file)) }
         channels.view.onCloseWindow = { [weak self] in self?.hideChannels() }
 
@@ -255,6 +257,19 @@ final class AppStage: CatStage {
         guard let controller else { return }
         themeMenu.show(controller.installedThemes(), current: controller.theme, under: anchor) { [weak controller] choice in
             controller?.themeChosen(choice)
+        }
+    }
+
+    /// Only looks for recent files when you press Attach, off the main thread, since Spotlight can take a moment. What
+    /// you pick is attached as if you'd dropped it there.
+    private func showRecentFiles(for composer: ChannelComposer, under anchor: NSView) {
+        guard let find = controller?.recentFiles else { return }
+        Task { [weak self, weak composer, weak anchor] in
+            let files = await Task.detached { find() }.value
+            guard let self, let anchor, anchor.window != nil else { return }
+            self.recentFiles.show(files, under: anchor) { file in
+                composer?.attach([.file(file)])
+            }
         }
     }
 

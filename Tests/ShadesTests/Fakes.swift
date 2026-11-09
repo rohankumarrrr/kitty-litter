@@ -385,6 +385,21 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         return found.report
     }
 
+    /// Pictures T3 keeps, by attachment ID or by `thread:path`, and each one asked for, in the same form.
+    var keptPictures: [String: Data] = [:]
+    private var _picturesAsked: [String] = []
+    var picturesAsked: [String] { lock.withLock { _picturesAsked } }
+
+    func picture(attachmentID: String) async -> Data? {
+        lock.withLock { _picturesAsked.append(attachmentID) }
+        return keptPictures[attachmentID]
+    }
+
+    func picture(threadID: String, path: String) async -> Data? {
+        lock.withLock { _picturesAsked.append("\(threadID):\(path)") }
+        return keptPictures["\(threadID):\(path)"]
+    }
+
     func origin(of threadID: String) async -> ThreadOrigin? {
         if untraceable.contains(threadID) { return nil }
         return origins[threadID] ?? ThreadOrigin(title: "Work", projectPath: nil, startedBy: .person)

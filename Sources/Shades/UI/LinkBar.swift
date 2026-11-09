@@ -2,15 +2,17 @@ import AppKit
 
 /// Where a link you pressed in Messages goes, over the box: its host, then its whole address, as much of it as fits.
 /// Nothing opens until you press Open, so a link's words can't hide where it leads, and nothing in a message can open
-/// anything by itself.
+/// anything by itself. A web picture asks the same way, with Show, before the Mac fetches it.
 final class LinkBar: QuietView {
     private static let pad: CGFloat = 12
     private static let titleHeight: CGFloat = 18
     private static let buttonGap: CGFloat = 8
 
     var onOpen: ((URL) -> Void)?
+    var onShowPicture: ((URL) -> Void)?
     var onCancel: (() -> Void)?
     private(set) var link: URL?
+    private(set) var isPicture = false
     let open = QuietButton(CatWords.openLink, style: .filled)
     let cancel = QuietButton("Cancel", style: .text)
 
@@ -19,7 +21,7 @@ final class LinkBar: QuietView {
         isHidden = true
         open.onPress = { [weak self] in
             guard let self, let link = self.link else { return }
-            self.onOpen?(link)
+            if self.isPicture { self.onShowPicture?(link) } else { self.onOpen?(link) }
         }
         cancel.onPress = { [weak self] in self?.onCancel?() }
         addSubview(open)
@@ -33,8 +35,10 @@ final class LinkBar: QuietView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func show(_ link: URL?) {
+    func show(_ link: URL?, picture: Bool = false) {
         self.link = link
+        isPicture = picture
+        open.retitle(picture ? CatWords.showPicture : CatWords.openLink)
         isHidden = link == nil
         setAccessibilityLabel(link.map { "\(title) \($0.absoluteString)" })
         needsLayout = true
@@ -42,7 +46,7 @@ final class LinkBar: QuietView {
     }
 
     /// The host it opens, which shows whatever room the address has.
-    var title: String { CatWords.openLink(to: link?.host ?? "") }
+    var title: String { isPicture ? CatWords.showPicture(from: link?.host ?? "") : CatWords.openLink(to: link?.host ?? "") }
 
     private var address: NSAttributedString {
         let wrapping = NSMutableParagraphStyle()

@@ -192,7 +192,7 @@ final class ShadesConversationPrivacyTests: XCTestCase {
         let secrets = ["PRIVATE-APP", "PRIVATE-PAGE", "PRIVATE-FILE", "PRIVATE-READING"]
         let snapshot = ScreenSnapshot(
             appName: "PRIVATE-APP", windowTitle: "PRIVATE-PAGE", url: URL(string: "https://example.invalid/PRIVATE-PAGE"),
-            selectedText: "PRIVATE-PAGE", pageText: "PRIVATE-PAGE", droppedName: "PRIVATE-FILE.pdf"
+            selectedText: "PRIVATE-PAGE", pageText: "PRIVATE-PAGE", droppedNames: ["PRIVATE-FILE.pdf"]
         )
         let fix = AgentThread(id: "fix", title: "Fix: Something in PRIVATE-APP", projectTitle: nil, status: .completed, model: "m", updatedAt: at)
         let handed = AgentThread(id: "handed", title: "PRIVATE-READING of the page", projectTitle: nil, status: .completed, model: "m", updatedAt: at)
@@ -218,7 +218,7 @@ final class ShadesConversationPrivacyTests: XCTestCase {
         let page = PhonePlace.key(.thread("fix", in: .channel(.shades)))
 
         let off = built(onPhone: [])
-        XCTAssertEqual(off.threads["fix"]?.parent.file?.name, "PRIVATE-FILE.pdf", "the Mac shows the file's name, from inside the screen block")
+        XCTAssertEqual(off.threads["fix"]?.parent.files.first?.name, "PRIVATE-FILE.pdf", "the Mac shows the file's name, from inside the screen block")
         XCTAssertFalse(PhoneView(PhonePlace("home", in: off), in: off, now: at).places.contains { $0.key == dm })
         for key in [dm, page, PhonePlace.key(.thread("fix", in: .activity))] {
             XCTAssertNil(PhonePlace(key, in: off).selection, "\(key) reached the phone with every switch off")

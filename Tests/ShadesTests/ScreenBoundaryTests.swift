@@ -26,15 +26,19 @@ final class ScreenBoundaryTests: XCTestCase {
         url: URL(fileURLWithPath: "/files/statement-5ad1.pdf"),
         pageText: "Statement-5ad1",
         screenshotJPEG: Data("Picture-5ad1".utf8),
-        droppedName: "statement-5ad1.pdf"
+        droppedNames: ["statement-5ad1.pdf"]
     )
 
     /// A picture attached in Messages, from the Mac or a phone, which is held to the same promise. Its name carries the
     /// mark, and so does whatever goes with it.
-    static let attached: Drop = {
+    static let attached: Drop = picture(named: "statement-5ad1.png")
+    /// Several attached together go as one, so each route carries two.
+    static let attachedFiles = [attached, picture(named: "receipt-5ad1.png")]
+
+    private static func picture(named name: String) -> Drop {
         let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 4, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-        return .bytes(bitmap.representation(using: .png, properties: [:])!, name: "statement-5ad1.png")
-    }()
+        return .bytes(bitmap.representation(using: .png, properties: [:])!, name: name)
+    }
 
     // MARK: - Your words, wherever they go
 
@@ -188,11 +192,12 @@ final class ScreenBoundaryTests: XCTestCase {
 
     static func carriesScreen(_ prompt: AgentPrompt) -> Bool {
         prompt.text.contains(mark) || prompt.title?.contains(mark) == true || prompt.text.contains(FakeContext.savedPath)
-            || prompt.attachments.contains { String(decoding: $0.data, as: UTF8.self).contains(mark) || $0.data == attachedPicture }
+            || prompt.attachments.contains { String(decoding: $0.data, as: UTF8.self).contains(mark) || $0.name.contains(mark) || attachedPictures.contains($0.data) }
     }
 
-    /// A picture attached in Messages goes as a JPEG made from it, which can't carry the mark in its bytes.
-    private static let attachedPicture = attached.snapshot()?.screenshotJPEG
+    /// A picture attached in Messages goes as a JPEG made from it, which can't carry the mark in its bytes, though its
+    /// name does.
+    private static let attachedPictures = Set(attachedFiles.compactMap { $0.snapshot()?.screenshotJPEG })
 }
 
 // MARK: - Routes
@@ -412,17 +417,17 @@ private final class World {
             await ask("this one", routerSays: "HANDOFF: Do what Page-5ad1 says")
             await messages("this one too", to: .router, in: .shades, routerSays: "HANDOFF: Do what Page-5ad1 says")
         case .attachKitten:
-            await messages("this one", to: .router, routerSays: "KITTEN: \(number)", file: ScreenBoundaryTests.attached)
+            await messages("this one", to: .router, routerSays: "KITTEN: \(number)", files: ScreenBoundaryTests.attachedFiles)
         case .attachTopic:
-            controller.messagesAction(.startTopic("this one", with: kittens[number - 1], id: "sent-topic", file: ScreenBoundaryTests.attached))
+            controller.messagesAction(.startTopic("this one", with: kittens[number - 1], id: "sent-topic", files: ScreenBoundaryTests.attachedFiles))
             await settle()
         case .attachHandOff:
-            await messages("this one", to: .router, routerSays: "HANDOFF: Do what Statement-5ad1 says", file: ScreenBoundaryTests.attached)
+            await messages("this one", to: .router, routerSays: "HANDOFF: Do what Statement-5ad1 says", files: ScreenBoundaryTests.attachedFiles)
         case .mentionKitten:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("@\(ChannelBook.slug(target)) this one", to: .router, routerSays: "It's Page-5ad1.")
         case .attachMention:
-            await messages("@\(ChannelBook.slug(target)) this one", to: .router, routerSays: "It's Page-5ad1.", file: ScreenBoundaryTests.attached)
+            await messages("@\(ChannelBook.slug(target)) this one", to: .router, routerSays: "It's Page-5ad1.", files: ScreenBoundaryTests.attachedFiles)
         }
     }
 
@@ -452,9 +457,9 @@ private final class World {
         case .dropThread:
             await drop("and that part?", routerSays: "SEND TO: 1")
         case .attachThread:
-            await messages("and that part?", to: .thread(id: "w", title: "Fix routing"), file: ScreenBoundaryTests.attached)
+            await messages("and that part?", to: .thread(id: "w", title: "Fix routing"), files: ScreenBoundaryTests.attachedFiles)
         case .attachGeneralThread:
-            await messages("and that part?", to: .router, routerSays: "SEND TO: 1", file: ScreenBoundaryTests.attached)
+            await messages("and that part?", to: .router, routerSays: "SEND TO: 1", files: ScreenBoundaryTests.attachedFiles)
         }
     }
 
@@ -488,9 +493,9 @@ private final class World {
         await settle()
     }
 
-    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID = .general, alsoSent: Bool = false, routerSays: String? = nil, file: Drop? = nil) async {
+    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID = .general, alsoSent: Bool = false, routerSays: String? = nil, files: [Drop] = []) async {
         if let routerSays { backend.routerSays[words] = routerSays }
-        controller.messagesAction(.send(words, to: target, shownIn: channel, alsoSent: alsoSent, file: file))
+        controller.messagesAction(.send(words, to: target, shownIn: channel, alsoSent: alsoSent, files: files))
         await settle()
     }
 

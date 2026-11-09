@@ -80,7 +80,9 @@ MainActor.assumeIsolated {
                 saveTheme: { theme in
                     if !DevFlags.wantsFlow { try ColorTheme.save(theme) }
                 },
-                installedThemes: { ColorTheme.installed(home: FileManager.default.homeDirectoryForCurrentUser, t3Home: T3Backend.defaultHome) }
+                installedThemes: { ColorTheme.installed(home: FileManager.default.homeDirectoryForCurrentUser, t3Home: T3Backend.defaultHome) },
+                recentFiles: { RecentFiles.find() },
+                webPicture: { await WebPicture.fetch($0) }
             ),
             stage: stage
         )

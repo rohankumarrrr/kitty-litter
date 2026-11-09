@@ -281,8 +281,8 @@ public struct Exchange: Sendable, Equatable, Identifiable {
     /// How many things it said on the way to that reply.
     public var earlierNotes: Int
     public var failure: String?
-    /// The name of a file or picture that came with what was asked, never what's in it.
-    public var file: String?
+    /// The files or pictures that came with what was asked, never what's in them.
+    public var files: [ExchangeFile]
 
     public init(
         id: String,
@@ -293,7 +293,7 @@ public struct Exchange: Sendable, Equatable, Identifiable {
         repliedAt: Date? = nil,
         earlierNotes: Int = 0,
         failure: String? = nil,
-        file: String? = nil
+        files: [ExchangeFile] = []
     ) {
         self.id = id
         self.asker = asker
@@ -303,7 +303,18 @@ public struct Exchange: Sendable, Equatable, Identifiable {
         self.repliedAt = repliedAt
         self.earlierNotes = earlierNotes
         self.failure = failure
-        self.file = file
+        self.files = files
+    }
+}
+
+/// A file or picture that came with a message: its name, and for a picture T3 keeps, T3's ID for it.
+public struct ExchangeFile: Sendable, Equatable {
+    public var name: String
+    public var attachmentID: String?
+
+    public init(name: String, attachmentID: String? = nil) {
+        self.name = name
+        self.attachmentID = attachmentID
     }
 }
 
@@ -364,6 +375,11 @@ public protocol AgentBackend: AnyObject, Sendable {
     func origin(of threadID: String) async -> ThreadOrigin?
     /// The threads whose messages have these words, best first. `nil` if T3 can't be asked.
     func threads(matching words: String) async -> [String]?
+    /// A picture sent with a message, by the ID of the copy T3 keeps, or `nil` if T3 won't give it.
+    func picture(attachmentID: String) async -> Data?
+    /// A picture in the folder a thread works in, by its path there, or `nil` if T3 won't give it. T3 never lets the
+    /// path out of that folder, symbolic links and all, so a reply naming one can't reach anything else.
+    func picture(threadID: String, path: String) async -> Data?
 }
 
 public extension AgentBackend {
@@ -382,4 +398,6 @@ public extension AgentBackend {
     func finalReport(threadID: String) async -> String? { (try? await report(threadID: threadID, run: nil)) ?? nil }
     func origin(of threadID: String) async -> ThreadOrigin? { nil }
     func threads(matching words: String) async -> [String]? { nil }
+    func picture(attachmentID: String) async -> Data? { nil }
+    func picture(threadID: String, path: String) async -> Data? { nil }
 }

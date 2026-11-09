@@ -15,8 +15,8 @@ struct PhoneAsk: Decodable {
     var kind: String?
     /// A thread's "Also send to #channel".
     var also: Bool?
-    /// A photo or file the page sent ahead, by the ID the Mac gave it.
-    var file: String?
+    /// Photos and files the page sent ahead, by the IDs the Mac gave them.
+    var files: [String]?
 
     /// The same action the window would take, and the key of where the phone goes next, or `nil` if the window
     /// couldn't do it either.
@@ -25,19 +25,20 @@ struct PhoneAsk: Decodable {
         switch act {
         case "send":
             let words = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let attached = file.flatMap(uploaded)
-            guard let key, !words.isEmpty || attached != nil, file == nil || attached != nil else { return nil }
+            let ids = files ?? []
+            let attached = ids.compactMap(uploaded)
+            guard let key, !words.isEmpty || !attached.isEmpty, attached.count == ids.count, Set(ids).count == ids.count, ids.count <= Drop.mostAtOnce else { return nil }
             let place = PhonePlace(key, in: book)
-            guard let target = place.target, attached == nil || target.takesFiles else { return nil }
+            guard let target = place.target, attached.isEmpty || target.takesFiles else { return nil }
             switch target {
             case .router:
-                return (.send(words, to: target, shownIn: place.selection?.channelID, file: attached), nil)
+                return (.send(words, to: target, shownIn: place.selection?.channelID, files: attached), nil)
             case .thread(let id, _, _):
                 let home = book.home(ofThread: id)
-                return (.send(words, to: target, shownIn: home, alsoSent: also == true && place.alsoSendTo(in: book) != nil, file: attached), nil)
+                return (.send(words, to: target, shownIn: home, alsoSent: also == true && place.alsoSendTo(in: book) != nil, files: attached), nil)
             case .newThread(let kitten):
                 let topic = newTopic()
-                return (.startTopic(words, with: kitten, id: topic, file: attached), PhonePlace.key(.thread(topic, in: .channel(.of(kitten)))))
+                return (.startTopic(words, with: kitten, id: topic, files: attached), PhonePlace.key(.thread(topic, in: .channel(.of(kitten)))))
             case .starting, .question:
                 return nil
             }
@@ -82,6 +83,14 @@ struct PhoneAsk: Decodable {
         case "older":
             guard let channel = key.flatMap({ PhonePlace($0, in: book).selection?.channelID }), channel != .shades else { return nil }
             return (.older(channel), nil)
+        case "picture":
+            // The address the page showed, and only if it's a web picture on a message the phone is shown, which is never
+            // the cat's own work, so a phone can't have the Mac fetch any other address, and pictures moving on the
+            // message can't make it fetch another.
+            guard let message = id.flatMap(book.message), book.home(ofThread: message.threadID) != .shades,
+                  let url = message.files.lazy.compactMap(\.source?.webAddress).first(where: { $0.absoluteString == value })
+            else { return nil }
+            return (.showPicture(url), nil)
         default:
             return nil
         }

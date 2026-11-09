@@ -160,7 +160,7 @@ extension AppController {
         let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
         // Your words alone would only make sense with the file, so nothing goes, except a correction in them,
         // which the owner gets on its own.
-        if !seesScreen, snapshot?.droppedName != nil {
+        if !seesScreen, snapshot?.isDropped == true {
             if let refused { refused() } else { onStarted?(nil) }
             say(CatWords.cantTakeFiles(kitten.name))
             if errand == .correction { give(words, to: kitten, snapshot: nil, as: .correctionCopy) }
@@ -217,7 +217,7 @@ extension AppController {
             // Neither does one working for a kitten that isn't meant to see it, or one that won't say.
             var seesScreen = thread.runtimeMode != nil && thread.runtimeMode != .fullAccess
             if seesScreen, snapshot != nil { seesScreen = await isClearOfScreenlessKittens(thread) }
-            guard seesScreen || snapshot?.droppedName == nil else {
+            guard seesScreen || snapshot?.isDropped != true else {
                 say(CatWords.cantTakeFiles(thread.title))
                 refused?()
                 return

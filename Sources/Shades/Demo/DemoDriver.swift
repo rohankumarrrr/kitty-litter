@@ -115,7 +115,7 @@ final class DemoDriver {
             // The same as taking a photo with the page's camera button: a made-up picture goes up, as the page sends one.
             guard let phone else { return print("The page isn't open. Try: phone open") }
             Task {
-                print("[phone] \(await phone.runAsync(DemoPhone.attachPicture))")
+                print("[phone] \(await phone.runAsync(DemoPhone.attachPicture(named: rest.isEmpty ? "keyboard" : rest)))")
                 fflush(stdout)
             }
         case "send":
@@ -153,7 +153,7 @@ final class DemoDriver {
             phone?.close()
             phone = nil
         default:
-            print("phone on | off | pair | open [place] | go [place] | attach | send [words] | press [button] | search [words] | answer [words] | subscribe | text | select [words] | link [words] | unselect | close")
+            print("phone on | off | pair | open [place] | go [place] | attach [name] | send [words] | press [button] | search [words] | answer [words] | subscribe | text | select [words] | link [words] | unselect | close")
         }
     }
 
@@ -278,6 +278,34 @@ final class DemoDriver {
         }
     }
 
+    /// `webpicture` presses the first web picture showing, which only shows its address, and `webpicture show` presses Show.
+    private func pressPicture(_ words: String) {
+        let view = stage.channels.view
+        if words == "show" {
+            guard let bar = [view.pane.linkBar, view.threadPane.linkBar].first(where: { !$0.isHidden && $0.isPicture }), let link = bar.link else { return print("no Show to press") }
+            bar.open.onPress?()
+            return print("showed \(link.absoluteString)")
+        }
+        let rows = view.pane.shownMessageRows + view.threadPane.shownMessageRows
+        guard let row = rows.first(where: { $0.webPictures.first != nil }), let link = row.webPictures.first else { return print("no web picture shows") }
+        row.onShowPicture?(link)
+        let bars = [view.pane.linkBar, view.threadPane.linkBar].filter { !$0.isHidden }
+        print("link bar shows \(bars.map { "\($0.title) \($0.link?.absoluteString ?? "")" })")
+    }
+
+    /// `recent` lists what Attach's menu offers, and `recent <n>` picks the nth, as choosing it from the menu does.
+    private func pickRecent(_ words: String) {
+        let files = controller.recentFiles()
+        let items = stage.recentFiles.items(files)
+        guard let number = Int(words) else {
+            return items.forEach { print($0.isSeparatorItem ? "recent ---" : "recent \($0.title)\($0.isEnabled ? "" : " (a note)")") }
+        }
+        guard files.indices.contains(number - 1) else { return print("no recent file \(number)") }
+        let view = stage.channels.view
+        let taken = (view.selection.thread == nil ? view.pane : view.threadPane).composer.attach([.file(files[number - 1])])
+        print("attached \(files[number - 1].lastPathComponent), taken: \(taken)")
+    }
+
     private func allSubviews(of view: NSView?) -> [NSView] {
         guard let view else { return [] }
         return view.subviews + view.subviews.flatMap { allSubviews(of: $0) }
@@ -294,6 +322,11 @@ final class DemoDriver {
     /// activity, threads, general, home, the start of a kitten's name for its channel, or a key as it is.
     private func phoneKey(_ place: String) -> String {
         if ["activity", "threads", "general", "home"].contains(place) { return place }
+        // `steve/demo-steve-yesterday` is that thread, in that kitten's channel.
+        let parts = place.split(separator: "/", maxSplits: 1).map(String.init)
+        if parts.count == 2, let kitten = Demo.kittens.first(where: { $0.name.lowercased().hasPrefix(parts[0].lowercased()) }) {
+            return PhonePlace.key(.thread(parts[1], in: .channel(.of(kitten))))
+        }
         if let kitten = Demo.kittens.first(where: { $0.name.lowercased().hasPrefix(place.lowercased()) }) {
             return PhonePlace.key(.channel(.of(kitten)))
         }
@@ -355,7 +388,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -529,7 +562,7 @@ final class DemoDriver {
             case "picture": Demo.samplePicture().map(Drop.picture)
             default: rest.isEmpty ? nil : .file(URL(fileURLWithPath: rest))
             }
-            let taken = drop.map { (view.selection.thread == nil ? view.pane : view.threadPane).composer.attach($0) } ?? false
+            let taken = drop.map { (view.selection.thread == nil ? view.pane : view.threadPane).composer.attach([$0]) } ?? false
             print("attached \(drop?.name ?? rest), taken: \(taken)")
         case "settings":
             // Opens Settings from the menu, or turns to a page of it: `settings messages`.
@@ -672,6 +705,10 @@ final class DemoDriver {
             highlight(rest)
         case "link":
             pressLink(rest)
+        case "webpicture":
+            pressPicture(rest)
+        case "recent":
+            pickRecent(rest)
         case "copy":
             // Where ⌘C in Messages would go and what it would copy, without copying, so your pasteboard is left alone.
             let target = NSApp.target(forAction: #selector(NSText.copy(_:)), to: nil, from: stage.channels.panel)

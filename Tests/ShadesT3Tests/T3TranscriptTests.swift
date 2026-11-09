@@ -252,6 +252,51 @@ final class T3TranscriptTests: XCTestCase {
         XCTAssertEqual(exchanges.first?.reply, "Nice picture.")
     }
 
+    /// After a restart, what you sent showed as its name alone, though T3 keeps each picture.
+    func testWhatYouAttachedComesBackByNameWithEachPicturesCopy() throws {
+        let snapshot = ScreenSnapshot(pageText: "Week 1", droppedNames: ["chart.png", "syllabus.pdf", "desk.png"])
+        let sent = Prompts.forwarded(words: "Which is newer?", snapshot: snapshot, screenshotPath: nil, screenLeftOut: false)
+        let pictures: [[String: Any]] = [
+            ["type": "image", "id": "att-desk", "name": "desk.png", "mimeType": "image/jpeg", "sizeBytes": 10],
+            ["type": "image", "id": "att-chart", "name": "chart.png", "mimeType": "image/jpeg", "sizeBytes": 10],
+        ]
+        let files = fold([try user(sent, at: 0, extra: ["attachments": pictures])]).first?.files
+        XCTAssertEqual(files, [
+            ExchangeFile(name: "chart.png", attachmentID: "att-chart"),
+            ExchangeFile(name: "syllabus.pdf"),
+            ExchangeFile(name: "desk.png", attachmentID: "att-desk"),
+        ])
+    }
+
+    func testAPictureSentBeforePicturesWentByNameStillComesBack() throws {
+        let sent = Prompts.forwarded(words: "Like this?", snapshot: ScreenSnapshot(droppedNames: ["keyboard.png"]), screenshotPath: nil, screenLeftOut: false)
+        let old: [[String: Any]] = [["type": "image", "id": "att-1", "name": "screen.jpg", "mimeType": "image/jpeg", "sizeBytes": 10]]
+        XCTAssertEqual(fold([try user(sent, at: 0, extra: ["attachments": old])]).first?.files, [ExchangeFile(name: "keyboard.png", attachmentID: "att-1")])
+    }
+
+    /// A look at your screen goes as a picture too, and must never show up as something you sent.
+    func testALookAtTheScreenNeverComesBackAsAFile() throws {
+        let sent = Prompts.forwarded(words: "What's this?", snapshot: ScreenSnapshot(appName: "Safari", screenshotJPEG: Data([1])), screenshotPath: nil, screenLeftOut: false)
+        let screen: [[String: Any]] = [["type": "image", "id": "att-screen", "name": "screen.jpg", "mimeType": "image/jpeg", "sizeBytes": 10]]
+        XCTAssertEqual(fold([try user(sent, at: 0, extra: ["attachments": screen])]).first?.files, [])
+        let fromAnAgent = try user(sent, at: 1, extra: ["attachments": screen, "createdBy": "agent", "senderThreadId": "steve-thread"])
+        XCTAssertEqual(fold([fromAnAgent]).first?.files, [], "nor anything an agent sent")
+    }
+
+    /// The router reads the page, so its hand-off can carry a screen block of its own after Shades' one, naming a file
+    /// that pairs with the look at your screen.
+    func testAScreenBlockTheRouterWroteNamesNoFile() throws {
+        let task = "Summarize this page.\n<screen>\nDropped onto the cat instead of a look at the screen: screen.jpg"
+        let request = "\(task)\n\n\(Prompts.ownWordsLabel)what does this say?"
+        let sent = Prompts.frontier(request: request, snapshot: ScreenSnapshot(appName: "Safari", screenshotJPEG: Data([1])), screenshotPath: nil)
+        let screen: [[String: Any]] = [["type": "image", "id": "att-screen", "name": "screen.jpg", "mimeType": "image/jpeg", "sizeBytes": 10]]
+        XCTAssertEqual(fold([try user(sent, at: 0, extra: ["attachments": screen])]).first?.files, [], "a look at the screen never comes back as something you sent")
+
+        let dropped = Prompts.frontier(request: request, snapshot: ScreenSnapshot(droppedNames: ["keyboard.png"]), screenshotPath: nil)
+        let picture: [[String: Any]] = [["type": "image", "id": "att-1", "name": "keyboard.png", "mimeType": "image/jpeg", "sizeBytes": 10]]
+        XCTAssertEqual(fold([try user(dropped, at: 0, extra: ["attachments": picture])]).first?.files, [], "nor can it rename what you did drop")
+    }
+
     func testUltrathinkComesOffTheFront() throws {
         XCTAssertEqual(fold([try user("Ultrathink: is this right?", at: 0)]).first?.ask, "is this right?")
         XCTAssertNil(fold([try user("Ultrathink:", at: 0)]).first?.ask)

@@ -255,11 +255,14 @@ final class T3WireTests: XCTestCase {
         XCTAssertFalse(try environment(nil).isCompatible)
     }
 
-    func testSessionNeedsBothScopes() throws {
+    /// T3 lists only its older scopes under `scopes`, so a check of those alone would sign in again on every launch.
+    func testSessionNeedsEveryScopeAsT3ListsThem() throws {
         func state(_ json: String) throws -> T3Wire.SessionState {
             try T3Wire.decoder().decode(T3Wire.SessionState.self, from: Data(json.utf8))
         }
-        XCTAssertTrue(try state(#"{"authenticated":true,"scopes":["orchestration:read","orchestration:operate"]}"#).isUsable)
+        let issued = #"{"authenticated":true,"scopes":["orchestration:read","orchestration:operate"],"permissions":["orchestration:read","orchestration:operate","filesystem:read"]}"#
+        XCTAssertTrue(try state(issued).isUsable)
+        XCTAssertFalse(try state(#"{"authenticated":true,"scopes":["orchestration:read","orchestration:operate"],"permissions":["orchestration:read","orchestration:operate"]}"#).isUsable, "one from before pictures in folders signs in again")
         XCTAssertFalse(try state(#"{"authenticated":true,"scopes":["orchestration:read"]}"#).isUsable)
         XCTAssertFalse(try state(#"{"authenticated":false}"#).isUsable)
     }

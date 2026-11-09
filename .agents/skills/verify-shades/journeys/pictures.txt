@@ -1,0 +1,46 @@
+front
+channels
+wait 1
+channel steve
+wait 1
+thread cramped
+wait 1
+recent
+recent 1
+attach pdf
+attach picture
+wait 0.5
+draw .verify/shades/pictures/1-three-attached
+send Which of these fits the plans?
+wait 2
+draw .verify/shades/pictures/2-sent
+back
+wait 1
+thread logo
+wait 2
+draw .verify/shades/pictures/3-agent-pictures
+webpicture
+wait 0.5
+draw .verify/shades/pictures/4-asks-first
+webpicture show
+wait 1.5
+draw .verify/shades/pictures/5-shown
+phone on
+wait 1
+wait 3
+phone open steve/demo-steve-yesterday
+wait 4
+draw .verify/shades/pictures/6-phone-thread
+phone go steve/demo-tidy
+wait 3
+phone attach keyboard
+wait 2
+phone attach desk
+wait 2
+draw .verify/shades/pictures/7-phone-attached
+phone send Two photos from my phone
+wait 4
+draw .verify/shades/pictures/8-phone-sent
+phone close
+front
+windows

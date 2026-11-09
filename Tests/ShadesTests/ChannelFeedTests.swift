@@ -667,7 +667,7 @@ extension ChannelFeedTests {
     func testOnlyWordsYouSentCanGoAgain() {
         var failed = ChannelMessage(exchangeID: "x", kind: .ask, speaker: .you, text: "Shorter", at: start, threadID: "a", threadTitle: "", failure: "Not sent")
         XCTAssertTrue(failed.canTryAgain)
-        failed.file = ChannelFile(name: "plan.pdf")
+        failed.files = [ChannelFile(name: "plan.pdf")]
         XCTAssertFalse(failed.canTryAgain, "a file isn't kept, and what stops one going is still there next time")
         let theirs = ChannelMessage(exchangeID: "x", kind: .reply, speaker: .kitten(steve.id), text: nil, at: start, threadID: "a", threadTitle: "", failure: "Ran out of quota")
         XCTAssertFalse(theirs.canTryAgain, "a kitten's failed turn is its own")

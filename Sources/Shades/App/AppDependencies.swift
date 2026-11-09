@@ -50,4 +50,8 @@ struct AppDependencies {
     var saveTheme: (ColorTheme?) throws -> Void = { _ in }
     /// The themes other apps on this Mac have, for Messages to offer.
     var installedThemes: () -> [ColorTheme.Found] = { [] }
+    /// The pictures and PDFs you've opened lately, for Attach in Messages.
+    var recentFiles: @Sendable () -> [URL] = { [] }
+    /// A web picture a reply points at, fetched once you've pressed Show on it.
+    var webPicture: @Sendable (URL) async -> Data? = { _ in nil }
 }

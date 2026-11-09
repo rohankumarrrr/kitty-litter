@@ -33,8 +33,8 @@ enum T3Transcript {
                 let asker: Exchange.Asker = item.scheduledTaskId != nil ? .schedule
                     : item.isFromPerson ? .you : .agent(threadID: item.agentSenderThreadID.flatMap(sender))
                 let ask = item.isFromPerson ? ownWords(item.text) : shown(item.text)
-                let file = item.isFromPerson ? item.text.flatMap(Prompts.droppedName) : nil
-                exchanges.append(Exchange(id: item.id, asker: asker, askedAt: item.when, ask: ask, file: file))
+                let files = item.isFromPerson ? T3Wire.files(of: item) : []
+                exchanges.append(Exchange(id: item.id, asker: asker, askedAt: item.when, ask: ask, files: files))
             } else if item.isSpoken, let words = shown(item.text) {
                 let index = exchange(answeredBy: item)
                 if exchanges[index].reply != nil { exchanges[index].earlierNotes += 1 }

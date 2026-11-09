@@ -67,7 +67,8 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
         print("[demo] forwarded to \(threadID) with \(attachments.count) attachments: \(Self.oneLine(text))")
         // Kept as T3 keeps it, so Messages reads your words back from the thread once it's moved.
-        let asked = Exchange(id: UUID().uuidString, asker: .you, askedAt: Date(), ask: Prompts.ownWords(in: text))
+        // T3 keeps what was attached by name, as a real echo does.
+        let asked = Exchange(id: UUID().uuidString, asker: .you, askedAt: Date(), ask: Prompts.ownWords(in: text), files: Prompts.droppedNames(in: text).map { ExchangeFile(name: $0) })
         lock.withLock {
             said[threadID, default: DemoChannels.transcripts[threadID] ?? DemoBusy.transcripts[threadID] ?? []].append(asked)
             moved[threadID] = Date()
@@ -138,6 +139,15 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         guard let thread = await allThreads()?.first(where: { $0.id == threadID }) else { return nil }
         let askedBy = ["demo-steve-from-clawde": "demo-clawde-main", "demo-clawde-from-steve": "demo-steve-fonts", "demo-steve-from-pepper": "demo-pepper-plans"]
         return ThreadOrigin(title: thread.title, projectPath: thread.projectPath, startedBy: askedBy[threadID].map(ThreadOrigin.Starter.thread) ?? .person)
+    }
+
+    /// Made-up pictures, as T3 would give them: the one you sent in the logo thread, and the one in Steve's folder.
+    func picture(attachmentID: String) async -> Data? {
+        attachmentID == DemoChannels.sentPicture ? Demo.samplePicture() : nil
+    }
+
+    func picture(threadID: String, path: String) async -> Data? {
+        (threadID, path) == DemoChannels.folderPicture ? Demo.samplePicture() : nil
     }
 
     func exchanges(threadID: String) async -> [Exchange]? {
@@ -539,6 +549,13 @@ enum Demo {
         return bitmap.representation(using: .png, properties: [:])
     }
 
+    /// The same picture as a file, as one you'd have opened lately.
+    static func samplePictureFile() -> URL? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("keyboard.png")
+        guard let data = samplePicture(), (try? data.write(to: url)) != nil else { return nil }
+        return url
+    }
+
     static func samplePDF() -> URL? {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("syllabus.pdf")
         var page = CGRect(x: 0, y: 0, width: 612, height: 792)
@@ -623,6 +640,12 @@ enum Demo {
             installedThemes: {
                 let home = Demo.sampleThemes()
                 return ColorTheme.installed(home: home, t3Home: home.appendingPathComponent(".t3", isDirectory: true))
+            },
+            recentFiles: { [Demo.samplePictureFile(), Demo.samplePDF()].compactMap { $0 } },
+            // Nothing leaves the Mac, so a web picture you press Show on is a made-up one.
+            webPicture: { url in
+                print("[demo] would fetch the picture at \(url.absoluteString)")
+                return Demo.samplePicture()
             }
         )
         return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys)

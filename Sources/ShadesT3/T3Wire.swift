@@ -8,7 +8,8 @@ enum T3Wire {
     /// The only orchestration protocol this client speaks. The server turns away anything else.
     static let protocolVersion = 2
     static let protocolQueryItem = URLQueryItem(name: "orchestrationProtocol", value: "2")
-    static let scopes = ["orchestration:read", "orchestration:operate"]
+    /// `filesystem:read` is only for a picture in a thread's own folder, which T3 keeps the path inside.
+    static let scopes = ["orchestration:read", "orchestration:operate", "filesystem:read"]
 
     enum Route {
         static let environment = "/.well-known/t3/environment"
@@ -27,6 +28,7 @@ enum T3Wire {
         static let ensureScratch = "projects.ensureScratch"
         static let mutateProject = "projects.mutate"
         static let createUploadURL = "attachments.createUploadUrl"
+        static let createAssetURL = "assets.createUrl"
     }
 
     /// Link that makes the desktop app show a thread.
@@ -100,11 +102,13 @@ enum T3Wire {
 
     struct SessionState: Decodable {
         let authenticated: Bool
+        /// Only T3's older scopes. Newer ones, such as `filesystem:read`, are only in `permissions`.
         let scopes: [String]?
+        let permissions: [String]?
         let expiresAt: Date?
 
         var isUsable: Bool {
-            authenticated && Set(scopes ?? []).isSuperset(of: T3Wire.scopes)
+            authenticated && Set(permissions ?? scopes ?? []).isSuperset(of: T3Wire.scopes)
         }
     }
 
@@ -245,6 +249,37 @@ enum T3Wire {
 
     struct UploadTicket: Decodable {
         let attachmentId: String
+        let relativeUrl: String
+    }
+
+    /// Something T3 keeps, which it hands out as a signed link. A file in a thread's folder is looked up by T3, which
+    /// turns away any path that leads out of that folder.
+    enum Asset: Encodable {
+        case attachment(id: String)
+        case workspaceFile(threadID: String, path: String)
+
+        private enum Keys: String, CodingKey { case _tag, attachmentId, disposition, threadId, path }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: Keys.self)
+            switch self {
+            case .attachment(let id):
+                try container.encode("attachment", forKey: ._tag)
+                try container.encode(id, forKey: .attachmentId)
+                try container.encode("inline", forKey: .disposition)
+            case .workspaceFile(let threadID, let path):
+                try container.encode("workspace-file", forKey: ._tag)
+                try container.encode(threadID, forKey: .threadId)
+                try container.encode(path, forKey: .path)
+            }
+        }
+    }
+
+    struct CreateAssetURL: Encodable {
+        let resource: Asset
+    }
+
+    struct AssetURL: Decodable {
         let relativeUrl: String
     }
 
@@ -671,6 +706,11 @@ enum T3Wire {
             let nativeId: String
         }
 
+        struct Attachment: Decodable {
+            let id: String
+            let name: String
+        }
+
         let id: String
         let type: String
         let status: String
@@ -697,6 +737,8 @@ enum T3Wire {
         let failure: Failure?
         /// Questions for the user.
         let questions: [Question]?
+        /// User messages: the pictures that came with it, which T3 keeps.
+        let attachments: [Lossy<Attachment>]?
         /// User messages: who sent it. Agents' messages name the thread they came from.
         let createdBy: String?
         let senderThreadId: String?
@@ -721,6 +763,19 @@ enum T3Wire {
         var isCommandOrFileChange: Bool { type == "command_execution" || type == "file_change" }
         var isOpenApproval: Bool {
             type == "approval_request" && !["completed", "failed", "cancelled"].contains(status)
+        }
+    }
+
+    /// What was dropped or attached with a message, by the names Shades wrote in its screen block, each picture with
+    /// T3's ID for the copy it keeps. A look at the screen names nothing, so its picture never comes back this way.
+    /// A message from before pictures went by their names has one, called `screen.jpg`.
+    static func files(of item: TurnItem) -> [ExchangeFile] {
+        let names = item.text.map(Prompts.droppedNames) ?? []
+        var kept = item.attachments?.compactMap(\.value) ?? []
+        if names.count == 1, kept.count == 1 { kept[0] = TurnItem.Attachment(id: kept[0].id, name: names[0]) }
+        return names.map { name in
+            guard let index = kept.firstIndex(where: { $0.name == name }) else { return ExchangeFile(name: name) }
+            return ExchangeFile(name: name, attachmentID: kept.remove(at: index).id)
         }
     }
 

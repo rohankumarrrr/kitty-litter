@@ -246,14 +246,20 @@ public enum Prompts {
 
     private static let droppedLabel = "Dropped onto the cat instead of a look at the screen: "
 
-    /// The name of what was dropped or attached, from the line Shades writes first in its own screen block, which is
-    /// the last one, since what's on a screen has its tags taken out. Never anything in the file.
-    public static func droppedName(in prompt: String) -> String? {
-        guard let block = prompt.range(of: "<screen>\n", options: .backwards) else { return nil }
-        let first = prompt[block.upperBound...].prefix { !$0.isNewline }
-        guard first.hasPrefix(droppedLabel) else { return nil }
-        let name = first.dropFirst(droppedLabel.count).trimmingCharacters(in: .whitespaces)
-        return name.isEmpty ? nil : name
+    /// The names of what was dropped or attached, from the lines Shades writes first in its own screen block, one a
+    /// file. Never anything in the files. Shades writes one block, and the warning before it that names its tags, and
+    /// takes the tags out of what's on a screen, so another means something else wrote one, such as a router's
+    /// hand-off steered by a page, and then no name counts.
+    public static func droppedNames(in prompt: String) -> [String] {
+        let opened = prompt.replacingOccurrences(of: untrusted, with: "").ranges(of: #/<\s*screen\b/#.ignoresCase())
+        guard opened.count == 1, let block = prompt.range(of: "<screen>\n") else { return [] }
+        var names: [String] = []
+        for line in prompt[block.upperBound...].split(separator: "\n", omittingEmptySubsequences: false) {
+            guard line.hasPrefix(droppedLabel) else { break }
+            let name = line.dropFirst(droppedLabel.count).trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty { names.append(name) }
+        }
+        return names
     }
 
     /// The user pointed at something broken. The marked area is what they mean.
@@ -390,7 +396,8 @@ public enum Prompts {
         if snapshot.isPrivate { return "<screen>Hidden: the user keeps this app private.</screen>" }
 
         var lines: [String] = []
-        if let name = snapshot.droppedName { lines.append("\(droppedLabel)\(name)") }
+        // A name is one line, so the next can't pass for another file.
+        lines += snapshot.droppedNames.map { "\(droppedLabel)\($0.split(whereSeparator: \.isNewline).joined(separator: " "))" }
         if let app = snapshot.appName { lines.append("App: \(app)") }
         if let title = snapshot.windowTitle { lines.append("Window: \(title)") }
         if let url = snapshot.url { lines.append("URL: \(url.absoluteString)") }

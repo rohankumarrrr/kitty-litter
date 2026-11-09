@@ -2,13 +2,13 @@ import Foundation
 import ShadesContext
 import ShadesCore
 
-/// What Messages can ask for. Nothing in it can say anything for you: sending takes words you typed, and a file only
-/// goes with them if you attached it.
+/// What Messages can ask for. Nothing in it can say anything for you: sending takes words you typed, and files only
+/// go with them if you attached them.
 enum MessagesAction: Equatable {
     /// `alsoSent` is a thread's "Also send to #channel", which shows your reply in `shownIn` as well.
-    case send(String, to: MessageTarget, shownIn: ChannelID?, alsoSent: Bool = false, file: Drop? = nil)
+    case send(String, to: MessageTarget, shownIn: ChannelID?, alsoSent: Bool = false, files: [Drop] = [])
     /// A new thread in the kitten's folder. `id` is what Messages calls it until T3 has its thread.
-    case startTopic(String, with: Kitten, id: String, file: Drop? = nil)
+    case startTopic(String, with: Kitten, id: String, files: [Drop] = [])
     case approval(ApprovalRequest, ApprovalDecision)
     /// Every part of a question's answer, in order: the options picked, or your own words alone.
     case answer(AgentQuestion, [[String]])
@@ -29,6 +29,8 @@ enum MessagesAction: Equatable {
     case react(String, Reaction)
     /// Words you're searching for, which T3 is asked about too, for threads Messages hasn't read.
     case find(String)
+    /// A picture on the web a reply points at, which you've seen the whole address of and pressed Show on.
+    case showPicture(URL)
 }
 
 /// Messages, laid out like Slack: Activity, your threads, #general, a channel for each kitten and a DM with the cat. Each
@@ -141,12 +143,12 @@ extension AppController {
 
     func messagesAction(_ action: MessagesAction) {
         switch action {
-        case .send(let words, let target, let channel, let alsoSent, let file):
+        case .send(let words, let target, let channel, let alsoSent, let files):
             // An @kitten in #general goes straight to that kitten, rather than the router choosing.
             let named = target == .router && channel == .general ? MessageTarget.mentioned(in: words, among: loadKittens().filter { !$0.planned }) : nil
-            send(words, to: named.map(MessageTarget.newThread) ?? target, shownIn: channel, alsoSent: alsoSent, file: file)
-        case .startTopic(let words, let kitten, let id, let file):
-            send(words, to: .newThread(kitten), shownIn: .of(kitten), echoID: id, file: file)
+            send(words, to: named.map(MessageTarget.newThread) ?? target, shownIn: channel, alsoSent: alsoSent, files: files)
+        case .startTopic(let words, let kitten, let id, let files):
+            send(words, to: .newThread(kitten), shownIn: .of(kitten), echoID: id, files: files)
         case .approval(let request, let decision):
             answer(request, decision)
         case .answer(let question, let answers):
@@ -182,6 +184,8 @@ extension AppController {
             channels.refresh()
         case .find(let words):
             channels.find(words)
+        case .showPicture(let url):
+            channels.pictures.show(url)
         }
     }
 
@@ -201,37 +205,38 @@ extension AppController {
     }
 
     /// Each way of sending passes on your words and nothing else: no screen, and nothing anyone else said. What's shown
-    /// meanwhile is kept in memory only, and a reply also sent to a channel is too until T3 has it. A file you attached
-    /// goes the way one dropped onto the cat does, only where your screen may, and where it can't, nothing goes and
-    /// Messages says why.
-    func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, alsoSent: Bool = false, echoID: String = "sent-\(UUID().uuidString)", file: Drop? = nil) {
-        guard let file else { return send(words, to: target, shownIn: channel, alsoSent: alsoSent, echoID: echoID, snapshot: nil) }
+    /// meanwhile is kept in memory only, and a reply also sent to a channel is too until T3 has it. Files you attached
+    /// go together the way one dropped onto the cat does, only where your screen may, and where they can't, nothing
+    /// goes and Messages says why.
+    func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, alsoSent: Bool = false, echoID: String = "sent-\(UUID().uuidString)", files: [Drop] = []) {
+        guard !files.isEmpty else { return send(words, to: target, shownIn: channel, alsoSent: alsoSent, echoID: echoID, snapshot: nil) }
         let words = words.isEmpty ? CatWords.summarize : words
-        let shown = ChannelFile(name: file.name, thumbnail: file.thumbnail())
-        // It's read off the main thread, since a long PDF takes a moment.
+        let files = Array(files.prefix(Drop.mostAtOnce))
+        let shown = files.map { ChannelFile(name: $0.name, thumbnail: $0.thumbnail()) }
+        // They're read off the main thread, since a long PDF takes a moment.
         attachTask = Task {
-            let snapshot = await Task.detached { file.snapshot() }.value
+            let snapshot = await Task.detached { Drop.snapshot(of: files) }.value
             guard let snapshot else {
-                showSent(words, echoID: echoID, file: shown, to: target, in: channel)
+                showSent(words, echoID: echoID, files: shown, to: target, in: channel)
                 return channels.failed(echoID, because: CatWords.cantReadThat)
             }
-            send(words, to: target, shownIn: channel, alsoSent: alsoSent, echoID: echoID, snapshot: snapshot, file: shown)
+            send(words, to: target, shownIn: channel, alsoSent: alsoSent, echoID: echoID, snapshot: snapshot, files: shown)
         }
     }
 
-    /// A file that couldn't be read still shows where you sent it, with why it went nowhere.
-    private func showSent(_ words: String, echoID: String, file: ChannelFile, to target: MessageTarget, in channel: ChannelID?) {
+    /// Files that couldn't be read still show where you sent them, with why they went nowhere.
+    private func showSent(_ words: String, echoID: String, files: [ChannelFile], to target: MessageTarget, in channel: ChannelID?) {
         guard let channel else { return }
         var threadID = ""
         if case .thread(let id, _, _) = target { threadID = id }
-        let message = ChannelMessage(exchangeID: echoID, kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: "", file: file)
+        let message = ChannelMessage(exchangeID: echoID, kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: "", files: files)
         channels.sent(message, in: channel, startsThread: { if case .newThread = target { true } else { false } }(), isReply: !threadID.isEmpty)
     }
 
-    private func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, alsoSent: Bool, echoID: String, snapshot: ScreenSnapshot?, file: ChannelFile? = nil) {
+    private func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, alsoSent: Bool, echoID: String, snapshot: ScreenSnapshot?, files: [ChannelFile] = []) {
         func echo(threadID: String = "", title: String = "", startsThread: Bool = false, isReply: Bool = false) {
             guard let channel else { return }
-            let message = ChannelMessage(exchangeID: echoID, kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: title, file: file, isSending: true)
+            let message = ChannelMessage(exchangeID: echoID, kind: .ask, speaker: .you, text: words, at: now(), threadID: threadID, threadTitle: title, files: files, isSending: true)
             channels.sent(message, in: channel, startsThread: startsThread, alsoSent: alsoSent && !threadID.isEmpty, isReply: isReply, target: target)
         }
         switch target {

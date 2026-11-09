@@ -2,7 +2,7 @@ import Foundation
 
 /// A message's markdown, read once by Foundation's parser into blocks that Messages and the phone both draw. It's only
 /// ever words: a link is to an http or https address or it's plain words, and a picture is its description, so nothing
-/// in a message loads or runs by itself.
+/// in a message loads or runs by itself. The pictures it points at are found by `pictures(in:)`, and shown under it.
 struct Markup: Equatable {
     struct Span: Equatable, Encodable {
         var text: String
@@ -117,9 +117,29 @@ struct Markup: Equatable {
         }
     }
 
+    /// A picture a message points at: its description, and the address or path it gave.
+    struct Picture: Equatable {
+        var name: String
+        var url: URL
+    }
+
+    /// The pictures written in markdown, in order, at most `Drop.mostAtOnce`.
+    static func pictures(in text: String) -> [Picture] {
+        guard text.contains("!["), let parsed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)) else { return [] }
+        let pictures = parsed.runs.compactMap { run in
+            run.imageURL.map { url in
+                let said = String(parsed[run.range].characters).replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                return Picture(name: said.isEmpty ? (url.lastPathComponent.isEmpty ? url.host ?? "" : url.lastPathComponent) : said, url: url)
+            }
+        }
+        return Array(pictures.prefix(10))
+    }
+
     private static func span(_ run: AttributedString.Runs.Run, _ text: String, pulls: [String: String]) -> Span {
         let intent = run.inlinePresentationIntent ?? []
-        // A line break in what was written stays one, as it was before markdown had blocks.
+        // A line break in what was written stays one, as it was before markdown had blocks. A picture with no
+        // description is nothing here, since it shows under the message.
+        let text = run.imageURL != nil ? text.replacingOccurrences(of: "\u{FFFC}", with: "") : text
         var span = Span(text: intent.contains(.softBreak) || intent.contains(.lineBreak) ? "\n" : text)
         if intent.contains(.stronglyEmphasized) { span.bold = true }
         if intent.contains(.emphasized) { span.italic = true }

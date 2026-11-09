@@ -150,7 +150,7 @@ extension AppController {
         guard !takenBack.contains(generation) else { return }
         // Whoever it's passed to gets their own say on the snapshot, so this only holds it back from here.
         let shared = settings.quickMode == .fullAccess ? nil : snapshot
-        guard shared != nil || snapshot?.droppedName == nil else {
+        guard shared != nil || snapshot?.isDropped != true else {
             let refused = CatWords.cantTakeFiles(ModelNames.friendly(model))
             // It could have held a correction, and nothing else will say it went nowhere.
             guard generation == replyGeneration else {
@@ -395,7 +395,7 @@ extension AppController {
     func handOff(task: String, question: String, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil) {
         // With full access, neither the page nor the quick agent's reading of it gets to reach it.
         guard settings.frontierMode != .fullAccess else {
-            guard snapshot?.droppedName == nil else {
+            guard snapshot?.isDropped != true else {
                 onStarted?(nil)
                 say(CatWords.cantTakeFiles(frontierName))
                 return
@@ -428,8 +428,11 @@ extension AppController {
         return (try? context.saveScreenshot(of: snapshot)) ?? nil
     }
 
+    /// What was dropped or attached goes by each picture's own name, which is how Messages finds it again after a restart.
     func attachments(for snapshot: ScreenSnapshot?) -> [AgentAttachment] {
-        guard let snapshot, !snapshot.isPrivate, let jpeg = snapshot.screenshotJPEG else { return [] }
+        guard let snapshot, !snapshot.isPrivate else { return [] }
+        if snapshot.isDropped { return snapshot.pictures }
+        guard let jpeg = snapshot.screenshotJPEG else { return [] }
         return [AgentAttachment(name: "screen.jpg", mimeType: "image/jpeg", data: jpeg)]
     }
 

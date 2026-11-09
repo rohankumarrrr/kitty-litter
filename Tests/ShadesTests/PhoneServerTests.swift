@@ -2,6 +2,7 @@ import Darwin
 import AppKit
 import CryptoKit
 @testable import Shades
+import ShadesContext
 import ShadesCore
 import XCTest
 
@@ -331,19 +332,33 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(kept.status, 200)
         let id = try XCTUnwrap(kept.id)
 
-        let (made, _) = try await page(#"{"act":"send","key":"\#(dm)","text":"Can I expense this?","file":"made-up"}"#, key: key)
+        let (made, _) = try await page(#"{"act":"send","key":"\#(dm)","text":"Can I expense this?","files":["made-up"]}"#, key: key)
         XCTAssertEqual(made, 409, "only a file this phone sent")
-        let (status, _) = try await page(#"{"act":"send","key":"\#(dm)","text":"Can I expense this?","file":"\#(id)"}"#, key: key)
+        let (status, _) = try await page(#"{"act":"send","key":"\#(dm)","text":"Can I expense this?","files":["\#(id)"]}"#, key: key)
         XCTAssertEqual(status, 200)
         await until { backend.sent.contains { $0.mode == .start } }
         let started = try XCTUnwrap(backend.sent.first { $0.mode == .start })
         XCTAssertEqual(started.prompt.projectID, "project-penny")
         XCTAssertTrue(started.prompt.text.hasPrefix("Can I expense this?"))
-        XCTAssertEqual(Prompts.droppedName(in: started.prompt.text), "receipt photo.png")
+        XCTAssertEqual(Prompts.droppedNames(in: started.prompt.text).first, "receipt photo.png")
         XCTAssertEqual(started.prompt.attachments.count, 1)
         XCTAssertFalse(log.all.contains("snapshot"), "nothing was captured")
-        let (again, _) = try await page(#"{"act":"send","key":"\#(dm)","text":"And again","file":"\#(id)"}"#, key: key)
+        let (again, _) = try await page(#"{"act":"send","key":"\#(dm)","text":"And again","files":["\#(id)"]}"#, key: key)
         XCTAssertEqual(again, 409, "a file goes once")
+
+        // Taking one off and adding another used to push out one still attached, so none could go.
+        var ids: [String] = []
+        for _ in 0..<Drop.mostAtOnce {
+            let uploaded = try await upload(photo, key: key)
+            ids.append(try XCTUnwrap(uploaded.id))
+        }
+        let (dropped, _) = try await page(#"{"act":"unattach","id":"\#(ids.removeLast())"}"#, key: key)
+        XCTAssertEqual(dropped, 204)
+        let replacement = try await upload(photo, key: key)
+        ids.append(try XCTUnwrap(replacement.id))
+        let list = ids.map { "\"\($0)\"" }.joined(separator: ",")
+        let (ten, _) = try await page(#"{"act":"send","key":"\#(dm)","text":"Ten","files":[\#(list)]}"#, key: key)
+        XCTAssertEqual(ten, 200, "ten attached, ten sent")
     }
 
     func testMovingAroundThePhoneKeepsWhatYouJustSent() async throws {
