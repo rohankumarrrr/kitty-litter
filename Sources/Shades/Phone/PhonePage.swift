@@ -178,6 +178,11 @@ enum PhonePage {
         .more { color: var(--soft); font-size: 14px; margin: 4px 12px 0; }
         .failure { color: var(--warn); font-size: 13px; margin: 3px 12px 0; }
         .retry { color: var(--you); font-size: 14px; font-weight: 600; margin: 4px 12px 0; }
+        .reactions { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 8px 0; }
+        .reactions button { background: var(--grey); border-radius: 999px; padding: 2px 9px; font-size: 15px; }
+        .reactbar { display: flex; gap: 2px; margin: 6px 4px 0; padding: 4px 6px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; }
+        .reactbar button { font-size: 24px; padding: 2px 5px; border-radius: 999px; }
+        .reactbar button.on { background: var(--grey); }
         .context { color: var(--soft); font-size: 12px; margin: 6px 12px 0; text-align: left; }
         .replybar { display: flex; align-items: center; gap: 6px; margin: 4px 6px 0; padding: 4px 8px; border-radius: 10px; font-size: 13px; }
         .replybar:active { background: var(--grey); }
@@ -519,7 +524,7 @@ enum PhonePage {
           // A file is for where you attached it, so it never follows you anywhere else.
           if (fresh || !next.box || !next.box.files) unattach();
           if (next.box) {
-            $('label').textContent = next.box.label;
+            label();
             $('words').placeholder = next.box.placeholder;
             $('send').disabled = !next.box.ready || uploading;
             for (const id of ['attach', 'camera']) $(id).hidden = !next.box.files;
@@ -774,7 +779,33 @@ enum PhonePage {
               act({ act: 'retry', id: item.id }).then((done) => { if (!done) event.target.disabled = false; });
             }, 'retry'));
           }
+          if (item.reactions && item.reactions.length) {
+            const marks = el('div', 'reactions');
+            for (const reaction of item.reactions) marks.append(button(reaction.label, () => act({ act: 'react', id: item.id, value: reaction.value })));
+            node.append(marks);
+          }
+          // Tapping what it said offers the reactions, except on a thread's parent, where a tap opens the thread.
+          const bubble = node.querySelector('.bubble');
+          if (item.reactions && bubble && item.kind !== 'parent') {
+            bubble.addEventListener('click', (event) => {
+              if (selecting() || event.target.closest('[role=link], button')) return;
+              react(node, item);
+            });
+          }
           return node;
+        }
+
+        // A reaction is only a mark, kept on the Mac, and never goes to an agent.
+        function react(node, item) {
+          const open = node.querySelector('.reactbar');
+          document.querySelectorAll('.reactbar').forEach((bar) => bar.remove());
+          if (open) return;
+          const bar = el('div', 'reactbar');
+          for (const mark of view.marks) {
+            const on = item.reactions.some((reaction) => reaction.value === mark.value);
+            bar.append(button(mark.label, () => { bar.remove(); act({ act: 'react', id: item.id, value: mark.value }); }, on ? 'on' : null));
+          }
+          node.append(bar);
         }
 
         // A kitten's markdown as the Mac read it, built as nodes and never markup. Only web addresses are links, and
@@ -972,6 +1003,7 @@ enum PhonePage {
           $('also').checked = false;
           unattach();
           fit();
+          label();
           if (done.open) go(done.open);
         };
 
@@ -1056,6 +1088,16 @@ enum PhonePage {
           words.style.height = words.scrollHeight + 'px';
         }
         $('words').addEventListener('input', fit);
+        $('words').addEventListener('input', label);
+
+        // Words that @ a kitten in #general go straight to it, and the line says so as you type, read the way the Mac
+        // reads them: the first @ and a channel's name, as a word of its own.
+        function label() {
+          if (!view || !view.box) return;
+          const mentions = view.box.mentions || {};
+          const named = $('words').value.split(/\s+/).map((word) => (word.match(/^@([\p{L}\p{N}_-]+)/u) || [])[1]).find((name) => name && mentions[name.toLowerCase()]);
+          $('label').textContent = named ? mentions[named.toLowerCase()] : view.box.label;
+        }
 
         $('pairform').onsubmit = async (event) => {
           event.preventDefault();

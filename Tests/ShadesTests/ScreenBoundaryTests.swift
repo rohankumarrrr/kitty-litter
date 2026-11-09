@@ -188,8 +188,11 @@ final class ScreenBoundaryTests: XCTestCase {
 
     static func carriesScreen(_ prompt: AgentPrompt) -> Bool {
         prompt.text.contains(mark) || prompt.title?.contains(mark) == true || prompt.text.contains(FakeContext.savedPath)
-            || prompt.attachments.contains { String(decoding: $0.data, as: UTF8.self).contains(mark) }
+            || prompt.attachments.contains { String(decoding: $0.data, as: UTF8.self).contains(mark) || $0.data == attachedPicture }
     }
+
+    /// A picture attached in Messages goes as a JPEG made from it, which can't carry the mark in its bytes.
+    private static let attachedPicture = attached.snapshot()?.screenshotJPEG
 }
 
 // MARK: - Routes
@@ -220,6 +223,10 @@ private enum Give: CaseIterable {
     case attachTopic
     /// A file attached in #general, and the router hands it to the frontier agent.
     case attachHandOff
+    /// #general in Messages, with an @ naming the kitten, so the router doesn't choose.
+    case mentionKitten
+    /// A file attached in #general, with an @ naming the kitten.
+    case attachMention
 
     var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff, .shadesHandOff, .attachHandOff].contains(self) }
 }
@@ -411,6 +418,11 @@ private final class World {
             await settle()
         case .attachHandOff:
             await messages("this one", to: .router, routerSays: "HANDOFF: Do what Statement-5ad1 says", file: ScreenBoundaryTests.attached)
+        case .mentionKitten:
+            await ask("what's this?", routerSays: "It's Page-5ad1.")
+            await messages("@\(ChannelBook.slug(target)) this one", to: .router, routerSays: "It's Page-5ad1.")
+        case .attachMention:
+            await messages("@\(ChannelBook.slug(target)) this one", to: .router, routerSays: "It's Page-5ad1.", file: ScreenBoundaryTests.attached)
         }
     }
 

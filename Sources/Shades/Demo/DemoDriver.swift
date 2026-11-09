@@ -300,7 +300,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -441,6 +441,18 @@ final class DemoDriver {
             let row = (view.pane.shownMessageRows + view.threadPane.shownMessageRows).last { $0.onTryAgain != nil }
             print(row == nil ? "nothing to try again" : "tried again")
             row?.onTryAgain?()
+        case "draft":
+            // The same as typing into that box without sending, such as `draft @pepper how's my budget?`.
+            let view = stage.channels.view
+            let text = (view.selection.thread == nil ? view.pane : view.threadPane).composer.textView
+            text.insertText(rest, replacementRange: NSRange(location: (text.string as NSString).length, length: 0))
+        case "react":
+            // The same as picking a reaction from React on the last message that takes one, such as `react thumbsUp`.
+            let view = stage.channels.view
+            let row = (view.pane.shownMessageRows + view.threadPane.shownMessageRows).last { $0.onReact != nil }
+            guard let reaction = Reaction(rawValue: rest) else { return print("react " + Reaction.allCases.map(\.rawValue).joined(separator: " | ")) }
+            print(row.map { "reacted \(reaction.emoji) to [\(($0.accessibilityLabel() ?? "").prefix(70))]" } ?? "nothing takes a reaction")
+            row?.onReact?(reaction)
         case "attach":
             // The same as dropping a file onto that box: `attach pdf` makes up a syllabus, `attach picture` a picture.
             let view = stage.channels.view

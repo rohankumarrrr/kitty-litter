@@ -197,6 +197,8 @@ struct PhoneView: Encodable, Equatable {
         var also: String?
         /// Whether a photo or file can go with your words, which an answer to a question can't.
         var files = true
+        /// In #general, the line for words that @ each kitten, by its channel's name.
+        var mentions: [String: String]?
     }
 
     /// The latest reply under a thread in Threads.
@@ -267,6 +269,8 @@ struct PhoneView: Encodable, Equatable {
         var picture: String?
         /// A message's words as the Mac read them, for the page to build without reading any markdown itself.
         var markup: [Markup.Block]?
+        /// Your reactions on a message T3 has, or `nil` for one that can't take any.
+        var reactions: [Choice]?
     }
 
     var key: String
@@ -287,6 +291,8 @@ struct PhoneView: Encodable, Equatable {
     /// Your picture, beside yours and for you in reply bars. Unlike a cat's, it comes only in what a paired phone is
     /// sent, never from an address of its own.
     var you: String?
+    /// Every reaction there is, for tapping a message.
+    var marks = Reaction.allCases.map { Choice(label: $0.emoji, value: $0.rawValue) }
 
     /// `newFrom` is where each thread's New line was when this phone came here, as the window keeps it.
     init(_ place: PhonePlace, in book: ChannelBook, now: Date, newFrom: [String: String] = [:]) {
@@ -296,12 +302,13 @@ struct PhoneView: Encodable, Equatable {
         let channel = place.selection?.channelID
         let also = place.alsoSendTo(in: book).map { CatWords.alsoSendTo(book.title(of: $0)) }
         box = place.target.map { target in
+            let mentions = target == .router && channel == .general ? Dictionary(book.mentionable.map { (ChannelBook.slug($0.name), CatWords.mentioning($0)) }, uniquingKeysWith: { first, _ in first }) : nil
             var label = CatWords.target(target, in: channel)
             // Not by its title, as `title(ofThread:)` says.
             if case .thread(let id, _, let report) = target, book.home(ofThread: id) == .shades {
                 label = CatWords.target(.thread(id: id, title: "", report: report))
             }
-            return Box(label: label, placeholder: CatWords.placeholder(target, in: channel, name: channel.map(book.name)), ready: target.isReady, also: also, files: target.takesFiles)
+            return Box(label: label, placeholder: CatWords.placeholder(target, in: channel, name: channel.map(book.name)), ready: target.isReady, also: also, files: target.takesFiles, mentions: mentions)
         }
         guard let selection = place.selection else {
             title = CatWords.messagesTitle
@@ -420,7 +427,8 @@ struct PhoneView: Encodable, Equatable {
             file: file?.name,
             // Only ever a JPEG Shades made, as base64.
             picture: file?.thumbnail.map { "data:image/jpeg;base64,\($0.base64EncodedString())" },
-            markup: text.map { Markup($0, pulls: book.pulls).blocks }
+            markup: text.map { Markup($0, pulls: book.pulls).blocks },
+            reactions: message.reactions?.map { Choice(label: $0.emoji, value: $0.rawValue) }
         )
     }
 

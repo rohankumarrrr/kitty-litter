@@ -294,6 +294,40 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(hello.retry)
     }
 
+    /// A reaction is only a mark on a message T3 has, from the fixed few, and the page shows the ones it has.
+    func testAPhoneReactsOnlyWithAMarkOnAMessageT3Has() throws {
+        let sending = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Hello?", at: noon, threadID: "", threadTitle: "", isSending: true)
+        let book = ChannelBook.build(
+            kittens: [steve], threads: [thread("a", of: steve)],
+            transcripts: ["a": [Exchange(id: "e1", asker: .you, askedAt: noon, ask: "How's it going?", reply: "Fine.", repliedAt: noon)]],
+            isReading: false, unreadable: 0, cantReachT3: false,
+            sent: [SentMessage(channel: .general, message: sending)],
+            reactions: ["e1:reply": [.eyes]]
+        )
+        XCTAssertEqual(ask("react", id: "e1:reply", value: "thumbsUp").action(in: book) { "x" }?.action, .react("e1:reply", .thumbsUp))
+        XCTAssertNil(ask("react", id: "e1:reply", value: "Ship it").action(in: book) { "x" }, "only one of the marks, never words")
+        XCTAssertNil(ask("react", id: sending.id, value: "thumbsUp").action(in: book) { "x" }, "nor on what T3 doesn't have")
+        XCTAssertNil(ask("react", id: "made-up", value: "thumbsUp").action(in: book) { "x" })
+
+        let thread = PhoneView(PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book), in: book, now: noon)
+        let reply = try XCTUnwrap(thread.rows.last { $0.kind == "message" })
+        XCTAssertEqual(reply.reactions, [PhoneView.Choice(label: "👀", value: "eyes")])
+        XCTAssertEqual(thread.marks.count, Reaction.allCases.count)
+        let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
+        XCTAssertNil(general.rows.first { $0.kind == "message" }?.reactions)
+    }
+
+    /// The line over #general's box can say who an @ names, as the window's does, for every kitten that's set up.
+    func testGeneralsBoxKnowsWhoAnAtGoesTo() {
+        let cali = Kitten(name: "Cali", role: "Travel", covers: "", folder: "/k/cali", planned: true)
+        let book = ChannelBook.build(kittens: [steve, pepper, cali], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
+        XCTAssertEqual(general.box?.mentions, ["steve-pawsniak": CatWords.mentioning(steve), "pepper": CatWords.mentioning(pepper)])
+        XCTAssertNil(PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon).box?.mentions)
+        XCTAssertEqual(MessageTarget.mentioned(in: "Ask @Steve-Pawsniak: and @pepper", among: book.mentionable), steve)
+        XCTAssertNil(MessageTarget.mentioned(in: "me@pepper.com @cali", among: book.mentionable))
+    }
+
     func testScrollingBackOnThePhoneLoadsAChannelsOlderPostsButNeverTheCatsDM() {
         let book = book()
         XCTAssertEqual(ask("older", key: PhonePlace.key(.channel(.of(steve)))).action(in: book) { "x" }?.action, .older(.of(steve)))

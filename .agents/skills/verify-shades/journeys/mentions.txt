@@ -1,0 +1,42 @@
+front
+channels
+wait 1
+colors Cursor/Opal Horizon
+channel general
+wait 1
+draft @pepper how much did I spend on food?
+wait 0.5
+draw .verify/shades/mentions/1-typing
+send @steve-pawsniak can you tighten my resume summary?
+wait 4
+draw .verify/shades/mentions/2-sent
+channel steve
+wait 3
+react thumbsUp
+wait 0.5
+react check
+wait 0.5
+draw .verify/shades/mentions/3-reacted
+react thumbsUp
+wait 0.5
+draw .verify/shades/mentions/4-took-it-off
+phone on
+wait 4
+phone pair
+wait 2
+phone open steve
+wait 6
+phone js [...document.querySelectorAll('.reactions button')].map((b) => b.textContent).join(' ')
+draw .verify/shades/mentions/5-phone
+phone js (() => { const bars = [...document.querySelectorAll('.replybar')]; const bar = bars[bars.length - 1]; if (!bar) return 'no reply bar'; bar.click(); return 'opened the thread' })()
+wait 4
+phone js (() => { const b = [...document.querySelectorAll('.msg:not(.mine) .bubble')].find((b) => !b.closest('.msg').querySelector('.replybar')); if (!b) return 'no reply'; b.click(); return document.querySelectorAll('.reactbar button').length + ' marks offered' })()
+wait 1
+draw .verify/shades/mentions/6-phone-bar
+phone js (() => { const b = [...document.querySelectorAll('.reactbar button')].find((b) => b.textContent === '🎉'); if (!b) return 'no marks'; b.click(); return 'tapped 🎉' })()
+wait 3
+phone js [...document.querySelectorAll('.reactions button')].map((b) => b.textContent).join(' ')
+draw .verify/shades/mentions/7-phone-reacted
+wait 2
+front
+windows

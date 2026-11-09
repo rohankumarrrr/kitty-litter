@@ -285,6 +285,7 @@ final class AppController {
         channels.alsoSent = { [weak self] in Set(self?.inbox.alsoSent.keys ?? [:].keys) }
         channels.alsoSentToGeneral = { [weak self] in self?.inbox.alsoSentToGeneral.mapValues(\.thread) ?? [:] }
         channels.keepAlsoSent = { [weak self] in self?.keepAlsoSent($0) }
+        channels.reactions = { [weak self] in self?.inbox.reactions ?? [:] }
     }
 
     func start() {

@@ -480,7 +480,39 @@ final class InboxTests: XCTestCase {
         XCTAssertEqual(before.catsWork, [:])
         XCTAssertEqual(before.onPhone, [:])
         XCTAssertEqual(before.alsoSent, [:])
+        XCTAssertEqual(before.reactions, [:])
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
+    }
+
+    /// A reaction is a mark and never words, so all that's kept is which message, by T3's ID, and which mark.
+    func testReactionsAreSavedAsIDsAndPressingOneAgainTakesItOff() throws {
+        let file = try folder().appendingPathComponent("inbox.json")
+        var inbox = Inbox(since: start)
+        inbox.react(.thumbsUp, to: "turn:reply", at: start)
+        inbox.react(.eyes, to: "turn:reply", at: start)
+        inbox.react(.heart, to: "other:ask", at: start)
+        inbox.react(.heart, to: "other:ask", at: start)
+        try inbox.save(to: file)
+        XCTAssertEqual(Inbox.load(from: file, now: start).reactions, ["turn:reply": [.thumbsUp, .eyes]], "in the order you added them, and the second press took it off")
+        let saved = try String(contentsOf: file, encoding: .utf8)
+        XCTAssertTrue(saved.contains("\"thumbsUp\""))
+        XCTAssertFalse(saved.contains("👍"), "by its name")
+
+        // One a later Shades added isn't lost by this one, or read as something it isn't.
+        let later = saved.replacingOccurrences(of: "\"eyes\"", with: "\"rocket\"")
+        try later.write(to: file, atomically: true, encoding: .utf8)
+        var loaded = Inbox.load(from: file, now: start)
+        XCTAssertEqual(loaded.reactions, ["turn:reply": [.thumbsUp]])
+        loaded.react(.thumbsUp, to: "turn:reply", at: start)
+        XCTAssertEqual(loaded.reactions, [:])
+        try loaded.save(to: file)
+        XCTAssertTrue(try String(contentsOf: file, encoding: .utf8).contains("\"rocket\""))
+
+        for index in 0...Inbox.placesKept {
+            inbox.react(.check, to: "t\(index):reply", at: start.addingTimeInterval(TimeInterval(index)))
+        }
+        XCTAssertEqual(inbox.reactions.count, Inbox.placesKept, "only the newest are kept")
+        XCTAssertNil(inbox.reactions["turn:reply"])
     }
 
     func testOnlyTheNewestPlacesAreKept() {

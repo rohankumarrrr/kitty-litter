@@ -38,6 +38,8 @@ final class ChannelFeed {
     /// is in.
     var alsoSent: () -> Set<String> = { [] }
     var alsoSentToGeneral: () -> [String: String] = { [:] }
+    /// Your reactions, by the ID of each message T3 has.
+    var reactions: () -> [String: [Reaction]] = { [:] }
     /// Hands over the replies also sent to a channel that T3 has now, so their IDs can be kept.
     var keepAlsoSent: ([String: ChannelBook.HeardAlsoSent]) -> Void = { _ in }
     /// What's on the screen, whose threads are read before the rest.
@@ -415,6 +417,7 @@ final class ChannelFeed {
             olderPages: olderPages,
             loadingOlder: loadingOlder,
             couldntRead: couldntRead,
+            reactions: reactions(),
             said: { reply in
                 let words = self.said[reply] ?? ChannelBook.said(reply)
                 said[reply] = words

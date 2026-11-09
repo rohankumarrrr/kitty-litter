@@ -20,6 +20,10 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     var onEscape: (() -> Void)?
 
     private(set) var target: MessageTarget?
+    /// The line over the box as the place sets it, before anything typed changes it.
+    private var standardLabel = ""
+    /// Who an @ in the words can go straight to, which is only ever in #general.
+    private var mentionable: [Kitten] = []
     /// Words typed for somewhere that's gone wait in the box, and Return doesn't send them anywhere else.
     var isHeld = false
     /// A thread's "Also send to #channel", under its box, as Slack has it.
@@ -114,7 +118,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
 
     /// `channel` is where the box is, which says who the router's answers come from, and `name` is its name as the
     /// sidebar writes it. `alsoSendTo` offers a thread's reply to its channel too.
-    func show(_ target: MessageTarget?, label: String? = nil, in channel: ChannelID? = nil, name: String? = nil, alsoSendTo: String? = nil) {
+    func show(_ target: MessageTarget?, label: String? = nil, in channel: ChannelID? = nil, name: String? = nil, alsoSendTo: String? = nil, mentionable: [Kitten] = []) {
         let changed = target != self.target || (alsoSendTo == nil) != alsoSend.isHidden
         // A file is for where you attached it, so it never follows the box anywhere else.
         if target != self.target, attachment != nil { attach(nil) }
@@ -123,9 +127,17 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         alsoSend.isHidden = alsoSendTo == nil
         if let alsoSendTo { alsoSend.title = alsoSendTo }
         guard let target else { return }
-        self.label.stringValue = label ?? CatWords.target(target, in: channel)
+        standardLabel = label ?? CatWords.target(target, in: channel)
+        // Words held for somewhere that's gone say so, whoever they name.
+        self.mentionable = target == .router && channel == .general && label == nil ? mentionable : []
+        showWhereWordsGo()
         textView.placeholder = CatWords.placeholder(target, in: channel, name: name)
         if changed { needsLayout = true }
+    }
+
+    /// Words that @ a kitten in #general go straight to it, and the line says so as you type.
+    private func showWhereWordsGo() {
+        label.stringValue = MessageTarget.mentioned(in: textView.string, among: mentionable).map(CatWords.mentioning) ?? standardLabel
     }
 
     var height: CGFloat {
@@ -163,6 +175,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     }
 
     func textDidChange(_ notification: Notification) {
+        showWhereWordsGo()
         onResize?()
     }
 
@@ -192,6 +205,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     func showDraft(_ text: String) {
         textView.string = text
         textView.undoManager?.removeAllActions()
+        showWhereWordsGo()
         needsLayout = true
     }
 
@@ -202,6 +216,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
             return
         }
         textView.string = ""
+        showWhereWordsGo()
         let file = takeAttachment()
         onResize?()
         onSend?(words, target, file)

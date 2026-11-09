@@ -444,6 +444,8 @@ final class MessageRowView: ChannelRowView {
     var onShowMore: (() -> Void)?
     /// Sends your words again, under ones that went nowhere.
     var onTryAgain: (() -> Void)?
+    /// Puts a reaction on it or takes it off, only on one T3 has. It's a mark, and says nothing to anyone.
+    var onReact: ((Reaction) -> Void)?
     /// Opens its thread: a parent, or a reply also sent to the channel.
     var onPress: (() -> Void)?
     /// Makes it, and everything after it in its thread, new to you again.
@@ -461,7 +463,9 @@ final class MessageRowView: ChannelRowView {
     private var showMore: QuietButton?
     private var tryAgain: QuietButton?
     /// Made the first time you hover, since most messages never are.
-    private var hoverButtons: (open: QuietButton, copy: QuietButton, reply: QuietButton, unread: QuietButton)?
+    private var hoverButtons: (open: QuietButton, copy: QuietButton, reply: QuietButton, unread: QuietButton, react: QuietButton)?
+    /// Your reactions, under what it said. Pressing one takes it off.
+    private var reactionChips: [QuietButton] = []
     /// A Copy on each code block.
     private(set) var codeButtons: [QuietButton] = []
     private(set) var bubble = NSRect.zero
@@ -491,7 +495,8 @@ final class MessageRowView: ChannelRowView {
     // Worked out when VoiceOver asks, rather than for every row of a long conversation as it's laid out.
     override func accessibilityLabel() -> String? {
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
-        return [context, look.name, time, said, message.file.map { CatWords.attached($0.name) }, message.failure, replyBar?.accessibilityWords(now: Date())].compactMap { $0 }.joined(separator: ", ")
+        let reactions = message.reactions?.map(\.emoji).joined(separator: " ")
+        return [context, look.name, time, said, message.file.map { CatWords.attached($0.name) }, message.failure, reactions.flatMap { $0.isEmpty ? nil : $0 }, replyBar?.accessibilityWords(now: Date())].compactMap { $0 }.joined(separator: ", ")
     }
 
     override var isPressable: Bool { onPress != nil }
@@ -535,6 +540,12 @@ final class MessageRowView: ChannelRowView {
                 return self != nil
             })
         }
+        if onReact != nil {
+            actions.append(NSAccessibilityCustomAction(name: CatWords.react) { [weak self] in
+                self?.showReactions()
+                return self != nil
+            })
+        }
         return actions
     }
 
@@ -564,15 +575,17 @@ final class MessageRowView: ChannelRowView {
                 open: QuietButton("Open", style: .text) { [weak self] in self?.onOpen?() },
                 copy: QuietButton("Copy", style: .text) { [weak self] in self?.copyPressed() },
                 reply: QuietButton("Reply", style: .text) { [weak self] in self?.onReply?() },
-                unread: QuietButton(CatWords.markUnread, style: .text) { [weak self] in self?.onMarkUnread?() }
+                unread: QuietButton(CatWords.markUnread, style: .text) { [weak self] in self?.onMarkUnread?() },
+                react: QuietButton(CatWords.react, style: .text) { [weak self] in self?.showReactions() }
             )
-            [buttons.open, buttons.copy, buttons.reply, buttons.unread].forEach(addSubview)
+            [buttons.open, buttons.copy, buttons.reply, buttons.unread, buttons.react].forEach(addSubview)
             hoverButtons = buttons
         }
         hoverButtons?.copy.isHidden = !hovering || message.text == nil
         hoverButtons?.open.isHidden = !hovering || onOpen == nil
         hoverButtons?.reply.isHidden = !hovering || onReply == nil
         hoverButtons?.unread.isHidden = !hovering || onMarkUnread == nil
+        hoverButtons?.react.isHidden = !hovering || onReact == nil
         placeHoverButtons(width: bounds.width)
         needsDisplay = true
     }
@@ -580,7 +593,28 @@ final class MessageRowView: ChannelRowView {
     /// How much of the head the buttons showing on hover cover.
     private var hoverWidth: CGFloat {
         guard let hoverButtons else { return 0 }
-        return [hoverButtons.open, hoverButtons.copy, hoverButtons.reply, hoverButtons.unread].filter { !$0.isHidden }.reduce(0) { $0 + $1.frame.width }
+        return [hoverButtons.open, hoverButtons.copy, hoverButtons.reply, hoverButtons.unread, hoverButtons.react].filter { !$0.isHidden }.reduce(0) { $0 + $1.frame.width }
+    }
+
+    /// A menu of the marks, with the ones it has ticked. A menu opens without making Shades the active app.
+    func showReactions() {
+        guard onReact != nil, let reactions = message.reactions else { return }
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        for reaction in Reaction.allCases {
+            let item = NSMenuItem(title: reaction.emoji, action: #selector(picked(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = reaction.rawValue
+            item.state = reactions.contains(reaction) ? .on : .off
+            menu.addItem(item)
+        }
+        let anchor = hoverButtons.flatMap { $0.react.isHidden ? nil : $0.react.frame } ?? NSRect(x: bubble.minX, y: bubble.maxY, width: 0, height: 0)
+        menu.popUp(positioning: nil, at: NSPoint(x: anchor.minX, y: anchor.maxY), in: self)
+    }
+
+    @objc private func picked(_ item: NSMenuItem) {
+        guard let reaction = (item.representedObject as? String).flatMap(Reaction.init(rawValue:)) else { return }
+        onReact?(reaction)
     }
 
     /// At the top right of each code block, inside it. A block that a cut message stops before has none.
@@ -607,7 +641,7 @@ final class MessageRowView: ChannelRowView {
     private func placeHoverButtons(width: CGFloat) {
         guard let hoverButtons else { return }
         var right = width - Self.margin + 6
-        for button in [hoverButtons.open, hoverButtons.copy, hoverButtons.reply, hoverButtons.unread] where !button.isHidden {
+        for button in [hoverButtons.open, hoverButtons.copy, hoverButtons.reply, hoverButtons.unread, hoverButtons.react] where !button.isHidden {
             right -= button.frame.width
             button.frame.origin = NSPoint(x: right, y: headTop - Self.pad)
         }
@@ -661,6 +695,7 @@ final class MessageRowView: ChannelRowView {
             showMore.frame.origin = NSPoint(x: look.isYou ? bubble.maxX - showMore.frame.width + 6 : bubble.minX - 6, y: bottom + 1)
             bottom += showMore.frame.height + 2
         }
+        bottom = placeReactions(below: bottom, right: right)
         if let replyBar, !replyBar.isEmpty {
             let barWidth = min(replyBar.width(now: Date()), width - Self.textLeft - Self.margin)
             let left = look.isYou ? right - barWidth : Self.textLeft - 4
@@ -674,6 +709,26 @@ final class MessageRowView: ChannelRowView {
         let height = max(bottom + Self.pad, look.hasCat || look.picture != nil ? headTop + Self.pad + Self.headHeight + Self.catSide : 0)
         fitted = (width, isExpanded, height)
         return height
+    }
+
+    /// In a row under what it said, from the bubble's side.
+    private func placeReactions(below top: CGFloat, right: CGFloat) -> CGFloat {
+        let reactions = message.reactions ?? []
+        guard !reactions.isEmpty else { return top }
+        if reactionChips.isEmpty {
+            reactionChips = reactions.map { reaction in
+                let chip = QuietButton(reaction.emoji, style: .plain) { [weak self] in self?.onReact?(reaction) }
+                chip.isArmed = onReact != nil
+                addSubview(chip)
+                return chip
+            }
+        }
+        var x = look.isYou ? right - reactionChips.reduce(0) { $0 + $1.frame.width + 4 } + 4 : bubble.minX
+        for chip in reactionChips {
+            chip.frame.origin = NSPoint(x: x, y: top + 4)
+            x += chip.frame.width + 4
+        }
+        return top + 4 + (reactionChips.first?.frame.height ?? 0)
     }
 
     override func draw(_ dirtyRect: NSRect) {
