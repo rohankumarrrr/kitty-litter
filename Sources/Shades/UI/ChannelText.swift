@@ -366,10 +366,18 @@ final class ChannelTextView: NSTextView {
         tryToPerform(#selector(ChannelPane.ask(toOpen:)), with: link)
     }
 
-    /// Copy is all a right-click offers. AppKit's own menu has Open Link and Open With, which open a link at once.
+    /// The menu of the message they're in, as a right-click beside them opens, with Copy taking what you've picked if
+    /// you have. Elsewhere Copy is all it offers. AppKit's own menu has Open Link and Open With, which open a link at once.
     override func menu(for event: NSEvent) -> NSMenu? {
-        let menu = NSMenu()
-        menu.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "")
+        guard let menu = superview?.menu(for: event) else {
+            let menu = NSMenu()
+            menu.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "")
+            return menu
+        }
+        if selectedRange().length > 0, let item = menu.item(withTitle: "Copy") {
+            item.target = self
+            item.action = #selector(copy(_:))
+        }
         return menu
     }
 
