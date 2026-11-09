@@ -13,6 +13,7 @@ enum ChannelImages {
         var height = ChannelsWindow.size.height
         var expandsLongMessage = false
         var hoversLastMessage = false
+        var hoversLastReply = false
     }
 
     static func draw(to folder: String) {
@@ -92,6 +93,7 @@ enum ChannelImages {
             Shot(name: "thread-from-threads", selection: .thread("demo-steve-copy", in: .threads), book: full),
             Shot(name: "thread-waiting", selection: .thread("demo-pepper-plans", in: .channel(.general)), book: full),
             Shot(name: "narrow-thread", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
+            Shot(name: "narrow-thread-hover", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height, hoversLastReply: true),
             Shot(name: "channel-expanded", selection: thread, book: full, expandsLongMessage: true),
             Shot(name: "channel-hover", selection: .channel(steve), book: full, hoversLastMessage: true),
             Shot(name: "crowded", selection: .activity, book: crowded(), height: ChannelsWindow.minimumSize.height),
@@ -122,6 +124,7 @@ enum ChannelImages {
         view.select(shot.selection)
         if shot.expandsLongMessage { (view.threadPane.longMessageRow ?? view.pane.longMessageRow)?.pressShowMore() }
         if shot.hoversLastMessage { view.pane.shownMessageRows.last?.hovering = true }
+        if shot.hoversLastReply { view.threadPane.shownMessageRows.last { !$0.isYours }?.hovering = true }
         hideScrollers(in: view)
         return png(of: view.superview ?? view)
     }

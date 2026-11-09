@@ -208,6 +208,10 @@ class ChannelRowView: QuietView {
     static let margin: CGFloat = 20
 
     var hovering = false { didSet { if hovering != oldValue { hoverChanged() } } }
+    /// Held down on a row that does something when pressed, so it shows before you let go.
+    private(set) var isPressed = false { didSet { if isPressed != oldValue { needsDisplay = true } } }
+    /// Hover's fill, or press's while it's held.
+    var highlight: NSColor? { isPressed ? MessagesInk.press : hovering ? MessagesInk.hover : nil }
 
     func fit(width: CGFloat) -> CGFloat { 0 }
     /// Words that only get their views once the row is shown.
@@ -231,10 +235,13 @@ class ChannelRowView: QuietView {
 
     override func mouseEntered(with event: NSEvent) { hovering = true }
     override func mouseExited(with event: NSEvent) { hovering = false }
-    override func mouseDown(with event: NSEvent) {}
+    override func mouseDown(with event: NSEvent) { isPressed = isPressable }
+    override func mouseDragged(with event: NSEvent) { isPressed = isPressable && isOver(event) }
     override func mouseUp(with event: NSEvent) {
-        if isPressable, bounds.contains(convert(event.locationInWindow, from: nil)) { press() }
+        isPressed = false
+        if isPressable, isOver(event) { press() }
     }
+    private func isOver(_ event: NSEvent) -> Bool { bounds.contains(convert(event.locationInWindow, from: nil)) }
     override func accessibilityPerformPress() -> Bool {
         guard isPressable else { return false }
         press()
@@ -473,6 +480,7 @@ final class MessageRowView: ChannelRowView {
     var context: String? { didSet { fitted = nil } }
     /// The message Search found, picked out for a moment so your eye lands on it.
     private(set) var isFound = false { didSet { needsDisplay = true } }
+    private var foundTimer: Timer?
 
     let message: ChannelMessage
     private let look: ChannelSpeakerLook
@@ -524,51 +532,47 @@ final class MessageRowView: ChannelRowView {
     override var isPressable: Bool { onPress != nil }
     override func press() { onPress?() }
 
+    /// What you can do to it, which VoiceOver and a right-click both offer, in this order.
+    private var actions: [(name: String, run: () -> Void)] {
+        let all: [(name: String, run: (() -> Void)?)] = [
+            (CatWords.threadTitle, onPress),
+            ("Try again", onTryAgain),
+            ("Reply", onReply),
+            (CatWords.openInT3, onOpen),
+            (CatWords.markUnread, onMarkUnread),
+            ("Copy", message.text == nil ? nil : { [weak self] in self?.copyPressed() }),
+            (CatWords.react, onReact == nil ? nil : { [weak self] in self?.showReactions() }),
+        ]
+        return all.compactMap { action in action.run.map { (action.name, $0) } }
+    }
+
     override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
-        var actions: [NSAccessibilityCustomAction] = []
-        if onPress != nil {
-            actions.append(NSAccessibilityCustomAction(name: CatWords.threadTitle) { [weak self] in
-                self?.onPress?()
-                return self != nil
-            })
+        actions.map { action in
+            NSAccessibilityCustomAction(name: action.name) {
+                action.run()
+                return true
+            }
         }
-        if onTryAgain != nil {
-            actions.append(NSAccessibilityCustomAction(name: "Try again") { [weak self] in
-                self?.onTryAgain?()
-                return self != nil
-            })
+    }
+
+    /// Everything the buttons over it do on hover, with React's marks as a menu inside it. A right-click menu opens
+    /// without making The Kitty Litter the active app.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let actions = actions
+        guard !actions.isEmpty else { return nil }
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        for action in actions {
+            let item = NSMenuItem(title: action.name, action: #selector(chose(_:)), keyEquivalent: "")
+            item.target = self
+            if action.name == CatWords.react { item.submenu = reactionsMenu() }
+            menu.addItem(item)
         }
-        if onReply != nil {
-            actions.append(NSAccessibilityCustomAction(name: "Reply") { [weak self] in
-                self?.onReply?()
-                return self != nil
-            })
-        }
-        if onOpen != nil {
-            actions.append(NSAccessibilityCustomAction(name: "Open") { [weak self] in
-                self?.onOpen?()
-                return self != nil
-            })
-        }
-        if onMarkUnread != nil {
-            actions.append(NSAccessibilityCustomAction(name: CatWords.markUnread) { [weak self] in
-                self?.onMarkUnread?()
-                return self != nil
-            })
-        }
-        if message.text != nil {
-            actions.append(NSAccessibilityCustomAction(name: "Copy") { [weak self] in
-                self?.copyPressed()
-                return self != nil
-            })
-        }
-        if onReact != nil {
-            actions.append(NSAccessibilityCustomAction(name: CatWords.react) { [weak self] in
-                self?.showReactions()
-                return self != nil
-            })
-        }
-        return actions
+        return menu
+    }
+
+    @objc private func chose(_ item: NSMenuItem) {
+        actions.first { $0.name == item.title }?.run()
     }
 
     override var textBlocks: [ChannelTextBlock] { [words, failure].compactMap { $0 } }
@@ -612,26 +616,31 @@ final class MessageRowView: ChannelRowView {
         needsDisplay = true
     }
 
-    /// How much of the head the buttons showing on hover cover.
-    private var hoverWidth: CGFloat {
-        guard let hoverButtons else { return 0 }
-        return [hoverButtons.open, hoverButtons.copy, hoverButtons.reply, hoverButtons.unread, hoverButtons.react].filter { !$0.isHidden }.reduce(0) { $0 + $1.frame.width }
+    /// Where the buttons showing on hover start, so the head can stop short of them.
+    private var hoverLeft: CGFloat {
+        guard let hoverButtons else { return bounds.width - Self.margin }
+        return [hoverButtons.open, hoverButtons.copy, hoverButtons.reply, hoverButtons.unread, hoverButtons.react].filter { !$0.isHidden }.map(\.frame.minX).min() ?? bounds.width - Self.margin
     }
 
-    /// A menu of the marks, with the ones it has ticked. A menu opens without making Shades the active app.
+    /// A menu of the marks. A menu opens without making The Kitty Litter the active app.
     func showReactions() {
-        guard onReact != nil, let reactions = message.reactions else { return }
+        guard onReact != nil, message.reactions != nil else { return }
+        let anchor = hoverButtons.flatMap { $0.react.isHidden ? nil : $0.react.frame } ?? NSRect(x: bubble.minX, y: bubble.maxY, width: 0, height: 0)
+        reactionsMenu().popUp(positioning: nil, at: NSPoint(x: anchor.minX, y: anchor.maxY), in: self)
+    }
+
+    /// The marks, with the ones it has ticked.
+    private func reactionsMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
         for reaction in Reaction.allCases {
             let item = NSMenuItem(title: reaction.emoji, action: #selector(picked(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = reaction.rawValue
-            item.state = reactions.contains(reaction) ? .on : .off
+            item.state = message.reactions?.contains(reaction) == true ? .on : .off
             menu.addItem(item)
         }
-        let anchor = hoverButtons.flatMap { $0.react.isHidden ? nil : $0.react.frame } ?? NSRect(x: bubble.minX, y: bubble.maxY, width: 0, height: 0)
-        menu.popUp(positioning: nil, at: NSPoint(x: anchor.minX, y: anchor.maxY), in: self)
+        return menu
     }
 
     @objc private func picked(_ item: NSMenuItem) {
@@ -743,14 +752,22 @@ final class MessageRowView: ChannelRowView {
         return top + 4 + (reactionChips.first?.frame.height ?? 0)
     }
 
+    /// Each reveal gets the whole time, however soon after the last one it comes.
     func flash() {
         isFound = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.isFound = false }
+        foundTimer?.invalidate()
+        foundTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.isFound = false }
+        }
     }
 
     override func draw(_ dirtyRect: NSRect) {
         if isFound {
             MessagesInk.accent.withAlphaComponent(0.16).setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1), xRadius: 8, yRadius: 8).fill()
+        }
+        if isPressed {
+            MessagesInk.press.setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1), xRadius: 8, yRadius: 8).fill()
         }
         if let context {
@@ -875,14 +892,20 @@ final class MessageRowView: ChannelRowView {
         }
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
+        // While the buttons show, it's only who said it, in the room they leave. A stub of a name says nothing the cat
+        // beside it doesn't, so with room for less than a few letters it waits until they go.
         var head = look.name
-        if message.earlierNotes > 0 { head += "  ·  \(CatWords.earlierNotes(message.earlierNotes))" }
-        if !hovering { head += "  ·  \(time)" }
+        if !hovering {
+            if message.earlierNotes > 0 { head += "  ·  \(CatWords.earlierNotes(message.earlierNotes))" }
+            head += "  ·  \(time)"
+        }
+        let room = (hovering ? hoverLeft - 4 : bounds.width - Self.margin) - Self.textLeft - 2
+        guard !hovering || room >= 40 else { return }
         NSAttributedString(string: head, attributes: [
             .font: MessagesInk.font(ofSize: 11, weight: .medium),
             .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: Self.textLeft + 2, y: baseline, width: max(bounds.width - Self.textLeft - Self.margin - (hovering ? hoverWidth : 0), 60), height: 15))
+        ]).draw(in: NSRect(x: Self.textLeft + 2, y: baseline, width: max(room, 0), height: 15))
     }
 }
 
@@ -970,8 +993,8 @@ final class ThreadDigestRowView: ChannelRowView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        if hovering {
-            MessagesInk.hover.setFill()
+        if let highlight {
+            highlight.setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 2), xRadius: 8, yRadius: 8).fill()
         }
         MessagesInk.line.setFill()
@@ -1075,8 +1098,8 @@ final class IssueRowView: ChannelRowView {
 
     override func draw(_ dirtyRect: NSRect) {
         let left = Self.textLeft
-        if hovering {
-            MessagesInk.hover.setFill()
+        if let highlight {
+            highlight.setFill()
             NSBezierPath(roundedRect: NSRect(x: left - 8, y: 1, width: bounds.width - left - Self.margin + 16, height: bounds.height - 2), xRadius: 7, yRadius: 7).fill()
         }
         thread.dotColor.setFill()

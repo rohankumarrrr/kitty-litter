@@ -391,7 +391,7 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(pane.linkBar.isHidden, "only web addresses, even if one got this far")
     }
 
-    func testRightClickingWordsOffersOnlyCopy() throws {
+    func testRightClickingWordsOffersNoWayToOpenALink() throws {
         let view = view()
         view.show(book(text: "Read [the docs](https://example.invalid/docs) first."))
         view.select(inThread)
@@ -401,7 +401,8 @@ final class ChannelsWindowTests: XCTestCase {
         let rect = words.layoutManager!.boundingRect(forGlyphRange: words.layoutManager!.glyphRange(forCharacterRange: at, actualCharacterRange: nil), in: words.textContainer!)
         // An event made here and handed straight to the view, never posted, so nothing reaches the desktop.
         let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: words.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil), modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
-        XCTAssertEqual(words.menu(for: event)?.items.map(\.title), ["Copy"], "no Open Link or Open With, which would skip the bar")
+        XCTAssertEqual(words.menu(for: event)?.items.map(\.title), row.accessibilityCustomActions()?.map(\.name), "only its message's own, with no Open Link or Open With, which would skip the bar")
+        XCTAssertEqual(row.accessibilityCustomActions()?.map(\.name), [CatWords.openInT3, CatWords.markUnread, "Copy", CatWords.react])
 
         // What AppKit does with a link any other way, such as VoiceOver pressing it.
         var opened: [URL] = []
@@ -776,6 +777,89 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(row.accessibilityCustomActions()?.contains { $0.name == CatWords.markUnread } == true)
         view.select(.channel(.of(steve)))
         XCTAssertEqual(view.keptUnread, [])
+    }
+
+    /// An event made here and handed straight to a view, never posted, so nothing reaches the desktop.
+    private func mouse(_ type: NSEvent.EventType, at point: NSPoint, in view: NSView) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.mouseEvent(with: type, location: view.convert(point, to: nil), modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+    }
+
+    func testARightClickOffersWhatTheButtonsOnHoverDo() throws {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.show(book(exchanges: 2))
+        view.select(.channel(.of(steve)))
+        let parent = try XCTUnwrap(view.pane.shownMessageRows.first { $0.replyBar != nil })
+        let menu = try XCTUnwrap(parent.menu(for: try mouse(.rightMouseDown, at: NSPoint(x: 30, y: 10), in: parent)))
+        XCTAssertEqual(menu.items.map(\.title), parent.accessibilityCustomActions()?.map(\.name), "the same as VoiceOver's, in the same order")
+        XCTAssertEqual(menu.items.map(\.title), [CatWords.threadTitle, "Reply", CatWords.openInT3, CatWords.markUnread, "Copy", CatWords.react])
+
+        let react = try XCTUnwrap(menu.item(withTitle: CatWords.react)?.submenu, "the marks themselves, as a menu inside it")
+        XCTAssertEqual(react.items.map(\.title), Reaction.allCases.map(\.emoji))
+        react.performActionForItem(at: 0)
+        XCTAssertEqual(sent, [.react(parent.message.id, Reaction.allCases[0])], "only ever a mark")
+
+        menu.performActionForItem(at: menu.indexOfItem(withTitle: CatWords.markUnread))
+        XCTAssertEqual(sent.last, .markUnread("t", from: parent.message.id))
+        menu.performActionForItem(at: menu.indexOfItem(withTitle: CatWords.threadTitle))
+        XCTAssertEqual(view.selection, inThread)
+    }
+
+    func testRightClickingWordsOffersTheirMessagesMenuWithCopyForWhatYouPicked() throws {
+        let view = view()
+        view.show(book(text: "Read this first."))
+        view.select(inThread)
+        let row = try XCTUnwrap(view.threadPane.shownMessageRows.first { !$0.isYours })
+        let words = try XCTUnwrap(subviews(of: row).compactMap { $0 as? ChannelTextView }.first)
+        let event = try mouse(.rightMouseDown, at: NSPoint(x: 4, y: 4), in: words)
+        let copy = try XCTUnwrap(words.menu(for: event)?.item(withTitle: "Copy"))
+        XCTAssertFalse(copy.target === words, "with nothing picked, the whole message")
+        words.setSelectedRange(NSRange(location: 0, length: 4))
+        let picked = try XCTUnwrap(words.menu(for: event)?.item(withTitle: "Copy"))
+        XCTAssertTrue(picked.target === words)
+        XCTAssertEqual(picked.action, #selector(NSText.copy(_:)))
+    }
+
+    func testPressingARowShowsBeforeYouLetGo() throws {
+        let view = view()
+        view.show(book(exchanges: 2))
+        view.select(.channel(.of(steve)))
+        let parent = try XCTUnwrap(view.pane.shownMessageRows.first { $0.replyBar != nil })
+        let inside = NSPoint(x: 30, y: 10)
+        parent.mouseDown(with: try mouse(.leftMouseDown, at: inside, in: parent))
+        XCTAssertTrue(parent.isPressed)
+        parent.mouseDragged(with: try mouse(.leftMouseDragged, at: NSPoint(x: 30, y: -40), in: parent))
+        XCTAssertFalse(parent.isPressed, "dragged off it, letting go won't press it")
+        parent.mouseDragged(with: try mouse(.leftMouseDragged, at: inside, in: parent))
+        XCTAssertTrue(parent.isPressed)
+        parent.mouseUp(with: try mouse(.leftMouseUp, at: inside, in: parent))
+        XCTAssertFalse(parent.isPressed)
+        XCTAssertEqual(view.selection, inThread)
+
+        let reply = try XCTUnwrap(view.threadPane.shownMessageRows.first { $0.onPress == nil })
+        reply.mouseDown(with: try mouse(.leftMouseDown, at: inside, in: reply))
+        XCTAssertFalse(reply.isPressed, "only a row that does something when pressed")
+    }
+
+    func testASecondRevealLastsAsLongAsTheFirst() throws {
+        let view = view()
+        view.show(book(exchanges: 2))
+        view.select(inThread)
+        let row = try XCTUnwrap(view.threadPane.shownMessageRows.first { !$0.isYours })
+        func wait(_ seconds: TimeInterval) {
+            let waited = expectation(description: "waited")
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { waited.fulfill() }
+            self.wait(for: [waited], timeout: seconds + 2)
+        }
+        XCTAssertTrue(view.threadPane.reveal(row.message.id))
+        XCTAssertTrue(row.isFound)
+        wait(1.5)
+        view.threadPane.reveal(row.message.id)
+        wait(1.5)
+        XCTAssertTrue(row.isFound, "the first one's time is up, and the second still has a second to go")
+        wait(1.5)
+        XCTAssertFalse(row.isFound)
     }
 
     private func work(_ id: String, title: String, updated: TimeInterval = 0) -> AgentThread {
