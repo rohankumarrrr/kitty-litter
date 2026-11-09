@@ -1,8 +1,8 @@
 import AppKit
 import ShadesCore
 
-/// Messages' colours: the theme you picked, or Ink's own. Only Messages and the phone take a theme, so the cat's
-/// other windows stay as they are. Kittens keep their own colours either way.
+/// Messages' colours: the theme you picked, or Ink's own. Only Messages, Settings and the phone take a theme, so the
+/// cat's other windows stay as they are. Kittens keep their own colours either way.
 enum MessagesInk {
     /// Set when the app starts and when you pick one, and read as Messages draws, all on the main thread.
     static var theme: ColorTheme?

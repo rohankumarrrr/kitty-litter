@@ -490,7 +490,7 @@ final class AppController {
         let channels = [SettingsForm.Channel(id: .general, title: "#\(CatWords.general)")]
             + loadKittens().map { SettingsForm.Channel(id: .of($0), title: "#\(ChannelBook.slug($0.name))") }
             + [SettingsForm.Channel(id: .shades, title: CatWords.shades)]
-        return SettingsForm(settings: settings, theme: theme?.name, channels: channels)
+        return SettingsForm(settings: settings, theme: theme, channels: channels)
     }
 
     /// A change made in Settings. Do Not Disturb and each channel's notifications have their own way in, there and

@@ -235,9 +235,9 @@ final class DemoDriver {
     /// `setting Extra words Pawsniak` types that and presses Return, and a box or a button is pressed, such as
     /// `setting Do Not Disturb` or `setting #general`. Prints what each control on the page says afterwards.
     private func setting(_ words: String) {
-        let controls = allSubviews(of: stage.settingsPanel.panel.contentView).filter { $0 is NSControl || $0 is QuietButton }
+        let controls = allSubviews(of: stage.settingsPanel.panel.contentView).filter { $0 is NSControl || $0 is QuietButton || $0 is QuietCheckbox }
         func names(_ view: NSView) -> [String] {
-            [view.accessibilityIdentifier(), (view as? NSButton)?.title ?? "", (view as? QuietButton)?.accessibilityLabel() ?? ""].filter { !$0.isEmpty }
+            [view.accessibilityIdentifier(), (view as? QuietButton)?.accessibilityLabel() ?? "", (view as? QuietCheckbox)?.title ?? ""].filter { !$0.isEmpty }
         }
         let found = controls.flatMap { view in names(view).map { (view, $0) } }
             .filter { words.lowercased().hasPrefix($0.1.lowercased()) }
@@ -245,20 +245,19 @@ final class DemoDriver {
         guard let (control, label) = found else { return print("no setting [\(words)]") }
         let choice = String(words.dropFirst(label.count)).trimmingCharacters(in: .whitespaces)
         switch control {
-        case let popup as NSPopUpButton:
-            guard popup.item(withTitle: choice) != nil else { return print("no choice [\(choice)] in \(label)") }
-            popup.selectItem(withTitle: choice)
-            popup.sendAction(popup.action, to: popup.target)
-        case let box as NSButton:
-            box.state = box.state == .on ? .off : .on
-            box.sendAction(box.action, to: box.target)
+        case let box as QuietCheckbox:
+            box.toggle()
         case let field as NSTextField:
             stage.settingsPanel.panel.makeFirstResponder(field)
             field.stringValue = choice
             field.sendAction(field.action, to: field.target)
+        case let button as QuietButton where button.accessibilityRole() == .popUpButton:
+            // A menu waits for a click, so this picks from a row's own choices the way the click would. Theme, Font
+            // and a channel's make theirs as they open, so `colors`, `font` and `notifications` stand in for those.
+            guard let menu = button.menu else { return print("\(label) opens a menu: use notifications, colors or font") }
+            guard let index = menu.items.firstIndex(where: { $0.title == choice }) else { return print("no choice [\(choice)] in \(label)") }
+            menu.performActionForItem(at: index)
         case let button as QuietButton:
-            // A menu waits for a click, so `notifications` and `colors` stand in for picking from one.
-            guard button.accessibilityRole() != .popUpButton else { return print("\(label) opens a menu: use notifications or colors") }
             button.onPress?()
         default:
             break
@@ -271,6 +270,10 @@ final class DemoDriver {
     /// posting anything to the system. Prints what has the keyboard afterwards.
     private func pressKey(_ characters: String, control: Bool = false) {
         guard let (name, window) = windows.first(where: { $0.1.isKeyWindow }) else { return print("no window has the keyboard") }
+        // A menu opens on the real desktop and waits there for a click, so `setting` picks from one instead.
+        if characters == " ", let button = window.firstResponder as? QuietButton, button.accessibilityRole() == .popUpButton {
+            return print("space on \(button.accessibilityLabel() ?? "") would open its menu: use setting")
+        }
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             let event = NSEvent.keyEvent(
                 with: type, location: .zero, modifierFlags: characters == "\u{19}" ? .shift : control ? .control : [], timestamp: ProcessInfo.processInfo.systemUptime,
@@ -292,10 +295,9 @@ final class DemoDriver {
         for view in allSubviews(of: panel.panel.contentView) {
             let id = view.accessibilityIdentifier()
             switch view {
-            case let popup as NSPopUpButton: print("  \(id): \(popup.titleOfSelectedItem ?? "")")
             case let field as NSTextField where field.isEditable: print("  \(id): \(field.stringValue)")
-            case let box as NSButton where box.allowsMixedState == false && box.title != "": print("  [\(box.state == .on ? "x" : " ")] \(box.title)")
-            case let button as QuietButton where !id.isEmpty: print("  \(button.accessibilityLabel() ?? id)")
+            case let box as QuietCheckbox: print("  [\(box.isOn ? "x" : " ")] \(box.title)")
+            case let button as QuietButton where !id.isEmpty: print("  \(id): \(button.accessibilityValue() as? String ?? "")")
             default: break
             }
         }

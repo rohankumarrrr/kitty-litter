@@ -9,6 +9,11 @@ tab
 draw .verify/shades/keyboard/1-theme
 tab
 tab
+space
+setting Text size Large
+tab
+tab
+tab
 tab back
 tab
 draw .verify/shades/keyboard/2-done
