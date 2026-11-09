@@ -797,6 +797,35 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.threadPane.composer.target, .question(question), "with nothing typed, it goes on to what needs answering")
     }
 
+    func testTheBoxShowsItsWordsWholeAtEveryTextSize() throws {
+        defer { MessagesInk.textSize = .standard }
+        let view = view()
+        view.show(book())
+        view.select(inThread)
+        view.layoutSubtreeIfNeeded()
+        // As Settings changes it, in a window that's already open.
+        func pick(_ size: TextSize) {
+            MessagesInk.textSize = size
+            view.restyle()
+            view.layoutSubtreeIfNeeded()
+        }
+        func shown(_ box: ChannelComposer) throws -> CGFloat { try XCTUnwrap(box.textView.enclosingScrollView).frame.height }
+        func line(_ box: ChannelComposer) throws -> CGFloat { try NSLayoutManager().defaultLineHeight(for: XCTUnwrap(box.textView.font)) }
+
+        for size in TextSize.allCases {
+            pick(size)
+            for box in [view.pane.composer, view.threadPane.composer] {
+                XCTAssertGreaterThanOrEqual(try shown(box), try line(box), "\(size): the placeholder")
+            }
+        }
+        let reply = view.threadPane.composer
+        reply.textView.insertText(Array(repeating: "Keep the pricing page as it is", count: 8).joined(separator: "\n"), replacementRange: NSRange(location: 0, length: 0))
+        for size in TextSize.allCases {
+            pick(size)
+            XCTAssertGreaterThanOrEqual(try shown(reply), try line(reply) * 5, "\(size): five whole lines of what's typed")
+        }
+    }
+
     func testANewTopicHoldsTheBoxUntilItsThreadExistsAndThenCarriesOnThere() {
         let threads = [work("t", title: "Resume")]
         let transcripts = ["t": [said("e", ask: "Tidy my resume", reply: "Done.", at: 0)]]

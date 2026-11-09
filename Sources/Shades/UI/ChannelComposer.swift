@@ -7,7 +7,6 @@ import ShadesCore
 /// from Attach's recent files. There's no file picker, since one would make Shades the active app, and a menu doesn't.
 final class ChannelComposer: QuietView, NSTextViewDelegate {
     private static let pad: CGFloat = 12
-    private static let lineHeight: CGFloat = 18
     private static let maxLines: CGFloat = 5
     private static let labelHeight: CGFloat = 22
     private static let fieldPad: CGFloat = 8
@@ -140,6 +139,8 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         textView.font = MessagesInk.font(ofSize: 14 + MessagesInk.textStep)
         alsoSend.needsDisplay = true
         needsDisplay = true
+        // Another text size makes the box taller or shorter.
+        onResize?()
     }
 
     /// Whether what you send next also shows in the thread's channel.
@@ -197,10 +198,12 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     }
 
     private var textHeight: CGFloat {
-        guard let manager = textView.layoutManager, let container = textView.textContainer else { return Self.lineHeight }
+        // A line of the font it's drawn in, so its words show whole at every text size.
+        let line = ceil(NSLayoutManager().defaultLineHeight(for: textView.font ?? .systemFont(ofSize: 14)))
+        guard let manager = textView.layoutManager, let container = textView.textContainer else { return line }
         manager.ensureLayout(for: container)
         let used = ceil(manager.usedRect(for: container).height)
-        return min(max(Self.lineHeight, used), Self.lineHeight * Self.maxLines)
+        return min(max(line, used), line * Self.maxLines)
     }
 
     override func layout() {
