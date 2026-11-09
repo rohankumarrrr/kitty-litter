@@ -391,7 +391,7 @@ final class QuietCheckbox: NSView {
         let box = NSRect(x: 1, y: (bounds.height - Self.box) / 2, width: Self.box, height: Self.box)
         let shape = NSBezierPath(roundedRect: box, xRadius: 3.5, yRadius: 3.5)
         if isOn {
-            MessagesInk.link.setFill()
+            MessagesInk.accent.setFill()
             shape.fill()
             let tick = NSBezierPath()
             tick.move(to: NSPoint(x: box.minX + 3.5, y: box.midY))

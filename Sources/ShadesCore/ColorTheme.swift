@@ -17,8 +17,10 @@ public struct ColorTheme: Equatable, Sendable {
     public var sidebar: UInt32
     /// Your messages, when the theme has a colour for them. Otherwise they're a tint of `accent`.
     public var mine: UInt32?
+    /// Errors, when the theme has a colour for them. Otherwise they're red.
+    public var error: UInt32?
 
-    public init(name: String, isDark: Bool, paper: UInt32, text: UInt32, soft: UInt32? = nil, accent: UInt32, line: UInt32? = nil, sidebar: UInt32? = nil, mine: UInt32? = nil) {
+    public init(name: String, isDark: Bool, paper: UInt32, text: UInt32, soft: UInt32? = nil, accent: UInt32, line: UInt32? = nil, sidebar: UInt32? = nil, mine: UInt32? = nil, error: UInt32? = nil) {
         self.name = name
         self.isDark = isDark
         self.paper = paper
@@ -28,6 +30,7 @@ public struct ColorTheme: Equatable, Sendable {
         self.line = line ?? Self.mix(paper, text, 0.12)
         self.sidebar = sidebar ?? Self.mix(paper, text, isDark ? 0.04 : 0.03)
         self.mine = mine
+        self.error = error
     }
 
     public var hover: UInt32 { Self.mix(paper, text, 0.07) }
@@ -36,6 +39,21 @@ public struct ColorTheme: Equatable, Sendable {
     public var bubble: UInt32 { Self.mix(paper, text, isDark ? 0.14 : 0.09) }
     /// A tint of the accent rather than the accent itself, so it never looks like a kitten's colour.
     public var yours: UInt32 { mine ?? Self.mix(paper, accent, isDark ? 0.32 : 0.2) }
+
+    /// The accent as words, such as reply counts and links.
+    public var link: UInt32 { Self.legible(accent, on: paper) }
+    /// Errors as words, in the theme's own colour for them or red.
+    public var danger: UInt32 { Self.legible(error ?? Self.red, on: paper) }
+
+    public static let red: UInt32 = 0xff3b30
+
+    /// `color` if it reads at 4.5:1 on `paper`. Otherwise the same hue, darker on a light window and lighter on a dark
+    /// one, only as far as reading it takes.
+    public static func legible(_ color: UInt32, on paper: UInt32) -> UInt32 {
+        guard contrast(color, paper) < 4.5 else { return color }
+        let away: UInt32 = contrast(paper, 0x000000) >= contrast(paper, 0xffffff) ? 0x000000 : 0xffffff
+        return (1...255).lazy.map { mix(color, away, Double($0) / 255) }.first { contrast($0, paper) >= 4.5 } ?? away
+    }
 
     /// The theme's own text if it reads well on `color`, or black or white otherwise.
     public func words(on color: UInt32) -> UInt32 {
@@ -126,7 +144,8 @@ extension ColorTheme {
             accent: over("accent") ?? object["accent"].flatMap { CSSColor.solid($0, over: paper) } ?? over("focus") ?? 0x0071e3,
             line: over("border"),
             sidebar: over("sidebar"),
-            mine: over("messageSurface")
+            mine: over("messageSurface"),
+            error: over("errorForeground") ?? over("error")
         )
     }
 
@@ -150,7 +169,8 @@ extension ColorTheme {
             soft: first(["descriptionForeground", "sideBarTitle.foreground", "tab.inactiveForeground"], paper),
             accent: first(["button.background", "focusBorder", "activityBarBadge.background", "textLink.foreground"], paper) ?? 0x0078d4,
             line: first(["sideBar.border", "editorGroup.border", "panel.border", "contrastBorder"], paper),
-            sidebar: first(["sideBar.background"], paper)
+            sidebar: first(["sideBar.background"], paper),
+            error: first(["errorForeground"], paper)
         )
     }
 
@@ -215,6 +235,7 @@ extension ColorTheme {
             "sidebar": hex(theme.sidebar),
         ]
         if let mine = theme.mine { object["mine"] = hex(mine) }
+        if let error = theme.error { object["error"] = hex(error) }
         try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]).write(to: file, options: .atomic)
     }
 
@@ -235,7 +256,8 @@ extension ColorTheme {
             accent: color("accent") ?? 0x0071e3,
             line: color("line"),
             sidebar: color("sidebar"),
-            mine: color("mine")
+            mine: color("mine"),
+            error: color("error")
         )
     }
 }
