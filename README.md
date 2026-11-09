@@ -83,7 +83,7 @@ Two settings are worth changing:
 - **To dictate with Fn:** set **System Settings > Keyboard > Press 🌐 key to** to **Do Nothing**. Otherwise macOS can act on the key too. You can also pick another key in Settings.
 - **To read page text in your browser:** turn on **View > Developer > Allow JavaScript from Apple Events**. Without it, the cat still gets the address and a screenshot.
 
-To see it without T3, permissions or a microphone, run `swift run shades --demo`.
+To see it without T3, permissions or a microphone, run `swift run shades --demo`. A demo, or a copy trying a flow out with `--ask`, `--hand-off` or `--fix`, takes none of the cat's shortcuts, so it never stops them working in the copy you've installed.
 
 ## Privacy
 
@@ -111,7 +111,7 @@ You can set up a kitten called Clawde whose area is the system itself, so "Steve
 
 ## When something goes wrong
 
-Choose **Check Myself** from the cat's menu, and it goes through its signature, permissions, T3 Code and kittens, and tells you what's wrong and what to do. The running app also writes that to `~/Library/Application Support/shades/health.json`, for agents to read.
+Choose **Check Myself** from the cat's menu, and it goes through its signature, permissions, T3 Code and kittens, and tells you what's wrong and what to do. If another copy of Shades has its shortcuts, it says which one to quit. The running app also writes that to `~/Library/Application Support/shades/health.json`, for agents to read.
 
 `scripts/install.sh` only replaces the running app with a properly signed build. It keeps the old copy, and puts it back if the new one doesn't come up. To go back by hand, run `scripts/install.sh --rollback`.
 

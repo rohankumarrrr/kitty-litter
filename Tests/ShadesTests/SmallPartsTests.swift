@@ -608,6 +608,15 @@ final class HealthCheckTests: XCTestCase {
         XCTAssertEqual(finding.problem, "Another app has ⌃⌘B, so pressing it does nothing here.")
     }
 
+    func testAnotherCopyOfShadesIsNamedAsTheLikelyHolderOfItsShortcuts() throws {
+        let facts = HealthFacts(shortcutsTaken: ["⌥Space", "⌃⌘B"], otherCopies: [4242])
+        let finding = try XCTUnwrap(HealthCheck.findings(from: facts).first { $0.check == "shortcuts" })
+        XCTAssertFalse(finding.ok)
+        XCTAssertEqual(finding.problem, "Another copy of me, process 4242, probably has ⌥Space and ⌃⌘B, so pressing them does nothing here.")
+        XCTAssertEqual(finding.fix, "Quit that copy, then choose Restart from my menu.")
+        XCTAssertTrue(HealthCheck.findings(from: HealthFacts(otherCopies: [4242])).allSatisfy(\.ok), "a copy that took nothing is no problem")
+    }
+
     func testABadSignatureHidesThePermissionsItWouldMakeLookOff() {
         let facts = HealthFacts(isSignedWithIdentity: false, hasScreenRecording: false, hasAccessibility: false)
         let problems = HealthCheck.findings(from: facts).filter { !$0.ok }

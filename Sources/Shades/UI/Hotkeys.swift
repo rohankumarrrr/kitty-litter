@@ -16,12 +16,16 @@ final class Hotkeys {
     /// A shared claim on a shortcut another app holds still succeeds, and then only one of them gets the key.
     /// Only an exclusive claim is refused, which is how Shades can tell you instead.
     static let options = OptionBits(kEventHotKeyExclusive)
+    /// Off in a demo or a copy trying a flow out. Those press their keys through the controller, and a claim of theirs
+    /// would take the shortcuts from the installed app whenever it starts while they run.
+    var claimsKeys = true
 
     @discardableResult
     func register(keyCode: Int, modifiers: Int, handler: @escaping () -> Void) -> UInt32? {
-        installIfNeeded()
         let id = nextID
         nextID += 1
+        guard claimsKeys else { return id }
+        installIfNeeded()
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(
             UInt32(keyCode),

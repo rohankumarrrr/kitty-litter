@@ -22,7 +22,7 @@ scripts/install.sh  # builds, signs and swaps in Shades.app, and rolls back if t
 scripts/install.sh --pull  # the same, after stopping for uncommitted work and pulling
 scripts/bundle.sh   # just builds Shades.app
 swift scripts/make-icon.swift assets   # redraws the app icon from the cat's art
-swift run shades --demo   # everything faked: no T3, permissions or microphone
+swift run shades --demo   # everything faked: no T3, permissions, microphone or shortcuts
 swift run shades --demo --no-script --commands steps.txt   # plays demo commands from a file, one a line
 swift test --filter ScreenBoundaryTests   # every route your screen could take to a kitten
 ```

@@ -107,6 +107,7 @@ MainActor.assumeIsolated {
     }
 
     stage.controller = controller
+    Hotkeys.shared.claimsKeys = !wantsDemo && !DevFlags.wantsFlow
     stage.start()
     controller.start()
     driver?.start(script: !CommandLine.arguments.contains("--no-script"))
