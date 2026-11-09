@@ -6,7 +6,8 @@ import ShadesCore
 import ShadesT3
 
 // Tries each capability against the real T3 server. Every thread it makes is titled "Shades test:"
-// and gets archived, and every sign-in it makes gets revoked. It never prints a token.
+// and gets archived, and every sign-in it makes gets revoked. It never prints a token, and never uses the
+// installed app's Keychain entry, which a build like this one can't read and would only replace.
 //
 //   probe-t3 connect    sign in, list threads and projects
 //   probe-t3 keychain   first run and second run against a throwaway Keychain entry
@@ -662,7 +663,7 @@ func probeTiming() async throws {
 }
 
 func probeSettle() async throws {
-    let backend = T3Backend()
+    let backend = makeBackend()
     try await backend.connect()
     func turn(_ events: AsyncThrowingStream<AgentReplyEvent, Error>) async throws -> (String?, String?) {
         var threadID: String?
@@ -693,7 +694,7 @@ func probeSettle() async throws {
 
 func probeReport() async throws {
     guard CommandLine.arguments.count > 2 else { throw NSError(domain: "usage: report <thread>", code: 2) }
-    let backend = T3Backend()
+    let backend = makeBackend()
     try await backend.connect()
     let started = clock.now
     let report = await backend.finalReport(threadID: CommandLine.arguments[2])
@@ -705,10 +706,11 @@ func probeReport() async throws {
 
 func probeOrigin() async throws {
     guard CommandLine.arguments.count > 2 else { throw NSError(domain: "usage: origin <thread>", code: 2) }
-    let backend = T3Backend()
+    let backend = makeBackend()
     try await backend.connect()
     let origin = await backend.origin(of: CommandLine.arguments[2])
     say("started by: \(origin.map { "\($0.startedBy)" } ?? "can't tell"), project: \(origin?.projectPath ?? "none")")
+    await backend.signOut()
     await backend.disconnect()
 }
 

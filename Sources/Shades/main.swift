@@ -25,7 +25,8 @@ MainActor.assumeIsolated {
         controller = AppController(dependencies: parts.dependencies, stage: stage)
         driver = DemoDriver(parts: parts, controller: controller, stage: stage)
     } else {
-        let backend = T3Backend()
+        let signIn = DevFlags.signInService()
+        let backend = T3Backend(credentials: KeychainCredentialStore(service: signIn), label: signIn == KeychainCredentialStore.defaultService ? "Shades" : "Shades trial")
         let context = ScreenContextProvider()
         let voice = ParakeetVoiceEngine()
         let keys = KeyHoldMonitor()
@@ -65,8 +66,9 @@ MainActor.assumeIsolated {
                 notify: { notifications?.post($0) },
                 withdrawNotifications: { notifications?.withdraw($0) },
                 clearNotifications: { notifications?.clear() },
-                // A copy trying a flow out stays off your phone, and out of the real app's way.
-                phoneKeys: DevFlags.wantsFlow ? MemoryPhoneKeys() : KeychainPhoneKeys(),
+                // A copy trying a flow out stays off your phone, and out of the real app's way. Any copy but the installed
+                // app keeps phone keys in memory, so it can never replace the app's own.
+                phoneKeys: DevFlags.isInstalledApp() ? KeychainPhoneKeys() : MemoryPhoneKeys(),
                 servePhone: { port in
                     guard let tailscale else { throw TailscaleServe.Problem(errorDescription: "A copy trying a flow out stays off your tailnet.") }
                     return try await tailscale.serve(to: port)

@@ -37,6 +37,19 @@ import ShadesT3
 @MainActor
 enum DevFlags {
     static var wantsFlow: Bool { ["--ask", "--hand-off", "--fix"].contains { value(after: $0) != nil } }
+
+    /// Where a copy keeps its T3 sign-in. Only the installed app, where `scripts/install.sh` puts it, uses its own
+    /// place. Any other copy, built from source or bundled elsewhere, or trying a flow out, keeps one apart, so it can
+    /// never save a sign-in where the app looks, or revoke the app's as one left by an older build.
+    static func signInService(bundlePath: String = Bundle.main.bundlePath, isTryingAFlow: Bool? = nil) -> String {
+        isInstalledApp(bundlePath: bundlePath, isTryingAFlow: isTryingAFlow) ? KeychainCredentialStore.defaultService : KeychainCredentialStore.defaultService + ".trial"
+    }
+
+    /// Whether this is the copy `scripts/install.sh` put in place, doing its own work, which is the only copy that
+    /// uses the app's Keychain entries: its T3 sign-in and its phone keys.
+    static func isInstalledApp(bundlePath: String = Bundle.main.bundlePath, isTryingAFlow: Bool? = nil) -> Bool {
+        URL(fileURLWithPath: bundlePath).standardizedFileURL.path == "/Applications/Shades.app" && !(isTryingAFlow ?? wantsFlow)
+    }
     static var wantsChannels: Bool { CommandLine.arguments.contains("--channels") }
     static var wantsChannelsCheck: Bool { CommandLine.arguments.contains("--channels-check") }
     static var channelsImageFolder: String? { value(after: "--channels-image") }

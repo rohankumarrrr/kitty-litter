@@ -14,8 +14,10 @@ actor T3Auth {
 
     private var credential: T3Credential?
     private var environment: T3Wire.Environment?
+    /// The sign-ins this run saved, the only ones it deletes.
+    private var savedHere: Set<String> = []
 
-    init(home: URL, store: T3CredentialStoring, label: String, ttl: String, renewBefore: TimeInterval) {
+    init(home: URL, store: T3CredentialStoring, label: String, ttl: String, renewBefore: TimeInterval, http: URLSession? = nil) {
         self.home = home
         self.store = store
         self.label = label
@@ -23,7 +25,7 @@ actor T3Auth {
         self.renewBefore = renewBefore
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 5
-        http = URLSession(configuration: configuration)
+        self.http = http ?? URLSession(configuration: configuration)
     }
 
     static var defaultHome: URL {
@@ -99,11 +101,13 @@ actor T3Auth {
         let leftByLastBuild = try? store.newestUnreadableSessionID()
         let issued = try await issueSession()
         // A locked or broken Keychain shouldn't stop the cat. It just signs in again next launch.
-        try? store.save(issued)
+        if (try? store.save(issued)) != nil { savedHere.insert(issued.sessionID) }
         credential = issued
 
+        // Deleting a Keychain item another build saved shows a dialog whatever prompts are set to, and waits on it,
+        // so one this run didn't save stays behind, revoked like the rest. Its build can still read it.
+        if let previous, savedHere.contains(previous.sessionID) { try? store.delete(sessionID: previous.sessionID) }
         // Old sessions shouldn't linger in T3's list. Best effort: they expire on their own too.
-        if let previous { try? store.delete(sessionID: previous.sessionID) }
         let replaced = [previous?.sessionID, leftByLastBuild].compactMap { $0 }
         if !replaced.isEmpty {
             Task {
@@ -120,9 +124,12 @@ actor T3Auth {
 
         var request = URLRequest(url: origin.appendingPathComponent(T3Wire.Route.session))
         request.setValue("Bearer \(candidate.token)", forHTTPHeaderField: "Authorization")
-        guard let (data, response) = try? await http.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200
-        else { throw T3Error.notRunning }
+        guard let (data, response) = try? await http.data(for: request), let status = (response as? HTTPURLResponse)?.statusCode else {
+            throw T3Error.notRunning
+        }
+        // One T3 revoked, such as one a copy built from source replaced, only means signing in again.
+        if status == 401 { return nil }
+        guard status == 200 else { throw T3Error.notRunning }
         guard let state = try? T3Wire.decoder().decode(T3Wire.SessionState.self, from: data), state.isUsable else {
             return nil
         }

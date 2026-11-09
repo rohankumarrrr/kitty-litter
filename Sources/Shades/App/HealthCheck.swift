@@ -34,6 +34,8 @@ struct HealthFacts: Equatable {
     var microphoneDenied = false
     var skillsInstalled = true
     var reachedT3 = true
+    /// T3 didn't answer the self-check in time, as when signing in waits on a Keychain dialog.
+    var t3DidntAnswer = false
     /// Kittens taking work whose folders aren't T3 projects, or have no instructions.
     var kittensNotInT3: [Kitten] = []
     var kittensWithoutInstructions: [String] = []
@@ -97,12 +99,21 @@ enum HealthCheck {
             ))
         }
 
-        results.append(facts.reachedT3 ? .good("T3 Code") : HealthFinding(
-            check: "T3 Code",
-            ok: false,
-            problem: "I can't reach T3 Code, so my agents can't run.",
-            fix: "Open T3 Code."
-        ))
+        if facts.t3DidntAnswer {
+            results.append(HealthFinding(
+                check: "T3 Code",
+                ok: false,
+                problem: "Signing in to T3 Code didn't finish, so my agents can't run.",
+                fix: "If macOS is showing a Keychain dialog, answer it, then choose Check Myself from my menu."
+            ))
+        } else {
+            results.append(facts.reachedT3 ? .good("T3 Code") : HealthFinding(
+                check: "T3 Code",
+                ok: false,
+                problem: "I can't reach T3 Code, so my agents can't run.",
+                fix: "Open T3 Code."
+            ))
+        }
         for kitten in facts.kittensNotInT3 {
             results.append(HealthFinding(
                 check: "kitten: \(kitten.name)",

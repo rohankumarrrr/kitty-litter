@@ -87,7 +87,7 @@ Two settings are worth changing:
 - **To dictate with Fn:** set **System Settings > Keyboard > Press 🌐 key to** to **Do Nothing**. Otherwise macOS can act on the key too. You can also pick another key in Settings.
 - **To read page text in your browser:** turn on **View > Developer > Allow JavaScript from Apple Events**. Without it, the cat still gets the address and a screenshot.
 
-To see it without T3, permissions or a microphone, run `swift run shades --demo`. A demo, or a copy trying a flow out with `--ask`, `--hand-off` or `--fix`, takes none of the cat's shortcuts, so it never stops them working in the copy you've installed.
+To see it without T3, permissions or a microphone, run `swift run shades --demo`. A demo, or a copy trying a flow out with `--ask`, `--hand-off` or `--fix`, takes none of the cat's shortcuts, so it never stops them working in the copy you've installed. A copy built from source, or trying a flow out, also signs in to T3 apart from the installed app, under its own Keychain entry, so it can't sign the app out.
 
 ## Privacy
 
