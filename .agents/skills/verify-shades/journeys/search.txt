@@ -1,0 +1,50 @@
+front
+channels
+wait 1.5
+colors Cursor/Opal Horizon
+channel general
+wait 0.5
+search silkscreen
+wait 1
+draw .verify/shades/search/1-found
+jump-down
+jump-open
+wait 0.3
+draw .verify/shades/search/2-landed
+search **Silkscreen**
+search kittens #31
+wait 0.5
+draw .verify/shades/search/3-chip
+search cheapest
+key esc
+busy
+wait 4
+search coupon
+wait 0.7
+draw .verify/shades/search/4-asking-t3
+wait 1.3
+search coupon
+draw .verify/shades/search/5-from-t3
+jump-open
+wait 0.3
+draw .verify/shades/search/6-landed-from-t3
+phone on
+wait 3
+phone open general
+wait 4
+phone search silkscreen
+wait 1.5
+phone text
+draw .verify/shades/search/7-phone-found
+phone js document.querySelector('.hit').click(); 'tapped'
+wait 1
+phone js (() => { const n = document.querySelector('.msg.landed'); if (!n) return 'nothing landed'; const b = n.getBoundingClientRect(); return 'landed ' + n.dataset.id + ' top=' + Math.round(b.top) + ' of ' + innerHeight; })()
+draw .verify/shades/search/8-phone-landed
+phone search cheapest
+wait 1.5
+phone text
+phone close
+phone off
+wait 1
+front
+windows

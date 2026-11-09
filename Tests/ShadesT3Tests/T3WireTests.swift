@@ -183,6 +183,14 @@ final class T3WireTests: XCTestCase {
         XCTAssertNil(T3Wire.answerForm([]))
     }
 
+    func testSearchAsksForOnlyTheKeysEveryServerTakesAndReadsOnlyWhichThreads() throws {
+        let payload = try decoded(T3Wire.encode(T3Wire.SearchThreads(query: "coupon box")))
+        XCTAssertEqual(payload as NSDictionary, ["query": "coupon box", "limit": 50], "newer keys would be turned away by older servers")
+        let json = #"{"matches":[{"threadId":"t1","projectId":"p","source":"user","snippet":"<screen>coupon</screen>","messageCreatedAt":null,"quality":1},{"threadId":"t2","projectId":"p","source":"assistant","snippet":"the coupon box","messageCreatedAt":"2026-11-08T10:00:00.000Z","messageId":"m"}],"threads":[]}"#
+        let result = try T3Wire.decoder().decode(T3Wire.SearchResult.self, from: Data(json.utf8))
+        XCTAssertEqual(result.matches.map(\.threadId), ["t1", "t2"])
+    }
+
     func testThreadLinkEncodesIDs() {
         let link = T3Wire.threadLink(environmentID: "env-1", threadID: "mcp:launch:abc")
         XCTAssertEqual(link?.absoluteString, "t3code://threads/env-1/mcp%3Alaunch%3Aabc")

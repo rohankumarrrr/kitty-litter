@@ -52,6 +52,7 @@ final class MessagesShortcutsTests: XCTestCase {
         XCTAssertEqual(key(18, "1", .command), .place(1))
         XCTAssertEqual(key(25, "9", .command), .place(9))
         XCTAssertEqual(key(40, "k", .command), .jump)
+        XCTAssertEqual(key(3, "f", .command), .search)
         XCTAssertEqual(key(53, "\u{1b}", []), .escape)
         XCTAssertEqual(key(17, "T", [.command, .shift]), .threads)
         XCTAssertEqual(key(46, "M", [.command, .shift]), .activity)
@@ -72,7 +73,7 @@ final class MessagesShortcutsTests: XCTestCase {
         window.update(book())
         window.view.select(.channel(.of(steve)))
         XCTAssertFalse(window.panel.isKeyWindow)
-        let all: [MessagesShortcut] = [.previousThread, .nextThread, .previousPlace, .nextPlace, .previousUnread, .nextUnread, .back, .forward, .place(1), .jump, .escape, .threads, .activity, .compose, .close, .cheatsheet]
+        let all: [MessagesShortcut] = [.previousThread, .nextThread, .previousPlace, .nextPlace, .previousUnread, .nextUnread, .back, .forward, .place(1), .jump, .search, .escape, .threads, .activity, .compose, .close, .cheatsheet]
         var closed = false
         window.view.onCloseWindow = { closed = true }
         for shortcut in all {
@@ -238,6 +239,53 @@ final class MessagesShortcutsTests: XCTestCase {
         view.jumpBox.query = "pepper"
         view.jumpBox.open()
         XCTAssertEqual(view.selection, .channel(.of(pepper)))
+    }
+
+    func testCommandFAndCommandKTurnTheBoxIntoEachOtherWithWhatsTyped() {
+        let view = view()
+        view.perform(.jump)
+        view.jumpBox.query = "resume"
+        XCTAssertEqual(view.jumpBox.items.map(\.title), ["Resume"])
+        view.perform(.search)
+        XCTAssertFalse(view.jumpBox.isHidden)
+        XCTAssertEqual(view.jumpBox.mode, .search)
+        XCTAssertEqual(view.jumpBox.query, "resume")
+        XCTAssertEqual(view.jumpBox.items.map(\.found?.message.id), ["e1:ask"], "now it's what messages say")
+        XCTAssertEqual(view.jumpBox.items.first?.title, CatWords.you)
+        view.perform(.search)
+        XCTAssertTrue(view.jumpBox.isHidden, "and the same key closes it")
+    }
+
+    func testSearchAsksT3OnlyOnceTypingPauses() {
+        let view = view()
+        var asked: [String] = []
+        view.onAction = { if case .find(let words) = $0 { asked.append(words) } }
+        view.perform(.search)
+        view.jumpBox.query = "co"
+        view.jumpBox.query = "coupon"
+        let paused = expectation(description: "typing paused")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { paused.fulfill() }
+        wait(for: [paused], timeout: 3)
+        XCTAssertEqual(asked, ["coupon"], "not every letter")
+    }
+
+    func testSearchOpensAMessagesThreadAndScrollsToItHoweverFarBack() throws {
+        let exchanges = (0..<80).map { index in
+            Exchange(id: "x\(index)", asker: .you, askedAt: at.addingTimeInterval(TimeInterval(index * 60)), ask: index == 3 ? "Where did the coupon box go?" : "Ask \(index)", reply: "Done \(index).", repliedAt: at.addingTimeInterval(TimeInterval(index * 60 + 1)))
+        }
+        let book = ChannelBook.build(kittens: [steve, pepper], threads: [thread("long", of: steve, title: "Checkout")], transcripts: ["long": exchanges], isReading: false, unreadable: 0, cantReachT3: false)
+        let view = ChannelsView(frame: NSRect(origin: .zero, size: ChannelsWindow.size))
+        view.show(book)
+        view.perform(.search)
+        view.jumpBox.query = "coupon box"
+        XCTAssertEqual(view.jumpBox.items.map(\.found?.message.id), ["x3:ask"])
+        view.jumpBox.open()
+        XCTAssertTrue(view.jumpBox.isHidden)
+        XCTAssertEqual(view.selection, .thread("long", in: .channel(.of(steve))))
+        let row = try XCTUnwrap(view.threadPane.shownMessageRows.first { $0.isFound }, "laid out, though a thread's pane opens on its newest")
+        XCTAssertEqual(row.message.id, "x3:ask")
+        XCTAssertGreaterThanOrEqual(row.frame.minY, view.threadPane.scrollOffset, "and on the screen")
+        XCTAssertLessThanOrEqual(row.frame.maxY, view.threadPane.scrollOffset + view.threadPane.visibleHeight)
     }
 
     func testNewPutsTheKeyboardInThePlacesBox() {

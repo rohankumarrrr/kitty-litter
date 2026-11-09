@@ -601,6 +601,18 @@ extension PhoneTests {
         XCTAssertTrue(PhonePage.html.contains(#"<a id="linkopen" class="go" target="_blank" rel="noopener noreferrer">Open</a>"#), "Open is the one link")
     }
 
+    /// What review found: a phone that lost its pairing kept what Search had found on the pairing screen, and a thread
+    /// that finished behind Search's results was marked seen.
+    func testSearchLeavesNothingBehindAndCoveringAThreadDoesntMarkItSeen() throws {
+        let script = PhonePage.script
+        let pairing = try XCTUnwrap(script.range(of: "function pairing() {").map { String(script[$0.upperBound...].prefix(600)) })
+        XCTAssertTrue(pairing.contains("$('found').replaceChildren();"), "what kittens said goes with the pairing")
+        XCTAssertTrue(pairing.contains("'search', 'found']) $(id).hidden = true;"))
+        XCTAssertEqual(script.components(separatedBy: "act({ act: 'seen'").count, 2, "every way of marking seen goes through one place")
+        let seen = try XCTUnwrap(script.range(of: "function seen() {").map { String(script[$0.upperBound...].prefix(300)) })
+        XCTAssertTrue(seen.contains("$('search').hidden"), "and it waits while Search covers the conversation")
+    }
+
     func testAReplyBarHasWhoRepliedAsTheWindowDrawsThemAndWhenTheLastWas() throws {
         let earlier = noon.addingTimeInterval(-86_400 * 3)
         let book = ChannelBook.build(

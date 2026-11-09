@@ -456,8 +456,10 @@ final class MessageRowView: ChannelRowView {
     var replyBar: ReplyBar? { didSet { fitted = nil } }
     /// Over a reply also sent to the channel, which thread it's in.
     var context: String? { didSet { fitted = nil } }
+    /// The message Search found, picked out for a moment so your eye lands on it.
+    private(set) var isFound = false { didSet { needsDisplay = true } }
 
-    private let message: ChannelMessage
+    let message: ChannelMessage
     private let look: ChannelSpeakerLook
     private let words: ChannelTextBlock?
     private let failure: ChannelTextBlock?
@@ -732,7 +734,16 @@ final class MessageRowView: ChannelRowView {
         return top + 4 + (reactionChips.first?.frame.height ?? 0)
     }
 
+    func flash() {
+        isFound = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.isFound = false }
+    }
+
     override func draw(_ dirtyRect: NSRect) {
+        if isFound {
+            MessagesInk.link.withAlphaComponent(0.16).setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1), xRadius: 8, yRadius: 8).fill()
+        }
         if let context {
             // Over the bubble it's about: yours on the right, everyone else's on the left.
             let paragraph = NSMutableParagraphStyle()

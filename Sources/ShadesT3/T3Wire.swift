@@ -23,6 +23,7 @@ enum T3Wire {
         static let subscribeThread = "orchestration.subscribeThread"
         static let getTurnItem = "orchestration.getTurnItem"
         static let getThreadProjection = "orchestration.getThreadProjection"
+        static let searchThreads = "orchestration.searchThreads"
         static let ensureScratch = "projects.ensureScratch"
         static let mutateProject = "projects.mutate"
         static let createUploadURL = "attachments.createUploadUrl"
@@ -381,6 +382,21 @@ enum T3Wire {
 
     struct GetThreadProjection: Encodable {
         let threadId: String
+    }
+
+    /// T3 takes 2 to 200 letters and up to 50 matches. Newer servers take more keys, which older ones would turn away.
+    struct SearchThreads: Encodable {
+        let query: String
+        var limit = 50
+    }
+
+    /// Each match also has a snippet of the message, which is never read, since it can come from inside a screen block.
+    struct SearchResult: Decodable {
+        struct Match: Decodable {
+            let threadId: String
+        }
+
+        let matches: [Match]
     }
 
     struct TurnItemResult: Decodable {

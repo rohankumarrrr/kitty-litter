@@ -10,6 +10,10 @@ enum DemoBusy {
     private static let talks = 30
     /// One of Steve's threads goes on and on.
     static let longThread = "busy-steve-long"
+    /// Steve's oldest, which Messages doesn't read until you scroll back, ends with words no other thread has, so
+    /// Search can only find it by asking T3.
+    static let onlyInT3 = "busy-steve-\(threadsPerKitten - 1)"
+    static let onlyInT3Words = "The coupon box sits under the order summary now, where people look for it."
 
     private static let topics = [
         "Tidy the pricing page", "Rewrite the onboarding copy", "Check the button labels", "Compare plan names",
@@ -97,7 +101,7 @@ enum DemoBusy {
                     asker: .you,
                     askedAt: askedAt,
                     ask: asks[(number + index) % asks.count],
-                    reply: isLast && thread.status.isActive ? nil : reply(number + index),
+                    reply: isLast && thread.status.isActive ? nil : isLast && thread.id == onlyInT3 ? onlyInT3Words : reply(number + index),
                     repliedAt: isLast && thread.status.isActive ? nil : askedAt.addingTimeInterval(600),
                     earlierNotes: index % 5 == 0 ? 1 : 0
                 )

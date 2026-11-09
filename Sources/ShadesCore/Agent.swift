@@ -362,6 +362,8 @@ public protocol AgentBackend: AnyObject, Sendable {
     func exchanges(threadID: String) async -> [Exchange]?
     /// Where this thread came from, or `nil` if that can't be read.
     func origin(of threadID: String) async -> ThreadOrigin?
+    /// The threads whose messages have these words, best first. `nil` if T3 can't be asked.
+    func threads(matching words: String) async -> [String]?
 }
 
 public extension AgentBackend {
@@ -379,4 +381,5 @@ public extension AgentBackend {
     /// What the agent last said in this thread, or `nil` if it can't be read.
     func finalReport(threadID: String) async -> String? { (try? await report(threadID: threadID, run: nil)) ?? nil }
     func origin(of threadID: String) async -> ThreadOrigin? { nil }
+    func threads(matching words: String) async -> [String]? { nil }
 }

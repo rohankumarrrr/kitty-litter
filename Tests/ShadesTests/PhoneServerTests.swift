@@ -492,6 +492,37 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(try opened(1), PhonePlace.key(.thread("on", in: .channel(.shades))))
     }
 
+    func testSearchOnAPhoneNeedsItsKeyThePagesOwnRequestAndAPhoneLooking() async throws {
+        let key = try await pair()
+        let budget = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: Date(), projectPath: penny.folder)
+        backend.listed = [budget]
+        backend.said["w"] = [Exchange(id: "turn", asker: .you, askedAt: Date(), ask: "Check the budget for December", reply: "Groceries went over.", repliedAt: Date())]
+        controller.threadsChanged([budget])
+        func search(key: String?, headers: [String: String] = ["X-Shades": "1"]) async throws -> (status: Int, found: [[String: Any]]) {
+            let (response, body) = try await send("POST", "/search", json: #"{"words":"groceries"}"#, key: key, headers: headers)
+            let found = (try? JSONSerialization.jsonObject(with: body) as? [String: Any])?["found"] as? [[String: Any]]
+            return (response.statusCode, found ?? [])
+        }
+        let stranger = try await search(key: "made-up")
+        XCTAssertEqual(stranger.status, 401)
+        let elsewhere = try await search(key: key, headers: [:])
+        XCTAssertEqual(elsewhere.status, 400, "only the page's own requests, which another site can't make")
+        let unlooked = try await search(key: key)
+        XCTAssertEqual(unlooked.status, 409, "Messages is only open while a phone is looking")
+
+        let (_, stream) = try await watch(PhonePlace.key(.channel(.of(penny))), key: key)
+        defer { stream.cancel() }
+        var found: [[String: Any]] = []
+        for _ in 0..<200 where found.isEmpty {
+            found = try await search(key: key).found
+            if found.isEmpty { try? await Task.sleep(nanoseconds: 20_000_000) }
+        }
+        XCTAssertEqual(found.first?["open"] as? String, PhonePlace.key(.thread("w", in: .channel(.of(penny)))))
+        XCTAssertEqual(found.first?["id"] as? String, "turn:reply")
+        XCTAssertEqual(found.first?["text"] as? String, "Groceries went over.")
+        XCTAssertEqual(found.first?["marks"] as? [[Int]], [[0, 9]])
+    }
+
     func testTappingANotificationOpensItsThreadEvenBeforeMessagesHasReadIt() async throws {
         let key = try await pair()
         _ = try await subscribe(key: key)

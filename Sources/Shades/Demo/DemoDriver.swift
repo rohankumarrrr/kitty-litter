@@ -124,6 +124,9 @@ final class DemoDriver {
         case "press":
             // The same as tapping the first button that says this.
             runOnPhone("(() => { const b = [...document.querySelectorAll('button')].find((b) => !b.disabled && !b.closest('[hidden]') && b.textContent.trim() === \(DemoPhone.quoted(rest))); if (!b) return 'no button'; b.click(); return 'pressed' })()")
+        case "search":
+            // The same as tapping Search and typing those words. The page asks once typing pauses, so `wait 1` first.
+            runOnPhone("(() => { if ($('search').hidden) $('find').click(); $('query').value = \(DemoPhone.quoted(rest)); $('query').dispatchEvent(new Event('input')); return 'typed' })()")
         case "answer":
             // The same as typing into a question card's box.
             runOnPhone("(() => { const i = document.querySelector('.card input'); if (!i) return 'no box'; i.value = \(DemoPhone.quoted(rest)); i.dispatchEvent(new Event('input')); return 'typed' })()")
@@ -150,7 +153,7 @@ final class DemoDriver {
             phone?.close()
             phone = nil
         default:
-            print("phone on | off | pair | open [place] | go [place] | attach | send [words] | press [button] | answer [words] | subscribe | text | select [words] | link [words] | unselect | close")
+            print("phone on | off | pair | open [place] | go [place] | attach | send [words] | press [button] | search [words] | answer [words] | subscribe | text | select [words] | link [words] | unselect | close")
         }
     }
 
@@ -315,7 +318,7 @@ final class DemoDriver {
             "previous-thread": .previousThread, "next-thread": .nextThread,
             "previous-place": .previousPlace, "next-place": .nextPlace,
             "previous-unread": .previousUnread, "next-unread": .nextUnread,
-            "back": .back, "forward": .forward, "jump": .jump, "esc": .escape,
+            "back": .back, "forward": .forward, "jump": .jump, "search": .search, "esc": .escape,
             "threads": .threads, "activity": .activity, "new": .compose, "close": .close, "shortcuts": .cheatsheet,
         ]
         for number in 1...9 { named["\(number)"] = .place(number) }
@@ -352,7 +355,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -441,6 +444,16 @@ final class DemoDriver {
             }
             view.jumpBox.query = rest
             print("jump [\(rest)] \(view.jumpBox.items.map(\.title).joined(separator: ", "))")
+        case "search":
+            // The same as typing into ⌘F's box, which opens it first if it isn't open.
+            let view = stage.channels.view
+            if view.jumpBox.isHidden || view.jumpBox.mode != .search {
+                stage.channels.panel.makeKey()
+                stage.channels.panel.handle(.search)
+            }
+            // The same words again only says what it shows now, such as what T3 found since.
+            if view.jumpBox.query != rest { view.jumpBox.query = rest }
+            print("search [\(rest)] \(view.jumpBox.items.map { "\($0.title): \($0.found?.snippet ?? "")" }.joined(separator: " | "))")
         case "jump-down", "jump-up":
             // The arrows in ⌘K's box.
             stage.channels.view.jumpBox.move(by: word == "jump-down" ? 1 : -1)
@@ -449,6 +462,9 @@ final class DemoDriver {
             // Return in ⌘K's box.
             stage.channels.view.jumpBox.open()
             print("jump-open \(whereMessagesIs)")
+            let view = stage.channels.view
+            let found = (view.threadPane.isHidden ? view.pane : view.threadPane).shownMessageRows.first(where: \.isFound)
+            if let found { print("found \(found.message.id) [\((found.message.text ?? "").prefix(60))]") }
         case "also":
             // The same as clicking "Also send to #channel" under a thread's box.
             let composer = stage.channels.view.threadPane.composer
