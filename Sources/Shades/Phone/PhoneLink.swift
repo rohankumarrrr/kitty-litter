@@ -16,6 +16,8 @@ final class PhoneLink {
         /// A notification can open a thread Messages hasn't read yet, so a stream asks for the thread it opened with
         /// until it shows.
         var opening: Bool
+        /// Where each thread's New line was when this page opened, so it stays put once it's all been seen.
+        var newFrom: [String: String] = [:]
 
         init(stream: PhoneStream, key: String) {
             self.stream = stream
@@ -94,7 +96,8 @@ final class PhoneLink {
 
     private func show(_ book: ChannelBook, to watcher: Watcher) {
         let place = PhonePlace(watcher.key, in: book)
-        let view = PhoneView(place, in: book, now: now())
+        watcher.newFrom.merge(book.newFrom) { _, now in now }
+        let view = PhoneView(place, in: book, now: now(), newFrom: watcher.newFrom)
         if place.selection?.thread != nil { watcher.opening = false }
         if !watcher.opening { watcher.key = view.key }
         guard view != watcher.shown, let json = try? JSONEncoder().encode(view) else { return }

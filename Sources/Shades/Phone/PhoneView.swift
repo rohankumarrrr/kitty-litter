@@ -272,12 +272,16 @@ struct PhoneView: Encodable, Equatable {
     var places: [Place]
     var rows: [Row]
     var box: Box?
+    /// On a thread's page, the message Mark unread makes new again: where its New line was, or else its latest from
+    /// someone else.
+    var unread: String?
     var cantReachT3: Bool
     /// Your picture, beside yours and for you in reply bars. Unlike a cat's, it comes only in what a paired phone is
     /// sent, never from an address of its own.
     var you: String?
 
-    init(_ place: PhonePlace, in book: ChannelBook, now: Date) {
+    /// `newFrom` is where each thread's New line was when this phone came here, as the window keeps it.
+    init(_ place: PhonePlace, in book: ChannelBook, now: Date, newFrom: [String: String] = [:]) {
         key = place.key
         places = Self.places(in: book)
         cantReachT3 = book.cantReachT3
@@ -297,7 +301,10 @@ struct PhoneView: Encodable, Equatable {
             cat = book.home(ofThread: thread).flatMap { Self.cat(of: $0, in: book) }
             back = PhonePlace.key(selection.closed)
             backTitle = ChannelHeader.words(for: selection.place, in: book).title
-            rows = ChannelRows.thread(thread, in: book).map { Self.row($0, at: selection.place, in: book, now: now) }
+            rows = ChannelRows.thread(thread, in: book, newFrom: newFrom).map { Self.row($0, at: selection.place, in: book, now: now) }
+            if book.canMarkUnread(thread), let messages = book.threads[thread]?.messages.filter({ !$0.isSending }) {
+                unread = newFrom[thread].flatMap { first in messages.first { $0.id == first }?.id } ?? (messages.last { $0.speaker != .you } ?? messages.last)?.id
+            }
         } else {
             (title, subtitle) = ChannelHeader.words(for: selection.place, in: book)
             cat = selection.channelID.flatMap { Self.cat(of: $0, in: book) }
@@ -306,7 +313,7 @@ struct PhoneView: Encodable, Equatable {
             }
             back = PhonePlace.home
             backTitle = CatWords.messagesTitle
-            rows = ChannelRows.rows(selection.place, in: book).map { Self.row($0, at: selection.place, in: book, now: now) }
+            rows = ChannelRows.rows(selection.place, in: book, newFrom: newFrom).map { Self.row($0, at: selection.place, in: book, now: now) }
         }
     }
 
@@ -422,6 +429,8 @@ struct PhoneView: Encodable, Equatable {
             )
         case .replies(let count):
             return Row(kind: "replies", text: CatWords.replies(count))
+        case .new(let count):
+            return Row(kind: "new", detail: CatWords.jumpToNew(count), text: CatWords.new)
         case .section(let title, let kind):
             return Row(kind: "section", title: title, clear: kind?.rawValue)
         case .heading(let status):

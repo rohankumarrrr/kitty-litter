@@ -196,6 +196,8 @@ final class ChannelPane: QuietView {
     var onOpen: ((_ thread: String, _ place: ChannelPlace?, _ typing: Bool, _ report: InboxEntry?) -> Void)?
     var onClose: (() -> Void)?
     var onAction: ((MessagesAction) -> Void)?
+    /// Makes a message in a thread, and everything after it, new to you again.
+    var onMarkUnread: ((_ thread: String, _ message: String) -> Void)?
     /// Opens a web address, only ever after you've seen it in the link bar and pressed Open.
     var onOpenLink: ((URL) -> Void)?
     var parts = PartAnswers()
@@ -218,7 +220,11 @@ final class ChannelPane: QuietView {
     /// Words brought back to a box whose target went meanwhile, such as a question answered in T3. They wait there,
     /// and Return sends them nowhere else, until the box is cleared.
     private var held: MessageTarget?
-    private(set) var shown: [ChannelRow] = []
+    private(set) var shown: [ChannelRow] = [] {
+        didSet { newLine = shown.indices.lazy.compactMap { index in if case .new(let count) = self.shown[index] { (index, count) } else { nil } }.first }
+    }
+    /// Where the New line is among them, and how much is new under it.
+    private var newLine: (index: Int, count: Int)?
     /// Views for the rows from `first` on. Each is only in the window while it's near what you can see.
     private var views: [ChannelRowView] = []
     /// Where each of `views` goes. Moving a view that isn't in the window still costs, so it only moves once it's in.
@@ -228,6 +234,10 @@ final class ChannelPane: QuietView {
     /// The state of each pull request, as the rows' chips show it.
     private var pulls: [String: String] = [:]
     private var expanded: Set<String> = []
+    /// Where each thread's New line was when you came here, so it stays put once what's under it counts as seen.
+    private var newFrom: [String: String] = [:]
+    /// Up to the New line, while it's above what you can see.
+    private var jump: QuietButton?
     private var stackedSize = NSSize.zero
     private var isPaging = false
     /// Showing something scrolls it too, but only you scrolling back to the top loads what's older.
@@ -292,6 +302,7 @@ final class ChannelPane: QuietView {
     override func layout() {
         super.layout()
         arrange()
+        showJump()
     }
 
     func arrange(force: Bool = false) {
@@ -342,15 +353,16 @@ final class ChannelPane: QuietView {
         if isNewSelection { linkBar.show(nil) }
         updateComposer(keepingDraft: !isNewBox, typedFor: restored)
         arrange()
+        newFrom = isNewSelection ? book.newFrom : newFrom.merging(book.newFrom) { _, now in now }
         let rows: [ChannelRow]
         switch role {
         case .place:
             header.show(selection.place, in: book)
-            rows = ChannelRows.rows(selection.place, in: book)
+            rows = ChannelRows.rows(selection.place, in: book, newFrom: newFrom)
         case .thread:
             guard let thread = selection.thread else { return }
             header.show(thread: thread, in: book)
-            rows = ChannelRows.thread(thread, in: book)
+            rows = ChannelRows.thread(thread, in: book, newFrom: newFrom)
         }
         let pullsChanged = book.pulls != pulls
         pulls = book.pulls
@@ -401,6 +413,7 @@ final class ChannelPane: QuietView {
         // Older posts that came in above what you're reading are laid out the way scrolling up to them would.
         pageIfNeeded()
         if pullsChanged, !isNewSelection { restyle() }
+        showJump()
     }
 
     /// A link pressed in one of this pane's messages. It only shows where the link goes, and Open in the bar is what
@@ -426,12 +439,16 @@ final class ChannelPane: QuietView {
     func restyle() {
         composer.restyle()
         header.needsDisplay = true
+        // Made again in the new colours.
+        jump?.removeFromSuperview()
+        jump = nil
         if isHidden {
             views.forEach { $0.removeFromSuperview() }
             views = []
             frames = []
             shown = []
             first = 0
+            showJump()
             return
         }
         guard let book else { return }
@@ -441,6 +458,7 @@ final class ChannelPane: QuietView {
         stack()
         scrollOffset = offset
         attach()
+        showJump()
     }
 
     /// Puts the keyboard in the box, since choosing to reply means you're about to type. The panel never activates
@@ -651,17 +669,20 @@ final class ChannelPane: QuietView {
                 view.onReply = { [weak self] in self?.onOpen?(post.threadID, nil, true, nil) }
             }
             if book.knows(thread: post.threadID) { view.onOpen = { [weak self] in self?.onOpenThread?(post.threadID) } }
+            offerMarkUnread(on: view, post.parent, in: post.threadID, of: book)
             return view
         case .message(let message):
             let view = messageView(message, in: book)
             if !message.threadID.isEmpty, book.knows(thread: message.threadID) {
                 view.onOpen = { [weak self] in self?.onOpenThread?(message.threadID) }
             }
+            offerMarkUnread(on: view, message, in: message.threadID, of: book)
             return view
         case .alsoSent(let message, let threadID, let parent):
             let view = messageView(message, in: book)
             view.context = CatWords.repliedToThread(parent)
             view.onPress = { [weak self] in self?.onOpen?(threadID, nil, false, nil) }
+            offerMarkUnread(on: view, message, in: threadID, of: book)
             return view
         case .digest(let digest):
             let view = ThreadDigestRowView(digest: digest, in: book, now: now)
@@ -669,6 +690,8 @@ final class ChannelPane: QuietView {
             return view
         case .replies(let count):
             return RepliesRowView(count: count)
+        case .new(let count):
+            return NewRowView(count: count)
         case .heading(let status):
             return HeadingRowView(status: status)
         case .issue(let thread):
@@ -711,6 +734,11 @@ final class ChannelPane: QuietView {
             self?.attach()
         }
         return view
+    }
+
+    private func offerMarkUnread(on view: MessageRowView, _ message: ChannelMessage, in thread: String, of book: ChannelBook) {
+        guard book.canMarkUnread(thread), !message.isSending else { return }
+        view.onMarkUnread = { [weak self] in self?.onMarkUnread?(thread, message.id) }
     }
 
     private func look(_ kitten: Kitten?, in book: ChannelBook) -> ChannelSpeakerLook {
@@ -838,7 +866,48 @@ final class ChannelPane: QuietView {
     @objc private func scrolled(_ notification: Notification) {
         attach()
         pageIfNeeded()
+        showJump()
     }
+
+    /// A way up to the New line while it's above what you can see, saying how much is new under it.
+    private func showJump() {
+        let line = newLine
+        let above = line.map { $0.index < first || frames.indices.contains($0.index - first) && frames[$0.index - first].maxY <= scroll.contentView.bounds.minY } ?? false
+        guard let line, above, !isHidden else {
+            jump?.removeFromSuperview()
+            jump = nil
+            return
+        }
+        let title = CatWords.jumpToNew(line.count)
+        if jump?.accessibilityLabel() != title {
+            jump?.removeFromSuperview()
+            let button = QuietButton(title, style: .filled) { [weak self] in self?.jumpToNew() }
+            button.colors = (MessagesInk.link, MessagesInk.onLink)
+            // It floats over messages, which can be the same colour.
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
+            shadow.shadowBlurRadius = 6
+            shadow.shadowOffset = NSSize(width: 0, height: -1)
+            button.wantsLayer = true
+            button.shadow = shadow
+            addSubview(button, positioned: .above, relativeTo: scroll)
+            jump = button
+        }
+        jump?.frame.origin = NSPoint(x: ((bounds.width - (jump?.frame.width ?? 0)) / 2).rounded(), y: ChannelHeader.height + 8)
+    }
+
+    /// Scrolls up so the New line is at the top, laying out what's above first if it has to.
+    func jumpToNew() {
+        guard let line = newLine else { return }
+        while first > line.index { layOutPageAbove() }
+        guard frames.indices.contains(line.index - first) else { return }
+        scrollOffset = min(max(frames[line.index - first].minY - Self.topPad, 0), bottomOffset)
+        attach()
+        showJump()
+    }
+
+    /// Whether the way up to the New line is showing, and what it says.
+    var jumpTitle: String? { jump?.accessibilityLabel() }
 
     /// Scrolling up near the oldest row laid out lays out the page before it, without moving what you're looking at.
     private func pageIfNeeded() {

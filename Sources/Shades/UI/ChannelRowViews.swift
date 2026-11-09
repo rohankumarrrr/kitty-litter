@@ -269,6 +269,37 @@ final class DayRowView: ChannelRowView {
     }
 }
 
+/// The line over what's new to you, as Slack's red New line.
+final class NewRowView: ChannelRowView {
+    init(count: Int) {
+        super.init(frame: .zero)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityLabel(CatWords.newMessages(count))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func fit(width: CGFloat) -> CGFloat { 24 }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let label = NSAttributedString(string: CatWords.new, attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: MessagesInk.badge,
+        ])
+        let size = label.size()
+        let right = bounds.width - Self.margin
+        let middle = bounds.midY.rounded() + 0.5
+        MessagesInk.badge.setStroke()
+        let line = NSBezierPath()
+        line.move(to: NSPoint(x: Self.margin, y: middle))
+        line.line(to: NSPoint(x: right - size.width - 8, y: middle))
+        line.stroke()
+        label.draw(at: NSPoint(x: right - size.width, y: bounds.midY - size.height / 2))
+    }
+}
+
 /// What a thread's reply bar shows, as Slack draws it: who replied, how many replies, and when the last one was.
 @MainActor
 struct ReplyBar {
@@ -415,6 +446,8 @@ final class MessageRowView: ChannelRowView {
     var onTryAgain: (() -> Void)?
     /// Opens its thread: a parent, or a reply also sent to the channel.
     var onPress: (() -> Void)?
+    /// Makes it, and everything after it in its thread, new to you again.
+    var onMarkUnread: (() -> Void)?
     var isExpanded = false
     /// Under a thread's parent, what's been said since.
     var replyBar: ReplyBar? { didSet { fitted = nil } }
@@ -428,7 +461,7 @@ final class MessageRowView: ChannelRowView {
     private var showMore: QuietButton?
     private var tryAgain: QuietButton?
     /// Made the first time you hover, since most messages never are.
-    private var hoverButtons: (open: QuietButton, copy: QuietButton, reply: QuietButton)?
+    private var hoverButtons: (open: QuietButton, copy: QuietButton, reply: QuietButton, unread: QuietButton)?
     /// A Copy on each code block.
     private(set) var codeButtons: [QuietButton] = []
     private(set) var bubble = NSRect.zero
@@ -490,6 +523,12 @@ final class MessageRowView: ChannelRowView {
                 return self != nil
             })
         }
+        if onMarkUnread != nil {
+            actions.append(NSAccessibilityCustomAction(name: CatWords.markUnread) { [weak self] in
+                self?.onMarkUnread?()
+                return self != nil
+            })
+        }
         if message.text != nil {
             actions.append(NSAccessibilityCustomAction(name: "Copy") { [weak self] in
                 self?.copyPressed()
@@ -524,16 +563,24 @@ final class MessageRowView: ChannelRowView {
             let buttons = (
                 open: QuietButton("Open", style: .text) { [weak self] in self?.onOpen?() },
                 copy: QuietButton("Copy", style: .text) { [weak self] in self?.copyPressed() },
-                reply: QuietButton("Reply", style: .text) { [weak self] in self?.onReply?() }
+                reply: QuietButton("Reply", style: .text) { [weak self] in self?.onReply?() },
+                unread: QuietButton(CatWords.markUnread, style: .text) { [weak self] in self?.onMarkUnread?() }
             )
-            [buttons.open, buttons.copy, buttons.reply].forEach(addSubview)
+            [buttons.open, buttons.copy, buttons.reply, buttons.unread].forEach(addSubview)
             hoverButtons = buttons
-            placeHoverButtons(width: bounds.width)
         }
         hoverButtons?.copy.isHidden = !hovering || message.text == nil
         hoverButtons?.open.isHidden = !hovering || onOpen == nil
         hoverButtons?.reply.isHidden = !hovering || onReply == nil
+        hoverButtons?.unread.isHidden = !hovering || onMarkUnread == nil
+        placeHoverButtons(width: bounds.width)
         needsDisplay = true
+    }
+
+    /// How much of the head the buttons showing on hover cover.
+    private var hoverWidth: CGFloat {
+        guard let hoverButtons else { return 0 }
+        return [hoverButtons.open, hoverButtons.copy, hoverButtons.reply, hoverButtons.unread].filter { !$0.isHidden }.reduce(0) { $0 + $1.frame.width }
     }
 
     /// At the top right of each code block, inside it. A block that a cut message stops before has none.
@@ -560,7 +607,7 @@ final class MessageRowView: ChannelRowView {
     private func placeHoverButtons(width: CGFloat) {
         guard let hoverButtons else { return }
         var right = width - Self.margin + 6
-        for button in [hoverButtons.open, hoverButtons.copy, hoverButtons.reply] {
+        for button in [hoverButtons.open, hoverButtons.copy, hoverButtons.reply, hoverButtons.unread] where !button.isHidden {
             right -= button.frame.width
             button.frame.origin = NSPoint(x: right, y: headTop - Self.pad)
         }
@@ -715,7 +762,7 @@ final class MessageRowView: ChannelRowView {
             .font: NSFont.systemFont(ofSize: 11, weight: .medium),
             .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: Self.textLeft + 2, y: baseline, width: max(bounds.width - Self.textLeft - Self.margin - (hovering ? 150 : 0), 60), height: 15))
+        ]).draw(in: NSRect(x: Self.textLeft + 2, y: baseline, width: max(bounds.width - Self.textLeft - Self.margin - (hovering ? hoverWidth : 0), 60), height: 15))
     }
 }
 

@@ -10,6 +10,8 @@ final class QuietButton: NSView {
     var onPress: (() -> Void)?
     /// A disarmed button shows dim and ignores clicks.
     var isArmed = true { didSet { needsDisplay = true } }
+    /// A filled one's own colours, such as a theme's, in place of the plain pill.
+    var colors: (fill: NSColor, ink: NSColor)? { didSet { needsDisplay = true } }
 
     let style: Style
     private var title: String
@@ -48,7 +50,7 @@ final class QuietButton: NSView {
     private var label: NSAttributedString {
         let color: NSColor
         switch style {
-        case .filled: color = Ink.pillText
+        case .filled: color = colors?.ink ?? Ink.pillText
         case .plain: color = Ink.text
         case .text: color = Ink.soft
         }
@@ -62,7 +64,8 @@ final class QuietButton: NSView {
         let shape = NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8)
         switch style {
         case .filled:
-            (isArmed ? Ink.pill : Ink.pill.withAlphaComponent(0.4)).setFill()
+            let fill = colors?.fill ?? Ink.pill
+            (isArmed ? fill : fill.withAlphaComponent(0.4)).setFill()
             shape.fill()
             if pressing { NSColor(white: 0.5, alpha: 0.3).setFill(); shape.fill() }
         case .plain:

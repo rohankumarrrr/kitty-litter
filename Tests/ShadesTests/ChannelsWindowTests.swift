@@ -698,6 +698,42 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(seen, [.activity, .channel(.of(steve)), inThread])
     }
 
+    func testTheNewLineStaysWhereItWasWithAWayUpToItUntilYouMoveOn() throws {
+        let view = view()
+        var unread = book(exchanges: 30)
+        unread.newFrom = ["t": "e2:reply"]
+        view.show(unread)
+        view.select(inThread)
+        XCTAssertTrue(view.threadPane.shown.contains(.new(55)), "over e2's reply, with all 55 messages from it on under it")
+        XCTAssertEqual(view.threadPane.jumpTitle, "↑  55 new messages", "it opens at the latest, so the line is above what you can see")
+
+        view.threadPane.jumpToNew()
+        XCTAssertNil(view.threadPane.jumpTitle, "the line's in view")
+        let line = try XCTUnwrap(view.threadPane.shown.firstIndex(of: .new(55)))
+        XCTAssertEqual(view.threadPane.shown[line + 1], .message(try XCTUnwrap(unread.threads["t"]?.replies[4])))
+
+        view.show(book(exchanges: 30))
+        XCTAssertTrue(view.threadPane.shown.contains(.new(55)), "once it's all seen, it stays while you're still here")
+        view.select(.channel(.of(steve)))
+        view.select(inThread)
+        XCTAssertFalse(view.threadPane.shown.contains(.new(55)), "and goes once you come back")
+    }
+
+    func testMarkUnreadOnAMessageKeepsItsThreadUnreadUntilYouMoveOn() throws {
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.show(book(exchanges: 3))
+        view.select(inThread)
+        let row = try XCTUnwrap(view.threadPane.shownMessageRows.last { $0.onMarkUnread != nil })
+        row.onMarkUnread?()
+        XCTAssertEqual(sent, [.markUnread("t", from: "e2:reply")])
+        XCTAssertEqual(view.keptUnread, ["t"], "so looking at it now doesn't count")
+        XCTAssertTrue(row.accessibilityCustomActions()?.contains { $0.name == CatWords.markUnread } == true)
+        view.select(.channel(.of(steve)))
+        XCTAssertEqual(view.keptUnread, [])
+    }
+
     private func work(_ id: String, title: String, updated: TimeInterval = 0) -> AgentThread {
         AgentThread(id: id, title: title, projectTitle: "Steve", status: .completed, model: "m", updatedAt: at.addingTimeInterval(updated), projectPath: "/k/steve")
     }

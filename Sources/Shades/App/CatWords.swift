@@ -133,6 +133,11 @@ enum CatWords {
     static let needsYouLabel = "Needs you"
     static func repliedToThread(_ parent: String) -> String { "replied to a thread: \(parent)" }
     static func moreReplies(_ count: Int) -> String { count == 1 ? "1 more reply" : "\(count) more replies" }
+    static let new = "New"
+    static func newMessages(_ count: Int) -> String { count == 1 ? "1 new message" : "\(count) new messages" }
+    /// The way up to the New line, when it's above what you can see.
+    static func jumpToNew(_ count: Int) -> String { "↑  \(newMessages(count))" }
+    static let markUnread = "Mark unread"
     static func alsoSendTo(_ channel: String) -> String { "Also send to \(channel)" }
     static let answerInWords = "Type an answer"
     static let didntStart = "That didn't start. Try again?"

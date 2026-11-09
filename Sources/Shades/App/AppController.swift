@@ -264,6 +264,9 @@ final class AppController {
         channels.onChange = { [weak self] in self?.channelsChanged($0) }
         channels.waiting = { [weak self] in self?.waiting ?? Waiting() }
         channels.isUnread = { [weak self] in self?.inbox.isUnread($0) ?? false }
+        channels.firstNew = { [weak self] thread, messages in
+            self?.inbox.firstNew(in: thread, among: messages.map { ($0.id, $0.speaker == .you) })
+        }
         channels.inGeneral = { [weak self] in self?.messagesThreads ?? [:] }
         channels.isWithShades = { [weak self] in self?.isWithShades($0) ?? false }
         channels.isCatsWork = { [weak self] in self?.isCatsWork($0) ?? false }

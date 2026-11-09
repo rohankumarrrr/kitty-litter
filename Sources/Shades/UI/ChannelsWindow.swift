@@ -92,6 +92,8 @@ final class ChannelsView: QuietView {
     var onCloseWindow: (() -> Void)?
     /// You've seen what's there, which is what takes its unread dot away.
     var onSeen: ((ChannelSelection) -> Void)?
+    /// Threads you've marked unread since you came here, which stay unread while you're still looking.
+    private(set) var keptUnread: Set<String> = []
     /// A theme file let go of anywhere on the window.
     var onDropTheme: ((URL) -> Void)?
     /// Opens a thread in T3.
@@ -123,6 +125,7 @@ final class ChannelsView: QuietView {
             pane.onSelect = { [weak self] in self?.select($0) }
             pane.onOpen = { [weak self] thread, place, typing, report in self?.open(thread: thread, from: place, typing: typing, replyingTo: report) }
             pane.onClose = { [weak self] in self?.closeThread() }
+            pane.onMarkUnread = { [weak self] thread, message in self?.markUnread(thread, from: message) }
             pane.composer.onEscape = { [weak self] in self?.perform(.escape) }
         }
         registerForDraggedTypes(Drop.types)
@@ -169,6 +172,7 @@ final class ChannelsView: QuietView {
         let old = self.selection
         self.selection = selection
         if selection.thread != old.thread { threadPane.leaveThread() }
+        if selection != old { keptUnread = [] }
         if !isTravelling, selection != history[historyIndex] {
             history = Array(history[...historyIndex].suffix(Self.historyKept - 1)) + [selection]
             historyIndex = history.count - 1
@@ -187,6 +191,11 @@ final class ChannelsView: QuietView {
         select(.thread(id, in: place ?? selection.place))
         threadPane.replying(to: report)
         if typing { threadPane.focusComposer() }
+    }
+
+    func markUnread(_ thread: String, from message: String) {
+        keptUnread.insert(thread)
+        onAction?(.markUnread(thread, from: message))
     }
 
     func closeThread() {

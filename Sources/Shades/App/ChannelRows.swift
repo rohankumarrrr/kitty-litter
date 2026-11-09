@@ -78,6 +78,8 @@ enum ChannelRow: Equatable {
     case digest(ThreadDigest)
     /// In a thread's pane, the line between its parent and its replies.
     case replies(Int)
+    /// The line over what's new to you, as Slack's New line, and how many new messages or posts there are under it.
+    case new(Int)
     case section(String, clearing: InboxEntry.Kind?)
     case heading(KittenStatus)
     case issue(AgentThread)
@@ -166,19 +168,22 @@ extension MessageTarget {
 
 /// Turns a place or a thread into rows, so the view doesn't branch.
 enum ChannelRows {
-    static func rows(_ place: ChannelPlace, in book: ChannelBook) -> [ChannelRow] {
+    /// `newFrom` is where each thread's line over what's new goes, as `ChannelBook.newFrom` has it.
+    static func rows(_ place: ChannelPlace, in book: ChannelBook, newFrom: [String: String] = [:]) -> [ChannelRow] {
         switch place {
         case .activity: return activity(in: book)
         case .threads: return threads(in: book)
-        case .channel(let id): return channel(id, of: book)
+        case .channel(let id): return channel(id, of: book, newFrom: newFrom)
         }
     }
 
     /// One thread on its own: its parent, how many replies, each reply, then whatever it's waiting on you for.
-    static func thread(_ id: String, in book: ChannelBook) -> [ChannelRow] {
+    static func thread(_ id: String, in book: ChannelBook, newFrom: [String: String] = [:]) -> [ChannelRow] {
         var rows: [ChannelRow] = []
         if let thread = book.threads[id] {
-            rows = [.message(thread.parent)]
+            let new = newFrom[id].flatMap { first in thread.messages.firstIndex { $0.id == first } }.map { thread.messages.count - $0 } ?? 0
+            let line = { (message: ChannelMessage) in message.id == newFrom[id] ? [ChannelRow.new(new)] : [] }
+            rows = line(thread.parent) + [.message(thread.parent)]
             if !thread.replies.isEmpty || thread.isCut { rows.append(.replies(thread.replyCount)) }
             if thread.isCut { rows.append(.note(CatWords.olderReplies)) }
             var lastDay = Calendar.current.startOfDay(for: thread.parent.at)
@@ -188,7 +193,7 @@ enum ChannelRows {
                     rows.append(.day(day))
                     lastDay = day
                 }
-                rows.append(.message(reply))
+                rows += line(reply) + [.message(reply)]
             }
             rows += statusNotes(of: book)
         } else {
@@ -307,10 +312,12 @@ enum ChannelRows {
         return [.note(book.isReading ? CatWords.readingMessages : CatWords.threadsEmpty)]
     }
 
-    private static func channel(_ id: ChannelID, of book: ChannelBook) -> [ChannelRow] {
+    private static func channel(_ id: ChannelID, of book: ChannelBook, newFrom: [String: String]) -> [ChannelRow] {
         guard let channel = book.channel(id), !channel.posts.isEmpty else { return [emptyNote(id, in: book)] }
         var rows: [ChannelRow] = channel.isCut && !book.cantReachT3 ? [.older(isLoading: channel.isLoadingOlder)] : []
         var lastDay = Date.distantPast
+        let new = channel.posts.filter { isNew($0, in: book, newFrom: newFrom) }.count
+        var lineDrawn = false
         for post in channel.posts {
             let row: ChannelRow
             let at: Date
@@ -331,9 +338,27 @@ enum ChannelRows {
                 rows.append(.day(day))
                 lastDay = day
             }
+            if !lineDrawn, isNew(post, in: book, newFrom: newFrom) {
+                rows.append(.new(new))
+                lineDrawn = true
+            }
             rows.append(row)
         }
         return rows + statusNotes(of: book)
+    }
+
+    /// Whether a post is new to you: a thread none of which you've seen, or a reply also sent here that came after what
+    /// you'd read of its thread. A thread with only new replies is new in its pane, as in Slack.
+    private static func isNew(_ post: ChannelPost, in book: ChannelBook, newFrom: [String: String]) -> Bool {
+        switch post {
+        case .thread(let id):
+            return newFrom[id] != nil && newFrom[id] == book.threads[id]?.parent.id
+        case .alsoSent(let message, let id):
+            guard let messages = book.threads[id]?.messages, let first = messages.firstIndex(where: { $0.id == newFrom[id] }) else { return false }
+            return messages[first...].contains { $0.id == message.id }
+        case .message:
+            return false
+        }
     }
 
     /// The start of a thread's first message, for "replied to a thread".

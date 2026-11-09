@@ -21,6 +21,8 @@ final class ChannelFeed {
     var onChange: ((ChannelBook) -> Void)?
     var waiting: () -> Waiting = { Waiting() }
     var isUnread: (AgentThread) -> Bool = { _ in false }
+    /// The first message that's new to you in an unread thread, given its messages, oldest first.
+    var firstNew: (AgentThread, [ChannelMessage]) -> String? = { _, _ in nil }
     /// Threads Messages started from #general, or passed your words to there, and when. They live in #general.
     var inGeneral: () -> [String: Date] = { [:] }
     /// Whether a thread is a conversation with the cat itself, which is any in the router's folder.
@@ -233,6 +235,11 @@ final class ChannelFeed {
         return threads.filter { readStamps[$0.id] == $0.updatedAt && !isWithShades($0) && (shown.contains($0.id) || quiet($0)) }
     }
 
+    /// What's been said in a thread, oldest first, as Messages shows it now.
+    func messages(in thread: String) -> [ChannelMessage] {
+        published?.threads[thread]?.messages ?? []
+    }
+
     /// One loop at a time, so there's only ever one pass. It holds off between passes, so a burst of changes makes one.
     private func run() {
         guard loop == nil else { return }
@@ -393,6 +400,7 @@ final class ChannelFeed {
             waiting: waiting(),
             sent: sent,
             isUnread: isUnread,
+            firstNew: firstNew,
             inGeneral: inGeneral(),
             withShades: Set(threads.filter(isWithShades).map(\.id)),
             catsWork: Set(threads.filter(isCatsWork).map(\.id)),

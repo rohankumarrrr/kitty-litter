@@ -91,7 +91,9 @@ final class AppStage: CatStage {
         channels.view.onCopy = { [weak self] text in self?.copyToPasteboard(text) }
         channels.view.onOpenLink = { NSWorkspace.shared.open($0) }
         channels.view.onAction = { [weak self] action in self?.controller?.messagesAction(action) }
-        channels.view.onSeen = { [weak self] selection in self?.controller?.messagesAction(.seen(selection)) }
+        channels.view.onSeen = { [weak self] selection in
+            self?.controller?.messagesAction(.seen(selection, keepingUnread: self?.channels.view.keptUnread ?? []))
+        }
         channels.view.sidebar.onTheme = { [weak self] anchor in self?.showThemeMenu(under: anchor) }
         channels.view.onDropTheme = { [weak self] file in self?.controller?.themeChosen(.file(file)) }
         channels.view.onCloseWindow = { [weak self] in self?.hideChannels() }

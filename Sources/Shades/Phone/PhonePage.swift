@@ -28,7 +28,9 @@ enum PhonePage {
               <p id="subtitle"></p>
             </div>
             <button id="link" type="button" hidden></button>
+            <button id="unread" type="button" hidden>Mark unread</button>
           </div>
+          <button id="jumpnew" type="button" hidden></button>
         </header>
         <div id="banner" role="status" hidden></div>
         <div id="notify" hidden>
@@ -96,7 +98,10 @@ enum PhonePage {
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
         #head { display: flex; align-items: center; gap: 10px; }
         #names { flex: 1; min-width: 0; }
-        #link { color: var(--you); font-size: 15px; flex: none; }
+        #link, #unread { color: var(--you); font-size: 15px; flex: none; }
+        #jumpnew { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap;
+          background: var(--you); color: var(--on-you); border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, .2); }
         #title { font-size: 20px; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
         #subtitle { margin: 2px 0 0; color: var(--soft); font-size: 13px; }
         #subtitle:empty { display: none; }
@@ -181,6 +186,9 @@ enum PhonePage {
         .replybar span { color: var(--soft); }
         .replies { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: 13px; margin: 12px 4px 4px; }
         .replies::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
+        /* Slack's New line, over what's new to you. */
+        .new { display: flex; align-items: center; gap: 10px; color: var(--badge); font-size: 12px; font-weight: 600; margin: 12px 4px 4px; }
+        .new::before { content: ''; flex: 1; border-top: 1px solid var(--badge); }
         .digest { display: block; width: 100%; text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--line); }
         .digest:active { background: var(--grey); }
         .digest h3 { margin: 0 0 6px; font-size: 14px; }
@@ -280,6 +288,10 @@ enum PhonePage {
         let stream = null;
         let view = null;
         let retry = null;
+        // A page where you've marked something unread stops saying it's seen it, until you go somewhere else.
+        let keptUnread = null;
+        // Jumped up to the New line, so what comes in doesn't take the page back down until you scroll there yourself.
+        let jumped = false;
         const expanded = new Set();
         const answers = new Map();
 
@@ -453,6 +465,8 @@ enum PhonePage {
         function go(next, push = true) {
           if (!next || next === key) return;
           key = next;
+          keptUnread = null;
+          jumped = false;
           view = null;
           if (push) history.pushState({ key }, '', '?key=' + encodeURIComponent(key));
           $('rows').replaceChildren();
@@ -486,7 +500,7 @@ enum PhonePage {
           if (view && view.key === next.key && selecting()) { held = next; return; }
           held = null;
           const fresh = !view || view.key !== next.key;
-          const nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 60;
+          const nearBottom = !jumped && window.innerHeight + window.scrollY >= document.body.scrollHeight - 60;
           if (next.key !== key) {
             key = next.key;
             history.replaceState({ key }, '', '?key=' + encodeURIComponent(key));
@@ -500,6 +514,7 @@ enum PhonePage {
           $('link').textContent = next.link ? next.link.label : '';
           $('back').hidden = !next.back;
           $('back').textContent = next.back ? '‹ ' + next.backTitle : '';
+          $('unread').hidden = !next.unread;
           $('box').hidden = !next.box;
           // A file is for where you attached it, so it never follows you anywhere else.
           if (fresh || !next.box || !next.box.files) unattach();
@@ -527,8 +542,31 @@ enum PhonePage {
             const node = [...$('rows').children].find(child => child.dataset.id === kept.id);
             if (node) window.scrollBy(0, node.getBoundingClientRect().top - kept.top);
           }
-          if (conversation(key) && document.visibilityState === 'visible') act({ act: 'seen', key }, true);
+          showJump();
+          if (conversation(key) && document.visibilityState === 'visible' && keptUnread !== key) act({ act: 'seen', key }, true);
         }
+
+        // A way up to the New line, while it's above what you can see.
+        function showJump() {
+          const line = $('rows').querySelector('.new');
+          $('jumpnew').hidden = !line || line.getBoundingClientRect().bottom > $('top').getBoundingClientRect().bottom;
+          $('jumpnew').textContent = line ? line.dataset.jump : '';
+        }
+        window.addEventListener('scroll', () => {
+          if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 2) jumped = false;
+          showJump();
+        }, { passive: true });
+        $('jumpnew').onclick = () => {
+          const line = $('rows').querySelector('.new');
+          if (!line) return;
+          jumped = true;
+          window.scrollBy(0, line.getBoundingClientRect().top - $('top').getBoundingClientRect().bottom - 8);
+        };
+        $('unread').onclick = () => {
+          if (!view || !view.unread) return;
+          keptUnread = key;
+          act({ act: 'unread', key, id: view.unread });
+        };
 
         // The window's own cats, drawn on the Mac. The outline is light on a dark page, so it follows the page.
         const scheme = () => getComputedStyle(document.documentElement).getPropertyValue('--cats').trim() === 'dark' ? 'dark' : 'light';
@@ -635,6 +673,11 @@ enum PhonePage {
               return node;
             }
             case 'replies': return el('div', 'replies', item.text);
+            case 'new': {
+              const node = el('div', 'new', item.text);
+              node.dataset.jump = item.detail;
+              return node;
+            }
             case 'digest': {
               const node = el('button', 'digest' + (item.unread ? ' unread' : ''));
               node.type = 'button';
@@ -1020,7 +1063,7 @@ enum PhonePage {
         };
 
         document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible' && view && conversation(key)) act({ act: 'seen', key }, true);
+          if (document.visibilityState === 'visible' && view && conversation(key) && keptUnread !== key) act({ act: 'seen', key }, true);
         });
 
         start();

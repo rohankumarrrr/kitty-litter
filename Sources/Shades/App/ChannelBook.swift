@@ -162,6 +162,8 @@ struct ChannelBook: Equatable {
     var unread: Set<String>
     /// Threads with a finished run you haven't looked at.
     var unreadThreads: Set<String>
+    /// The first message that's new to you in each of those, by thread ID, where the line over what's new goes.
+    var newFrom: [String: String] = [:]
     /// Every thread T3 listed, by ID, with its title as shown.
     var listed: [String: AgentThread]
     /// Where each listed thread lives, worked out before its owner's name comes off its title.
@@ -218,6 +220,7 @@ struct ChannelBook: Equatable {
         waiting: Waiting = Waiting(),
         sent: [SentMessage] = [],
         isUnread: (AgentThread) -> Bool = { _ in false },
+        firstNew: (AgentThread, [ChannelMessage]) -> String? = { _, _ in nil },
         inGeneral: [String: Date] = [:],
         withShades: Set<String> = [],
         catsWork: Set<String> = [],
@@ -411,6 +414,11 @@ struct ChannelBook: Equatable {
             homes[thread.id] = home(of: thread.id, owner: owner, inGeneral: inGeneral, catsWork: catsWork)
             if let owner { named[thread.id]?.title = title(of: thread, owner: owner) }
         }
+        let unreadShown = Set(unreadListed.map(\.id)).intersection(built.keys)
+        let newFrom = Dictionary(uniqueKeysWithValues: unreadShown.compactMap { id -> (String, String)? in
+            guard let listed = threadsByID[id], let thread = built[id] else { return nil }
+            return firstNew(listed, thread.messages).map { (id, $0) }
+        })
         let started = Dictionary(sent.compactMap { $0.startsThread && !$0.message.threadID.isEmpty ? ($0.message.exchangeID, $0.message.threadID) : nil }, uniquingKeysWith: { first, _ in first })
         return ChannelBook(
             statuses: statuses,
@@ -419,7 +427,8 @@ struct ChannelBook: Equatable {
             issues: issues,
             waiting: waiting,
             unread: Set(unreadListed.compactMap { ownerOf($0)?.id }),
-            unreadThreads: Set(unreadListed.map(\.id)).intersection(built.keys),
+            unreadThreads: unreadShown,
+            newFrom: newFrom,
             listed: named,
             listedHomes: homes,
             started: started,
@@ -624,6 +633,11 @@ extension ChannelBook {
             if case .message(let message) = post { message } else { nil }
         }
         return (threads.values.flatMap(\.messages) + loose).first { $0.id == id }
+    }
+
+    /// Whether you can mark a thread unread: one T3 lists, so Messages knows its runs. Talks with the cat never are.
+    func canMarkUnread(_ id: String) -> Bool {
+        listed[id] != nil && threads[id] != nil && !talks.contains(id)
     }
 
     /// Whether anything is known of this thread, so there's somewhere for words to go.
