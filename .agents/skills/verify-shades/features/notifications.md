@@ -1,15 +1,15 @@
 # Notifications
 
-Each new approval, question or decision in Activity posts one macOS notification that says only who and what kind, such as "Steve Pawsniak needs an approval". With **Also when a session finishes** on in Settings, a finished session posts one too, such as "Steve Pawsniak finished". Clicking one opens its thread beside where it lives in Messages, and answering takes it back. Each channel's **Notifications**, in its header, says what it tells you on the Mac and on the phone, or mutes it.
+Each new approval, question or decision in Activity posts one macOS notification that says only who and what kind, such as "Steve Pawsniak needs an approval". With **Also when a session finishes** on in Settings, a finished session posts one too, such as "Steve Pawsniak finished". Clicking one opens its thread beside where it lives in The Kitty Litter, and answering takes it back. Each channel's **Notifications**, in its header, says what it tells you on the Mac and on the phone, or mutes it.
 
 ## Sub-features
 
 - `notify-new` posts one for each new thing waiting on you, and never for what was asked before the app started.
-- `notify-click` opens the thread it's about beside its channel, from whichever place Messages was on, or in T3 for a thread Messages doesn't show.
+- `notify-click` opens the thread it's about beside its channel, from whichever place The Kitty Litter was on, or in T3 for a thread The Kitty Litter doesn't show.
 - `notify-finished` posts one for each finished session once it's turned on, and never says what it said. An inbox kitten's run that ships and asks gets one notification, the decision.
 - `notify-withdraw` takes a notification back once what it was about is answered, and starting takes back every one from before.
 - `channel-notifications` is each channel's **Notifications**, in its header: Mute, and Everything, Only when it needs you or Nothing, on this Mac and on your phone. A muted channel's header says Muted.
-- `bubble-open` is the cat's own report when a session ends. Its **Open** shows the thread in Messages, and only a thread Messages doesn't follow says Open in T3. Activity's cards say **View thread** the same way.
+- `bubble-open` is the cat's own report when a session ends. Its **Open** shows the thread in The Kitty Litter, and only a thread The Kitty Litter doesn't follow says Open in T3. Activity's cards say **View thread** the same way.
 
 ## How to get to it (user POV)
 
@@ -44,7 +44,7 @@ Journey: `journeys/channel-notifications.txt`. `notifications <channel> [mute | 
 - **Muted.** `notifications steve mute` ticks Mute. `0-muted/channels.png` shows #steve-pawsniak with Muted at the top right beside "1 open". `finish demo-tidy` and `approval command npm test` give no `[demo] notified` and no `[demo] pushed`, and `windows` has the bubble not showing. `1-quiet/channels.png` still says Muted, with the approval as Needs you on Steve's thread and a count of 1 beside his channel.
 - **Unmuted.** `notifications steve mute` again brings back Everything on both, and `2-unmuted/channels.png` says Notifications at the top right.
 
-- **Open.** Journey `journeys/open.txt`. `finish demo-tidy`, `wait 8`, then `buttons` prints `button Open`, and nothing about T3. `1-report/bubble.png` shows Steve's report with Open under it. `bubble Open` presses it and prints `pressed Open`, and `2-opened/channels.png` shows "Tidy up the pricing page" open beside #steve-pawsniak, with no bubble left. `approval command swift test` and `report decision` put cards in Activity, and `3-activity/channels.png` shows the approval with Deny, Allow, Allow for this session and View thread, and Clawde's decision with Reply, Done and Open in T3, since the demo has nothing for Messages to read in that thread.
+- **Open.** Journey `journeys/open.txt`. `finish demo-tidy`, `wait 8`, then `buttons` prints `button Open`, and nothing about T3. `1-report/bubble.png` shows Steve's report with Open under it. `bubble Open` presses it and prints `pressed Open`, and `2-opened/channels.png` shows "Tidy up the pricing page" open beside #steve-pawsniak, with no bubble left. `approval command swift test` and `report decision` put cards in Activity, and `3-activity/channels.png` shows the approval with Deny, Allow, Allow for this session and View thread, and Clawde's decision with Reply, Done and Open in T3, since the demo has nothing for The Kitty Litter to read in that thread.
 
 ## Gotchas
 

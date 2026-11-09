@@ -603,6 +603,14 @@ extension PhoneTests {
         XCTAssertTrue(PhonePage.html.contains(#"<a id="linkopen" class="go" target="_blank" rel="noopener noreferrer">Open</a>"#), "Open is the one link")
     }
 
+    func testThePageIsTheKittyLitterWithANameThatFitsUnderItsHomeScreenIcon() throws {
+        XCTAssertTrue(PhonePage.html.contains("<title>The Kitty Litter</title>"))
+        XCTAssertTrue(PhonePage.html.contains(#"<meta name="apple-mobile-web-app-title" content="Kitty Litter">"#), "short enough that iOS doesn't cut it off")
+        let manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(PhonePage.manifest.utf8)) as? [String: Any])
+        XCTAssertEqual(manifest["name"] as? String, "The Kitty Litter")
+        XCTAssertEqual(manifest["short_name"] as? String, "Kitty Litter")
+    }
+
     /// What review found: a phone that lost its pairing kept what Search had found on the pairing screen, and a thread
     /// that finished behind Search's results was marked seen.
     func testSearchLeavesNothingBehindAndCoveringAThreadDoesntMarkItSeen() throws {

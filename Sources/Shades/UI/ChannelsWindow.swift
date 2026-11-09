@@ -24,7 +24,7 @@ final class ChannelsPanel: NSPanel {
         backgroundColor = MessagesInk.paper
         animationBehavior = .none
         becomesKeyOnlyIfNeeded = true
-        title = CatWords.messagesTitle
+        title = CatWords.appName
         // Shades' own captures leave out all its windows. This keeps Messages out of anyone else's too, such as a
         // kitten's own screen tools, so one kitten can't be shown another's messages.
         sharingType = .none

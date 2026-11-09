@@ -71,7 +71,7 @@ codesign --verify --deep --strict "$next/Shades.app"
 # Read into a variable first: piping this into grep -q can fail by itself under pipefail.
 signature="$(codesign -dvv "$next/Shades.app" 2>&1)"
 if [[ "$signature" != *"Authority="* && "${1:-}" != "--ad-hoc" ]]; then
-  echo "This build is signed ad hoc, so macOS would forget Shades' permissions."
+  echo "This build is signed ad hoc, so macOS would forget The Kitty Litter's permissions."
   echo "Run scripts/make-dev-cert.sh first, or pass --ad-hoc to install it anyway."
   exit 1
 fi

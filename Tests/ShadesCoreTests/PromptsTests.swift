@@ -399,4 +399,11 @@ final class PromptsTests: XCTestCase {
         XCTAssertNil(Prompts.question(in: Prompts.forwarded(words: "and that part?", snapshot: nil, screenshotPath: nil, screenLeftOut: false)), "only the cat's own prompt")
         XCTAssertNil(Prompts.question(in: Prompts.quick(question: "<screen>secret</screen>", snapshot: nil)), "words that can't be told from a screen show nothing")
     }
+
+    func testTheCatIsShadesInTheKittyLitterAndThreadsFromBeforeStillReadBack() {
+        let prompt = Prompts.quick(question: "What day is it?", snapshot: nil)
+        XCTAssertTrue(prompt.hasPrefix("You are Shades, a small cat living on the user's desktop, in an app called The Kitty Litter,"))
+        let before = prompt.replacingOccurrences(of: ", in an app called The Kitty Litter", with: "")
+        XCTAssertEqual(Prompts.question(in: before), "What day is it?", "a router thread from before the rename")
+    }
 }

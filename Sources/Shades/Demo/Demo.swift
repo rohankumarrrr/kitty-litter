@@ -604,7 +604,7 @@ enum Demo {
     static let kittens = [
         Kitten(name: "Steve Pawsniak", role: "Professional", covers: "Their career, resume and interviews.", folder: "/demo/steve"),
         Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: 0xb3261e, seesScreen: false),
-        Kitten(name: "Clawde", role: "The system", covers: "Shades and the other kittens.", folder: "/demo/clawde", color: 0xd9730d, seesScreen: false, usesInbox: true),
+        Kitten(name: "Clawde", role: "The system", covers: "The Kitty Litter and the other kittens.", folder: "/demo/clawde", color: 0xd9730d, seesScreen: false, usesInbox: true),
         Kitten(name: "Cali", role: "Scheduling", covers: "Their time.", folder: "/demo/cali", planned: true, color: 0x1e7fb3),
         Kitten(name: "Furbit", role: "Health", covers: "Their health.", folder: "/demo/furbit", planned: true, color: 0x2e9e4f),
     ]
@@ -636,7 +636,7 @@ enum Demo {
                 print("[demo] pushed to \(request.url?.host ?? "?"): \(opened.map { String(decoding: $0, as: UTF8.self) } ?? "nothing it could open")")
                 return 201
             },
-            saveTheme: { print("[demo] Messages in \($0.map { "\($0.name)'s colours" } ?? "Shades' own colours"), not saved in demo mode") },
+            saveTheme: { print("[demo] \(CatWords.appName) in \($0.map { "\($0.name)'s colours" } ?? "\(CatWords.appName)'s own colours"), not saved in demo mode") },
             installedThemes: {
                 let home = Demo.sampleThemes()
                 return ColorTheme.installed(home: home, t3Home: home.appendingPathComponent(".t3", isDirectory: true))

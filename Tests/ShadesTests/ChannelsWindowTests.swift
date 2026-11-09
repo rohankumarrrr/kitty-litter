@@ -316,6 +316,13 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.threadPane.distanceFromBottom, 0, accuracy: 1)
     }
 
+    func testTheWindowIsTheKittyLitterAndTheCatIsStillShades() {
+        XCTAssertEqual(ChannelsPanel().title, "The Kitty Litter", "what VoiceOver and window lists call it")
+        XCTAssertEqual(CatWords.shortcutGroups.last?.title, "The Kitty Litter")
+        XCTAssertTrue(CatWords.shortcutGroups.last?.rows.contains { $0.keys == "⌘W" && $0.does == "Close The Kitty Litter" } == true)
+        XCTAssertEqual(CatWords.placeholder(.router, in: .shades), "Message Shades", "his DM keeps his name")
+    }
+
     func testClosingKeepsEverythingSoItOpensAgainAsYouLeftIt() {
         let window = ChannelsWindow()
         var closed = 0
@@ -1223,7 +1230,7 @@ extension ChannelsWindowTests {
         XCTAssertEqual(try XCTUnwrap(window.view.pane.shownMessageRows.first { $0.isYours }).fill, Ink.hex(ChannelSpeakerLook.yours))
     }
 
-    func testTheThemeMenuOffersShadesAndEachAppsThemesAndSaysToDropTheRest() throws {
+    func testTheThemeMenuOffersItsOwnColoursAndEachAppsThemesAndSaysToDropTheRest() throws {
         let found = [
             ColorTheme.Found(theme: Self.paper, app: "T3 Code", file: URL(fileURLWithPath: "/t3/paper.json")),
             ColorTheme.Found(theme: Self.opal, app: "T3 Code", file: URL(fileURLWithPath: "/t3/opal.json")),
@@ -1234,7 +1241,7 @@ extension ChannelsWindowTests {
         let shown = items.map { item in
             item.isSeparatorItem ? "---" : "\(item.state == .on ? "* " : "")\(item.title)\(item.submenu == nil ? "" : " >")\(item.isEnabled ? "" : " (off)")"
         }
-        XCTAssertEqual(shown, ["Shades", "---", "* T3 Code >", "* iTerm2 >", "---", CatWords.dropATheme + " (off)"])
+        XCTAssertEqual(shown, ["The Kitty Litter", "---", "* T3 Code >", "* iTerm2 >", "---", CatWords.dropATheme + " (off)"])
         let t3 = try XCTUnwrap(items[2].submenu).items
         XCTAssertEqual(t3.map(\.title), ["Opal Horizon", "Paper"], "by name")
         XCTAssertEqual(t3.map(\.state), [.on, .off])

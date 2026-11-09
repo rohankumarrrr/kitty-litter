@@ -11,8 +11,8 @@ enum PhonePage {
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="color-scheme" content="light dark">
         <meta name="apple-mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-title" content="Shades">
-        <title>Shades</title>
+        <meta name="apple-mobile-web-app-title" content="Kitty Litter">
+        <title>The Kitty Litter</title>
         <link rel="manifest" href="/manifest.json">
         <link rel="apple-touch-icon" href="/icon.png">
         <link rel="stylesheet" href="/app.css">
@@ -24,7 +24,7 @@ enum PhonePage {
           <div id="head">
             <span id="headcat" hidden></span>
             <div id="names">
-              <h1 id="title">Shades</h1>
+              <h1 id="title">The Kitty Litter</h1>
               <p id="subtitle"></p>
             </div>
             <button id="link" type="button" hidden></button>
@@ -67,7 +67,7 @@ enum PhonePage {
         </div>
         <section id="pair" hidden>
           <h1>Pair this phone</h1>
-          <p>Turn on Messages on your phone in Shades' Settings on your Mac, and it shows a code. Scan it with your camera, or type it here.</p>
+          <p>Turn on The Kitty Litter on my phone in Settings on your Mac, and it shows a code. Scan it with your camera, or type it here.</p>
           <form id="pairform">
             <input id="code" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="ABCD-EFGH" aria-label="Code">
             <button type="submit">Pair</button>
@@ -288,9 +288,9 @@ enum PhonePage {
         const $ = (id) => document.getElementById(id);
         const conversation = (key) => key === 'general' || /^(c|t|r):/.test(key);
         const words = {
-          unreachable: "Can't reach your Mac. Shades has to be running, and your Mac awake.",
+          unreachable: "Can't reach your Mac. The Kitty Litter has to be running, and your Mac awake.",
           gone: "That's changed since. Have another look.",
-          wrongCode: "That code didn't work. Turn pairing on again in Shades on your Mac for a new one.",
+          wrongCode: "That code didn't work. Turn pairing on again in The Kitty Litter on your Mac for a new one.",
           answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied',
           openLink: (host) => 'Open a link to ' + host + '?',
           showPicture: (host) => 'Show a picture from ' + host + '?', pictureFrom: (host) => '🖼 Picture from ' + host,
@@ -298,7 +298,7 @@ enum PhonePage {
           several: 'Pick as many as you like.',
           sending: 'Sending...', retry: 'Try again',
           notifyAsk: 'Get a notification when something needs you.',
-          cantRead: 'Shades can only read photos and PDFs.',
+          cantRead: 'The Kitty Litter can only read photos and PDFs.',
           tooBig: "That's too big to send. Try something under 10 MB.",
           homeScreen: 'For notifications on an iPhone, add this page to your Home Screen with Share, then pair it there.',
           search: 'Search', cancel: 'Cancel',
@@ -1265,7 +1265,7 @@ enum PhonePage {
         """#
 
     static let manifest = """
-        {"name": "Shades", "short_name": "Shades", "start_url": "/?key=home", "scope": "/", "display": "standalone",
+        {"name": "The Kitty Litter", "short_name": "Kitty Litter", "start_url": "/?key=home", "scope": "/", "display": "standalone",
          "background_color": "#1d1d1f", "theme_color": "#1d1d1f", "icons": [{"src": "/icon.png", "sizes": "180x180", "type": "image/png"}]}
         """
 
@@ -1276,7 +1276,7 @@ enum PhonePage {
         self.addEventListener('push', (event) => {
           let message = {};
           try { message = event.data ? event.data.json() : {}; } catch (error) {}
-          event.waitUntil(self.registration.showNotification(message.title || 'Shades', { tag: message.tag, icon: '/icon.png', data: { key: message.key } }));
+          event.waitUntil(self.registration.showNotification(message.title || 'The Kitty Litter', { tag: message.tag, icon: '/icon.png', data: { key: message.key } }));
         });
         self.addEventListener('notificationclick', (event) => {
           event.notification.close();

@@ -58,7 +58,7 @@ public enum Prompts {
         notSetUp: [Kitten] = []
     ) -> String {
         """
-        \(quickOpening), and you run their AI agents for them. \
+        \(quickOpening), in an app called The Kitty Litter, and you run their AI agents for them. \
         They just said something to you while working, and they never want to have to explain themselves.
 
         First, check their own words for a correction: them saying a fact or an interpretation in a kitten's \

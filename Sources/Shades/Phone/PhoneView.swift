@@ -329,7 +329,7 @@ struct PhoneView: Encodable, Equatable {
             return Box(label: label, placeholder: CatWords.placeholder(target, in: channel, name: channel.map(book.name)), ready: target.isReady, also: also, files: target.takesFiles, mentions: mentions)
         }
         guard let selection = place.selection else {
-            title = CatWords.messagesTitle
+            title = CatWords.appName
             rows = []
             return
         }
@@ -351,7 +351,7 @@ struct PhoneView: Encodable, Equatable {
                 link = Link(label: CatWords.issues(count), open: PhonePlace.key(.activity))
             }
             back = PhonePlace.home
-            backTitle = CatWords.messagesTitle
+            backTitle = CatWords.appName
             if selection.place == .channel(.shades) { subtitle = CatWords.shadesOnPhone }
             rows = Self.shown(selection, in: book, newFrom: newFrom).map { Self.row($0, at: selection.place, in: book, now: now) }
         }
