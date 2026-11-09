@@ -24,6 +24,8 @@ final class MenuBar: NSObject, NSMenuDelegate {
     /// Whether Messages on your phone is on, so there's a phone to pair.
     var canPairPhone: (() -> Bool)?
     var onPairPhone: (() -> Void)?
+    var isDoNotDisturb: (() -> Bool)?
+    var onDoNotDisturb: (() -> Void)?
     /// Extra items, such as setting up permissions or demo mode's controls.
     var extras: [Extra] = []
 
@@ -65,6 +67,12 @@ final class MenuBar: NSObject, NSMenuDelegate {
         rebuild()
     }
 
+    /// Each item as the menu would show it now, for the demo to print and press.
+    var shownItems: [NSMenuItem] {
+        rebuild()
+        return menu.items
+    }
+
     private func rebuild() {
         menu.removeAllItems()
         actions = []
@@ -87,6 +95,10 @@ final class MenuBar: NSObject, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
+        let quiet = NSMenuItem(title: CatWords.doNotDisturb, action: nil, keyEquivalent: "")
+        quiet.state = isDoNotDisturb?() == true ? .on : .off
+        bind(quiet) { [weak self] in self?.onDoNotDisturb?() }
+        menu.addItem(quiet)
         addAction("Settings...") { [weak self] in self?.onSettings?() }
         addAction("Quit Shades") { NSApp.terminate(nil) }
     }

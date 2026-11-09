@@ -43,15 +43,19 @@ final class ChannelSidebar: QuietView {
     private static let top: CGFloat = 38
     private static let rowHeight: CGFloat = 30
     private static let headingHeight: CGFloat = 32
-    private static let footerHeight: CGFloat = 40
+    private static let footerHeight: CGFloat = 68
 
     var onSelect: ((ChannelPlace) -> Void)?
     /// Theme was pressed, so its menu can open under it.
     var onTheme: ((NSView) -> Void)?
     var onShortcuts: (() -> Void)?
+    var onDoNotDisturb: (() -> Void)?
     private(set) var rows: [ChannelSidebarRow] = []
     let themeButton = QuietButton(CatWords.themeButton, style: .text)
     let shortcutsButton = QuietButton(CatWords.shortcutsButton, style: .text)
+    /// One switch, which says so when it's on.
+    let quietButton = QuietButton(CatWords.doNotDisturb, style: .text)
+    let quietOnButton = QuietButton(CatWords.doNotDisturbOn, style: .plain)
 
     private let scroll = QuietScrollView()
     private let list = QuietView()
@@ -64,6 +68,11 @@ final class ChannelSidebar: QuietView {
         addSubview(scroll)
         addSubview(themeButton)
         addSubview(shortcutsButton)
+        addSubview(quietButton)
+        addSubview(quietOnButton)
+        quietOnButton.isHidden = true
+        quietButton.onPress = { [weak self] in self?.onDoNotDisturb?() }
+        quietOnButton.onPress = { [weak self] in self?.onDoNotDisturb?() }
         themeButton.onPress = { [weak self] in
             guard let self else { return }
             self.onTheme?(self.themeButton)
@@ -82,6 +91,8 @@ final class ChannelSidebar: QuietView {
         let groups = ChannelSidebarItem.groups(in: book)
         if groups.map(\.items) != shownGroups { rebuild(groups) }
         rows.forEach { $0.isSelected = $0.item.place == selection }
+        quietButton.isHidden = book.waiting.doNotDisturb
+        quietOnButton.isHidden = !book.waiting.doNotDisturb
     }
 
     /// The next `show` makes every row again, in the colours there are now.
@@ -132,7 +143,10 @@ final class ChannelSidebar: QuietView {
     override func layout() {
         super.layout()
         scroll.frame = NSRect(x: 0, y: Self.top, width: bounds.width - 1, height: max(bounds.height - Self.top - Self.footerHeight, 0))
-        themeButton.frame.origin = NSPoint(x: 10, y: bounds.height - Self.footerHeight + (Self.footerHeight - themeButton.frame.height) / 2)
+        let top = bounds.height - Self.footerHeight + 6
+        quietButton.frame.origin = NSPoint(x: 10, y: top)
+        quietOnButton.frame.origin = NSPoint(x: 10, y: top)
+        themeButton.frame.origin = NSPoint(x: 10, y: top + quietButton.frame.height + 4)
         shortcutsButton.frame.origin = NSPoint(x: themeButton.frame.maxX + 4, y: themeButton.frame.minY)
     }
 

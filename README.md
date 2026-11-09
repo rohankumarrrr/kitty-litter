@@ -38,6 +38,8 @@ On your phone, the same Messages over your tailnet:
 
 <img src="docs/images/phone.gif" width="300" alt="Messages on a phone: allowing an approval, then sending in a channel and getting an answer">
 
+**Do Not Disturb.** Choose Do Not Disturb from the cat's menu or the menu bar, or press it at the bottom of Messages' sidebar, and nothing pops up: no bubble for a report, a reply, a question, an approval or anything the cat would say by itself, no macOS notification and no notification on your phone. The cat curls up asleep, the menu item has a check, and Messages says Do Not Disturb is on, so you know why it's quiet. It stays on through a restart until you turn it off. Anything you start yourself, such as asking the cat, still answers as usual. Nothing waiting on you is answered or dropped for being ignored. When you turn it off, the cat says once what came in, such as "While you were away: 2 replies, 1 approval", and **Open** shows all of it at the top of Activity, in the order it came, each with its usual buttons. It stays there until you've looked and closed Messages. What was held back isn't sent late.
+
 ## How the work gets routed
 
 There's no list of projects to maintain. Shades acts as one router in front of your agents. Everything you say goes to one model that can see your kittens and your recent T3 sessions, and it does one of four things:
@@ -95,6 +97,7 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 - **Notifications:** they say only who needs you and for what, such as "Pepper needs an approval", or if you turn them on, who finished, such as "Pepper finished", and never what was asked or said, since Notification Center keeps its own copy and can show it on the lock screen. On a paired phone they're encrypted for that phone alone, so its push service sees only that Shades sent something.
 - **Your phone:** Messages on your phone is off until you turn it on. Then the page is on your Tailscale network, and only a phone you've paired with a code from your Mac gets past it. What it shows goes to your phone's browser, and Shades keeps only a hash of each phone's key, in your Keychain. Turning it off unpairs every phone.
 - **Your picture:** if you give Messages one, a small copy is kept in `~/Library/Application Support/shades/picture.jpg`, and deleting it goes back to your blue square. It's only drawn, in Messages and on a paired phone, and never goes to T3 or an agent.
+- **Do Not Disturb:** what came in while it was on is saved with the inbox only as IDs, such as a thread's or an approval's, and read again from T3 when you catch up. The cat's own lines aren't saved at all.
 - **The inbox:** what's in it is saved only on your Mac, in `~/Library/Application Support/shades/inbox.json`, which only you can read. A reply is your words and nothing else. It never looks at your screen.
 
 ## Kittens

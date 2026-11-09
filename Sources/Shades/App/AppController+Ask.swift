@@ -443,12 +443,13 @@ extension AppController {
         case correctionCopy
     }
 
-    /// A copy goes out alongside the rest of the message, so it waits its turn rather than talking over that.
-    func tell(_ text: String, threadID: String? = nil, as errand: Errand) {
+    /// A copy goes out alongside the rest of the message, so it waits its turn rather than talking over that. One
+    /// that's `unasked` comes once the work's well under way, so Do Not Disturb holds it.
+    func tell(_ text: String, threadID: String? = nil, as errand: Errand, unasked: Bool = false) {
         if errand == .correctionCopy {
-            post(caption: CatWords.correctionCaption, text: text, threadID: threadID)
+            post(caption: CatWords.correctionCaption, text: text, threadID: threadID, unasked: unasked)
         } else {
-            say(text, threadID: threadID)
+            say(text, threadID: threadID, unasked: unasked)
         }
     }
 
@@ -498,7 +499,7 @@ extension AppController {
                     case .failed(let message):
                         // Only this turn's, since words sent to the thread after it started still went without your screen.
                         if let warning { takeBackNotice(warning) }
-                        tell(message, as: errand)
+                        tell(message, as: errand, unasked: startedThread != nil)
                     case .text, .finished:
                         break
                     }
@@ -509,7 +510,7 @@ extension AppController {
                 }
             } catch {
                 if startedThread == nil { onStarted?(nil) }
-                tell(CatWords.problem(error, while: .agents), as: errand)
+                tell(CatWords.problem(error, while: .agents), as: errand, unasked: startedThread != nil)
             }
         }
     }

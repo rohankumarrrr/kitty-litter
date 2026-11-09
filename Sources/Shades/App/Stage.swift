@@ -57,6 +57,8 @@ protocol CatStage: AnyObject {
     func catAgentsBusy(_ busy: Bool)
     func catCelebrate()
     func catPet()
+    /// Curled up asleep while Do Not Disturb is on, so you can see why nothing's popping up.
+    func catDoNotDisturb(_ on: Bool)
     /// Runs to the pointer, for when something needs you.
     func catComeToYou(arrived: @escaping () -> Void)
     /// Runs to a part of the screen and perches on it.

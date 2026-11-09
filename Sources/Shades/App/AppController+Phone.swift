@@ -43,7 +43,7 @@ extension AppController {
             } catch {
                 guard let self, self.phone === link else { return }
                 self.phone = nil
-                self.say(CatWords.phoneProblem(error))
+                self.say(CatWords.phoneProblem(error), unasked: true)
                 // Whatever the last run left on your tailnet points at a port Shades doesn't hold now.
                 self.onTailscale { [stopServingPhone] in await stopServingPhone() }
             }

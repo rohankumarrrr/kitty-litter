@@ -274,6 +274,30 @@ enum CatWords {
     static let inboxCaption = "Messages"
     static let inboxSent = "Sent. Waiting to hear back."
 
+    static let doNotDisturb = "Do Not Disturb"
+    static let doNotDisturbOn = "Do Not Disturb is on"
+    static let whileAwayTitle = "While you were away"
+
+    /// What came in while Do Not Disturb was on, by kind, for the one bubble once it's off.
+    static func whileAway(_ missed: [Missed]) -> String {
+        var threads = 0, approvals = 0, questions = 0, lines = 0
+        for item in missed {
+            switch item {
+            case .thread: threads += 1
+            case .approval: approvals += 1
+            case .question: questions += 1
+            case .line: lines += 1
+            }
+        }
+        let parts = [
+            threads == 0 ? nil : replies(threads),
+            approvals == 0 ? nil : approvals == 1 ? "1 approval" : "\(approvals) approvals",
+            questions == 0 ? nil : questions == 1 ? "1 question" : "\(questions) questions",
+            lines == 0 ? nil : lines == 1 ? "1 note from me" : "\(lines) notes from me",
+        ]
+        return "\(whileAwayTitle): \(parts.compactMap { $0 }.joined(separator: ", "))."
+    }
+
     static func inboxHeadline(_ entries: [InboxEntry]) -> String {
         let decisions = entries.filter(\.needsYou).count
         let shipped = entries.filter { $0.kind == .shipped }.count

@@ -104,6 +104,8 @@ final class AppStage: CatStage {
         menuBar.onSettings = { [weak self] in self?.controller?.settingsPressed() }
         menuBar.canPairPhone = { [weak self] in self?.controller?.phone != nil }
         menuBar.onPairPhone = { [weak self] in self?.controller?.pairPhone() }
+        menuBar.isDoNotDisturb = { [weak self] in self?.controller?.settings.doNotDisturb == true }
+        menuBar.onDoNotDisturb = { [weak self] in self?.controller?.doNotDisturbPressed() }
         pairing.onClose = { [weak self] in self?.controller?.pairingClosed() }
     }
 
@@ -146,6 +148,7 @@ final class AppStage: CatStage {
     func catLevel(_ level: Float) { cat.setLevel(level) }
     func catAgentsBusy(_ busy: Bool) { cat.setAgentsBusy(busy) }
     func catCelebrate() { cat.celebrate() }
+    func catDoNotDisturb(_ on: Bool) { cat.setDoNotDisturb(on) }
 
     func catPet() {
         catSay(cat.pet())

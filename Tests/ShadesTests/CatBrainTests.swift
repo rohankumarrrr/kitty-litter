@@ -31,6 +31,27 @@ final class CatBrainTests: XCTestCase {
         XCTAssertTrue([.sleep1, .sleep2].contains(seen[91]!))
     }
 
+    func testCurlsUpUnderDoNotDisturbAndSleepsThroughEverythingButYou() {
+        var cat = brain()
+        cat.setDoNotDisturb(true)
+        XCTAssertEqual(cat.state, .sleep)
+        cat.setAgentsBusy(true)
+        cat.setStatus(.attention)
+        cat.celebrate()
+        cat.tick()
+        XCTAssertEqual(cat.state, .sleep)
+        XCTAssertEqual(cat.pose.glint, .plain)
+
+        cat.setStatus(.listening)
+        XCTAssertEqual(cat.state, .sit, "you're talking to it")
+        cat.setStatus(.none)
+        for _ in 1...11 { cat.tick() }
+        XCTAssertEqual(cat.state, .sleep, "and it curls up again soon after")
+
+        cat.setDoNotDisturb(false)
+        XCTAssertEqual(cat.state, .sit)
+    }
+
     func testBreathesWhileAsleepWithAFloatingZ() {
         var cat = brain()
         for _ in 1...100 { cat.tick() }

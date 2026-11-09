@@ -138,6 +138,11 @@ final class CatController {
         poke()
     }
 
+    func setDoNotDisturb(_ on: Bool) {
+        brain.setDoNotDisturb(on)
+        poke()
+    }
+
     func hold(_ pose: CatPose?) {
         heldPose = pose
         poke()

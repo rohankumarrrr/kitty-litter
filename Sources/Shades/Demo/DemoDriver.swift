@@ -297,7 +297,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | send [words] | retry | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -577,6 +577,24 @@ final class DemoDriver {
             stage.menuBar.popUpMenu(at: NSPoint(x: 0, y: 64), in: stage.cat.view)
         case "menuclose":
             stage.menuBar.closeMenu()
+        case "menuitems":
+            // What the cat's menu and the menu bar show, with a check by what's on.
+            for item in stage.menuBar.shownItems where !item.isSeparatorItem {
+                print("menu \(item.state == .on ? "✓" : "-") \(item.title)")
+            }
+        case "menupress":
+            // The same as choosing that item from the menu.
+            let item = stage.menuBar.shownItems.first { $0.title == rest }
+            print(item == nil ? "no menu item [\(rest)]" : "chose \(rest)")
+            if let item, let action = item.action { NSApp.sendAction(action, to: item.target, from: item) }
+        case "sidebar":
+            // The same as pressing a button at the foot of Messages' sidebar.
+            let button = stage.channels.view.sidebar.subviews.compactMap { $0 as? QuietButton }.first { !$0.isHidden && $0.accessibilityLabel() == rest }
+            print(button == nil ? "no sidebar button [\(rest)]" : "pressed \(rest)")
+            button?.onPress?()
+        case "dnd":
+            // Where Do Not Disturb stands: the switch, the cat, and what's waiting to be caught up on.
+            print("dnd \(controller.settings.doNotDisturb ? "on" : "off") cat=\(stage.cat.brain.state) away=\(controller.away.count)")
         case "cover":
             // A window standing in for your work, over Messages as clicking back into another app leaves it, or beside it.
             // Borderless, since AppKit pulls a titled window back over Messages when beside it would go off the screen.

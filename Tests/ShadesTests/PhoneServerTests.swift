@@ -517,6 +517,19 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(shown.last, page, "the tap ends on the thread once it's read: \(shown)")
     }
 
+    func testDoNotDisturbHoldsPushesAndDoesntSendThemLate() async throws {
+        let key = try await pair()
+        _ = try await subscribe(key: key)
+        controller.doNotDisturbPressed()
+        approvalNow()
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(pushed, [])
+        controller.doNotDisturbPressed()
+        approvalNow()
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(pushed, [], "the catch-up covers it")
+    }
+
     func testOnlyAPairedPhoneSubscribesAndOnlyToAPushService() async throws {
         let refused = try await subscribe(key: "made-up")
         XCTAssertEqual(refused, 401)

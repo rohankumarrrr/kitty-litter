@@ -131,6 +131,9 @@ struct Waiting: Equatable {
     var reports: [InboxEntry] = []
     /// Work the cat started outside any kitten, while it's going or just finished. It's what each kitten is on, for Shades.
     var shadesWork: [AgentThread] = []
+    /// What came in while Do Not Disturb was on that you haven't caught up on, in the order it came.
+    var away: [Missed] = []
+    var doNotDisturb = false
 
     var count: Int { approvals.count + questions.count + reports.filter(\.needsYou).count }
 }

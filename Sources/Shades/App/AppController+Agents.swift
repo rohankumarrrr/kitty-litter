@@ -8,7 +8,7 @@ extension AppController {
             try await backend.connect()
         } catch {
             stage.showStatus(CatWords.cantReachT3, needsYou: false)
-            say(CatWords.problem(error, while: .agents))
+            say(CatWords.problem(error, while: .agents), unasked: true)
         }
     }
 
@@ -97,6 +97,8 @@ extension AppController {
     func approvalsChanged(hadApprovals: Bool) {
         channels.refresh()
         notifyNeedsYou()
+        // Every one asks, so Do Not Disturb keeps them all, however many came at once.
+        let comes = approvals.pending.map { mayPopUp(.approval($0.id)) }.contains(true)
         if approvals.isEmpty {
             approvalsOnShow = false
             approvalsHidden = false
@@ -104,6 +106,10 @@ extension AppController {
                 catIsAway = false
                 catFollowsReply()
             }
+        } else if !hadApprovals, !comes {
+            // They wait in Messages, as if you'd pressed Esc, and clicking the cat still brings them up.
+            approvalsOnShow = true
+            approvalsHidden = true
         } else if !hadApprovals {
             // It comes to you first, then asks.
             approvalsOnShow = false

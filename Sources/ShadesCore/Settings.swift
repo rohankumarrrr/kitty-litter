@@ -21,6 +21,8 @@ public struct Settings: Codable, Sendable, Equatable {
     public var phone: Bool
     /// A notification when a session finishes, as well as when something needs you. Off until you turn it on.
     public var notifyFinished: Bool
+    /// Nothing pops up while it's on, and what came in waits for you to catch up on.
+    public var doNotDisturb: Bool
 
     public init(
         quickModel: ModelChoice = .quick,
@@ -33,7 +35,8 @@ public struct Settings: Codable, Sendable, Equatable {
         talkKey: HoldKey = .rightOption,
         dictateKey: HoldKey = .fn,
         phone: Bool = false,
-        notifyFinished: Bool = false
+        notifyFinished: Bool = false,
+        doNotDisturb: Bool = false
     ) {
         self.quickModel = quickModel
         self.frontierModel = frontierModel
@@ -46,10 +49,11 @@ public struct Settings: Codable, Sendable, Equatable {
         self.dictateKey = dictateKey
         self.phone = phone
         self.notifyFinished = notifyFinished
+        self.doNotDisturb = doNotDisturb
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished
+        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb
     }
 
     /// Anything missing takes its default, so a settings file from an older version keeps working.
@@ -67,6 +71,7 @@ public struct Settings: Codable, Sendable, Equatable {
         dictateKey = try saved.decodeIfPresent(HoldKey.self, forKey: .dictateKey) ?? defaults.dictateKey
         phone = try saved.decodeIfPresent(Bool.self, forKey: .phone) ?? defaults.phone
         notifyFinished = try saved.decodeIfPresent(Bool.self, forKey: .notifyFinished) ?? defaults.notifyFinished
+        doNotDisturb = try saved.decodeIfPresent(Bool.self, forKey: .doNotDisturb) ?? defaults.doNotDisturb
     }
 
     public static let defaultPrivateApps = [

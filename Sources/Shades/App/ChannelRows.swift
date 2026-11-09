@@ -207,6 +207,7 @@ enum ChannelRows {
                 return MessageTarget.takesWords(question, answered: answered) ? book.thread(holding: question.id, else: question.threadID) : nil
             case .report(let entry): return entry.threadID
             case .issue(let thread): return book.threads[thread.id] == nil ? nil : thread.id
+            case .digest(let digest): return digest.threadID
             default: return nil
             }
         }.filter { seen.insert($0).inserted }
@@ -218,19 +219,57 @@ enum ChannelRows {
             || book.waiting.questions.contains { book.thread(holding: $0.id, else: $0.threadID) == id }
     }
 
-    /// What's waiting on you first, then reports, then what each kitten is on.
+    /// What came in while you were away first, then what's waiting on you, then reports, then what each kitten is on.
     private static func activity(in book: ChannelBook) -> [ChannelRow] {
+        let away = away(in: book)
+        // Each shows once, in the order it came, rather than again in its usual place below.
+        var above: Set<String> = []
+        for row in away {
+            switch row {
+            case .approval(let request): above.insert(request.id)
+            case .question(let question): above.insert(question.id)
+            case .report(let entry): above.insert(entry.id)
+            default: break
+            }
+        }
         let waiting = book.waiting
-        var rows: [ChannelRow] = waiting.approvals.map(ChannelRow.approval) + waiting.questions.map(ChannelRow.question)
-        let reports = Inbox.panelOrder(waiting.reports)
+        var rows: [ChannelRow] = waiting.approvals.filter { !above.contains($0.id) }.map(ChannelRow.approval)
+            + waiting.questions.filter { !above.contains($0.id) }.map(ChannelRow.question)
+        let reports = Inbox.panelOrder(waiting.reports.filter { !above.contains($0.id) })
         rows += reports.filter { $0.kind == .decision }.map(ChannelRow.report)
-        rows = rows.isEmpty ? [.note(CatWords.nothingNeedsYou)] : [.section(CatWords.waitingOnYou, clearing: nil)] + rows
+        if !rows.isEmpty {
+            rows = [.section(CatWords.waitingOnYou, clearing: nil)] + rows
+        } else if above.isEmpty {
+            rows = [.note(CatWords.nothingNeedsYou)]
+        }
         for kind in [InboxEntry.Kind.shipped, .note] {
             let these = reports.filter { $0.kind == kind }
             if !these.isEmpty { rows += [.section(CatWords.reportsTitle(kind), clearing: kind)] + these.map(ChannelRow.report) }
         }
         let progress = inProgress(in: book)
-        return statusNotes(of: book) + rows + (progress.isEmpty ? [] : [.section(CatWords.inProgress, clearing: nil)] + progress)
+        let caughtUp: [ChannelRow] = away.isEmpty ? [] : [.section(CatWords.whileAwayTitle, clearing: nil)] + away
+        return statusNotes(of: book) + caughtUp + rows + (progress.isEmpty ? [] : [.section(CatWords.inProgress, clearing: nil)] + progress)
+    }
+
+    /// Everything Do Not Disturb held, each as it shows anywhere else, with its usual buttons. A thread shows as its
+    /// inbox rows if it has any, or else as its latest reply. Anything that's been answered or has gone is left out.
+    private static func away(in book: ChannelBook) -> [ChannelRow] {
+        let waiting = book.waiting
+        return waiting.away.flatMap { missed -> [ChannelRow] in
+            switch missed {
+            case .approval(let id):
+                return waiting.approvals.filter { $0.id == id }.map(ChannelRow.approval)
+            case .question(let id):
+                return waiting.questions.filter { $0.id == id }.map(ChannelRow.question)
+            case .thread(let id):
+                let reports = waiting.reports.filter { $0.threadID == id }
+                if !reports.isEmpty { return Inbox.panelOrder(reports).map(ChannelRow.report) }
+                if let thread = book.threads[id] { return [.digest(digest(of: thread, in: book))] }
+                return book.listed[id].map { [.issue($0)] } ?? []
+            case .line(let text):
+                return [.note(text)]
+            }
+        }
     }
 
     private static func inProgress(in book: ChannelBook) -> [ChannelRow] {
@@ -248,17 +287,19 @@ enum ChannelRows {
         }
     }
 
+    private static func digest(of thread: ChannelThread, in book: ChannelBook) -> ThreadDigest {
+        ThreadDigest(
+            threadID: thread.id,
+            channel: thread.home,
+            parent: thread.parent,
+            latest: thread.replies.last { !($0.isStillGoing && $0.text == nil) },
+            more: max(thread.replyCount - 1, 0),
+            isUnread: book.unreadThreads.contains(thread.id)
+        )
+    }
+
     private static func threads(in book: ChannelBook) -> [ChannelRow] {
-        let yours = book.yours.map { thread in
-            ChannelRow.digest(ThreadDigest(
-                threadID: thread.id,
-                channel: thread.home,
-                parent: thread.parent,
-                latest: thread.replies.last { !($0.isStillGoing && $0.text == nil) },
-                more: max(thread.replyCount - 1, 0),
-                isUnread: book.unreadThreads.contains(thread.id)
-            ))
-        }
+        let yours = book.yours.map { ChannelRow.digest(digest(of: $0, in: book)) }
         if !yours.isEmpty { return statusNotes(of: book) + yours }
         if book.cantReachT3 { return [.note(CatWords.cantReachT3Yet)] }
         return [.note(book.isReading ? CatWords.readingMessages : CatWords.threadsEmpty)]
