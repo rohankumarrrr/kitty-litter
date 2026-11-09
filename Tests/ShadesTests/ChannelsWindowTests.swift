@@ -1229,6 +1229,21 @@ extension ChannelsWindowTests {
         try body()
     }
 
+    func testLinksAndErrorsReadOnTheWindowInAnyThemeOrNone() {
+        let teal = ColorTheme(name: "Teal Light", isDark: false, paper: 0xfbfbfb, text: 0x403f53, accent: 0x2aa298)
+        for theme in [nil, Self.opal, Self.paper, teal] {
+            themed(theme) {
+                for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+                    let paper = resolved(MessagesInk.paper, in: appearance)
+                    for (role, color) in [("link", MessagesInk.link), ("danger", MessagesInk.danger)] {
+                        let ratio = Self.contrast(resolved(color, in: appearance), paper)
+                        XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(role) in \(theme?.name ?? "Shades' own") \(appearance.rawValue) gives \(ratio)")
+                    }
+                }
+            }
+        }
+    }
+
     func testAThemeTintsYourMessagesAndTheWindowAndLeavesEveryKittenItsOwnColour() throws {
         let colours = ChannelSpeakerLook.palette + Demo.kittens.compactMap(ChannelSpeakerLook.color(of:))
         let kittens = colours.enumerated().map { Kitten(name: "K\($0.offset)", role: "", covers: "", folder: "/k/k\($0.offset)", color: $0.element) }

@@ -48,9 +48,13 @@ enum MessagesInk {
     static var line: NSColor { themed(\.line) ?? Ink.line }
     static var hover: NSColor { themed(\.hover) ?? Ink.hover }
     static var press: NSColor { themed(\.press) ?? Ink.press }
-    /// Reply bars and links, which Slack draws in its accent: the theme's, or the blue of your own messages.
-    static var link: NSColor { themed(\.accent) ?? Ink.hex(ChannelSpeakerLook.yours) }
-    static var onLink: NSColor { ChannelSpeakerLook.readable(on: theme?.accent ?? ChannelSpeakerLook.yours) }
+    /// The theme's accent, or the blue of your own messages, for what's filled with it, such as a ticked box.
+    static var accent: NSColor { themed(\.accent) ?? Ink.hex(ChannelSpeakerLook.yours) }
+    static var onAccent: NSColor { ChannelSpeakerLook.readable(on: theme?.accent ?? ChannelSpeakerLook.yours) }
+    /// Reply bars and links, which Slack draws in its accent, made darker or lighter if they wouldn't read.
+    static var link: NSColor { legible(\.link, else: ChannelSpeakerLook.yours) }
+    /// Why something didn't work, such as a message that couldn't be sent.
+    static var danger: NSColor { legible(\.danger, else: ColorTheme.red) }
     /// A count of what's waiting on you, in the colour the cat glints when something does.
     static var badge: NSColor { Ink.hex(CatGlint.attention(bright: true).color!) }
     static var onBadge: NSColor { ChannelSpeakerLook.readable(on: CatGlint.attention(bright: true).color!) }
@@ -62,5 +66,10 @@ enum MessagesInk {
 
     private static func themed(_ color: KeyPath<ColorTheme, UInt32>) -> NSColor? {
         theme.map { Ink.hex($0[keyPath: color]) }
+    }
+
+    /// The theme's colour, or `own` made to read on Ink's paper in light or dark.
+    private static func legible(_ color: KeyPath<ColorTheme, UInt32>, else own: UInt32) -> NSColor {
+        themed(color) ?? NSColor(name: nil) { Ink.hex(ColorTheme.legible(own, on: $0.isDark ? 0x1d1d1f : 0xf9f9f9)) }
     }
 }

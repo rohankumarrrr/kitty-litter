@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import ShadesCore
 
@@ -30,6 +31,9 @@ final class ColorThemeTests: XCTestCase {
           "Foreground Color": { "Red Component": 0.9058823529411765, "Green Component": 0.8941176470588236, "Blue Component": 0.9254901960784314, "Color Space": "sRGB" },
           "Cursor Color": { "Red Component": 0.7254901960784313, "Green Component": 0.6509803921568628, "Blue Component": 1, "Color Space": "sRGB" } } ] }
         """##
+
+    /// A light theme like Night Owl Light, whose teal accent is too light to read as words on its window.
+    static let tealLight = ##"{ "name": "Teal Light", "type": "light", "colors": { "editor.background": "#FBFBFB", "editor.foreground": "#403F53", "button.background": "#2AA298" } }"##
 
     private func read(_ text: String, name: String = "file") throws -> ColorTheme {
         try ColorTheme.read(Data(text.utf8), name: name)
@@ -118,6 +122,38 @@ final class ColorThemeTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(ColorTheme.contrast(theme.words(on: theme.yours), theme.yours), 4.5)
             XCTAssertGreaterThanOrEqual(ColorTheme.contrast(theme.words(on: theme.bubble), theme.bubble), 4.5)
         }
+    }
+
+    func testLinksAndErrorsReadOnTheWindowAndKeepTheirColour() throws {
+        let teal = try read(Self.tealLight)
+        XCTAssertLessThan(ColorTheme.contrast(teal.accent, teal.paper), 4.5, "the accent itself doesn't read as words")
+        XCTAssertGreaterThanOrEqual(ColorTheme.contrast(teal.link, teal.paper), 4.5)
+        XCTAssertLessThan(ColorTheme.contrast(teal.link, teal.paper), 4.6, "only as dark as reading it takes")
+        XCTAssertEqual(Self.hue(teal.link), Self.hue(teal.accent), accuracy: 1, "still teal")
+
+        XCTAssertEqual(try read(Self.t3).link, 0x8a6cff, "Opal's accent already reads, so it's left alone")
+
+        let shadesLight = ColorTheme(name: "Shades light", isDark: false, paper: 0xf9f9f9, text: 0x202020, accent: 0x0071e3)
+        for theme in [teal, shadesLight] {
+            XCTAssertGreaterThanOrEqual(ColorTheme.contrast(theme.danger, theme.paper), 4.5, theme.name)
+            XCTAssertEqual(Self.hue(theme.danger), Self.hue(ColorTheme.red), accuracy: 1, "still red in \(theme.name)")
+        }
+    }
+
+    func testAThemesOwnErrorColourIsUsedAndSaved() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("shades-theme-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("theme.json")
+        let opal = try read(##"{ "name": "Opal Horizon", "appearance": "dark", "canvas": "#0C0A10", "accent": "#8A6CFF", "colors": { "error": "#FF7A9A", "errorForeground": "#FF97B1" } }"##)
+        XCTAssertEqual(opal.danger, 0xff97b1, "the theme's colour for error words")
+
+        try ColorTheme.save(opal, to: file)
+        XCTAssertEqual(ColorTheme.load(from: file)?.danger, 0xff97b1, "still there after a restart")
+    }
+
+    private static func hue(_ color: UInt32) -> Double {
+        let rgb = [16, 8, 0].map { CGFloat((color >> UInt32($0)) & 0xff) / 255 }
+        return Double(NSColor(srgbRed: rgb[0], green: rgb[1], blue: rgb[2], alpha: 1).hueComponent) * 360
     }
 
     func testItSavesAsAFewColoursAndComesBackTheSame() throws {

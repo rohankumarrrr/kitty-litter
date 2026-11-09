@@ -144,6 +144,16 @@ struct ChannelSpeakerLook {
 
     var bubbleFill: NSColor { bubble.map(Ink.hex) ?? Self.grey }
 
+    /// Where a kitten's cat goes, when you have no picture. A theme's tint for your messages can be too close to its
+    /// window to see, so then it gets an edge, at the 3:1 a shape needs.
+    static func drawYourSquare(in rect: NSRect, radius: CGFloat) {
+        Ink.hex(MessagesInk.theme?.yours ?? yours).setFill()
+        NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+        guard let theme = MessagesInk.theme, ColorTheme.contrast(theme.yours, theme.paper) < 3 else { return }
+        MessagesInk.link.setStroke()
+        NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: radius - 0.5, yRadius: radius - 0.5).stroke()
+    }
+
     /// Whichever reads better on the bubble.
     var bubbleText: NSColor {
         guard let bubble else { return MessagesInk.text }
@@ -365,8 +375,7 @@ struct ReplyBar {
                 CatStamp.draw(CatPose(frame: .sit), jacket: jacket, in: frame, on: view)
             case .you:
                 if let picture = MessagesInk.pictureImage { PictureStamp.draw(picture, in: frame); break }
-                Ink.hex(MessagesInk.theme?.yours ?? ChannelSpeakerLook.yours).setFill()
-                NSBezierPath(roundedRect: frame.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4).fill()
+                ChannelSpeakerLook.drawYourSquare(in: frame.insetBy(dx: 1, dy: 1), radius: 4)
             }
             x += Self.face + 3
         }
@@ -408,7 +417,7 @@ final class MessageWords {
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
         markup = said.map { Markup($0, pulls: pulls) }
         words = markup.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Self.color(of: message, look: look))) }
-        failure = message.failure.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Ink.hex(0xff3b30))) }
+        failure = message.failure.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: MessagesInk.danger)) }
     }
 
     /// Draws the words for `look` as it is now, which a theme, text size or font can change.
@@ -417,7 +426,7 @@ final class MessageWords {
         guard paint != now, let markup else { return }
         paint = now
         words?.restyle(ChannelMarkdown.attributed(markup, color: Self.color(of: message, look: look)))
-        failure?.restyle(ChannelMarkdown.attributed(message.failure ?? "", color: Ink.hex(0xff3b30)))
+        failure?.restyle(ChannelMarkdown.attributed(message.failure ?? "", color: MessagesInk.danger))
     }
 
     private static func color(of message: ChannelMessage, look: ChannelSpeakerLook) -> NSColor {
@@ -741,7 +750,7 @@ final class MessageRowView: ChannelRowView {
 
     override func draw(_ dirtyRect: NSRect) {
         if isFound {
-            MessagesInk.link.withAlphaComponent(0.16).setFill()
+            MessagesInk.accent.withAlphaComponent(0.16).setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1), xRadius: 8, yRadius: 8).fill()
         }
         if let context {
@@ -989,8 +998,7 @@ final class ThreadDigestRowView: ChannelRowView {
             } else if let picture = look.picture {
                 PictureStamp.draw(picture, in: cat.insetBy(dx: 1, dy: 1))
             } else {
-                look.bubbleFill.setFill()
-                NSBezierPath(roundedRect: cat.insetBy(dx: 3, dy: 3), xRadius: 5, yRadius: 5).fill()
+                ChannelSpeakerLook.drawYourSquare(in: cat.insetBy(dx: 3, dy: 3), radius: 5)
             }
             let head = NSMutableAttributedString(string: look.name, attributes: [.font: MessagesInk.font(ofSize: 12, weight: .semibold), .foregroundColor: MessagesInk.text])
             head.append(NSAttributedString(string: "  \(message.at.formatted(date: .omitted, time: .shortened))", attributes: [.font: MessagesInk.font(ofSize: 11), .foregroundColor: MessagesInk.soft]))
