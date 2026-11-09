@@ -80,7 +80,7 @@ extension AppController {
     @discardableResult
     func sayPassedOn(_ said: String, threadID: String, missesScreen: Bool, asked: Int, followUp: Bool = false) -> Int? {
         guard missesScreen, asked == questionsAsked else {
-            say(said, threadID: threadID)
+            say(said, threadID: threadID, fades: true)
             return nil
         }
         line = nil
@@ -229,7 +229,7 @@ extension AppController {
                 dispatchers.remove(thread.id)
                 noteCorrection(in: thread.id)
             }
-            say(CatWords.sentTo(thread), threadID: thread.id)
+            say(CatWords.sentTo(thread), threadID: thread.id, fades: true)
             let shared = seesScreen ? snapshot : nil
             let text = Prompts.forwarded(
                 words: words,

@@ -35,6 +35,7 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - A screen block that follows a kitten instead of its folder. T3 can run Claude with `--settings` per provider instance, so a kitten's threads could share one wherever they work. Untested, because it needs a change to T3's settings.
 
 - Say on a thread's reply bar how many of its replies are new, so a bold channel shows which thread it's bold for. Today a channel's New line, like Slack's, only goes over threads none of which you've seen and replies also sent to it, and a thread with only new replies shows its line in its pane.
+- Leave a problem out of the bubble when The Kitty Litter already shows it under what you sent. A reply from Activity puts its report back but doesn't say why there yet, so for now the bubble says it too, and stays until you press Esc or click in another app.
 - Answer an agent's question from the bubble. It shows the question and options now, and you answer in The Kitty Litter or T3.
 - Fold a busy conversation in The Kitty Litter down to one row per thread, with how many replies it has and the latest, the way a Slack channel shows a thread. Today every thread's messages are shown in order, and its title and project mark where each one starts.
 - Set a channel's notifications from the phone, and see which channels are muted in The Kitty Litter's sidebar. Both are set from the channel's header on the Mac now, and only its header says it's muted.

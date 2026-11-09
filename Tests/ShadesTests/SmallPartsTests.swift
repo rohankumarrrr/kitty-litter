@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 @testable import Shades
 import ShadesCore
+import ShadesT3
 import XCTest
 
 final class QuickSessionTests: XCTestCase {
@@ -544,7 +545,7 @@ final class LayoutTests: XCTestCase {
 
 final class WordsTests: XCTestCase {
     private struct Friendly: LocalizedError {
-        var errorDescription: String? { "T3 Code isn't running. Open it and try again." }
+        var errorDescription: String? { "I can't reach T3 Code. Open it and try again." }
     }
 
     private struct Plain: Error {}
@@ -558,7 +559,12 @@ final class WordsTests: XCTestCase {
     }
 
     func testAModulesOwnMessageWins() {
-        XCTAssertEqual(CatWords.problem(Friendly(), while: .agents), "T3 Code isn't running. Open it and try again.")
+        XCTAssertEqual(CatWords.problem(Friendly(), while: .agents), "I can't reach T3 Code. Open it and try again.")
+    }
+
+    func testT3BeingOutOfReachIsSaidOneWay() {
+        XCTAssertEqual(CatWords.problem(T3Error.notRunning, while: .agents), CatWords.cantReachT3Yet)
+        XCTAssertEqual(CatWords.problem(Plain(), while: .agents), CatWords.cantReachT3Yet)
     }
 
     func testEveryProblemHasAShortLine() {

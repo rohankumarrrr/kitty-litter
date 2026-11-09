@@ -36,7 +36,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     }
 
     func connect() async throws {
-        if connectFails { throw DemoError(errorDescription: "T3 Code isn't running. Open it and try again.") }
+        if connectFails { throw DemoError(errorDescription: CatWords.cantReachT3Yet) }
     }
 
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
@@ -63,7 +63,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         if connectFails {
-            return AsyncThrowingStream { $0.finish(throwing: DemoError(errorDescription: "T3 Code isn't running. Open it and try again.")) }
+            return AsyncThrowingStream { $0.finish(throwing: DemoError(errorDescription: CatWords.cantReachT3Yet)) }
         }
         print("[demo] forwarded to \(threadID) with \(attachments.count) attachments: \(Self.oneLine(text))")
         // Kept as T3 keeps it, so Messages reads your words back from the thread once it's moved.
@@ -299,7 +299,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         return AsyncThrowingStream { continuation in
             Task {
                 if self.connectFails {
-                    continuation.finish(throwing: DemoError(errorDescription: "T3 Code isn't running. Open it and try again."))
+                    continuation.finish(throwing: DemoError(errorDescription: CatWords.cantReachT3Yet))
                     return
                 }
                 continuation.yield(.started(threadID: threadID))

@@ -4,7 +4,7 @@ public enum T3Error: LocalizedError, Equatable {
     case notRunning
     case commandLineToolMissing
     case signInFailed
-    /// This T3 Code speaks a different protocol than the one Shades was built against.
+    /// This T3 Code speaks a different protocol than the one The Kitty Litter was built against.
     case incompatibleServer(version: String?)
     case unauthorized
     case connectionLost
@@ -17,19 +17,19 @@ public enum T3Error: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .notRunning:
-            return "T3 Code isn't running. Open it and try again."
+            return "I can't reach T3 Code. Open it and try again."
         case .commandLineToolMissing:
-            return "Couldn't find T3 Code's command line tool. Open T3 Code once, then try again."
+            return "I can't find T3 Code's command line tool. Open T3 Code once, then try again."
         case .signInFailed:
-            return "Couldn't sign in to T3 Code."
+            return "I couldn't sign in to T3 Code. Quit and reopen it, then try again."
         case let .incompatibleServer(version):
-            return "The Kitty Litter doesn't work with \(version.map { "T3 Code \($0)" } ?? "this version of T3 Code") yet. Check for an update to The Kitty Litter."
+            return "I can't work with \(version.map { "T3 Code \($0)" } ?? "this version of T3 Code") yet. Check for an update to The Kitty Litter."
         case .unauthorized:
-            return "T3 Code didn't accept the saved sign-in."
+            return "T3 Code didn't accept my sign-in. Try again in a moment."
         case .connectionLost:
-            return "Lost the connection to T3 Code."
+            return "I lost the connection to T3 Code. Make sure it's open, then try again."
         case .timedOut:
-            return "T3 Code took too long to answer."
+            return "T3 Code took too long to answer. Try again in a moment."
         case let .rejected(reason):
             return reason
         case let .attachmentNotSupported(name, reason):

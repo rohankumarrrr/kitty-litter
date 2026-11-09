@@ -71,7 +71,7 @@ extension AppController {
         Task { [backend] in try? await backend.settle(threadID: thread.id) }
         stage.showStatus(watch.summary, needsYou: watch.needsYouCount > 0)
         let title = latestThreads.first { $0.id == next }?.title
-        say(CatWords.passedOn(to: title), threadID: next, unasked: true)
+        say(CatWords.passedOn(to: title), threadID: next, fades: true, unasked: true)
     }
 
     func announce(_ question: AgentQuestion) {

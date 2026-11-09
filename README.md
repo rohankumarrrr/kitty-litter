@@ -114,6 +114,8 @@ You can set up a kitten called Clawde whose area is the system itself, so "Steve
 
 ## When something goes wrong
 
+The cat says what went wrong in one line, with what to do about it, and the line stays up until you press Esc or click somewhere else. A line that's only news, like "Sent that to…", goes by itself after a few seconds, but not while the pointer's on it.
+
 Choose **Check Myself** from the cat's menu, and it goes through its signature, permissions, T3 Code and kittens, and tells you what's wrong and what to do. If another copy of The Kitty Litter has its shortcuts, it says which one to quit. The running app also writes that to `~/Library/Application Support/shades/health.json`, for agents to read.
 
 `scripts/install.sh` only replaces the running app with a properly signed build. It keeps the old copy, and puts it back if the new one doesn't come up. To go back by hand, run `scripts/install.sh --rollback`.

@@ -181,6 +181,6 @@ extension AppController {
         let text = CatWords.fetchingEars(fraction)
         guard line?.text != text else { return }
         fetchingEarsLine = true
-        say(text, seconds: nil)
+        say(text)
     }
 }

@@ -187,7 +187,7 @@ final class ChannelRowsTests: XCTestCase {
     }
 
     func testAnEmptyChannelWhenT3IsAwaySaysSo() {
-        XCTAssertEqual(notes(channel(steve, in: book(isReading: true, cantReachT3: true))), ["I can't reach T3 Code. Open it and I'll catch up."])
+        XCTAssertEqual(notes(channel(steve, in: book(isReading: true, cantReachT3: true))), ["I can't reach T3 Code. Open it and try again."])
     }
 
     func testAnEmptyChannelWithAFailedReadSaysThatInstead() {
@@ -197,7 +197,7 @@ final class ChannelRowsTests: XCTestCase {
 
     func testTroubleDoesntTakeAwayWhatsAlreadyThere() {
         let rows = channel(steve, in: book(threads: [thread("a")], transcripts: ["a": [exchange("e")]], unreadable: 2, cantReachT3: true))
-        XCTAssertEqual(rows.suffix(2), [.note("I can't reach T3 Code. Open it and I'll catch up."), .note("Couldn't read 2 threads. I'll try again.")])
+        XCTAssertEqual(rows.suffix(2), [.note("I can't reach T3 Code. Open it and try again."), .note("Couldn't read 2 threads. I'll try again.")])
         XCTAssertEqual(parents(rows).count, 1)
     }
 
@@ -229,12 +229,12 @@ final class ChannelRowsTests: XCTestCase {
 
     func testActivityWithNothingKnownAndNoT3SaysSoOnce() {
         let rows = ChannelRows.rows(.activity, in: book(isReading: true, cantReachT3: true))
-        XCTAssertEqual(rows.first, .note("I can't reach T3 Code. Open it and I'll catch up."))
-        XCTAssertEqual(rows.filter { $0 == .note("I can't reach T3 Code. Open it and I'll catch up.") }.count, 1)
+        XCTAssertEqual(rows.first, .note("I can't reach T3 Code. Open it and try again."))
+        XCTAssertEqual(rows.filter { $0 == .note("I can't reach T3 Code. Open it and try again.") }.count, 1)
     }
 
     func testActivityLeadsWithAnyTrouble() {
-        XCTAssertEqual(ChannelRows.rows(.activity, in: book(threads: [thread("a")], cantReachT3: true)).first, .note("I can't reach T3 Code. Open it and I'll catch up."))
+        XCTAssertEqual(ChannelRows.rows(.activity, in: book(threads: [thread("a")], cantReachT3: true)).first, .note("I can't reach T3 Code. Open it and try again."))
     }
 
     private func issueIDs(_ rows: [ChannelRow]) -> [String] {

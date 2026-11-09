@@ -43,6 +43,7 @@ final class FakeStage: CatStage {
     var channelsUpdated: [ChannelBook] = []
     var copied: String?
     var arriveImmediately = true
+    var isPointerOnBubble = false
     var pendingArrival: (() -> Void)?
 
     init(log: Log) { self.log = log }

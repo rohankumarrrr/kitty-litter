@@ -273,7 +273,7 @@ final class PhoneTests: XCTestCase {
 
     func testOnlyWordsOfYoursThatWentNowhereCanBeTriedAgain() throws {
         var failed = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "And then?", at: noon, threadID: "a", threadTitle: "Work")
-        failed.failure = "I can't reach T3 Code. Is it running?"
+        failed.failure = "I can't reach T3 Code. Open it and try again."
         let sending = ChannelMessage(exchangeID: "sent-2", kind: .ask, speaker: .you, text: "Hello?", at: noon, threadID: "", threadTitle: "", isSending: true)
         let book = ChannelBook.build(
             kittens: [steve], threads: [thread("a", of: steve)], transcripts: ["a": [Exchange(id: "e1", asker: .you, askedAt: noon, ask: "How's it going?")]],
@@ -287,7 +287,7 @@ final class PhoneTests: XCTestCase {
 
         let thread = PhoneView(PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book), in: book, now: noon)
         let shown = try XCTUnwrap(thread.rows.last { $0.kind == "message" })
-        XCTAssertEqual(shown.failure, "I can't reach T3 Code. Is it running?")
+        XCTAssertEqual(shown.failure, "I can't reach T3 Code. Open it and try again.")
         XCTAssertEqual(shown.retry, true)
         let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
         let hello = try XCTUnwrap(general.rows.first { $0.kind == "message" })

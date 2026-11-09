@@ -13,7 +13,7 @@ One WebSocket does nearly everything, because approvals and live streaming need 
 3. **Sign in.** See below.
 4. **Open the socket.** `GET /ws?orchestrationProtocol=2` with `Authorization: Bearer <token>`. Without the query item the server answers 426.
 
-If T3 goes away, the client keeps trying, and backs off to one try every 5 seconds. A call made while T3 is down tries straight away and fails fast with "T3 Code isn't running." When T3 returns, subscriptions are sent again: the thread list takes a fresh snapshot, and a running turn resumes after the last event it saw.
+If T3 goes away, the client keeps trying, and backs off to one try every 5 seconds. A call made while T3 is down tries straight away and fails fast with "I can't reach T3 Code. Open it and try again." Messages says the same while it can't read. When T3 returns, subscriptions are sent again: the thread list takes a fresh snapshot, and a running turn resumes after the last event it saw.
 
 ## Sign-in
 

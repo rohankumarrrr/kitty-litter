@@ -15,7 +15,6 @@ final class AppController {
     static let panelWait: TimeInterval = 1.5
     /// How long anything waits on it at all. A stuck capture can't hold a question up.
     static let captureTimeout: TimeInterval = 4
-    nonisolated private static let lineSeconds: TimeInterval = 5
     static let settleSeconds: TimeInterval = 2
     private static let longestLine = 200
 
@@ -198,6 +197,8 @@ final class AppController {
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
     /// Waiting a little before saying it's finished means that doesn't read as done.
     var reportDelay: TimeInterval = 5
+    /// How long news stays up, and longer while the pointer's on it. A problem stays until you dismiss it.
+    var lineSeconds: TimeInterval = 5
     /// How long a question waits for the first list of sessions, so one asked right after launch can still be routed.
     var threadListWait: TimeInterval = 2
     /// How long after T3's first list Messages reads ahead, so it never competes with everything else a launch asks T3.
@@ -454,17 +455,21 @@ final class AppController {
         stage.catStatus(status)
     }
 
-    /// One short line from the cat, which clears itself unless `seconds` is `nil`. One that's `unasked` comes by
-    /// itself rather than answering something you did, so Do Not Disturb holds it.
-    func say(_ text: String, threadID: String? = nil, seconds: TimeInterval? = AppController.lineSeconds, unasked: Bool = false) {
+    /// One short line from the cat. It stays until you dismiss it, since a problem often says what to do about it,
+    /// unless it `fades`, as news does. One that's `unasked` comes by itself rather than answering something you
+    /// did, so Do Not Disturb holds it.
+    func say(_ text: String, threadID: String? = nil, fades: Bool = false, unasked: Bool = false) {
         if unasked, !mayPopUp(missed(thread: threadID, text: text)) { return }
         lineCounter += 1
         let id = lineCounter
         line = Line(text: String(text.prefix(Self.longestLine)), threadID: threadID, id: id, unasked: unasked)
         renderBubble()
-        guard let seconds else { return }
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        guard fades else { return }
+        Task { [weak self, lineSeconds] in
+            try? await Task.sleep(for: .seconds(lineSeconds))
+            while let self, self.line?.id == id, self.stage.isPointerOnBubble {
+                try? await Task.sleep(for: .seconds(0.5))
+            }
             guard let self, self.line?.id == id else { return }
             self.line = nil
             self.renderBubble()
