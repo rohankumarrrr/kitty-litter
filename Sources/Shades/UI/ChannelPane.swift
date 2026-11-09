@@ -183,6 +183,8 @@ final class ChannelPane: QuietView {
     var onOpen: ((_ thread: String, _ place: ChannelPlace?, _ typing: Bool, _ report: InboxEntry?) -> Void)?
     var onClose: (() -> Void)?
     var onAction: ((MessagesAction) -> Void)?
+    /// Opens a web address, only ever after you've seen it in the link bar and pressed Open.
+    var onOpenLink: ((URL) -> Void)?
     var parts = PartAnswers()
 
     private let now: () -> Date = Date.init
@@ -190,6 +192,7 @@ final class ChannelPane: QuietView {
     private let scroll = QuietScrollView()
     private let document = QuietView()
     let composer = ChannelComposer()
+    let linkBar = LinkBar()
     private(set) var selection: ChannelSelection = .activity
     private var book: ChannelBook?
     /// The inbox row whose Reply or Ask opened this thread, until you look elsewhere. All you send here is about it.
@@ -209,6 +212,8 @@ final class ChannelPane: QuietView {
     private var frames: [NSRect] = []
     private var first = 0
     private var words: [String: MessageWords] = [:]
+    /// The state of each pull request, as the rows' chips show it.
+    private var pulls: [String: String] = [:]
     private var expanded: Set<String> = []
     private var stackedSize = NSSize.zero
     private var isPaging = false
@@ -220,6 +225,12 @@ final class ChannelPane: QuietView {
         addSubview(scroll)
         addSubview(header)
         addSubview(composer)
+        addSubview(linkBar)
+        linkBar.onOpen = { [weak self] link in
+            self?.showLink(nil)
+            if Markup.opens(link) { self?.onOpenLink?(link) }
+        }
+        linkBar.onCancel = { [weak self] in self?.showLink(nil) }
         header.onIssues = { [weak self] in self?.onSelect?(.activity) }
         header.onClose = { [weak self] in self?.onClose?() }
         header.onOpen = { [weak self] in
@@ -269,8 +280,10 @@ final class ChannelPane: QuietView {
 
     func arrange(force: Bool = false) {
         let box = composer.height
+        let bar = min(linkBar.height(for: bounds.width), max(bounds.height - ChannelHeader.height - box, 0))
         header.frame = NSRect(x: 0, y: 0, width: bounds.width, height: ChannelHeader.height)
-        scroll.frame = NSRect(x: 0, y: ChannelHeader.height, width: bounds.width, height: max(bounds.height - ChannelHeader.height - box, 0))
+        scroll.frame = NSRect(x: 0, y: ChannelHeader.height, width: bounds.width, height: max(bounds.height - ChannelHeader.height - box - bar, 0))
+        linkBar.frame = NSRect(x: 0, y: bounds.height - box - bar, width: bounds.width, height: bar)
         composer.frame = NSRect(x: 0, y: bounds.height - box, width: bounds.width, height: box)
         if force { composer.needsLayout = true }
         guard stackedSize != scroll.contentSize else { return }
@@ -308,6 +321,7 @@ final class ChannelPane: QuietView {
         let restored = isNewBox ? swapDraft(for: selection, in: book) : nil
         self.selection = selection
         self.book = book
+        if isNewSelection { linkBar.show(nil) }
         updateComposer(keepingDraft: !isNewBox, typedFor: restored)
         arrange()
         let rows: [ChannelRow]
@@ -320,6 +334,10 @@ final class ChannelPane: QuietView {
             header.show(thread: thread, in: book)
             rows = ChannelRows.thread(thread, in: book)
         }
+        let pullsChanged = book.pulls != pulls
+        pulls = book.pulls
+        // A pull request's chip changes with its state, which the rows themselves don't say.
+        if pullsChanged, !isNewSelection, rows == shown { return restyle() }
         guard isNewSelection || rows != shown else { return }
 
         let wasAtBottom = isNearBottom
@@ -362,6 +380,19 @@ final class ChannelPane: QuietView {
             keep(anchor)
         }
         attach()
+        if pullsChanged, !isNewSelection { restyle() }
+    }
+
+    /// A link pressed in one of this pane's messages. It only shows where the link goes, and Open in the bar is what
+    /// opens it, so nothing a kitten writes can open anything by itself. Only web addresses are links at all.
+    @objc func ask(toOpen link: URL) {
+        guard Markup.opens(link) else { return NSSound.beep() }
+        showLink(link)
+    }
+
+    private func showLink(_ link: URL?) {
+        linkBar.show(link)
+        arrange()
     }
 
     /// Where the laid-out rows start after a refresh: at the same row as before, or as many from the end.
@@ -644,7 +675,7 @@ final class ChannelPane: QuietView {
 
     private func messageView(_ message: ChannelMessage, in book: ChannelBook) -> MessageRowView {
         let look = ChannelSpeakerLook(message.speaker, in: book)
-        let laidOut = words[message.id].flatMap { $0.message == message ? $0 : nil } ?? MessageWords(message, look: look)
+        let laidOut = words[message.id].flatMap { $0.message == message && $0.pulls == pulls ? $0 : nil } ?? MessageWords(message, look: look, pulls: pulls)
         laidOut.paint(for: look)
         words[message.id] = laidOut
         let view = MessageRowView(message: message, look: look, words: laidOut)

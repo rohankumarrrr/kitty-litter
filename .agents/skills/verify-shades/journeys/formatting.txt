@@ -1,0 +1,42 @@
+front
+channels
+wait 1
+colors Cursor/Opal Horizon
+channel clawde
+thread settings panel
+wait 2
+draw .verify/shades/formatting/0-thread
+more
+wait 1
+draw .verify/shades/formatting/0-whole
+link kittens
+wait 1
+draw .verify/shades/formatting/1-link-bar
+channel steve
+thread pricing copy
+wait 2
+link billing page
+wait 1
+draw .verify/shades/formatting/2-labelled-link
+theme light
+colors shades
+channel clawde
+thread settings panel
+wait 2
+more
+wait 1
+draw .verify/shades/formatting/3-light
+phone on
+wait 2
+phone open
+wait 3
+phone go t:demo-clawde-main@c:%2Fdemo%2Fclawde
+wait 3
+draw .verify/shades/formatting/4-phone
+phone link kittens
+wait 1
+draw .verify/shades/formatting/5-phone-link
+wait 2
+phone close
+front
+windows

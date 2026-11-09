@@ -480,6 +480,35 @@ extension PhoneTests {
         XCTAssertEqual(general.rows.first { $0.kind == "message" }?.cat, "sit/shades", "the cat answers as itself, in its own jacket")
     }
 
+    func testAMessageGoesToThePhoneAsTheMacReadIt() throws {
+        var merged = thread("a", of: steve)
+        merged.pullRequest = ThreadPullRequest(number: 4, state: "merged", url: "https://github.com/o/r/pull/4")
+        let reply = "Done: https://github.com/o/r/pull/4\n\n```\nswift test\n```\n\n[run me](javascript:alert(1))"
+        let book = ChannelBook.build(
+            kittens: [steve], threads: [merged], transcripts: ["a": [Exchange(id: "e", asker: .you, askedAt: noon, ask: "Ask", reply: reply, repliedAt: noon)]],
+            isReading: false, unreadable: 0, cantReachT3: false
+        )
+        let view = PhoneView(PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book), in: book, now: noon)
+        let row = try XCTUnwrap(view.rows.last { $0.kind == "message" })
+        XCTAssertEqual(row.text, reply, "what was said, for its length")
+        let blocks = try XCTUnwrap(row.markup)
+        XCTAssertEqual(blocks.map(\.kind), [.paragraph, .code, .paragraph])
+        XCTAssertEqual(blocks[0].spans?.last?.pull, Markup.Pull(state: "merged"))
+        XCTAssertEqual(blocks[1].code, "swift test")
+        XCTAssertNil(blocks[2].spans?.first?.link, "only web addresses are links")
+        let json = String(decoding: try JSONEncoder().encode(row), as: UTF8.self)
+        XCTAssertFalse(json.contains("\"link\":\"javascript"))
+    }
+
+    func testThePageBuildsMarkupAsNodesAndAsksBeforeALinkOpens() {
+        XCTAssertFalse(PhonePage.script.contains("innerHTML"), "every word is text, never markup")
+        XCTAssertFalse(PhonePage.script.contains("link.href"), "a message's link has no address of its own, so a long press or a middle click can't follow it")
+        XCTAssertTrue(PhonePage.script.contains("link.onclick = () => ask(part.link);"), "tapping it only shows where it goes")
+        XCTAssertTrue(PhonePage.script.contains("$('linktitle').textContent = words.openLink(new URL(link).host);"), "naming its host")
+        XCTAssertTrue(PhonePage.style.contains("max-height: calc(100dvh"), "and the sheet stays on screen however long the address is")
+        XCTAssertTrue(PhonePage.html.contains(#"<a id="linkopen" class="go" target="_blank" rel="noopener noreferrer">Open</a>"#), "Open is the one link")
+    }
+
     func testAReplyBarHasWhoRepliedAsTheWindowDrawsThemAndWhenTheLastWas() throws {
         let earlier = noon.addingTimeInterval(-86_400 * 3)
         let book = ChannelBook.build(

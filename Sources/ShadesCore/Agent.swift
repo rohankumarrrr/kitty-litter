@@ -194,10 +194,13 @@ public struct AnswerForm: Sendable, Hashable {
 public struct ThreadPullRequest: Sendable, Hashable {
     public var number: Int
     public var state: String
+    /// Its address, which is how a link to it in a message finds its state.
+    public var url: String?
 
-    public init(number: Int, state: String) {
+    public init(number: Int, state: String, url: String? = nil) {
         self.number = number
         self.state = state
+        self.url = url
     }
 }
 

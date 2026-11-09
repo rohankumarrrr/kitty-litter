@@ -464,6 +464,7 @@ enum T3Wire {
                 let state: String
             }
             let number: Int
+            let url: String?
             let snapshot: Snapshot
         }
 
@@ -486,7 +487,7 @@ enum T3Wire {
         let pullRequests: [Lossy<PullRequest>]?
 
         var latestPullRequest: ThreadPullRequest? {
-            (pullRequests ?? []).compactMap(\.value).last.map { ThreadPullRequest(number: $0.number, state: $0.snapshot.state) }
+            (pullRequests ?? []).compactMap(\.value).last.map { ThreadPullRequest(number: $0.number, state: $0.snapshot.state, url: $0.url) }
         }
 
         /// Subagents and side chats live inside their parent, never in a thread list.

@@ -362,24 +362,29 @@ struct ReplyBar {
 /// shown again, scrolled back to or kept through a refresh isn't read and measured again.
 final class MessageWords {
     let message: ChannelMessage
+    /// The state of each pull request it was drawn with, since a chip shows it.
+    let pulls: [String: String]
     let words: ChannelTextBlock?
     let failure: ChannelTextBlock?
+    private let markup: Markup?
     /// The bubble and theme its words are coloured for.
     private var paint: (bubble: UInt32?, theme: ColorTheme?)
 
-    init(_ message: ChannelMessage, look: ChannelSpeakerLook) {
+    init(_ message: ChannelMessage, look: ChannelSpeakerLook, pulls: [String: String] = [:]) {
         self.message = message
+        self.pulls = pulls
         paint = (look.bubble, MessagesInk.theme)
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
-        words = said.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Self.color(of: message, look: look))) }
+        markup = said.map { Markup($0, pulls: pulls) }
+        words = markup.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Self.color(of: message, look: look))) }
         failure = message.failure.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Ink.hex(0xff3b30))) }
     }
 
     /// Colours the words for `look` as it is now, which a theme can change.
     func paint(for look: ChannelSpeakerLook) {
-        guard paint.bubble != look.bubble || paint.theme != MessagesInk.theme else { return }
+        guard paint.bubble != look.bubble || paint.theme != MessagesInk.theme, let markup else { return }
         paint = (look.bubble, MessagesInk.theme)
-        words?.recolor(Self.color(of: message, look: look))
+        words?.restyle(ChannelMarkdown.attributed(markup, color: Self.color(of: message, look: look)))
     }
 
     private static func color(of message: ChannelMessage, look: ChannelSpeakerLook) -> NSColor {
@@ -424,6 +429,8 @@ final class MessageRowView: ChannelRowView {
     private var tryAgain: QuietButton?
     /// Made the first time you hover, since most messages never are.
     private var hoverButtons: (open: QuietButton, copy: QuietButton, reply: QuietButton)?
+    /// A Copy on each code block.
+    private(set) var codeButtons: [QuietButton] = []
     private(set) var bubble = NSRect.zero
     /// A file or picture that came with it, under its words.
     private var fileFrame = NSRect.zero
@@ -529,6 +536,27 @@ final class MessageRowView: ChannelRowView {
         needsDisplay = true
     }
 
+    /// At the top right of each code block, inside it. A block that a cut message stops before has none.
+    private func placeCodeButtons() {
+        guard let words else { return }
+        let blocks = words.codeBlocks
+        while codeButtons.count < blocks.count {
+            let button = QuietButton("Copy", style: .text)
+            addSubview(button)
+            codeButtons.append(button)
+        }
+        for (index, button) in codeButtons.enumerated() {
+            button.isHidden = index >= blocks.count
+            guard index < blocks.count else { continue }
+            let block = blocks[index]
+            button.onPress = { [weak self, weak button] in
+                self?.onCopy?(block.code)
+                button?.flash("Copied")
+            }
+            button.frame.origin = NSPoint(x: bubble.minX + Self.insetX + block.frame.maxX - button.frame.width, y: bubble.minY + Self.insetY + block.frame.minY + (ChannelMarkdown.copyRoom - button.frame.height) / 2 + 1)
+        }
+    }
+
     private func placeHoverButtons(width: CGFloat) {
         guard let hoverButtons else { return }
         var right = width - Self.margin + 6
@@ -595,6 +623,7 @@ final class MessageRowView: ChannelRowView {
             replyBarFrame = .zero
         }
         placeHoverButtons(width: width)
+        placeCodeButtons()
         let height = max(bottom + Self.pad, look.hasCat || look.picture != nil ? headTop + Self.pad + Self.headHeight + Self.catSide : 0)
         fitted = (width, isExpanded, height)
         return height

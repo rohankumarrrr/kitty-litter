@@ -321,7 +321,7 @@ final class T3ThreadListTests: XCTestCase {
         list.apply(try snapshot(threads: [open, thread(id: "settled")]))
         let threads = Dictionary(uniqueKeysWithValues: list.agentThreads(summaries: [:]).map { ($0.id, $0) })
         XCTAssertEqual(threads["open"]?.isSettled, false)
-        XCTAssertEqual(threads["open"]?.pullRequest, ThreadPullRequest(number: 12, state: "open"), "the last one it can read")
+        XCTAssertEqual(threads["open"]?.pullRequest, ThreadPullRequest(number: 12, state: "open", url: "https://example.com/12"), "the last one it can read")
         XCTAssertEqual(threads["settled"]?.isSettled, true)
         XCTAssertNil(threads["settled"]?.pullRequest)
     }
