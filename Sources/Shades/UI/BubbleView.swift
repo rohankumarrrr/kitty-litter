@@ -63,7 +63,7 @@ final class BubbleView: BalloonView {
         textView.layoutManager?.delegate = self
 
         for label in [caption, counter] {
-            label.font = .systemFont(ofSize: 11)
+            label.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
             label.textColor = Ink.soft
             label.lineBreakMode = .byTruncatingTail
             label.isHidden = true

@@ -5,7 +5,7 @@ import AppKit
 /// anything by itself. A web picture asks the same way, with Show, before the Mac fetches it.
 final class LinkBar: QuietView {
     private static let pad: CGFloat = 12
-    private static let titleHeight: CGFloat = 18
+    private static var titleHeight: CGFloat { MessagesInk.meta + 7 }
     private static let buttonGap: CGFloat = 8
 
     var onOpen: ((URL) -> Void)?
@@ -52,7 +52,7 @@ final class LinkBar: QuietView {
         let wrapping = NSMutableParagraphStyle()
         wrapping.lineBreakMode = .byCharWrapping
         return NSAttributedString(string: link?.absoluteString ?? "", attributes: [
-            .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+            .font: NSFont.monospacedSystemFont(ofSize: MessagesInk.body - 1, weight: .regular),
             .foregroundColor: MessagesInk.text,
             .paragraphStyle: wrapping,
         ])
@@ -83,7 +83,7 @@ final class LinkBar: QuietView {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingMiddle
         NSAttributedString(string: title, attributes: [
-            .font: MessagesInk.font(ofSize: 11, weight: .semibold),
+            .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .semibold),
             .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: Self.pad, y: Self.pad, width: bounds.width - Self.pad * 2, height: Self.titleHeight))

@@ -52,7 +52,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         textView.isRichText = false
         textView.allowsUndo = true
         textView.drawsBackground = false
-        textView.font = MessagesInk.font(ofSize: 14 + MessagesInk.textStep)
+        textView.font = MessagesInk.font(ofSize: MessagesInk.title)
         textView.insertionPointColor = Ink.accent
         textView.textContainerInset = .zero
         textView.textContainer?.lineFragmentPadding = 0
@@ -136,7 +136,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         label.textColor = MessagesInk.soft
         label.font = MessagesInk.font(ofSize: 11)
         textView.textColor = MessagesInk.text
-        textView.font = MessagesInk.font(ofSize: 14 + MessagesInk.textStep)
+        textView.font = MessagesInk.font(ofSize: MessagesInk.title)
         alsoSend.needsDisplay = true
         needsDisplay = true
         // Another text size makes the box taller or shorter.

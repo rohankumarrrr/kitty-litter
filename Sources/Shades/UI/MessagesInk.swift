@@ -9,7 +9,7 @@ enum MessagesInk {
     /// How big what's said is, set the same way.
     static var textSize: TextSize = .standard
     /// Points added to every size what's said is drawn at, and the box you type in.
-    static var textStep: CGFloat {
+    private static var textStep: CGFloat {
         switch textSize {
         case .small: -1
         case .standard: 0
@@ -17,6 +17,12 @@ enum MessagesInk {
         case .larger: 4
         }
     }
+    /// What's said, such as a message, a note or a search hit.
+    static var body: CGFloat { 13 + textStep }
+    /// Who said it, when and how many. It grows half as fast, so it stays quieter than what it's about.
+    static var meta: CGFloat { 11 + textStep / 2 }
+    /// Over what's said, such as a heading in a message or a search hit's name.
+    static var title: CGFloat { 14 + textStep }
     /// The family Messages draws its words in, set the same way. `nil` is the system's.
     static var fontFamily: String?
     /// The system's own faces, which no family name reaches, by the names Font Book gives them.
@@ -25,8 +31,19 @@ enum MessagesInk {
     ]
 
     /// A font for Messages' words in the chosen family, at this size and weight. A family that isn't on this Mac, such
-    /// as one written into the settings file by hand, draws in the system's.
-    static func font(ofSize size: CGFloat, weight: NSFont.Weight = .regular, family: String? = MessagesInk.fontFamily) -> NSFont {
+    /// as one written into the settings file by hand, draws in the system's. `tabular` gives every digit one width, so a
+    /// number that changes, such as an age or a count, holds still.
+    static func font(ofSize size: CGFloat, weight: NSFont.Weight = .regular, tabular: Bool = false, family: String? = MessagesInk.fontFamily) -> NSFont {
+        let font = face(ofSize: size, weight: weight, family: family)
+        guard tabular else { return font }
+        let digits = font.fontDescriptor.addingAttributes([.featureSettings: [[
+            NSFontDescriptor.FeatureKey.typeIdentifier: kNumberSpacingType,
+            NSFontDescriptor.FeatureKey.selectorIdentifier: kMonospacedNumbersSelector,
+        ]]])
+        return NSFont(descriptor: digits, size: size) ?? font
+    }
+
+    private static func face(ofSize size: CGFloat, weight: NSFont.Weight, family: String?) -> NSFont {
         let system = NSFont.systemFont(ofSize: size, weight: weight)
         guard let family else { return system }
         if let face = systemFaces.first(where: { $0.name == family }) {

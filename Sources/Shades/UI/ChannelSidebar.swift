@@ -252,7 +252,7 @@ final class ChannelSidebarRow: ChannelRowView {
             right -= 16
         }
         if item.badge > 0 {
-            let count = NSAttributedString(string: "\(item.badge)", attributes: [.font: MessagesInk.font(ofSize: 11, weight: .bold), .foregroundColor: MessagesInk.onBadge])
+            let count = NSAttributedString(string: "\(item.badge)", attributes: [.font: MessagesInk.font(ofSize: 11, weight: .bold, tabular: true), .foregroundColor: MessagesInk.onBadge])
             let size = count.size()
             let pill = NSRect(x: right - max(size.width + 10, 18), y: bounds.midY - 9, width: max(size.width + 10, 18), height: 18)
             MessagesInk.badge.setFill()

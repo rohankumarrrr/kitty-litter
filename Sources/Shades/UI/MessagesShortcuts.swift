@@ -158,7 +158,7 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
     }
 
     private static let width: CGFloat = 520
-    private static let fieldHeight: CGFloat = 46
+    private static var fieldHeight: CGFloat { MessagesInk.title + 32 }
     private static let footerHeight: CGFloat = 26
     /// How long typing pauses before T3 is asked, so it's asked about what you meant rather than every letter.
     private static let askAfter: TimeInterval = 0.35
@@ -177,14 +177,14 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
     private var asking: Timer?
     private let plainWords = PlainWords()
 
-    private var rowHeight: CGFloat { mode == .search ? 54 : 40 }
+    private var rowHeight: CGFloat { mode == .search ? MessagesInk.title + MessagesInk.body + 27 : MessagesInk.title + 26 }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = MessagesInk.font(ofSize: 16)
+        field.font = MessagesInk.font(ofSize: MessagesInk.title + 2)
         field.delegate = self
         addSubview(field)
         setAccessibilityElement(true)
@@ -208,10 +208,10 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
     func show(_ book: ChannelBook, mode: Mode = .jump) {
         self.book = book
         self.mode = mode
-        field.font = MessagesInk.font(ofSize: 16)
+        field.font = MessagesInk.font(ofSize: MessagesInk.title + 2)
         field.textColor = MessagesInk.text
         let placeholder = mode == .search ? CatWords.searchPlaceholder : CatWords.jumpPlaceholder
-        field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [.foregroundColor: MessagesInk.soft, .font: MessagesInk.font(ofSize: 16)])
+        field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [.foregroundColor: MessagesInk.soft, .font: MessagesInk.font(ofSize: MessagesInk.title + 2)])
         setAccessibilityLabel(mode == .search ? CatWords.searchTitle : CatWords.jumpTitle)
         refilter()
         askSoon()
@@ -304,7 +304,7 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
     override func layout() {
         super.layout()
         let card = card
-        field.frame = NSRect(x: card.minX + 16, y: card.minY + 12, width: card.width - 32, height: 24)
+        field.frame = NSRect(x: card.minX + 16, y: card.minY + 12, width: card.width - 32, height: MessagesInk.title + 10)
     }
 
     func controlTextDidChange(_ notification: Notification) {
@@ -348,7 +348,7 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         guard !items.isEmpty else {
-            NSAttributedString(string: nothing, attributes: [.font: MessagesInk.font(ofSize: 13), .foregroundColor: MessagesInk.soft])
+            NSAttributedString(string: nothing, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.body), .foregroundColor: MessagesInk.soft])
                 .draw(at: NSPoint(x: card.minX + 16, y: card.minY + Self.fieldHeight + 11))
             return
         }
@@ -358,30 +358,31 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
                 MessagesInk.press.setFill()
                 NSBezierPath(roundedRect: row, xRadius: 7, yRadius: 7).fill()
             }
-            let line = NSMutableAttributedString(string: item.title, attributes: [.font: MessagesInk.font(ofSize: 14, weight: .medium), .foregroundColor: MessagesInk.text])
+            let line = NSMutableAttributedString(string: item.title, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.title, weight: .medium), .foregroundColor: MessagesInk.text])
             if let detail = item.detail {
-                line.append(NSAttributedString(string: "   \(detail)", attributes: [.font: MessagesInk.font(ofSize: 12), .foregroundColor: MessagesInk.soft]))
+                line.append(NSAttributedString(string: "   \(detail)", attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta + 1), .foregroundColor: MessagesInk.soft]))
             }
             line.addAttribute(.paragraphStyle, value: truncating, range: NSRange(location: 0, length: line.length))
+            let lineHeight = MessagesInk.title + 4
             guard let found = item.found else {
-                line.draw(in: NSRect(x: row.minX + 10, y: row.midY - 9, width: row.width - 20, height: 18))
+                line.draw(in: NSRect(x: row.minX + 10, y: row.midY - lineHeight / 2, width: row.width - 20, height: lineHeight))
                 continue
             }
-            line.draw(in: NSRect(x: row.minX + 10, y: row.minY + 7, width: row.width - 20, height: 18))
-            let words = NSMutableAttributedString(string: found.snippet, attributes: [.font: MessagesInk.font(ofSize: 13), .foregroundColor: MessagesInk.soft, .paragraphStyle: truncating])
+            line.draw(in: NSRect(x: row.minX + 10, y: row.minY + 7, width: row.width - 20, height: lineHeight))
+            let words = NSMutableAttributedString(string: found.snippet, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.body), .foregroundColor: MessagesInk.soft, .paragraphStyle: truncating])
             for mark in found.marks where NSMaxRange(mark) <= words.length {
-                words.addAttributes([.font: MessagesInk.font(ofSize: 13, weight: .semibold), .foregroundColor: MessagesInk.text], range: mark)
+                words.addAttributes([.font: MessagesInk.font(ofSize: MessagesInk.body, weight: .semibold), .foregroundColor: MessagesInk.text], range: mark)
             }
-            words.draw(in: NSRect(x: row.minX + 10, y: row.minY + 27, width: row.width - 20, height: 18))
+            words.draw(in: NSRect(x: row.minX + 10, y: row.minY + 7 + lineHeight + 2, width: row.width - 20, height: MessagesInk.body + 5))
         }
         if let footer {
-            NSAttributedString(string: footer, attributes: [.font: MessagesInk.font(ofSize: 12), .foregroundColor: MessagesInk.soft])
+            NSAttributedString(string: footer, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta + 1, tabular: true), .foregroundColor: MessagesInk.soft])
                 .draw(at: NSPoint(x: card.minX + 16, y: card.maxY - Self.footerHeight))
         }
     }
 }
 
-/// ⌘/: every shortcut, grouped, over the window, as Slack's list is.
+/// ⌘/: every shortcut, grouped, over the window, as Slack's list is. Like a menu, it stays one size whatever the text size.
 final class CheatsheetView: QuietView {
     private static let width: CGFloat = 460
     private static let rowHeight: CGFloat = 26
