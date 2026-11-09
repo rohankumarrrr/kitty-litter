@@ -80,7 +80,8 @@ enum DemoChannels {
         reply: String? = nil,
         repliedMinutes: Double? = nil,
         notes: Int = 0,
-        failure: String? = nil
+        failure: String? = nil,
+        files: [ExchangeFile] = []
     ) -> Exchange {
         Exchange(
             id: id,
@@ -90,9 +91,14 @@ enum DemoChannels {
             reply: reply,
             repliedAt: repliedMinutes.map(ago(minutes:)),
             earlierNotes: notes,
-            failure: failure
+            failure: failure,
+            files: files
         )
     }
+
+    /// What T3 keeps of the picture you sent in the logo thread, and the one Steve made in his folder.
+    static let sentPicture = "demo-attachment-logo"
+    static let folderPicture = (thread: "demo-steve-yesterday", path: "screenshots/logo-480.png")
 
     /// Your reply in Steve's pricing copy thread, which you also sent to his channel, as "Also send to" does. Messages
     /// only keeps that in memory, so the demo starts with it there.
@@ -128,8 +134,15 @@ enum DemoChannels {
                 "logo-1",
                 minutes: 1_520,
                 ask: "The logo wraps onto two lines on my phone.",
-                reply: "Fixed. The logo now shrinks below 480 points, and it's in pull request 9.",
-                repliedMinutes: 1_500
+                reply: """
+                Fixed. The logo now shrinks below 480 points, and it's in pull request 9.
+
+                ![The logo at 480 points](screenshots/logo-480.png)
+
+                ![How it looked before](https://example.com/logo-before.png)
+                """,
+                repliedMinutes: 1_500,
+                files: [ExchangeFile(name: "logo on my phone.png", attachmentID: sentPicture)]
             ),
         ],
         "demo-steve-fonts": [

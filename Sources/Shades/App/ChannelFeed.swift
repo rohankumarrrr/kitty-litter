@@ -86,10 +86,16 @@ final class ChannelFeed {
     /// How many passes over T3 have finished.
     private(set) var passes = 0
 
-    init(backend: AgentBackend, kittens: @escaping () -> [Kitten], gap: Duration = .seconds(3)) {
+    /// Small copies of the pictures on messages.
+    let pictures: PictureShelf
+
+    /// `web` fetches a web picture once you've pressed Show on it.
+    init(backend: AgentBackend, kittens: @escaping () -> [Kitten], gap: Duration = .seconds(3), web: @escaping @Sendable (URL) async -> Data? = { await WebPicture.fetch($0) }) {
         self.backend = backend
         self.kittens = kittens
         self.gap = gap
+        pictures = PictureShelf(backend: backend, web: web)
+        pictures.onChange = { [weak self] in self?.refresh() }
     }
 
     var threadsHeld: Int { transcripts.count }
@@ -440,7 +446,7 @@ final class ChannelFeed {
         // Only what this build asks about is kept, so replies that have gone don't stay in memory.
         var said: [String: String?] = [:]
         defer { self.said = said }
-        return ChannelBook.build(
+        var book = ChannelBook.build(
             kittens: kittens(),
             threads: unreadNew.isEmpty ? threads : threads.filter { !unreadNew.contains($0.id) },
             transcripts: transcripts,
@@ -470,5 +476,7 @@ final class ChannelFeed {
                 return words
             }
         )
+        pictures.fill(&book)
+        return book
     }
 }

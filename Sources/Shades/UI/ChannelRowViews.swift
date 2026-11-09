@@ -438,7 +438,10 @@ final class MessageRowView: ChannelRowView {
     private static let widest: CGFloat = 0.7
     static let stillGoingAlpha = 0.55
     private static let pictureSide: CGFloat = 180
+    /// Each of several pictures, cut square.
+    private static let tileSide: CGFloat = 110
     private static let fileHeight: CGFloat = 36
+    private static let fileGap: CGFloat = 4
 
     var onOpen: (() -> Void)?
     var onReply: (() -> Void)?
@@ -448,6 +451,8 @@ final class MessageRowView: ChannelRowView {
     var onTryAgain: (() -> Void)?
     /// Puts a reaction on it or takes it off, only on one T3 has. It's a mark, and says nothing to anyone.
     var onReact: ((Reaction) -> Void)?
+    /// A web picture pressed, which only shows its address until you press Show.
+    var onShowPicture: ((URL) -> Void)?
     /// Opens its thread: a parent, or a reply also sent to the channel.
     var onPress: (() -> Void)?
     /// Makes it, and everything after it in its thread, new to you again.
@@ -473,9 +478,13 @@ final class MessageRowView: ChannelRowView {
     /// A Copy on each code block.
     private(set) var codeButtons: [QuietButton] = []
     private(set) var bubble = NSRect.zero
-    /// A file or picture that came with it, under its words.
-    private var fileFrame = NSRect.zero
-    private lazy var picture: NSImage? = message.file?.thumbnail.flatMap(NSImage.init(data:))
+    /// The files and pictures that came with it, or that its words point at, under its words.
+    private var fileFrames: [NSRect] = []
+    private lazy var pictures: [NSImage?] = message.files.map { $0.thumbnail.flatMap(NSImage.init(data:)) }
+    /// A web picture waiting on Show is a button of its own.
+    private var webButtons: [Int: QuietButton] = [:]
+    /// The web pictures it shows that are waiting on Show.
+    var webPictures: [URL] { message.files.compactMap { $0.thumbnail == nil ? $0.source?.webAddress : nil } }
     private var failureTop: CGFloat = 0
     private var replyBarFrame = NSRect.zero
     private var headTop: CGFloat { context == nil ? Self.pad : Self.pad + Self.contextHeight }
@@ -500,7 +509,7 @@ final class MessageRowView: ChannelRowView {
     override func accessibilityLabel() -> String? {
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
         let reactions = message.reactions?.map(\.emoji).joined(separator: " ")
-        return [context, look.name, time, said, message.file.map { CatWords.attached($0.name) }, message.failure, reactions.flatMap { $0.isEmpty ? nil : $0 }, replyBar?.accessibilityWords(now: Date())].compactMap { $0 }.joined(separator: ", ")
+        return ([context, look.name, time, said] + message.files.map { CatWords.attached($0.name) } + [message.failure, reactions.flatMap { $0.isEmpty ? nil : $0 }, replyBar?.accessibilityWords(now: Date())]).compactMap { $0 }.joined(separator: ", ")
     }
 
     override var isPressable: Bool { onPress != nil }
@@ -666,18 +675,8 @@ final class MessageRowView: ChannelRowView {
         } else {
             bubble = NSRect(x: look.isYou ? right : Self.textLeft, y: bottom, width: 0, height: 0)
         }
-        if let file = message.file {
-            var size = NSSize(width: min(Self.fileWidth(file.name), room + Self.insetX * 2), height: Self.fileHeight)
-            if let picture, picture.size.width > 0, picture.size.height > 0 {
-                let scale = min(Self.pictureSide / picture.size.width, Self.pictureSide / picture.size.height)
-                size = NSSize(width: floor(picture.size.width * scale), height: floor(picture.size.height * scale))
-            }
-            let top = bottom + (words == nil ? 0 : 4)
-            fileFrame = NSRect(x: look.isYou ? right - size.width : Self.textLeft, y: top, width: size.width, height: size.height)
-            bottom = fileFrame.maxY
-        } else {
-            fileFrame = .zero
-        }
+        layOutFiles(top: bottom + (words == nil ? 0 : 4), room: room + Self.insetX * 2, right: right)
+        if let lowest = fileFrames.map(\.maxY).max() { bottom = lowest }
         if let failure {
             failure.fit(width: room + Self.insetX * 2)
             failureTop = bottom + (words == nil ? 0 : 4)
@@ -771,7 +770,7 @@ final class MessageRowView: ChannelRowView {
             (message.isStillGoing || message.isSending ? look.fill(fadedTo: Self.stillGoingAlpha) : fill).setFill()
             NSBezierPath(roundedRect: bubble, xRadius: radius, yRadius: radius).fill()
         }
-        if let file = message.file, fileFrame.width > 0 { drawFile(file) }
+        for (index, frame) in fileFrames.enumerated() where webButtons[index] == nil { drawFile(message.files[index], picture: pictures[index], in: frame) }
     }
 
     private static var fileFont: NSFont { MessagesInk.font(ofSize: 13) }
@@ -780,13 +779,57 @@ final class MessageRowView: ChannelRowView {
         ceil(NSAttributedString(string: name, attributes: [.font: fileFont]).size().width) + 46
     }
 
-    /// A picture as itself, and any other file as its mark and name.
-    private func drawFile(_ file: ChannelFile) {
+    /// Left to right, onto as many lines as they need: one picture as itself, several as squares, and anything else
+    /// as its name. A web picture waiting on Show is a button that asks first.
+    private func layOutFiles(top: CGFloat, room: CGFloat, right: CGFloat) {
+        let several = pictures.compactMap { $0 }.count > 1
+        var lines: [[(index: Int, size: NSSize)]] = []
+        var lineWidth: CGFloat = 0
+        for (index, file) in message.files.enumerated() {
+            var size = NSSize(width: min(Self.fileWidth(file.name), room), height: Self.fileHeight)
+            if let picture = pictures[index], picture.size.width > 0, picture.size.height > 0 {
+                let scale = min(Self.pictureSide / picture.size.width, Self.pictureSide / picture.size.height)
+                size = several ? NSSize(width: Self.tileSide, height: Self.tileSide) : NSSize(width: floor(picture.size.width * scale), height: floor(picture.size.height * scale))
+            } else if let link = file.source?.webAddress {
+                let button = webButtons[index] ?? QuietButton(file.couldntShow ? "\(file.name) · \(CatWords.couldntShow)" : "🖼 \(CatWords.pictureFrom(link.host ?? ""))") { [weak self] in
+                    self?.onShowPicture?(link)
+                }
+                if button.superview == nil { addSubview(button) }
+                webButtons[index] = button
+                size = NSSize(width: min(button.frame.width, room), height: button.frame.height)
+            }
+            if lines.isEmpty || lineWidth + Self.fileGap + size.width > room {
+                lines.append([])
+                lineWidth = -Self.fileGap
+            }
+            lines[lines.count - 1].append((index, size))
+            lineWidth += Self.fileGap + size.width
+        }
+        fileFrames = Array(repeating: .zero, count: message.files.count)
+        var y = top
+        for line in lines {
+            let width = line.map(\.size.width).reduce(0, +) + Self.fileGap * CGFloat(line.count - 1)
+            var x = look.isYou ? right - width : Self.textLeft
+            for (index, size) in line {
+                fileFrames[index] = NSRect(x: x, y: y, width: size.width, height: size.height)
+                webButtons[index]?.frame = fileFrames[index]
+                x += size.width + Self.fileGap
+            }
+            y += (line.map(\.size.height).max() ?? 0) + Self.fileGap
+        }
+    }
+
+    /// A picture as itself, cut square when it's one of several, and any other file as its mark and name.
+    private func drawFile(_ file: ChannelFile, picture: NSImage?, in fileFrame: NSRect) {
         let shape = NSBezierPath(roundedRect: fileFrame, xRadius: 10, yRadius: 10)
         if let picture {
             NSGraphicsContext.saveGraphicsState()
             shape.addClip()
-            picture.draw(in: fileFrame, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            let size = picture.size
+            let fill = max(fileFrame.width / max(size.width, 1), fileFrame.height / max(size.height, 1))
+            let cut = NSSize(width: fileFrame.width / fill, height: fileFrame.height / fill)
+            let from = NSRect(x: (size.width - cut.width) / 2, y: (size.height - cut.height) / 2, width: cut.width, height: cut.height)
+            picture.draw(in: fileFrame, from: from, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
             NSGraphicsContext.restoreGraphicsState()
             return
         }
@@ -794,7 +837,7 @@ final class MessageRowView: ChannelRowView {
         shape.fill()
         MessagesInk.line.setStroke()
         shape.stroke()
-        let mark = NSImage(systemSymbolName: "doc.fill", accessibilityDescription: nil)?.withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
+        let mark = NSImage(systemSymbolName: file.source == nil ? "doc.fill" : "photo", accessibilityDescription: nil)?.withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
         mark?.isTemplate = true
         if let mark {
             let tinted = NSImage(size: mark.size, flipped: false) { rect in

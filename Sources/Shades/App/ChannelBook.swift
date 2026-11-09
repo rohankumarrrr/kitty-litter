@@ -40,8 +40,8 @@ struct ChannelMessage: Equatable, Identifiable {
     var earlierNotes = 0
     var isStillGoing = false
     var failure: String?
-    /// A file or picture that came with it.
-    var file: ChannelFile?
+    /// The files or pictures that came with it, or that its words point at.
+    var files: [ChannelFile] = []
     /// Yours, on its way, until T3 has it.
     var isSending = false
     /// Your reactions, kept by T3's ID for it, so `nil` for one T3 doesn't have, or that's said nothing yet, which
@@ -50,13 +50,17 @@ struct ChannelMessage: Equatable, Identifiable {
 
     var id: String { "\(exchangeID):\(kind.rawValue)" }
     /// Yours, and it went nowhere. One with a file has to be sent again by hand, since the file isn't kept.
-    var canTryAgain: Bool { speaker == .you && failure != nil && file == nil }
+    var canTryAgain: Bool { speaker == .you && failure != nil && files.isEmpty }
 }
 
-/// A file or picture on a message: its name, and for a picture you sent while Shades has been running, a small copy.
+/// A file or picture on a message: its name, a small copy of a picture once there is one, and where that copy comes
+/// from when it isn't here yet.
 struct ChannelFile: Equatable {
     var name: String
     var thumbnail: Data?
+    var source: PictureSource?
+    /// A web picture you pressed Show on that didn't come.
+    var couldntShow = false
 }
 
 /// One T3 session, the way Slack shows a thread: the message that started it, then every reply, oldest first.
@@ -348,9 +352,20 @@ struct ChannelBook: Equatable {
             }
             if let index = thread.messages.firstIndex(where: { !claimed.contains($0.id) && isEcho(of: message, $0) }) {
                 claimed.insert(thread.messages[index].id)
-                // T3 keeps the file but not a picture of it, so the one shown meanwhile stays while Shades runs.
-                if thread.messages[index].file?.name == message.file?.name, thread.messages[index].file?.thumbnail == nil {
-                    thread.messages[index].file = message.file
+                // The pictures shown meanwhile stay while Shades runs, rather than wait for T3's copies, each for the one
+                // in the same place among those of its name, since every photo from a phone's camera can share one.
+                var shown: [String: [Data?]] = [:]
+                for file in message.files { shown[file.name, default: []].append(file.thumbnail) }
+                var seen: [String: Int] = [:]
+                var files = thread.messages[index].files
+                for file in files.indices {
+                    let place = seen[files[file].name, default: 0]
+                    seen[files[file].name] = place + 1
+                    guard files[file].thumbnail == nil, let same = shown[files[file].name], same.indices.contains(place) else { continue }
+                    files[file].thumbnail = same[place]
+                }
+                if files != thread.messages[index].files {
+                    thread.messages[index].files = files
                     gathered[message.threadID] = thread
                 }
                 let echo = thread.messages[index]
@@ -484,7 +499,7 @@ struct ChannelBook: Equatable {
         let talkingToItself = asker == replier
         var messages: [ChannelMessage] = []
         if let ask = exchange.ask, !talkingToItself {
-            messages.append(ChannelMessage(exchangeID: exchange.id, kind: .ask, speaker: asker, text: ask, at: exchange.askedAt, threadID: threadID, threadTitle: title, file: exchange.file.map { ChannelFile(name: $0) }))
+            messages.append(ChannelMessage(exchangeID: exchange.id, kind: .ask, speaker: asker, text: ask, at: exchange.askedAt, threadID: threadID, threadTitle: title, files: files(of: exchange)))
         }
         if exchange.reply != nil || exchange.failure != nil || (isStillGoing && !talkingToItself) {
             messages.append(ChannelMessage(
@@ -497,7 +512,8 @@ struct ChannelBook: Equatable {
                 threadTitle: title,
                 earlierNotes: exchange.earlierNotes,
                 isStillGoing: isStillGoing,
-                failure: exchange.failure
+                failure: exchange.failure,
+                files: exchange.reply.map { pictures(in: $0, threadID: threadID) } ?? []
             ))
         }
         return messages
@@ -505,10 +521,22 @@ struct ChannelBook: Equatable {
 
     /// Read from T3, so it takes your reactions by T3's ID for it, once it's said something.
     private static func reacted(_ message: ChannelMessage, _ reactions: [String: [Reaction]]) -> ChannelMessage {
-        guard message.text != nil || message.file != nil else { return message }
+        guard message.text != nil || !message.files.isEmpty else { return message }
         var message = message
         message.reactions = reactions[message.id] ?? []
         return message
+    }
+
+    private static func files(of exchange: Exchange) -> [ChannelFile] {
+        exchange.files.map { ChannelFile(name: $0.name, source: $0.attachmentID.map(PictureSource.sent)) }
+    }
+
+    /// The pictures a reply points at. It's untrusted, so a path is only ever asked of T3 as one in the thread's own
+    /// folder, which T3 keeps it to, and a web address waits until you've seen it and pressed Show.
+    static func pictures(in reply: String, threadID: String) -> [ChannelFile] {
+        Markup.pictures(in: reply).compactMap { picture in
+            PictureSource(picture.url, inThread: threadID).map { ChannelFile(name: picture.name, source: $0) }
+        }
     }
 
     /// Each page of older posts you've scrolled back to shows as many again.
@@ -528,7 +556,7 @@ struct ChannelBook: Equatable {
             let isStillGoing = thread.status.isActive && index == exchanges.count - 1
             var messages: [ChannelMessage] = []
             if exchange.asker == .you, let ask = exchange.ask {
-                messages.append(ChannelMessage(exchangeID: exchange.id, kind: .ask, speaker: .you, text: ask, at: exchange.askedAt, threadID: thread.id, threadTitle: thread.title, file: exchange.file.map { ChannelFile(name: $0) }))
+                messages.append(ChannelMessage(exchangeID: exchange.id, kind: .ask, speaker: .you, text: ask, at: exchange.askedAt, threadID: thread.id, threadTitle: thread.title, files: files(of: exchange)))
             }
             // A reply still being written is read the way the bubble reads it, so a half-written marker never shows.
             let reply = exchange.reply.flatMap { isStillGoing ? saidSoFar($0) : said($0) }
@@ -657,6 +685,28 @@ extension ChannelBook {
     }
 
     /// A message it shows, by `ChannelMessage.id`.
+    /// Changes every message, wherever it shows: in its thread, on its own in a channel, or also sent to one.
+    mutating func eachMessage(_ change: (inout ChannelMessage) -> Void) {
+        for id in threads.keys {
+            change(&threads[id]!.parent)
+            for index in threads[id]!.replies.indices { change(&threads[id]!.replies[index]) }
+        }
+        for channel in channels.indices {
+            for post in channels[channel].posts.indices {
+                switch channels[channel].posts[post] {
+                case .message(var message):
+                    change(&message)
+                    channels[channel].posts[post] = .message(message)
+                case .alsoSent(var message, let thread):
+                    change(&message)
+                    channels[channel].posts[post] = .alsoSent(message, thread: thread)
+                case .thread:
+                    break
+                }
+            }
+        }
+    }
+
     func message(_ id: String) -> ChannelMessage? {
         let loose = channels.flatMap(\.posts).compactMap { post -> ChannelMessage? in
             if case .message(let message) = post { message } else { nil }

@@ -1184,7 +1184,7 @@ final class FlowTests: XCTestCase {
     private let syllabus = ScreenSnapshot(
         url: URL(fileURLWithPath: "/files/syllabus.pdf"),
         pageText: "Week 1: Describing data",
-        droppedName: "syllabus.pdf"
+        droppedNames: ["syllabus.pdf"]
     )
 
     private func drop(_ question: String) async {
@@ -4246,18 +4246,44 @@ final class FlowTests: XCTestCase {
         backend.origins["s"] = ThreadOrigin(title: thread.title, projectPath: thread.projectPath, startedBy: .person)
         controller.threadsChanged([thread])
         controller.channelsPressed()
-        controller.messagesAction(.send("Like this?", to: .thread(id: "s", title: "Tidy the site"), shownIn: .of(steve), file: picture))
+        controller.messagesAction(.send("Like this?", to: .thread(id: "s", title: "Tidy the site"), shownIn: .of(steve), files: [picture]))
         await settle()
         let sent = try XCTUnwrap(backend.sent.last { $0.mode == .forward })
         XCTAssertEqual(sent.threadID, "s")
         XCTAssertEqual(sent.prompt.attachments.count, 1, "the picture")
         XCTAssertTrue(sent.prompt.text.hasPrefix("Like this?"), "your words first")
-        XCTAssertEqual(Prompts.droppedName(in: sent.prompt.text), "keyboard.png")
+        XCTAssertEqual(Prompts.droppedNames(in: sent.prompt.text).first, "keyboard.png")
         let shown = shownBook?.threads["s"]?.messages.last
-        XCTAssertEqual(shown?.file?.name, "keyboard.png")
-        XCTAssertNotNil(shown?.file?.thumbnail, "a small copy shows while Shades runs")
+        XCTAssertEqual(shown?.files.first?.name, "keyboard.png")
+        XCTAssertNotNil(shown?.files.first?.thumbnail, "a small copy shows while Shades runs")
         XCTAssertNil(shown?.failure)
         XCTAssertFalse(log.all.contains("snapshot"), "and nothing looked at the screen")
+    }
+
+    /// Messages took one file a message.
+    func testSeveralFilesGoTogetherInOneMessage() async throws {
+        kittens = [steve]
+        let thread = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/k/steve")
+        backend.origins["s"] = ThreadOrigin(title: thread.title, projectPath: thread.projectPath, startedBy: .person)
+        controller.threadsChanged([thread])
+        controller.channelsPressed()
+        let pdf = try XCTUnwrap(Demo.samplePDF())
+        guard case .bytes(let data, _) = picture else { return XCTFail() }
+        controller.messagesAction(.send("Which fits?", to: .thread(id: "s", title: "Tidy the site"), shownIn: .of(steve), files: [picture, .file(pdf), .bytes(data, name: "desk.png")]))
+        await settle()
+        let sent = try XCTUnwrap(backend.sent.last { $0.mode == .forward })
+        XCTAssertEqual(backend.sent.filter { $0.mode == .forward }.count, 1, "one message")
+        XCTAssertEqual(sent.prompt.attachments.map(\.name), ["keyboard.png", "desk.png"], "each picture by its own name")
+        XCTAssertEqual(Prompts.droppedNames(in: sent.prompt.text), ["keyboard.png", "syllabus.pdf", "desk.png"])
+        XCTAssertTrue(sent.prompt.text.contains("Week 2: Probability"), "and the PDF's text")
+        let shown = try XCTUnwrap(shownBook?.threads["s"]?.messages.last)
+        XCTAssertEqual(shown.files.map(\.name), ["keyboard.png", "syllabus.pdf", "desk.png"])
+        XCTAssertTrue(shown.files.allSatisfy { $0.thumbnail != nil }, "a small copy of each while Shades runs, the PDF's first page too")
+
+        controller.messagesAction(.send("And these?", to: .thread(id: "s", title: "Tidy the site"), shownIn: .of(steve), files: [picture, .bytes(Data("notes".utf8), name: "notes.txt")]))
+        await settle()
+        XCTAssertEqual(backend.sent.filter { $0.mode == .forward }.count, 1, "one it can't read stops them all")
+        XCTAssertEqual(shownBook?.threads["s"]?.messages.last?.failure, CatWords.cantReadThat)
     }
 
     /// A reply that never got to T3 only flashed the cat's bubble, so in Messages it looked delivered.
@@ -4319,12 +4345,12 @@ final class FlowTests: XCTestCase {
         kittens = [pepper]
         controller.threadsChanged([AgentThread(id: "p", title: "Budget", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/k/pepper")])
         controller.channelsPressed()
-        controller.messagesAction(.send("What's this?", to: .thread(id: "p", title: "Budget"), shownIn: .of(pepper), file: picture))
+        controller.messagesAction(.send("What's this?", to: .thread(id: "p", title: "Budget"), shownIn: .of(pepper), files: [picture]))
         await settle()
         XCTAssertTrue(backend.sent.isEmpty, "nothing went, not even your words without it")
         XCTAssertEqual(shownBook?.threads["p"]?.messages.last?.failure, CatWords.cantTakeFiles("Budget"), "and Messages says why, under what you sent")
 
-        controller.messagesAction(.startTopic("And this?", with: pepper, id: "sent-topic", file: picture))
+        controller.messagesAction(.startTopic("And this?", with: pepper, id: "sent-topic", files: [picture]))
         await settle()
         XCTAssertTrue(backend.sent.isEmpty, "nor a new thread with it")
         XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.cantTakeFiles("Pepper"), "and it says why, not just that it didn't start")
@@ -4337,7 +4363,7 @@ final class FlowTests: XCTestCase {
         await messages("What day is it?", to: .router)
         let conversation = controller.messagesQuick.thread(at: clock)
         XCTAssertNotNil(conversation)
-        controller.messagesAction(.send("What's this?", to: .router, shownIn: .general, file: picture))
+        controller.messagesAction(.send("What's this?", to: .router, shownIn: .general, files: [picture]))
         await settle()
         await controller.messagesTurn?.value
         let routed = try XCTUnwrap(backend.sent.last { $0.prompt.text.contains("Their question: What's this?") })
@@ -4350,7 +4376,7 @@ final class FlowTests: XCTestCase {
         fullAccess.quickMode = .fullAccess
         controller.apply(fullAccess)
         let before = backend.sent.count
-        controller.messagesAction(.send("And this?", to: .router, shownIn: .general, file: picture))
+        controller.messagesAction(.send("And this?", to: .router, shownIn: .general, files: [picture]))
         await settle()
         await controller.messagesTurn?.value
         XCTAssertEqual(backend.sent.count, before, "a router with full access gets no file")
@@ -5102,12 +5128,12 @@ final class FlowTests: XCTestCase {
         backend.projects["/k/pepper"] = "project-pepper"
         backend.projects["/k/steve"] = "project-steve"
         controller.channelsPressed()
-        controller.messagesAction(.send("@pepper what's this?", to: .router, shownIn: .general, file: picture))
+        controller.messagesAction(.send("@pepper what's this?", to: .router, shownIn: .general, files: [picture]))
         await settle()
         XCTAssertTrue(backend.sent.isEmpty, "nothing went, not even your words without it")
         XCTAssertEqual(said(in: .general, of: shownBook).first?.failure, CatWords.cantTakeFiles("Pepper"), "and it says why under them")
 
-        controller.messagesAction(.send("@steve-pawsniak what's this?", to: .router, shownIn: .general, file: picture))
+        controller.messagesAction(.send("@steve-pawsniak what's this?", to: .router, shownIn: .general, files: [picture]))
         await settle()
         let sent = try XCTUnwrap(backend.sent.first)
         XCTAssertEqual(sent.prompt.projectID, "project-steve")

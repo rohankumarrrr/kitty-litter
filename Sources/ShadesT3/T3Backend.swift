@@ -307,6 +307,28 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         }
     }
 
+    public func picture(attachmentID: String) async -> Data? {
+        await asset(.attachment(id: attachmentID))
+    }
+
+    public func picture(threadID: String, path: String) async -> Data? {
+        await asset(.workspaceFile(threadID: threadID, path: path))
+    }
+
+    /// Up to the most T3 takes for a picture, and only what says it's one.
+    private func asset(_ resource: T3Wire.Asset) async -> Data? {
+        guard let link: T3Wire.AssetURL = try? await socket.call(T3Wire.Method.createAssetURL, T3Wire.CreateAssetURL(resource: resource)),
+              let origin = try? await auth.currentOrigin(),
+              let url = URL(string: link.relativeUrl, relativeTo: origin),
+              url.host == origin.host, url.port == origin.port,
+              let (data, response) = try? await uploads.data(from: url),
+              let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              http.mimeType?.lowercased().hasPrefix("image/") == true,
+              data.count <= T3Wire.maxImageBytes
+        else { return nil }
+        return data
+    }
+
     // MARK: Beyond the contract
 
     /// Your T3 projects, for binding a thread to one.

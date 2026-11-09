@@ -34,6 +34,15 @@ final class QuietButton: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Says something else from now on, at the size that takes.
+    func retitle(_ word: String) {
+        guard word != title else { return }
+        title = word
+        setFrameSize(NSSize(width: ceil(label.size().width) + (style == .text ? 12 : 22), height: Self.height))
+        setAccessibilityLabel(word)
+        needsDisplay = true
+    }
+
     /// Says something else for a moment, keeping its size.
     func flash(_ word: String) {
         let original = title

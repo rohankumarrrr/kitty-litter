@@ -195,6 +195,16 @@ struct PhoneView: Encodable, Equatable {
         var color: String?
     }
 
+    /// A file or picture on a message: its name, and a small copy of a picture once the Mac has one. A web picture
+    /// that's waiting for you to press Show has its whole address, which is what the page shows before it's fetched.
+    struct File: Encodable, Equatable {
+        var name: String
+        /// Only ever a JPEG Shades made, as base64.
+        var picture: String?
+        var web: String?
+        var failed: Bool?
+    }
+
     struct Box: Encodable, Equatable {
         var label: String
         var placeholder: String
@@ -271,9 +281,8 @@ struct PhoneView: Encodable, Equatable {
         var reply: Reply?
         var more: Int?
         var unread: Bool?
-        /// A file or picture on a message: its name, and for a picture sent while Shades has been running, a small copy.
-        var file: String?
-        var picture: String?
+        /// The files and pictures on a message.
+        var files: [File]?
         /// A message's words as the Mac read them, for the page to build without reading any markdown itself.
         var markup: [Markup.Block]?
         /// Your reactions on a message T3 has, or `nil` for one that can't take any.
@@ -419,8 +428,9 @@ struct PhoneView: Encodable, Equatable {
     private static func message(_ message: ChannelMessage, in book: ChannelBook) -> Row {
         let look = ChannelSpeakerLook(message.speaker, in: book)
         let text = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
-        // A file's name came inside the screen block, so the cat's own work shows only words.
-        let file = book.home(ofThread: message.threadID) == .shades ? nil : message.file
+        // A file's name came inside the screen block, and a picture in the folder the cat's work runs in can be a copy
+        // of the screen, so the cat's own work shows only words.
+        let files = book.home(ofThread: message.threadID) == .shades ? [] : message.files
         return Row(
             kind: "message",
             id: message.id,
@@ -436,9 +446,14 @@ struct PhoneView: Encodable, Equatable {
             sending: message.isSending ? true : nil,
             retry: message.canTryAgain ? true : nil,
             at: millis(message.at),
-            file: file?.name,
-            // Only ever a JPEG Shades made, as base64.
-            picture: file?.thumbnail.map { "data:image/jpeg;base64,\($0.base64EncodedString())" },
+            files: files.isEmpty ? nil : files.map { file in
+                File(
+                    name: file.name,
+                    picture: file.thumbnail.map { "data:image/jpeg;base64,\($0.base64EncodedString())" },
+                    web: file.thumbnail == nil ? file.source?.webAddress?.absoluteString : nil,
+                    failed: file.couldntShow ? true : nil
+                )
+            },
             markup: text.map { Markup($0, pulls: book.pulls).blocks },
             reactions: message.reactions?.map { Choice(label: $0.emoji, value: $0.rawValue) }
         )

@@ -45,18 +45,14 @@ enum PhonePage {
         <main id="found" hidden></main>
         <form id="box" hidden>
           <label id="label" for="words"></label>
-          <div id="attached" hidden>
-            <img id="attachedpicture" alt="">
-            <span id="attachedname"></span>
-            <button id="unattach" type="button" aria-label="Remove attachment">✕</button>
-          </div>
+          <div id="attached" hidden></div>
           <div class="field">
             <button id="attach" class="tool" type="button" aria-label="Attach a photo or file">📎</button>
             <button id="camera" class="tool" type="button" aria-label="Take a photo">📷</button>
             <textarea id="words" rows="1" enterkeyhint="send"></textarea>
             <button id="send" type="submit">Send</button>
           </div>
-          <input id="pick" type="file" accept="image/*,application/pdf" hidden>
+          <input id="pick" type="file" accept="image/*,application/pdf" multiple hidden>
           <input id="snap" type="file" accept="image/*" capture="environment" hidden>
           <label id="alsolabel" hidden><input type="checkbox" id="also"> <span id="alsotext"></span></label>
         </form>
@@ -66,6 +62,7 @@ enum PhonePage {
           <div class="buttons">
             <button id="linkcancel" type="button">Cancel</button>
             <a id="linkopen" class="go" target="_blank" rel="noopener noreferrer">Open</a>
+            <button id="linkshow" class="go" type="button" hidden>Show</button>
           </div>
         </div>
         <section id="pair" hidden>
@@ -186,7 +183,7 @@ enum PhonePage {
         #linktitle { margin: 0; color: var(--soft); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
         #linkaddress { margin: 6px 0 0; font: 14px/1.4 ui-monospace, Menlo, monospace; overflow-wrap: anywhere; overflow-y: auto; min-height: 0; }
         #linksheet .buttons { justify-content: flex-end; }
-        #linksheet .buttons a { background: var(--you); color: var(--on-you); border-radius: 999px; padding: 8px 16px; font-size: 15px; text-decoration: none; }
+        #linksheet .buttons .go { background: var(--you); color: var(--on-you); border-radius: 999px; padding: 8px 16px; font-size: 15px; text-decoration: none; }
         .bubble.cut { max-height: 16.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); }
         .more { color: var(--soft); font-size: 14px; margin: 4px 12px 0; }
         .failure { color: var(--warn); font-size: 13px; margin: 3px 12px 0; }
@@ -252,12 +249,16 @@ enum PhonePage {
         #send { background: var(--you); color: var(--on-you); border-radius: 18px; padding: 8px 14px; font-weight: 600; }
         .tool { font-size: 20px; padding: 6px 2px; line-height: 1; }
         .tool:disabled { opacity: .4; }
-        #attached { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 8px; border-radius: 12px; background: var(--grey); }
-        #attached img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex: none; }
-        #attached img:not([src]) { display: none; }
-        #attachedname { flex: 1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        #unattach { color: var(--soft); padding: 4px 8px; }
-        .picture { max-width: 66%; max-height: 240px; border-radius: 14px; margin-top: 4px; display: block; }
+        #attached { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+        .chip { display: flex; align-items: center; gap: 8px; padding: 6px 4px 6px 8px; border-radius: 12px; background: var(--grey); max-width: 100%; min-width: 0; }
+        .chip img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex: none; }
+        .chip span { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
+        .chip button { color: var(--soft); padding: 4px 8px; }
+        .pictures { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; max-width: 86%; }
+        .mine .pictures { margin-left: auto; justify-content: flex-end; }
+        .picture { max-width: 66%; max-height: 240px; border-radius: 14px; display: block; }
+        .pictures.several .picture { width: 31%; max-width: 120px; height: 96px; object-fit: cover; }
+        .web { color: var(--text); text-align: left; }
         .file { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 8px 12px; border-radius: 12px;
           background: var(--card); border: 1px solid var(--line); font-size: 14px; max-width: 86%; overflow-wrap: anywhere; }
 
@@ -292,6 +293,8 @@ enum PhonePage {
           wrongCode: "That code didn't work. Turn pairing on again in Shades on your Mac for a new one.",
           answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied',
           openLink: (host) => 'Open a link to ' + host + '?',
+          showPicture: (host) => 'Show a picture from ' + host + '?', pictureFrom: (host) => '🖼 Picture from ' + host,
+          couldntShow: "Couldn't show it.", tooMany: 'One message takes up to 10 files.',
           several: 'Pick as many as you like.',
           sending: 'Sending...', retry: 'Try again',
           notifyAsk: 'Get a notification when something needs you.',
@@ -858,13 +861,24 @@ enum PhonePage {
             }
           }
           if (yours) said.append(you());
-          if (item.picture) {
-            const picture = el('img', 'picture');
-            picture.src = item.picture;
-            picture.alt = item.file || '';
-            node.append(picture);
-          } else if (item.file) {
-            node.append(el('div', 'file', '📄 ' + item.file));
+          if (item.files) {
+            const pictures = el('div', 'pictures' + (item.files.filter((file) => file.picture).length > 1 ? ' several' : ''));
+            item.files.forEach((file) => {
+              if (file.picture) {
+                const picture = el('img', 'picture');
+                picture.src = file.picture;
+                picture.alt = file.name;
+                pictures.append(picture);
+              } else if (file.web) {
+                // Fetched by the Mac, and only once you've seen the whole address and tapped Show.
+                const host = new URL(file.web).host;
+                const label = file.failed ? file.name + ' · ' + words.couldntShow : words.pictureFrom(host);
+                pictures.append(button(label, () => ask(file.web, () => act({ act: 'picture', id: item.id, value: file.web })), 'file web'));
+              } else {
+                pictures.append(el('div', 'file', '📄 ' + file.name));
+              }
+            });
+            if (pictures.childElementCount) node.append(pictures);
           }
           if (item.failure) node.append(el('div', 'failure', item.failure));
           if (item.retry) {
@@ -971,12 +985,16 @@ enum PhonePage {
           return node;
         }
 
-        // Only Open, a link you tap yourself, goes anywhere.
-        function ask(link) {
-          $('linktitle').textContent = words.openLink(new URL(link).host);
+        // Only Open, a link you tap yourself, goes anywhere, and only Show fetches a picture on the web.
+        let showing = null;
+        function ask(link, show) {
+          showing = show || null;
+          $('linktitle').textContent = show ? words.showPicture(new URL(link).host) : words.openLink(new URL(link).host);
           $('linkaddress').textContent = link;
           $('linkaddress').scrollTop = 0;
-          $('linkopen').href = link;
+          $('linkopen').hidden = !!show;
+          $('linkshow').hidden = !show;
+          if (show) $('linkopen').removeAttribute('href'); else $('linkopen').href = link;
           $('linksheet').hidden = false;
         }
 
@@ -1084,71 +1102,100 @@ enum PhonePage {
         $('link').onclick = () => { if (view && view.link) go(view.link.open); };
         $('linkcancel').onclick = () => { $('linksheet').hidden = true; };
         $('linkopen').onclick = () => { $('linksheet').hidden = true; };
+        $('linkshow').onclick = () => {
+          $('linksheet').hidden = true;
+          if (showing) showing();
+          showing = null;
+        };
 
         $('box').onsubmit = async (event) => {
           event.preventDefault();
           const text = $('words').value.trim();
-          if ((!text && !attached) || uploading) return;
+          if ((!text && !attached.length) || uploading) return;
           $('send').disabled = true;
-          const done = await act({ act: 'send', key, text, also: !$('alsolabel').hidden && $('also').checked, file: attached && attached.id });
+          const done = await act({ act: 'send', key, text, also: !$('alsolabel').hidden && $('also').checked, files: attached.map((file) => file.id) });
           $('send').disabled = false;
           if (!done) return;
           $('words').value = '';
           $('also').checked = false;
-          unattach();
+          // The Mac used them up in sending, so there's nothing to forget.
+          attached = [];
+          chips();
           fit();
           label();
           if (done.open) go(done.open);
         };
 
-        // A photo or file goes to the Mac first, so the message itself stays small. A photo is made smaller here,
-        // since the Mac only ever sends a picture the size of a screenshot.
-        let attached = null;
+        // Photos and files go to the Mac first, one at a time, so the message itself stays small. A photo is made
+        // smaller here, since the Mac only ever sends a picture the size of a screenshot.
+        let attached = [];
         let uploading = false;
         $('attach').onclick = () => $('pick').click();
         $('camera').onclick = () => $('snap').click();
         for (const id of ['pick', 'snap']) {
           $(id).onchange = () => {
-            const file = $(id).files[0];
+            const files = [...$(id).files];
             $(id).value = '';
-            if (file) attach(file);
+            attach(files);
           };
         }
-        $('unattach').onclick = unattach;
         $('words').addEventListener('paste', (event) => {
-          const file = [...(event.clipboardData ? event.clipboardData.files : [])][0];
-          if (!file || !view || !view.box || !view.box.files) return;
+          const files = [...(event.clipboardData ? event.clipboardData.files : [])];
+          if (!files.length || !view || !view.box || !view.box.files) return;
           event.preventDefault();
-          attach(file);
+          attach(files);
         });
 
-        async function attach(file) {
-          const isPicture = file.type.startsWith('image/');
-          if (!isPicture && file.type !== 'application/pdf') return banner(words.cantRead);
+        async function attach(files) {
+          if (!files.length || uploading) return;
+          if (attached.length + files.length > 10) banner(words.tooMany);
           uploading = true;
           $('send').disabled = true;
           try {
-            const blob = isPicture ? await shrink(file) : file;
-            const name = isPicture ? (file.name || 'photo').replace(/\.[^.]*$/, '') + '.jpg' : file.name;
-            if (blob.size > 10 * 1024 * 1024) return banner(words.tooBig);
-            const response = await fetch('/file', {
-              method: 'POST', cache: 'no-store', body: blob,
-              headers: headers({ 'Content-Type': blob.type || 'application/octet-stream', 'X-Shades': '1', 'X-Name': encodeURIComponent(name) }),
-            });
-            if (response.status === 401) return pairing();
-            if (!response.ok) return banner(response.status === 413 ? words.tooBig : words.unreachable);
-            unattach();
-            attached = { id: (await response.json()).id, name, picture: isPicture ? await preview(blob) : null };
-            $('attachedname').textContent = name;
-            if (attached.picture) $('attachedpicture').src = attached.picture; else $('attachedpicture').removeAttribute('src');
-            $('attached').hidden = false;
-            banner('');
+            for (const file of files.slice(0, 10 - attached.length)) {
+              const isPicture = file.type.startsWith('image/');
+              if (!isPicture && file.type !== 'application/pdf') { banner(words.cantRead); continue; }
+              const blob = isPicture ? await shrink(file) : file;
+              const name = isPicture ? (file.name || 'photo').replace(/\.[^.]*$/, '') + '.jpg' : file.name;
+              if (blob.size > 10 * 1024 * 1024) { banner(words.tooBig); continue; }
+              const response = await fetch('/file', {
+                method: 'POST', cache: 'no-store', body: blob,
+                headers: headers({ 'Content-Type': blob.type || 'application/octet-stream', 'X-Shades': '1', 'X-Name': encodeURIComponent(name) }),
+              });
+              if (response.status === 401) return pairing();
+              if (!response.ok) { banner(response.status === 413 ? words.tooBig : words.unreachable); continue; }
+              attached.push({ id: (await response.json()).id, name, picture: isPicture ? await preview(blob) : null });
+              chips();
+            }
           } catch (error) {
             banner(words.unreachable);
           } finally {
             uploading = false;
             $('send').disabled = !(view && view.box && view.box.ready);
           }
+        }
+
+        // What's attached, over the box: each with a small picture or its name, and ✕ to take it off.
+        function chips() {
+          $('attached').replaceChildren(...attached.map((file) => {
+            const chip = el('div', 'chip');
+            if (file.picture) {
+              const picture = el('img');
+              picture.src = file.picture;
+              picture.alt = '';
+              chip.append(picture);
+            }
+            chip.append(el('span', null, file.name));
+            const remove = button('✕', () => {
+              attached = attached.filter((other) => other !== file);
+              chips();
+              forget([file]);
+            });
+            remove.setAttribute('aria-label', 'Remove ' + file.name);
+            chip.append(remove);
+            return chip;
+          }));
+          $('attached').hidden = !attached.length;
         }
 
         function preview(blob) {
@@ -1161,9 +1208,14 @@ enum PhonePage {
         }
 
         function unattach() {
-          attached = null;
-          $('attached').hidden = true;
-          $('attachedpicture').removeAttribute('src');
+          forget(attached);
+          attached = [];
+          chips();
+        }
+
+        // The Mac keeps only so many, so what's taken off goes there too, or it could push out one still attached.
+        function forget(files) {
+          for (const file of files) post('/act', { act: 'unattach', id: file.id });
         }
 
         async function shrink(file) {

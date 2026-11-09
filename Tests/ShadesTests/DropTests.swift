@@ -34,7 +34,7 @@ final class DropTests: XCTestCase {
     func testAPDFGivesItsTextAndWhereItIs() throws {
         let pdf = try XCTUnwrap(Demo.samplePDF())
         let snapshot = try XCTUnwrap(Drop.file(pdf).snapshot())
-        XCTAssertEqual(snapshot.droppedName, "syllabus.pdf")
+        XCTAssertEqual(snapshot.droppedNames.first, "syllabus.pdf")
         XCTAssertEqual(snapshot.url, pdf)
         XCTAssertTrue(snapshot.pageText?.contains("Week 2: Probability") == true)
         XCTAssertNil(snapshot.screenshotJPEG)
@@ -44,7 +44,7 @@ final class DropTests: XCTestCase {
     func testAPictureComesAsAJPEGNoBiggerThanAScreenshot() throws {
         let picture = try png(width: 4000, height: 1000, named: "wide.png")
         let snapshot = try XCTUnwrap(Drop.file(picture).snapshot())
-        XCTAssertEqual(snapshot.droppedName, "wide.png")
+        XCTAssertEqual(snapshot.droppedNames.first, "wide.png")
         let jpeg = try XCTUnwrap(snapshot.screenshotJPEG)
         let source = try XCTUnwrap(CGImageSourceCreateWithData(jpeg as CFData, nil))
         XCTAssertEqual(CGImageSourceGetType(source) as String?, UTType.jpeg.identifier)
@@ -55,14 +55,14 @@ final class DropTests: XCTestCase {
 
     func testAPictureWithNoExtensionIsStillRead() throws {
         let picture = try png(width: 10, height: 10, named: "Screenshot")
-        XCTAssertEqual(try XCTUnwrap(Drop.file(picture).snapshot()).droppedName, "Screenshot")
+        XCTAssertEqual(try XCTUnwrap(Drop.file(picture).snapshot()).droppedNames.first, "Screenshot")
     }
 
     func testALinkIsOnlyItsAddress() throws {
         let link = try XCTUnwrap(URL(string: "https://jobs.example.com/listing/123"))
         let snapshot = try XCTUnwrap(Drop.link(link).snapshot())
         XCTAssertEqual(snapshot.url, link)
-        XCTAssertEqual(snapshot.droppedName, "jobs.example.com")
+        XCTAssertEqual(snapshot.droppedNames.first, "jobs.example.com")
         XCTAssertNil(snapshot.pageText)
         XCTAssertNil(snapshot.screenshotJPEG)
     }

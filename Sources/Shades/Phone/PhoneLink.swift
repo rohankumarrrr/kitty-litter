@@ -48,7 +48,7 @@ final class PhoneLink {
     private var files: [String: (file: Drop, at: Date)] = [:]
     /// What Search has read of messages' words, while a phone is looking.
     private var plainWords = PlainWords()
-    private static let filesKept = 6
+    private static let filesKept = Drop.mostAtOnce
     private static let fileMinutes: TimeInterval = 10
 
     init(
@@ -231,9 +231,14 @@ final class PhoneLink {
 
     private func perform(_ request: PhoneServer.Request) -> PhoneServer.Response {
         guard Self.isFromPage(request), let ask = try? JSONDecoder().decode(PhoneAsk.self, from: request.body) else { return .status(400) }
+        // A photo or file taken off before sending goes now, so it can't push out one still attached.
+        if ask.act == "unattach" {
+            if let id = ask.id { files[id] = nil }
+            return .status(204)
+        }
         // Messages is only open while a phone is looking, and what's done is checked against what it shows.
         guard let book, let (action, opens) = ask.action(in: book, newTopic: { "sent-\(UUID().uuidString)" }, file: { [files] in files[$0]?.file }) else { return .status(409) }
-        if let id = ask.file { files[id] = nil }
+        for id in ask.files ?? [] { files[id] = nil }
         act(action)
         return .json(Opened(open: opens))
     }

@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -22,6 +23,7 @@ import ShadesT3
 //   probe-t3 report <thread>   how fast a thread's last report can be read, and how long it is
 //   probe-t3 router     what the router decides for made-up kittens and sessions, and nothing past that
 //   probe-t3 search <words>   how many threads T3's search names for those words, and how fast, and nothing they say
+//   probe-t3 picture [<thread> <path>]   a made-up picture sent and read back as after a restart, or a picture in a thread's folder
 
 let sol = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "low")
 let clock = ContinuousClock()
@@ -724,6 +726,40 @@ func probeSearch() async throws {
     await backend.disconnect()
 }
 
+/// With a path, asks T3 for that picture in the thread's own folder, which T3 should refuse for anything outside it.
+/// With none, sends a made-up picture to a new test thread, reads it back as T3 keeps it after a restart, and fetches
+/// its copy. Prints only sizes, never what's in a picture.
+func probePicture() async throws {
+    let backend = makeBackend()
+    try await backend.connect()
+    func describe(_ data: Data?) -> String {
+        guard let data else { return "T3 wouldn't give it" }
+        guard let image = NSBitmapImageRep(data: data) else { return "\(data.count) bytes that aren't a picture" }
+        return "\(data.count) bytes, \(image.pixelsWide)×\(image.pixelsHigh)"
+    }
+    if CommandLine.arguments.count > 3 {
+        let (thread, path) = (CommandLine.arguments[2], CommandLine.arguments[3])
+        say("\(path): \(describe(await backend.picture(threadID: thread, path: path)))")
+        await backend.signOut()
+        return await backend.disconnect()
+    }
+    let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 48, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    let made = AgentAttachment(name: "made-up.png", mimeType: "image/png", data: bitmap.representation(using: .png, properties: [:])!)
+    let snapshot = ScreenSnapshot(droppedNames: ["made-up.png", "notes.pdf"], pictures: [made])
+    let text = Prompts.forwarded(words: "This is a test. Reply with exactly: ok", snapshot: snapshot, screenshotPath: nil, screenLeftOut: false)
+    let (threadID, _) = try await runTurn(backend.start(prompt("attachments", text, attachments: [made])))
+    let files = await backend.exchanges(threadID: threadID)?.first?.files ?? []
+    say("read back: \(files.map { "\($0.name)\($0.attachmentID == nil ? "" : " with T3's copy")" }.joined(separator: ", "))")
+    for file in files {
+        guard let id = file.attachmentID else { continue }
+        say("\(file.name): \(describe(await backend.picture(attachmentID: id)))")
+    }
+    try? await backend.archive(threadID: threadID)
+    say("archived \(threadID)")
+    await backend.signOut()
+    await backend.disconnect()
+}
+
 /// What a router's reply can come to, below any correction lines.
 enum RouterRest: String {
     case nothing
@@ -868,6 +904,7 @@ let probes: [String: () async throws -> Void] = [
     "origin": probeOrigin,
     "router": probeRouter,
     "search": probeSearch,
+    "picture": probePicture,
 ]
 
 guard let name = CommandLine.arguments.dropFirst().first, let probe = probes[name] else {

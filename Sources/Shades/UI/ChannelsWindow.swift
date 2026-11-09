@@ -104,6 +104,8 @@ final class ChannelsView: QuietView {
     var onAction: ((MessagesAction) -> Void)? { didSet { panes.forEach { $0.onAction = onAction } } }
     var onOpenLink: ((URL) -> Void)? { didSet { panes.forEach { $0.onOpenLink = onOpenLink } } }
     var onShowOnPhone: ((String) -> Void)? { didSet { panes.forEach { $0.onShowOnPhone = onShowOnPhone } } }
+    /// Attach in a box, which offers recent files.
+    var onAttach: ((ChannelComposer, NSView) -> Void)? { didSet { panes.forEach { $0.onAttach = onAttach } } }
 
     private var panes: [ChannelPane] { [pane, threadPane] }
 
@@ -242,7 +244,7 @@ final class ChannelsView: QuietView {
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         if themeFile(in: sender) != nil { return .copy }
-        return Drop(sender.draggingPasteboard)?.isFile == true && box(for: sender) != nil ? .copy : []
+        return Drop.all(sender.draggingPasteboard).contains(where: \.isFile) && box(for: sender) != nil ? .copy : []
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -254,8 +256,8 @@ final class ChannelsView: QuietView {
             onDropTheme?(file)
             return true
         }
-        guard let drop = Drop(sender.draggingPasteboard), let box = box(for: sender) else { return false }
-        return box.attach(drop)
+        guard let box = box(for: sender) else { return false }
+        return box.attach(Drop.all(sender.draggingPasteboard))
     }
 
     override func draw(_ dirtyRect: NSRect) {

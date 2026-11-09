@@ -31,7 +31,7 @@ enum CatWords {
     static func shortcutTaken(_ label: String) -> String { "Another app has \(label), so use the menu bar for that one." }
 
     static func looking(at snapshot: ScreenSnapshot) -> String? {
-        guard let app = snapshot.droppedName ?? snapshot.appName else { return nil }
+        guard let app = snapshot.droppedNames.first ?? snapshot.appName else { return nil }
         return "Looking at \(app)"
     }
 
@@ -40,6 +40,10 @@ enum CatWords {
     static let cantReadThat = "I can only read PDFs, pictures and links."
     static let answersTakeNoFiles = "An answer to a question can only be words."
     static let removeAttachment = "Remove attachment"
+    static let attach = "Attach"
+    static let attachRecent = "Attach a recent file"
+    static let noRecentFiles = "No recent pictures or PDFs"
+    static let dropAFile = "Or drop one onto the box"
     static let aFile = "a file"
     static func attached(_ name: String) -> String { "Attached: \(name)" }
     static func cantTakeFiles(_ name: String) -> String {
@@ -233,6 +237,10 @@ enum CatWords {
     static func pullRequest(_ pullRequest: ThreadPullRequest) -> String { "PR #\(pullRequest.number) \(pullRequest.state)" }
     static func openLink(to host: String) -> String { "Open a link to \(host)?" }
     static let openLink = "Open"
+    static func showPicture(from host: String) -> String { "Show a picture from \(host)?" }
+    static let showPicture = "Show"
+    static func pictureFrom(_ host: String) -> String { "Picture from \(host)" }
+    static let couldntShow = "Couldn't show it"
 
     static func day(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
         if calendar.isDate(date, inSameDayAs: now) { return "Today" }

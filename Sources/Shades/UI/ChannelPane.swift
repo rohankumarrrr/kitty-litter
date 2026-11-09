@@ -207,6 +207,8 @@ final class ChannelPane: QuietView {
     /// Flips whether a thread of the cat's own work shows on your phone. It's apart from `onAction`, which is all a
     /// phone can reach, so only you on the Mac can flip it.
     var onShowOnPhone: ((String) -> Void)?
+    /// Attach in the box, which offers recent files.
+    var onAttach: ((ChannelComposer, NSView) -> Void)?
     var parts = PartAnswers()
 
     private let now: () -> Date = Date.init
@@ -262,6 +264,10 @@ final class ChannelPane: QuietView {
             self?.showLink(nil)
             if Markup.opens(link) { self?.onOpenLink?(link) }
         }
+        linkBar.onShowPicture = { [weak self] link in
+            self?.showLink(nil)
+            self?.onAction?(.showPicture(link))
+        }
         linkBar.onCancel = { [weak self] in self?.showLink(nil) }
         header.onIssues = { [weak self] in self?.onSelect?(.activity) }
         header.onClose = { [weak self] in self?.onClose?() }
@@ -274,7 +280,7 @@ final class ChannelPane: QuietView {
             guard let self, let id = self.selection.thread else { return }
             self.onShowOnPhone?(id)
         }
-        composer.onSend = { [weak self] words, target, file in
+        composer.onSend = { [weak self] words, target, files in
             guard let self else { return }
             switch target {
             case .question(let question):
@@ -288,21 +294,25 @@ final class ChannelPane: QuietView {
                 // The new thread opens in the pane, and the keyboard goes with it if you were typing.
                 let topic = "sent-\(UUID().uuidString)"
                 let typing = self.window?.firstResponder === self.composer.textView
-                self.onAction?(.startTopic(words, with: kitten, id: topic, file: file))
+                self.onAction?(.startTopic(words, with: kitten, id: topic, files: files))
                 self.onOpen?(topic, nil, typing, nil)
             case .thread(let id, _, _):
                 let alsoSent = self.composer.alsoSends
                 self.composer.alsoSends = false
-                self.onAction?(.send(words, to: target, shownIn: self.book?.home(ofThread: id), alsoSent: alsoSent, file: file))
+                self.onAction?(.send(words, to: target, shownIn: self.book?.home(ofThread: id), alsoSent: alsoSent, files: files))
                 self.updateComposer()
                 self.arrange(force: true)
             default:
-                self.onAction?(.send(words, to: target, shownIn: self.selection.channelID, file: file))
+                self.onAction?(.send(words, to: target, shownIn: self.selection.channelID, files: files))
                 self.updateComposer()
                 self.arrange(force: true)
             }
         }
         composer.onResize = { [weak self] in self?.typed() }
+        composer.onAttach = { [weak self] anchor in
+            guard let self else { return }
+            self.onAttach?(self.composer, anchor)
+        }
         scroll.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
     }
@@ -442,8 +452,14 @@ final class ChannelPane: QuietView {
         showLink(link)
     }
 
-    private func showLink(_ link: URL?) {
-        linkBar.show(link)
+    /// A web picture pressed in one of this pane's messages. The bar shows its whole address, and only Show fetches it.
+    func ask(toShowPicture link: URL) {
+        guard Markup.opens(link) else { return NSSound.beep() }
+        showLink(link, picture: true)
+    }
+
+    private func showLink(_ link: URL?, picture: Bool = false) {
+        linkBar.show(link, picture: picture)
         arrange()
     }
 
@@ -599,7 +615,7 @@ final class ChannelPane: QuietView {
             return
         }
         composer.textView.string = ""
-        composer.onSend?(words, spot.target, composer.takeAttachment())
+        composer.onSend?(words, spot.target, composer.takeAttachments())
         arrange(force: true)
     }
 
@@ -747,6 +763,7 @@ final class ChannelPane: QuietView {
         view.onCopy = { [weak self] in self?.onCopy?($0) }
         if message.canTryAgain { view.onTryAgain = { [weak self] in self?.onAction?(.tryAgain(message.exchangeID)) } }
         if message.reactions != nil { view.onReact = { [weak self] in self?.onAction?(.react(message.id, $0)) } }
+        view.onShowPicture = { [weak self] in self?.ask(toShowPicture: $0) }
         view.onShowMore = { [weak self, weak view] in
             self?.expanded.insert(message.id)
             view?.isExpanded = true

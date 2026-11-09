@@ -18,13 +18,13 @@ If T3 goes away, the client keeps trying, and backs off to one try every 5 secon
 ## Sign-in
 
 ```
-t3 auth session issue --scope orchestration:read --scope orchestration:operate --ttl 30d --label Shades --json
+t3 auth session issue --scope orchestration:read --scope orchestration:operate --scope filesystem:read --ttl 30d --label Shades --json
 ```
 
-This is T3's documented way to sign in a headless client. It needs no clicks, because anyone who can run it as this user already has this access. It takes about 0.8 s, and only happens on the first run and when renewing.
+This is T3's documented way to sign in a headless client. It needs no clicks, because anyone who can run it as this user already has this access. It takes about 0.8 s, and only happens on the first run and when renewing. `filesystem:read` is only for a picture a reply points at in its thread's folder, which `assets.createUrl` won't hand out without it. A saved session without it isn't usable, so the first launch that wants it signs in again and revokes the old one.
 
 - The token goes in the login Keychain under service `dev.shades.t3-session`, with the session ID as the account. It's never logged or written anywhere else.
-- A saved token is checked with `GET /api/auth/session` on each connect.
+- A saved token is checked with `GET /api/auth/session` on each connect. Its `scopes` lists only T3's older scopes, so the check reads `permissions`, which lists them all, `filesystem:read` included. `probe-t3 keychain` shows a second launch reusing the first one's session.
 - With 7 days left, the client signs in again and revokes the old session. If the server answers 401 on reconnect, it does the same.
 - The session shows up as "Shades" in T3's list of connections.
 
@@ -74,6 +74,7 @@ A `cause` entry is `Fail` with an `error` (`detail` and `message` are for people
 | `projects.ensureScratch` | The "No project" project. The client remembers it. |
 | `projects.mutate` | Registers the router's own folder as a project, the first time. |
 | `attachments.createUploadUrl` | A signed URL for one upload. |
+| `assets.createUrl` | A signed URL for something T3 keeps: `{"_tag":"attachment","attachmentId":…,"disposition":"inline"}` for a picture sent with a message, or `{"_tag":"workspace-file","threadId":…,"path":…}` for a file in a thread's folder. |
 
 ### Starting and following up
 
@@ -197,6 +198,12 @@ Messages reads a thread's turn items and folds them into exchanges: someone aske
 Images can be GIF, JPEG, PNG or WebP, up to 10 MB each and 80 MB per message. Nothing here checks that the bytes really are an image, so a corrupt one reaches the model.
 
 T3 saves each one as `userdata/attachments/<threadId>-<id>.<ext>`, readable by anything running as you, and doesn't remove it later, even when the thread goes. It sends Claude the image inside the message, as base64, so denying the folder doesn't stop an attached image arriving. It also adds that folder to every Claude thread's additional directories. The base64 ends up in T3's provider log and Claude's transcript too.
+
+A user message's turn item lists what came with it, as `attachments: [{"type":"image","id":…,"name":…,"mimeType":…,"sizeBytes":…}]`, so Shades sends each dropped or attached picture named for its file, and pairs them up again by name after a restart. A message from before that has one called `screen.jpg`, which pairs with the one file its screen block names. Names are only read from a message with one screen block besides Shades' warning about it, since a router's hand-off follows that block and could carry one of its own naming the look at your screen. `assets.createUrl` with the `attachment` resource gives a signed `relativeUrl` under `/api/assets/`, good for an hour, which needs no sign-in, and only `orchestration:read`. `probe-t3 picture` sends a made-up picture to a test thread, reads it back and fetches its copy.
+
+### A picture in a thread's folder
+
+`assets.createUrl` with `{"_tag":"workspace-file","threadId":…,"path":…}` needs `filesystem:read`. T3 finds the thread's own folder, its worktree or its project, makes a relative path of an absolute one, and turns away anything outside it, after resolving symbolic links, along with anything that isn't a file T3 previews, such as a picture, a page or a PDF, and its own internal files. Shades only asks for picture names, and only shows what decodes as a picture. `probe-t3 picture <thread> <path>` asks for one and prints its size. Run against a thread whose folder is a copy of this repo, `assets/cat.png` came back at 256×256, and `../../../../shades/assets/cat.png`, an absolute path outside the folder, `Package.swift`, and a symbolic link in the folder pointing at a picture outside it, all came back refused.
 
 ### Opening a thread
 

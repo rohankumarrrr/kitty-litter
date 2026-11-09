@@ -43,6 +43,7 @@ final class AppController {
     let sendPush: (URLRequest) async -> Int?
     let saveTheme: (ColorTheme?) throws -> Void
     let installedThemes: () -> [ColorTheme.Found]
+    let recentFiles: @Sendable () -> [URL]
     let stage: CatStage
     let now: () -> Date
     let launchedAt: Date
@@ -266,10 +267,11 @@ final class AppController {
         theme = dependencies.theme
         saveTheme = dependencies.saveTheme
         installedThemes = dependencies.installedThemes
+        recentFiles = dependencies.recentFiles
         self.stage = stage
         self.now = now
         launchedAt = now()
-        channels = ChannelFeed(backend: dependencies.backend, kittens: dependencies.kittens)
+        channels = ChannelFeed(backend: dependencies.backend, kittens: dependencies.kittens, web: dependencies.webPicture)
         channels.onChange = { [weak self] in self?.channelsChanged($0) }
         channels.waiting = { [weak self] in self?.waiting ?? Waiting() }
         channels.isUnread = { [weak self] in self?.inbox.isUnread($0) ?? false }

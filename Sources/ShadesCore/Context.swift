@@ -19,9 +19,11 @@ public struct ScreenSnapshot: Sendable {
     public var elements: [ScreenElement]
     /// The app is on the privacy list, so nothing else was captured.
     public var isPrivate: Bool
-    /// The name of a file or link dropped onto the cat, when that's what this holds instead of the screen.
-    /// It goes wherever the screen may and nowhere else, since a file can be a copy of the screen.
-    public var droppedName: String?
+    /// The names of the files or link dropped onto the cat, or attached in Messages, when that's what this holds
+    /// instead of the screen. It goes wherever the screen may and nowhere else, since a file can be a copy of the screen.
+    public var droppedNames: [String]
+    /// Each picture among them, by its name, which goes to T3 as itself. The first is `screenshotJPEG` too.
+    public var pictures: [AgentAttachment]
 
     public init(
         capturedAt: Date = Date(),
@@ -36,7 +38,8 @@ public struct ScreenSnapshot: Sendable {
         screenshotArea: CGRect? = nil,
         elements: [ScreenElement] = [],
         isPrivate: Bool = false,
-        droppedName: String? = nil
+        droppedNames: [String] = [],
+        pictures: [AgentAttachment] = []
     ) {
         self.capturedAt = capturedAt
         self.appName = appName
@@ -50,8 +53,12 @@ public struct ScreenSnapshot: Sendable {
         self.screenshotArea = screenshotArea
         self.elements = elements
         self.isPrivate = isPrivate
-        self.droppedName = droppedName
+        self.droppedNames = droppedNames
+        self.pictures = pictures
     }
+
+    /// Whether it holds something dropped or attached rather than the screen.
+    public var isDropped: Bool { !droppedNames.isEmpty }
 }
 
 /// A button, link, field or label on screen, read through Accessibility.
