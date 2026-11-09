@@ -258,6 +258,33 @@ final class ShadesConversationPrivacyTests: XCTestCase {
         XCTAssertNil(PhoneAsk(act: "older", key: dm).action(in: on) { "x" })
     }
 
+    /// Do Not Disturb's catch-up showed the agent's reply in work you hadn't shown, and an approval that came before T3
+    /// listed a fix showed its title, app and all.
+    func testTheCatsOwnWorkYouHaventShownKeepsItsRepliesAndTitleOffThePhonesActivity() throws {
+        let snapshot = ScreenSnapshot(appName: "PRIVATE-APP", windowTitle: "PRIVATE-PAGE", pageText: "PRIVATE-PAGE")
+        let fix = AgentThread(id: "fix", title: "Fix: Something in PRIVATE-APP", projectTitle: nil, status: .completed, model: "m", updatedAt: at)
+        let said = try exchanges(prompt: Prompts.fix(description: "Where can I get one?", snapshot: snapshot, screenshotPath: "/tmp/s.jpg"), reply: "PRIVATE-REPLY")
+        var waiting = Waiting()
+        waiting.away = [.thread("fix")]
+        func activity(onPhone: Set<String>) throws -> String {
+            let book = ChannelBook.build(
+                kittens: [steve], threads: [fix], transcripts: ["fix": said], isReading: false, unreadable: 0, cantReachT3: false,
+                waiting: waiting, catsWork: ["fix"], onPhone: onPhone, hasPhone: true
+            )
+            return String(decoding: try JSONEncoder().encode(PhoneView(PhonePlace("activity", in: book), in: book, now: at)), as: UTF8.self)
+        }
+        let hidden = try activity(onPhone: [])
+        XCTAssertFalse(hidden.contains("PRIVATE-REPLY"), "the agent's reply in work you haven't shown reached the phone")
+        XCTAssertTrue(hidden.contains("Where can I get one?"), "it goes by your words")
+        XCTAssertTrue(try activity(onPhone: ["fix"]).contains("PRIVATE-REPLY"), "work you've shown has its replies")
+
+        var early = Waiting()
+        early.approvals = [ApprovalRequest(id: "r", threadID: "fix", threadTitle: fix.title, kind: .command, summary: "ls", createdAt: at)]
+        let unlisted = ChannelBook.build(kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: early, catsWork: ["fix"])
+        let card = String(decoding: try JSONEncoder().encode(PhoneView(PhonePlace("activity", in: unlisted), in: unlisted, now: at)), as: UTF8.self)
+        XCTAssertFalse(card.contains("PRIVATE-APP"), "a thread Messages can't place yet could be the cat's own work")
+    }
+
     func testShadesTakesWordsOnlyThroughTheRouterAndStaysOffThePhone() {
         let built = book(router(), exchanges: [Exchange(id: "e", asker: .you, askedAt: at, ask: "What's here?", reply: "An answer.")])
         XCTAssertEqual(MessageTarget.standard(for: .channel(.shades), in: built), .router, "Messages' own conversation with the router, which never had your screen")

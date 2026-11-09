@@ -454,18 +454,20 @@ struct PhoneView: Encodable, Equatable {
                 let look = ChannelSpeakerLook(latest.speaker, in: book)
                 return Reply(name: look.name, text: latest.text ?? latest.failure, color: look.bubble.map(hex), cat: cat(of: look), at: millis(latest.at))
             }
+            // The cat's own work you haven't shown here, such as in Do Not Disturb's catch-up, is only your words.
+            let hidden = digest.channel == .shades && !book.onPhone.contains(digest.threadID)
             return Row(
                 kind: "digest",
                 id: digest.threadID,
                 title: book.title(of: digest.channel),
                 name: look.name,
-                text: digest.parent.text,
+                text: hidden ? Self.title(ofThread: digest.threadID, "", in: book) : digest.parent.text,
                 color: look.bubble.map(hex),
                 cat: cat(of: look),
                 at: millis(digest.parent.at),
-                open: PhonePlace.key(.thread(digest.threadID, in: .threads)),
-                reply: reply,
-                more: digest.more > 0 ? digest.more : nil,
+                open: hidden ? nil : PhonePlace.key(.thread(digest.threadID, in: .threads)),
+                reply: hidden ? nil : reply,
+                more: hidden || digest.more == 0 ? nil : digest.more,
                 unread: digest.isUnread
             )
         case .replies(let count):
@@ -529,9 +531,9 @@ struct PhoneView: Encodable, Equatable {
     }
 
     /// The cat's own work is titled from what was on your screen, such as the app or the router's reading of it, so a
-    /// phone calls it by your words instead.
+    /// phone calls it by your words instead. So is a thread Messages can't place yet, which could be the cat's own work.
     private static func title(ofThread id: String, _ title: String, in book: ChannelBook) -> String {
-        guard book.home(ofThread: id) == .shades else { return title }
+        if let home = book.home(ofThread: id), home != .shades { return title }
         guard let parent = book.threads[id]?.parent, parent.speaker == .you, let words = parent.text else { return CatWords.shades }
         return ChannelRows.firstWords(of: words)
     }
