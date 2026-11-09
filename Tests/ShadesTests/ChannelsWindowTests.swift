@@ -171,6 +171,50 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertFalse(moves(.needsYou))
     }
 
+    func testAChannelThatNeedsYouSaysSoOnce() throws {
+        func marks(badge: Int) throws -> (Int, String?) {
+            let item = ChannelSidebarItem(place: .channel(.of(steve)), title: "steve", icon: .kitten(KittenStatus(kitten: steve, state: .needsYou)), badge: badge)
+            let row = ChannelSidebarRow(item: item)
+            let host = QuietView(frame: NSRect(x: 0, y: 0, width: 204, height: 30))
+            host.appearance = NSAppearance(named: .aqua)
+            host.addSubview(row)
+            row.frame = host.bounds
+            let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: rep)
+            return (Self.redMarks(in: rep, rightOf: Int(34 * CGFloat(rep.pixelsWide) / host.bounds.width)), row.accessibilityLabel())
+        }
+        let counted = try marks(badge: 2)
+        XCTAssertEqual(counted.0, 1, "the count is the one mark, with no square beside it")
+        XCTAssertEqual(counted.1, "steve, Needs you, 2 waiting")
+        XCTAssertEqual(try marks(badge: 0).0, 1, "with nothing counted, the square still says it")
+    }
+
+    /// Separate patches of the needs-you red right of the cat, so a pill with its digits counts once.
+    private static func redMarks(in rep: NSBitmapImageRep, rightOf left: Int) -> Int {
+        let red = Ink.hex(CatGlint.attention(bright: true).color!)
+        func isRed(_ x: Int, _ y: Int) -> Bool {
+            guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { return false }
+            return abs(color.redComponent - red.redComponent) < 0.1 && abs(color.greenComponent - red.greenComponent) < 0.1 && abs(color.blueComponent - red.blueComponent) < 0.1
+        }
+        var seen = Set<Int>()
+        var patches = 0
+        for y in 0..<rep.pixelsHigh {
+            for x in left..<rep.pixelsWide where isRed(x, y) && !seen.contains(y * rep.pixelsWide + x) {
+                patches += 1
+                var stack = [(x, y)]
+                seen.insert(y * rep.pixelsWide + x)
+                while let (px, py) = stack.popLast() {
+                    for (nx, ny) in [(px + 1, py), (px - 1, py), (px, py + 1), (px, py - 1)]
+                    where nx >= left && nx < rep.pixelsWide && ny >= 0 && ny < rep.pixelsHigh && !seen.contains(ny * rep.pixelsWide + nx) && isRed(nx, ny) {
+                        seen.insert(ny * rep.pixelsWide + nx)
+                        stack.append((nx, ny))
+                    }
+                }
+            }
+        }
+        return patches
+    }
+
     func testALongMessageIsCutAndShowMoreSurvivesARefresh() throws {
         let view = view()
         view.show(book(text: long))

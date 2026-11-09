@@ -246,7 +246,9 @@ final class ChannelSidebarRow: ChannelRowView {
         }
 
         var right = bounds.width - 10
-        if case .kitten(let status) = item.icon, let dot = status.state.dotColor {
+        // A count says it needs you in the same red, so the square shows only without one. The pose and the words
+        // VoiceOver hears carry the state, so the square is decoration and keeps the glint's colour even where it's faint.
+        if item.badge == 0, case .kitten(let status) = item.icon, let dot = status.state.dotColor {
             dot.setFill()
             NSBezierPath(rect: NSRect(x: right - 8, y: bounds.midY - 4, width: 8, height: 8)).fill()
             right -= 16
