@@ -1,3 +1,4 @@
+import JavaScriptCore
 @testable import Shades
 import ShadesCore
 import XCTest
@@ -326,6 +327,30 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon).box?.mentions)
         XCTAssertEqual(MessageTarget.mentioned(in: "Ask @Steve-Pawsniak: and @pepper", among: book.mentionable), steve)
         XCTAssertNil(MessageTarget.mentioned(in: "me@pepper.com @cali", among: book.mentionable))
+    }
+
+    /// The page reads an @ only to label the box, and the Mac decides where the words go, so the two have to agree,
+    /// whatever the name is written in.
+    func testThePagesLineReadsAnAtTheWayTheMacSends() throws {
+        let script = PhonePage.script
+        let start = try XCTUnwrap(script.range(of: "function mentioned("))
+        let end = try XCTUnwrap(script.range(of: "\n}\n", range: start.upperBound..<script.endIndex))
+        let page = try XCTUnwrap(JSContext())
+        page.evaluateScript(String(script[start.lowerBound..<end.upperBound]))
+        let kittens = [
+            Kitten(name: "Steve Pawsniak", role: "", covers: "", folder: "/k/steve"),
+            Kitten(name: "Zoe\u{0308}", role: "", covers: "", folder: "/k/zoe"),
+            Kitten(name: "बिल्ली", role: "", covers: "", folder: "/k/billi"),
+            Kitten(name: "🐾", role: "", covers: "", folder: "/k/paw"),
+        ]
+        let book = ChannelBook.build(kittens: kittens, threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        let mentions = try XCTUnwrap(PhoneView(PhonePlace("general", in: book), in: book, now: noon).box?.mentions)
+        let read = try XCTUnwrap(page.objectForKeyedSubscript("mentioned"))
+        for words in ["@steve-pawsniak hi", "@Zoë, hi", "@Zoe\u{0308} hi", "@बिल्ली को खाना दो", "Lunch @ 12", "email @!", "@steve"] {
+            let sent = MessageTarget.mentioned(in: words, among: book.mentionable).map(CatWords.mentioning)
+            let shown = read.call(withArguments: [words, mentions])?.toString()
+            XCTAssertEqual(shown == "null" ? nil : shown, sent, words)
+        }
     }
 
     func testScrollingBackOnThePhoneLoadsAChannelsOlderPostsButNeverTheCatsDM() {

@@ -140,7 +140,8 @@ enum MessageTarget: Equatable {
     static func mentioned(in words: String, among kittens: [Kitten]) -> Kitten? {
         for word in words.split(whereSeparator: \.isWhitespace) where word.hasPrefix("@") {
             let name = word.dropFirst().prefix { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }.lowercased()
-            if let kitten = kittens.first(where: { ChannelBook.slug($0.name) == name }) { return kitten }
+            // A lone @ names no one, even a kitten whose name has no letters or numbers to make a channel's name of.
+            if !name.isEmpty, let kitten = kittens.first(where: { ChannelBook.slug($0.name) == name }) { return kitten }
         }
         return nil
     }

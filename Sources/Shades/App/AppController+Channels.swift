@@ -242,11 +242,13 @@ extension AppController {
             // The box waits for the new thread, so what you add next goes there too.
             let title = String(words.prefix { !$0.isNewline }.prefix(60))
             let sentAt = now()
-            give(words, to: kitten, snapshot: snapshot) { [weak self] threadID in
+            give(words, to: kitten, snapshot: snapshot, onStarted: { [weak self] threadID in
                 // Named with an @ in #general, it lives there, as everything started from there does.
                 if channel == .general, let threadID, let self { self.messagesThreads[threadID] = self.messagesThreads[threadID] ?? sentAt }
                 self?.channels.started(echoID, in: threadID, title: title)
-            }
+            }, refused: { [weak self] in
+                self?.channels.failed(echoID, because: CatWords.cantTakeFiles(kitten.name))
+            })
         case .thread(let id, let title, let report):
             echo(threadID: id, title: title, isReply: true)
             guard let snapshot else { return reply(words, toThread: id, title: title, marking: report, echoID: echoID) }

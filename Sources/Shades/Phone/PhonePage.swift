@@ -1090,13 +1090,20 @@ enum PhonePage {
         $('words').addEventListener('input', fit);
         $('words').addEventListener('input', label);
 
-        // Words that @ a kitten in #general go straight to it, and the line says so as you type, read the way the Mac
-        // reads them: the first @ and a channel's name, as a word of its own.
+        // Words that @ a kitten in #general go straight to it, and the line says so as you type.
         function label() {
           if (!view || !view.box) return;
-          const mentions = view.box.mentions || {};
-          const named = $('words').value.split(/\s+/).map((word) => (word.match(/^@([\p{L}\p{N}_-]+)/u) || [])[1]).find((name) => name && mentions[name.toLowerCase()]);
-          $('label').textContent = named ? mentions[named.toLowerCase()] : view.box.label;
+          $('label').textContent = mentioned($('words').value, view.box.mentions || {}) || view.box.label;
+        }
+
+        // Read the way the Mac reads it: the first @ and a channel's name, as a word of its own. Marks count with the
+        // letter they're on, as they do on the Mac.
+        function mentioned(text, mentions) {
+          for (const word of text.normalize('NFC').split(/\s+/)) {
+            const name = ((word.match(/^@([\p{L}\p{M}\p{N}_-]+)/u) || [])[1] || '').toLowerCase();
+            if (name && mentions[name]) return mentions[name];
+          }
+          return null;
         }
 
         $('pairform').onsubmit = async (event) => {

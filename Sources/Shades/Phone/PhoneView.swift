@@ -302,7 +302,9 @@ struct PhoneView: Encodable, Equatable {
         let channel = place.selection?.channelID
         let also = place.alsoSendTo(in: book).map { CatWords.alsoSendTo(book.title(of: $0)) }
         box = place.target.map { target in
-            let mentions = target == .router && channel == .general ? Dictionary(book.mentionable.map { (ChannelBook.slug($0.name), CatWords.mentioning($0)) }, uniquingKeysWith: { first, _ in first }) : nil
+            // Composed, as the page reads what's typed, so an accent stored either way still names its kitten.
+            let names = book.mentionable.map { (ChannelBook.slug($0.name).precomposedStringWithCanonicalMapping, CatWords.mentioning($0)) }.filter { !$0.0.isEmpty }
+            let mentions = target == .router && channel == .general ? Dictionary(names, uniquingKeysWith: { first, _ in first }) : nil
             var label = CatWords.target(target, in: channel)
             // Not by its title, as `title(ofThread:)` says.
             if case .thread(let id, _, let report) = target, book.home(ofThread: id) == .shades {

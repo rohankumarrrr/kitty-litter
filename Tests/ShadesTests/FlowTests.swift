@@ -4327,7 +4327,7 @@ final class FlowTests: XCTestCase {
         controller.messagesAction(.startTopic("And this?", with: pepper, id: "sent-topic", file: picture))
         await settle()
         XCTAssertTrue(backend.sent.isEmpty, "nor a new thread with it")
-        XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.didntStart)
+        XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.cantTakeFiles("Pepper"), "and it says why, not just that it didn't start")
     }
 
     /// Messages' talk with the router goes to your phone and never holds your screen, so a file gets a router thread of its own.
@@ -5086,6 +5086,13 @@ final class FlowTests: XCTestCase {
             await messages(words, to: .router)
         }
         XCTAssertEqual(backend.sent.dropFirst(before).map(\.prompt.projectID), ["project-router", "project-router", "project-router"], "an email, a name that's no one's, and a kitten that isn't set up go to the router")
+
+        // A kitten whose name has no letters or numbers has no channel's name for an @ to match, so a lone @ isn't it.
+        kittens = [Kitten(name: "🐾", role: "Pets", covers: "the cat", folder: "/k/paw"), steve]
+        backend.projects["/k/paw"] = "project-paw"
+        backend.routerSays = ["Lunch @ 12, can you book it?": "It's Tuesday."]
+        await messages("Lunch @ 12, can you book it?", to: .router)
+        XCTAssertEqual(backend.sent.last?.prompt.projectID, "project-router", "no kitten was named")
     }
 
     /// A file still goes only where your screen may, as it would from the kitten's own channel.
@@ -5098,7 +5105,7 @@ final class FlowTests: XCTestCase {
         controller.messagesAction(.send("@pepper what's this?", to: .router, shownIn: .general, file: picture))
         await settle()
         XCTAssertTrue(backend.sent.isEmpty, "nothing went, not even your words without it")
-        XCTAssertEqual(said(in: .general, of: shownBook).first?.failure, CatWords.didntStart, "and it says so under them")
+        XCTAssertEqual(said(in: .general, of: shownBook).first?.failure, CatWords.cantTakeFiles("Pepper"), "and it says why under them")
 
         controller.messagesAction(.send("@steve-pawsniak what's this?", to: .router, shownIn: .general, file: picture))
         await settle()
