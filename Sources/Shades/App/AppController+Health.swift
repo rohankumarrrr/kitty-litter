@@ -1,6 +1,16 @@
 import Foundation
 import ShadesCore
 
+/// Whichever of two answers comes first, which is the only one taken. Both come on the main actor.
+private final class FirstAnswer<Value>: @unchecked Sendable {
+    var continuation: CheckedContinuation<Value?, Never>?
+
+    func finish(_ value: Value?) {
+        continuation?.resume(returning: value)
+        continuation = nil
+    }
+}
+
 /// The cat keeping an eye on itself, so that when something's wrong it can say what, rather
 /// than you having to work it out from the symptoms.
 extension AppController {
@@ -32,16 +42,19 @@ extension AppController {
         var facts = systemFacts()
         facts.inboxSaves = !inboxSaveFailed
         facts.shortcutsTaken = takenShortcuts
-        var frontDoorError: Error?
-        do {
-            _ = try await routerProjectID(for: settings.quickModel)
-        } catch {
-            frontDoorError = error
+        // Signing in can wait on a Keychain dialog, and nothing can cut that short, so T3 gets a while to answer and the
+        // report goes out either way. The install waits for it, and a copy that never reports gets rolled back.
+        let frontDoor: Result<String, Error>? = await withinT3Wait { [self] in
+            do { return .success(try await routerProjectID(for: settings.quickModel)) } catch { return .failure(error) }
         }
+        facts.t3DidntAnswer = frontDoor == nil
+        var frontDoorError: Error?
+        if case .failure(let error)? = frontDoor { frontDoorError = error }
         // Right after a launch T3 can take some seconds to send its first list. Finding the front door waits for it,
         // so whether T3 is there is only judged once that's done.
         await waitForThreadList()
-        facts.reachedT3 = threadListArrived
+        // T3 answering once this run says nothing about now, so a check that went unanswered counts as not reaching it.
+        facts.reachedT3 = threadListArrived && !facts.t3DidntAnswer
         facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
         switch frontDoorError {
         case let problem as FrontDoorProblem:
@@ -55,8 +68,13 @@ extension AppController {
 
         for kitten in loadKittens() where !kitten.planned {
             if !fileExists(kitten.folder + "/CLAUDE.md") { facts.kittensWithoutInstructions.append(kitten.name) }
-            if facts.reachedT3, await backend.projectID(atPath: kitten.workspace) == nil {
-                facts.kittensNotInT3.append(kitten)
+            if facts.reachedT3 {
+                // No answer in time isn't the same as no project.
+                switch await withinT3Wait({ [backend] in await backend.projectID(atPath: kitten.workspace) }) {
+                case .some(nil): facts.kittensNotInT3.append(kitten)
+                case nil: facts.t3DidntAnswer = true
+                default: break
+                }
             }
             // Only Claude Code reads the settings that make up the block.
             if !kitten.seesScreen, settings.frontierModel.provider != "claudeAgent" || !screenBlockGaps(kitten.folder).isEmpty {
@@ -68,6 +86,20 @@ extension AppController {
         health = findings
         reportHealth(findings)
         return findings
+    }
+
+    /// What `work` comes to, or `nil` if it's still going after `t3Wait`, when it's left to finish on its own.
+    private func withinT3Wait<Value>(_ work: @escaping @MainActor () async -> Value) async -> Value? {
+        let once = FirstAnswer<Value>()
+        let wait = t3Wait
+        return await withCheckedContinuation { continuation in
+            once.continuation = continuation
+            Task { @MainActor in once.finish(await work()) }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                once.finish(nil)
+            }
+        }
     }
 
     /// Why the screen can't be seen, if the real reason isn't what it looks like.

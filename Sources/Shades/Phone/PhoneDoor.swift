@@ -110,39 +110,99 @@ final class MemoryPhoneKeys: PhoneKeyStoring {
     func save(_ name: String, _ lines: [String]) { saved[name] = lines }
 }
 
-/// In the login Keychain rather than a file a kitten could rewrite to let itself in, or read to send as you. As with the
-/// T3 sign-in, a build signed differently can't read them, which only means pairing again, and this never calls
-/// `SecItemUpdate`, since that shows a dialog for another build's item.
+/// In the login Keychain rather than a file a kitten could rewrite to let itself in, or read to send as you. A build
+/// signed with the same certificate reads what an earlier one saved, but changing or deleting another build's item
+/// shows a dialog and waits on it, on the main thread here, so each save is an item of its own, the newest that can be
+/// read is the one that counts, and only items this run saved are ever deleted. Saving what's already there touches
+/// nothing.
 final class KeychainPhoneKeys: PhoneKeyStoring {
-    private static func item(_ name: String) -> [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "dev.shades.phone",
-            kSecAttrAccount as String: name,
-        ]
+    private let keychain: PhoneKeychain
+    /// The item this run saved for each name, the only kind it deletes.
+    private var savedHere: [String: String] = [:]
+
+    init(keychain: PhoneKeychain = LoginPhoneKeychain()) {
+        self.keychain = keychain
     }
 
     func load(_ name: String) -> [String] {
-        withoutPrompts {
-            var query = Self.item(name)
-            query[kSecReturnData as String] = true
-            query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
-            var result: CFTypeRef?
-            guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return [] }
-            return String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init)
-        }
+        newest(name).map(Self.lines) ?? []
     }
 
     func save(_ name: String, _ lines: [String]) {
+        guard load(name) != lines else { return }
+        let account = "\(name).\(UUID().uuidString)"
+        guard keychain.add(account: account, data: Data(lines.joined(separator: "\n").utf8), label: "Shades: phone \(name)") else { return }
+        if let before = savedHere[name] { keychain.delete(account: before) }
+        savedHere[name] = account
+    }
+
+    /// What's in the newest item for this name that this build can read. Older builds saved one under the name itself.
+    private func newest(_ name: String) -> Data? {
+        keychain.items().first { ($0.account == name || $0.account.hasPrefix(name + ".")) && $0.data != nil }?.data
+    }
+
+    private static func lines(_ data: Data) -> [String] {
+        String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init)
+    }
+}
+
+/// The few Keychain calls the phone keys make, so what they decide can be tested without the Keychain.
+protocol PhoneKeychain {
+    /// Every item, newest first: its account, and what's in it, or `nil` if this build can't read it.
+    func items() -> [(account: String, data: Data?)]
+    func add(account: String, data: Data, label: String) -> Bool
+    func delete(account: String)
+}
+
+struct LoginPhoneKeychain: PhoneKeychain {
+    private static let service = "dev.shades.phone"
+
+    func items() -> [(account: String, data: Data?)] {
         withoutPrompts {
-            SecItemDelete(Self.item(name) as CFDictionary)
-            guard !lines.isEmpty else { return }
-            var attributes = Self.item(name)
-            attributes[kSecValueData as String] = Data(lines.joined(separator: "\n").utf8)
-            attributes[kSecAttrLabel as String] = "Shades: phone \(name)"
-            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-            SecItemAdd(attributes as CFDictionary, nil)
+            var result: CFTypeRef?
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: Self.service,
+                kSecReturnAttributes as String: true,
+                kSecMatchLimit as String: kSecMatchLimitAll,
+            ]
+            guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return [] }
+            return (result as? [[String: Any]] ?? [])
+                .sorted { ($0[kSecAttrModificationDate as String] as? Date ?? .distantPast) > ($1[kSecAttrModificationDate as String] as? Date ?? .distantPast) }
+                .compactMap { $0[kSecAttrAccount as String] as? String }
+                .map { ($0, read($0)) }
         }
+    }
+
+    func add(account: String, data: Data, label: String) -> Bool {
+        withoutPrompts {
+            var attributes = Self.item(account)
+            attributes[kSecValueData as String] = data
+            attributes[kSecAttrLabel as String] = label
+            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
+        }
+    }
+
+    func delete(account: String) {
+        _ = withoutPrompts { SecItemDelete(Self.item(account) as CFDictionary) }
+    }
+
+    private func read(_ account: String) -> Data? {
+        var query = Self.item(account)
+        query[kSecReturnData as String] = true
+        query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    private static func item(_ account: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
     }
 
     private func withoutPrompts<Result>(_ body: () -> Result) -> Result {

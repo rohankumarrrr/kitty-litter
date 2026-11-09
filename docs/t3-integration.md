@@ -24,8 +24,9 @@ t3 auth session issue --scope orchestration:read --scope orchestration:operate -
 This is T3's documented way to sign in a headless client. It needs no clicks, because anyone who can run it as this user already has this access. It takes about 0.8 s, and only happens on the first run and when renewing. `filesystem:read` is only for a picture a reply points at in its thread's folder, which `assets.createUrl` won't hand out without it. A saved session without it isn't usable, so the first launch that wants it signs in again and revokes the old one.
 
 - The token goes in the login Keychain under service `dev.shades.t3-session`, with the session ID as the account. It's never logged or written anywhere else.
+- Only the installed app, at `/Applications/Shades.app` where `scripts/install.sh` puts it, uses that service. Any other copy, built from source as `swift run shades` makes, bundled elsewhere by `scripts/bundle.sh`, or trying a flow out with `--ask`, `--hand-off` or `--fix`, keeps its sign-in under `dev.shades.t3-session.trial` and shows up as "Shades trial", so it can never save a sign-in where the app looks, or revoke the app's as one an older build left. Several such copies can run at once without being able to read each other's sign-ins, so one never revokes a sign-in there it can't read, since another copy may still be using it. Those stay in T3's list until they run out. Such a copy keeps to itself the way one trying a flow out does: phone keys in memory, so it can't replace the app's, no phone page on your tailnet, no notifications, an inbox that's never read from or written to `inbox.json`, the real theme left alone, and no `health.json`, which is what `scripts/install.sh` waits for from the installed app. `probe-t3` and `--channels-check` sign in only for as long as they run, and sign out.
 - A saved token is checked with `GET /api/auth/session` on each connect. Its `scopes` lists only T3's older scopes, so the check reads `permissions`, which lists them all, `filesystem:read` included. `probe-t3 keychain` shows a second launch reusing the first one's session.
-- With 7 days left, the client signs in again and revokes the old session. If the server answers 401 on reconnect, it does the same.
+- With 7 days left, the client signs in again and revokes the old session. If the server answers 401 on reconnect, or to the saved token at launch, as it does once a session's been revoked, it does the same.
 - The session shows up as "Shades" in T3's list of connections.
 
 ### Why not MCP?
@@ -34,13 +35,14 @@ MCP's OAuth flow needs a person to approve it on the `/connect-agent` page, its 
 
 ### The Keychain and rebuilds
 
-Keychain items belong to the exact signed code that made them. A rebuilt app with an ad hoc signature counts as a different app, so it can't read the old item.
+Keychain items belong to the signed code that made them. A rebuilt app with an ad hoc signature counts as a different app, so it can't read the old item. Builds signed with the same certificate, as `scripts/install.sh` signs them, can read each other's.
 
-macOS would normally ask about that with a dialog on every rebuild, so the store turns prompts off. An unreadable item means signing in again, about 0.8 s and no dialog, and the last build's session gets revoked. The old item can't be deleted or changed by the new build, so it stays behind, harmless, until something signed like the old build removes it, or you delete it in Keychain Access.
+macOS would normally ask about that with a dialog on every rebuild, so the store turns prompts off. An unreadable item means signing in again, about 0.8 s and no dialog, and the installed app revokes the last build's session. A new sign-in only ever deletes an item its own run saved. Another build's item, readable or not, stays behind, harmless, until something signed like that build removes it, or you delete it in Keychain Access.
 
 A few things learned the hard way:
 
-- **Never call `SecItemUpdate` on these items.** Changing an attribute on another build's item shows a dialog even with `SecKeychainSetUserInteractionAllowed(false)`. Reading, deleting and listing attributes don't.
+- **Never change or delete another build's item.** Changing an attribute on one shows a dialog even with `SecKeychainSetUserInteractionAllowed(false)`, and so does deleting one this build can read, and the call waits until the dialog's answered. That held a whole launch once: a new scope made the saved sign-in unusable, so the first launch of the new build signed in again and deleted the one the last build had saved. Reading and listing attributes don't. `T3AuthTests` covers a launch over items earlier builds left. The phone's keys follow the same rule, on the main thread, where a dialog would hold the whole app: each change is an item of its own, the newest one that can be read counts, saving what's already there touches nothing, a phone coming back with the subscription it already has saves nothing, whatever order its JSON came in, and only items this run saved are deleted. `PhoneKeychainTests` covers that.
+- **Nothing waits on signing in for good.** The self-check gives T3 10 seconds to answer, then writes `health.json` anyway, with a finding that says to answer a Keychain dialog if one's showing, since `scripts/install.sh` rolls back a copy that never reports.
 - **Keychain failures aren't fatal.** Sign-in then only lasts until the app quits, and each launch leaves a session behind until it expires. This was seen once, with error -25293, just after a process was killed in the middle of a dialog. It cleared up by itself within minutes.
 - The data protection Keychain isn't an option: it needs an entitlement an open-source build can't have (error -34018).
 

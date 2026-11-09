@@ -1,0 +1,15 @@
+front
+check
+wait 2
+draw .verify/shades/check-myself/1-all-good
+buttons
+esc
+t3 stuck
+check
+wait 3
+draw .verify/shades/check-myself/2-waiting
+wait 9
+draw .verify/shades/check-myself/3-stuck
+buttons
+front
+windows

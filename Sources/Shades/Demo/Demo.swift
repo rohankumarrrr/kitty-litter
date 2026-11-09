@@ -24,6 +24,8 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     /// When each canned thread last moved, which a reply into it does.
     private var moved: [String: Date] = [:]
     var connectFails = false
+    /// T3 never answers, as when signing in waits on a Keychain dialog.
+    var stuck = false
     var onOpen: ((String) -> Void)?
 
     init() {
@@ -112,7 +114,10 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    func projectID(atPath path: String) async -> String? { "demo-project" }
+    func projectID(atPath path: String) async -> String? {
+        if stuck { try? await Task.sleep(nanoseconds: 3_600_000_000_000) }
+        return "demo-project"
+    }
 
     func report(threadID: String, run: String?) async throws -> String? {
         try? await Task.sleep(nanoseconds: 800_000_000)

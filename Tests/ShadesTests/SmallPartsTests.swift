@@ -772,3 +772,16 @@ final class CorrectionSendsTests: XCTestCase {
         XCTAssertEqual(sends.end("w", reached: false)?.wasDispatcher, true, "neither got there, so it goes back to how it was before both")
     }
 }
+
+@MainActor
+final class SignInServiceTests: XCTestCase {
+    /// A copy built from source shared the installed app's Keychain entry, so it could save sign-ins where the app
+    /// looks, and revoke the app's own as one an older build left.
+    func testOnlyTheInstalledAppUsesItsSignIn() {
+        XCTAssertEqual(DevFlags.signInService(bundlePath: "/Applications/Shades.app", isTryingAFlow: false), "dev.shades.t3-session")
+        XCTAssertEqual(DevFlags.signInService(bundlePath: "/Users/someone/code/shades/.build/arm64-apple-macosx/debug", isTryingAFlow: false), "dev.shades.t3-session.trial")
+        XCTAssertEqual(DevFlags.signInService(bundlePath: "/Applications/Shades.app", isTryingAFlow: true), "dev.shades.t3-session.trial", "trying a flow out")
+        XCTAssertEqual(DevFlags.signInService(bundlePath: "/Users/someone/code/shades/build/Shades.app", isTryingAFlow: false), "dev.shades.t3-session.trial", "bundled but not installed")
+        XCTAssertFalse(DevFlags.isInstalledApp(bundlePath: "/Users/someone/code/shades/.build/arm64-apple-macosx/debug", isTryingAFlow: false), "so its phone keys stay in memory too")
+    }
+}

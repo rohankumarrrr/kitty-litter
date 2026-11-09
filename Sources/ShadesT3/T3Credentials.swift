@@ -26,8 +26,9 @@ public protocol T3CredentialStoring: Sendable {
 /// rebuilt app can't read them. Asking would pop up a dialog on every rebuild, so this never asks:
 /// an unreadable item just means signing in again.
 ///
-/// Reading, adding and deleting are safe here, but changing an item made by another build shows a
-/// dialog even with prompts turned off, so this never calls SecItemUpdate.
+/// Reading and adding are safe here, but changing or deleting an item made by another build shows a
+/// dialog even with prompts turned off, and waits on it, so this never calls SecItemUpdate, and `T3Auth`
+/// only deletes what its own run saved.
 public final class KeychainCredentialStore: T3CredentialStoring, @unchecked Sendable {
     public static let defaultService = "dev.shades.t3-session"
 

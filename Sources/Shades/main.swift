@@ -25,17 +25,23 @@ MainActor.assumeIsolated {
         controller = AppController(dependencies: parts.dependencies, stage: stage)
         driver = DemoDriver(parts: parts, controller: controller, stage: stage)
     } else {
-        let backend = T3Backend()
+        // Any copy but the installed app, built from source, bundled elsewhere or trying a flow out, keeps to itself:
+        // its own sign-in, and none of the app's inbox, notifications, theme, phone keys or phone page.
+        let keepsToItself = !DevFlags.isInstalledApp()
+        let signIn = DevFlags.signInService()
+        // Copies that aren't installed share one service and can run at once, so one can't tell another's sign-in
+        // from a stale one.
+        let backend = T3Backend(credentials: KeychainCredentialStore(service: signIn), label: keepsToItself ? "Shades trial" : "Shades", revokesWhatItCantRead: !keepsToItself)
         let context = ScreenContextProvider()
         let voice = ParakeetVoiceEngine()
         let keys = KeyHoldMonitor()
         let inboxFile = Settings.directory.appendingPathComponent("inbox.json")
-        // A copy trying a flow out sees your real threads too, and the real app already says.
-        let notifications = DevFlags.wantsFlow ? nil : NeedsYouNotifications()
+        // Such a copy sees your real threads too, and the real app already says.
+        let notifications = keepsToItself ? nil : NeedsYouNotifications()
         var settings = Settings.load()
         MessagesInk.picture = YourPicture.load()
-        if DevFlags.wantsFlow { settings.phone = false }
-        let tailscale = DevFlags.wantsFlow ? nil : TailscaleServe(port: PhoneLink.port)
+        if keepsToItself { settings.phone = false }
+        let tailscale = keepsToItself ? nil : TailscaleServe(port: PhoneLink.port)
         let real = AppController(
             dependencies: AppDependencies(
                 backend: backend,
@@ -51,24 +57,26 @@ MainActor.assumeIsolated {
                 fileExists: { FileManager.default.fileExists(atPath: $0) },
                 screenBlockGaps: { ScreenBlock.gaps(in: FileManager.default.contents(atPath: $0 + "/.claude/settings.json")) },
                 routerFolder: { try? RouterBlock.prepare(Settings.directory.appendingPathComponent("router", isDirectory: true)) },
+                // The installed app's report is what the install waits for, so no other copy writes one.
                 reportHealth: { findings in
+                    guard !keepsToItself else { return }
                     let version = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
                     let report = HealthCheck.report(findings, pid: getpid(), version: version, at: Date())
                     SystemHealth.write(report, to: Settings.directory.appendingPathComponent("health.json"))
                 },
-                // A run that's only trying a flow out has no business filing anything, or touching the real file.
-                inbox: DevFlags.wantsFlow ? Inbox(since: .distantFuture) : Inbox.load(from: inboxFile, now: Date()),
+                // It has no business filing anything, or touching the real file.
+                inbox: keepsToItself ? Inbox(since: .distantFuture) : Inbox.load(from: inboxFile, now: Date()),
                 saveInbox: { inbox in
-                    if !DevFlags.wantsFlow { try inbox.save(to: inboxFile) }
+                    if !keepsToItself { try inbox.save(to: inboxFile) }
                 },
                 hidesTestThreads: !DevFlags.wantsFlow,
                 notify: { notifications?.post($0) },
                 withdrawNotifications: { notifications?.withdraw($0) },
                 clearNotifications: { notifications?.clear() },
-                // A copy trying a flow out stays off your phone, and out of the real app's way.
-                phoneKeys: DevFlags.wantsFlow ? MemoryPhoneKeys() : KeychainPhoneKeys(),
+                // Phone keys in memory, so it can never replace the app's own.
+                phoneKeys: keepsToItself ? MemoryPhoneKeys() : KeychainPhoneKeys(),
                 servePhone: { port in
-                    guard let tailscale else { throw TailscaleServe.Problem(errorDescription: "A copy trying a flow out stays off your tailnet.") }
+                    guard let tailscale else { throw TailscaleServe.Problem(errorDescription: "Only the installed copy of me goes on your tailnet.") }
                     return try await tailscale.serve(to: port)
                 },
                 stopServingPhone: { await tailscale?.stop() },
@@ -76,9 +84,9 @@ MainActor.assumeIsolated {
                     (try? await URLSession(configuration: .ephemeral).data(for: request)).flatMap { ($0.1 as? HTTPURLResponse)?.statusCode }
                 },
                 theme: ColorTheme.load(),
-                // A copy trying a flow out leaves the real theme alone.
+                // It leaves the real theme alone.
                 saveTheme: { theme in
-                    if !DevFlags.wantsFlow { try ColorTheme.save(theme) }
+                    if !keepsToItself { try ColorTheme.save(theme) }
                 },
                 installedThemes: { ColorTheme.installed(home: FileManager.default.homeDirectoryForCurrentUser, t3Home: T3Backend.defaultHome) },
                 recentFiles: { RecentFiles.find() },
