@@ -1,3 +1,4 @@
+import JavaScriptCore
 @testable import Shades
 import ShadesCore
 import XCTest
@@ -292,6 +293,64 @@ final class PhoneTests: XCTestCase {
         let hello = try XCTUnwrap(general.rows.first { $0.kind == "message" })
         XCTAssertEqual(hello.sending, true)
         XCTAssertNil(hello.retry)
+    }
+
+    /// A reaction is only a mark on a message T3 has, from the fixed few, and the page shows the ones it has.
+    func testAPhoneReactsOnlyWithAMarkOnAMessageT3Has() throws {
+        let sending = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Hello?", at: noon, threadID: "", threadTitle: "", isSending: true)
+        let book = ChannelBook.build(
+            kittens: [steve], threads: [thread("a", of: steve)],
+            transcripts: ["a": [Exchange(id: "e1", asker: .you, askedAt: noon, ask: "How's it going?", reply: "Fine.", repliedAt: noon)]],
+            isReading: false, unreadable: 0, cantReachT3: false,
+            sent: [SentMessage(channel: .general, message: sending)],
+            reactions: ["e1:reply": [.eyes]]
+        )
+        XCTAssertEqual(ask("react", id: "e1:reply", value: "thumbsUp").action(in: book) { "x" }?.action, .react("e1:reply", .thumbsUp))
+        XCTAssertNil(ask("react", id: "e1:reply", value: "Ship it").action(in: book) { "x" }, "only one of the marks, never words")
+        XCTAssertNil(ask("react", id: sending.id, value: "thumbsUp").action(in: book) { "x" }, "nor on what T3 doesn't have")
+        XCTAssertNil(ask("react", id: "made-up", value: "thumbsUp").action(in: book) { "x" })
+
+        let thread = PhoneView(PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book), in: book, now: noon)
+        let reply = try XCTUnwrap(thread.rows.last { $0.kind == "message" })
+        XCTAssertEqual(reply.reactions, [PhoneView.Choice(label: "👀", value: "eyes")])
+        XCTAssertEqual(thread.marks.count, Reaction.allCases.count)
+        let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
+        XCTAssertNil(general.rows.first { $0.kind == "message" }?.reactions)
+    }
+
+    /// The line over #general's box can say who an @ names, as the window's does, for every kitten that's set up.
+    func testGeneralsBoxKnowsWhoAnAtGoesTo() {
+        let cali = Kitten(name: "Cali", role: "Travel", covers: "", folder: "/k/cali", planned: true)
+        let book = ChannelBook.build(kittens: [steve, pepper, cali], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
+        XCTAssertEqual(general.box?.mentions, ["steve-pawsniak": CatWords.mentioning(steve), "pepper": CatWords.mentioning(pepper)])
+        XCTAssertNil(PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon).box?.mentions)
+        XCTAssertEqual(MessageTarget.mentioned(in: "Ask @Steve-Pawsniak: and @pepper", among: book.mentionable), steve)
+        XCTAssertNil(MessageTarget.mentioned(in: "me@pepper.com @cali", among: book.mentionable))
+    }
+
+    /// The page reads an @ only to label the box, and the Mac decides where the words go, so the two have to agree,
+    /// whatever the name is written in.
+    func testThePagesLineReadsAnAtTheWayTheMacSends() throws {
+        let script = PhonePage.script
+        let start = try XCTUnwrap(script.range(of: "function mentioned("))
+        let end = try XCTUnwrap(script.range(of: "\n}\n", range: start.upperBound..<script.endIndex))
+        let page = try XCTUnwrap(JSContext())
+        page.evaluateScript(String(script[start.lowerBound..<end.upperBound]))
+        let kittens = [
+            Kitten(name: "Steve Pawsniak", role: "", covers: "", folder: "/k/steve"),
+            Kitten(name: "Zoe\u{0308}", role: "", covers: "", folder: "/k/zoe"),
+            Kitten(name: "बिल्ली", role: "", covers: "", folder: "/k/billi"),
+            Kitten(name: "🐾", role: "", covers: "", folder: "/k/paw"),
+        ]
+        let book = ChannelBook.build(kittens: kittens, threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        let mentions = try XCTUnwrap(PhoneView(PhonePlace("general", in: book), in: book, now: noon).box?.mentions)
+        let read = try XCTUnwrap(page.objectForKeyedSubscript("mentioned"))
+        for words in ["@steve-pawsniak hi", "@Zoë, hi", "@Zoe\u{0308} hi", "@बिल्ली को खाना दो", "Lunch @ 12", "email @!", "@steve"] {
+            let sent = MessageTarget.mentioned(in: words, among: book.mentionable).map(CatWords.mentioning)
+            let shown = read.call(withArguments: [words, mentions])?.toString()
+            XCTAssertEqual(shown == "null" ? nil : shown, sent, words)
+        }
     }
 
     func testScrollingBackOnThePhoneLoadsAChannelsOlderPostsButNeverTheCatsDM() {

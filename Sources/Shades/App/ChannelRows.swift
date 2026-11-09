@@ -135,6 +135,17 @@ enum MessageTarget: Equatable {
         return .thread(id: id, title: book.title(ofThread: id))
     }
 
+    /// The kitten an @ in your words names, by its channel's name, such as `@steve-pawsniak`: the first one, as a word
+    /// of its own, so an email address isn't one. Only your words are read for it.
+    static func mentioned(in words: String, among kittens: [Kitten]) -> Kitten? {
+        for word in words.split(whereSeparator: \.isWhitespace) where word.hasPrefix("@") {
+            let name = word.dropFirst().prefix { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }.lowercased()
+            // A lone @ names no one, even a kitten whose name has no letters or numbers to make a channel's name of.
+            if !name.isEmpty, let kitten = kittens.first(where: { ChannelBook.slug($0.name) == name }) { return kitten }
+        }
+        return nil
+    }
+
     /// Whether the part of a question that's next to answer takes your own words.
     static func takesWords(_ question: AgentQuestion, answered: [String: Int]) -> Bool {
         guard let parts = question.form?.parts, parts.indices.contains(answered[question.id] ?? 0) else { return false }

@@ -207,6 +207,9 @@ enum CatWords {
     }
 
     static func answering(_ text: String) -> String { "Answering: \(text.isEmpty ? "their question" : text)" }
+    /// The line over #general's box once your words @ a kitten.
+    static func mentioning(_ kitten: Kitten) -> String { "Straight to \(kitten.name), in a new thread here" }
+    static let react = "React"
 
     /// `name` is the channel's, as the sidebar writes it.
     static func placeholder(_ target: MessageTarget, in channel: ChannelID? = nil, name: String? = nil) -> String {

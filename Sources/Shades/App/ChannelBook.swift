@@ -44,6 +44,9 @@ struct ChannelMessage: Equatable, Identifiable {
     var file: ChannelFile?
     /// Yours, on its way, until T3 has it.
     var isSending = false
+    /// Your reactions, kept by T3's ID for it, so `nil` for one T3 doesn't have, or that's said nothing yet, which
+    /// can't take any.
+    var reactions: [Reaction]?
 
     var id: String { "\(exchangeID):\(kind.rawValue)" }
     /// Yours, and it went nowhere. One with a file has to be sent again by hand, since the file isn't kept.
@@ -236,6 +239,7 @@ struct ChannelBook: Equatable {
         olderPages: [ChannelID: Int] = [:],
         loadingOlder: Set<ChannelID> = [],
         couldntRead: Set<String> = [],
+        reactions: [String: [Reaction]] = [:],
         said: (String) -> String? = ChannelBook.said
     ) -> ChannelBook {
         // A talk with the cat is titled with your question, which can start with a kitten's name, so it's kept apart
@@ -270,7 +274,7 @@ struct ChannelBook: Equatable {
                 if !couldntRead.contains(thread.id) { leftOut.insert(.shades) }
                 continue
             }
-            let messages = talk(in: thread, exchanges, said: said)
+            let messages = talk(in: thread, exchanges, said: said).map { reacted($0, reactions) }
             gather(thread.id, Gathered(title: thread.title, home: .shades, messages: messages, isCut: exchanges.count >= keptExchanges))
             answered += messages.filter { answersInGeneral.contains($0.exchangeID) && $0.text != nil }.map { message in
                 var plain = message
@@ -295,7 +299,7 @@ struct ChannelBook: Equatable {
                 let asker = speaker(of: exchange.asker, replier: replier, threads: threadsByID, owner: ownerOf, inGeneral: inGeneral, catsWork: catsWork)
                 // Waiting on you isn't working, so what it last said reads as said.
                 let isStillGoing = thread.status.isActive && !KittenBoard.needsYou(thread) && index == exchanges.count - 1
-                messages += self.messages(of: exchange, in: thread.id, title: title, asker: asker, replier: replier, isStillGoing: isStillGoing)
+                messages += self.messages(of: exchange, in: thread.id, title: title, asker: asker, replier: replier, isStillGoing: isStillGoing).map { reacted($0, reactions) }
             }
             guard !messages.isEmpty else { continue }
             let home = home(of: thread.id, owner: owner, inGeneral: inGeneral, catsWork: catsWork)
@@ -495,6 +499,14 @@ struct ChannelBook: Equatable {
         return messages
     }
 
+    /// Read from T3, so it takes your reactions by T3's ID for it, once it's said something.
+    private static func reacted(_ message: ChannelMessage, _ reactions: [String: [Reaction]]) -> ChannelMessage {
+        guard message.text != nil || message.file != nil else { return message }
+        var message = message
+        message.reactions = reactions[message.id] ?? []
+        return message
+    }
+
     /// Each page of older posts you've scrolled back to shows as many again.
     private static func channel(_ id: ChannelID, _ placed: [Placed], leavesOutThreads: Bool, pages: Int, isLoadingOlder: Bool) -> Channel {
         let ordered = placed.sorted { a, b in
@@ -620,6 +632,11 @@ extension ChannelBook {
 
     func kitten(of requestID: String) -> Kitten? {
         waiting.owners[requestID].flatMap { kitten($0) }
+    }
+
+    /// The kittens an @ in #general can go straight to: every one that's set up.
+    var mentionable: [Kitten] {
+        statuses.filter { $0.state != .notSetUp }.map(\.kitten)
     }
 
     /// The kitten whose channel this is, if it's one you can write in.

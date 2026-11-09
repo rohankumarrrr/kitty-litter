@@ -556,7 +556,7 @@ final class ChannelPane: QuietView {
         if held != nil { label = CatWords.heldDraft }
         let channel = selection.channelID
         composer.isHeld = held != nil
-        composer.show(target, label: label, in: channel, name: channel.flatMap { book?.name(of: $0) }, alsoSendTo: also)
+        composer.show(target, label: label, in: channel, name: channel.flatMap { book?.name(of: $0) }, alsoSendTo: also, mentionable: book?.mentionable ?? [])
     }
 
     /// The talk key went down while you were typing here.
@@ -738,6 +738,7 @@ final class ChannelPane: QuietView {
         view.isExpanded = expanded.contains(message.id)
         view.onCopy = { [weak self] in self?.onCopy?($0) }
         if message.canTryAgain { view.onTryAgain = { [weak self] in self?.onAction?(.tryAgain(message.exchangeID)) } }
+        if message.reactions != nil { view.onReact = { [weak self] in self?.onAction?(.react(message.id, $0)) } }
         view.onShowMore = { [weak self, weak view] in
             self?.expanded.insert(message.id)
             view?.isExpanded = true

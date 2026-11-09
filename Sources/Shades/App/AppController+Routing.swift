@@ -150,7 +150,8 @@ extension AppController {
     /// Gives your words to a kitten, in a new thread in its workspace. T3 writes the title.
     /// `onStarted` hears the new thread, or `nil` if there isn't one.
     /// `asked` is `questionsAsked` when you sent them, if that was before now.
-    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, as errand: Errand = .work, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil) {
+    /// `refused` is for where you sent it to say why a file couldn't go, which otherwise only the cat says.
+    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, as errand: Errand = .work, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil, refused: (() -> Void)? = nil) {
         // As with a session, a kitten with full access doesn't get to see text from a page. Nor does
         // one whose thread would count as a kitten's that isn't meant to see it, in a project they share.
         let sharesWithScreenless = loadKittens().contains {
@@ -160,7 +161,7 @@ extension AppController {
         // Your words alone would only make sense with the file, so nothing goes, except a correction in them,
         // which the owner gets on its own.
         if !seesScreen, snapshot?.droppedName != nil {
-            onStarted?(nil)
+            if let refused { refused() } else { onStarted?(nil) }
             say(CatWords.cantTakeFiles(kitten.name))
             if errand == .correction { give(words, to: kitten, snapshot: nil, as: .correctionCopy) }
             return

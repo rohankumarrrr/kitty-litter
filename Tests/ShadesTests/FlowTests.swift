@@ -4327,7 +4327,7 @@ final class FlowTests: XCTestCase {
         controller.messagesAction(.startTopic("And this?", with: pepper, id: "sent-topic", file: picture))
         await settle()
         XCTAssertTrue(backend.sent.isEmpty, "nor a new thread with it")
-        XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.didntStart)
+        XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.cantTakeFiles("Pepper"), "and it says why, not just that it didn't start")
     }
 
     /// Messages' talk with the router goes to your phone and never holds your screen, so a file gets a router thread of its own.
@@ -5014,6 +5014,104 @@ final class FlowTests: XCTestCase {
         controller.channelsClosed()
         let echoed = try XCTUnwrap(restarted.threads["w"]?.replies.first { $0.text == "Keep the summary short" })
         XCTAssertEqual(restarted.channel(.of(steve))?.posts, [.thread("w"), .alsoSent(echoed, thread: "w")])
+    }
+
+    /// A reaction is a mark and nothing more: no button says anything for you, so none reaches an agent as words.
+    func testAReactionIsAMarkThatReachesNoAgentAndStaysAfterARestart() async throws {
+        kittens = [steve]
+        let work = AgentThread(id: "w", title: "Resume", projectTitle: "steve", status: .completed, model: "m", updatedAt: clock, projectPath: "/k/steve")
+        backend.listed = [work]
+        backend.said["w"] = [Exchange(id: "first", asker: .you, askedAt: clock, ask: "Tighten my resume", reply: "Tightened.", repliedAt: clock)]
+        controller.threadsChanged([work])
+        func book(where done: (ChannelBook) -> Bool) async -> ChannelBook? {
+            for _ in 0..<400 {
+                if let book = stage.channelsUpdated.last(where: done) { return book }
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            return nil
+        }
+        controller.channelsPressed()
+        let first = await book { !$0.isReading && $0.threads["w"] != nil }
+        let read = try XCTUnwrap(first)
+        let reply = try XCTUnwrap(read.threads["w"]?.replies.first)
+        XCTAssertEqual(reply.reactions, [], "T3 has it, so it can take one")
+
+        controller.messagesAction(.react(reply.id, .thumbsUp))
+        controller.messagesAction(.react(reply.id, .check))
+        controller.messagesAction(.react(reply.id, .check))
+        await settle()
+        XCTAssertTrue(backend.sent.isEmpty, "no agent heard a word")
+        XCTAssertTrue(backend.answers.isEmpty && backend.responses.isEmpty)
+        XCTAssertEqual(stage.channelsUpdated.last?.threads["w"]?.replies.first?.reactions, [.thumbsUp], "pressing one again takes it off")
+        let saved = try XCTUnwrap(savedInbox)
+        XCTAssertEqual(saved.reactions, ["first:reply": [.thumbsUp]])
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(saved), as: UTF8.self).contains("Tightened"), "never the words")
+
+        controller.messagesAction(.send("Keep it short", to: .thread(id: "w", title: "Resume"), shownIn: .of(steve)))
+        XCTAssertNil(stage.channelsUpdated.last?.threads["w"]?.replies.last?.reactions, "what T3 doesn't have yet can't take one")
+
+        controller.channelsClosed()
+        stage.channelsUpdated = []
+        controller = makeController(inbox: saved)
+        controller.threadsChanged([work])
+        controller.channelsPressed()
+        let again = await book { !$0.isReading && $0.threads["w"] != nil }
+        let restarted = try XCTUnwrap(again)
+        controller.channelsClosed()
+        XCTAssertEqual(restarted.threads["w"]?.replies.first?.reactions, [.thumbsUp])
+    }
+
+    /// An @ in #general names who your words are for, so the router doesn't choose.
+    func testAnAtInGeneralGoesStraightToThatKittenWithOnlyYourWords() async throws {
+        let planned = Kitten(name: "Cali", role: "Travel", covers: "trips", folder: "/k/cali", planned: true)
+        kittens = [steve, penny, planned]
+        backend.projects["/k/penny"] = "project-penny"
+        backend.projects["/k/steve"] = "project-steve"
+        controller.channelsPressed()
+        await messages("@penny can I afford a new laptop?", to: .router)
+
+        XCTAssertEqual(backend.sent.count, 1, "the router never ran")
+        XCTAssertEqual(backend.sent[0].prompt.projectID, "project-penny")
+        XCTAssertEqual(backend.sent[0].prompt.text, Prompts.forKitten(penny, words: "@penny can I afford a new laptop?", snapshot: nil, screenshotPath: nil, screenLeftOut: false), "only your words, as you typed them")
+        let started = try XCTUnwrap(controller.messagesThreads.keys.first, "it started from #general, so it lives there")
+        XCTAssertEqual(shownBook?.channel(.general)?.posts, [.thread(started)])
+        XCTAssertEqual(shownBook?.threads[started]?.home, .general)
+
+        await messages("Ask @Steve-Pawsniak, and @penny too, about my resume", to: .router)
+        XCTAssertEqual(backend.sent.last?.prompt.projectID, "project-steve", "the first one named, by its channel's name")
+
+        let before = backend.sent.count
+        for words in ["Email me@penny.com", "@pen, what's my balance?", "@cali plan a trip"] {
+            backend.routerSays = [words: "It's Tuesday."]
+            await messages(words, to: .router)
+        }
+        XCTAssertEqual(backend.sent.dropFirst(before).map(\.prompt.projectID), ["project-router", "project-router", "project-router"], "an email, a name that's no one's, and a kitten that isn't set up go to the router")
+
+        // A kitten whose name has no letters or numbers has no channel's name for an @ to match, so a lone @ isn't it.
+        kittens = [Kitten(name: "🐾", role: "Pets", covers: "the cat", folder: "/k/paw"), steve]
+        backend.projects["/k/paw"] = "project-paw"
+        backend.routerSays = ["Lunch @ 12, can you book it?": "It's Tuesday."]
+        await messages("Lunch @ 12, can you book it?", to: .router)
+        XCTAssertEqual(backend.sent.last?.prompt.projectID, "project-router", "no kitten was named")
+    }
+
+    /// A file still goes only where your screen may, as it would from the kitten's own channel.
+    func testAFileWithAnAtGoesOnlyToAKittenThatSeesYourScreen() async throws {
+        let pepper = Kitten(name: "Pepper", role: "Finance", covers: "their money", folder: "/k/pepper", seesScreen: false)
+        kittens = [pepper, steve]
+        backend.projects["/k/pepper"] = "project-pepper"
+        backend.projects["/k/steve"] = "project-steve"
+        controller.channelsPressed()
+        controller.messagesAction(.send("@pepper what's this?", to: .router, shownIn: .general, file: picture))
+        await settle()
+        XCTAssertTrue(backend.sent.isEmpty, "nothing went, not even your words without it")
+        XCTAssertEqual(said(in: .general, of: shownBook).first?.failure, CatWords.cantTakeFiles("Pepper"), "and it says why under them")
+
+        controller.messagesAction(.send("@steve-pawsniak what's this?", to: .router, shownIn: .general, file: picture))
+        await settle()
+        let sent = try XCTUnwrap(backend.sent.first)
+        XCTAssertEqual(sent.prompt.projectID, "project-steve")
+        XCTAssertEqual(sent.prompt.attachments.count, 1)
     }
 
     /// A fix showed nowhere in Messages, so a question asked with Fix left nothing in the cat's DM.

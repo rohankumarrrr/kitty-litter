@@ -70,6 +70,7 @@ public struct Inbox: Codable, Equatable, Sendable {
     private var alsoShown: [String: Date]?
     private var alsoShownInGeneral: [String: ShownInGeneral]?
     private var shownOnPhone: [String: Date]?
+    private var reacted: [String: Reacted]?
 
     /// How many of each place's IDs are kept, newest first. More than Messages reads.
     public static let placesKept = 300
@@ -123,6 +124,36 @@ public struct Inbox: Codable, Equatable, Sendable {
     public var alsoSentToGeneral: [String: ShownInGeneral] {
         get { alsoShownInGeneral ?? [:] }
         set { alsoShownInGeneral = Self.newest(newValue) { $0.at } }
+    }
+
+    /// Your reactions, by T3's ID for each message and whether it's what was asked or the answer, in the order you
+    /// added them. Only those IDs and each reaction's name are kept, never the words, and one this copy of Shades
+    /// doesn't know is left out.
+    public var reactions: [String: [Reaction]] {
+        (reacted ?? [:]).compactMapValues { kept in
+            let reactions = kept.reactions.compactMap(Reaction.init(rawValue:))
+            return reactions.isEmpty ? nil : reactions
+        }
+    }
+
+    /// Puts the reaction on that message, or takes it off if it's already there. It's only a mark, and tells no agent
+    /// anything.
+    public mutating func react(_ reaction: Reaction, to message: String, at date: Date) {
+        var reacted = self.reacted ?? [:]
+        var kept = reacted[message] ?? Reacted(reactions: [], at: date)
+        if kept.reactions.contains(reaction.rawValue) {
+            kept.reactions.removeAll { $0 == reaction.rawValue }
+        } else {
+            kept.reactions.append(reaction.rawValue)
+            kept.at = date
+        }
+        reacted[message] = kept.reactions.isEmpty ? nil : kept
+        self.reacted = Self.newest(reacted) { $0.at }
+    }
+
+    private struct Reacted: Codable, Equatable, Sendable {
+        var reactions: [String]
+        var at: Date
     }
 
     /// The thread a message Messages also showed in #general is in, and when. Only IDs.
@@ -402,4 +433,21 @@ public enum Missed: Codable, Hashable, Sendable {
     case question(String)
     /// One of the cat's own lines, which is never saved.
     case line(String)
+}
+
+/// A mark you put on a message in Messages. No button says anything for you, so it's one of a few fixed marks, kept on
+/// your Mac by its name, and never sent to an agent.
+public enum Reaction: String, CaseIterable, Sendable {
+    case thumbsUp, check, eyes, heart, laugh, tada
+
+    public var emoji: String {
+        switch self {
+        case .thumbsUp: "👍"
+        case .check: "✅"
+        case .eyes: "👀"
+        case .heart: "❤️"
+        case .laugh: "😂"
+        case .tada: "🎉"
+        }
+    }
 }

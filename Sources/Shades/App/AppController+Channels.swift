@@ -24,6 +24,9 @@ enum MessagesAction: Equatable {
     case older(ChannelID)
     /// What a channel tells you, from its header.
     case notifications(ChannelID, ChannelNotifications)
+    /// Puts a reaction on a message, by its `ChannelMessage.id`, or takes it off. It's a mark kept on your Mac, and
+    /// tells no agent anything.
+    case react(String, Reaction)
 }
 
 /// Messages, laid out like Slack: Activity, your threads, #general, a channel for each kitten and a DM with the cat. Each
@@ -132,7 +135,9 @@ extension AppController {
     func messagesAction(_ action: MessagesAction) {
         switch action {
         case .send(let words, let target, let channel, let alsoSent, let file):
-            send(words, to: target, shownIn: channel, alsoSent: alsoSent, file: file)
+            // An @kitten in #general goes straight to that kitten, rather than the router choosing.
+            let named = target == .router && channel == .general ? MessageTarget.mentioned(in: words, among: loadKittens().filter { !$0.planned }) : nil
+            send(words, to: named.map(MessageTarget.newThread) ?? target, shownIn: channel, alsoSent: alsoSent, file: file)
         case .startTopic(let words, let kitten, let id, let file):
             send(words, to: .newThread(kitten), shownIn: .of(kitten), echoID: id, file: file)
         case .approval(let request, let decision):
@@ -164,6 +169,10 @@ extension AppController {
             channels.older(in: channel)
         case .notifications(let channel, let notifications):
             setNotifications(notifications, for: channel)
+        case .react(let message, let reaction):
+            inbox.react(reaction, to: message, at: now())
+            keepInbox()
+            channels.refresh()
         }
     }
 
@@ -232,9 +241,14 @@ extension AppController {
             echo(startsThread: true)
             // The box waits for the new thread, so what you add next goes there too.
             let title = String(words.prefix { !$0.isNewline }.prefix(60))
-            give(words, to: kitten, snapshot: snapshot) { [weak self] threadID in
+            let sentAt = now()
+            give(words, to: kitten, snapshot: snapshot, onStarted: { [weak self] threadID in
+                // Named with an @ in #general, it lives there, as everything started from there does.
+                if channel == .general, let threadID, let self { self.messagesThreads[threadID] = self.messagesThreads[threadID] ?? sentAt }
                 self?.channels.started(echoID, in: threadID, title: title)
-            }
+            }, refused: { [weak self] in
+                self?.channels.failed(echoID, because: CatWords.cantTakeFiles(kitten.name))
+            })
         case .thread(let id, let title, let report):
             echo(threadID: id, title: title, isReply: true)
             guard let snapshot else { return reply(words, toThread: id, title: title, marking: report, echoID: echoID) }
