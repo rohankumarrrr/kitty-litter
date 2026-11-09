@@ -439,7 +439,10 @@ enum PhonePage {
           stream = null;
           pass = null;
           localStorage.removeItem('shades.key');
-          for (const id of ['top', 'rows', 'box', 'banner']) $(id).hidden = true;
+          // What Search found is what kittens said, so it goes with everything else.
+          $('found').replaceChildren();
+          $('find').textContent = words.search;
+          for (const id of ['top', 'rows', 'box', 'banner', 'search', 'found']) $(id).hidden = true;
           $('pair').hidden = false;
         }
 
@@ -575,7 +578,12 @@ enum PhonePage {
             setTimeout(() => landed.classList.remove('landed'), 2500);
           }
           showJump();
-          if (conversation(key) && document.visibilityState === 'visible' && keptUnread !== key) act({ act: 'seen', key }, true);
+          seen();
+        }
+
+        // A conversation counts as seen only while it's in front of you, not while Search covers it.
+        function seen() {
+          if (view && conversation(key) && $('search').hidden && document.visibilityState === 'visible' && keptUnread !== key) act({ act: 'seen', key }, true);
         }
 
         // A way up to the New line, while it's above what you can see.
@@ -613,7 +621,11 @@ enum PhonePage {
           if (open) { window.scrollTo(0, 0); $('query').focus(); }
           else window.scrollTo(0, conversation(key) ? document.body.scrollHeight : 0);
         }
-        $('find').addEventListener('click', () => searching($('search').hidden));
+        $('find').addEventListener('click', () => {
+          const open = $('search').hidden;
+          searching(open);
+          if (!open) seen();
+        });
         $('search').addEventListener('submit', (event) => { event.preventDefault(); $('query').blur(); });
         $('query').addEventListener('input', () => { clearTimeout(finding); finding = setTimeout(find, 250); });
 
@@ -1194,7 +1206,7 @@ enum PhonePage {
         };
 
         document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible' && view && conversation(key) && keptUnread !== key) act({ act: 'seen', key }, true);
+          if (document.visibilityState === 'visible') seen();
         });
 
         start();

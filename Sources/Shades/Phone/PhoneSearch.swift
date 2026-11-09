@@ -19,8 +19,8 @@ struct PhoneFound: Encodable, Equatable {
     var found: [Message]
     var more: Bool
 
-    init(_ words: String, in book: ChannelBook, now: Date) {
-        let (found, more) = MessageSearch.find(words, in: book, limit: Self.limit) { PhonePlace.opening($0, in: book) }
+    init(_ words: String, in book: ChannelBook, now: Date, reading plainWords: PlainWords = PlainWords()) {
+        let (found, more) = MessageSearch.find(words, in: book, limit: Self.limit, reading: plainWords) { PhonePlace.opening($0, in: book) }
         self.found = found.map { found in
             let item = JumpItem(found, in: book, now: now)
             return Message(id: found.message.id, open: PhonePlace.key(found.selection), name: item.title, detail: item.detail ?? "", text: found.snippet, marks: found.marks.map { [$0.location, $0.length] })

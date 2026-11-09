@@ -175,6 +175,7 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
     private(set) var hasMore = false
     private var book: ChannelBook?
     private var asking: Timer?
+    private let plainWords = PlainWords()
 
     private var rowHeight: CGFloat { mode == .search ? 54 : 40 }
 
@@ -215,6 +216,11 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         askSoon()
     }
 
+    /// Messages shows a new book, whose words Search reads ahead, open or not, so the first search seldom waits.
+    func readAhead(_ book: ChannelBook) {
+        plainWords.readAhead(book)
+    }
+
     /// What Messages has read changed while it's open, such as the threads T3 found. What's highlighted stays.
     func update(_ book: ChannelBook) {
         let current = items.indices.contains(highlighted) ? items[highlighted] : nil
@@ -233,7 +239,7 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
             hasMore = false
         case .search:
             let now = Date()
-            let (found, more) = MessageSearch.find(query, in: book, limit: searchLimit)
+            let (found, more) = MessageSearch.find(query, in: book, limit: searchLimit, reading: plainWords)
             items = found.map { JumpItem($0, in: book, now: now) }
             hasMore = more
         }

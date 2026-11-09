@@ -78,6 +78,43 @@ final class MessageSearchTests: XCTestCase {
         XCTAssertTrue(found.snippet.contains("The coupon box moved."))
     }
 
+    func testWordsThatOverlapAreBoldTogetherWhicheverWayTheyreTyped() throws {
+        let book = book(["a": [exchange("e1", ask: "Which font?", reply: "Silkscreen is fine.", minutes: 0)]])
+        for query in ["silk silkscreen", "silkscreen silk"] {
+            let found = try XCTUnwrap(MessageSearch.find(query, in: book, limit: 8).found.first)
+            XCTAssertEqual(found.marks, [NSRange(location: 0, length: 10)], query)
+            XCTAssertEqual(PhoneFound(query, in: book, now: at).found.first?.marks, [[0, 10]], "the phone's page skips a mark inside another")
+        }
+    }
+
+    func testEachMessagesMarkdownIsReadOnceHoweverOftenItsSearched() {
+        let reply = "I opened https://github.com/example/shop/pull/412 for it. See [the notes](https://example.com/notes).\n\n```swift\nlet total = 1\n```"
+        let said = (0..<40).map { index in exchange("e\(index)", ask: "Step \(index)", reply: reply, minutes: Double(index)) }
+        let book = book(["a": said])
+        let plainWords = PlainWords()
+        XCTAssertTrue(MessageSearch.find("swift", in: book, limit: 8, reading: plainWords).found.isEmpty, "a code block's language isn't something it says")
+        XCTAssertEqual(plainWords.reads, 40)
+        XCTAssertTrue(MessageSearch.find("swift", in: book, limit: 8, reading: plainWords).found.isEmpty)
+        XCTAssertTrue(MessageSearch.find("github", in: book, limit: 8, reading: plainWords).found.isEmpty)
+        XCTAssertEqual(MessageSearch.find("total", in: book, limit: 8, reading: plainWords).found.count, 8)
+        XCTAssertEqual(plainWords.reads, 40, "typing on, and searching again as threads come in, reads nothing twice")
+
+        let more = self.book(["a": said + [exchange("e40", ask: "Step 40", reply: reply, minutes: 40)]])
+        _ = MessageSearch.find("swift", in: more, limit: 8, reading: plainWords)
+        XCTAssertEqual(plainWords.reads, 41, "only what's new")
+    }
+
+    func testItReadsAheadOffTheMainThreadSoTheFirstSearchDoesntWait() async {
+        let said = (0..<40).map { index in exchange("e\(index)", ask: "Step \(index)", reply: "Use **Silkscreen** in `h1`.", minutes: Double(index)) }
+        let book = book(["a": said])
+        let plainWords = PlainWords()
+        plainWords.readAhead(book)
+        for _ in 0..<400 where plainWords.reads < 80 { try? await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(plainWords.reads, 80, "every message with words, asks and replies alike")
+        XCTAssertEqual(MessageSearch.find("silkscreen h1", in: book, limit: 8, reading: plainWords).found.count, 8)
+        XCTAssertEqual(plainWords.reads, 80, "the search itself read nothing")
+    }
+
     func testAPhoneOnlyFindsWhatItCanOpenAndNeverTheCatsDM() throws {
         let book = book([
             "a": [exchange("e1", ask: "Which plan is cheapest?", reply: "Starter.", minutes: 0)],

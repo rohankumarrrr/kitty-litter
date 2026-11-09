@@ -169,6 +169,7 @@ final class ChannelsView: QuietView {
         sidebar.show(book, selection: selection.place)
         pane.show(selection, in: book, isNewSelection: isFresh)
         if selection.thread != nil { threadPane.show(selection, in: book, isNewSelection: isFresh) }
+        jumpBox.readAhead(book)
         if !jumpBox.isHidden { jumpBox.update(book) }
         onSeen?(selection)
     }

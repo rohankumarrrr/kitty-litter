@@ -46,6 +46,8 @@ final class PhoneLink {
     private var letting: Task<Void, Never>?
     /// Photos and files a phone sent ahead of its message, by the ID it was given, in memory only and briefly.
     private var files: [String: (file: Drop, at: Date)] = [:]
+    /// What Search has read of messages' words, while a phone is looking.
+    private var plainWords = PlainWords()
     private static let filesKept = 6
     private static let fileMinutes: TimeInterval = 10
 
@@ -91,6 +93,7 @@ final class PhoneLink {
     func publish(_ book: ChannelBook) {
         guard self.book != nil else { return }
         self.book = book
+        plainWords.readAhead(book)
         watchers.forEach { show(book, to: $0) }
     }
 
@@ -173,6 +176,7 @@ final class PhoneLink {
         letting?.cancel()
         letting = nil
         book = hold()
+        if let book { plainWords.readAhead(book) }
         watchers.append(watcher)
         stream.onClose = { [weak self, weak watcher] in
             guard let self else { return }
@@ -192,6 +196,7 @@ final class PhoneLink {
     private func forget() {
         guard book != nil else { return }
         book = nil
+        plainWords = PlainWords()
         release()
     }
 
@@ -242,7 +247,7 @@ final class PhoneLink {
     private func search(_ request: PhoneServer.Request) -> PhoneServer.Response {
         guard Self.isFromPage(request), let search = try? JSONDecoder().decode(Search.self, from: request.body) else { return .status(400) }
         guard let book else { return .status(409) }
-        return .json(PhoneFound(search.words, in: book, now: now()))
+        return .json(PhoneFound(search.words, in: book, now: now(), reading: plainWords))
     }
 
     private struct Kept: Encodable {
