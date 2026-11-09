@@ -48,6 +48,8 @@ struct HealthFacts: Equatable {
     var t3GivesRunIDs = true
     /// Shortcuts another app already had when Shades asked for them, such as "⌃⌘B".
     var shortcutsTaken: [String] = []
+    /// Other copies of Shades running, by process ID, such as one built from source and left running.
+    var otherCopies: [Int32] = []
 }
 
 enum HealthCheck {
@@ -168,13 +170,33 @@ enum HealthCheck {
             problem: "T3 Code has stopped saying which run a thread last finished, so reports go to the bubble instead of the inbox, and a restart can lose them.",
             fix: "Run swift run probe-t3 to see what changed."
         ))
-        results.append(facts.shortcutsTaken.isEmpty ? .good("shortcuts") : HealthFinding(
+        results.append(shortcutsFinding(facts))
+        return results
+    }
+
+    /// Another copy of Shades that was up first holds all of them, so when one's running it's the likely holder.
+    private static func shortcutsFinding(_ facts: HealthFacts) -> HealthFinding {
+        guard !facts.shortcutsTaken.isEmpty else { return .good("shortcuts") }
+        let taken = facts.shortcutsTaken.joined(separator: " and ")
+        let them = facts.shortcutsTaken.count == 1 ? "it" : "them"
+        guard !facts.otherCopies.isEmpty else {
+            return HealthFinding(
+                check: "shortcuts",
+                ok: false,
+                problem: "Another app has \(taken), so pressing \(them) does nothing here.",
+                fix: "Use my menu for \(them), or change the other app's shortcut and choose Restart from my menu."
+            )
+        }
+        let one = facts.otherCopies.count == 1
+        let copies = facts.otherCopies.map(String.init).joined(separator: " and ")
+        return HealthFinding(
             check: "shortcuts",
             ok: false,
-            problem: "Another app has \(facts.shortcutsTaken.joined(separator: " and ")), so pressing \(facts.shortcutsTaken.count == 1 ? "it" : "them") does nothing here.",
-            fix: "Use my menu for \(facts.shortcutsTaken.count == 1 ? "it" : "them"), or change the other app's shortcut and choose Restart from my menu."
-        ))
-        return results
+            problem: one
+                ? "Another copy of me, process \(copies), probably has \(taken), so pressing \(them) does nothing here."
+                : "Other copies of me, processes \(copies), probably have \(taken), so pressing \(them) does nothing here.",
+            fix: "Quit \(one ? "that copy" : "those copies"), then choose Restart from my menu."
+        )
     }
 
     static func report(_ findings: [HealthFinding], pid: Int32, version: String, at date: Date) -> HealthReport {

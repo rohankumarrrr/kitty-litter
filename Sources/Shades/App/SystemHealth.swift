@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Security
 import ShadesContext
 import ShadesCore
@@ -19,6 +19,10 @@ enum SystemHealth {
         facts.skillsInstalled = FileManager.default.fileExists(
             atPath: skillsFolder.appendingPathComponent("pstack/skills/poteto-mode/SKILL.md").path
         )
+        // The app is Shades and a build from source is shades.
+        facts.otherCopies = NSWorkspace.shared.runningApplications
+            .filter { $0.processIdentifier != getpid() && $0.executableURL?.lastPathComponent.lowercased() == "shades" }
+            .map(\.processIdentifier)
         return facts
     }
 
