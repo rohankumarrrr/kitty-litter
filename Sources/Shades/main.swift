@@ -121,7 +121,7 @@ MainActor.assumeIsolated {
             controller.startHealthChecks()
             Setup.runOnFirstLaunch {
                 let globeIsFree = controller.settings.dictateKey != .fn || KeyHoldMonitor.globeAction == .doNothing
-                controller.say(globeIsFree ? CatWords.setUp : "\(CatWords.setUp) \(CatWords.globeTip)", seconds: 20)
+                controller.say(globeIsFree ? CatWords.setUp : "\(CatWords.setUp) \(CatWords.globeTip)")
             }
         }
     }

@@ -172,7 +172,7 @@ extension AppController {
             keepInbox()
             inboxChanged()
         }
-        say(CatWords.sentTo(title), threadID: threadID)
+        say(CatWords.sentTo(title), threadID: threadID, fades: true)
         forwardTask = Task {
             var heardBack = false
             do {

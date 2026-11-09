@@ -448,11 +448,11 @@ extension AppController {
 
     /// A copy goes out alongside the rest of the message, so it waits its turn rather than talking over that. One
     /// that's `unasked` comes once the work's well under way, so Do Not Disturb holds it.
-    func tell(_ text: String, threadID: String? = nil, as errand: Errand, unasked: Bool = false) {
+    func tell(_ text: String, threadID: String? = nil, as errand: Errand, fades: Bool = false, unasked: Bool = false) {
         if errand == .correctionCopy {
             post(caption: CatWords.correctionCaption, text: text, threadID: threadID, unasked: unasked)
         } else {
-            say(text, threadID: threadID, unasked: unasked)
+            say(text, threadID: threadID, fades: fades, unasked: unasked)
         }
     }
 
@@ -478,7 +478,7 @@ extension AppController {
             runtimeMode: settings.frontierMode,
             projectID: projectID
         )
-        if errand != .correctionCopy { say(CatWords.handingOff(modelName: name), seconds: nil) }
+        if errand != .correctionCopy { say(CatWords.handingOff(modelName: name)) }
         frontierTask = Task {
             var startedThread: String?
             var warning: Int?
@@ -495,7 +495,7 @@ extension AppController {
                         if missesScreen {
                             warning = sayPassedOn(said, threadID: threadID, missesScreen: true, asked: asked)
                         } else {
-                            tell(said, threadID: threadID, as: errand)
+                            tell(said, threadID: threadID, as: errand, fades: true)
                         }
                     case .needsApproval(let request):
                         addApproval(request)

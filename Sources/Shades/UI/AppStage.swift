@@ -199,6 +199,8 @@ final class AppStage: CatStage {
         bubble.show(content)
     }
 
+    var isPointerOnBubble: Bool { bubble.isVisible && bubble.panel.frame.contains(NSEvent.mouseLocation) }
+
     var isInputVisible: Bool { input.isVisible }
 
     func showInput(_ request: InputRequest) {

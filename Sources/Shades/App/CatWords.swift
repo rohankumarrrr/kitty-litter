@@ -201,7 +201,8 @@ enum CatWords {
     static let loadOlder = "Load older messages"
     static let loadingOlder = "Loading older messages..."
     static let olderReplies = "Older replies are in T3."
-    static let cantReachT3Yet = "I can't reach T3 Code. Open it and I'll catch up."
+    /// What T3Error.notRunning says, so the bubble and Messages name it the same way.
+    static let cantReachT3Yet = "I can't reach T3 Code. Open it and try again."
     static let stillGoing = "Still working on it..."
     static func noThreadsYet(_ name: String) -> String { "You and \(name) haven't started a thread yet." }
     static func notSetUpYet(_ kitten: Kitten) -> String { "\(kitten.name) isn't set up yet." }
@@ -414,7 +415,7 @@ enum CatWords {
         let words = String(describing: error).lowercased()
         switch doing {
         case .agents:
-            return "I can't reach T3 Code. Is it running?"
+            return cantReachT3Yet
         case .seeing:
             return needsScreenRecording
         case .listening:

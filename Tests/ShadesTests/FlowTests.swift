@@ -187,11 +187,11 @@ final class FlowTests: XCTestCase {
 
     /// T3 not running is said as it always was, rather than blamed on the folder.
     func testIfT3WontTakeItsFolderTheFrontDoorDoesntRunAndSaysWhy() async {
-        backend.addProjectError = Friendly(errorDescription: "T3 Code isn't running. Open it and try again.")
+        backend.addProjectError = Friendly(errorDescription: "I can't reach T3 Code. Open it and try again.")
         await ask("what's this?")
         XCTAssertTrue(backend.sent.isEmpty)
         guard case .line(let said, _)? = stage.bubble else { return XCTFail("nothing said") }
-        XCTAssertEqual(said, "T3 Code isn't running. Open it and try again.")
+        XCTAssertEqual(said, "I can't reach T3 Code. Open it and try again.")
     }
 
     func testShowsThinkingStraightAway() async {
@@ -747,7 +747,7 @@ final class FlowTests: XCTestCase {
 
     func testAnotherLineDoesntLoseTheWarning() async {
         await askClawde("Read this x thread")
-        controller.say("Work's started in a new session.", seconds: nil)
+        controller.say("Work's started in a new session.")
         XCTAssertEqual(stage.bubble, .line("Work's started in a new session.", threadID: nil))
         controller.bubbleDismissed(byClick: false)
         XCTAssertEqual(stage.bubble, .notice(caption: "Clawde has this.", text: sendTheLink, threadID: "thread-2"))
@@ -2884,7 +2884,7 @@ final class FlowTests: XCTestCase {
     }
 
     func testLoadingTheEarsDoesntTalkOverAnything() async {
-        controller.say("On it.", seconds: nil)
+        controller.say("On it.")
         controller.fetchingEars(0.1)
         clock = clock.addingTimeInterval(5)
         controller.fetchingEars(0.5)
@@ -4073,17 +4073,42 @@ final class FlowTests: XCTestCase {
     // MARK: - Problems
 
     func testNoT3GetsOneShortLine() async {
-        backend.connectError = Friendly(errorDescription: "T3 Code isn't running. Open it and try again.")
+        backend.connectError = Friendly(errorDescription: "I can't reach T3 Code. Open it and try again.")
         controller.start()
         await settle()
-        XCTAssertEqual(stage.bubble, .line("T3 Code isn't running. Open it and try again.", threadID: nil))
+        XCTAssertEqual(stage.bubble, .line("I can't reach T3 Code. Open it and try again.", threadID: nil))
         XCTAssertEqual(stage.statusText, CatWords.cantReachT3)
     }
 
     func testAFailedTurnGetsOneShortLine() async {
-        backend.streamError = Friendly(errorDescription: "Lost the connection to T3 Code.")
+        backend.streamError = Friendly(errorDescription: "I lost the connection to T3 Code. Make sure it's open, then try again.")
         await ask("hello")
-        XCTAssertEqual(stage.bubble, .line("Lost the connection to T3 Code.", threadID: nil))
+        XCTAssertEqual(stage.bubble, .line("I lost the connection to T3 Code. Make sure it's open, then try again.", threadID: nil))
+    }
+
+    func testAProblemStaysUntilYouDismissIt() async {
+        controller.lineSeconds = 0.05
+        backend.streamError = Friendly(errorDescription: "I can't reach T3 Code. Open it and try again.")
+        await ask("hello")
+        try? await Task.sleep(for: .seconds(0.3))
+        XCTAssertEqual(stage.bubble, .line("I can't reach T3 Code. Open it and try again.", threadID: nil))
+        controller.bubbleDismissed(byClick: true)
+        XCTAssertNil(stage.bubble)
+    }
+
+    func testNewsGoesByItselfButNotWhileThePointerIsOnIt() async {
+        controller.lineSeconds = 0.05
+        backend.replies = [
+            [.finished(fullText: "HANDOFF: Fix the bug")],
+            [.finished(fullText: "Done.")],
+        ]
+        stage.isPointerOnBubble = true
+        await ask("please fix it")
+        try? await Task.sleep(for: .seconds(0.3))
+        XCTAssertEqual(stage.bubble, .line("Fable has this.", threadID: "thread-2"))
+        stage.isPointerOnBubble = false
+        try? await Task.sleep(for: .seconds(0.8))
+        XCTAssertNil(stage.bubble)
     }
 
     func testAMissingPermissionShowsWhenAsking() async {

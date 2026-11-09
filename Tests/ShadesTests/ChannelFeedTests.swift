@@ -651,9 +651,9 @@ extension ChannelFeedTests {
         feed.sent(echo, in: .of(steve), isReply: true, target: .thread(id: "a", title: "Work"))
         XCTAssertNil(feed.toTryAgain("sent-1"), "nothing to try again while it's on its way")
 
-        feed.failed("sent-1", because: "I can't reach T3 Code. Is it running?")
+        feed.failed("sent-1", because: "I can't reach T3 Code. Open it and try again.")
         let failed = latest?.threads["a"]?.latest
-        XCTAssertEqual(failed?.failure, "I can't reach T3 Code. Is it running?")
+        XCTAssertEqual(failed?.failure, "I can't reach T3 Code. Open it and try again.")
         XCTAssertEqual(failed?.isSending, false)
         XCTAssertEqual(failed?.canTryAgain, true)
         XCTAssertEqual(feed.toTryAgain("sent-1")?.target, .thread(id: "a", title: "Work"), "where it was going")

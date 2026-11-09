@@ -67,6 +67,8 @@ protocol CatStage: AnyObject {
 
     // The bubble
     func showBubble(_ content: BubbleContent?)
+    /// The pointer resting on it, as when you're reading it.
+    var isPointerOnBubble: Bool { get }
 
     // The input panel
     var isInputVisible: Bool { get }

@@ -34,8 +34,11 @@ final class T3CredentialsTests: XCTestCase {
     }
 
     func testErrorsSpeakPlainly() {
-        XCTAssertEqual(T3Error.notRunning.errorDescription, "T3 Code isn't running. Open it and try again.")
-        XCTAssertEqual(T3Error.incompatibleServer(version: "9.9.9").errorDescription, "The Kitty Litter doesn't work with T3 Code 9.9.9 yet. Check for an update to The Kitty Litter.")
-        XCTAssertEqual(T3Error.incompatibleServer(version: nil).errorDescription, "The Kitty Litter doesn't work with this version of T3 Code yet. Check for an update to The Kitty Litter.")
+        XCTAssertEqual(T3Error.notRunning.errorDescription, "I can't reach T3 Code. Open it and try again.")
+        XCTAssertEqual(T3Error.incompatibleServer(version: "9.9.9").errorDescription, "I can't work with T3 Code 9.9.9 yet. Check for an update to The Kitty Litter.")
+        XCTAssertEqual(T3Error.incompatibleServer(version: nil).errorDescription, "I can't work with this version of T3 Code yet. Check for an update to The Kitty Litter.")
+        XCTAssertEqual(T3Error.signInFailed.errorDescription, "I couldn't sign in to T3 Code. Quit and reopen it, then try again.")
+        XCTAssertEqual(T3Error.connectionLost.errorDescription, "I lost the connection to T3 Code. Make sure it's open, then try again.")
+        XCTAssertEqual(T3Error.timedOut.errorDescription, "T3 Code took too long to answer. Try again in a moment.")
     }
 }

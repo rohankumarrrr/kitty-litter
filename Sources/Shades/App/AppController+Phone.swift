@@ -37,7 +37,7 @@ extension AppController {
         )
         link.onPaired = { [weak self] in
             self?.stage.showPairing(nil)
-            self?.say(CatWords.phonePaired)
+            self?.say(CatWords.phonePaired, fades: true)
         }
         link.theme = theme
         phone = link
