@@ -81,12 +81,12 @@ enum PhonePage {
     static let style = """
         :root {
           --paper: #f9f9f9; --text: #1d1d1f; --soft: #6e6e73; --line: #d2d2d7; --grey: #e9e9eb;
-          --you: #0071e3; --on-you: #ffffff; --card: #ffffff; --warn: #c9341c; --badge: #ff3b5c; --cats: light;
+          --you: #0071e3; --on-you: #ffffff; --link: #0070e1; --card: #ffffff; --warn: #c9341c; --badge: #ff3b5c; --alert: #d6324d; --cats: light;
           font: 17px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
           -webkit-text-size-adjust: 100%;
         }
         @media (prefers-color-scheme: dark) {
-          :root { --paper: #1d1d1f; --text: #f5f5f7; --soft: #98989d; --line: #3a3a3c; --grey: #3a3a3c; --card: #2c2c2e; --warn: #ff6b55; --cats: dark; }
+          :root { --paper: #1d1d1f; --text: #f5f5f7; --soft: #98989d; --line: #3a3a3c; --grey: #3a3a3c; --link: #2586e7; --card: #2c2c2e; --warn: #ff6b55; --alert: #ff3b5c; --cats: dark; }
         }
         * { box-sizing: border-box; }
         html, body { margin: 0; background: var(--paper); color: var(--text); }
@@ -96,11 +96,11 @@ enum PhonePage {
 
         #top { position: sticky; top: 0; z-index: 2; background: var(--paper); border-bottom: 1px solid var(--line);
           padding: calc(env(safe-area-inset-top) + 10px) 16px 10px; }
-        #back { color: var(--you); font-size: 15px; margin-bottom: 4px; display: block; max-width: 100%;
+        #back { color: var(--link); font-size: 15px; margin-bottom: 4px; display: block; max-width: 100%;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
         #head { display: flex; align-items: center; gap: 10px; }
         #names { flex: 1; min-width: 0; }
-        #link, #unread, #find { color: var(--you); font-size: 15px; flex: none; }
+        #link, #unread, #find { color: var(--link); font-size: 15px; flex: none; }
         #jumpnew { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap;
           background: var(--you); color: var(--on-you); border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600;
           box-shadow: 0 2px 10px rgba(0, 0, 0, .2); }
@@ -115,7 +115,7 @@ enum PhonePage {
         #title { font-size: 20px; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
         #subtitle { margin: 2px 0 0; color: var(--soft); font-size: 13px; }
         #subtitle:empty { display: none; }
-        #banner { background: var(--warn); color: #fff; padding: 8px 16px; font-size: 14px; }
+        #banner { background: var(--warn); color: var(--paper); padding: 8px 16px; font-size: 14px; }
         #notify { display: flex; align-items: center; gap: 12px; margin: 12px 12px 0; padding: 10px 14px; border-radius: 14px;
           background: var(--card); border: 1px solid var(--line); }
         #notifytext { flex: 1; margin: 0; color: var(--soft); font-size: 14px; }
@@ -127,8 +127,9 @@ enum PhonePage {
         .place:active, .issue:active { background: var(--grey); }
         .place .name { flex: 1; font-size: 17px; }
         .place.unread .name { font-weight: 600; }
-        .place.asleep { opacity: .45; }
-        .count { background: var(--badge); color: #fff; border-radius: 999px; padding: 1px 8px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .place.asleep .cat { opacity: .45; }
+        .place.asleep .name { color: var(--soft); }
+        .count { background: var(--badge); color: #000; border-radius: 999px; padding: 1px 8px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
         .icon { width: 32px; height: 32px; flex: none; display: grid; place-items: center; color: var(--soft); }
         .icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
         .place.unread .icon { color: var(--text); }
@@ -165,7 +166,7 @@ enum PhonePage {
         .bubble .marker { flex: none; min-width: .8em; }
         .bubble .code { border-radius: 10px; background: color-mix(in srgb, currentColor 9%, transparent); }
         .bubble pre { margin: 0; padding: 8px 10px; font: 14px/1.4 ui-monospace, Menlo, monospace; white-space: pre; overflow-x: auto; }
-        .bubble .copy { display: block; margin: 0 0 -6px auto; padding: 4px 10px 0; font-size: 13px; opacity: .7; }
+        .bubble .copy { display: block; margin: 0 0 -6px auto; padding: 4px 10px 0; font-size: 13px; }
         .bubble .table { overflow-x: auto; }
         .bubble table { border-collapse: collapse; font-size: 15px; white-space: normal; }
         .bubble th, .bubble td { overflow-wrap: normal; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); padding: 3px 8px; text-align: left; vertical-align: top; }
@@ -187,7 +188,7 @@ enum PhonePage {
         .bubble.cut { max-height: 16.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); }
         .more { color: var(--soft); font-size: 14px; margin: 4px 12px 0; }
         .failure { color: var(--warn); font-size: 13px; margin: 3px 12px 0; }
-        .retry { color: var(--you); font-size: 14px; font-weight: 600; margin: 4px 12px 0; }
+        .retry { color: var(--link); font-size: 14px; font-weight: 600; margin: 4px 12px 0; }
         .reactions { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 8px 0; }
         .reactions button { background: var(--grey); border-radius: 999px; padding: 2px 9px; font-size: 15px; }
         .reactbar { display: flex; gap: 2px; margin: 6px 4px 0; padding: 4px 6px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; }
@@ -196,13 +197,13 @@ enum PhonePage {
         .context { color: var(--soft); font-size: 12px; margin: 6px 12px 0; text-align: left; }
         .replybar { display: flex; align-items: center; gap: 6px; margin: 4px 6px 0; padding: 4px 8px; border-radius: 10px; font-size: 13px; }
         .replybar:active { background: var(--grey); }
-        .replybar b { color: var(--you); }
-        .replybar .waiting { color: var(--badge); font-weight: 600; }
+        .replybar b { color: var(--link); }
+        .replybar .waiting { color: var(--alert); font-weight: 600; }
         .replybar span { color: var(--soft); }
         .replies { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: 13px; margin: 12px 4px 4px; }
         .replies::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
         /* Slack's New line, over what's new to you. */
-        .new { display: flex; align-items: center; gap: 10px; color: var(--badge); font-size: 12px; font-weight: 600; margin: 12px 4px 4px; }
+        .new { display: flex; align-items: center; gap: 10px; color: var(--alert); font-size: 12px; font-weight: 600; margin: 12px 4px 4px; }
         .new::before { content: ''; flex: 1; border-top: 1px solid var(--badge); }
         .digest { display: block; width: 100%; text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--line); }
         .digest:active { background: var(--grey); }
@@ -211,11 +212,11 @@ enum PhonePage {
         .digest p { margin: 2px 0 6px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         .digest small { color: var(--soft); }
         .digest .who { display: flex; align-items: center; gap: 6px; }
-        .digest .more { color: var(--you); font-weight: 600; margin: 0; }
+        .digest .more { color: var(--link); font-weight: 600; margin: 0; }
         #alsolabel { display: flex; align-items: center; gap: 6px; color: var(--soft); font-size: 13px; margin: 6px 4px 0; }
         .section { display: flex; justify-content: space-between; align-items: baseline; margin: 22px 4px 6px; }
         .section span { color: var(--soft); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-        .section button { color: var(--you); font-size: 14px; }
+        .section button { color: var(--link); font-size: 14px; }
         .heading { display: flex; align-items: center; gap: 10px; margin: 16px 4px 4px; }
         .heading p { margin: 0; color: var(--soft); font-size: 13px; }
         .issue { display: block; width: 100%; text-align: left; padding: 8px 4px 8px 46px; border-radius: 10px; }
@@ -250,10 +251,10 @@ enum PhonePage {
         .tool { font-size: 20px; padding: 6px 2px; line-height: 1; }
         .tool:disabled { opacity: .4; }
         #attached { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
-        .chip { display: flex; align-items: center; gap: 8px; padding: 6px 4px 6px 8px; border-radius: 12px; background: var(--grey); max-width: 100%; min-width: 0; }
-        .chip img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex: none; }
-        .chip span { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
-        .chip button { color: var(--soft); padding: 4px 8px; }
+        .attachment { display: flex; align-items: center; gap: 8px; padding: 6px 4px 6px 8px; border-radius: 12px; background: var(--grey); max-width: 100%; min-width: 0; }
+        .attachment img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex: none; }
+        .attachment span { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
+        .attachment button { color: var(--soft); padding: 4px 8px; }
         .pictures { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; max-width: 86%; }
         .mine .pictures { margin-left: auto; justify-content: flex-end; }
         .picture { max-width: 66%; max-height: 240px; border-radius: 14px; display: block; }
@@ -270,15 +271,17 @@ enum PhonePage {
         """
 
     /// The theme you picked for Messages, over the page's own colours in light and dark alike. Each is a hex colour
-    /// worked out on the Mac, so nothing from the theme's file reaches the page as it was written.
+    /// worked out on the Mac, so nothing from the theme's file reaches the page as it was written, and words in any of
+    /// them read at 4.5:1.
     static func colors(_ theme: ColorTheme?) -> String {
         guard let theme else { return "" }
         let hex = ColorTheme.hex
         return """
 
             :root { color-scheme: \(theme.isDark ? "dark" : "light"); --cats: \(theme.isDark ? "dark" : "light");
-              --paper: \(hex(theme.paper)); --text: \(hex(theme.text)); --soft: \(hex(theme.soft)); --line: \(hex(theme.line));
-              --grey: \(hex(theme.bubble)); --card: \(hex(theme.hover)); --you: \(hex(theme.accent)); --on-you: \(hex(theme.words(on: theme.accent))); }
+              --paper: \(hex(theme.paper)); --text: \(hex(theme.text)); --soft: \(hex(ColorTheme.legible(theme.soft, on: theme.hover))); --line: \(hex(theme.line));
+              --grey: \(hex(theme.bubble)); --card: \(hex(theme.hover)); --you: \(hex(theme.accent)); --on-you: \(hex(theme.words(on: theme.accent)));
+              --link: \(hex(theme.link)); --warn: \(hex(theme.danger)); --alert: \(hex(ColorTheme.legible(0xff3b5c, on: theme.paper))); }
 
             """
     }
@@ -1178,7 +1181,7 @@ enum PhonePage {
         // What's attached, over the box: each with a small picture or its name, and ✕ to take it off.
         function chips() {
           $('attached').replaceChildren(...attached.map((file) => {
-            const chip = el('div', 'chip');
+            const chip = el('div', 'attachment');
             if (file.picture) {
               const picture = el('img');
               picture.src = file.picture;
