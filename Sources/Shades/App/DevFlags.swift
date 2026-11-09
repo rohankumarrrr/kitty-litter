@@ -30,6 +30,10 @@ import ShadesT3
 /// And for driving the demo from a file of its commands, one a line, such as `wait 2` or `draw out`:
 ///
 ///     shades --demo --no-script --commands steps.txt
+///
+/// And for seeing it with Reduce Motion on, whatever your Mac is set to:
+///
+///     shades --demo --reduce-motion
 @MainActor
 enum DevFlags {
     static var wantsFlow: Bool { ["--ask", "--hand-off", "--fix"].contains { value(after: $0) != nil } }
@@ -38,6 +42,7 @@ enum DevFlags {
     static var channelsImageFolder: String? { value(after: "--channels-image") }
     static var commandsFile: String? { value(after: "--commands") }
     static var pictureFile: String? { value(after: "--picture") }
+    static var reducesMotion: Bool { CommandLine.arguments.contains("--reduce-motion") }
 
     static func savePicture(from path: String) -> Never {
         do {

@@ -25,4 +25,4 @@ Journey: `journeys/kittens.txt`.
 ## Gotchas
 
 - Clicking a kitten has no demo command yet. In the demo, opening a thread prints `[demo] would open <thread> in T3`.
-- The kittens move while the view is open, so two pictures of the same state can differ by a frame.
+- The kittens move while the view is open, so two pictures of the same state can differ by a frame. With `--reduce-motion` they hold still, as they do with Reduce Motion on.

@@ -38,6 +38,8 @@ struct CatBrain {
     /// How soon it curls up again under Do Not Disturb, once you're done with it.
     private static let dozeAfter = 10
     private static let celebrateTicks = 20
+    /// Something that needs you blinks for five seconds, then holds, so it never flashes for hours.
+    private static let attentionBlinks = 50
 
     private(set) var state: State = .sit
     private(set) var position: CGPoint
@@ -50,7 +52,10 @@ struct CatBrain {
     private(set) var doNotDisturb = false
     private var celebrating = 0
     private var celebrateOnArrival = false
+    private var statusAt = 0
     var level: Float = 0
+    /// Reduce Motion: it gets where it's going in one tick, and nothing else about it moves on its own.
+    var still = false
 
     init(position: CGPoint) {
         self.position = position
@@ -74,8 +79,8 @@ struct CatBrain {
             idle += 1
             if state == .sit { sitStep() }
             if state == .sleep {
-                let breath = count % 12 < 6
-                pose = CatPose(frame: breath ? .sleep1 : .sleep2, z: (count / 6) % 4)
+                let breath = cycle % 12 < 6
+                pose = CatPose(frame: breath ? .sleep1 : .sleep2, z: (cycle / 6) % 4)
             }
         }
         return arrived
@@ -98,7 +103,7 @@ struct CatBrain {
         let dx = target.x - position.x
         let dy = target.y - position.y
         let distance = (dx * dx + dy * dy).squareRoot()
-        if distance <= Self.speed {
+        if still || distance <= Self.speed {
             position = target
             state = .sit
             idle = 0
@@ -126,7 +131,7 @@ struct CatBrain {
         if staysUp {
             // Busy with you, so no scratching and no nodding off.
             if idle > Self.sleepAfter { idle = 0 }
-            pose = CatPose(frame: idle % Self.blinkEvery == 0 ? .blink : .sit, lift: hop, glint: glint)
+            pose = CatPose(frame: blinking ? .blink : .sit, lift: hop, glint: glint)
             return
         }
         if idle > (doNotDisturb ? Self.dozeAfter : Self.sleepAfter) {
@@ -137,10 +142,10 @@ struct CatBrain {
                 return
             }
         }
-        if idle > Self.scratchStart && idle < Self.scratchEnd {
+        if !still && idle > Self.scratchStart && idle < Self.scratchEnd {
             pose = CatPose(frame: count % 2 == 1 ? .scratch1 : .scratch2)
         } else {
-            pose = CatPose(frame: idle % Self.blinkEvery == 0 ? .blink : .sit)
+            pose = CatPose(frame: blinking ? .blink : .sit)
         }
     }
 
@@ -149,6 +154,10 @@ struct CatBrain {
         if celebrating <= 0 {
             state = .sit
             idle = 0
+            return
+        }
+        if still {
+            pose = CatPose(frame: .bat1, glint: .party)
             return
         }
         let beat = celebrating % 4
@@ -166,15 +175,24 @@ struct CatBrain {
     }
 
     private var hop: Int {
-        status == .listening && level > 0.45 ? 1 : 0
+        !still && status == .listening && level > 0.45 ? 1 : 0
+    }
+
+    private var blinking: Bool {
+        !still && idle % Self.blinkEvery == 0
+    }
+
+    /// What the drawings that loop by themselves count by. A still cat stays on the first of each.
+    private var cycle: Int {
+        still ? 0 : count
     }
 
     private var glint: CatGlint {
         switch status {
         case .none: return .plain
         case .listening: return .listening(loudness: level < 0.15 ? 0 : level < 0.5 ? 1 : 2)
-        case .thinking: return .thinking(bright: count % 8 < 4)
-        case .attention: return .attention(bright: count % 6 < 3)
+        case .thinking: return .thinking(bright: cycle % 8 < 4)
+        case .attention: return .attention(bright: count - statusAt > Self.attentionBlinks || cycle % 6 < 3)
         }
     }
 
@@ -203,6 +221,7 @@ struct CatBrain {
     }
 
     mutating func setStatus(_ status: CatStatus) {
+        if status != self.status { statusAt = count }
         self.status = status
         if staysUp { wake() }
         if state == .sit { pose.glint = glint }

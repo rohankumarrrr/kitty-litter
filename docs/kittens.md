@@ -54,6 +54,8 @@ Normally you only see Shades. Shift-click him, or choose Kittens from his menu, 
 - **Idle**, asleep
 - **Not set up yet**, for a `planned` kitten
 
+With **Reduce motion** on in System Settings › Accessibility › Display, each kitten holds still in its state's first drawing, here and in The Kitty Litter, and the cat goes straight to where it's going instead of running, so an approval shows at once. When something needs you, the cat's light blinks for five seconds and then stays on, and under Reduce motion it doesn't blink at all.
+
 Click a kitten to open whatever most needs looking at in T3. A thread counts as a kitten's if it's in the kitten's folder or its `project`, or if its title starts with the kitten's name and a colon, which is what a kitten's instructions should ask for when it works in another project.
 
 ### The Kitty Litter
