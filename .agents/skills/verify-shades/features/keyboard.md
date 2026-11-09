@@ -17,14 +17,14 @@ With Keyboard navigation on in System Settings › Keyboard, every button you ca
 
 ## Driving it with the demo
 
-Journey: `journeys/keyboard.txt`. `keyboard on` stands in for the system setting, which the demo leaves as it is. `tab`, `tab back`, `tab control` and `space` hand Tab, Shift-Tab, Ctrl-Tab or Space to whichever of the app's windows has the keyboard, the way the key arrives there, without posting anything to the system, and print `focus <window> <what has the keyboard> key= front=`.
+Journey: `journeys/keyboard.txt`. `keyboard on` stands in for the system setting, which the demo leaves as it is. `tab`, `tab back`, `tab control` and `space` hand Tab, Shift-Tab, Ctrl-Tab or Space to whichever of the app's windows has the keyboard, the way the key arrives there, without posting anything to the system, and print `focus <window> <what has the keyboard> key= front=`, where `front=another app` means your app stayed in front.
 
 - **Settings.** `settings messages`, then `tab` prints `focus settings The Kitty Litter ▾`, which is Theme, and `1-theme/settings.png` shows the ring round it. Tab goes on to `SF Pro ▾` and `Done`, `tab back` comes back, and `2-done/settings.png` shows Done's ring inside it. `space` on Done closes Settings, and `windows` shows `settings visible=false`.
 - **Activity.** After `approval`, `channels` and `key activity`, Tab goes through Do Not Disturb, Theme, ⌘/ Shortcuts, Settings, the approval's words, Deny and Allow. `3-allow/channels.png` shows the ring on Allow, and `space` prints `[demo] accept: npm run build && npm test`.
 - **A header.** `channel general`, and the fifth Tab is `Notifications`, shown in `4-notifications/channels.png`.
 - **Also send.** `channel steve`, `thread pricing copy`, `draft Keep the FAQ`. `tab back` from the window lands on `Also send to #steve-pawsniak`, the next goes into the box, `tab control` comes back out, and `space` ticks it, shown in `5-also-send/channels.png`.
 - **Off.** `keyboard off`, then `tab` skips every button and lands on words or a box.
-- Every `focus` line says `front=` your app, and `windows` never shows the bubble or kittens with `key=true`.
+- Every `focus` line says `front=another app`, and `windows` never shows the bubble or kittens with `key=true`.
 
 ## Gotchas
 

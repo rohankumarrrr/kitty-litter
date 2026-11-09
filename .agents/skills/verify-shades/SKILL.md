@@ -30,7 +30,7 @@ The cat and its windows show on the real desktop while it runs. They never make 
 swift run shades --demo --no-script --commands .agents/skills/verify-shades/journeys/doctor.txt
 ```
 
-It prints `front <app>`, a `window <name> ...` line for each of `cat`, `bubble`, `input`, `kittens` and `channels`, then `state ... active=`. If it does, the build is worth driving. `front` is the app in front, which must stay whatever was in front before the run, never this app (`shades` from source). If it says `shades`, a window made The Kitty Litter the active app, which breaks a rule in `AGENTS.md` and is a bug in its own right. `active=true` on its own isn't: AppKit says that while one of The Kitty Litter's panels has the keyboard, such as the Ask box or the box in The Kitty Litter, even though your app stays in front. If the first `front` of a run already says `shades`, macOS put the demo in front as it launched, such as when nothing else was in front, so that run can't show whether a window did it. A build error means fixing the build first.
+It prints `front another app`, a `window <name> ...` line for each of `cat`, `bubble`, `input`, `kittens` and `channels`, then `state ... active=`. If it does, the build is worth driving. `front` says whether this copy of The Kitty Litter is in front, `front The Kitty Litter`, or `front another app`, and never names the other app, since what a journey prints goes on public pull requests. It must stay `another app` all run. If it says `The Kitty Litter`, a window made The Kitty Litter the active app, which breaks a rule in `AGENTS.md` and is a bug in its own right. `active=true` on its own isn't: AppKit says that while one of The Kitty Litter's panels has the keyboard, such as the Ask box or the box in The Kitty Litter, even though your app stays in front. If the first `front` of a run already says `The Kitty Litter`, macOS put the demo in front as it launched, such as when nothing else was in front, so that run can't show whether a window did it. A build error means fixing the build first.
 
 ## Drive
 
@@ -39,7 +39,7 @@ Find the feature in [features/README.md](features/README.md), run its journey fr
 - `wait <seconds>` holds back the lines after it. Each feature file says how long its steps take.
 - `draw <folder>` has each window that's showing draw itself to `<folder>/<name>.png`, and prints `drew <name> <path>`. `input` is the Ask box and `channels` is The Kitty Litter.
 - `windows` prints each window's frame, whether it's showing and whether it has the keyboard, then the cat's state and `active=`.
-- `front` prints the app in front.
+- `front` prints `The Kitty Litter` when this copy is in front, `another app` when anything else is, and `nothing` when nothing is. The `front=` on `key`, `highlight` and `tab` lines says the same. Your installed copy in front counts as another app.
 - `record <file.gif> <window>...` records those windows, or `phone`, as a looping GIF until `record stop`, and keeps each frame as a picture in `.verify/shades/record/<name>/`. See [Recordings](#recordings).
 - The rest, such as `ask`, `channels`, `channel`, `send`, `report`, `inbox`, `approval` and `allow`, are listed by `help` and defined in `handle` in `Sources/Shades/Demo/DemoDriver.swift`. Each calls the same controller method as the button it stands for.
 

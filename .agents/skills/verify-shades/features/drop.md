@@ -33,4 +33,4 @@ Journey: `journeys/drop.txt`. `drop` hands the cat a pasteboard the same way a d
 - The `[demo]` lines cut a prompt short, so they don't show the `<screen>` block with the file. `FlowTests` checks what's in it.
 - The demo can't drag anything, so a real drag reaching the cat's window is only tried by a person. The cat's window lets the pointer through except over the cat's own pixels, and a drag has to be over those too.
 - The demo router's summary is canned, so it describes the syllabus whatever you drop.
-- Check `front`, not `active=`. AppKit says `active=true` while any of The Kitty Litter's panels has the keyboard, the drop's box and the Ask box included, so the last `front` should name the same app as the first.
+- Check `front`, not `active=`. AppKit says `active=true` while any of The Kitty Litter's panels has the keyboard, the drop's box and the Ask box included, so the last `front` should say `another app`, as the first does.

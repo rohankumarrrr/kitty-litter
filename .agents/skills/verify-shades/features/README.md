@@ -12,7 +12,7 @@ The maintained list of what a person can do with The Kitty Litter, and how to pr
 
 - Capture the action and the state after it, as a picture before and a picture after.
 - Check the `[demo]` lines for what was sent, alongside the pictures.
-- Start every journey with `front`, and end it with `front` and `windows`. The last `front` mustn't be this app (`shades` from source) unless the first one already was. `active=true` is expected while a box has the keyboard.
+- Start every journey with `front`, and end it with `front` and `windows`. The last `front` must say `another app` unless the first one already said `The Kitty Litter`. `active=true` is expected while a box has the keyboard.
 - Record the feature and journey with each picture.
 - If a journey can't reach a state, report the command you ran and what was missing. Don't report a different path as the one you were asked to prove.
 
