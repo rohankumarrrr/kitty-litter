@@ -10,6 +10,7 @@ actor T3Auth {
     private let label: String
     private let ttl: String
     private let renewBefore: TimeInterval
+    private let revokesWhatItCantRead: Bool
     private let http: URLSession
 
     private var credential: T3Credential?
@@ -17,12 +18,13 @@ actor T3Auth {
     /// The sign-ins this run saved, the only ones it deletes.
     private var savedHere: Set<String> = []
 
-    init(home: URL, store: T3CredentialStoring, label: String, ttl: String, renewBefore: TimeInterval, http: URLSession? = nil) {
+    init(home: URL, store: T3CredentialStoring, label: String, ttl: String, renewBefore: TimeInterval, revokesWhatItCantRead: Bool = true, http: URLSession? = nil) {
         self.home = home
         self.store = store
         self.label = label
         self.ttl = ttl
         self.renewBefore = renewBefore
+        self.revokesWhatItCantRead = revokesWhatItCantRead
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 5
         self.http = http ?? URLSession(configuration: configuration)
@@ -98,7 +100,7 @@ actor T3Auth {
         if !forceNew, let usable = try await usableCredential(origin: origin) { return usable.token }
 
         let previous = credential ?? (try? store.load())
-        let leftByLastBuild = try? store.newestUnreadableSessionID()
+        let leftByLastBuild = revokesWhatItCantRead ? try? store.newestUnreadableSessionID() : nil
         let issued = try await issueSession()
         // A locked or broken Keychain shouldn't stop the cat. It just signs in again next launch.
         if (try? store.save(issued)) != nil { savedHere.insert(issued.sessionID) }

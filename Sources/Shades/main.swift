@@ -29,7 +29,9 @@ MainActor.assumeIsolated {
         // its own sign-in, and none of the app's inbox, notifications, theme, phone keys or phone page.
         let keepsToItself = !DevFlags.isInstalledApp()
         let signIn = DevFlags.signInService()
-        let backend = T3Backend(credentials: KeychainCredentialStore(service: signIn), label: keepsToItself ? "Shades trial" : "Shades")
+        // Copies that aren't installed share one service and can run at once, so one can't tell another's sign-in
+        // from a stale one.
+        let backend = T3Backend(credentials: KeychainCredentialStore(service: signIn), label: keepsToItself ? "Shades trial" : "Shades", revokesWhatItCantRead: !keepsToItself)
         let context = ScreenContextProvider()
         let voice = ParakeetVoiceEngine()
         let keys = KeyHoldMonitor()

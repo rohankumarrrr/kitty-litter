@@ -7,6 +7,8 @@ final class T3AuthTests: XCTestCase {
     /// Answers as T3's server would: who it is, and what it makes of each saved sign-in, by its token.
     final class FakeServer: URLProtocol {
         nonisolated(unsafe) static var sessions: [String: String] = [:]
+        /// Where the fake `t3` tool lists the sign-ins it issued and hasn't revoked.
+        nonisolated(unsafe) static var issued: URL?
 
         override class func canInit(with request: URLRequest) -> Bool { true }
         override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -16,11 +18,16 @@ final class T3AuthTests: XCTestCase {
             let token = request.value(forHTTPHeaderField: "Authorization")?.replacingOccurrences(of: "Bearer ", with: "") ?? ""
             let (status, body) = request.url?.path == "/.well-known/t3/environment"
                 ? (200, #"{"environmentId":"e","serverVersion":"1","orchestrationProtocolVersion":2}"#)
-                : Self.sessions[token].map { (200, $0) } ?? (401, "")
+                : Self.sessions[token].map { (200, $0) } ?? (Self.stillIssued(token) ? (200, T3AuthTests.newScopes) : (401, ""))
             let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: Data(body.utf8))
             client?.urlProtocolDidFinishLoading(self)
+        }
+
+        private static func stillIssued(_ token: String) -> Bool {
+            guard let issued, let list = try? String(contentsOf: issued, encoding: .utf8) else { return false }
+            return list.split(separator: "\n").contains(Substring(token))
         }
     }
 
@@ -58,6 +65,29 @@ final class T3AuthTests: XCTestCase {
         }
     }
 
+    /// One Keychain service shared by builds that can't read each other's items, as copies built from source are:
+    /// each lists every item, newest first, but reads only what its own build saved.
+    final class Service: @unchecked Sendable {
+        private let lock = NSLock()
+        private var items: [(credential: T3Credential, build: String)] = []
+
+        func seenBy(_ build: String) -> T3CredentialStoring { Build(service: self, build: build) }
+
+        private struct Build: T3CredentialStoring {
+            let service: Service
+            let build: String
+
+            func load() -> T3Credential? { service.newest { $0 == build } }
+            func newestUnreadableSessionID() -> String? { service.newest { $0 != build }?.sessionID }
+            func save(_ credential: T3Credential) { service.lock.withLock { service.items.append((credential, build)) } }
+            func delete(sessionID: String) { service.lock.withLock { service.items.removeAll { $0.credential.sessionID == sessionID } } }
+        }
+
+        private func newest(_ readable: (String) -> Bool) -> T3Credential? {
+            lock.withLock { items.last { readable($0.build) }?.credential }
+        }
+    }
+
     private static let oldScopes = #"{"authenticated":true,"scopes":["orchestration:read","orchestration:operate"],"permissions":["orchestration:read","orchestration:operate"]}"#
     private static let newScopes = #"{"authenticated":true,"scopes":["orchestration:read","orchestration:operate"],"permissions":["orchestration:read","orchestration:operate","filesystem:read"]}"#
     private let fromOldBuild = T3Credential(sessionID: "from-32d9263", token: "t-old")
@@ -72,7 +102,8 @@ final class T3AuthTests: XCTestCase {
         try FileManager.default.createDirectory(at: userdata, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         try Data(#"{"origin":"http://t3.test"}"#.utf8).write(to: userdata.appendingPathComponent("server-runtime.json"))
-        // Each sign-in gets a session of its own, as T3's tool gives.
+        FakeServer.issued = bin.appendingPathComponent("issued")
+        // Each sign-in gets a session of its own, as T3's tool gives, which T3 accepts until it's revoked.
         let tool = """
         #!/bin/sh
         cd "$(dirname "$0")"
@@ -80,7 +111,10 @@ final class T3AuthTests: XCTestCase {
         case "$*" in
           *"session issue"*)
             n=$(( $(cat count 2>/dev/null || echo 0) + 1 )); echo $n > count
+            echo "t-$n" >> issued
             printf '{"sessionId":"new-%s","token":"t-%s","expiresAt":"2030-01-01T00:00:00.000Z"}' $n $n ;;
+          *"session revoke"*)
+            grep -vx "t-${4#new-}" issued > issued.next; mv issued.next issued ;;
         esac
         """
         let path = bin.appendingPathComponent("t3")
@@ -92,10 +126,23 @@ final class T3AuthTests: XCTestCase {
         try? FileManager.default.removeItem(at: home)
     }
 
-    private func auth(_ keychain: Keychain) -> T3Auth {
+    private func auth(_ store: T3CredentialStoring, revokesWhatItCantRead: Bool = true) -> T3Auth {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [FakeServer.self]
-        return T3Auth(home: home, store: keychain, label: "Shades test", ttl: "1h", renewBefore: 0, http: URLSession(configuration: configuration))
+        return T3Auth(home: home, store: store, label: "Shades test", ttl: "1h", renewBefore: 0, revokesWhatItCantRead: revokesWhatItCantRead, http: URLSession(configuration: configuration))
+    }
+
+    private func toolOutput(_ name: String) -> String {
+        (try? String(contentsOf: home.appendingPathComponent("bin/\(name)"), encoding: .utf8)) ?? ""
+    }
+
+    private var issued: Int { Int(toolOutput("count").trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0 }
+
+    /// Revoking runs on its own after a sign-in, so this gives it a moment to.
+    private func revoked() async throws -> [String] {
+        let revoked = { self.toolOutput("calls").split(separator: "\n").filter { $0.hasPrefix("auth session revoke ") }.map { String($0.dropFirst(20)) } }
+        for _ in 0..<10 where revoked().isEmpty { try await Task.sleep(for: .milliseconds(100)) }
+        return revoked()
     }
 
     private func signedIn(_ keychain: Keychain, forceNew: Bool = false) async throws -> String? {
@@ -157,5 +204,32 @@ final class T3AuthTests: XCTestCase {
         let used = try await signedIn(keychain)
         XCTAssertEqual(used, "Bearer t-1")
         XCTAssertEqual(keychain.saved, ["new-1"])
+    }
+
+    /// Copies built from source share a service but can't read each other's sign-ins, so each took the other's for one
+    /// an older build left and revoked it, then signed in again over it on every reconnect.
+    func testTwoCopiesRunningAtOnceKeepTheirOwnSignIns() async throws {
+        let service = Service()
+        let x = auth(service.seenBy("x"), revokesWhatItCantRead: false)
+        let y = auth(service.seenBy("y"), revokesWhatItCantRead: false)
+        _ = try await x.socketRequest(forceNewSession: false)
+        _ = try await y.socketRequest(forceNewSession: false)
+        let revoked = try await revoked()
+        XCTAssertEqual(revoked, [])
+        for _ in 1...3 {
+            _ = try await x.socketRequest(forceNewSession: false)
+            _ = try await y.socketRequest(forceNewSession: false)
+        }
+        XCTAssertEqual(issued, 2, "each signs in once")
+    }
+
+    /// The installed app is the only copy on its service, so a sign-in there it can't read was left by a build signed
+    /// differently, and goes from T3's list.
+    func testTheInstalledAppRevokesASignInItCantRead() async throws {
+        let service = Service()
+        try service.seenBy("signed differently").save(T3Credential(sessionID: "left", token: "t-left"))
+        _ = try await auth(service.seenBy("installed")).socketRequest(forceNewSession: false)
+        let revoked = try await revoked()
+        XCTAssertEqual(revoked, ["left"])
     }
 }

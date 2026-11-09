@@ -27,15 +27,18 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
     ///   - label: The name this client goes by in T3's list of connections.
     ///   - sessionTTL: How long each sign-in lasts, as `t3 auth session issue` takes it.
     ///   - renewBefore: Signs in again once this little is left, so a session never runs out mid-task.
+    ///   - revokesWhatItCantRead: Revokes a saved sign-in this build can't read, which a build signed differently
+    ///     left. Copies that share where they keep it and run side by side can't, since another may still be using it.
     public init(
         home: URL? = nil,
         credentials: T3CredentialStoring = KeychainCredentialStore(),
         label: String = "Shades",
         sessionTTL: String = "30d",
-        renewBefore: TimeInterval = 7 * 24 * 60 * 60
+        renewBefore: TimeInterval = 7 * 24 * 60 * 60,
+        revokesWhatItCantRead: Bool = true
     ) {
         let home = home ?? T3Auth.defaultHome
-        let auth = T3Auth(home: home, store: credentials, label: label, ttl: sessionTTL, renewBefore: renewBefore)
+        let auth = T3Auth(home: home, store: credentials, label: label, ttl: sessionTTL, renewBefore: renewBefore, revokesWhatItCantRead: revokesWhatItCantRead)
         let socket = T3Socket { forceNewSession in
             try await auth.socketRequest(forceNewSession: forceNewSession)
         }
