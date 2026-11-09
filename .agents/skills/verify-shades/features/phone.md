@@ -1,6 +1,6 @@
 # Phone
 
-With **Messages on my phone** on in Settings, the cat shows a code and a picture of it. A phone that scans it, or types the code into the page, gets Messages in its browser, laid out the way Slack's phone app is: the list of places, Activity, Threads, #general, each kitten's channel, and each thread on a page of its own, with the same buttons as the window. Each kitten is the window's own pixel cat, from `/cat/<light|dark>/<pose>/<jacket>.png`.
+With **The Kitty Litter on my phone** on in Settings, the cat shows a code and a picture of it. A phone that scans it, or types the code into the page, gets The Kitty Litter in its browser, laid out the way Slack's phone app is: the list of places, Activity, Threads, #general, each kitten's channel, and each thread on a page of its own, with the same buttons as the window. Each kitten is the window's own pixel cat, from `/cat/<light|dark>/<pose>/<jacket>.png`.
 
 ## Sub-features
 
@@ -8,17 +8,17 @@ With **Messages on my phone** on in Settings, the cat shows a code and a picture
 - `phone-places` lists Activity and Threads, then #general and each kitten's channel, with the window's counts, bold and dots, each kitten's cat posed for what it's doing, and icons drawn to match the window's. The cat's DM stays on the Mac.
 - `phone-switch` shows a thread of the cat's own work, such as a fix, under Shades on the phone once **Show on phone** is pressed at the top of its thread on the Mac, with only your words and the agent's replies, and takes it off again with **Hide from phone**.
 - `phone-cats` draws the window's cats wherever a kitten or the cat appears: the places, a channel's and a thread's header, beside each message, in reply bars, in Threads, and on Activity's headings and cards.
-- `phone-picture` draws your picture, if you've given Messages one, beside your messages and in place of your square, from what a paired phone is sent rather than an address of its own. `journeys/picture.txt` drives it, as [messages.md](messages.md) says, and `swift test --filter PhoneServerTests/testYourPictureGoesOnlyToAPairedPhone` checks nothing unpaired gets it.
+- `phone-picture` draws your picture, if you've given The Kitty Litter one, beside your messages and in place of your square, from what a paired phone is sent rather than an address of its own. `journeys/picture.txt` drives it, as [messages.md](messages.md) says, and `swift test --filter PhoneServerTests/testYourPictureGoesOnlyToAPairedPhone` checks nothing unpaired gets it.
 - `phone-answer` allows or denies an approval, answers a question from its card, and replies to a report.
-- `phone-send` sends in #general through the router, starts a new thread from a kitten's channel, which opens on its own page, and replies in a thread, with its Also send to #channel. What you send says "Sending..." until T3 has it, and what never got there has Try again. `journeys/delivery.txt` ends with it, as [Messages](./messages.md) describes under Delivery.
+- `phone-send` sends in #general through the router, starts a new thread from a kitten's channel, which opens on its own page, and replies in a thread, with its Also send to #channel. What you send says "Sending..." until T3 has it, and what never got there has Try again. `journeys/delivery.txt` ends with it, as [The Kitty Litter](./messages.md) describes under Delivery.
 - `phone-notify` sends each new thing in Activity to a subscribed phone, encrypted for it, saying only who and what kind.
 - `phone-formatting` draws a message's lists, tables, quotes, code blocks with Copy and pull request chips from what the Mac read, and tapping a link shows its whole address before Open. See `messages-formatting` in [messages.md](messages.md), whose journey covers both.
-- `phone-theme` gives the page Messages' theme, and holds back what's new while you're selecting words.
-- `phone-search` finds a message by its words from **Search** at the top of every page, over what Messages has read and only what a phone can open, and tapping one opens its page and scrolls to it. See `messages-search` in [messages.md](messages.md), whose journey covers both.
+- `phone-theme` gives the page The Kitty Litter's theme, and holds back what's new while you're selecting words.
+- `phone-search` finds a message by its words from **Search** at the top of every page, over what The Kitty Litter has read and only what a phone can open, and tapping one opens its page and scrolls to it. See `messages-search` in [messages.md](messages.md), whose journey covers both.
 
 ## How to get to it (user POV)
 
-- Turn on **Messages on my phone, over Tailscale** on Settings' Messages page. The code shows.
+- Turn on **The Kitty Litter on my phone, over Tailscale** on Settings' The Kitty Litter page. The code shows.
 - Scan it with the phone's camera, or open the address and type the code.
 - Tap a place, then use the box at the bottom or a card's buttons.
 
@@ -65,7 +65,7 @@ End every journey with `front` and `windows`. The app in front stays whatever it
 ## Gotchas
 
 - Each place is a stream of its own, so moving between them reconnects. Give `phone go` and `phone send` two or three seconds before drawing.
-- `header` presses a button at the top of the open thread's pane, by its words. It prints `no header button [...]` when there's none, such as **Show on phone** in a kitten's thread, or while Messages isn't on your phone.
+- `header` presses a button at the top of the open thread's pane, by its words. It prints `no header button [...]` when there's none, such as **Show on phone** in a kitten's thread, or while The Kitty Litter isn't on your phone.
 - `phone go` takes a key as it is, so `phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve` opens Steve's "Rewrite the pricing copy" thread with its replies, and `t:demo-tidy@c:%2Fdemo%2Fsteve` opens the one an `approval` waits in.
 - `phone text` doesn't show the cats, since they're pictures. `swift test --filter PhoneServerTests` checks their address gives the window's art pixel for pixel, and nothing for any other address.
 - A `draw` just before the file runs out can miss the phone, whose picture comes back a moment later. End with a `wait 2`.

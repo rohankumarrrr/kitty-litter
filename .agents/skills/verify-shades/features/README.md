@@ -1,6 +1,6 @@
 # Shades verification map
 
-The maintained list of what a person can do with Shades, and how to prove each in demo mode. Read this before driving the app, then use the matching feature file. Launch, doctor and cleanup are in [../SKILL.md](../SKILL.md).
+The maintained list of what a person can do with The Kitty Litter, and how to prove each in demo mode. Read this before driving the app, then use the matching feature file. Launch, doctor and cleanup are in [../SKILL.md](../SKILL.md).
 
 ## Baseline
 
@@ -12,7 +12,7 @@ The maintained list of what a person can do with Shades, and how to prove each i
 
 - Capture the action and the state after it, as a picture before and a picture after.
 - Check the `[demo]` lines for what was sent, alongside the pictures.
-- Start every journey with `front`, and end it with `front` and `windows`. The last `front` mustn't be Shades unless the first one already was. `active=true` is expected while a box has the keyboard.
+- Start every journey with `front`, and end it with `front` and `windows`. The last `front` mustn't be this app (`shades` from source) unless the first one already was. `active=true` is expected while a box has the keyboard.
 - Record the feature and journey with each picture.
 - If a journey can't reach a state, report the command you ran and what was missing. Don't report a different path as the one you were asked to prove.
 
@@ -24,11 +24,11 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 
 - [Ask](./ask.md) covers asking the cat, its answer, pointing at things, passing to a kitten and handing off.
 - [Drop](./drop.md) covers dropping a PDF, picture or link onto the cat, and where it may go.
-- [Messages](./messages.md) covers Activity, Threads, #general, a kitten's channel, a thread in the pane beside it, Also send to #channel, the DM with the cat, search, formatting and links, selecting and copying, and themes.
-- [Inbox](./inbox.md) covers a kitten's report arriving, its row in Messages, replying to it and clearing it.
+- [The Kitty Litter](./messages.md) covers Activity, Threads, #general, a kitten's channel, a thread in the pane beside it, Also send to #channel, the DM with the cat, search, formatting and links, selecting and copying, and themes.
+- [Inbox](./inbox.md) covers a kitten's report arriving, its row in The Kitty Litter, replying to it and clearing it.
 - [Approvals](./approvals.md) covers an agent asking to run something, and allowing it.
-- [Phone](./phone.md) covers Messages on your phone: turning it on, pairing, reading and answering from the page, and its theme.
+- [Phone](./phone.md) covers The Kitty Litter on your phone: turning it on, pairing, reading and answering from the page, and its theme.
 - [Notifications](./notifications.md) covers the macOS notification for something new in Activity or a finished session, clicking or tapping it to open its thread, taking it back, and each channel's notifications on the Mac and the phone.
 - [Do Not Disturb](./dnd.md) covers the switch, the cat asleep, every pop-up staying quiet, and catching up in Activity.
 - [Kittens](./kittens.md) covers the view of every kitten and how each is doing.
-- [Settings](./settings.md) covers every setting in one place, from the menu or Messages: models, keys, notifications, each channel's, theme, font, text size, where Open goes, the phone and the privacy list.
+- [Settings](./settings.md) covers every setting in one place, from the menu or The Kitty Litter: models, keys, notifications, each channel's, theme, font, text size, where Open goes, the phone and the privacy list.

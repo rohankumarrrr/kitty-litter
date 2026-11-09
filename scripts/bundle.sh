@@ -42,9 +42,9 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Shades</string>
+    <string>The Kitty Litter</string>
     <key>CFBundleDisplayName</key>
-    <string>Shades</string>
+    <string>The Kitty Litter</string>
     <key>CFBundleIdentifier</key>
     <string>me.rohan-is.shades</string>
     <key>CFBundleExecutable</key>
@@ -64,7 +64,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Shades listens only while you hold your talk or dictate key, and your voice stays on your Mac.</string>
+    <string>The Kitty Litter listens only while you hold your talk or dictate key, and your voice stays on your Mac.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>So the cat can read the page you're looking at when you ask.</string>
 </dict>

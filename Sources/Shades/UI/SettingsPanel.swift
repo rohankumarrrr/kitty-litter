@@ -14,7 +14,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             case .agents: "Agents"
             case .voice: "Voice"
             case .notifications: CatWords.notifications
-            case .messages: CatWords.messagesTitle
+            case .messages: CatWords.appName
             case .privacy: "Privacy"
             }
         }
@@ -126,7 +126,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
                     self?.build()
                 }
             }
-            let phone = checkbox("Messages on my phone, over Tailscale", settings.phone) { [weak self] on in
+            let phone = checkbox("\(CatWords.appName) on my phone, over Tailscale", settings.phone) { [weak self] on in
                 self?.edit { $0.phone = on }
             }
             var rows = [
@@ -152,7 +152,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     private static let modes: [(String, RuntimeMode)] = RuntimeMode.allCases.map { (modeName($0), $0) }
     private static let keys: [(String, HoldKey)] = HoldKey.allCases.map { (keyName($0), $0) }
     private static let sizes: [(String, TextSize)] = [("Small", .small), ("Default", .standard), ("Large", .large), ("Larger", .larger)]
-    private static let opens: [(String, Bool)] = [("In Messages first", true), ("In T3", false)]
+    private static let opens: [(String, Bool)] = [("In \(CatWords.appName) first", true), ("In T3", false)]
 
     // MARK: - Building
 

@@ -10,7 +10,7 @@ When an agent wants to run a command or touch a file, the cat comes over and the
 ## How to get to it (user POV)
 
 - The cat comes to you by itself when an agent asks.
-- Press Deny, Allow or Allow for this session in the bubble, or answer it in Messages.
+- Press Deny, Allow or Allow for this session in the bubble, or answer it in The Kitty Litter.
 
 ## Driving it with the demo
 

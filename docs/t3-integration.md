@@ -1,6 +1,6 @@
 # Talking to T3 Code
 
-Shades runs every agent through [T3 Code](https://t3.codes), a local app with a server inside. There's no public API for this. Everything below was read from the app's own bundle and checked against the running server, version 0.1.6, orchestration protocol 2.
+The Kitty Litter runs every agent through [T3 Code](https://t3.codes), a local app with a server inside. There's no public API for this. Everything below was read from the app's own bundle and checked against the running server, version 0.1.6, orchestration protocol 2.
 
 All wire formats live in `Sources/ShadesT3/T3Wire.swift`, so a T3 update should only ever mean changing that one file. When T3 updates, run the probes in `Sources/Probes/T3`.
 
@@ -30,7 +30,7 @@ This is T3's documented way to sign in a headless client. It needs no clicks, be
 
 ### Why not MCP?
 
-MCP's OAuth flow needs a person to approve it on the `/connect-agent` page, its sessions are only good for `/mcp`, and MCP deliberately can't answer permission requests. Shades has to answer them, so it needs this surface anyway. A session with a subject of `mcp-client` is refused everywhere except `/mcp`, and pretending to be one would dodge that approval step, so Shades doesn't.
+MCP's OAuth flow needs a person to approve it on the `/connect-agent` page, its sessions are only good for `/mcp`, and MCP deliberately can't answer permission requests. The Kitty Litter has to answer them, so it needs this surface anyway. A session with a subject of `mcp-client` is refused everywhere except `/mcp`, and pretending to be one would dodge that approval step, so The Kitty Litter doesn't.
 
 ### The Keychain and rebuilds
 
@@ -66,11 +66,11 @@ A `cause` entry is `Fail` with an `error` (`detail` and `message` are for people
 | --- | --- |
 | `orchestration.launchThread` | New thread. Answers `threadId`, `projection` and `sequence`. |
 | `orchestration.dispatchCommand` | Follow-ups, approvals, answers to questions, settling, archiving, mode changes. Answers `sequence`. |
-| `orchestration.subscribeThread` | One thread's events. Also one whole thread, for Messages. |
-| `orchestration.subscribeShell` | Every thread, for the dashboard. Also one full snapshot, for Messages. |
+| `orchestration.subscribeThread` | One thread's events. Also one whole thread, for The Kitty Litter. |
+| `orchestration.subscribeShell` | Every thread, for the dashboard. Also one full snapshot, for The Kitty Litter. |
 | `orchestration.getTurnItem` | The words of an approval or a question. |
 | `orchestration.getThreadProjection` | A thread's final report, a fallback for those words, and a settled thread's runtime mode. |
-| `orchestration.searchThreads` | Which threads have the words you searched Messages for. |
+| `orchestration.searchThreads` | Which threads have the words you searched The Kitty Litter for. |
 | `projects.ensureScratch` | The "No project" project. The client remembers it. |
 | `projects.mutate` | Registers the router's own folder as a project, the first time. |
 | `attachments.createUploadUrl` | A signed URL for one upload. |
@@ -101,7 +101,7 @@ Only send `thread.runtime-mode.set` when the mode really changes. For providers 
 
 #### Who a message is from
 
-`message.dispatch` sends `createdBy: "user"`. A launch sends none, and T3 records the user, which we measured on real threads Shades started. Agents using T3's tools show `createdBy: "agent"`.
+`message.dispatch` sends `createdBy: "user"`. A launch sends none, and T3 records the user, which we measured on real threads The Kitty Litter started. Agents using T3's tools show `createdBy: "agent"`.
 
 Kittens rely on this to believe a correction, as [kittens.md](kittens.md#corrections) describes. It has a limit: it stops an agent using T3's tools from speaking as the user, but not a process holding the user's T3 credentials.
 
@@ -139,7 +139,7 @@ A thread's turn can end while work it started carries on, and it wakes up again 
 
 ### Search
 
-Messages' ⌘F sends `{"query": "...", "limit": 50}`, the only keys every server takes. T3 wants 2 to 200 letters, and newer servers take more keys, which older ones turn away. It answers with `matches`, one for each message, each with a `threadId`, a `snippet`, a `source` of `user` or `assistant`, and on newer servers a `messageId` and a `quality`. Only `threadId` is read. The snippet comes from what was sent, which for your own messages can be the screen and instructions that went with your words, so it never shows. Messages reads each thread named the usual way, which leaves those out, and searches what's left. It's about 30 ms on a real list of a few hundred threads. `swift run probe-t3 search <words>` says how many threads T3 names, how fast, and how many of them are listed, and nothing they say.
+The Kitty Litter's ⌘F sends `{"query": "...", "limit": 50}`, the only keys every server takes. T3 wants 2 to 200 letters, and newer servers take more keys, which older ones turn away. It answers with `matches`, one for each message, each with a `threadId`, a `snippet`, a `source` of `user` or `assistant`, and on newer servers a `messageId` and a `quality`. Only `threadId` is read. The snippet comes from what was sent, which for your own messages can be the screen and instructions that went with your words, so it never shows. The Kitty Litter reads each thread named the usual way, which leaves those out, and searches what's left. It's about 30 ms on a real list of a few hundred threads. `swift run probe-t3 search <words>` says how many threads T3 names, how fast, and how many of them are listed, and nothing they say.
 
 ### Approvals
 
@@ -167,21 +167,21 @@ The same command answers it, with `answers` in place of `decision`, filed under 
 {"type": "runtime-request.respond", "commandId": "<uuid>", "threadId": "…", "requestId": "…", "answers": {"<question id>": "Blue", "<another>": ["Large"]}}
 ```
 
-An option sends its `value`, or its `label` if it has none, and your own words go in as they are, unless `allowCustomAnswer` is `false`. A `multiSelect` question wants a list of the values picked, even of one, while your own words stay a string. T3's own composer won't send until every question has an answer, so Messages asks them one at a time and sends them together. A question with no `id` has nowhere to file its answer, and is answered in T3, as is one whose turn item can't be read. T3 files one answer under each `id`, so different questions sharing one are asked together, in your own words, and the same question asked twice, which Claude's IDs make possible since they're the question's words, is asked once. As with approvals, the thread is the request's own, which for a subagent isn't the listed one. `probe-t3 question` checks it live: a thread asks two questions at once, one taking several choices, Shades answers the first with an option and the second with two, and the thread carries on with all three.
+An option sends its `value`, or its `label` if it has none, and your own words go in as they are, unless `allowCustomAnswer` is `false`. A `multiSelect` question wants a list of the values picked, even of one, while your own words stay a string. T3's own composer won't send until every question has an answer, so The Kitty Litter asks them one at a time and sends them together. A question with no `id` has nowhere to file its answer, and is answered in T3, as is one whose turn item can't be read. T3 files one answer under each `id`, so different questions sharing one are asked together, in your own words, and the same question asked twice, which Claude's IDs make possible since they're the question's words, is asked once. As with approvals, the thread is the request's own, which for a subagent isn't the listed one. `probe-t3 question` checks it live: a thread asks two questions at once, one taking several choices, The Kitty Litter answers the first with an option and the second with two, and the thread carries on with all three.
 
 ### Reports and settling
 
 - Each turn item has a `runId`, so asking for one run's report can come back empty when that run said nothing, rather than with the words of the run before.
 - `orchestration.getThreadProjection` gives a thread's turn items, and took about 60 ms even on threads with hundreds of them. The final report is the newest `assistant_message` with no `parentItemId`, since subagents have one. Claude's thinking also arrives as `assistant_message`, with `thinking` in its ID.
-- The same projection says who started a thread, which decides whether it gets your screen. `lineage.parentThreadId` only covers subagents, so a thread from `t3_thread_launch` has none. Its `thread.createdBy` is `"agent"`, and the first user message in `messages` has a `senderThreadId` naming the thread that launched it, even if it was launched idle. `"user"` means a person or Shades started it. `probe-t3 origin <thread>` shows the result.
+- The same projection says who started a thread, which decides whether it gets your screen. `lineage.parentThreadId` only covers subagents, so a thread from `t3_thread_launch` has none. Its `thread.createdBy` is `"agent"`, and the first user message in `messages` has a `senderThreadId` naming the thread that launched it, even if it was launched idle. `"user"` means a person or The Kitty Litter started it. `probe-t3 origin <thread>` shows the result.
 - `{"type": "thread.settle", "commandId": …, "threadId": …}` settles a thread. It can still take a follow-up afterwards, which was checked live.
 
 ### Who said what
 
-Messages reads a thread's turn items and folds them into exchanges: someone asked, and the agent answered. The fold is `T3Transcript.exchanges`, and it's pure.
+The Kitty Litter reads a thread's turn items and folds them into exchanges: someone asked, and the agent answered. The fold is `T3Transcript.exchanges`, and it's pure.
 
 - **The full list.** `orchestration.subscribeShell` with `omitIdleSubagents: false` and `omitOlderSettled: false` gives one snapshot of every thread that isn't archived, subagents included. A real one was 234 threads and 470 KB, in 143 ms. The client interrupts the stream after that first snapshot. The snapshot's `archivedThreads` key exists but is empty, so an archived thread can't be named, and a sender in one shows as someone else.
-- **Shell fields.** `settledAt` is set exactly when a thread is settled. `pullRequests` is `[{number, url, snapshot: {state, title, …}}]`, where `state` is `open`, `merged` or `closed`, and the last one counts. Its `url` is how a link to it in a message finds its state for the chip Messages draws.
+- **Shell fields.** `settledAt` is set exactly when a thread is settled. `pullRequests` is `[{number, url, snapshot: {state, title, …}}]`, where `state` is `open`, `merged` or `closed`, and the last one counts. Its `url` is how a link to it in a message finds its state for the chip The Kitty Litter draws.
 - **A `user_message` item** has `text`, `messageId`, `createdBy` (`user` or `agent`), `creationSource`, `senderThreadId` and `inputIntent` (`turn_start`, `queued_turn` or `steer`). A missing or `user` `createdBy` is a person. `agent` with `senderThreadId` is that thread, or the nearest listed thread above it for a subagent. Anything else, including a value T3 adds later, is never treated as a person. What a schedule sends has a `scheduledTaskId`, and the `createdBy` of whoever set the schedule up, which is `agent` with no `senderThreadId` for one made with T3's `schedule_task` tool. It's read as the schedule whatever it says, so a kitten's scheduled run is its own work, and its report starts a thread in its channel instead of the schedule's prompt doing so as someone else.
 - **Items T3 writes itself.** Some `user_message` items carry a non-null `idleCompaction` or `workflowScript`. Some of those say `createdBy: user`, so they're skipped by name. Notifications and delegated completions are their own `notification` item type, so skipping by type removes them, and a reply after one carries on the same exchange.
 - **Words.** Only what's above the first `---` line of a person's message is theirs, from `Prompts.ownWords`, whatever ends that line, and it comes out as nothing if it still has a screen tag that isn't alone in backticks. Imported threads mark what the coding tool behind them wrote as the user's, in tags such as `<system-reminder>` and `<task-notification>`, so `T3Wire.withoutToolBlocks` takes those out of what's above the line. It only knows the tags found in real threads, because people write hyphenated tags too, so a new one reads as the person until it's added to `T3Wire.toolTags`. Agents' messages and replies keep their `---` lines, which are usually just markdown, and lose any screen block. `Prompts.withoutBlocks` counts tags to balance them, so nested blocks come out whole, one that never closes goes through the end, and an extra closing tag takes what came before it. A tag alone in backticks is someone writing about it, so it stays, but a block in backticks still comes out. T3 leaves `Ultrathink:` on the front of some messages, and uses `[User attached one or more files without additional text. Respond using the conversation context and the attached files.]` for one that's only attachments.
@@ -199,11 +199,11 @@ Images can be GIF, JPEG, PNG or WebP, up to 10 MB each and 80 MB per message. No
 
 T3 saves each one as `userdata/attachments/<threadId>-<id>.<ext>`, readable by anything running as you, and doesn't remove it later, even when the thread goes. It sends Claude the image inside the message, as base64, so denying the folder doesn't stop an attached image arriving. It also adds that folder to every Claude thread's additional directories. The base64 ends up in T3's provider log and Claude's transcript too.
 
-A user message's turn item lists what came with it, as `attachments: [{"type":"image","id":…,"name":…,"mimeType":…,"sizeBytes":…}]`, so Shades sends each dropped or attached picture named for its file, and pairs them up again by name after a restart. A message from before that has one called `screen.jpg`, which pairs with the one file its screen block names. Names are only read from a message with one screen block besides Shades' warning about it, since a router's hand-off follows that block and could carry one of its own naming the look at your screen. `assets.createUrl` with the `attachment` resource gives a signed `relativeUrl` under `/api/assets/`, good for an hour, which needs no sign-in, and only `orchestration:read`. `probe-t3 picture` sends a made-up picture to a test thread, reads it back and fetches its copy.
+A user message's turn item lists what came with it, as `attachments: [{"type":"image","id":…,"name":…,"mimeType":…,"sizeBytes":…}]`, so The Kitty Litter sends each dropped or attached picture named for its file, and pairs them up again by name after a restart. A message from before that has one called `screen.jpg`, which pairs with the one file its screen block names. Names are only read from a message with one screen block besides The Kitty Litter's warning about it, since a router's hand-off follows that block and could carry one of its own naming the look at your screen. `assets.createUrl` with the `attachment` resource gives a signed `relativeUrl` under `/api/assets/`, good for an hour, which needs no sign-in, and only `orchestration:read`. `probe-t3 picture` sends a made-up picture to a test thread, reads it back and fetches its copy.
 
 ### A picture in a thread's folder
 
-`assets.createUrl` with `{"_tag":"workspace-file","threadId":…,"path":…}` needs `filesystem:read`. T3 finds the thread's own folder, its worktree or its project, makes a relative path of an absolute one, and turns away anything outside it, after resolving symbolic links, along with anything that isn't a file T3 previews, such as a picture, a page or a PDF, and its own internal files. Shades only asks for picture names, and only shows what decodes as a picture. `probe-t3 picture <thread> <path>` asks for one and prints its size. Run against a thread whose folder is a copy of this repo, `assets/cat.png` came back at 256×256, and `../../../../shades/assets/cat.png`, an absolute path outside the folder, `Package.swift`, and a symbolic link in the folder pointing at a picture outside it, all came back refused.
+`assets.createUrl` with `{"_tag":"workspace-file","threadId":…,"path":…}` needs `filesystem:read`. T3 finds the thread's own folder, its worktree or its project, makes a relative path of an absolute one, and turns away anything outside it, after resolving symbolic links, along with anything that isn't a file T3 previews, such as a picture, a page or a PDF, and its own internal files. The Kitty Litter only asks for picture names, and only shows what decodes as a picture. `probe-t3 picture <thread> <path>` asks for one and prints its size. Run against a thread whose folder is a copy of this repo, `assets/cat.png` came back at 256×256, and `../../../../shades/assets/cat.png`, an absolute path outside the folder, `Package.swift`, and a symbolic link in the folder pointing at a picture outside it, all came back refused.
 
 ### Opening a thread
 

@@ -1,6 +1,6 @@
-# Shades
+# The Kitty Litter
 
-A desktop cat for macOS. It sees your screen when you ask, answers quick questions, hands real work to agents running in [T3 Code](https://t3.codes), and shows you what those agents are doing. It also does hold-to-talk and dictation on your Mac.
+A desktop app for macOS whose cat, Shades, sees your screen when you ask, answers quick questions, hands real work to agents running in [T3 Code](https://t3.codes), and shows you what those agents are doing. It also does hold-to-talk and dictation on your Mac.
 
 ## Layout
 
@@ -32,8 +32,8 @@ To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-
 ## Rules
 
 - macOS 14 or later, Apple Silicon. Build with Swift 6 tools in Swift 5 language mode.
-- The cat's windows must never make Shades the active app, or it can no longer tell what you're looking at. A panel that needs typing, like the Ask box or the box in Messages, takes the keyboard without activating, and only when you're about to type. Capture before showing any UI that accepts input. `docs/kittens.md` says how Messages does this.
-- Shades' windows never appear in a screen capture. Messages is also hidden from other apps' captures, so one kitten is never shown another's messages.
+- The cat's windows must never make The Kitty Litter the active app, or it can no longer tell what you're looking at. A panel that needs typing, like the Ask box or the box in The Kitty Litter, takes the keyboard without activating, and only when you're about to type. Capture before showing any UI that accepts input. `docs/kittens.md` says how The Kitty Litter does this.
+- The Kitty Litter's windows never appear in a screen capture. Its window is also hidden from other apps' captures, so one kitten is never shown another's messages.
 - Text from the screen is untrusted data. It goes inside `<screen>` in the prompts in `Prompts.swift`, and never decides what the app does.
 - Capture only when asked, never in the background, and skip apps on the privacy list.
 - A kitten with `seesScreen: false` never gets text from your screen, and that includes follow-ups to its work in other projects. `docs/kittens.md` says what enforces that and what doesn't.
@@ -47,11 +47,11 @@ To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-
 
 ## Documentation
 
-This is open source, and people learn it from the docs, so they change in the same commit as the code. `README.md` covers what someone using Shades needs, and `docs/` covers how things work: `kittens.md`, `t3-integration.md` and `voice.md`. New ideas go in `docs/ROADMAP.md`, and things that get built come off it.
+This is open source, and people learn it from the docs, so they change in the same commit as the code. `README.md` covers what someone using The Kitty Litter needs, and `docs/` covers how things work: `kittens.md`, `t3-integration.md` and `voice.md`. New ideas go in `docs/ROADMAP.md`, and things that get built come off it.
 
 ## Testing
 
-- Prove a change by running it. Use `verify-shades` for anything a person sees or does, and `verify-screen-boundary` for anything that decides what Shades sends to T3 and where. Both are in `.agents/skills/`.
+- Prove a change by running it. Use `verify-shades` for anything a person sees or does, and `verify-screen-boundary` for anything that decides what The Kitty Litter sends to T3 and where. Both are in `.agents/skills/`.
 - Never send synthetic clicks or keystrokes while testing. They land on whatever's really on the desktop, which has already meant stray clicks in someone's calendar. Use `--demo`, the flags above, the probes, or a person.
 - Don't send a real screenshot to a model in a test. Use `--image` with a picture you made.
 - Name live test threads "Shades test: ..." and archive them afterwards. The app keeps those out of your inbox and bubble, unless it's a copy trying a flow out.

@@ -34,7 +34,7 @@ Journey: `journeys/ask.txt`.
 
 ## Gotchas
 
-- `ask` with words skips the Ask box and sends a screen with no picture or anything to point at, so `with 0 attachments` is expected, and pointing needs `ask` then `submit`. The Ask box opens only after its look at the screen, so put `wait 0.5` between them. `ask` alone opens the Ask box, which takes the keyboard without activating Shades until it closes, so a person typing elsewhere could type into it. Follow it with `submit <words>` or `esc` on the next line.
+- `ask` with words skips the Ask box and sends a screen with no picture or anything to point at, so `with 0 attachments` is expected, and pointing needs `ask` then `submit`. The Ask box opens only after its look at the screen, so put `wait 0.5` between them. `ask` alone opens the Ask box, which takes the keyboard without activating The Kitty Litter until it closes, so a person typing elsewhere could type into it. Follow it with `submit <words>` or `esc` on the next line.
 - A streamed answer takes about 1.4 seconds to start and 35 milliseconds a word. Draw too early and the bubble is half written.
 - Each `ask` after the first carries on in the same router thread, which is why later router turns print `carried on in`.
 - Replace waits 0.7 seconds before it takes a click, so it shows dim in a picture drawn sooner than that. The `replace` command doesn't wait.

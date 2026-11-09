@@ -23,7 +23,7 @@ public enum T3Error: LocalizedError, Equatable {
         case .signInFailed:
             return "Couldn't sign in to T3 Code."
         case let .incompatibleServer(version):
-            return "Shades doesn't work with \(version.map { "T3 Code \($0)" } ?? "this version of T3 Code") yet. Check for an update to Shades."
+            return "The Kitty Litter doesn't work with \(version.map { "T3 Code \($0)" } ?? "this version of T3 Code") yet. Check for an update to The Kitty Litter."
         case .unauthorized:
             return "T3 Code didn't accept the saved sign-in."
         case .connectionLost:

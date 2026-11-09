@@ -1,6 +1,6 @@
 # Roadmap
 
-Shades starts small on purpose. Version one is four things done well: ask about your screen, fix what you're looking at, talk and dictate, and keep an eye on your agents. These are the ideas saved for later.
+The Kitty Litter starts small on purpose. Version one is four things done well: ask about your screen, fix what you're looking at, talk and dictate, and keep an eye on your agents. These are the ideas saved for later.
 
 ## Where this is heading
 
@@ -23,10 +23,10 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - **Step-by-step hints.** The cat can already point at what you ask about. For homework, it could point at the next step each time you ask, without doing it for you.
 - **Kittens out on the desktop.** Shift-clicking Shades already shows every kitten and how it's doing. Next, each working kitten could walk around the screen as its own small cat. Click one to open its thread.
 - **Local screen memory.** An opt-in, on-device history for "where did I see that article?", plus a summary at the end of the day. It's the riskiest for privacy, so it comes last and never leaves your Mac.
-- **An inbox for everyone.** The inbox started with the kitten that looks after the system, and it works for any kitten that sets `inbox: true`. Next, make it the default for every kitten, and show a kitten's proposals as decision rows, so everything waiting on you is in one place. A digest of several finishes would do the same job, so it should become part of Activity in Messages rather than sit beside it.
+- **An inbox for everyone.** The inbox started with the kitten that looks after the system, and it works for any kitten that sets `inbox: true`. Next, make it the default for every kitten, and show a kitten's proposals as decision rows, so everything waiting on you is in one place. A digest of several finishes would do the same job, so it should become part of Activity in The Kitty Litter rather than sit beside it.
 - **Threads that wake themselves.** A kitten's thread picks up again by itself when its own pull request fails CI or gets a review comment, so a fix doesn't wait on you to notice.
-- **Steer or queue from Messages.** Enter steers a kitten that's still working, by joining the run it's on, and Option-Enter queues the next task behind it. Today a message always waits for its own run.
-- **Kittens on a schedule.** A kitten that runs at a set time, such as a weekly check on something it looks after, and reports to Messages.
+- **Steer or queue from The Kitty Litter.** Enter steers a kitten that's still working, by joining the run it's on, and Option-Enter queues the next task behind it. Today a message always waits for its own run.
+- **Kittens on a schedule.** A kitten that runs at a set time, such as a weekly check on something it looks after, and reports to The Kitty Litter.
 - **The cat's eyes as a tool.** Expose "see screen" and "cat say" as an MCP server, so any T3 agent can look at your screen or speak through the cat, and you can ask about your screen from inside T3.
 
 ## Smaller things
@@ -35,15 +35,16 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - A screen block that follows a kitten instead of its folder. T3 can run Claude with `--settings` per provider instance, so a kitten's threads could share one wherever they work. Untested, because it needs a change to T3's settings.
 
 - Say on a thread's reply bar how many of its replies are new, so a bold channel shows which thread it's bold for. Today a channel's New line, like Slack's, only goes over threads none of which you've seen and replies also sent to it, and a thread with only new replies shows its line in its pane.
-- Answer an agent's question from the bubble. It shows the question and options now, and you answer in Messages or T3.
-- Fold a busy conversation in Messages down to one row per thread, with how many replies it has and the latest, the way a Slack channel shows a thread. Today every thread's messages are shown in order, and its title and project mark where each one starts.
-- Set a channel's notifications from the phone, and see which channels are muted in Messages' sidebar. Both are set from the channel's header on the Mac now, and only its header says it's muted.
-- Read a thread's whole history in Messages when it opens on its own, even past each kitten's newest 30, instead of saying the rest is in T3.
-- Keep a question you asked in the cat's DM that only got passed on after a restart. Its talk with the router is archived, and T3 doesn't list archived threads, so Messages would have to read it by the ID it kept.
-- Send the phone only what changed in Messages. It gets every row of the place it's on each time anything changes, about 170 KB for a conversation of 580 rows, and draws them all again, where the window only lays out what's near what you can see.
-- Work out what Messages shows off the main thread, or only for the threads that changed. It's about 12 ms each time anything changes with hundreds of threads, which is most of what's left when a message arrives.
-- A theme for the rest of the cat. Only Messages and its phone page take one now, so the bubble, the Ask box and the kitten view keep Shades' own colours, and a phone that's already open takes a new theme the next time it opens the page.
+- Answer an agent's question from the bubble. It shows the question and options now, and you answer in The Kitty Litter or T3.
+- Fold a busy conversation in The Kitty Litter down to one row per thread, with how many replies it has and the latest, the way a Slack channel shows a thread. Today every thread's messages are shown in order, and its title and project mark where each one starts.
+- Set a channel's notifications from the phone, and see which channels are muted in The Kitty Litter's sidebar. Both are set from the channel's header on the Mac now, and only its header says it's muted.
+- Read a thread's whole history in The Kitty Litter when it opens on its own, even past each kitten's newest 30, instead of saying the rest is in T3.
+- Keep a question you asked in the cat's DM that only got passed on after a restart. Its talk with the router is archived, and T3 doesn't list archived threads, so The Kitty Litter would have to read it by the ID it kept.
+- Send the phone only what changed in The Kitty Litter. It gets every row of the place it's on each time anything changes, about 170 KB for a conversation of 580 rows, and draws them all again, where the window only lays out what's near what you can see.
+- Work out what The Kitty Litter shows off the main thread, or only for the threads that changed. It's about 12 ms each time anything changes with hundreds of threads, which is most of what's left when a message arrives.
+- A theme for the rest of the cat. Only The Kitty Litter and its phone page take one now, so the bubble, the Ask box and the kitten view keep The Kitty Litter's own colours, and a phone that's already open takes a new theme the next time it opens the page.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
+- Rename `Shades.app` itself, and its folder in Application Support and its Keychain items, to The Kitty Litter, once there's a way to prove macOS keeps its permissions and `install.sh`'s rollback handles the old name.
 - Remember project nicknames, so the frontier agent can skip the search next time.
 - Replace a rewrite in place in apps that only take paste, such as browsers, Slack and VS Code. Today the rewrite is copied there, since a paste can't be read back to prove it landed.
 - Windows and Linux. Version one is macOS only because capture, the non-activating window and on-device speech are all native.

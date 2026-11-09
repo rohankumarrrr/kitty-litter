@@ -35,7 +35,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         menu.autoenablesItems = false
         item.menu = menu
         item.button?.image = Self.icon()
-        item.button?.toolTip = "Shades"
+        item.button?.toolTip = CatWords.appName
     }
 
     /// The top-right corner of the menu bar icon, for hanging things from.
@@ -51,7 +51,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     func show(status: String, needsYou: Bool) {
         self.status = status
         item.button?.contentTintColor = needsYou ? Ink.hex(CatGlint.attention(bright: true).color!) : nil
-        item.button?.setAccessibilityLabel("Shades: \(status)")
+        item.button?.setAccessibilityLabel("\(CatWords.appName): \(status)")
     }
 
     func popUpMenu(at point: NSPoint, in view: NSView) {
@@ -83,7 +83,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
         let waiting = messagesSummary?().map { "\($0) · " } ?? ""
-        addAction(CatWords.messagesTitle, shortcut: waiting + Shortcut.messagesLabel) { [weak self] in self?.onMessages?() }
+        addAction(CatWords.appName, shortcut: waiting + Shortcut.messagesLabel) { [weak self] in self?.onMessages?() }
         addAction("Ask...", shortcut: Shortcut.askLabel) { [weak self] in self?.onAsk?() }
         addAction("Fix what I'm looking at", shortcut: Shortcut.fixLabel) { [weak self] in self?.onFix?() }
         addAction("Kittens", shortcut: "Shift-click the cat") { [weak self] in self?.onKittens?() }
@@ -100,7 +100,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         bind(quiet) { [weak self] in self?.onDoNotDisturb?() }
         menu.addItem(quiet)
         addAction("Settings...") { [weak self] in self?.onSettings?() }
-        addAction("Quit Shades") { NSApp.terminate(nil) }
+        addAction("Quit \(CatWords.appName)") { NSApp.terminate(nil) }
     }
 
     private func addAction(_ title: String, shortcut: String? = nil, run: @escaping () -> Void) {
