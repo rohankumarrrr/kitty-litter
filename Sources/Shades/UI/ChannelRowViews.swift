@@ -269,7 +269,7 @@ final class DayRowView: ChannelRowView {
 
     override func draw(_ dirtyRect: NSRect) {
         let label = NSAttributedString(string: CatWords.day(date, now: now()), attributes: [
-            .font: MessagesInk.font(ofSize: 11, weight: .medium),
+            .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .medium),
             .foregroundColor: MessagesInk.soft,
         ])
         let size = label.size()
@@ -302,7 +302,7 @@ final class NewRowView: ChannelRowView {
 
     override func draw(_ dirtyRect: NSRect) {
         let label = NSAttributedString(string: CatWords.new, attributes: [
-            .font: MessagesInk.font(ofSize: 11, weight: .semibold),
+            .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .semibold),
             .foregroundColor: MessagesInk.badge,
         ])
         let size = label.size()
@@ -401,7 +401,7 @@ struct ReplyBar {
     }
 
     private static func attributed(_ text: String, color: NSColor, bold: Bool) -> NSAttributedString {
-        NSAttributedString(string: text, attributes: [.font: MessagesInk.font(ofSize: 12, weight: bold ? .semibold : .regular), .foregroundColor: color])
+        NSAttributedString(string: text, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta + 1, weight: bold ? .semibold : .regular, tabular: true), .foregroundColor: color])
     }
 }
 
@@ -446,8 +446,8 @@ final class MessageRowView: ChannelRowView {
     private static let clampedLines = 12
     private static let catSide: CGFloat = 28
     private static let pad: CGFloat = 5
-    private static let headHeight: CGFloat = 18
-    private static let contextHeight: CGFloat = 16
+    private static var headHeight: CGFloat { MessagesInk.meta + 7 }
+    private static var contextHeight: CGFloat { MessagesInk.meta + 5 }
     private static let insetX: CGFloat = 12
     private static let insetY: CGFloat = 7
     /// Of the pane's width, so a long message still reads as a bubble.
@@ -776,10 +776,10 @@ final class MessageRowView: ChannelRowView {
             paragraph.lineBreakMode = .byTruncatingTail
             paragraph.alignment = look.isYou ? .right : .left
             NSAttributedString(string: context, attributes: [
-                .font: MessagesInk.font(ofSize: 11),
+                .font: MessagesInk.font(ofSize: MessagesInk.meta),
                 .foregroundColor: hovering ? MessagesInk.text : MessagesInk.soft,
                 .paragraphStyle: paragraph,
-            ]).draw(in: NSRect(x: Self.textLeft + 2, y: Self.pad, width: max((look.isYou ? end(in: bounds.width) : bounds.width - Self.margin) - Self.textLeft - 2, 60), height: 15))
+            ]).draw(in: NSRect(x: Self.textLeft + 2, y: Self.pad, width: max((look.isYou ? end(in: bounds.width) : bounds.width - Self.margin) - Self.textLeft - 2, 60), height: MessagesInk.meta + 4))
         }
         if let replyBar, replyBarFrame.width > 0 {
             replyBar.draw(in: replyBarFrame, on: self, hovering: hovering && onPress != nil, now: Date())
@@ -799,6 +799,7 @@ final class MessageRowView: ChannelRowView {
         for (index, frame) in fileFrames.enumerated() where webButtons[index] == nil { drawFile(message.files[index], picture: pictures[index], in: frame) }
     }
 
+    /// A file stays the size of the buttons beside it, whatever the text size.
     private static var fileFont: NSFont { MessagesInk.font(ofSize: 13) }
 
     private static func fileWidth(_ name: String) -> CGFloat {
@@ -882,7 +883,7 @@ final class MessageRowView: ChannelRowView {
 
     /// Who said it and when, over the bubble. Yours only needs the time.
     private func drawHead() {
-        let small = MessagesInk.font(ofSize: 11)
+        let small = MessagesInk.font(ofSize: MessagesInk.meta)
         let timeLabel = NSAttributedString(string: time, attributes: [.font: small, .foregroundColor: MessagesInk.soft])
         let timeWidth = ceil(timeLabel.size().width)
         let baseline = headTop + 1
@@ -902,10 +903,10 @@ final class MessageRowView: ChannelRowView {
         let room = (hovering ? hoverLeft - 4 : bounds.width - Self.margin) - Self.textLeft - 2
         guard !hovering || room >= 40 else { return }
         NSAttributedString(string: head, attributes: [
-            .font: MessagesInk.font(ofSize: 11, weight: .medium),
+            .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .medium),
             .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: Self.textLeft + 2, y: baseline, width: max(room, 0), height: 15))
+        ]).draw(in: NSRect(x: Self.textLeft + 2, y: baseline, width: max(room, 0), height: MessagesInk.meta + 4))
     }
 }
 
@@ -928,7 +929,7 @@ final class RepliesRowView: ChannelRowView {
 
     override func draw(_ dirtyRect: NSRect) {
         let label = NSAttributedString(string: CatWords.replies(count), attributes: [
-            .font: MessagesInk.font(ofSize: 11, weight: .medium),
+            .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .medium),
             .foregroundColor: MessagesInk.soft,
         ])
         let size = label.size()
@@ -969,7 +970,9 @@ final class ThreadDigestRowView: ChannelRowView {
     override var isPressable: Bool { true }
     override func press() { onPress?() }
 
-    private static var textFont: NSFont { MessagesInk.font(ofSize: 13) }
+    private static var textFont: NSFont { MessagesInk.font(ofSize: MessagesInk.body) }
+    /// Who said each and when, over its words.
+    private static var headHeight: CGFloat { MessagesInk.meta + 7 }
 
     private func text(_ message: ChannelMessage) -> NSAttributedString {
         let paragraph = NSMutableParagraphStyle()
@@ -981,14 +984,14 @@ final class ThreadDigestRowView: ChannelRowView {
     override func fit(width: CGFloat) -> CGFloat {
         let room = max(width - Self.textLeft - Self.margin, 60)
         let most = ceil(Self.textFont.boundingRectForFont.height) * CGFloat(Self.lines)
-        var y: CGFloat = 32
+        var y = MessagesInk.meta + 21
         blocks = said.map { _, message in
             let measured = text(message).boundingRect(with: NSSize(width: room, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin]).height
             let height = min(ceil(measured), most)
-            defer { y += 18 + height + 8 }
-            return (y + 18, height)
+            defer { y += Self.headHeight + height + 8 }
+            return (y + Self.headHeight, height)
         }
-        if digest.more > 0 { y += 18 }
+        if digest.more > 0 { y += Self.headHeight }
         return y + 8
     }
 
@@ -1001,15 +1004,16 @@ final class ThreadDigestRowView: ChannelRowView {
         NSRect(x: Self.margin, y: bounds.height - 1, width: bounds.width - Self.margin * 2, height: 1).fill()
 
         var x = Self.catLeft
+        let name = NSAttributedString(string: channel, attributes: [
+            .font: MessagesInk.font(ofSize: MessagesInk.meta + 1, weight: digest.isUnread ? .bold : .semibold),
+            .foregroundColor: MessagesInk.text,
+        ])
         if digest.isUnread {
             MessagesInk.badge.setFill()
-            NSBezierPath(ovalIn: NSRect(x: x, y: 15, width: 7, height: 7)).fill()
+            NSBezierPath(ovalIn: NSRect(x: x, y: 10 + (name.size().height - 7) / 2, width: 7, height: 7)).fill()
             x += 13
         }
-        NSAttributedString(string: channel, attributes: [
-            .font: MessagesInk.font(ofSize: 12, weight: digest.isUnread ? .bold : .semibold),
-            .foregroundColor: MessagesInk.text,
-        ]).draw(at: NSPoint(x: x, y: 10))
+        name.draw(at: NSPoint(x: x, y: 10))
 
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
@@ -1023,15 +1027,15 @@ final class ThreadDigestRowView: ChannelRowView {
             } else {
                 ChannelSpeakerLook.drawYourSquare(in: cat.insetBy(dx: 3, dy: 3), radius: 5)
             }
-            let head = NSMutableAttributedString(string: look.name, attributes: [.font: MessagesInk.font(ofSize: 12, weight: .semibold), .foregroundColor: MessagesInk.text])
-            head.append(NSAttributedString(string: "  \(message.at.formatted(date: .omitted, time: .shortened))", attributes: [.font: MessagesInk.font(ofSize: 11), .foregroundColor: MessagesInk.soft]))
+            let head = NSMutableAttributedString(string: look.name, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta + 1, weight: .semibold), .foregroundColor: MessagesInk.text])
+            head.append(NSAttributedString(string: "  \(message.at.formatted(date: .omitted, time: .shortened))", attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta), .foregroundColor: MessagesInk.soft]))
             head.addAttribute(.paragraphStyle, value: truncating, range: NSRange(location: 0, length: head.length))
-            head.draw(in: NSRect(x: Self.textLeft, y: block.top - 17, width: room, height: 16))
+            head.draw(in: NSRect(x: Self.textLeft, y: block.top - Self.headHeight + 1, width: room, height: Self.headHeight - 2))
             text(message).draw(with: NSRect(x: Self.textLeft, y: block.top, width: room, height: block.height), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
         }
         if digest.more > 0, let last = blocks.last {
             NSAttributedString(string: CatWords.moreReplies(digest.more), attributes: [
-                .font: MessagesInk.font(ofSize: 12, weight: .semibold),
+                .font: MessagesInk.font(ofSize: MessagesInk.meta + 1, weight: .semibold, tabular: true),
                 .foregroundColor: MessagesInk.link,
             ]).draw(at: NSPoint(x: Self.textLeft, y: last.top + last.height + 6))
         }
@@ -1052,7 +1056,9 @@ final class HeadingRowView: ChannelRowView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    override func fit(width: CGFloat) -> CGFloat { 52 }
+    private static var subTop: CGFloat { 14 + MessagesInk.body + 5 }
+
+    override func fit(width: CGFloat) -> CGFloat { Self.subTop + MessagesInk.meta + 9 }
 
     override func draw(_ dirtyRect: NSRect) {
         CatStamp.draw(status.pose(tick: 0), jacket: ChannelSpeakerLook.color(of: status.kitten), in: NSRect(x: Self.catLeft, y: 14, width: 32, height: 32), on: self)
@@ -1060,15 +1066,15 @@ final class HeadingRowView: ChannelRowView {
         truncating.lineBreakMode = .byTruncatingTail
         let width = bounds.width - Self.textLeft - Self.margin
         NSAttributedString(string: status.kitten.name, attributes: [
-            .font: MessagesInk.font(ofSize: 13, weight: .semibold),
+            .font: MessagesInk.font(ofSize: MessagesInk.body, weight: .semibold),
             .foregroundColor: MessagesInk.text,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: Self.textLeft, y: 14, width: width, height: 17))
+        ]).draw(in: NSRect(x: Self.textLeft, y: 14, width: width, height: MessagesInk.body + 4))
         NSAttributedString(string: "\(status.kitten.role) · \(CatWords.kittenState(status.state))", attributes: [
-            .font: MessagesInk.font(ofSize: 11),
+            .font: MessagesInk.font(ofSize: MessagesInk.meta),
             .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: Self.textLeft, y: 32, width: width, height: 14))
+        ]).draw(in: NSRect(x: Self.textLeft, y: Self.subTop, width: width, height: MessagesInk.meta + 3))
     }
 }
 
@@ -1094,7 +1100,7 @@ final class IssueRowView: ChannelRowView {
 
     override var isPressable: Bool { true }
     override func press() { onPress?() }
-    override func fit(width: CGFloat) -> CGFloat { 30 }
+    override func fit(width: CGFloat) -> CGFloat { MessagesInk.body + 17 }
 
     override func draw(_ dirtyRect: NSRect) {
         let left = Self.textLeft
@@ -1108,7 +1114,7 @@ final class IssueRowView: ChannelRowView {
         var edge = bounds.width - Self.margin
         let details = [CatWords.age(of: thread.updatedAt, now: now()), CatWords.status(thread), thread.pullRequest.map(CatWords.pullRequest)]
         for text in details.compactMap({ $0 }) {
-            let label = NSAttributedString(string: text, attributes: [.font: MessagesInk.font(ofSize: 11), .foregroundColor: MessagesInk.soft])
+            let label = NSAttributedString(string: text, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta, tabular: true), .foregroundColor: MessagesInk.soft])
             let size = label.size()
             edge -= ceil(size.width)
             label.draw(at: NSPoint(x: edge, y: bounds.midY - size.height / 2))
@@ -1118,10 +1124,10 @@ final class IssueRowView: ChannelRowView {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         NSAttributedString(string: thread.title, attributes: [
-            .font: MessagesInk.font(ofSize: 13),
+            .font: MessagesInk.font(ofSize: MessagesInk.body),
             .foregroundColor: MessagesInk.text,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: left + 16, y: 6, width: max(edge - left - 16, 40), height: 17))
+        ]).draw(in: NSRect(x: left + 16, y: 6, width: max(edge - left - 16, 40), height: MessagesInk.body + 4))
     }
 }
 
@@ -1134,7 +1140,7 @@ final class NoteRowView: ChannelRowView {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = isCentered ? .center : .left
         block = ChannelTextBlock(NSAttributedString(string: text, attributes: [
-            .font: MessagesInk.font(ofSize: 13),
+            .font: MessagesInk.font(ofSize: MessagesInk.body),
             .foregroundColor: MessagesInk.soft,
             .paragraphStyle: paragraph,
         ]))
@@ -1202,7 +1208,7 @@ final class SectionRowView: ChannelRowView {
 
     override func draw(_ dirtyRect: NSRect) {
         NSAttributedString(string: title.uppercased(), attributes: [
-            .font: MessagesInk.font(ofSize: 10, weight: .semibold),
+            .font: MessagesInk.font(ofSize: MessagesInk.meta - 1, weight: .semibold),
             .foregroundColor: MessagesInk.soft,
             .kern: 0.5,
         ]).draw(at: NSPoint(x: Self.catLeft, y: 16))
@@ -1224,7 +1230,7 @@ final class CardRowView: ChannelRowView {
 
     private static let catSide: CGFloat = 32
     private static let pad: CGFloat = 8
-    private static let wordsTop: CGFloat = 28
+    private static var wordsTop: CGFloat { pad + MessagesInk.body + 7 }
     private static let buttonHeight: CGFloat = 26
 
     let buttons: [QuietButton]
@@ -1276,7 +1282,7 @@ final class CardRowView: ChannelRowView {
         }
         if footer != nil {
             footerTop = bottom + 2
-            bottom = footerTop + 16
+            bottom = footerTop + MessagesInk.meta + 5
         }
         bottom += 8
         var x = Self.textLeft
@@ -1299,7 +1305,7 @@ final class CardRowView: ChannelRowView {
         let left = Self.textLeft
         var right = bounds.width - Self.margin
         if let at {
-            let time = NSAttributedString(string: CatWords.age(of: at, now: Date()), attributes: [.font: MessagesInk.font(ofSize: 11), .foregroundColor: MessagesInk.soft])
+            let time = NSAttributedString(string: CatWords.age(of: at, now: Date()), attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta, tabular: true), .foregroundColor: MessagesInk.soft])
             right -= ceil(time.size().width)
             time.draw(at: NSPoint(x: right, y: Self.pad + 2))
             right -= 8
@@ -1307,17 +1313,17 @@ final class CardRowView: ChannelRowView {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         NSAttributedString(string: heading, attributes: [
-            .font: MessagesInk.font(ofSize: 13, weight: .semibold),
+            .font: MessagesInk.font(ofSize: MessagesInk.body, weight: .semibold),
             .foregroundColor: MessagesInk.text,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: left, y: Self.pad, width: max(right - left, 40), height: 18))
+        ]).draw(in: NSRect(x: left, y: Self.pad, width: max(right - left, 40), height: MessagesInk.body + 5))
 
         if let answer {
             MessagesInk.line.setFill()
             NSRect(x: left, y: answerTop, width: 2, height: answer.height).fill()
         }
         if let footer {
-            NSAttributedString(string: footer, attributes: [.font: MessagesInk.font(ofSize: 11), .foregroundColor: MessagesInk.soft])
+            NSAttributedString(string: footer, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta), .foregroundColor: MessagesInk.soft])
                 .draw(at: NSPoint(x: left, y: footerTop))
         }
     }

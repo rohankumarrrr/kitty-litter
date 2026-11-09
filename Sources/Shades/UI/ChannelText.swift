@@ -3,8 +3,8 @@ import AppKit
 /// A message's markdown as Messages draws it. A link is underlined and only says where it goes: pressing it asks
 /// before anything opens, in the pane's link bar.
 enum ChannelMarkdown {
-    static var font: NSFont { MessagesInk.font(ofSize: 13 + MessagesInk.textStep) }
-    private static var codeFont: NSFont { .monospacedSystemFont(ofSize: 12 + MessagesInk.textStep, weight: .regular) }
+    static var font: NSFont { MessagesInk.font(ofSize: MessagesInk.body) }
+    private static var codeFont: NSFont { .monospacedSystemFont(ofSize: MessagesInk.body - 1, weight: .regular) }
     static let copyRoom: CGFloat = 22
     /// More cells than this take seconds to lay out as a table, so a bigger one is drawn as text, the way code is.
     static let largestTable = 400
@@ -37,7 +37,7 @@ enum ChannelMarkdown {
             case .paragraph:
                 result.append(line(block.spans ?? [], color: color, style: style))
             case .heading:
-                result.append(line(block.spans ?? [], color: color, style: style, font: MessagesInk.font(ofSize: 14 + MessagesInk.textStep, weight: .semibold)))
+                result.append(line(block.spans ?? [], color: color, style: style, font: MessagesInk.font(ofSize: MessagesInk.title, weight: .semibold)))
             case .item:
                 let indent = CGFloat(min((block.depth ?? 1) - 1, deepestIndent)) * 14
                 let marker = block.marker ?? ""

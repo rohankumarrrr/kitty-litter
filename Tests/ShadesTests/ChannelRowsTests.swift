@@ -176,6 +176,39 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(CatWords.age(of: noon, now: noon.addingTimeInterval(90_000)), "1d ago")
     }
 
+    @MainActor
+    func testWhoSaidItWhenAndWhatsOverItGrowWithTheTextSize() throws {
+        defer { MessagesInk.textSize = .standard }
+        let built = book(threads: [thread("a", title: "Rewrite the pricing copy")], transcripts: ["a": [exchange("a1"), exchange("a2", asked: 30)]])
+        let post = try XCTUnwrap(parents(channel(steve, in: built)).first)
+        let search = JumpBoxView(frame: NSRect(x: 0, y: 0, width: 900, height: 560))
+        func measured(_ size: TextSize) -> [String: CGFloat] {
+            MessagesInk.textSize = size
+            search.show(built, mode: .search)
+            search.layout()
+            return [
+                "reply bar": ReplyBar(post, in: built).width(now: noon.addingTimeInterval(60)),
+                "kitten's name and state": HeadingRowView(status: KittenStatus(kitten: steve, state: .idle)).fit(width: 600),
+                "thread in Activity": IssueRowView(thread: thread("a"), now: { self.noon }).fit(width: 600),
+                "search box": search.field.frame.height,
+            ]
+        }
+        let sizes = TextSize.allCases.map { ($0, measured($0)) }
+        for ((smaller, before), (bigger, after)) in zip(sizes, sizes.dropFirst()) {
+            for (what, height) in before {
+                XCTAssertGreaterThan(try XCTUnwrap(after[what]), height, "\(what) from \(smaller) to \(bigger)")
+            }
+        }
+    }
+
+    func testNumbersThatChangeHoldStillInEveryFace() {
+        for family in [nil] + MessagesInk.systemFaces.map(\.name) {
+            let font = MessagesInk.font(ofSize: MessagesInk.meta, tabular: true, family: family)
+            let widths = Set((0...9).map { NSAttributedString(string: "\($0)", attributes: [.font: font]).size().width })
+            XCTAssertEqual(widths.count, 1, "every digit one width in \(family ?? "the system's")")
+        }
+    }
+
     func testAnEmptyChannelSaysSo() {
         XCTAssertEqual(notes(channel(steve, in: book())), ["You and Steve Pawsniak haven't started a thread yet."])
         XCTAssertEqual(notes(channel(cali, in: book())), ["Cali isn't set up yet."])
