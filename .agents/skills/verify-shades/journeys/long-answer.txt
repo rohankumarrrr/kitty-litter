@@ -1,0 +1,7 @@
+front
+ask Give me a long answer about this page
+wait 14
+draw .verify/shades/long-answer/0-done
+buttons
+front
+windows

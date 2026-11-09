@@ -10,7 +10,7 @@ It's early, and it runs its agents through [T3 Code](https://t3.codes), so you'l
 
 The recordings here come from demo mode, with made-up kittens and a pretend pricing page, and The Kitty Litter draws each frame from its own windows.
 
-**Ask.** Press ⌥Space or click the cat, and ask anything. It looks at your screen at that moment and answers in a bubble, usually in about 10 seconds, though a model can occasionally take much longer. Good for "how do I start problem 3?" or "what does this error mean?" Ask where something is, like "where's the export button?", and the cat runs over and sits on it. It only points, and never clicks. If it can't find the spot, it says so.
+**Ask.** Press ⌥Space or click the cat, and ask anything. It looks at your screen at that moment and answers in a bubble, usually in about 10 seconds, though a model can occasionally take much longer. A long answer shows its end, with its top faded and a scroll bar to get back to its start. Good for "how do I start problem 3?" or "what does this error mean?" Ask where something is, like "where's the export button?", and the cat runs over and sits on it. It only points, and never clicks. If it can't find the spot, it says so.
 
 <p><img src="docs/images/ask.gif" width="372" alt="Typing a question into the Ask box over a pricing page, and the cat answering in a bubble"> <img src="docs/images/point.gif" width="409" alt="Asking where to start a free trial, and the cat running over to sit on the Start free trial button"></p>
 

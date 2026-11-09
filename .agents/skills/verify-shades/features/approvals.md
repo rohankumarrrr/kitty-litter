@@ -21,6 +21,7 @@ Preconditions:
 Journey: `journeys/approvals.txt`.
 
 - **Ask.** `approval command npm test`, then `wait 4`. `bubble.png` in `0-asked` shows "Steve Pawsniak: Tidy up the pricing page", "Wants to run this:", `npm test`, and the three buttons.
+- **A long command.** `approval command npm run build && npm test && npx playwright test --project=chromium --reporter=line --workers=4`, then `wait 4`. The command wraps only at spaces, so `--reporter=line` starts a line whole rather than splitting after `--`. What's selected and copied is the real text.
 - **Allow.** `allow`, then `wait 1`. The output says `[demo] accept: npm test`, and `1-allowed` has no `bubble.png` because the bubble has gone.
 
 ## Gotchas

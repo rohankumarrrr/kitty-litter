@@ -23,7 +23,7 @@ Preconditions:
 
 Journey: `journeys/inbox.txt`.
 
-- **Arrive.** `report decision`, then `wait 7`. `[demo] started demo-1 ... Below is the final report` is the sorting. `bubble.png` in `0-bubble` says "Inbox, 1 decision, Open".
+- **Arrive.** `report decision`, then `wait 7`. `[demo] started demo-1 ... Below is the final report` is the sorting. `bubble.png` in `0-bubble` says "The Kitty Litter" over "1 decision", with Open drawn as a button, the same as Open after a hand-off.
 - **Open.** `inbox`, then `wait 1`. `channels.png` in `1-open` shows The Kitty Litter at Activity, with "Ship the login fix?" from "Clawde · Fix login", and Reply, Done and Open in T3.
 - **Reply.** `inbox reply`, then `wait 1`. `channels.png` in `2-reply` shows the "Fix login" thread in the pane beside #clawde, with Open in T3 and ✕ at the top and "Replies in Fix login" over the box.
 - **Send.** `send Go ahead`, then `wait 2`. `[demo] forwarded to demo-login with 0 attachments: Go ahead / --- / Passed on` shows only your words went to that thread. `channels.png` in `3-sent` shows "Go ahead" as your bubble in the pane, and Activity has no count left.
