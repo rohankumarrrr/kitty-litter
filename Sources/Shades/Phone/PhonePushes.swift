@@ -29,6 +29,8 @@ final class PhonePushes {
     /// Whether it's somewhere a phone's notifications can go. Subscribing again replaces the one before.
     func subscribe(_ subscription: WebPush.Subscription) -> Bool {
         guard subscription.isValid else { return false }
+        // A phone coming back posts the same one each time, which changes nothing, whatever order its JSON came in.
+        guard subscriptions.last != subscription else { return true }
         subscriptions.removeAll { $0.endpoint == subscription.endpoint }
         subscriptions = Array((subscriptions + [subscription]).suffix(Self.most))
         save()

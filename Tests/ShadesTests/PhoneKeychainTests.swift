@@ -34,7 +34,8 @@ final class PhoneKeychainTests: XCTestCase {
     }
 
     private let subscription = WebPush.Subscription(endpoint: "https://web.push.apple.com/a-phone", p256dh: WebPush.string(P256.KeyAgreement.PrivateKey().publicKey.x963Representation), auth: WebPush.string(Data(repeating: 7, count: 16)))
-    private var saved: String { String(decoding: try! JSONEncoder().encode(subscription), as: UTF8.self) }
+    /// With its keys in another order, which `JSONEncoder` doesn't keep the same on every macOS.
+    private var saved: String { #"{"auth":"\#(subscription.auth)","p256dh":"\#(subscription.p256dh)","endpoint":"\#(subscription.endpoint)"}"# }
 
     /// A paired phone coming back posts its subscription again, which replaced the last build's item on the main thread,
     /// and that waited on a Keychain dialog, which held the whole app.

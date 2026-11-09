@@ -113,8 +113,8 @@ final class MemoryPhoneKeys: PhoneKeyStoring {
 /// In the login Keychain rather than a file a kitten could rewrite to let itself in, or read to send as you. A build
 /// signed with the same certificate reads what an earlier one saved, but changing or deleting another build's item
 /// shows a dialog and waits on it, on the main thread here, so each save is an item of its own, the newest that can be
-/// read is the one that counts, and only items this run saved are ever deleted. Saving what's already there, as a phone
-/// coming back does each time, touches nothing.
+/// read is the one that counts, and only items this run saved are ever deleted. Saving what's already there touches
+/// nothing.
 final class KeychainPhoneKeys: PhoneKeyStoring {
     private let keychain: PhoneKeychain
     /// The item this run saved for each name, the only kind it deletes.
