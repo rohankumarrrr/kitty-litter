@@ -132,6 +132,70 @@ final class CatBrainTests: XCTestCase {
         XCTAssertNotEqual(cat.pose.frame, first)
     }
 
+    func testAStillCatArrivesInOneTickAndItsGlintHolds() {
+        var cat = brain()
+        cat.still = true
+        let target = CGPoint(x: 1800, y: 0)
+        cat.go(to: target)
+        XCTAssertTrue(cat.tick(), "nothing waits on a run across the screen")
+        XCTAssertEqual(cat.position, target)
+        XCTAssertEqual(cat.state, .sit)
+
+        for status in [CatStatus.attention, .thinking] {
+            cat.setStatus(status)
+            var poses = Set<CatPose>()
+            for _ in 1...300 {
+                cat.tick()
+                poses.insert(cat.pose)
+            }
+            XCTAssertEqual(poses.count, 1, "\(status) holds one drawing")
+        }
+        XCTAssertEqual(cat.pose, CatPose(frame: .sit, glint: .thinking(bright: true)))
+    }
+
+    func testNothingElseAboutAStillCatMovesOnItsOwn() {
+        var cat = brain()
+        cat.still = true
+        var poses = Set<CatPose>()
+        for _ in 1...200 {
+            cat.tick()
+            poses.insert(cat.pose)
+        }
+        XCTAssertEqual(cat.state, .sleep)
+        XCTAssertEqual(poses, [CatPose(frame: .sit), CatPose(frame: .sleep1, z: 0)], "no blinking, scratching or breathing")
+
+        cat.celebrate()
+        poses = []
+        for _ in 1...19 {
+            cat.tick()
+            poses.insert(cat.pose)
+        }
+        XCTAssertEqual(poses, [CatPose(frame: .bat1, glint: .party)])
+
+        cat.setStatus(.listening)
+        cat.level = 0.9
+        cat.tick()
+        XCTAssertEqual(cat.pose.lift, 0)
+        XCTAssertEqual(cat.pose.glint, .listening(loudness: 2), "how loud you are still shows")
+    }
+
+    func testSomethingNeedingYouBlinksForFiveSecondsThenHolds() {
+        var cat = brain()
+        cat.setStatus(.attention)
+        var first = Set<CatGlint>()
+        for _ in 1...50 {
+            cat.tick()
+            first.insert(cat.pose.glint)
+        }
+        XCTAssertEqual(first, [.attention(bright: true), .attention(bright: false)])
+        var after = Set<CatGlint>()
+        for _ in 1...600 {
+            cat.tick()
+            after.insert(cat.pose.glint)
+        }
+        XCTAssertEqual(after, [.attention(bright: true)])
+    }
+
     func testBeingPettedSaysAWordAndWakes() {
         var cat = brain()
         for _ in 1...100 { cat.tick() }

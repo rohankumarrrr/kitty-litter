@@ -136,6 +136,8 @@ final class ChannelsWindowTests: XCTestCase {
     }
 
     func testOnlyAKittenThatsWorkingOrNeedsYouMoves() {
+        Motion.forced = false
+        defer { Motion.forced = nil }
         func moves(_ state: KittenStatus.State) -> Bool {
             let status = KittenStatus(kitten: steve, state: state)
             return ChannelSidebarRow(item: ChannelSidebarItem(place: .channel(.of(steve)), title: "steve", icon: .kitten(status))).isLive
@@ -144,6 +146,10 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(moves(.needsYou))
         XCTAssertFalse(moves(.idle))
         XCTAssertFalse(moves(.notSetUp))
+
+        Motion.forced = true
+        XCTAssertFalse(moves(.working(sessions: 1)), "Reduce Motion holds every kitten still")
+        XCTAssertFalse(moves(.needsYou))
     }
 
     func testALongMessageIsCutAndShowMoreSurvivesARefresh() throws {

@@ -42,6 +42,7 @@ final class CatController {
         let start = saved.flatMap { $0.count == 2 ? CGPoint(x: $0[0], y: $0[1]) : nil } ?? Self.defaultHome()
         home = ScreenBounds.clamp(start, size: Self.size, to: Self.screens())
         brain = CatBrain(position: home)
+        brain.still = Motion.isReduced
 
         panel.contentView = view
         panel.setFrame(NSRect(origin: home, size: Self.size), display: false)
@@ -68,6 +69,11 @@ final class CatController {
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.screensChanged() }
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.motionChanged() }
         }
     }
 
@@ -292,6 +298,11 @@ final class CatController {
             brain.move(to: ScreenBounds.clamp(brain.position, size: Self.size, to: Self.screens()))
             poke()
         }
+    }
+
+    private func motionChanged() {
+        brain.still = Motion.isReduced
+        poke()
     }
 
     // MARK: - Screens

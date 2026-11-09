@@ -45,11 +45,14 @@ final class KittenPanel {
 
         guard !panel.isVisible else { return }
         panel.orderFrontRegardless()
-        let timer = Timer(timeInterval: Self.tickSeconds, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.advance() }
+        // Under Reduce Motion each kitten holds its first drawing.
+        if !Motion.isReduced {
+            let timer = Timer(timeInterval: Self.tickSeconds, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.advance() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            self.timer = timer
         }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated { if !ClickAway.isPaused { self?.hide() } }
         }
@@ -59,6 +62,7 @@ final class KittenPanel {
     func hide() {
         timer?.invalidate()
         timer = nil
+        tick = 0
         if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         clickMonitor = nil
         panel.orderOut(nil)

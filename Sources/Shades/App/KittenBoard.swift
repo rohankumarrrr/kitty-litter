@@ -18,7 +18,7 @@ struct KittenStatus: Equatable, Identifiable {
 
     var id: String { kitten.id }
 
-    /// How it looks right now, at this tick of a timer running five times a second.
+    /// How it looks right now, at this tick of a timer running five times a second. Tick 0 is how it holds still.
     func pose(tick: Int) -> CatPose {
         switch state {
         case .working:

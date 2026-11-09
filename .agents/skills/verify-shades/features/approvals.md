@@ -25,6 +25,6 @@ Journey: `journeys/approvals.txt`.
 
 ## Gotchas
 
-- The bubble only shows once the cat has run over, which takes a few seconds. `windows` says `state run` while it's on the way.
+- The bubble only shows once the cat has run over, which takes a few seconds. `windows` says `state run` while it's on the way. With `--reduce-motion` the cat is there in a tick, as it is with Reduce Motion on.
 - `approval` takes a kind first: `command`, `fileChange` or `fileRead`. The words after it are what's shown.
 - `deny` and `session` answer the other two ways.

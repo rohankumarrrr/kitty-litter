@@ -194,9 +194,9 @@ final class ChannelSidebarRow: ChannelRowView {
     override var isPressable: Bool { true }
     override func press() { onPress?() }
 
-    /// Only a kitten that's working or needs you moves, so nothing else has to redraw.
+    /// Only a kitten that's working or needs you moves, so nothing else has to redraw. Under Reduce Motion, none do.
     var isLive: Bool {
-        guard case .kitten(let status) = item.icon else { return false }
+        guard !Motion.isReduced, case .kitten(let status) = item.icon else { return false }
         return status.state.dotColor != nil
     }
 
