@@ -17,7 +17,7 @@ With **Messages on my phone** on in Settings, the cat shows a code and a picture
 
 ## How to get to it (user POV)
 
-- Turn on **Messages on my phone, over Tailscale** in Settings and press Save. The code shows.
+- Turn on **Messages on my phone, over Tailscale** on Settings' Messages page. The code shows.
 - Scan it with the phone's camera, or open the address and type the code.
 - Tap a place, then use the box at the bottom or a card's buttons.
 

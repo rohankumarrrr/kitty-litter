@@ -223,6 +223,58 @@ final class DemoDriver {
         print("no link shows [\(words)]")
     }
 
+    /// The same as changing a control in Settings, found by its row: `setting Text size Large` picks Large,
+    /// `setting Extra words Pawsniak` types that and presses Return, and a box or a button is pressed, such as
+    /// `setting Do Not Disturb` or `setting #general`. Prints what each control on the page says afterwards.
+    private func setting(_ words: String) {
+        let controls = allSubviews(of: stage.settingsPanel.panel.contentView).filter { $0 is NSControl || $0 is QuietButton }
+        func names(_ view: NSView) -> [String] {
+            [view.accessibilityIdentifier(), (view as? NSButton)?.title ?? "", (view as? QuietButton)?.accessibilityLabel() ?? ""].filter { !$0.isEmpty }
+        }
+        let found = controls.flatMap { view in names(view).map { (view, $0) } }
+            .filter { words.lowercased().hasPrefix($0.1.lowercased()) }
+            .max { $0.1.count < $1.1.count }
+        guard let (control, label) = found else { return print("no setting [\(words)]") }
+        let choice = String(words.dropFirst(label.count)).trimmingCharacters(in: .whitespaces)
+        switch control {
+        case let popup as NSPopUpButton:
+            guard popup.item(withTitle: choice) != nil else { return print("no choice [\(choice)] in \(label)") }
+            popup.selectItem(withTitle: choice)
+            popup.sendAction(popup.action, to: popup.target)
+        case let box as NSButton:
+            box.state = box.state == .on ? .off : .on
+            box.sendAction(box.action, to: box.target)
+        case let field as NSTextField:
+            stage.settingsPanel.panel.makeFirstResponder(field)
+            field.stringValue = choice
+            field.sendAction(field.action, to: field.target)
+        case let button as QuietButton:
+            // A menu waits for a click, so `notifications` and `colors` stand in for picking from one.
+            guard button.accessibilityRole() != .popUpButton else { return print("\(label) opens a menu: use notifications or colors") }
+            button.onPress?()
+        default:
+            break
+        }
+        print("set \(label)")
+        settingsShown()
+    }
+
+    /// Each control on Settings' page as it shows now.
+    private func settingsShown() {
+        let panel = stage.settingsPanel
+        print("settings page=\(panel.page.title) visible=\(panel.isVisible)")
+        for view in allSubviews(of: panel.panel.contentView) {
+            let id = view.accessibilityIdentifier()
+            switch view {
+            case let popup as NSPopUpButton: print("  \(id): \(popup.titleOfSelectedItem ?? "")")
+            case let field as NSTextField where field.isEditable: print("  \(id): \(field.stringValue)")
+            case let box as NSButton where box.allowsMixedState == false && box.title != "": print("  [\(box.state == .on ? "x" : " ")] \(box.title)")
+            case let button as QuietButton where !id.isEmpty: print("  \(button.accessibilityLabel() ?? id)")
+            default: break
+            }
+        }
+    }
+
     private func allSubviews(of view: NSView?) -> [NSView] {
         guard let view else { return [] }
         return view.subviews + view.subviews.flatMap { allSubviews(of: $0) }
@@ -300,7 +352,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -464,7 +516,15 @@ final class DemoDriver {
             let taken = drop.map { (view.selection.thread == nil ? view.pane : view.threadPane).composer.attach($0) } ?? false
             print("attached \(drop?.name ?? rest), taken: \(taken)")
         case "settings":
-            controller.settingsPressed()
+            // Opens Settings from the menu, or turns to a page of it: `settings messages`.
+            if let page = SettingsPanel.Page.allCases.first(where: { $0.title.lowercased() == rest.lowercased() }) {
+                stage.settingsPanel.select(page)
+                print("settings page \(page.title)")
+            } else {
+                controller.settingsPressed()
+            }
+        case "setting":
+            setting(rest)
         case "phone":
             phone(rest)
         case "type":

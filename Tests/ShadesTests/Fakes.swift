@@ -116,9 +116,16 @@ final class FakeStage: CatStage {
     func releaseMessagesBox() { messagesBoxHeld = false }
     var themes: [ColorTheme?] = []
     func showTheme(_ theme: ColorTheme?) { themes.append(theme) }
-    /// What pressing Save in the settings panel does.
-    var saveSettings: ((Settings) -> Void)?
-    func showSettings(_ settings: Settings, onSave: @escaping (Settings) -> Void) { saveSettings = onSave }
+    /// What Settings was opened with, and where, then what it's showing since.
+    var settingsShown: [(form: SettingsForm, overMessages: Bool)] = []
+    var settingsForms: [SettingsForm] = []
+    func showSettings(_ form: SettingsForm, overMessages: Bool) {
+        settingsShown.append((form, overMessages))
+        settingsForms.append(form)
+    }
+    func settingsChanged(_ form: SettingsForm) { settingsForms.append(form) }
+    var textSizes: [TextSize] = []
+    func showTextSize(_ size: TextSize) { textSizes.append(size) }
     var pairings: [PhonePairingCard?] = []
     func showPairing(_ card: PhonePairingCard?) { pairings.append(card) }
     func copyToPasteboard(_ text: String) { copied = text }

@@ -1,0 +1,36 @@
+front
+settings
+wait 1
+draw .verify/shades/settings/1-agents
+setting Front door mode Accept edits
+settings voice
+setting Extra words Pawsniak, Clawde
+settings notifications
+setting Also when a session finishes
+notifications steve mute
+wait 1
+draw .verify/shades/settings/2-notifications
+settings messages
+setting Phone
+wait 2
+setting Open threads In T3
+setting Text size Larger
+channels
+wait 2
+channel steve
+wait 2
+settings messages
+draw .verify/shades/settings/3-messages
+setting Done
+sidebar Settings
+wait 1
+settings privacy
+setting Private apps com.example.vault, com.example.diary
+draw .verify/shades/settings/4-privacy
+settings notifications
+setting Do Not Disturb
+dnd
+settings notifications
+menuitems
+front
+windows

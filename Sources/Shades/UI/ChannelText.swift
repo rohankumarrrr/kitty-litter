@@ -3,8 +3,8 @@ import AppKit
 /// A message's markdown as Messages draws it. A link is underlined and only says where it goes: pressing it asks
 /// before anything opens, in the pane's link bar.
 enum ChannelMarkdown {
-    static let font = NSFont.systemFont(ofSize: 13)
-    private static let codeFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+    static var font: NSFont { .systemFont(ofSize: 13 + MessagesInk.textStep) }
+    private static var codeFont: NSFont { .monospacedSystemFont(ofSize: 12 + MessagesInk.textStep, weight: .regular) }
     static let copyRoom: CGFloat = 22
     /// More cells than this take seconds to lay out as a table, so a bigger one is drawn as text, the way code is.
     static let largestTable = 400
@@ -37,7 +37,7 @@ enum ChannelMarkdown {
             case .paragraph:
                 result.append(line(block.spans ?? [], color: color, style: style))
             case .heading:
-                result.append(line(block.spans ?? [], color: color, style: style, font: .systemFont(ofSize: 14, weight: .semibold)))
+                result.append(line(block.spans ?? [], color: color, style: style, font: .systemFont(ofSize: 14 + MessagesInk.textStep, weight: .semibold)))
             case .item:
                 let indent = CGFloat(min((block.depth ?? 1) - 1, deepestIndent)) * 14
                 let marker = block.marker ?? ""
@@ -145,7 +145,7 @@ enum ChannelMarkdown {
                 if rowIndex == 0 { block.backgroundColor = color.withAlphaComponent(0.06) }
                 let style = NSMutableParagraphStyle()
                 style.textBlocks = [block]
-                result.append(line(cell, color: color, style: style, font: rowIndex == 0 ? .systemFont(ofSize: 13, weight: .semibold) : font))
+                result.append(line(cell, color: color, style: style, font: rowIndex == 0 ? .systemFont(ofSize: font.pointSize, weight: .semibold) : font))
             }
         }
         return result
@@ -287,6 +287,8 @@ final class ChannelTextBlock {
     /// The same words drawn another way, such as in a theme's colours, without measuring them again.
     func restyle(_ text: NSAttributedString) {
         storage.setAttributedString(text)
+        // A new text size lays out to a new height.
+        fitted = nil
         textView?.selectedTextAttributes = Self.selection(on: wordsColor)
     }
 

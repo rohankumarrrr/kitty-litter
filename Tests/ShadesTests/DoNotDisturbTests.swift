@@ -314,7 +314,7 @@ final class DoNotDisturbTests: XCTestCase {
         quiet()
         var saved = Settings()
         saved.vocabulary = ["Shades"]
-        stage.saveSettings?(saved)
+        controller.settingsEdited(saved)
         XCTAssertEqual(controller.settings.vocabulary, ["Shades"])
         XCTAssertTrue(controller.settings.doNotDisturb)
     }

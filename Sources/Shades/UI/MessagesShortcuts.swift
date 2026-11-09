@@ -26,6 +26,8 @@ enum MessagesShortcut: Hashable {
     case close
     /// ⌘/, every shortcut.
     case cheatsheet
+    /// ⌘,, every setting, as in any Mac app.
+    case settings
 
     /// Physical keys, so they're where they are whatever the layout, as in T3 Code and Slack.
     private enum Key {
@@ -62,6 +64,7 @@ enum MessagesShortcut: Hashable {
             case (_, "n"): self = .compose
             case (_, "w"): self = .close
             case (_, "/"): self = .cheatsheet
+            case (_, ","): self = .settings
             default: return nil
             }
         case [.option]:
@@ -348,7 +351,7 @@ extension ChannelsView {
     func perform(_ shortcut: MessagesShortcut) -> Bool {
         guard let book else { return false }
         switch shortcut {
-        case .jump, .cheatsheet, .escape, .close: break
+        case .jump, .cheatsheet, .escape, .close, .settings: break
         default: hideOverlays()
         }
         switch shortcut {
@@ -396,6 +399,9 @@ extension ChannelsView {
         case .cheatsheet:
             closeJump()
             cheatsheet.isHidden.toggle()
+            return true
+        case .settings:
+            onSettings?()
             return true
         }
     }

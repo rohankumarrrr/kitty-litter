@@ -58,6 +58,7 @@ final class MessagesShortcutsTests: XCTestCase {
         XCTAssertEqual(key(45, "n", .command), .compose)
         XCTAssertEqual(key(13, "w", .command), .close)
         XCTAssertEqual(key(44, "/", .command), .cheatsheet)
+        XCTAssertEqual(key(43, ",", .command), .settings)
         XCTAssertNil(key(8, "c", .command), "⌘C is for copying")
         XCTAssertNil(key(126, "", []), "the arrows alone move through what's in front of you")
         XCTAssertNil(key(40, "k", [.command, .control]))

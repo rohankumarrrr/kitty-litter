@@ -6,6 +6,17 @@ import ShadesCore
 enum MessagesInk {
     /// Set when the app starts and when you pick one, and read as Messages draws, all on the main thread.
     static var theme: ColorTheme?
+    /// How big what's said is, set the same way.
+    static var textSize: TextSize = .standard
+    /// Points added to every size what's said is drawn at, and the box you type in.
+    static var textStep: CGFloat {
+        switch textSize {
+        case .small: -1
+        case .standard: 0
+        case .large: 2
+        case .larger: 4
+        }
+    }
     /// Your picture, as the small JPEG `YourPicture` keeps, set when the app starts. `nil` keeps your blue square.
     static var picture: Data? { didSet { pictureImage = picture.flatMap(NSImage.init(data:)) } }
     private(set) static var pictureImage: NSImage?

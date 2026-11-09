@@ -49,10 +49,12 @@ final class ChannelSidebar: QuietView {
     /// Theme was pressed, so its menu can open under it.
     var onTheme: ((NSView) -> Void)?
     var onShortcuts: (() -> Void)?
+    var onSettings: (() -> Void)?
     var onDoNotDisturb: (() -> Void)?
     private(set) var rows: [ChannelSidebarRow] = []
     let themeButton = QuietButton(CatWords.themeButton, style: .text)
     let shortcutsButton = QuietButton(CatWords.shortcutsButton, style: .text)
+    let settingsButton = QuietButton(CatWords.settingsButton, style: .text)
     /// One switch, which says so when it's on.
     let quietButton = QuietButton(CatWords.doNotDisturb, style: .text)
     let quietOnButton = QuietButton(CatWords.doNotDisturbOn, style: .plain)
@@ -68,6 +70,7 @@ final class ChannelSidebar: QuietView {
         addSubview(scroll)
         addSubview(themeButton)
         addSubview(shortcutsButton)
+        addSubview(settingsButton)
         addSubview(quietButton)
         addSubview(quietOnButton)
         quietOnButton.isHidden = true
@@ -78,6 +81,7 @@ final class ChannelSidebar: QuietView {
             self.onTheme?(self.themeButton)
         }
         shortcutsButton.onPress = { [weak self] in self?.onShortcuts?() }
+        settingsButton.onPress = { [weak self] in self?.onSettings?() }
     }
 
     @available(*, unavailable)
@@ -148,6 +152,7 @@ final class ChannelSidebar: QuietView {
         quietOnButton.frame.origin = NSPoint(x: 10, y: top)
         themeButton.frame.origin = NSPoint(x: 10, y: top + quietButton.frame.height + 4)
         shortcutsButton.frame.origin = NSPoint(x: themeButton.frame.maxX + 4, y: themeButton.frame.minY)
+        settingsButton.frame.origin = NSPoint(x: shortcutsButton.frame.maxX + 4, y: themeButton.frame.minY)
     }
 
     override func draw(_ dirtyRect: NSRect) {

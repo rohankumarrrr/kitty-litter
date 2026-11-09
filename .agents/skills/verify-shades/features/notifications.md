@@ -35,7 +35,7 @@ Journey: `journeys/notify-finished.txt`, which also covers the phone.
 - **On.** `notify-finished on`, then `finish demo-tidy`. The output says `[demo] notified: Steve Pawsniak finished, which opens demo-tidy`, then `[demo] pushed to web.push.apple.com: {"title":"Steve Pawsniak finished","tag":"demo-tidy","key":"t:demo-tidy@c:%2Fdemo%2Fsteve"}`, with nothing from the report. `report shipped` says `[demo] notified: Clawde finished, which opens demo-icon`.
 - **Click.** `notification demo-tidy` from #general. `1-clicked/channels.png` shows "Tidy up the pricing page" open beside #steve-pawsniak.
 - **Tap.** `phone open t:demo-tidy@c:%2Fdemo%2Fsteve` opens the page the push names, as tapping it does. `phone text` and `2-tapped` show the thread's own page, with Steve at the top and its conversation.
-- **Settings.** `settings`, then `draw`. `3-settings/settings.png` shows Notifications with Also when a session finishes ticked, since `notify-finished on` ticked it.
+- **Settings.** `settings`, `settings notifications`, then `draw`. `3-settings/settings.png` shows Settings' Notifications page with Also when a session finishes ticked, since `notify-finished on` ticked it, and each channel with what it tells you.
 
 Journey: `journeys/channel-notifications.txt`. `notifications <channel> [mute | mac <level> | phone <level>]` stands in for picking from a channel's Notifications menu, and prints the menu after, with `*` beside what's ticked. The channel is named as `channel` names it, and a level is `everything`, `needsYou` or `nothing`.
 

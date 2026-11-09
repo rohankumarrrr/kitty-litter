@@ -53,10 +53,15 @@ extension AppController {
         return isCatsWork(thread) ? .shades : nil
     }
 
+    /// Where Open goes: Messages, where it shows the thread, unless Settings says T3.
+    func opensInMessages(_ threadID: String) -> Bool {
+        settings.openInMessages && messagesHome(ofThread: threadID) != nil
+    }
+
     /// The bubble's Open: the thread beside where it lives, and the bubble's done with it. T3 is only for a thread
-    /// Messages doesn't show.
+    /// Messages doesn't show, or for every thread with Settings' Open set to T3.
     func showInMessages(_ threadID: String) {
-        guard let home = messagesHome(ofThread: threadID) else { return backend.open(threadID: threadID) }
+        guard settings.openInMessages, let home = messagesHome(ofThread: threadID) else { return backend.open(threadID: threadID) }
         if notices.first?.threadID == threadID, notices.first?.questionID == nil { notices.removeFirst() }
         if line?.threadID == threadID { line = nil }
         channelsPressed(selecting: .thread(threadID, in: .channel(home)))

@@ -90,6 +90,8 @@ final class ChannelsView: QuietView {
     var isTravelling = false
     /// ⌘W, which closes the window.
     var onCloseWindow: (() -> Void)?
+    /// ⌘,, which opens Settings over the window.
+    var onSettings: (() -> Void)?
     /// You've seen what's there, which is what takes its unread dot away.
     var onSeen: ((ChannelSelection) -> Void)?
     /// Threads you've marked unread since you came here, which stay unread while you're still looking.
@@ -320,6 +322,13 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         MessagesInk.theme = theme
         panel.appearance = MessagesInk.appearance
         panel.backgroundColor = MessagesInk.paper
+        view.restyle()
+    }
+
+    /// What's said, and the box you type in, at another size, where you were.
+    func apply(_ size: TextSize) {
+        guard size != MessagesInk.textSize else { return }
+        MessagesInk.textSize = size
         view.restyle()
     }
 

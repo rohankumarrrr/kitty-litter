@@ -398,24 +398,25 @@ final class MessageWords {
     let words: ChannelTextBlock?
     let failure: ChannelTextBlock?
     private let markup: Markup?
-    /// The bubble and theme its words are coloured for.
-    private var paint: (bubble: UInt32?, theme: ColorTheme?)
+    /// The bubble, theme and text size its words are drawn for.
+    private var paint: (bubble: UInt32?, theme: ColorTheme?, size: TextSize)
 
     init(_ message: ChannelMessage, look: ChannelSpeakerLook, pulls: [String: String] = [:]) {
         self.message = message
         self.pulls = pulls
-        paint = (look.bubble, MessagesInk.theme)
+        paint = (look.bubble, MessagesInk.theme, MessagesInk.textSize)
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
         markup = said.map { Markup($0, pulls: pulls) }
         words = markup.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Self.color(of: message, look: look))) }
         failure = message.failure.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Ink.hex(0xff3b30))) }
     }
 
-    /// Colours the words for `look` as it is now, which a theme can change.
+    /// Draws the words for `look` as it is now, which a theme or text size can change.
     func paint(for look: ChannelSpeakerLook) {
-        guard paint.bubble != look.bubble || paint.theme != MessagesInk.theme, let markup else { return }
-        paint = (look.bubble, MessagesInk.theme)
+        guard paint.bubble != look.bubble || paint.theme != MessagesInk.theme || paint.size != MessagesInk.textSize, let markup else { return }
+        paint = (look.bubble, MessagesInk.theme, MessagesInk.textSize)
         words?.restyle(ChannelMarkdown.attributed(markup, color: Self.color(of: message, look: look)))
+        failure?.restyle(ChannelMarkdown.attributed(message.failure ?? "", color: Ink.hex(0xff3b30)))
     }
 
     private static func color(of message: ChannelMessage, look: ChannelSpeakerLook) -> NSColor {
