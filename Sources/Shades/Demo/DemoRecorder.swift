@@ -25,15 +25,17 @@ final class DemoRecorder {
     /// Whether the cat's in it, out on the desktop, where the page it's looking at goes behind it.
     private let onPage: Bool
     private let phone: DemoPhone?
+    private let now: () -> Date
     private var shots: [Shot] = []
     private var loop: Task<Void, Never>?
 
     /// `windows` gives what each chosen window shows now, and where. A phone is recorded on its own.
-    init(file: URL, windows: @escaping () -> [(CGImage, CGRect)], onPage: Bool, phone: DemoPhone?) {
+    init(file: URL, windows: @escaping () -> [(CGImage, CGRect)], onPage: Bool, phone: DemoPhone?, now: @escaping () -> Date = Date.init) {
         self.file = file
         self.windows = windows
         self.onPage = onPage
         self.phone = phone
+        self.now = now
     }
 
     func start() {
@@ -89,7 +91,7 @@ final class DemoRecorder {
     }
 
     private func shoot() async {
-        let at = Date()
+        let at = now()
         if let phone {
             let image = await phone.image(scale: Self.scale)
             shots.append(Shot(windows: [], phone: image, at: at))

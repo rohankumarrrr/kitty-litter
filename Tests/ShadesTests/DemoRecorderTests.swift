@@ -16,16 +16,19 @@ final class DemoRecorderTests: XCTestCase {
     func testARecordingLoopsAndKeepsOnlyWhatChanged() async throws {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("shades-recording-\(UUID().uuidString).gif")
         defer { try? FileManager.default.removeItem(at: file) }
-        var shown = square(0.2)
         let frame = CGRect(x: 100, y: 100, width: 20, height: 20)
-        let recorder = DemoRecorder(file: file, windows: { [(shown, frame)] }, onPage: false, phone: nil)
+        let (before, after) = (square(0.2), square(0.8))
+        var taken = 0
+        // A busy machine, where each frame is taken a quarter of a second after the last rather than the eighth asked for.
+        let recorder = DemoRecorder(
+            file: file,
+            windows: { taken += 1; return [(taken <= 3 ? before : after, frame)] },
+            onPage: false,
+            phone: nil,
+            now: { Date(timeIntervalSinceReferenceDate: Double(taken) * 0.25) }
+        )
         recorder.start()
-        let started = Date()
-        try await Task.sleep(nanoseconds: 600_000_000)
-        // How long it really was shown, which on a busy machine is more than was asked for.
-        let shownFor = Date().timeIntervalSince(started)
-        shown = square(0.8)
-        try await Task.sleep(nanoseconds: 600_000_000)
+        for _ in 0..<1000 where taken < 6 { try await Task.sleep(nanoseconds: 10_000_000) }
         let said = recorder.stop()
 
         XCTAssertTrue(said.hasPrefix("recorded"), said)
@@ -35,7 +38,7 @@ final class DemoRecorderTests: XCTestCase {
         XCTAssertEqual(gif?[kCGImagePropertyGIFLoopCount] as? Int, 0, "it loops forever")
         let first = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])?[kCGImagePropertyGIFDictionary] as? [CFString: Any]
         let seconds = try XCTUnwrap(first?[kCGImagePropertyGIFUnclampedDelayTime] as? Double)
-        XCTAssertEqual(seconds, shownFor, accuracy: 0.2, "and lasts as long as it was shown")
+        XCTAssertEqual(seconds, 0.75, accuracy: 0.01, "and lasts as long as it was shown, three frames a quarter of a second apart")
         let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
         XCTAssertEqual(image.width, Int((20 + 48) * DemoRecorder.scale), "the window with room around it, sharp on a Retina screen")
     }
