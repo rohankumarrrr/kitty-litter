@@ -16,6 +16,9 @@ final class BubbleView: BalloonView {
 
     private let scroll = NSScrollView()
     let textView = BubbleTextView()
+    private let scroller = BubbleScroller()
+    private let topFade = EdgeFade(top: true)
+    private let bottomFade = EdgeFade(top: false)
     private let caption = NSTextField(labelWithString: "")
     private let counter = NSTextField(labelWithString: "")
     private let heading = NSTextField(wrappingLabelWithString: "")
@@ -31,12 +34,17 @@ final class BubbleView: BalloonView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
+        scroll.verticalScroller = scroller
+        scroller.controlSize = .small
+        scroller.onScrollByUser = { [weak self] in self?.followEnd = false }
         scroll.autohidesScrollers = true
-        scroll.scrollerStyle = .overlay
         scroll.borderType = .noBorder
         scroll.documentView = textView
+        scroll.contentView.postsBoundsChangedNotifications = true
         addSubview(scroll)
+        addSubview(topFade)
+        addSubview(bottomFade)
+        NotificationCenter.default.addObserver(self, selector: #selector(textScrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
 
         textView.isEditable = false
         textView.isSelectable = true
@@ -52,6 +60,7 @@ final class BubbleView: BalloonView {
         textView.usesFontPanel = false
         textView.linkTextAttributes = [:]
         textView.onScrollByUser = { [weak self] in self?.followEnd = false }
+        textView.layoutManager?.delegate = self
 
         for label in [caption, counter] {
             label.font = .systemFont(ofSize: 11)
@@ -220,12 +229,18 @@ final class BubbleView: BalloonView {
         // The scroll bar lives in the right padding, so it never covers the words.
         let scrollWidth = innerWidth + padding - 3
         scroll.frame = NSRect(x: padding, y: y, width: scrollWidth, height: visibleText)
-        textView.minSize = NSSize(width: scrollWidth, height: 0)
-        textView.maxSize = NSSize(width: scrollWidth, height: .greatestFiniteMagnitude)
-        textView.frame = NSRect(x: 0, y: 0, width: scrollWidth, height: max(textHeight, visibleText))
-        // No bar flickering while text streams in; it's there once there's something to scroll.
+        // No bar flickering while text streams in. Once there's something to scroll it stays in sight, not just
+        // while scrolling, so a long answer always has a way back to its start.
+        scroll.scrollerStyle = .legacy
         scroll.hasVerticalScroller = !content.isStreaming && textHeight > visibleText
+        let textWidth = scroll.contentSize.width
+        textView.minSize = NSSize(width: textWidth, height: 0)
+        textView.maxSize = NSSize(width: textWidth, height: .greatestFiniteMagnitude)
+        textView.frame = NSRect(x: 0, y: 0, width: textWidth, height: max(textHeight, visibleText))
         if followEnd { textView.scrollToEndOfDocument(nil) }
+        topFade.frame = NSRect(x: padding, y: scroll.frame.maxY - EdgeFade.height, width: innerWidth, height: EdgeFade.height)
+        bottomFade.frame = NSRect(x: padding, y: scroll.frame.minY, width: innerWidth, height: EdgeFade.height)
+        textScrolled()
 
         // A button with no background of its own lines its words up with the text above.
         var x = padding - (buttons.first?.style == .text ? 6 : 0)
@@ -235,6 +250,13 @@ final class BubbleView: BalloonView {
         }
         needsDisplay = true
         return size
+    }
+
+    /// Text hidden past an edge fades out there, so a cut line reads as more to come rather than a mistake.
+    @objc private func textScrolled() {
+        let shown = scroll.contentView.bounds
+        topFade.isHidden = shown.minY < 1
+        bottomFade.isHidden = shown.maxY > textView.frame.height - 1
     }
 
     private func buildButtons(for content: BubbleContent) {
@@ -281,9 +303,55 @@ final class BubbleView: BalloonView {
                 add("Allow for this session", .text, .approval(request, .acceptForSession))
             }
         case .inbox:
-            add("Open", .text, .openMessages)
+            add("Open", .plain, .openMessages)
         }
     }
+}
+
+extension BubbleView: NSLayoutManagerDelegate {
+    /// A command wraps only at a space, so a flag such as --reporter=line stays in one piece. What's copied is the real text.
+    func layoutManager(_ layoutManager: NSLayoutManager, shouldBreakLineByWordBeforeCharacterAt charIndex: Int) -> Bool {
+        guard case .approval(let request, _, _)? = content, request.kind == .command, charIndex > 0,
+              let text = layoutManager.textStorage?.string as NSString?
+        else { return true }
+        return (CharacterSet.whitespaces as NSCharacterSet).characterIsMember(text.character(at: charIndex - 1))
+    }
+}
+
+/// Only the knob of the scroll bar, so it can stay in sight without a track drawn over the bubble.
+final class BubbleScroller: NSScroller {
+    var onScrollByUser: (() -> Void)?
+
+    override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        onScrollByUser?()
+        super.mouseDown(with: event)
+    }
+}
+
+/// The bubble's paper fading in over the text at one edge.
+final class EdgeFade: NSView {
+    static let height: CGFloat = 28
+    private let top: Bool
+
+    init(top: Bool) {
+        self.top = top
+        super.init(frame: .zero)
+        isHidden = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let clear = Ink.paper.withAlphaComponent(0)
+        NSGradient(starting: top ? clear : Ink.paper, ending: top ? Ink.paper : clear)?.draw(in: bounds, angle: 90)
+    }
+
+    // Only paint, so clicks, selecting and scrolling reach the text under it.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// The reply text. Clicking it is the one thing that gives the bubble the keyboard,

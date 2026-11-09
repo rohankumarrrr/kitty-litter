@@ -417,6 +417,59 @@ final class LayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(caption.frame.width, try XCTUnwrap(caption.cell).cellSize.width, "its words and the padding either side")
     }
 
+    /// A long answer opened at its end with its first line cut in half above, and nothing to say there was more.
+    @MainActor
+    func testALongAnswerShowsThereIsMoreAboveAndAWayBackToItsStart() throws {
+        let view = BubbleView(frame: .zero)
+        let answer = String(repeating: "The pricing page has three plans, and the middle one is highlighted. ", count: 30)
+        _ = view.update(.reply(text: answer, done: true, threadID: nil, note: nil), keepingWidth: false, limitHeight: 600)
+        let scroll = try XCTUnwrap(view.textView.enclosingScrollView)
+        let fades = view.subviews.compactMap { $0 as? EdgeFade }
+        func fading() -> [Bool] { fades.map { !$0.isHidden } }
+
+        XCTAssertEqual(fading(), [true, false], "it opens at its end, so the top fades and the bottom doesn't")
+        XCTAssertTrue(scroll.hasVerticalScroller && scroll.scrollerStyle == .legacy, "a bar that stays in sight, not only while scrolling")
+        XCTAssertGreaterThanOrEqual(scroll.contentSize.width, try XCTUnwrap(view.textView.textContainer).size.width, "beside the words, never over them")
+        view.textView.scrollToBeginningOfDocument(nil)
+        XCTAssertEqual(fading(), [false, true], "at its start, the rest is below")
+
+        _ = view.update(.reply(text: "Three plans.", done: true, threadID: nil, note: nil), keepingWidth: false, limitHeight: 600)
+        XCTAssertEqual(fading(), [false, false], "a short answer has nothing hidden")
+        XCTAssertFalse(scroll.hasVerticalScroller)
+    }
+
+    /// "--project=chromium --" ended one line and "reporter=line" started the next, splitting the flag.
+    @MainActor
+    func testACommandToApproveWrapsOnlyBetweenWords() throws {
+        let view = BubbleView(frame: .zero)
+        let command = "npm run build && npm test && npx playwright test --project=chromium --reporter=line --workers=4"
+        let request = ApprovalRequest(id: "r", threadID: "t", threadTitle: "Tidy up the pricing page", kind: .command, summary: command, createdAt: Date())
+        _ = view.update(.approval(request, position: 1, total: 1), keepingWidth: false, limitHeight: 600)
+        let manager = try XCTUnwrap(view.textView.layoutManager)
+        var starts: [Int] = []
+        manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: try XCTUnwrap(view.textView.textContainer))) { _, _, _, glyphs, _ in
+            starts.append(manager.characterIndexForGlyph(at: glyphs.location))
+        }
+        XCTAssertGreaterThan(starts.count, 1, "long enough to wrap")
+        for start in starts.dropFirst() {
+            let line = (command as NSString).substring(from: start)
+            XCTAssertEqual((command as NSString).character(at: start - 1), 0x20, "a line starts mid-word: \(line)")
+        }
+        XCTAssertEqual(view.textView.string, command, "and what you'd copy is what would run")
+    }
+
+    /// The inbox's Open was grey text while Open after a hand-off was a pill, though each is the bubble's one action.
+    @MainActor
+    func testTheInboxBubblesOpenIsDrawnLikeOpenEverywhereElse() throws {
+        func open(_ content: BubbleContent) throws -> QuietButton {
+            let view = BubbleView(frame: .zero)
+            view.opensInMessages = { _ in true }
+            _ = view.update(content, keepingWidth: false, limitHeight: 600)
+            return try XCTUnwrap(view.subviews.compactMap { $0 as? QuietButton }.first { $0.accessibilityLabel() == "Open" })
+        }
+        XCTAssertEqual(try open(.inbox("1 decision")).style, try open(.line("Opus has this.", threadID: "t")).style)
+    }
+
     func testSitsAboveTheCatAndPointsAtIt() {
         let cat = CGRect(x: 1300, y: 20, width: 64, height: 64)
         let placement = BubbleLayout.place(size: CGSize(width: 340, height: 120), over: cat, in: screen)
