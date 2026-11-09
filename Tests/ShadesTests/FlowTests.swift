@@ -2599,6 +2599,7 @@ final class FlowTests: XCTestCase {
             reported.fulfill()
         }
         await fulfillment(of: [reported], timeout: 5)
+        XCTAssertEqual(reportedHealth, [findings], "what health.json is written from")
         let t3 = findings.first { $0.check == "T3 Code" }
         XCTAssertEqual(t3?.ok, false)
         XCTAssertEqual(t3?.fix, "If macOS is showing a Keychain dialog, answer it, then choose Check Myself from my menu.")
