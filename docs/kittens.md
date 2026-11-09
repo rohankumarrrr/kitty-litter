@@ -170,6 +170,8 @@ scripts/install-kitten-skills.sh
 
 That copies their instruction files into `~/kittens/_skills`, pinned to commits that were read first. Their own installers add session hooks and auto-updates to every agent on your Mac, which is more reach than this needs, so the script doesn't run them. A kitten's instructions point at the files instead, and that works for any agent in any project. pstack's `/setup-pstack` writes the model sheet it reads, at `~/.config/t3-pstack/models.md`.
 
+The same script puts four skills for design passes in `~/kittens/_skills/design`: [dickwu's Apple design skill](https://github.com/dickwu/apple-design-skill), [Jakub Krehel's Better Interface](https://github.com/jakubkrehel/skills) with the skills it hands work to, [Emil Kowalski's Apple design skill](https://github.com/emilkowalski/skills) and [Superfuture's Design Review](https://github.com/Superfuture/design-review). Two parts of Superfuture's are taken out. Its usage ping posts an install ID to its author's server on every review, and its README says deleting that step is how to opt out. Its Pro mode uploads the code under review to another server, with a license key. If what's left still mentions `curl` or either server, the script stops without copying anything.
+
 ## How work moves
 
 1. **You ask Shades.** It gives your exact words and your screen to the kitten. It doesn't paraphrase, since that's how context goes missing.
