@@ -93,6 +93,13 @@ struct PhonePlace: Equatable {
         self.key = key
     }
 
+    /// Where a phone opens a message Search found, if it can see it at all: where the window opens it, or for a thread
+    /// its channel doesn't lead to, Threads. It's the same gate as a key the phone asks for.
+    static func opening(_ selection: ChannelSelection, in book: ChannelBook) -> ChannelSelection? {
+        let tries = [selection] + (selection.thread.map { [ChannelSelection.thread($0, in: .threads)] } ?? [])
+        return tries.first { PhonePlace(key($0), in: book).selection == $0 }
+    }
+
     /// The channel a reply here can also be sent to: the thread's home, as the window's checkbox offers.
     func alsoSendTo(in book: ChannelBook) -> ChannelID? {
         guard case .thread(let id, _, _)? = target, let home = book.home(ofThread: id), home != .shades else { return nil }

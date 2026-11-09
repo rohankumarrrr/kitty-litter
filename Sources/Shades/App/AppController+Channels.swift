@@ -27,6 +27,8 @@ enum MessagesAction: Equatable {
     /// Puts a reaction on a message, by its `ChannelMessage.id`, or takes it off. It's a mark kept on your Mac, and
     /// tells no agent anything.
     case react(String, Reaction)
+    /// Words you're searching for, which T3 is asked about too, for threads Messages hasn't read.
+    case find(String)
 }
 
 /// Messages, laid out like Slack: Activity, your threads, #general, a channel for each kitten and a DM with the cat. Each
@@ -178,6 +180,8 @@ extension AppController {
             inbox.react(reaction, to: message, at: now())
             keepInbox()
             channels.refresh()
+        case .find(let words):
+            channels.find(words)
         }
     }
 

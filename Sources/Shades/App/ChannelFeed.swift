@@ -4,8 +4,8 @@ import ShadesCore
 /// The one owner of what's been said. What's been read stays in memory while the app runs, and never goes to disk,
 /// since a copy in Shades' folder would let any kitten read every other kitten's threads. So Messages opens at once
 /// and then reads only the threads that have moved since. It reads once soon after launch, then only while the window
-/// or a phone is looking. Each kitten's channel and the cat's DM read their newest threads, and older ones a page at a
-/// time as you scroll back to them.
+/// or a phone is looking. Each kitten's channel and the cat's DM read their newest threads, older ones a page at a
+/// time as you scroll back to them, and any older one Search finds in T3.
 @MainActor
 final class ChannelFeed {
     private static let newestReadPerKitten = 30
@@ -17,6 +17,9 @@ final class ChannelFeed {
     /// What you've sent that T3 hasn't echoed yet, such as the cat's own answers in #general, which T3 never has, and
     /// replies you also sent to a channel.
     private static let sentKept = 100
+    /// How many of the threads T3 names for one search are read, and how many found that way stay read.
+    private static let foundAtOnce = 8
+    private static let foundKept = 30
 
     var onChange: ((ChannelBook) -> Void)?
     var waiting: () -> Waiting = { Waiting() }
@@ -61,6 +64,10 @@ final class ChannelFeed {
     /// How many pages of older threads and posts you've scrolled back to in each channel, while the app runs.
     private var olderPages: [ChannelID: Int] = [:]
     private var loadingOlder: Set<ChannelID> = []
+    /// Threads Search found in T3 that Messages hadn't read, latest last, which stay read while the app runs.
+    private var found: [String] = []
+    /// The words Search is asking T3 about now, and the asking.
+    private var searching: (words: String, task: Task<Void, Never>)?
     private var hasRead = false
     private var unreadable = 0
     private var cantReachT3 = false
@@ -205,6 +212,40 @@ final class ChannelFeed {
         publish()
     }
 
+    /// Asks T3 which threads have these words, and reads the ones Messages hasn't, so Search finds them too. Only the
+    /// latest words count, and they're kept only until T3 answers.
+    func find(_ words: String) {
+        searching?.task.cancel()
+        searching = nil
+        guard !MessageSearch.words(in: words).isEmpty else { return publish() }
+        let task = Task { [weak self, backend] in
+            let named = await backend.threads(matching: words) ?? []
+            guard let self, !Task.isCancelled else { return }
+            let shows = self.shows(KittenBoard.Owners(self.kittens()))
+            let new = Array(named.compactMap { id in self.threads.first { $0.id == id } }
+                .filter { self.transcripts[$0.id] == nil && shows($0) }
+                .prefix(Self.foundAtOnce))
+            self.found = Array((self.found.filter { id in !new.contains { $0.id == id } } + new.map(\.id)).suffix(Self.foundKept))
+            _ = await self.read(new) { thread, exchanges in
+                if let exchanges { self.keep(exchanges, of: thread) }
+            }
+            guard !Task.isCancelled else { return }
+            self.searching = nil
+            self.publish()
+        }
+        searching = (words, task)
+        publish()
+    }
+
+    /// Whether Messages shows a thread at all, as `ChannelBook.build` decides: a talk with the cat that isn't a test, a
+    /// kitten's, or the cat's own work that lives in #general or its DM. Anything else can hold your screen.
+    private func shows(_ owners: KittenBoard.Owners) -> (AgentThread) -> Bool {
+        let inGeneral = inGeneral()
+        return { [isWithShades, isCatsWork] thread in
+            isWithShades(thread) ? !thread.isLiveTest : owners.of(thread) != nil || inGeneral[thread.id] != nil || isCatsWork(thread)
+        }
+    }
+
     /// The threads behind what you're looking at whose latest words are on the screen as they are now, so they can
     /// count as read. A channel only shows each thread's parent, so there that has to be all it's said, or its latest
     /// reply has to be sent to the channel too. A thread's pane shows every reply.
@@ -295,9 +336,11 @@ final class ChannelFeed {
             return Array(threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten * pages))
         }
         let kittens: [AgentThread] = byOwner.flatMap { owner, threads in owner.map { newest(threads, in: .kitten($0)) } ?? [] }
-        let owned: [AgentThread] = kittens + general
+        var owned: [AgentThread] = kittens + general
             + newest((byOwner[nil] ?? []).filter(isCatsWork), in: .shades)
             + newest(talks.filter { !$0.isLiveTest }, in: .shades)
+        let reading = Set(owned.map(\.id))
+        owned += listed.filter { found.contains($0.id) && !reading.contains($0.id) }
         let onScreen = isOnScreen(owners)
         // What you're looking at first, then the newest, so the top of each conversation fills in first.
         let moved = owned
@@ -314,13 +357,7 @@ final class ChannelFeed {
         var lastShown = Date()
         let read = await read(moved) { thread, exchanges in
             unreadNew.remove(thread.id)
-            if let exchanges {
-                // A thread shows its newest replies, and always its first message, which is the one that started it.
-                transcripts[thread.id] = exchanges.count > ChannelBook.keptExchanges
-                    ? Array(exchanges.prefix(1) + exchanges.suffix(ChannelBook.keptExchanges - 1))
-                    : exchanges
-                readStamps[thread.id] = thread.updatedAt
-            }
+            if let exchanges { keep(exchanges, of: thread) }
             if Date().timeIntervalSince(lastShown) >= Self.showEvery {
                 lastShown = Date()
                 publish()
@@ -336,6 +373,14 @@ final class ChannelFeed {
         couldntRead = Set(moved.map(\.id)).subtracting(transcripts.keys)
         if unreadable > 0 { isDirty = true }
         publish()
+    }
+
+    /// A thread shows its newest replies, and always its first message, which is the one that started it.
+    private func keep(_ exchanges: [Exchange], of thread: AgentThread) {
+        transcripts[thread.id] = exchanges.count > ChannelBook.keptExchanges
+            ? Array(exchanges.prefix(1) + exchanges.suffix(ChannelBook.keptExchanges - 1))
+            : exchanges
+        readStamps[thread.id] = thread.updatedAt
     }
 
     /// Whether a thread's words are part of what's on the screen.
@@ -418,6 +463,7 @@ final class ChannelFeed {
             loadingOlder: loadingOlder,
             couldntRead: couldntRead,
             reactions: reactions(),
+            searchingT3: searching?.words,
             said: { reply in
                 let words = self.said[reply] ?? ChannelBook.said(reply)
                 said[reply] = words

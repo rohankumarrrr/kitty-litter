@@ -70,6 +70,7 @@ A `cause` entry is `Fail` with an `error` (`detail` and `message` are for people
 | `orchestration.subscribeShell` | Every thread, for the dashboard. Also one full snapshot, for Messages. |
 | `orchestration.getTurnItem` | The words of an approval or a question. |
 | `orchestration.getThreadProjection` | A thread's final report, a fallback for those words, and a settled thread's runtime mode. |
+| `orchestration.searchThreads` | Which threads have the words you searched Messages for. |
 | `projects.ensureScratch` | The "No project" project. The client remembers it. |
 | `projects.mutate` | Registers the router's own folder as a project, the first time. |
 | `attachments.createUploadUrl` | A signed URL for one upload. |
@@ -134,6 +135,10 @@ The shell stream sends a `snapshot`, then `thread.updated`, `thread.removed`, `p
 A blocking `pendingRuntimeRequest` overrides this: `user_input` is `waitingForAnswer`, and the approval kinds are `waitingForApproval`.
 
 A thread's turn can end while work it started carries on, and it wakes up again when that work hands back. So a `completed` thread with anything in `pendingBackgroundTasks`, or with an active thread whose `lineage.parentThreadId` is this one, counts as `running`. The app also waits a few seconds before reporting a thread as finished, to cover the gap between a child finishing and its parent waking.
+
+### Search
+
+Messages' ⌘F sends `{"query": "...", "limit": 50}`, the only keys every server takes. T3 wants 2 to 200 letters, and newer servers take more keys, which older ones turn away. It answers with `matches`, one for each message, each with a `threadId`, a `snippet`, a `source` of `user` or `assistant`, and on newer servers a `messageId` and a `quality`. Only `threadId` is read. The snippet comes from what was sent, which for your own messages can be the screen and instructions that went with your words, so it never shows. Messages reads each thread named the usual way, which leaves those out, and searches what's left. It's about 30 ms on a real list of a few hundred threads. `swift run probe-t3 search <words>` says how many threads T3 names, how fast, and how many of them are listed, and nothing they say.
 
 ### Approvals
 

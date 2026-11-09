@@ -14,6 +14,7 @@ With **Messages on my phone** on in Settings, the cat shows a code and a picture
 - `phone-notify` sends each new thing in Activity to a subscribed phone, encrypted for it, saying only who and what kind.
 - `phone-formatting` draws a message's lists, tables, quotes, code blocks with Copy and pull request chips from what the Mac read, and tapping a link shows its whole address before Open. See `messages-formatting` in [messages.md](messages.md), whose journey covers both.
 - `phone-theme` gives the page Messages' theme, and holds back what's new while you're selecting words.
+- `phone-search` finds a message by its words from **Search** at the top of every page, over what Messages has read and only what a phone can open, and tapping one opens its page and scrolls to it. See `messages-search` in [messages.md](messages.md), whose journey covers both.
 
 ## How to get to it (user POV)
 

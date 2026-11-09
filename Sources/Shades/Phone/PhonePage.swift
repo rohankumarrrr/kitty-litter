@@ -29,8 +29,12 @@ enum PhonePage {
             </div>
             <button id="link" type="button" hidden></button>
             <button id="unread" type="button" hidden>Mark unread</button>
+            <button id="find" type="button" hidden>Search</button>
           </div>
           <button id="jumpnew" type="button" hidden></button>
+          <form id="search" hidden>
+            <input id="query" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search messages" aria-label="Search messages">
+          </form>
         </header>
         <div id="banner" role="status" hidden></div>
         <div id="notify" hidden>
@@ -38,6 +42,7 @@ enum PhonePage {
           <button id="notifybutton" type="button" hidden>Turn on</button>
         </div>
         <main id="rows"></main>
+        <main id="found" hidden></main>
         <form id="box" hidden>
           <label id="label" for="words"></label>
           <div id="attached" hidden>
@@ -98,10 +103,18 @@ enum PhonePage {
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
         #head { display: flex; align-items: center; gap: 10px; }
         #names { flex: 1; min-width: 0; }
-        #link, #unread { color: var(--you); font-size: 15px; flex: none; }
+        #link, #unread, #find { color: var(--you); font-size: 15px; flex: none; }
         #jumpnew { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap;
           background: var(--you); color: var(--on-you); border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600;
           box-shadow: 0 2px 10px rgba(0, 0, 0, .2); }
+        #search { margin-top: 10px; }
+        #query { width: 100%; font: inherit; color: inherit; background: var(--grey); border: 0; border-radius: 10px; padding: 8px 12px; }
+        .hit { display: block; width: 100%; text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+        .hit:active { background: var(--grey); }
+        .hit small { color: var(--soft); font-size: 13px; }
+        .hit p { margin: 4px 0 0; color: var(--soft); overflow-wrap: anywhere; }
+        .hit b { color: var(--text); }
+        .msg.landed .bubble { box-shadow: 0 0 0 3px var(--you); }
         #title { font-size: 20px; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
         #subtitle { margin: 2px 0 0; color: var(--soft); font-size: 13px; }
         #subtitle:empty { display: none; }
@@ -285,6 +298,10 @@ enum PhonePage {
           cantRead: 'Shades can only read photos and PDFs.',
           tooBig: "That's too big to send. Try something under 10 MB.",
           homeScreen: 'For notifications on an iPhone, add this page to your Home Screen with Share, then pair it there.',
+          search: 'Search', cancel: 'Cancel',
+          searchHint: 'Type a word or two from the message.',
+          searchNothing: 'No messages with those words.',
+          searchMore: (count) => 'The newest ' + count + '. Add a word to narrow it down.',
         };
 
         let key = new URLSearchParams(location.search).get('key') || 'home';
@@ -299,6 +316,8 @@ enum PhonePage {
         let jumped = false;
         const expanded = new Set();
         const answers = new Map();
+        // The message a search led to, until its page shows and scrolls to it.
+        let landing = null;
 
         function el(tag, className, text) {
           const node = document.createElement(tag);
@@ -349,7 +368,7 @@ enum PhonePage {
           if (hello && hello.status === 401) return pairing();
           if (!hello || !hello.ok) { banner(words.unreachable); retry = setTimeout(start, 5000); return; }
           $('pair').hidden = true;
-          for (const id of ['top', 'rows']) $(id).hidden = false;
+          for (const id of ['top', 'rows', 'find']) $(id).hidden = false;
           listen();
           notifications().catch(() => {});
         }
@@ -520,7 +539,7 @@ enum PhonePage {
           $('back').hidden = !next.back;
           $('back').textContent = next.back ? '‹ ' + next.backTitle : '';
           $('unread').hidden = !next.unread;
-          $('box').hidden = !next.box;
+          $('box').hidden = !next.box || !$('search').hidden;
           // A file is for where you attached it, so it never follows you anywhere else.
           if (fresh || !next.box || !next.box.files) unattach();
           if (next.box) {
@@ -547,6 +566,14 @@ enum PhonePage {
             const node = [...$('rows').children].find(child => child.dataset.id === kept.id);
             if (node) window.scrollBy(0, node.getBoundingClientRect().top - kept.top);
           }
+          if (landing && landing.key !== next.key) landing = null;
+          const landed = landing && [...$('rows').children].find(child => child.dataset.id === landing.id);
+          if (landed) {
+            landing = null;
+            landed.scrollIntoView({ block: 'center' });
+            landed.classList.add('landed');
+            setTimeout(() => landed.classList.remove('landed'), 2500);
+          }
           showJump();
           if (conversation(key) && document.visibilityState === 'visible' && keptUnread !== key) act({ act: 'seen', key }, true);
         }
@@ -572,6 +599,61 @@ enum PhonePage {
           keptUnread = key;
           act({ act: 'unread', key, id: view.unread });
         };
+
+        // Search, over what Messages on your Mac has read and this phone can open. Nothing typed or found is kept.
+        let finding = null;
+        function searching(open) {
+          for (const id of ['search', 'found']) $(id).hidden = !open;
+          $('rows').hidden = open;
+          $('box').hidden = open || !(view && view.box);
+          $('find').textContent = open ? words.cancel : words.search;
+          clearTimeout(finding);
+          $('query').value = '';
+          $('found').replaceChildren(el('p', 'note', words.searchHint));
+          if (open) { window.scrollTo(0, 0); $('query').focus(); }
+          else window.scrollTo(0, conversation(key) ? document.body.scrollHeight : 0);
+        }
+        $('find').addEventListener('click', () => searching($('search').hidden));
+        $('search').addEventListener('submit', (event) => { event.preventDefault(); $('query').blur(); });
+        $('query').addEventListener('input', () => { clearTimeout(finding); finding = setTimeout(find, 250); });
+
+        async function find() {
+          const asked = $('query').value;
+          if (asked.trim().length < 2) return $('found').replaceChildren(el('p', 'note', words.searchHint));
+          const response = await post('/search', { words: asked });
+          if (asked !== $('query').value || $('search').hidden) return;
+          if (response && response.status === 401) return pairing();
+          if (!response || !response.ok) return banner(response && response.status === 409 ? words.gone : words.unreachable);
+          banner('');
+          const result = await response.json();
+          const hits = result.found.map((item) => {
+            const node = el('button', 'hit');
+            node.type = 'button';
+            node.append(el('small', null, item.name + ' · ' + item.detail), marked(item.text, item.marks));
+            node.onclick = () => {
+              landing = { key: item.open, id: item.id };
+              searching(false);
+              if (item.open === key && view) show(view); else go(item.open);
+            };
+            return node;
+          });
+          if (!hits.length) hits.push(el('p', 'note', words.searchNothing));
+          if (result.more) hits.push(el('p', 'note', words.searchMore(result.found.length)));
+          $('found').replaceChildren(...hits);
+        }
+
+        // The words you typed in bold, as nodes, never markup, since the rest is what kittens said.
+        function marked(text, marks) {
+          const node = el('p');
+          let at = 0;
+          for (const [start, length] of marks) {
+            if (start < at) continue;
+            node.append(text.slice(at, start), el('b', null, text.slice(start, start + length)));
+            at = start + length;
+          }
+          node.append(text.slice(at));
+          return node;
+        }
 
         // The window's own cats, drawn on the Mac. The outline is light on a dark page, so it follows the page.
         const scheme = () => getComputedStyle(document.documentElement).getPropertyValue('--cats').trim() === 'dark' ? 'dark' : 'light';

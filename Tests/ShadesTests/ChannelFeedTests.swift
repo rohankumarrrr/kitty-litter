@@ -14,6 +14,8 @@ private final class FeedBackend: AgentBackend, @unchecked Sendable {
     private var _gates: [CheckedContinuation<Void, Never>] = []
     private var _holdsReads = false
     private var _readDuration: Duration = .zero
+    private var _named: [String] = []
+    private var _searches: [String] = []
 
     var threads: [AgentThread]? {
         get { lock.withLock { _threads } }
@@ -31,6 +33,12 @@ private final class FeedBackend: AgentBackend, @unchecked Sendable {
         get { lock.withLock { _readDuration } }
         set { lock.withLock { _readDuration = newValue } }
     }
+    /// What T3's search names, whatever it's asked.
+    var named: [String] {
+        get { lock.withLock { _named } }
+        set { lock.withLock { _named = newValue } }
+    }
+    var searches: [String] { lock.withLock { _searches } }
     var listings: Int { lock.withLock { _listings } }
     var reads: [String] { lock.withLock { _reads } }
     var mostAtOnce: Int { lock.withLock { _mostAtOnce } }
@@ -80,6 +88,13 @@ private final class FeedBackend: AgentBackend, @unchecked Sendable {
         return lock.withLock {
             _reading -= 1
             return _failing.contains(threadID) ? nil : _words[threadID, default: []]
+        }
+    }
+
+    func threads(matching words: String) async -> [String]? {
+        lock.withLock {
+            _searches.append(words)
+            return _named
         }
     }
 
@@ -682,6 +697,57 @@ extension ChannelFeedTests {
         feed.older(in: .of(steve))
         await eventually { self.latest?.threads(in: .of(steve)).count == 70 }
         XCTAssertEqual(latest?.channel(.of(steve))?.isCut, false, "and once there's nothing older, nothing more to load")
+    }
+
+    func testSearchFindsWhatLoadOlderRead() async {
+        backend.threads = (0..<35).map { thread("t\($0)", age: TimeInterval($0)) }
+        for index in 0..<35 { backend.say(index == 34 ? "Where did the coupon box go?" : "Ask \(index)", in: "t\(index)") }
+        await openAndRead()
+        XCTAssertTrue(MessageSearch.find("coupon", in: latest!, limit: 8).found.isEmpty, "Messages hasn't read that far back")
+        feed.older(in: .of(steve))
+        await eventually { self.latest?.threads(in: .of(steve)).count == 35 }
+        XCTAssertEqual(MessageSearch.find("coupon", in: latest!, limit: 8).found.map(\.message.threadID), ["t34"])
+    }
+
+    func testSearchAsksT3AndReadsOnlyTheThreadsItNamesThatMessagesShows() async {
+        backend.threads = (0..<35).map { thread("t\($0)", age: TimeInterval($0)) } + [thread("elsewhere", project: "Elsewhere")]
+        for index in 0..<35 { backend.say("Ask \(index)", in: "t\(index)") }
+        backend.say("Where did the coupon box go?", in: "t34")
+        backend.say("The coupon box is in the footer.", in: "elsewhere")
+        await openAndRead()
+        let read = backend.reads.count
+        // T3 matches what was sent, screen and all, so a thread it names can have none of the words Messages shows.
+        backend.named = ["elsewhere", "t34", "t33", "t0"]
+        backend.holdsReads = true
+        feed.find("coupon")
+        await eventually { self.latest?.searchingT3 == "coupon" }
+        await eventually { self.backend.heldReads > 0 }
+        backend.releaseReads()
+        await eventually { self.latest?.searchingT3 == nil }
+
+        XCTAssertEqual(backend.searches, ["coupon"])
+        XCTAssertEqual(Set(backend.reads.dropFirst(read)), ["t34", "t33"], "only threads Messages shows and hasn't read, never someone else's")
+        XCTAssertEqual(MessageSearch.find("coupon", in: latest!, limit: 8).found.map(\.message.threadID), ["t34"], "what shows is only what Messages itself read")
+        XCTAssertNil(latest?.threads["elsewhere"])
+
+        feed.threadsChanged(backend.threads!)
+        await holdOn()
+        XCTAssertNotNil(latest?.threads["t34"], "what Search found stays read")
+        XCTAssertEqual(MessageSearch.find("coupon", in: latest!, limit: 8).found.count, 1)
+    }
+
+    func testOnlyTheLatestWordsAreAskedAboutAndNoneStopsLooking() async {
+        backend.threads = [thread("t0")]
+        backend.say("Ask", in: "t0")
+        await openAndRead()
+        backend.holdsReads = true
+        backend.named = ["t1"]
+        feed.find("co")
+        feed.find("")
+        XCTAssertNil(latest?.searchingT3, "clearing the box stops it looking")
+        feed.find("x")
+        XCTAssertNil(latest?.searchingT3, "one letter isn't asked about")
+        backend.releaseReads()
     }
 
     func testTheCatsDMLoadsOlderTalksToo() async {

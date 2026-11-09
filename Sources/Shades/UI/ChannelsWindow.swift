@@ -120,6 +120,7 @@ final class ChannelsView: QuietView {
         addSubview(cheatsheet)
         jumpBox.onOpen = { [weak self] in self?.jumped(to: $0) }
         jumpBox.onClose = { [weak self] in self?.closeJump() }
+        jumpBox.onFind = { [weak self] in self?.onAction?(.find($0)) }
         cheatsheet.onClose = { [weak self] in self?.cheatsheet.isHidden = true }
         sidebar.onSelect = { [weak self] in self?.select(ChannelSelection($0)) }
         sidebar.onShortcuts = { [weak self] in self?.perform(.cheatsheet) }
@@ -168,6 +169,7 @@ final class ChannelsView: QuietView {
         sidebar.show(book, selection: selection.place)
         pane.show(selection, in: book, isNewSelection: isFresh)
         if selection.thread != nil { threadPane.show(selection, in: book, isNewSelection: isFresh) }
+        if !jumpBox.isHidden { jumpBox.update(book) }
         onSeen?(selection)
     }
 

@@ -133,11 +133,13 @@ final class PhoneLink {
             return door.admits(request) ? perform(request) : .status(401)
         case ("POST", "/file"):
             return door.admits(request) ? keep(request) : .status(401)
+        case ("POST", "/search"):
+            return door.admits(request) ? search(request) : .status(401)
         case ("GET", "/push"):
             return door.admits(request) ? .json(["key": pushes.publicKey]) : .status(401)
         case ("POST", "/push"):
             return door.admits(request) ? subscribe(request) : .status(401)
-        case (_, "/"), (_, "/hello"), (_, "/pair"), (_, "/events"), (_, "/act"), (_, "/file"), (_, "/push"):
+        case (_, "/"), (_, "/hello"), (_, "/pair"), (_, "/events"), (_, "/act"), (_, "/file"), (_, "/push"), (_, "/search"):
             return .status(405)
         default:
             return .status(404)
@@ -229,6 +231,18 @@ final class PhoneLink {
         if let id = ask.file { files[id] = nil }
         act(action)
         return .json(Opened(open: opens))
+    }
+
+    private struct Search: Decodable {
+        var words: String
+    }
+
+    /// Search over what Messages has read, kept to what a phone can open. As with `/act`, Messages is only open while
+    /// a phone is looking, and nothing it was asked or found is kept.
+    private func search(_ request: PhoneServer.Request) -> PhoneServer.Response {
+        guard Self.isFromPage(request), let search = try? JSONDecoder().decode(Search.self, from: request.body) else { return .status(400) }
+        guard let book else { return .status(409) }
+        return .json(PhoneFound(search.words, in: book, now: now()))
     }
 
     private struct Kept: Encodable {

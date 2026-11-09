@@ -89,6 +89,15 @@ enum ChannelRow: Equatable {
     case note(String)
     /// At the top of a channel with older posts, which scrolling back to it loads.
     case older(isLoading: Bool)
+
+    /// The message it shows, by `ChannelMessage.id`, if it shows one.
+    var messageID: String? {
+        switch self {
+        case .message(let message), .alsoSent(let message, _, _): return message.id
+        case .parent(let post): return post.parent.id
+        default: return nil
+        }
+    }
 }
 
 /// Where what you type in Messages goes. None of them carry your screen, and each carries only your words.

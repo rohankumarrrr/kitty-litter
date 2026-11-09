@@ -144,6 +144,20 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         lock.withLock { said[threadID] } ?? DemoChannels.transcripts[threadID] ?? DemoBusy.transcripts[threadID] ?? []
     }
 
+    /// As T3's search does: every thread with a message that has all the words, including threads Messages hasn't read.
+    /// It takes a moment, as T3's does, so Messages can be seen looking.
+    func threads(matching words: String) async -> [String]? {
+        if connectFails { return nil }
+        try? await Task.sleep(for: .seconds(1))
+        let words = words.lowercased().split(whereSeparator: \.isWhitespace)
+        var found: [String] = []
+        for thread in await allThreads() ?? [] {
+            let said = (await exchanges(threadID: thread.id) ?? []).flatMap { [$0.ask, $0.reply].compactMap { $0?.lowercased() } }
+            if said.contains(where: { text in words.allSatisfy { text.contains($0) } }) { found.append(thread.id) }
+        }
+        return found
+    }
+
     /// Hundreds more threads, with long conversations, as T3 would list them for someone who uses it all day.
     func makeBusy() {
         update { threads in

@@ -208,6 +208,13 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         return T3Wire.finalReport(in: projection.turnItems.compactMap(\.value), run: run)
     }
 
+    public func threads(matching words: String) async -> [String]? {
+        let query = String(words.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+        guard query.count >= 2, let result: T3Wire.SearchResult = try? await socket.call(T3Wire.Method.searchThreads, T3Wire.SearchThreads(query: query)) else { return nil }
+        var seen: Set<String> = []
+        return result.matches.map(\.threadId).filter { seen.insert($0).inserted }
+    }
+
     public func allThreads() async -> [AgentThread]? {
         let scratchRoot = scratchRoot
         let list = await firstSnapshot(

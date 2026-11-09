@@ -21,6 +21,7 @@ import ShadesT3
 //   probe-t3 settle     settles a finished thread, then checks a follow-up still works
 //   probe-t3 report <thread>   how fast a thread's last report can be read, and how long it is
 //   probe-t3 router     what the router decides for made-up kittens and sessions, and nothing past that
+//   probe-t3 search <words>   how many threads T3's search names for those words, and how fast, and nothing they say
 
 let sol = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "low")
 let clock = ContinuousClock()
@@ -709,6 +710,20 @@ func probeOrigin() async throws {
     await backend.disconnect()
 }
 
+func probeSearch() async throws {
+    let words = CommandLine.arguments.dropFirst(2).joined(separator: " ")
+    guard words.count >= 2 else { throw NSError(domain: "usage: search <words>", code: 2) }
+    let backend = makeBackend()
+    try await backend.connect()
+    let started = clock.now
+    let named = await backend.threads(matching: words)
+    say(named.map { "\($0.count) threads named in \(milliseconds(clock.now - started))" } ?? "T3 couldn't be asked")
+    let listed = Set(await backend.allThreads()?.map(\.id) ?? [])
+    say("\(named?.filter(listed.contains).count ?? 0) of them listed, so Messages could read them")
+    await backend.signOut()
+    await backend.disconnect()
+}
+
 /// What a router's reply can come to, below any correction lines.
 enum RouterRest: String {
     case nothing
@@ -852,6 +867,7 @@ let probes: [String: () async throws -> Void] = [
     "report": probeReport,
     "origin": probeOrigin,
     "router": probeRouter,
+    "search": probeSearch,
 ]
 
 guard let name = CommandLine.arguments.dropFirst().first, let probe = probes[name] else {

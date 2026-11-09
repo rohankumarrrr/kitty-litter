@@ -159,6 +159,12 @@ enum CatWords {
     static let jumpTitle = "Jump to"
     static let jumpPlaceholder = "Jump to a place or thread"
     static let jumpNothing = "Nothing by that name."
+    static let searchTitle = "Search"
+    static let searchPlaceholder = "Search messages"
+    static let searchHint = "Type a word or two from the message."
+    static let searchNothing = "No messages with those words."
+    static let searchingT3 = "Looking through older threads in T3..."
+    static func searchMore(_ count: Int) -> String { "The newest \(count). Add a word to narrow it down." }
     /// What ⌘/ lists, grouped as Slack's list is. The keys are T3 Code's, the Claude app's and Slack's own.
     static let shortcutGroups: [(title: String, rows: [(keys: String, does: String)])] = [
         ("Moving around", [
@@ -167,6 +173,7 @@ enum CatWords {
             ("⌘1 … ⌘9", "That row of the sidebar"),
             ("⌘[  ⌘]", "Back and forward"),
             ("⌘K", "Jump to a place or thread"),
+            ("⌘F", "Search messages"),
             ("⌘⇧T", "Threads"),
             ("⌘⇧M", "Activity"),
         ]),

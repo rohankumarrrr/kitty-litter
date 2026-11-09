@@ -16,6 +16,8 @@ enum MessagesShortcut: Hashable {
     case place(Int)
     /// ⌘K, a box for jumping to a place or thread by name.
     case jump
+    /// ⌘F, the same box finding a message by its words.
+    case search
     /// Esc, which closes the jump box, the shortcuts, or a thread's pane.
     case escape
     /// ⌘⇧T and ⌘⇧M.
@@ -61,6 +63,7 @@ enum MessagesShortcut: Hashable {
             case (Key.leftBracket, _): self = .back
             case (Key.rightBracket, _): self = .forward
             case (_, "k"): self = .jump
+            case (_, "f"): self = .search
             case (_, "n"): self = .compose
             case (_, "w"): self = .close
             case (_, "/"): self = .cheatsheet
@@ -93,16 +96,25 @@ enum MessagesShortcut: Hashable {
     }
 }
 
-/// Somewhere ⌘K can jump to: a place in the sidebar, or a thread.
+/// Somewhere ⌘K can jump to: a place in the sidebar, or a thread. Or a message ⌘F found, which the pane scrolls to.
 struct JumpItem: Equatable {
     var title: String
     /// Where a thread is, such as its channel.
     var detail: String?
     var selection: ChannelSelection
+    var found: FoundMessage?
 }
 
 extension JumpItem {
     static let limit = 8
+
+    /// Who said it, then where and when, with its words under them.
+    init(_ found: FoundMessage, in book: ChannelBook, now: Date) {
+        let channel = (found.selection.thread.flatMap(book.home(ofThread:)) ?? found.selection.channelID).map(book.title(of:))
+        let thread = found.selection.thread.map(book.title(ofThread:))
+        let place = [thread, channel].compactMap { $0 }.filter { !$0.isEmpty }
+        self.init(title: book.name(of: found.message.speaker), detail: (place + [CatWords.age(of: found.message.at, now: now)]).joined(separator: " · "), selection: found.selection, found: found)
+    }
 
     /// Every place, then every thread you can open, newest first, worked out from what's in memory.
     static func all(in book: ChannelBook) -> [JumpItem] {
@@ -137,19 +149,34 @@ extension JumpItem {
     }
 }
 
-/// ⌘K: a box over the window that jumps to a place or thread by name. It's a view inside Messages, not a window of
-/// its own, so it can't make Shades the active app. The arrows move, Return opens and Esc closes.
+/// ⌘K: a box over the window that jumps to a place or thread by name, and ⌘F, the same box finding a message by its
+/// words. It's a view inside Messages, not a window of its own, so it can't make Shades the active app. The arrows
+/// move, Return opens and Esc closes.
 final class JumpBoxView: QuietView, NSTextFieldDelegate {
-    private static let width: CGFloat = 520
-    private static let rowHeight: CGFloat = 40
-    private static let fieldHeight: CGFloat = 46
+    enum Mode {
+        case jump, search
+    }
 
-    var onOpen: ((ChannelSelection) -> Void)?
+    private static let width: CGFloat = 520
+    private static let fieldHeight: CGFloat = 46
+    private static let footerHeight: CGFloat = 26
+    /// How long typing pauses before T3 is asked, so it's asked about what you meant rather than every letter.
+    private static let askAfter: TimeInterval = 0.35
+
+    var onOpen: ((JumpItem) -> Void)?
     var onClose: (() -> Void)?
+    /// Words for T3 to look for, once typing pauses in Search.
+    var onFind: ((String) -> Void)?
     let field = NSTextField()
+    private(set) var mode = Mode.jump
     private(set) var items: [JumpItem] = []
     private(set) var highlighted = 0
+    /// Search found more than there's room for.
+    private(set) var hasMore = false
     private var book: ChannelBook?
+    private var asking: Timer?
+
+    private var rowHeight: CGFloat { mode == .search ? 54 : 40 }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -172,22 +199,82 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         set {
             field.stringValue = newValue
             refilter()
+            askSoon()
         }
     }
 
-    func show(_ book: ChannelBook) {
+    /// Opens it as ⌘K's or ⌘F's, with whatever's typed in it.
+    func show(_ book: ChannelBook, mode: Mode = .jump) {
         self.book = book
+        self.mode = mode
         field.textColor = MessagesInk.text
-        field.placeholderAttributedString = NSAttributedString(string: CatWords.jumpPlaceholder, attributes: [.foregroundColor: MessagesInk.soft, .font: NSFont.systemFont(ofSize: 16)])
+        let placeholder = mode == .search ? CatWords.searchPlaceholder : CatWords.jumpPlaceholder
+        field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [.foregroundColor: MessagesInk.soft, .font: NSFont.systemFont(ofSize: 16)])
+        setAccessibilityLabel(mode == .search ? CatWords.searchTitle : CatWords.jumpTitle)
         refilter()
+        askSoon()
+    }
+
+    /// What Messages has read changed while it's open, such as the threads T3 found. What's highlighted stays.
+    func update(_ book: ChannelBook) {
+        let current = items.indices.contains(highlighted) ? items[highlighted] : nil
+        self.book = book
+        refilter()
+        if let current, let index = items.firstIndex(where: { $0.selection == current.selection && $0.found?.message.id == current.found?.message.id }) {
+            highlighted = index
+        }
     }
 
     private func refilter() {
         guard let book else { return }
-        items = JumpItem.matching(query, in: book)
+        switch mode {
+        case .jump:
+            items = JumpItem.matching(query, in: book)
+            hasMore = false
+        case .search:
+            let now = Date()
+            let (found, more) = MessageSearch.find(query, in: book, limit: searchLimit)
+            items = found.map { JumpItem($0, in: book, now: now) }
+            hasMore = more
+        }
         highlighted = 0
         needsLayout = true
         needsDisplay = true
+    }
+
+    /// As many as fit over the window, up to ⌘K's eight.
+    private var searchLimit: Int {
+        min(max(Int((bounds.height - 160) / rowHeight), 3), JumpItem.limit)
+    }
+
+    /// Search asks T3 once typing pauses, for threads Messages hasn't read. No words asks it to stop looking.
+    private func askSoon() {
+        asking?.invalidate()
+        asking = nil
+        guard mode == .search else { return }
+        let words = query
+        let timer = Timer(timeInterval: Self.askAfter, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.isHidden else { return }
+                self.onFind?(words)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        asking = timer
+    }
+
+    /// Under the row when there's nothing to show: what to type, that T3 is still looking, or that nothing has it.
+    private var nothing: String {
+        guard mode == .search else { return CatWords.jumpNothing }
+        if MessageSearch.words(in: query).isEmpty { return CatWords.searchHint }
+        return book?.searchingT3 != nil ? CatWords.searchingT3 : CatWords.searchNothing
+    }
+
+    /// Under Search's messages: that T3 is still looking, or that there are more than fit.
+    private var footer: String? {
+        guard mode == .search, !items.isEmpty else { return nil }
+        if book?.searchingT3 != nil { return CatWords.searchingT3 }
+        return hasMore ? CatWords.searchMore(items.count) : nil
     }
 
     func move(by step: Int) {
@@ -198,12 +285,12 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
 
     func open() {
         guard items.indices.contains(highlighted) else { return NSSound.beep() }
-        onOpen?(items[highlighted].selection)
+        onOpen?(items[highlighted])
     }
 
     private var card: NSRect {
         let width = min(Self.width, bounds.width - 40)
-        let height = Self.fieldHeight + CGFloat(max(items.count, 1)) * Self.rowHeight + 12
+        let height = Self.fieldHeight + CGFloat(max(items.count, 1)) * rowHeight + 12 + (footer == nil ? 0 : Self.footerHeight)
         return NSRect(x: (bounds.width - width) / 2, y: 70, width: width, height: height)
     }
 
@@ -215,6 +302,7 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
 
     func controlTextDidChange(_ notification: Notification) {
         refilter()
+        askSoon()
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
@@ -232,7 +320,7 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         let point = convert(event.locationInWindow, from: nil)
         let card = card
         guard card.contains(point) else { return onClose?() ?? () }
-        let row = Int((point.y - card.minY - Self.fieldHeight) / Self.rowHeight)
+        let row = Int((point.y - card.minY - Self.fieldHeight) / rowHeight)
         guard point.y > card.minY + Self.fieldHeight, items.indices.contains(row) else { return }
         highlighted = row
         open()
@@ -253,12 +341,12 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         guard !items.isEmpty else {
-            NSAttributedString(string: CatWords.jumpNothing, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: MessagesInk.soft])
+            NSAttributedString(string: nothing, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: MessagesInk.soft])
                 .draw(at: NSPoint(x: card.minX + 16, y: card.minY + Self.fieldHeight + 11))
             return
         }
         for (index, item) in items.enumerated() {
-            let row = NSRect(x: card.minX + 6, y: card.minY + Self.fieldHeight + 6 + CGFloat(index) * Self.rowHeight, width: card.width - 12, height: Self.rowHeight - 4)
+            let row = NSRect(x: card.minX + 6, y: card.minY + Self.fieldHeight + 6 + CGFloat(index) * rowHeight, width: card.width - 12, height: rowHeight - 4)
             if index == highlighted {
                 MessagesInk.press.setFill()
                 NSBezierPath(roundedRect: row, xRadius: 7, yRadius: 7).fill()
@@ -268,7 +356,20 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
                 line.append(NSAttributedString(string: "   \(detail)", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: MessagesInk.soft]))
             }
             line.addAttribute(.paragraphStyle, value: truncating, range: NSRange(location: 0, length: line.length))
-            line.draw(in: NSRect(x: row.minX + 10, y: row.midY - 9, width: row.width - 20, height: 18))
+            guard let found = item.found else {
+                line.draw(in: NSRect(x: row.minX + 10, y: row.midY - 9, width: row.width - 20, height: 18))
+                continue
+            }
+            line.draw(in: NSRect(x: row.minX + 10, y: row.minY + 7, width: row.width - 20, height: 18))
+            let words = NSMutableAttributedString(string: found.snippet, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: MessagesInk.soft, .paragraphStyle: truncating])
+            for mark in found.marks where NSMaxRange(mark) <= words.length {
+                words.addAttributes([.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: MessagesInk.text], range: mark)
+            }
+            words.draw(in: NSRect(x: row.minX + 10, y: row.minY + 27, width: row.width - 20, height: 18))
+        }
+        if let footer {
+            NSAttributedString(string: footer, attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: MessagesInk.soft])
+                .draw(at: NSPoint(x: card.minX + 16, y: card.maxY - Self.footerHeight))
         }
     }
 }
@@ -351,7 +452,7 @@ extension ChannelsView {
     func perform(_ shortcut: MessagesShortcut) -> Bool {
         guard let book else { return false }
         switch shortcut {
-        case .jump, .cheatsheet, .escape, .close, .settings: break
+        case .jump, .search, .cheatsheet, .escape, .close, .settings: break
         default: hideOverlays()
         }
         switch shortcut {
@@ -369,7 +470,10 @@ extension ChannelsView {
             select(ChannelSelection(places[number - 1]))
             return true
         case .jump:
-            if jumpBox.isHidden { openJump(book) } else { closeJump() }
+            toggleBox(.jump, book)
+            return true
+        case .search:
+            toggleBox(.search, book)
             return true
         case .escape:
             if !jumpBox.isHidden {
@@ -468,10 +572,21 @@ extension ChannelsView {
         return true
     }
 
-    private func openJump(_ book: ChannelBook) {
+    /// ⌘K and ⌘F open the box, close it if it's already theirs, and turn it into the other's with what's typed in it.
+    private func toggleBox(_ mode: JumpBoxView.Mode, _ book: ChannelBook) {
+        if jumpBox.isHidden {
+            openJump(book, mode: mode)
+        } else if jumpBox.mode == mode {
+            closeJump()
+        } else {
+            jumpBox.show(book, mode: mode)
+        }
+    }
+
+    private func openJump(_ book: ChannelBook, mode: JumpBoxView.Mode) {
         cheatsheet.isHidden = true
-        jumpBox.show(book)
-        jumpBox.query = ""
+        jumpBox.field.stringValue = ""
+        jumpBox.show(book, mode: mode)
         jumpBox.isHidden = false
         window?.makeFirstResponder(jumpBox.field)
     }
@@ -482,13 +597,17 @@ extension ChannelsView {
         if let responder = window?.firstResponder as? NSView, responder.isDescendant(of: jumpBox) { window?.makeFirstResponder(nil) }
     }
 
-    func jumped(to selection: ChannelSelection) {
+    /// Opens what the box found, and for a message, scrolls the pane it's in to it.
+    func jumped(to item: JumpItem) {
         closeJump()
+        let selection = item.selection
         if let thread = selection.thread {
             open(thread: thread, from: selection.place)
         } else {
             select(selection)
         }
+        guard let message = item.found?.message.id else { return }
+        (selection.thread == nil ? pane : threadPane).reveal(message)
     }
 
     private func hideOverlays() {

@@ -402,13 +402,7 @@ final class ChannelPane: QuietView {
         first = start
         shown = rows
         if words.count > Self.wordsKept {
-            let showing = Set(rows.compactMap { row -> String? in
-                switch row {
-                case .message(let message), .alsoSent(let message, _, _): return message.id
-                case .parent(let post): return post.parent.id
-                default: return nil
-                }
-            })
+            let showing = Set(rows.compactMap(\.messageID))
             words = words.filter { showing.contains($0.key) }
         }
         stack()
@@ -425,6 +419,20 @@ final class ChannelPane: QuietView {
         pageIfNeeded()
         if pullsChanged, !isNewSelection { restyle() }
         showJump()
+    }
+
+    /// Scrolls to a message Search found and marks it for a moment, laying out the rows above it first if it's that far
+    /// back. Returns whether this pane shows it.
+    @discardableResult
+    func reveal(_ messageID: String) -> Bool {
+        guard let index = shown.firstIndex(where: { $0.messageID == messageID }) else { return false }
+        while first > index { layOutPageAbove() }
+        let frame = frames[index - first]
+        scrollOffset = min(max(frame.midY - scroll.contentSize.height / 2, 0), bottomOffset)
+        attach()
+        // Found again by its message, since scrolling there can lay out a page above it.
+        views.lazy.compactMap { $0 as? MessageRowView }.first { $0.message.id == messageID }?.flash()
+        return true
     }
 
     /// A link pressed in one of this pane's messages. It only shows where the link goes, and Open in the bar is what

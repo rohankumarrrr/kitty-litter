@@ -192,6 +192,8 @@ struct ChannelBook: Equatable {
     var isReading: Bool
     var unreadable: Int
     var cantReachT3: Bool
+    /// The words Search is asking T3 about, until it's answered and the threads it named are read.
+    var searchingT3: String?
 
     /// The state of each pull request a listed thread opened, by `Markup.pull`'s key, for the chips in messages.
     var pulls: [String: String] {
@@ -240,6 +242,7 @@ struct ChannelBook: Equatable {
         loadingOlder: Set<ChannelID> = [],
         couldntRead: Set<String> = [],
         reactions: [String: [Reaction]] = [:],
+        searchingT3: String? = nil,
         said: (String) -> String? = ChannelBook.said
     ) -> ChannelBook {
         // A talk with the cat is titled with your question, which can start with a kitten's name, so it's kept apart
@@ -449,7 +452,8 @@ struct ChannelBook: Equatable {
             alsoSentHeard: alsoSentHeard,
             isReading: isReading,
             unreadable: unreadable,
-            cantReachT3: cantReachT3
+            cantReachT3: cantReachT3,
+            searchingT3: searchingT3
         )
     }
 
