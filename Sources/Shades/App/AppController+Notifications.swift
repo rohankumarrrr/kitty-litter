@@ -67,15 +67,16 @@ extension AppController {
     }
 
     /// On the Mac, and on each phone, where a tap opens the thread's own page. A phone can't show a thread Messages
-    /// doesn't, or one in the cat's DM, so those open Activity there. Each asks first, since its channel can say
-    /// something different for the Mac and the phone. It says whether the Mac shows it, the only one taken back.
+    /// doesn't, or one in the cat's DM you haven't chosen to show there, so those open Activity there. Each asks first,
+    /// since its channel can say something different for the Mac and the phone. It says whether the Mac shows it, the
+    /// only one taken back.
     @discardableResult
     private func tell(_ alert: NeedsYouAlert) -> Bool {
         let onMac = mayPopUp(alert.missed)
-        let onPhone = mayPopUp(alert.missed, on: .phone)
+        let toPhone = mayPopUp(alert.missed, on: .phone)
         if onMac { notify(alert) }
-        if onPhone {
-            let home = messagesHome(ofThread: alert.threadID).flatMap { $0 == .shades ? nil : $0 }
+        if toPhone {
+            let home = messagesHome(ofThread: alert.threadID).flatMap { $0 == .shades && onPhone[alert.threadID] == nil ? nil : $0 }
             let opens = home.map { ChannelSelection.thread(alert.threadID, in: .channel($0)) } ?? .activity
             phone?.pushes.push(alert, opening: PhonePlace.key(opens), now: now())
         }

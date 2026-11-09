@@ -465,6 +465,33 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(pushed.count, 1, "once, as on the Mac")
     }
 
+    /// The cat's own work opens Activity on your phone, unless you've chosen to show it there, when it opens the thread.
+    func testANotificationAboutTheCatsOwnWorkOpensItOnlyOnceItsSwitchIsOn() async throws {
+        let key = try await pair()
+        _ = try await subscribe(key: key)
+        func asking(_ id: String) -> AgentThread {
+            AgentThread(
+                id: id, title: "Fix: it", projectTitle: nil, status: .waitingForApproval, model: "m", updatedAt: Date(),
+                pendingApprovals: [ApprovalRequest(id: "r-\(id)", threadID: id, threadTitle: "Fix: it", kind: .command, summary: "ls", createdAt: Date())]
+            )
+        }
+        func opened(_ index: Int) throws -> String? {
+            let body = try WebPush.decrypt(XCTUnwrap(pushed[index].httpBody), with: phone, auth: phoneAuth)
+            return (try JSONSerialization.jsonObject(with: body) as? [String: String])?["key"]
+        }
+        backend.listed = [asking("off")]
+        controller.threadsChanged([asking("off")])
+        await until { pushed.count == 1 }
+        XCTAssertEqual(try opened(0), PhonePlace.key(.activity))
+
+        controller.threadsChanged([asking("off"), AgentThread(id: "on", title: "Fix: it", projectTitle: nil, status: .running, model: "m", updatedAt: Date())])
+        controller.showOnPhonePressed("on")
+        backend.listed = [asking("off"), asking("on")]
+        controller.threadsChanged([asking("off"), asking("on")])
+        await until { pushed.count == 2 }
+        XCTAssertEqual(try opened(1), PhonePlace.key(.thread("on", in: .channel(.shades))))
+    }
+
     func testTappingANotificationOpensItsThreadEvenBeforeMessagesHasReadIt() async throws {
         let key = try await pair()
         _ = try await subscribe(key: key)

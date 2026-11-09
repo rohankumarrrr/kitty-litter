@@ -505,6 +505,37 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertFalse(titles().contains { $0 == "Notifications" || $0 == "Muted" })
     }
 
+    /// The cat's own work had no way onto your phone. Its switch is in its thread's header, apart from what a phone can do.
+    func testTheCatsOwnThreadOffersToShowOnYourPhoneWhileMessagesIsThere() throws {
+        let fix = AgentThread(id: "fix", title: "Fix: it", projectTitle: nil, status: .completed, model: "m", updatedAt: at)
+        let steves = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
+        let said = [Exchange(id: "e", asker: .you, askedAt: at, ask: "Ask", reply: "Reply", repliedAt: at)]
+        func book(onPhone: Set<String> = [], hasPhone: Bool = true) -> ChannelBook {
+            ChannelBook.build(kittens: [steve], threads: [fix, steves], transcripts: ["fix": said, "t": said], isReading: false, unreadable: 0, cantReachT3: false, catsWork: ["fix"], onPhone: onPhone, hasPhone: hasPhone)
+        }
+        func buttons(in view: NSView) -> [String] {
+            subviews(of: view).compactMap { $0 as? QuietButton }.compactMap { $0.accessibilityLabel() }
+        }
+        let view = view()
+        var pressed: [String] = []
+        var acted: [MessagesAction] = []
+        view.onShowOnPhone = { pressed.append($0) }
+        view.onAction = { acted.append($0) }
+        view.show(book())
+        view.select(.thread("fix", in: .channel(.shades)))
+        try pressButton("Show on phone", in: view.threadPane)
+        XCTAssertEqual(pressed, ["fix"])
+        XCTAssertEqual(acted, [], "it's no action a phone could ask for")
+
+        view.show(book(onPhone: ["fix"]))
+        XCTAssertTrue(buttons(in: view.threadPane).contains("Hide from phone"))
+        view.show(book(hasPhone: false))
+        XCTAssertFalse(buttons(in: view.threadPane).contains("Show on phone"), "with Messages off your phone, there's nowhere to show it")
+        view.show(book())
+        view.select(.thread("t", in: .channel(.of(steve))))
+        XCTAssertFalse(buttons(in: view.threadPane).contains("Show on phone"), "a kitten's thread is on your phone already")
+    }
+
     func testAChannelsBoxStartsANewThreadAndOpensItInThePane() {
         let view = view()
         var sent: [MessagesAction] = []

@@ -174,6 +174,10 @@ struct ChannelBook: Equatable {
     var talks: Set<String>
     /// Work the cat started for you outside Messages, which lives in its DM, and which you can reply to.
     var catsWork: Set<String> = []
+    /// The cat's own work you chose to show on your phone. Only ever some of `catsWork`, so never a talk.
+    var onPhone: Set<String> = []
+    /// Whether Messages is on your phone, which is when a thread of the cat's own work offers to show there.
+    var hasPhone = false
     /// Replies also sent to a channel that T3 has now, by the ID of T3's copy.
     var alsoSentHeard: [String: HeardAlsoSent] = [:]
 
@@ -224,6 +228,8 @@ struct ChannelBook: Equatable {
         inGeneral: [String: Date] = [:],
         withShades: Set<String> = [],
         catsWork: Set<String> = [],
+        onPhone: Set<String> = [],
+        hasPhone: Bool = false,
         answersInGeneral: Set<String> = [],
         alsoSent: Set<String> = [],
         alsoSentToGeneral: Set<String> = [],
@@ -434,6 +440,8 @@ struct ChannelBook: Equatable {
             started: started,
             talks: Set(talkThreads.map(\.id)),
             catsWork: catsWork.intersection(threadsByID.keys),
+            onPhone: onPhone.intersection(catsWork).intersection(threadsByID.keys),
+            hasPhone: hasPhone,
             alsoSentHeard: alsoSentHeard,
             isReading: isReading,
             unreadable: unreadable,
