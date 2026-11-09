@@ -220,7 +220,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         textView.minSize = NSSize(width: scroll.frame.width, height: 0)
         textView.maxSize = NSSize(width: scroll.frame.width, height: .greatestFiniteMagnitude)
         alsoSend.sizeToFit()
-        alsoSend.frame.origin = NSPoint(x: ChannelRowView.margin - 2, y: field.maxY + 4)
+        alsoSend.frame.origin = NSPoint(x: ChannelRowView.margin - 1 - QuietCheckbox.inset, y: field.maxY + 4)
         needsDisplay = true
     }
 
@@ -323,7 +323,6 @@ final class AttachmentChip: NSView {
         name.font = MessagesInk.font(ofSize: 13)
         name.lineBreakMode = .byTruncatingMiddle
         remove.onPress = { [weak self] in self?.onRemove?() }
-        remove.setAccessibilityLabel(CatWords.removeAttachment)
         [picture, name, remove].forEach(addSubview)
     }
 
@@ -338,6 +337,7 @@ final class AttachmentChip: NSView {
         picture.image = thumbnail ?? NSImage(systemSymbolName: "doc.fill", accessibilityDescription: nil)
         picture.contentTintColor = MessagesInk.soft
         setAccessibilityLabel(CatWords.attached(name))
+        remove.setAccessibilityLabel(CatWords.remove(name))
         needsLayout = true
         needsDisplay = true
     }
@@ -356,8 +356,8 @@ final class AttachmentChip: NSView {
     }
 }
 
-/// A checkbox you can only press with the mouse, in Messages' colours. Like `QuietButton`, it never takes the keyboard,
-/// so pressing it leaves the keyboard where it was.
+/// A checkbox in Messages' colours. Like `QuietButton`, a click leaves the keyboard where it was, and Space ticks it
+/// once Tab has reached it.
 final class QuietCheckbox: NSView {
     private static let box: CGFloat = 14
 
@@ -375,7 +375,8 @@ final class QuietCheckbox: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override var isFlipped: Bool { true }
-    override var acceptsFirstResponder: Bool { false }
+    override var acceptsFirstResponder: Bool { QuietFocus.allows(self) }
+    override var canBecomeKeyView: Bool { QuietFocus.allows(self) && !isHiddenOrHasHiddenAncestor }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var needsPanelToBecomeKey: Bool { false }
 
@@ -383,12 +384,15 @@ final class QuietCheckbox: NSView {
         NSAttributedString(string: title, attributes: [.font: MessagesInk.font(ofSize: 12), .foregroundColor: MessagesInk.soft])
     }
 
+    /// Room inside it for the ring, which goes round the box and its words.
+    static let inset: CGFloat = 4
+
     func sizeToFit() {
-        setFrameSize(NSSize(width: Self.box + 8 + ceil(label.size().width) + 4, height: 20))
+        setFrameSize(NSSize(width: Self.inset + Self.box + 8 + ceil(label.size().width) + 6, height: 20))
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let box = NSRect(x: 1, y: (bounds.height - Self.box) / 2, width: Self.box, height: Self.box)
+        let box = NSRect(x: Self.inset, y: (bounds.height - Self.box) / 2, width: Self.box, height: Self.box)
         let shape = NSBezierPath(roundedRect: box, xRadius: 3.5, yRadius: 3.5)
         if isOn {
             MessagesInk.accent.setFill()
@@ -407,9 +411,25 @@ final class QuietCheckbox: NSView {
         }
         let text = label
         text.draw(at: NSPoint(x: box.maxX + 7, y: (bounds.height - text.size().height) / 2))
+        if QuietFocus.shows(self) { QuietFocus.ring(bounds, radius: 6) }
     }
 
     override func mouseDown(with event: NSEvent) {}
+
+    override func becomeFirstResponder() -> Bool {
+        QuietFocus.took(self)
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        needsDisplay = true
+        return true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard QuietFocus.isSpace(event) else { return super.keyDown(with: event) }
+        if !event.isARepeat { toggle() }
+    }
 
     override func mouseUp(with event: NSEvent) {
         guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }

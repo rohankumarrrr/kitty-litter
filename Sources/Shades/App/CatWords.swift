@@ -39,7 +39,7 @@ enum CatWords {
     static let summarize = "Summarize this."
     static let cantReadThat = "I can only read PDFs, pictures and links."
     static let answersTakeNoFiles = "An answer to a question can only be words."
-    static let removeAttachment = "Remove attachment"
+    static func remove(_ name: String) -> String { "Remove \(name)" }
     static let attach = "Attach"
     static let attachRecent = "Attach a recent file"
     static let noRecentFiles = "No recent pictures or PDFs"

@@ -24,6 +24,8 @@ final class ChannelsPanel: NSPanel {
         backgroundColor = MessagesInk.paper
         animationBehavior = .none
         becomesKeyOnlyIfNeeded = true
+        // Rows come and go, so Tab works out its way round again whenever they do.
+        autorecalculatesKeyViewLoop = true
         title = CatWords.appName
         // Shades' own captures leave out all its windows. This keeps Messages out of anyone else's too, such as a
         // kitten's own screen tools, so one kitten can't be shown another's messages.

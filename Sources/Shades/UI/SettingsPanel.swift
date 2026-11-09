@@ -211,6 +211,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         panel.invalidateShadow()
         // No box has the keyboard until you click into one, so a stray key can't type over a model.
         panel.initialFirstResponder = root
+        panel.recalculateKeyViewLoop()
         panel.makeFirstResponder(root)
     }
 
@@ -405,6 +406,9 @@ private final class SettingsRootView: NSView {
     override var acceptsFirstResponder: Bool { true }
     /// Esc closes it, while no box has the keyboard too.
     override func keyDown(with event: NSEvent) { interpretKeyEvents([event]) }
+    /// Tab still goes round the page from here, which nothing else in the chain does once a key is read this way.
+    override func insertTab(_ sender: Any?) { window?.selectNextKeyView(sender) }
+    override func insertBacktab(_ sender: Any?) { window?.selectPreviousKeyView(sender) }
 
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: BalloonView.radius, yRadius: BalloonView.radius)

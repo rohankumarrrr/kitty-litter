@@ -1,0 +1,55 @@
+front
+keyboard on
+settings
+wait 1
+settings messages
+wait 1
+draw .verify/shades/keyboard/0-settings
+tab
+draw .verify/shades/keyboard/1-theme
+tab
+tab
+tab back
+tab
+draw .verify/shades/keyboard/2-done
+space
+wait 1
+windows
+approval
+wait 1
+channels
+wait 2
+key activity
+wait 1
+tab
+tab
+tab
+tab
+tab
+tab
+tab
+draw .verify/shades/keyboard/3-allow
+space
+wait 1
+channel general
+wait 1
+tab
+tab
+tab
+tab
+tab
+draw .verify/shades/keyboard/4-notifications
+channel steve
+wait 1
+thread pricing copy
+wait 2
+draft Keep the FAQ
+tab back
+tab back
+tab control
+space
+draw .verify/shades/keyboard/5-also-send
+keyboard off
+tab
+front
+windows
