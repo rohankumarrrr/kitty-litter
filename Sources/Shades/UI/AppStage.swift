@@ -72,9 +72,9 @@ final class AppStage: CatStage {
             }
             return true
         }
-        cat.onRightClick = { [weak self] event in
+        cat.onMenu = { [weak self] point in
             guard let self else { return }
-            self.menuBar.popUpMenu(at: event.locationInWindow, in: self.cat.view)
+            self.menuBar.popUpMenu(at: point, in: self.cat.view)
         }
 
         kittens.anchor = { [weak self] in

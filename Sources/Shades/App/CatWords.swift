@@ -83,6 +83,7 @@ enum CatWords {
     }
 
     static let pairTitle = "Pair your phone"
+    static let pairPicture = "QR code to pair your phone"
     static func pairHow(_ address: String?) -> String {
         let open = address.map { "Scan this with your phone's camera, or open \($0) and type the code." } ?? "Open the page on your phone and type the code."
         return open + " It works once, for the next 10 minutes. Your phone needs Tailscale on, and your Mac awake with me running."
@@ -112,6 +113,9 @@ enum CatWords {
     static let passedOnToKitten = "I passed that to the kitten it's for."
     static let passedOnCorrection = "I passed that correction on."
     static let shades = "Shades"
+    /// What VoiceOver calls the cat: what pressing it does, then what it is.
+    static let catLabel = "Ask \(shades)"
+    static let catHelp = "A cat in sunglasses. Pressing it takes one look at your screen and opens the Ask box. Its menu has everything else."
     static let themeButton = "Theme"
     static let plainTheme = appName
     static let noThemesFound = "No themes from T3 Code, Cursor, VS Code or iTerm2"

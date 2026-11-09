@@ -90,43 +90,13 @@ final class BubbleView: BalloonView {
         let rebuildButtons = !sameKind || self.content?.buttonKey != content.buttonKey || opensHere != content.threadID.map(opensInMessages)
         self.content = content
 
-        var captionText: String?
-        var counterText: String?
-        var headingText: String?
-        var body = ""
-        var soft = false
-        var code = false
+        let words = content.words(thinkingDots: thinkingDots)
+        let body = words.body
+        let code = words.isCode
 
-        switch content {
-        case .thinking(let note):
-            captionText = note
-            body = "Thinking" + String(repeating: ".", count: thinkingDots)
-            soft = true
-        case .listening(let text):
-            body = text.isEmpty ? "Listening..." : text
-            soft = text.isEmpty
-        case .reply(let text, _, _, let note, _):
-            captionText = note
-            body = text
-        case .line(let text, _):
-            body = text
-        case .notice(let noticeCaption, let text, _):
-            captionText = noticeCaption
-            body = text
-        case .approval(let request, let position, let total):
-            captionText = request.threadTitle
-            counterText = total > 1 ? "\(position) of \(total)" : nil
-            headingText = CatWords.asks(request.kind)
-            body = request.summary
-            code = request.kind == .command
-        case .inbox(let headline):
-            captionText = CatWords.inboxCaption
-            body = headline
-        }
-
-        setLabel(caption, captionText)
-        setLabel(counter, counterText)
-        setLabel(heading, headingText)
+        setLabel(caption, words.caption)
+        setLabel(counter, words.counter)
+        setLabel(heading, words.heading)
         if rebuildButtons { buildButtons(for: content) }
 
         let font = code ? NSFont.monospacedSystemFont(ofSize: 12, weight: .regular) : NSFont.systemFont(ofSize: 13)
@@ -134,7 +104,7 @@ final class BubbleView: BalloonView {
         style.lineSpacing = 2
         let attributed = NSAttributedString(string: body, attributes: [
             .font: font,
-            .foregroundColor: soft ? Ink.soft : Ink.text,
+            .foregroundColor: words.isSoft ? Ink.soft : Ink.text,
             .paragraphStyle: style,
         ])
         if textView.string != body || textView.font != font {
@@ -292,8 +262,9 @@ final class BubbleView: BalloonView {
             copy.onPress = { [weak copy] in
                 copied?()
                 copy?.flash("Copied")
+                BubbleController.announce("Copied")
             }
-        case .line(_, let threadID), .notice(_, _, let threadID):
+        case .line(_, let threadID), .notice(_, _, let threadID, _):
             if let threadID { open(threadID) }
         case .approval(let request, _, _):
             // The same weight for both: nothing here should lean you toward yes.
@@ -368,7 +339,62 @@ final class BubbleTextView: NSTextView {
     }
 }
 
+/// What the bubble shows, top to bottom. VoiceOver hears these same words, so it's never told more than you see.
+struct BubbleWords: Equatable {
+    var caption: String?
+    var counter: String?
+    var heading: String?
+    var body: String
+    var isSoft = false
+    var isCode = false
+}
+
 extension BubbleContent {
+    func words(thinkingDots: Int = 0) -> BubbleWords {
+        switch self {
+        case .thinking(let note):
+            return BubbleWords(caption: note, body: "Thinking" + String(repeating: ".", count: thinkingDots), isSoft: true)
+        case .listening(let text):
+            return BubbleWords(body: text.isEmpty ? "Listening..." : text, isSoft: text.isEmpty)
+        case .reply(let text, _, _, let note, _):
+            return BubbleWords(caption: note, body: text)
+        case .line(let text, _):
+            return BubbleWords(body: text)
+        case .notice(let caption, let text, _, _):
+            return BubbleWords(caption: caption, body: text)
+        case .approval(let request, let position, let total):
+            return BubbleWords(
+                caption: request.threadTitle,
+                counter: total > 1 ? "\(position) of \(total)" : nil,
+                heading: CatWords.asks(request.kind),
+                body: request.summary,
+                isCode: request.kind == .command
+            )
+        case .inbox(let headline):
+            return BubbleWords(caption: CatWords.inboxCaption, body: headline)
+        }
+    }
+
+    /// What VoiceOver says as this shows. Nothing while you talk, so the microphone doesn't hear it, or while
+    /// an answer is still coming in, so it's read once, whole.
+    var spoken: String? {
+        switch self {
+        case .listening, .reply(_, false, _, _, _): return nil
+        default:
+            let words = words()
+            return [words.caption, words.counter, words.heading, words.body].compactMap { $0 }.joined(separator: "\n")
+        }
+    }
+
+    /// Something waiting on your answer, which VoiceOver says straight away.
+    var isUrgent: Bool {
+        switch self {
+        case .approval: return true
+        case .notice(_, _, _, let asks): return asks
+        default: return false
+        }
+    }
+
     fileprivate var kind: Int {
         switch self {
         case .thinking: return 0
@@ -386,7 +412,7 @@ extension BubbleContent {
         case .thinking, .listening: return ""
         case .reply(let text, let done, let thread, _, let canReplace): return done ? "reply|\(thread ?? "")|\(canReplace)|\(text)" : ""
         case .line(_, let thread): return "line|\(thread ?? "")"
-        case .notice(_, _, let thread): return "notice|\(thread ?? "")"
+        case .notice(_, _, let thread, _): return "notice|\(thread ?? "")"
         case .approval(let request, _, _): return "approval|\(request.id)"
         case .inbox: return "inbox"
         }
@@ -394,7 +420,7 @@ extension BubbleContent {
 
     fileprivate var threadID: String? {
         switch self {
-        case .reply(_, true, let thread, _, _), .line(_, let thread), .notice(_, _, let thread): return thread
+        case .reply(_, true, let thread, _, _), .line(_, let thread), .notice(_, _, let thread, _): return thread
         default: return nil
         }
     }

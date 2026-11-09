@@ -43,6 +43,7 @@ final class PairingPanel {
         if let link = card.link, let picture = Self.picture(of: link) {
             let image = NSImageView(image: picture)
             image.imageScaling = .scaleNone
+            image.setAccessibilityLabel(CatWords.pairPicture)
             image.wantsLayer = true
             image.layer?.backgroundColor = NSColor.white.cgColor
             image.layer?.cornerRadius = 8

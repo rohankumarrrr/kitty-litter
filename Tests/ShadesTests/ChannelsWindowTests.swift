@@ -118,6 +118,25 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(row.accessibilityPerformPress())
     }
 
+    func testVoiceOverHearsWhichPlaceIsShownAndWhetherDoNotDisturbIsOn() throws {
+        let view = view()
+        view.show(book())
+        let activity = try XCTUnwrap(view.sidebar.row(for: .activity))
+        let steves = try XCTUnwrap(view.sidebar.row(for: .channel(.of(steve))))
+        XCTAssertEqual(activity.accessibilityRole(), .radioButton)
+        XCTAssertEqual(activity.accessibilityValue() as? Int, 1)
+        XCTAssertEqual(steves.accessibilityValue() as? Int, 0)
+        XCTAssertTrue(steves.accessibilityPerformPress())
+        XCTAssertEqual(activity.accessibilityValue() as? Int, 0)
+        XCTAssertEqual(steves.accessibilityValue() as? Int, 1)
+
+        let sidebar = view.sidebar
+        XCTAssertEqual(sidebar.quietButton.accessibilityRole(), .checkBox)
+        XCTAssertEqual(sidebar.quietButton.accessibilityValue() as? Int, 0)
+        XCTAssertEqual(sidebar.quietOnButton.accessibilityRole(), .checkBox)
+        XCTAssertEqual(sidebar.quietOnButton.accessibilityValue() as? Int, 1)
+    }
+
     func testAFinishedThreadIsInItsChannelAndOutOfActivity() throws {
         let view = view()
         view.show(book())
