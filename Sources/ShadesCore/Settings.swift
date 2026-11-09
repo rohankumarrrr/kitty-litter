@@ -33,6 +33,9 @@ public struct Settings: Codable, Sendable, Equatable {
     public var textSize: TextSize
     /// Open shows a thread in Messages wherever Messages has it, and T3 only for one it doesn't. Off, Open is always T3.
     public var openInMessages: Bool
+    /// The font Messages draws its words in, by family name, or `nil` for the system's. "New York", "SF Pro Rounded"
+    /// and "SF Mono" are the system's own serif, rounded and monospaced faces.
+    public var messagesFont: String?
 
     public init(
         quickModel: ModelChoice = .quick,
@@ -49,7 +52,8 @@ public struct Settings: Codable, Sendable, Equatable {
         doNotDisturb: Bool = false,
         channelNotifications: [String: ChannelNotifications] = [:],
         textSize: TextSize = .standard,
-        openInMessages: Bool = true
+        openInMessages: Bool = true,
+        messagesFont: String? = nil
     ) {
         self.quickModel = quickModel
         self.frontierModel = frontierModel
@@ -66,10 +70,11 @@ public struct Settings: Codable, Sendable, Equatable {
         self.channelNotifications = channelNotifications
         self.textSize = textSize
         self.openInMessages = openInMessages
+        self.messagesFont = messagesFont
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb, channelNotifications, textSize, openInMessages
+        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb, channelNotifications, textSize, openInMessages, messagesFont
     }
 
     /// Anything missing takes its default, so a settings file from an older version keeps working.
@@ -91,6 +96,7 @@ public struct Settings: Codable, Sendable, Equatable {
         channelNotifications = try saved.decodeIfPresent([String: ChannelNotifications].self, forKey: .channelNotifications) ?? defaults.channelNotifications
         textSize = try saved.decodeIfPresent(TextSize.self, forKey: .textSize) ?? defaults.textSize
         openInMessages = try saved.decodeIfPresent(Bool.self, forKey: .openInMessages) ?? defaults.openInMessages
+        messagesFont = try saved.decodeIfPresent(String.self, forKey: .messagesFont)
     }
 
     /// A channel you've never changed tells you everything.

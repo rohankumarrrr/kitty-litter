@@ -125,7 +125,11 @@ final class FakeStage: CatStage {
     }
     func settingsChanged(_ form: SettingsForm) { settingsForms.append(form) }
     var textSizes: [TextSize] = []
-    func showTextSize(_ size: TextSize) { textSizes.append(size) }
+    var fonts: [String?] = []
+    func showText(size: TextSize, font: String?) {
+        textSizes.append(size)
+        fonts.append(font)
+    }
     var pairings: [PhonePairingCard?] = []
     func showPairing(_ card: PhonePairingCard?) { pairings.append(card) }
     func copyToPasteboard(_ text: String) { copied = text }

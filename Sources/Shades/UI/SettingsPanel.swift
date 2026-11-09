@@ -38,6 +38,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     private var corner = NSPoint.zero
     private var handlers: [Handler] = []
     private let notificationsMenu = NotificationsMenu()
+    private let fontMenu = FontMenu()
 
     func show(_ form: SettingsForm, near corner: NSPoint) {
         self.form = form
@@ -118,11 +119,19 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             return rows
         case .messages:
             let theme = menuButton(form.theme ?? CatWords.plainTheme) { [weak self] anchor in self?.onTheme?(anchor) }
+            let font = menuButton(settings.messagesFont ?? MessagesInk.systemFaces[0].name) { [weak self] anchor in
+                self?.fontMenu.show(current: settings.messagesFont, under: anchor) { [weak self] picked in
+                    self?.edit { $0.messagesFont = picked }
+                    // Its button says the font, and its own change doesn't make the page again by itself.
+                    self?.build()
+                }
+            }
             let phone = checkbox("Messages on my phone, over Tailscale", settings.phone) { [weak self] on in
                 self?.edit { $0.phone = on }
             }
             var rows = [
                 row(CatWords.themeButton, theme),
+                row("Font", font),
                 row("Text size", popup(Self.sizes, settings.textSize) { $0.textSize = $1 }),
                 row("Open threads", popup(Self.opens, settings.openInMessages) { $0.openInMessages = $1 }),
                 row("Phone", phone),

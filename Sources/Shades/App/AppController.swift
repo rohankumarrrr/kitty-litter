@@ -317,7 +317,7 @@ final class AppController {
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.keyReleased(key) } }
         }
         stage.showTheme(theme)
-        stage.showTextSize(settings.textSize)
+        stage.showText(size: settings.textSize, font: settings.messagesFont)
         stage.catDoNotDisturb(settings.doNotDisturb)
         // Turned off before you caught up, it still has that to say.
         catchingUp = !settings.doNotDisturb && !away.isEmpty
@@ -499,7 +499,7 @@ final class AppController {
         let keysChanged = updated.talkKey != settings.talkKey || updated.dictateKey != settings.dictateKey
         let phoneChanged = updated.phone != settings.phone
         let quietChanged = updated.doNotDisturb != settings.doNotDisturb
-        let sizeChanged = updated.textSize != settings.textSize
+        let textChanged = updated.textSize != settings.textSize || updated.messagesFont != settings.messagesFont
         let openChanged = updated.openInMessages != settings.openInMessages
         settings = updated
         saveSettings(updated)
@@ -513,7 +513,7 @@ final class AppController {
             channels.refresh()
         }
         if quietChanged { doNotDisturbChanged() }
-        if sizeChanged { stage.showTextSize(updated.textSize) }
+        if textChanged { stage.showText(size: updated.textSize, font: updated.messagesFont) }
         // A bubble's Open says where it goes.
         if openChanged { renderBubble() }
         stage.settingsChanged(settingsForm)

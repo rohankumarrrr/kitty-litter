@@ -37,7 +37,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        label.font = .systemFont(ofSize: 11)
+        label.font = MessagesInk.font(ofSize: 11)
         label.lineBreakMode = .byTruncatingTail
         label.isSelectable = false
         addSubview(label)
@@ -46,7 +46,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         textView.isRichText = false
         textView.allowsUndo = true
         textView.drawsBackground = false
-        textView.font = .systemFont(ofSize: 14 + MessagesInk.textStep)
+        textView.font = MessagesInk.font(ofSize: 14 + MessagesInk.textStep)
         textView.insertionPointColor = Ink.accent
         textView.textContainerInset = .zero
         textView.textContainer?.lineFragmentPadding = 0
@@ -102,8 +102,9 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
 
     func restyle() {
         label.textColor = MessagesInk.soft
+        label.font = MessagesInk.font(ofSize: 11)
         textView.textColor = MessagesInk.text
-        textView.font = .systemFont(ofSize: 14 + MessagesInk.textStep)
+        textView.font = MessagesInk.font(ofSize: 14 + MessagesInk.textStep)
         alsoSend.needsDisplay = true
         needsDisplay = true
     }
@@ -262,7 +263,7 @@ final class AttachmentChip: NSView {
         picture.wantsLayer = true
         picture.layer?.cornerRadius = 6
         picture.layer?.masksToBounds = true
-        name.font = .systemFont(ofSize: 13)
+        name.font = MessagesInk.font(ofSize: 13)
         name.lineBreakMode = .byTruncatingMiddle
         remove.onPress = { [weak self] in self?.onRemove?() }
         remove.setAccessibilityLabel(CatWords.removeAttachment)
@@ -322,7 +323,7 @@ final class QuietCheckbox: NSView {
     override var needsPanelToBecomeKey: Bool { false }
 
     private var label: NSAttributedString {
-        NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: MessagesInk.soft])
+        NSAttributedString(string: title, attributes: [.font: MessagesInk.font(ofSize: 12), .foregroundColor: MessagesInk.soft])
     }
 
     func sizeToFit() {

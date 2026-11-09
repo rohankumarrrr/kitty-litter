@@ -155,6 +155,7 @@ enum CatWords {
     static let directMessages = "Direct messages"
     static let shortcutsButton = "⌘/ Shortcuts"
     static let settingsButton = "Settings"
+    static let allFonts = "All fonts"
     static let shortcutsTitle = "Keyboard shortcuts"
     static let jumpTitle = "Jump to"
     static let jumpPlaceholder = "Jump to a place or thread"

@@ -134,7 +134,7 @@ final class ChannelSidebar: QuietView {
 
     private func addHeading(_ text: String, at y: CGFloat) -> CGFloat {
         let label = NSTextField(labelWithAttributedString: NSAttributedString(string: text.uppercased(), attributes: [
-            .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+            .font: MessagesInk.font(ofSize: 10, weight: .semibold),
             .foregroundColor: MessagesInk.soft,
             .kern: 0.5,
         ]))
@@ -238,7 +238,7 @@ final class ChannelSidebarRow: ChannelRowView {
             right -= 16
         }
         if item.badge > 0 {
-            let count = NSAttributedString(string: "\(item.badge)", attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .bold), .foregroundColor: MessagesInk.onBadge])
+            let count = NSAttributedString(string: "\(item.badge)", attributes: [.font: MessagesInk.font(ofSize: 11, weight: .bold), .foregroundColor: MessagesInk.onBadge])
             let size = count.size()
             let pill = NSRect(x: right - max(size.width + 10, 18), y: bounds.midY - 9, width: max(size.width + 10, 18), height: 18)
             MessagesInk.badge.setFill()
@@ -251,7 +251,7 @@ final class ChannelSidebarRow: ChannelRowView {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         NSAttributedString(string: item.title, attributes: [
-            .font: NSFont.systemFont(ofSize: 13, weight: item.isUnread || item.badge > 0 ? .bold : .regular),
+            .font: MessagesInk.font(ofSize: 13, weight: item.isUnread || item.badge > 0 ? .bold : .regular),
             .foregroundColor: isFaded ? MessagesInk.soft : item.isUnread || item.badge > 0 || isSelected ? MessagesInk.text : MessagesInk.soft,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: left, y: (bounds.height - 17) / 2, width: max(right - left, 0), height: 17))

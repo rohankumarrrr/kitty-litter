@@ -31,4 +31,4 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 - [Notifications](./notifications.md) covers the macOS notification for something new in Activity or a finished session, clicking or tapping it to open its thread, taking it back, and each channel's notifications on the Mac and the phone.
 - [Do Not Disturb](./dnd.md) covers the switch, the cat asleep, every pop-up staying quiet, and catching up in Activity.
 - [Kittens](./kittens.md) covers the view of every kitten and how each is doing.
-- [Settings](./settings.md) covers every setting in one place, from the menu or Messages: models, keys, notifications, each channel's, theme, text size, where Open goes, the phone and the privacy list.
+- [Settings](./settings.md) covers every setting in one place, from the menu or Messages: models, keys, notifications, each channel's, theme, font, text size, where Open goes, the phone and the privacy list.

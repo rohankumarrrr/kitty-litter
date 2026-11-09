@@ -41,16 +41,19 @@ final class SettingsTests: XCTestCase {
 
     override func tearDown() async throws {
         MessagesInk.textSize = .standard
+        MessagesInk.fontFamily = nil
     }
 
     func testAnOlderSettingsFileOpensInMessagesAtTheUsualSize() throws {
         let old = try JSONDecoder().decode(Settings.self, from: Data(#"{"phone": true}"#.utf8))
         XCTAssertEqual(old.textSize, .standard)
         XCTAssertTrue(old.openInMessages)
+        XCTAssertNil(old.messagesFont, "the system's font")
 
         var changed = Settings()
         changed.textSize = .larger
         changed.openInMessages = false
+        changed.messagesFont = "Georgia"
         let read = try JSONDecoder().decode(Settings.self, from: JSONEncoder().encode(changed))
         XCTAssertEqual(read, changed)
     }
@@ -182,5 +185,73 @@ final class SettingsTests: XCTestCase {
         MessagesInk.textSize = .larger
         block.restyle(ChannelMarkdown.attributed(text))
         XCTAssertGreaterThan(block.fit(width: 240), usual)
+    }
+
+    // MARK: - Font
+
+    func testAFontGoesToMessages() {
+        var georgia = controller.settings
+        georgia.messagesFont = "Georgia"
+        controller.settingsEdited(georgia)
+        XCTAssertEqual(stage.fonts, ["Georgia"])
+        georgia.messagesFont = nil
+        controller.settingsEdited(georgia)
+        XCTAssertEqual(stage.fonts, ["Georgia", nil], "back to the system's")
+    }
+
+    func testMessagesDrawsInThePickedFontAndTheSystemsWhenItsNotHere() {
+        let system = MessagesInk.font(ofSize: 13)
+        MessagesInk.fontFamily = "Georgia"
+        XCTAssertEqual(MessagesInk.font(ofSize: 13).familyName, "Georgia")
+        XCTAssertEqual(MessagesInk.font(ofSize: 13, weight: .semibold).fontDescriptor.symbolicTraits.contains(.bold), true, "bold in Georgia too")
+        let words = ChannelMarkdown.attributed("Plain words")
+        XCTAssertEqual((words.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.familyName, "Georgia")
+
+        MessagesInk.fontFamily = "New York"
+        XCTAssertNotEqual(MessagesInk.font(ofSize: 13).fontName, system.fontName, "the system's serif")
+        MessagesInk.fontFamily = "A Font Nobody Has"
+        XCTAssertEqual(MessagesInk.font(ofSize: 13).fontName, system.fontName)
+    }
+
+    func testWordsAlreadyLaidOutFollowANewFont() throws {
+        let book = ChannelBook.build(kittens: [], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        let look = ChannelSpeakerLook(.you, in: book)
+        let message = ChannelMessage(exchangeID: "e", kind: .ask, speaker: .you, text: "Rewrite the pricing copy so it sounds like a person wrote it.", at: clock, threadID: "", threadTitle: "")
+        let words = MessageWords(message, look: look)
+        _ = words.words?.fit(width: 900)
+        let system = try XCTUnwrap(words.words?.width)
+        MessagesInk.fontFamily = "Courier"
+        words.paint(for: look)
+        _ = words.words?.fit(width: 900)
+        XCTAssertGreaterThan(try XCTUnwrap(words.words?.width), system, "Courier's letters are wider")
+    }
+
+    func testTheFontMenuHasTheSystemsFacesThenEveryFamily() throws {
+        let menu = FontMenu()
+        let families = ["Georgia", ".Hidden", "Avenir Next"]
+        let items = menu.items(current: nil, families: families)
+        XCTAssertEqual(items.map(\.title), ["SF Pro", "New York", "SF Pro Rounded", "SF Mono", "", CatWords.allFonts])
+        XCTAssertEqual(items.first?.state, .on)
+        XCTAssertNil(items.first?.representedObject, "the system's is no font at all in the file")
+        XCTAssertEqual(items[1].representedObject as? String, "New York")
+        let all = try XCTUnwrap(items.last?.submenu)
+        XCTAssertEqual(all.items.map(\.title), ["Avenir Next", "Georgia"], "sorted, without the ones macOS keeps for itself")
+
+        let picked = menu.items(current: "Georgia", families: families)
+        XCTAssertEqual(picked.first?.state, .off)
+        XCTAssertEqual(picked.last?.state, .on)
+        XCTAssertEqual(picked.last?.submenu?.items.first { $0.state == .on }?.title, "Georgia")
+
+        let gone = menu.items(current: "A Font Nobody Has", families: families)
+        XCTAssertEqual(gone[4].title, "A Font Nobody Has")
+        XCTAssertFalse(gone[4].isEnabled, "written by hand, and not on this Mac")
+    }
+
+    func testFontIsOnTheMessagesPageUnderTheme() {
+        let (panel, _) = panel(Settings(messagesFont: "Georgia"))
+        panel.select(.messages)
+        let rows = controls(in: panel).map { $0.accessibilityIdentifier() }.filter { !$0.isEmpty }
+        XCTAssertEqual(Array(rows.prefix(2)), [CatWords.themeButton, "Font"])
+        XCTAssertTrue(controls(in: panel).contains { ($0 as? QuietButton)?.accessibilityLabel() == "Georgia ▾" })
     }
 }

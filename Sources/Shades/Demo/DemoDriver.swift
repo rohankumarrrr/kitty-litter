@@ -355,7 +355,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | key [shortcut] | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -642,6 +642,21 @@ final class DemoDriver {
                     print("theme   \(theme.state == .on ? "*" : " ") \(theme.title) \((theme.representedObject as? URL)?.path ?? "")")
                 }
             }
+        case "fonts":
+            // What Font in Settings offers: the system's faces, then how many families All fonts has.
+            for item in FontMenu().items(current: controller.settings.messagesFont, families: NSFontManager.shared.availableFontFamilies) {
+                let more = item.submenu.map { " (\($0.items.count) families)" } ?? ""
+                print(item.isSeparatorItem ? "font ---" : "font \(item.state == .on ? "*" : " ") \(item.title)\(more)\(item.isEnabled ? "" : " (not on this Mac)")")
+            }
+        case "font":
+            // The same as picking that font from Settings' Font menu, by its name, or `font` alone for the system's.
+            let items = FontMenu().items(current: controller.settings.messagesFont, families: NSFontManager.shared.availableFontFamilies)
+            let picked = (items + items.compactMap(\.submenu).flatMap(\.items)).first { $0.title == (rest.isEmpty ? MessagesInk.systemFaces[0].name : rest) && $0.isEnabled }
+            guard let picked else { return print("no font [\(rest)]") }
+            var settings = controller.settings
+            settings.messagesFont = picked.representedObject as? String
+            controller.settingsEdited(settings)
+            print("font \(settings.messagesFont ?? "system")")
         case "colors":
             // The same as picking a theme from that menu, by its app and name such as "Cursor/Opal Horizon", or
             // dropping a theme file onto Messages.

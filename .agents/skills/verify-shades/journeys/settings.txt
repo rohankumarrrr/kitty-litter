@@ -21,6 +21,10 @@ channel steve
 wait 2
 settings messages
 draw .verify/shades/settings/3-messages
+fonts
+font New York
+wait 1
+draw .verify/shades/settings/3b-font
 setting Done
 sidebar Settings
 wait 1

@@ -123,14 +123,14 @@ final class ChannelHeader: QuietView {
         truncating.lineBreakMode = .byTruncatingTail
         let room = (buttons.first?.frame.minX ?? bounds.width - ChannelRowView.margin) - left - 8
         let name = NSAttributedString(string: title, attributes: [
-            .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
+            .font: MessagesInk.font(ofSize: 14, weight: .semibold),
             .foregroundColor: MessagesInk.text,
             .paragraphStyle: truncating,
         ])
         if let subtitle, !subtitle.isEmpty {
             name.draw(in: NSRect(x: left, y: Self.top - 1, width: room, height: 18))
             NSAttributedString(string: subtitle, attributes: [
-                .font: NSFont.systemFont(ofSize: 11),
+                .font: MessagesInk.font(ofSize: 11),
                 .foregroundColor: MessagesInk.soft,
                 .paragraphStyle: truncating,
             ]).draw(in: NSRect(x: left, y: Self.top + 18, width: room, height: 14))
