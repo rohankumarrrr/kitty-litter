@@ -756,3 +756,88 @@ extension PhoneTests {
         for emoji in ["🔔", "💬"] { XCTAssertFalse(PhonePage.script.contains(emoji), "drawn to match the window instead") }
     }
 }
+
+// MARK: - Errors, the link sheet and questions
+
+extension PhoneTests {
+    /// A conversation is read from its bottom, so anything above it is out of sight. An error goes at the bottom of the
+    /// header, which stays at the top of the screen.
+    func testAnErrorShowsInTheHeaderWhereverYouAreAndIsReadOut() throws {
+        let html = PhonePage.html
+        let start = try XCTUnwrap(html.range(of: #"<header id="top">"#))
+        let end = try XCTUnwrap(html.range(of: "</header>", range: start.upperBound..<html.endIndex))
+        XCTAssertTrue(html[start.lowerBound..<end.upperBound].contains(#"<div id="banner" role="status"></div>"#), "always there, empty, so VoiceOver reads what it comes to say")
+        XCTAssertTrue(PhonePage.style.contains("#top { position: sticky; top: 0;"))
+        XCTAssertFalse(PhonePage.script.contains("$('banner').hidden"), "never hidden, which would leave nothing to read out")
+        XCTAssertFalse(PhonePage.script.contains("'banner', "), "nor with what pairing hides")
+    }
+
+    /// What the helper reported: everything the Mac sent took away whatever the page had said, such as a file being
+    /// too big, before you'd seen it. What comes in by itself only shows the Mac can be reached.
+    func testOnlyWhatYouDoTakesAnErrorAway() throws {
+        let page = try Self.page(["banner", "reached"])
+        page.evaluateScript("let writes = 0, shown = ''; const strip = { get textContent() { return shown; }, set textContent(text) { writes += 1; shown = text; } }; const $ = () => strip;")
+        page.evaluateScript("banner(words.tooBig); reached();")
+        XCTAssertEqual(page.evaluateScript("shown")?.toString(), "That's too big to send. Try something under 10 MB.")
+        page.evaluateScript("banner(words.unreachable); banner(words.unreachable);")
+        XCTAssertEqual(page.evaluateScript("writes")?.toInt32(), 2, "trying again every few seconds doesn't say it again")
+        page.evaluateScript("reached();")
+        XCTAssertEqual(page.evaluateScript("shown")?.toString(), "", "until the Mac answers")
+        XCTAssertTrue(PhonePage.script.contains("if (line.startsWith('data: ')) { reached();"), "what the Mac sends")
+        XCTAssertTrue(PhonePage.script.contains("if (quiet) reached(); else banner('');"), "and what the page marks seen by itself")
+    }
+
+    /// The sheet a link shows is a real one: over a dimmed page that can't be reached until it's gone, which Escape puts
+    /// away, with the keyboard on Cancel, never on Open, so a held Enter can't open what you haven't read.
+    func testALinksSheetIsModalOverADimmedPageWithTheKeyboardOnCancel() throws {
+        let html = PhonePage.html
+        XCTAssertTrue(html.contains(#"<dialog id="linksheet" aria-labelledby="linktitle">"#))
+        let cancel = try XCTUnwrap(html.range(of: #"<button id="linkcancel" type="button" autofocus>Cancel</button>"#))
+        XCTAssertLessThan(cancel.lowerBound, try XCTUnwrap(html.range(of: #"<a id="linkopen""#)).lowerBound)
+        XCTAssertTrue(PhonePage.script.contains("$('linksheet').showModal();"))
+        XCTAssertFalse(PhonePage.script.contains("$('linksheet').hidden"))
+        XCTAssertTrue(PhonePage.style.contains("#linksheet::backdrop { background:"))
+        XCTAssertTrue(PhonePage.script.contains("if (event.key === 'Enter') { event.preventDefault(); ask(part.link); }"), "the Enter that shows it goes no further")
+    }
+
+    /// A question's text is its first part's, so the card says it once, numbered, as the window's card does.
+    func testAQuestionCardAsksEachPartOnce() throws {
+        let font = AnswerForm.Part(key: "font", text: "Which font?", options: ["Silkscreen", "System"], values: ["s", "y"], takesOwnWords: false)
+        let pages = AnswerForm.Part(key: "pages", text: "Which pages?", options: ["Home", "Blog"], values: ["h", "b"], takesOwnWords: false, picksSeveral: true)
+        let book = book(waiting: Waiting(questions: [
+            AgentQuestion(id: "two", threadID: "a", threadTitle: "Work", text: "Which font?", form: AnswerForm(parts: [font, pages])),
+            AgentQuestion(id: "one", threadID: "a", threadTitle: "Work", text: "Which font?", form: AnswerForm(parts: [font])),
+            AgentQuestion(id: "t3", threadID: "a", threadTitle: "Work", text: "Which font?", form: nil),
+        ]))
+        let page = try Self.page(["el", "button", "card", "question", "chosen", "mark"])
+        var said: [String: [String]] = [:]
+        for row in PhoneView(PhonePlace("activity", in: book), in: book, now: noon).rows where row.kind == "question" {
+            let json = String(decoding: try JSONEncoder().encode(row), as: UTF8.self)
+            said[row.id ?? ""] = page.evaluateScript("said(card(\(json)))")?.toArray() as? [String]
+        }
+        XCTAssertEqual(said["two"]?.filter { $0.contains("Which") }, ["1 of 2: Which font?", "2 of 2: Which pages?"])
+        XCTAssertEqual(said["one"]?.filter { $0.contains("Which") }, ["Which font?"])
+        XCTAssertEqual(said["t3"]?.filter { $0.contains("Which") }, ["Which font?"], "and one answered in T3 still says it")
+    }
+
+    /// The page's `words` and its functions with these names, with just enough of a document to build nodes and read
+    /// back what they say.
+    private static func page(_ names: [String]) throws -> JSContext {
+        let script = PhonePage.script
+        func cut(from start: String, to end: String) throws -> String {
+            let from = try XCTUnwrap(script.range(of: start), start)
+            return String(script[from.lowerBound..<(try XCTUnwrap(script.range(of: end, range: from.upperBound..<script.endIndex))).upperBound])
+        }
+        let document = """
+            const document = { createElement: (tag) => ({ tag, children: [], dataset: {}, classList: { toggle() {} },
+              append(...nodes) { this.children.push(...nodes); }, setAttribute() {}, querySelectorAll() { return []; } }) };
+            const cat = () => document.createElement('img'), time = () => '', act = () => Promise.resolve(null), answers = new Map();
+            const said = (node) => [node.textContent, ...node.children.flatMap(said)].filter((text) => text);
+            """
+        let page = try XCTUnwrap(JSContext())
+        page.exceptionHandler = { _, error in XCTFail(error?.toString() ?? "") }
+        let functions = try names.map { try cut(from: "function \($0)(", to: "\n}\n") }
+        page.evaluateScript(([document, try cut(from: "const words = {", to: "\n};\n")] + functions).joined(separator: "\n"))
+        return page
+    }
+}

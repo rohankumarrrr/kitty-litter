@@ -35,8 +35,8 @@ enum PhonePage {
           <form id="search" hidden>
             <input id="query" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search messages" aria-label="Search messages">
           </form>
+          <div id="banner" role="status"></div>
         </header>
-        <div id="banner" role="status" hidden></div>
         <div id="notify" hidden>
           <p id="notifytext"></p>
           <button id="notifybutton" type="button" hidden>Turn on</button>
@@ -56,15 +56,15 @@ enum PhonePage {
           <input id="snap" type="file" accept="image/*" capture="environment" hidden>
           <label id="alsolabel" hidden><input type="checkbox" id="also"> <span id="alsotext"></span></label>
         </form>
-        <div id="linksheet" role="dialog" aria-labelledby="linktitle" hidden>
+        <dialog id="linksheet" aria-labelledby="linktitle">
           <p id="linktitle"></p>
           <p id="linkaddress"></p>
           <div class="buttons">
-            <button id="linkcancel" type="button">Cancel</button>
+            <button id="linkcancel" type="button" autofocus>Cancel</button>
             <a id="linkopen" class="go" target="_blank" rel="noopener noreferrer">Open</a>
             <button id="linkshow" class="go" type="button" hidden>Show</button>
           </div>
-        </div>
+        </dialog>
         <section id="pair" hidden>
           <h1>Pair this phone</h1>
           <p>Turn on The Kitty Litter on my phone in Settings on your Mac, and it shows a code. Scan it with your camera, or type it here.</p>
@@ -115,7 +115,10 @@ enum PhonePage {
         #title { font-size: 20px; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
         #subtitle { margin: 2px 0 0; color: var(--soft); font-size: 13px; }
         #subtitle:empty { display: none; }
-        #banner { background: var(--warn); color: var(--paper); padding: 8px 16px; font-size: 14px; }
+        /* Across the bottom of the header, so it's in sight however far down you are. Always there, empty, so what it
+           says is read out. */
+        #banner { background: var(--warn); color: var(--paper); margin: 10px -16px -10px; padding: 8px 16px; font-size: 14px; }
+        #banner:empty { margin: 0; padding: 0; }
         #notify { display: flex; align-items: center; gap: 12px; margin: 12px 12px 0; padding: 10px 14px; border-radius: 14px;
           background: var(--card); border: 1px solid var(--line); }
         #notifytext { flex: 1; margin: 0; color: var(--soft); font-size: 14px; }
@@ -177,10 +180,12 @@ enum PhonePage {
         .chip[data-state=open] { background: #1f883d; }
         .chip[data-state=merged] { background: #8250df; }
         .chip[data-state=closed] { background: #cf222e; }
-        /* However long the address, the sheet stays on screen and the address scrolls inside it. */
-        #linksheet { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 12px); z-index: 3;
+        /* However long the address, the sheet stays on screen and the address scrolls inside it. Only while it's open,
+           since a closed dialog is hidden by the browser's own rule. */
+        #linksheet[open] { position: fixed; inset: auto 12px calc(env(safe-area-inset-bottom) + 12px); margin: 0; width: auto; max-width: none;
           max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); display: flex; flex-direction: column;
-          background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
+          color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
+        #linksheet::backdrop { background: rgba(0, 0, 0, .4); }
         #linktitle { margin: 0; color: var(--soft); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
         #linkaddress { margin: 6px 0 0; font: 14px/1.4 ui-monospace, Menlo, monospace; overflow-wrap: anywhere; overflow-y: auto; min-height: 0; }
         #linksheet .buttons { justify-content: flex-end; }
@@ -233,6 +238,7 @@ enum PhonePage {
         .card .answer { margin: 8px 0 0; padding-left: 10px; border-left: 3px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
         .card .footer { margin: 8px 0 0; color: var(--soft); font-size: 13px; }
         .card .part { margin: 12px 0 0; }
+        .card header + .part { margin: 0; }
         .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
         .buttons button, #pairform button { background: var(--grey); border-radius: 999px; padding: 8px 16px; font-size: 15px; }
         .buttons button.picked { background: var(--you); color: var(--on-you); }
@@ -332,9 +338,14 @@ enum PhonePage {
           return node;
         }
 
+        // Written only when it changes, so trying again every few seconds doesn't say it again each time.
         function banner(text) {
-          $('banner').textContent = text || '';
-          $('banner').hidden = !text;
+          if ($('banner').textContent !== (text || '')) $('banner').textContent = text || '';
+        }
+
+        // What the Mac sends on its own only shows it can be reached, so it takes away nothing else you were told.
+        function reached() {
+          if ($('banner').textContent === words.unreachable) banner('');
         }
 
         function headers(extra) {
@@ -355,7 +366,7 @@ enum PhonePage {
 
         async function act(body, quiet) {
           const response = await post('/act', body);
-          if (response && response.ok) { banner(''); return response.json(); }
+          if (response && response.ok) { if (quiet) reached(); else banner(''); return response.json(); }
           if (response && response.status === 401) { pairing(); return null; }
           if (!quiet) banner(response && response.status === 409 ? words.gone : words.unreachable);
           return null;
@@ -372,9 +383,10 @@ enum PhonePage {
           let hello = null;
           try { hello = await fetch('/hello', { headers: headers(), cache: 'no-store' }); } catch (error) {}
           if (hello && hello.status === 401) return pairing();
-          if (!hello || !hello.ok) { banner(words.unreachable); retry = setTimeout(start, 5000); return; }
           $('pair').hidden = true;
-          for (const id of ['top', 'rows', 'find']) $(id).hidden = false;
+          $('top').hidden = false;
+          if (!hello || !hello.ok) { banner(words.unreachable); retry = setTimeout(start, 5000); return; }
+          for (const id of ['rows', 'find']) $(id).hidden = false;
           listen();
           notifications().catch(() => {});
         }
@@ -448,7 +460,8 @@ enum PhonePage {
           // What Search found is what kittens said, so it goes with everything else.
           $('found').replaceChildren();
           $('find').textContent = words.search;
-          for (const id of ['top', 'rows', 'box', 'banner', 'search', 'found']) $(id).hidden = true;
+          banner('');
+          for (const id of ['top', 'rows', 'box', 'search', 'found']) $(id).hidden = true;
           $('pair').hidden = false;
         }
 
@@ -485,7 +498,7 @@ enum PhonePage {
                 const event = buffer.slice(0, end);
                 buffer = buffer.slice(end + 2);
                 for (const line of event.split('\n')) {
-                  if (line.startsWith('data: ')) { banner(''); show(JSON.parse(line.slice(6))); }
+                  if (line.startsWith('data: ')) { reached(); show(JSON.parse(line.slice(6))); }
                 }
               }
             }
@@ -498,6 +511,7 @@ enum PhonePage {
         function go(next, push = true) {
           if (!next || next === key) return;
           key = next;
+          banner('');
           keptUnread = null;
           jumped = false;
           view = null;
@@ -957,7 +971,8 @@ enum PhonePage {
           link.tabIndex = 0;
           link.append(node);
           link.onclick = () => ask(part.link);
-          link.onkeydown = (event) => { if (event.key === 'Enter') ask(part.link); };
+          // Held back, or the same Enter goes on to press whatever the sheet just put the keyboard on.
+          link.onkeydown = (event) => { if (event.key === 'Enter') { event.preventDefault(); ask(part.link); } };
           return link;
         }
 
@@ -998,7 +1013,8 @@ enum PhonePage {
           $('linkopen').hidden = !!show;
           $('linkshow').hidden = !show;
           if (show) $('linkopen').removeAttribute('href'); else $('linkopen').href = link;
-          $('linksheet').hidden = false;
+          // Over everything else, which can't be reached until it's gone, with the keyboard on Cancel and never on Open.
+          if (!$('linksheet').open) $('linksheet').showModal();
         }
 
         function button(label, onclick, className) {
@@ -1013,7 +1029,9 @@ enum PhonePage {
           const header = el('header');
           header.append(cat(item.cat), el('span', 'title', item.title));
           if (item.at) header.append(el('time', null, time(item.at)));
-          node.append(header, el('p', 'text', item.text));
+          node.append(header);
+          // A question's text is its first part's, which that part says with its number, as the window does.
+          if (!(item.parts || []).some((part) => part.text === item.text)) node.append(el('p', 'text', item.text));
           if (item.answer) node.append(el('p', 'answer', item.answer));
           if (item.kind === 'question') question(item, node);
           const buttons = el('div', 'buttons');
@@ -1048,7 +1066,7 @@ enum PhonePage {
           const instant = parts.length === 1 && !parts[0].words && !parts[0].several;
           parts.forEach((part, index) => {
             const box = el('div', 'part');
-            if (parts.length > 1 || part.text !== item.text) box.append(el('p', 'text', (parts.length > 1 ? (index + 1) + ' of ' + parts.length + ': ' : '') + part.text));
+            box.append(el('p', 'text', (parts.length > 1 ? (index + 1) + ' of ' + parts.length + ': ' : '') + part.text));
             const choices = el('div', 'buttons');
             for (const choice of part.choices) {
               const pick = button(choice.label, () => {
@@ -1103,10 +1121,16 @@ enum PhonePage {
 
         $('back').onclick = () => { if (view && view.back) go(view.back); };
         $('link').onclick = () => { if (view && view.link) go(view.link.open); };
-        $('linkcancel').onclick = () => { $('linksheet').hidden = true; };
-        $('linkopen').onclick = () => { $('linksheet').hidden = true; };
+        $('linkcancel').onclick = () => $('linksheet').close();
+        $('linkopen').onclick = () => $('linksheet').close();
+        // A tap on the dimmed page lands on the sheet itself, outside its box, and puts it away as Cancel does.
+        $('linksheet').onclick = (event) => {
+          const box = $('linksheet').getBoundingClientRect();
+          const outside = event.clientY < box.top || event.clientY > box.bottom || event.clientX < box.left || event.clientX > box.right;
+          if (event.target === $('linksheet') && outside) $('linksheet').close();
+        };
         $('linkshow').onclick = () => {
-          $('linksheet').hidden = true;
+          $('linksheet').close();
           if (showing) showing();
           showing = null;
         };
@@ -1151,7 +1175,7 @@ enum PhonePage {
 
         async function attach(files) {
           if (!files.length || uploading) return;
-          if (attached.length + files.length > 10) banner(words.tooMany);
+          banner(attached.length + files.length > 10 ? words.tooMany : '');
           uploading = true;
           $('send').disabled = true;
           try {
