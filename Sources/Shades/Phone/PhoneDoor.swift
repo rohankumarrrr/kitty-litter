@@ -25,15 +25,20 @@ final class PhoneDoor {
 
     private let keys: PhoneKeyStoring
     private var hashes: Set<String>
+    /// Phones were paired by an earlier build, whose pairing this one can't read.
+    private let pairedByAnotherBuild: Bool
     private(set) var pairing: Pairing?
     private var triesLeft = 0
 
     init(keys: PhoneKeyStoring) {
         self.keys = keys
         hashes = Set(keys.load(PhoneKeys.paired))
+        pairedByAnotherBuild = keys.cantRead(PhoneKeys.paired)
     }
 
     var hasPhones: Bool { !hashes.isEmpty }
+    /// A phone that was paired is locked out until it pairs again, since this build can't read its pairing.
+    var needsPairingAgain: Bool { hashes.isEmpty && pairedByAnotherBuild }
 
     func openPairing(now: Date) -> Pairing {
         var random = SystemRandomNumberGenerator()
@@ -90,6 +95,8 @@ final class PhoneDoor {
 protocol PhoneKeyStoring {
     func load(_ name: String) -> [String]
     func save(_ name: String, _ lines: [String])
+    /// Whether the last `load` of this name found items, none of which this build could read.
+    func cantRead(_ name: String) -> Bool
 }
 
 enum PhoneKeys {
@@ -104,11 +111,14 @@ enum PhoneKeys {
 /// For the demo and tests, which never touch the Keychain.
 final class MemoryPhoneKeys: PhoneKeyStoring {
     var saved: [String: [String]] = [:]
+    /// Names saved by a build this one stands in as being unable to read.
+    var unreadable: Set<String> = []
 
     var hashes: [String] { saved[PhoneKeys.paired] ?? [] }
 
     func load(_ name: String) -> [String] { saved[name] ?? [] }
     func save(_ name: String, _ lines: [String]) { saved[name] = lines }
+    func cantRead(_ name: String) -> Bool { unreadable.contains(name) }
 }
 
 /// In the login Keychain rather than a file a kitten could rewrite to let itself in, or read to send as you. Without a
@@ -120,14 +130,20 @@ final class KeychainPhoneKeys: PhoneKeyStoring {
     private let keychain: PhoneKeychain
     /// The item this run saved for each name, the only kind it deletes.
     private var savedHere: [String: String] = [:]
+    private var unreadable: Set<String> = []
 
     init(keychain: PhoneKeychain = LoginPhoneKeychain()) {
         self.keychain = keychain
     }
 
+    /// The newest item for this name that this build can read. Older builds saved one under the name itself.
     func load(_ name: String) -> [String] {
-        newest(name).map(Self.lines) ?? []
+        let items = keychain.items().filter { $0.account == name || $0.account.hasPrefix(name + ".") }
+        if !items.isEmpty, items.allSatisfy({ $0.data == nil }) { unreadable.insert(name) } else { unreadable.remove(name) }
+        return items.first { $0.data != nil }?.data.map(Self.lines) ?? []
     }
+
+    func cantRead(_ name: String) -> Bool { unreadable.contains(name) }
 
     func save(_ name: String, _ lines: [String]) {
         guard load(name) != lines else { return }
@@ -135,11 +151,6 @@ final class KeychainPhoneKeys: PhoneKeyStoring {
         guard keychain.add(account: account, data: Data(lines.joined(separator: "\n").utf8), label: "Shades: phone \(name)") else { return }
         if let before = savedHere[name] { keychain.delete(account: before) }
         savedHere[name] = account
-    }
-
-    /// What's in the newest item for this name that this build can read. Older builds saved one under the name itself.
-    private func newest(_ name: String) -> Data? {
-        keychain.items().first { ($0.account == name || $0.account.hasPrefix(name + ".")) && $0.data != nil }?.data
     }
 
     private static func lines(_ data: Data) -> [String] {

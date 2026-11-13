@@ -6,10 +6,12 @@ import XCTest
 /// touches it.
 @MainActor
 final class PhoneKeychainTests: XCTestCase {
-    /// The login Keychain as builds signed with one certificate see it: each reads what any of them saved, newest first,
-    /// but deleting one another build saved shows a dialog and waits on it, on the main thread, which `prompts` counts.
+    /// The login Keychain as builds see it: newest first, each reading what another saved only if `readsOtherBuilds`, as
+    /// builds signed with a Team ID would, and deleting one another build saved shows a dialog and waits on it, on the
+    /// main thread, which `prompts` counts.
     final class Keychain: PhoneKeychain {
         var build: String
+        var readsOtherBuilds = true
         private var stored: [(account: String, data: Data, build: String)]
         private(set) var added: [String] = []
         private(set) var prompts: [String] = []
@@ -19,7 +21,9 @@ final class PhoneKeychainTests: XCTestCase {
             stored = items.map { ($0.0, Data($0.1.joined(separator: "\n").utf8), $0.2) }
         }
 
-        func items() -> [(account: String, data: Data?)] { stored.reversed().map { ($0.account, $0.data) } }
+        func items() -> [(account: String, data: Data?)] {
+            stored.reversed().map { ($0.account, readsOtherBuilds || $0.build == build ? $0.data : nil) }
+        }
 
         func add(account: String, data: Data, label: String) -> Bool {
             stored.append((account, data, build))
@@ -58,5 +62,28 @@ final class PhoneKeychainTests: XCTestCase {
         XCTAssertEqual(keychain.added.count, 2)
         XCTAssertEqual(keychain.prompts, [], "the last build's item stays behind")
         XCTAssertFalse(keychain.items().contains { $0.account == keychain.added[0] }, "the first one this run saved went")
+    }
+
+    /// Without a Team ID a new build can't read the last one's pairing, so the phone has to pair again, which nothing said.
+    func testAPairingThisBuildCantReadMeansPairingAgain() {
+        let keychain = Keychain(build: "new", items: [("paired.a", ["hash"], "old")])
+        keychain.readsOtherBuilds = false
+        let door = PhoneDoor(keys: KeychainPhoneKeys(keychain: keychain))
+        XCTAssertFalse(door.hasPhones)
+        XCTAssertTrue(door.needsPairingAgain)
+        XCTAssertEqual(keychain.prompts, [], "found out without a dialog")
+
+        keychain.readsOtherBuilds = true
+        XCTAssertFalse(PhoneDoor(keys: KeychainPhoneKeys(keychain: keychain)).needsPairingAgain, "a pairing it can read still counts")
+        XCTAssertFalse(PhoneDoor(keys: KeychainPhoneKeys(keychain: Keychain(build: "new", items: []))).needsPairingAgain, "never paired isn't pairing again")
+    }
+
+    func testPairingAgainInThisRunPutsItRight() {
+        let keychain = Keychain(build: "new", items: [("paired.a", ["hash"], "old")])
+        keychain.readsOtherBuilds = false
+        let door = PhoneDoor(keys: KeychainPhoneKeys(keychain: keychain))
+        let pairing = door.openPairing(now: Date())
+        XCTAssertNotNil(door.pair(pairing.code, now: Date()))
+        XCTAssertFalse(door.needsPairingAgain)
     }
 }

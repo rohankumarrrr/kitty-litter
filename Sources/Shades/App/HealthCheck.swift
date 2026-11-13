@@ -52,6 +52,8 @@ struct HealthFacts: Equatable {
     var shortcutsTaken: [String] = []
     /// Other copies of Shades running, by process ID, such as one built from source and left running.
     var otherCopies: [Int32] = []
+    /// The phone page is on, but the phone paired with it can't get in, since this build can't read its pairing.
+    var phoneNeedsPairingAgain = false
 }
 
 /// T3 not answering the self-check. Every step of connecting gives up after a while except a Keychain call, which
@@ -199,6 +201,14 @@ enum HealthCheck {
             fix: "Run swift run probe-t3 to see what changed."
         ))
         results.append(shortcutsFinding(facts))
+        if facts.phoneNeedsPairingAgain {
+            results.append(HealthFinding(
+                check: "phone",
+                ok: false,
+                problem: "Your phone needs pairing again, since this build of me can't read its pairing.",
+                fix: "Choose \(CatWords.pairItem) from my menu, then scan the code or type it on your phone."
+            ))
+        }
         return results
     }
 
