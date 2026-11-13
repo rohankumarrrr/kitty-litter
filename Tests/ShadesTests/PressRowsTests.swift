@@ -362,6 +362,28 @@ final class PressRowsTests: XCTestCase {
 
     // MARK: In a message's words
 
+    func testACodeBlocksCopyCopiesItsCode() throws {
+        for keyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { keyboard }
+            let replies = [exchange("k1", 60, ask: "Show me the settings.", reply: "Here:\n\n```\nfont: Inter\n```")]
+            let (_, view, heard) = showing(book(replies: replies), thread: "k", keyed: keyboard)
+            let row = try row("k1:reply", in: view.threadPane)
+            let copy = try XCTUnwrap(row.codeButtons.first)
+            if keyboard {
+                try arrow(to: row, in: view.threadPane)
+                XCTAssertTrue(tabs(from: view.threadPane.list, to: copy), "Tab reaches it")
+                try Press.key(" ", keyCode: 49, on: copy)
+            } else {
+                // Words under the pointer would start a selection, whose own loop waits for a real release.
+                let hit = try Press.hit(copy)
+                XCTAssertTrue(hit === copy, "the click lands on the code block's Copy, not on \(type(of: hit)) over it")
+                guard hit === copy else { continue }
+                try Press.click(copy)
+            }
+            XCTAssertEqual(heard.copied, ["font: Inter"], "by \(keyboard ? "keyboard" : "mouse")")
+        }
+    }
+
     func testALinkShowsWhereItGoesAndOnlyOpenOpensIt() throws {
         let replies = [exchange("k1", 60, ask: "Where's the plan?", reply: "[The plan](https://example.com/plan)")]
         for width: CGFloat in [1100, 820] {
