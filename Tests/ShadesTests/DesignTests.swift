@@ -161,6 +161,173 @@ final class DesignTests: XCTestCase {
         XCTAssertEqual(CatGlint.listening(loudness: 1).color, Opal.good, "done")
     }
 
+    // MARK: - Light that's quick to draw again
+
+    /// Every message in sight draws its card again on each step of a scroll, so a card is kept once drawn. What's kept
+    /// has to look the same as drawing it afresh, wherever it falls between pixels and whichever way up the view is.
+    func testACardOrTileDrawnAgainLooksTheSameAsDrawingItAfresh() {
+        let light = Opal.Light.of(Opal.kittens[0])
+        let card = NSRect(x: 64.25, y: 23, width: 201.37, height: 58.6)
+        let tile = NSRect(x: 20, y: 101.3, width: 32, height: 32)
+        let cases: [(name: String, afresh: () -> Void, kept: () -> Void)] = [
+            ("card", { Opal.drawCard(in: card, light: light, shape: NSBezierPath(roundedRect: card, xRadius: 16, yRadius: 16)) }, { Opal.card(in: card, radius: 16, light: light) }),
+            ("tile", { Opal.drawTile(in: tile, light: light) }, { Opal.tile(in: tile, light: light) }),
+        ]
+        for (name, afresh, kept) in cases {
+            for flipped in [true, false] {
+                let drawn = Self.drawn(flipped: flipped, afresh)
+                for round in ["first", "again"] {
+                    let (worst, off) = Self.difference(drawn, Self.drawn(flipped: flipped, kept))
+                    XCTAssertLessThanOrEqual(worst, 3, "\(name) \(round), flipped \(flipped)")
+                    XCTAssertLessThanOrEqual(off, 10, "\(name) \(round), flipped \(flipped)")
+                }
+            }
+        }
+    }
+
+    /// The cat's bubble carries the rim's light on down its tail, below the card's body, as the light along the bottom
+    /// edge does.
+    func testACardsLightCarriesOnDownItsTail() {
+        let body = NSRect(x: 40, y: 60, width: 200, height: 120)
+        for flipped in [true, false] {
+            let tail = NSRect(x: 120, y: flipped ? body.maxY - 1 : body.minY - 11, width: 12, height: 12)
+            let shape = NSBezierPath(roundedRect: body, xRadius: 20, yRadius: 20)
+            shape.append(NSBezierPath(rect: tail))
+            let picture = Self.drawn(flipped: flipped) { Opal.card(in: body, light: .of(0x00ff00), shape: shape) }
+            // Just inside the tail's side, near its tip, in pixels from the picture's top.
+            let tip = flipped ? tail.maxY - 2 : picture.size.height - tail.minY - 2
+            var pixel = [Int](repeating: 0, count: 4)
+            picture.getPixel(&pixel, atX: Int((tail.minX + 0.5) * 2), y: Int(tip * 2))
+            XCTAssertGreaterThan(pixel[1], 120, "flipped \(flipped): the tail's edge is lit, \(pixel)")
+        }
+    }
+
+    /// The rimlit card, the tile and a toolbar's icon each cost a few plain rounded fills of their size once they've been
+    /// drawn, rather than the twenty to forty that made a long conversation scroll slowly. Each is timed beside the fill
+    /// in the same run, so a busy machine slows both.
+    func testDrawingTheLightAgainCostsAboutWhatAPlainFillDoes() {
+        let light = Opal.Light.of(Opal.kittens[2])
+        let card = NSRect(x: 8, y: 8, width: 300, height: 300)
+        let tile = NSRect(x: 8, y: 8, width: 32, height: 32)
+        let icon = QuietButton("Copy", style: .plain)
+        icon.symbol = "doc.on.doc"
+        icon.setFrameSize(NSSize(width: 26, height: 26))
+        // Kept, they come to about 1, 2 and 6 fills, and drawn afresh each time to about 44, 18 and 43.
+        let cases: [(name: String, work: () -> Void, fill: NSRect, fills: Double)] = [
+            ("card", { Opal.card(in: card, radius: 16, light: light) }, card, 10),
+            ("tile", { Opal.tile(in: tile, light: light) }, tile, 9),
+            ("icon", { icon.draw(icon.bounds) }, icon.bounds, 20),
+        ]
+        for (name, work, area, fills) in cases {
+            let fill = { Ink.hex(Opal.control).setFill(); NSBezierPath(roundedRect: area, xRadius: 9, yRadius: 9).fill() }
+            let (drawn, filled) = Self.timed(work, beside: fill)
+            XCTAssertLessThan(drawn, filled * fills, "\(name) took \(drawn)s against \(filled)s for a fill")
+        }
+    }
+
+    /// What's kept is by size and light rather than one for each message, stays under its limit however many sizes a
+    /// long conversation draws, and goes when The Kitty Litter closes.
+    func testWhatsKeptStaysUnderItsLimitAndGoesWhenTheKittyLitterCloses() {
+        Opal.forgetKept()
+        _ = Self.picture(flipped: true) {
+            Opal.card(in: NSRect(x: 8, y: 8, width: 300, height: 60), radius: 16, light: .shades)
+            let one = Opal.keptBytes
+            Opal.card(in: NSRect(x: 8, y: 8, width: 300, height: 60), radius: 16, light: .shades)
+            XCTAssertEqual(Opal.keptBytes, one, "the same card again is the one kept")
+            for height in stride(from: 100, to: 300, by: 4) {
+                Opal.card(in: NSRect(x: 8, y: 8, width: 300, height: CGFloat(height)), radius: 16, light: .shades)
+            }
+        }
+        XCTAssertGreaterThan(Opal.keptBytes, 0)
+        XCTAssertLessThanOrEqual(Opal.keptBytes, Opal.keptLimit)
+        ChannelsWindow().windowWillClose(Notification(name: NSWindow.willCloseNotification))
+        XCTAssertEqual(Opal.keptBytes, 0)
+    }
+
+    /// The slower of each's best batches, so one hiccup on a busy runner doesn't decide it.
+    private static func timed(_ work: () -> Void, beside fill: () -> Void) -> (Double, Double) {
+        var works: [Double] = []
+        var fills: [Double] = []
+        _ = picture(flipped: true) {
+            work()
+            for _ in 0..<7 {
+                works.append(batch(work))
+                fills.append(batch(fill))
+            }
+        }
+        return (works.sorted()[3], fills.sorted()[3])
+    }
+
+    private static func batch(_ work: () -> Void) -> Double {
+        let start = DispatchTime.now().uptimeNanoseconds
+        for _ in 0..<40 { work() }
+        return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000_000
+    }
+
+    /// A view drawing itself into a Retina picture, as the demo's pictures of each window are made.
+    private final class Canvas: NSView {
+        let upsideDown: Bool
+        let work: () -> Void
+        init(flipped: Bool, work: @escaping () -> Void) {
+            upsideDown = flipped
+            self.work = work
+            super.init(frame: NSRect(x: 0, y: 0, width: 320, height: 320))
+        }
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+        override var isFlipped: Bool { upsideDown }
+        override func draw(_ dirtyRect: NSRect) {
+            Ink.hex(Opal.page).setFill()
+            bounds.fill()
+            work()
+        }
+    }
+
+    private static func drawn(flipped: Bool, _ work: @escaping () -> Void) -> NSBitmapImageRep {
+        let canvas = Canvas(flipped: flipped, work: work)
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 640, pixelsHigh: 640, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        rep.size = canvas.bounds.size
+        canvas.cacheDisplay(in: canvas.bounds, to: rep)
+        return rep
+    }
+
+    /// A Retina picture of what `work` draws over the page, flipped as a message's row is or not.
+    private static func picture(flipped: Bool, _ work: () -> Void) -> NSBitmapImageRep {
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 640, pixelsHigh: 640, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        rep.size = NSSize(width: 320, height: 320)
+        let context = NSGraphicsContext(cgContext: NSGraphicsContext(bitmapImageRep: rep)!.cgContext, flipped: flipped)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        if flipped {
+            context.cgContext.translateBy(x: 0, y: rep.size.height)
+            context.cgContext.scaleBy(x: 1, y: -1)
+        }
+        Ink.hex(Opal.page).setFill()
+        NSRect(origin: .zero, size: rep.size).fill()
+        work()
+        NSGraphicsContext.restoreGraphicsState()
+        return rep
+    }
+
+    /// The most any channel of any pixel is off by, and how many pixels are off by more than 2.
+    private static func difference(_ a: NSBitmapImageRep, _ b: NSBitmapImageRep) -> (worst: Int, off: Int) {
+        var worst = 0, off = 0
+        let (p, q) = (a.bitmapData!, b.bitmapData!)
+        for y in 0..<a.pixelsHigh {
+            var most = 0
+            for x in 0..<a.bytesPerRow {
+                let gap = abs(Int(p[y * a.bytesPerRow + x]) - Int(q[y * b.bytesPerRow + x]))
+                most = max(most, gap)
+                if x % 4 == 3 {
+                    if most > 2 { off += 1 }
+                    worst = max(worst, most)
+                    most = 0
+                }
+            }
+        }
+        return (worst, off)
+    }
+
     // MARK: - Measuring
 
     /// Warm and strong enough to read as orange or amber, from red-orange to gold. Pale yellow is too soft to count.

@@ -4,6 +4,6 @@ wait 1
 channels
 wait 2
 perf
-wait 90
+wait 70
 front
 windows

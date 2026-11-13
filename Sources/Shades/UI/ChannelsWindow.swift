@@ -495,6 +495,8 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         timer?.invalidate()
         timer = nil
+        // Its messages' cards are most of what's kept, and the next time it opens draws them again.
+        Opal.forgetKept()
         onClose?()
     }
 

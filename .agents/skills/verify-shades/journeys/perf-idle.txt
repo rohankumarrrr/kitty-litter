@@ -1,0 +1,7 @@
+front
+busy
+wait 1
+perf idle 15
+wait 110
+front
+windows
