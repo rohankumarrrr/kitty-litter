@@ -58,13 +58,13 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(read, changed)
     }
 
-    func testItListsEveryChannelWithWhatEachTellsYou() {
-        kittens = [steve]
+    func testItListsTheCatAndEachKittenByNameWithWhatEachTellsYou() {
+        kittens = [steve, Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)]
         controller.settingsPressed(overMessages: true)
         let shown = stage.settingsShown.last
         XCTAssertEqual(shown?.overMessages, true)
-        XCTAssertEqual(shown?.form.channels.map(\.title), ["#general", "#steve-pawsniak", "Shades"])
-        XCTAssertEqual(shown?.form.channels.map(\.id), [.general, .of(steve), .shades])
+        XCTAssertEqual(shown?.form.channels.map(\.title), ["Shades", "Steve Pawsniak"], "as the sidebar lists them, with no #general and no kitten that's only planned")
+        XCTAssertEqual(shown?.form.channels.map(\.id), [.shades, .of(steve)])
     }
 
     func testAChangeMadeElsewhereShowsInSettingsAndItsOwnChangesCantUndoIt() {
@@ -117,7 +117,7 @@ final class SettingsTests: XCTestCase {
         let panel = SettingsPanel()
         var changes: [Settings] = []
         panel.onChange = { changes.append($0) }
-        let form = SettingsForm(settings: settings, channels: [.init(id: .general, title: "#general"), .init(id: .of(steve), title: "#steve-pawsniak")])
+        let form = SettingsForm(settings: settings, channels: [.init(id: .shades, title: "Shades"), .init(id: .of(steve), title: "Steve Pawsniak")])
         panel.show(form, near: NSPoint(x: 900, y: 800))
         addTeardownBlock { panel.hide() }
         return (panel, { changes })
@@ -182,7 +182,7 @@ final class SettingsTests: XCTestCase {
         }
         XCTAssertEqual(menus, [
             "Front door mode: Auto", "Frontier mode: Auto", "Hold to talk: Right Option", "Hold to dictate: fn",
-            "#general: Everything", "#steve-pawsniak: Everything", "Font: SF Pro",
+            "Shades: Everything", "Steve Pawsniak: Everything", "Font: SF Pro",
         ])
     }
 
@@ -278,12 +278,13 @@ final class SettingsTests: XCTestCase {
     func testEachChannelSaysWhatItTellsYou() {
         var settings = Settings(phone: true)
         settings.setNotifications(ChannelNotifications(muted: true), for: "kitten:/k/steve")
-        settings.setNotifications(ChannelNotifications(mac: .everything, phone: .nothing), for: "general")
+        settings.setNotifications(ChannelNotifications(mac: .everything, phone: .nothing), for: "shades")
         let (panel, _) = panel(settings)
         panel.select(.notifications)
         let labels = controls(in: panel).compactMap { $0 as? QuietButton }.map { "\($0.accessibilityLabel() ?? ""): \($0.accessibilityValue() as? String ?? "")" }
-        XCTAssertTrue(labels.contains("#steve-pawsniak: Muted"), "\(labels)")
-        XCTAssertTrue(labels.contains("#general: Mac: Everything · Phone: Nothing"), "\(labels)")
+        XCTAssertTrue(labels.contains("Steve Pawsniak: Muted"), "\(labels)")
+        XCTAssertTrue(labels.contains("Shades: Mac: Everything · Phone: Nothing"), "\(labels)")
+        XCTAssertTrue(controls(in: panel).compactMap { $0 as? NSTextField }.contains { $0.stringValue == CatWords.kittensHeading.uppercased() || $0.stringValue == CatWords.kittensHeading }, "under Kittens, as in the sidebar")
         XCTAssertEqual(SettingsPanel.summary(ChannelNotifications(mac: .everything, phone: .nothing), phone: false), "Everything", "no phone, no phone in it")
     }
 

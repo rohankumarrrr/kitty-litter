@@ -13,7 +13,7 @@ phone go activity
 wait 3
 phone press Allow
 wait 2.5
-phone go general
+phone go steve
 wait 3
 phone send Hello from my phone
 wait 4

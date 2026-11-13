@@ -4,8 +4,8 @@ import ShadesCore
 /// The one owner of what's been said. What's been read stays in memory while the app runs, and never goes to disk,
 /// since a copy in Shades' folder would let any kitten read every other kitten's threads. So Messages opens at once
 /// and then reads only the threads that have moved since. It reads once soon after launch, then only while the window
-/// or a phone is looking. Each kitten's channel and the cat's DM read their newest threads, older ones a page at a
-/// time as you scroll back to them, and any older one Search finds in T3.
+/// or a phone is looking. Each kitten's channel and the cat's read their newest threads, older ones a page at a time
+/// as you scroll back to them, and any older one Search finds in T3.
 @MainActor
 final class ChannelFeed {
     private static let newestReadPerKitten = 30
@@ -14,8 +14,7 @@ final class ChannelFeed {
     private static let quietGaps = 5
     /// How long reads that land close together wait to be shown as one change.
     private static let showEvery: TimeInterval = 0.15
-    /// What you've sent that T3 hasn't echoed yet, such as the cat's own answers in #general, which T3 never has, and
-    /// replies you also sent to a channel.
+    /// What you've sent that T3 hasn't echoed yet, such as the cat's own answers, and replies you also sent to a channel.
     private static let sentKept = 100
     /// How many of the threads T3 names for one search are read, and how many found that way stay read.
     private static let foundAtOnce = 8
@@ -26,21 +25,17 @@ final class ChannelFeed {
     var isUnread: (AgentThread) -> Bool = { _ in false }
     /// The first message that's new to you in an unread thread, given its messages, oldest first.
     var firstNew: (AgentThread, [ChannelMessage]) -> String? = { _, _ in nil }
-    /// Threads Messages started from #general, or passed your words to there, and when. They live in #general.
-    var inGeneral: () -> [String: Date] = { [:] }
+    /// Threads Messages started or passed your words to, and when.
+    var messagesThreads: () -> [String: Date] = { [:] }
     /// Whether a thread is a conversation with the cat itself, which is any in the router's folder.
     var isWithShades: (AgentThread) -> Bool = { _ in false }
-    /// Whether a thread is work the cat started for you outside Messages, which lives in its DM.
+    /// Whether a thread is work the cat started for you outside Messages, which lives with the cat.
     var isCatsWork: (AgentThread) -> Bool = { _ in false }
     /// The cat's own work you chose to show on your phone, and whether Messages is on your phone at all.
     var onPhone: () -> Set<String> = { [] }
     var hasPhone: () -> Bool = { false }
-    /// The turns of Messages' talk with the router that the cat answered in #general, by T3's ID for each.
-    var answersInGeneral: () -> Set<String> = { [] }
-    /// Replies also sent to their thread's channel by the ID of T3's copy of each, and to #general with the thread each
-    /// is in.
+    /// Replies also sent to their thread's channel, by the ID of T3's copy of each.
     var alsoSent: () -> Set<String> = { [] }
-    var alsoSentToGeneral: () -> [String: String] = { [:] }
     /// Your reactions, by the ID of each message T3 has.
     var reactions: () -> [String: [Reaction]] = { [:] }
     /// Hands over the replies also sent to a channel that T3 has now, so their IDs can be kept.
@@ -181,16 +176,6 @@ final class ChannelFeed {
         sent.first { $0.message.exchangeID == exchangeID && $0.message.canTryAgain && $0.target != nil }
     }
 
-    /// What you sent is a turn T3 has now, so once that's read it shows instead.
-    func heard(_ exchangeIDs: [String], as turn: String) {
-        for index in sent.indices where exchangeIDs.contains(sent[index].message.exchangeID) {
-            sent[index].heardAs = turn
-            sent[index].message.isSending = false
-        }
-        isDirty = true
-        publish()
-    }
-
     /// What you sent now has a thread, or `nil` if it never got one. A new topic says it didn't start, and anything
     /// else stays where you said it.
     func started(_ exchangeID: String, in threadID: String?, title: String = "", alsoSent: Bool? = nil) {
@@ -244,11 +229,11 @@ final class ChannelFeed {
     }
 
     /// Whether Messages shows a thread at all, as `ChannelBook.build` decides: a talk with the cat that isn't a test, a
-    /// kitten's, or the cat's own work that lives in #general or its DM. Anything else can hold your screen.
+    /// kitten's, or the cat's own work that Messages or you started. Anything else can hold your screen.
     private func shows(_ owners: KittenBoard.Owners) -> (AgentThread) -> Bool {
-        let inGeneral = inGeneral()
+        let mine = messagesThreads()
         return { [isWithShades, isCatsWork] thread in
-            isWithShades(thread) ? !thread.isLiveTest : owners.of(thread) != nil || inGeneral[thread.id] != nil || isCatsWork(thread)
+            isWithShades(thread) ? !thread.isLiveTest : owners.of(thread) != nil || mine[thread.id] != nil || isCatsWork(thread)
         }
     }
 
@@ -263,13 +248,10 @@ final class ChannelFeed {
         if let id = selection.channelID, let channel = book.channel(id) {
             // A thread that's said nothing has nothing left to see, so the channel it would be in counts for it.
             let owners = KittenBoard.Owners(kittens())
-            let inGeneral = inGeneral()
             quiet = { thread in
                 guard book.threads[thread.id] == nil, self.transcripts[thread.id] != nil else { return false }
-                let owner = owners.of(thread)
                 switch id {
-                case .kitten(let kitten): return owner?.id == kitten && inGeneral[thread.id] == nil
-                case .general: return inGeneral[thread.id] != nil
+                case .kitten(let kitten): return owners.of(thread)?.id == kitten
                 case .shades: return false
                 }
             }
@@ -330,20 +312,16 @@ final class ChannelFeed {
 
         let owners = KittenBoard.Owners(kittens())
         let talks = listed.filter(isWithShades)
-        let mine = inGeneral()
-        let shownInGeneral = Set(alsoSentToGeneral().values)
-        // Everything that shows in #general is read, since only so many are kept, whoever's thread it is.
-        let isGeneral = { (thread: AgentThread) in mine[thread.id] != nil || shownInGeneral.contains(thread.id) }
-        let general = listed.filter { !isWithShades($0) && isGeneral($0) }
-        let byOwner = Dictionary(grouping: listed.filter { !isWithShades($0) && !isGeneral($0) }) { owners.of($0)?.id }
+        let mine = messagesThreads()
+        let byOwner = Dictionary(grouping: listed.filter { !isWithShades($0) }) { owners.of($0)?.id }
         let loading = loadingOlder
         func newest(_ threads: [AgentThread], in channel: ChannelID) -> [AgentThread] {
             let pages = (olderPages[channel] ?? 0) + 1
             return Array(threads.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.newestReadPerKitten * pages))
         }
         let kittens: [AgentThread] = byOwner.flatMap { owner, threads in owner.map { newest(threads, in: .kitten($0)) } ?? [] }
-        var owned: [AgentThread] = kittens + general
-            + newest((byOwner[nil] ?? []).filter(isCatsWork), in: .shades)
+        var owned: [AgentThread] = kittens
+            + newest((byOwner[nil] ?? []).filter { isCatsWork($0) || mine[$0.id] != nil }, in: .shades)
             + newest(talks.filter { !$0.isLiveTest }, in: .shades)
         let reading = Set(owned.map(\.id))
         owned += listed.filter { found.contains($0.id) && !reading.contains($0.id) }
@@ -394,13 +372,11 @@ final class ChannelFeed {
         let isWithShades = isWithShades
         let isCatsWork = isCatsWork
         let open = lookingAt?.thread
-        let inGeneral = inGeneral()
+        let mine = messagesThreads()
         let place: (AgentThread) -> Bool
         switch lookingAt?.place {
         case .channel(.shades)?:
-            place = { isWithShades($0) || isCatsWork($0) }
-        case .channel(.general)?:
-            place = { inGeneral[$0.id] != nil || (!isWithShades($0) && owners.of($0) == nil && !isCatsWork($0)) }
+            place = { isWithShades($0) || owners.of($0) == nil && (isCatsWork($0) || mine[$0.id] != nil) }
         case .channel(.kitten(let kitten))?:
             place = { thread in owners.of(thread)?.id == kitten }
         case .threads?:
@@ -457,14 +433,12 @@ final class ChannelFeed {
             sent: sent,
             isUnread: isUnread,
             firstNew: firstNew,
-            inGeneral: inGeneral(),
+            messagesThreads: messagesThreads(),
             withShades: Set(threads.filter(isWithShades).map(\.id)),
             catsWork: Set(threads.filter(isCatsWork).map(\.id)),
             onPhone: onPhone(),
             hasPhone: hasPhone(),
-            answersInGeneral: answersInGeneral(),
             alsoSent: alsoSent(),
-            alsoSentToGeneral: Set(alsoSentToGeneral().keys),
             olderPages: olderPages,
             loadingOlder: loadingOlder,
             couldntRead: couldntRead,

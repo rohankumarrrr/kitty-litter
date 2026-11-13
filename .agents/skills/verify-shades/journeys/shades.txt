@@ -10,8 +10,8 @@ draw .verify/shades/shades/1-hello
 send I need help with my resume
 wait 4
 draw .verify/shades/shades/2-resume
-channel general
+channel steve
 wait 1
-draw .verify/shades/shades/3-everyone
+draw .verify/shades/shades/3-steve
 front
 windows

@@ -147,16 +147,16 @@ final class AppController {
     /// Messages' own conversation with the router, apart from the Ask box's, which can hold your screen.
     var messagesQuick = QuickSession()
     /// Sessions the router started for what you wrote in Messages, and threads no kitten owns that it passed your words
-    /// to, and when. Each is a thread in #general, kept as IDs with the inbox so a restart leaves it there.
+    /// to, and when. Each shows with its kitten or the cat, kept as IDs with the inbox so a restart leaves it there.
     var messagesThreads: [String: Date] {
-        get { inbox.inGeneral }
+        get { inbox.messagesThreads }
         set {
-            inbox.inGeneral = newValue
+            inbox.messagesThreads = newValue
             keepInbox()
         }
     }
     /// Work the cat started for you from the Ask box, out loud, a drop or Fix, which no kitten owns. Each is a thread
-    /// in its DM, kept as IDs with the inbox, like `messagesThreads`.
+    /// with the cat, kept as IDs with the inbox, like `messagesThreads`.
     var catsWork: [String: Date] {
         get { inbox.catsWork }
         set {
@@ -285,14 +285,12 @@ final class AppController {
         channels.firstNew = { [weak self] thread, messages in
             self?.inbox.firstNew(in: thread, among: messages.map { ($0.id, $0.speaker == .you) })
         }
-        channels.inGeneral = { [weak self] in self?.messagesThreads ?? [:] }
+        channels.messagesThreads = { [weak self] in self?.messagesThreads ?? [:] }
         channels.isWithShades = { [weak self] in self?.isWithShades($0) ?? false }
         channels.isCatsWork = { [weak self] in self?.isCatsWork($0) ?? false }
         channels.onPhone = { [weak self] in Set(self?.onPhone.keys ?? [:].keys) }
         channels.hasPhone = { [weak self] in self?.settings.phone == true }
-        channels.answersInGeneral = { [weak self] in Set(self?.inbox.answersInGeneral.keys ?? [:].keys) }
         channels.alsoSent = { [weak self] in Set(self?.inbox.alsoSent.keys ?? [:].keys) }
-        channels.alsoSentToGeneral = { [weak self] in self?.inbox.alsoSentToGeneral.mapValues(\.thread) ?? [:] }
         channels.keepAlsoSent = { [weak self] in self?.keepAlsoSent($0) }
         channels.reactions = { [weak self] in self?.inbox.reactions ?? [:] }
     }
@@ -500,9 +498,8 @@ final class AppController {
     }
 
     var settingsForm: SettingsForm {
-        let channels = [SettingsForm.Channel(id: .general, title: "#\(CatWords.general)")]
-            + loadKittens().map { SettingsForm.Channel(id: .of($0), title: "#\(ChannelBook.slug($0.name))") }
-            + [SettingsForm.Channel(id: .shades, title: CatWords.shades)]
+        let channels = [SettingsForm.Channel(id: .shades, title: CatWords.shades)]
+            + loadKittens().filter { !$0.planned }.map { SettingsForm.Channel(id: .of($0), title: $0.name) }
         return SettingsForm(settings: settings, channels: channels)
     }
 

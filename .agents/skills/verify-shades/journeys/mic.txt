@@ -21,16 +21,16 @@ wait 1
 windows
 channels
 wait 2
-channel general
+channel shades
 wait 1
 voiceover box
 voiceover press Speak
 wait 1.6
 voiceover box
-draw .verify/shades/mic/4-general-listening
+draw .verify/shades/mic/4-shades-listening
 windows
 voiceover press Done speaking
 wait 2.5
-draw .verify/shades/mic/5-general-sent
+draw .verify/shades/mic/5-shades-sent
 front
 windows

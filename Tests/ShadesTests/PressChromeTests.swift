@@ -198,7 +198,7 @@ final class PressChromeTests: XCTestCase {
 
     func testEverySidebarRowShowsItsPlaceWhenClicked() throws {
         let (_, view, _) = messages(book())
-        let places: [ChannelPlace] = [.threads, .channel(.general), .channel(.of(steve)), .channel(.of(pepper)), .channel(.shades), .activity]
+        let places: [ChannelPlace] = [.threads, .channel(.shades), .channel(.of(steve)), .channel(.of(pepper)), .activity]
         XCTAssertEqual(Set(places.map { "\($0)" }), Set(ChannelSidebarItem.places(in: book()).map { "\($0)" }), "every row")
         for place in places {
             let row = try XCTUnwrap(view.sidebar.row(for: place))
@@ -626,7 +626,7 @@ extension PressChromeTests {
 
         try key("k", keyCode: 40, modifiers: .command, in: panel)
         let titles = view.jumpBox.items.map(\.title)
-        let row = try XCTUnwrap(titles.firstIndex(of: "#pepper"))
+        let row = try XCTUnwrap(titles.firstIndex(of: "Pepper"))
         XCTAssertTrue(try click(at: jumpRow(row, in: view.jumpBox), in: view.jumpBox) === view.jumpBox, "a click on a row lands on the box")
         XCTAssertTrue(view.jumpBox.isHidden)
         XCTAssertEqual(view.selection, .channel(.of(pepper)), "clicking a row opens it")

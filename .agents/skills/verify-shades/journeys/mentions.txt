@@ -1,7 +1,7 @@
 front
 channels
 wait 1
-channel general
+channel shades
 wait 1
 draft @pepper how much did I spend on food?
 wait 0.5

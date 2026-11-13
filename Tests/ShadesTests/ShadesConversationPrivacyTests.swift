@@ -131,7 +131,7 @@ final class ShadesConversationPrivacyTests: XCTestCase {
         XCTAssertFalse(built.issues.flatMap(\.threads).contains { $0.id == "router" })
         XCTAssertFalse(built.channel(.of(steve))?.posts.contains(.thread("router")) == true)
         XCTAssertEqual(built.unread, [], "A router thread marked the kitten unread")
-        XCTAssertFalse(built.isUnread(.general))
+        XCTAssertFalse(built.isUnread(.shades), "nor the cat, since you were there for the answer")
     }
 
     func testARouterThreadAfterRestartCannotReappearAsWritableShadesWork() {
@@ -293,7 +293,6 @@ final class ShadesConversationPrivacyTests: XCTestCase {
             XCTAssertNil(PhonePlace(PhonePlace.key(selection), in: built).selection)
         }
         XCTAssertFalse(PhoneView(PhonePlace("home", in: built), in: built, now: at).places.contains { $0.title == "Shades" })
-        XCTAssertEqual(built.channel(.general)?.posts, [])
-        XCTAssertFalse(built.yours.contains { $0.id == "router" }, "Threads leaves talks in the DM")
+        XCTAssertFalse(built.yours.contains { $0.id == "router" }, "Threads leaves talks with the cat")
     }
 }

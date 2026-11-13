@@ -113,7 +113,7 @@ extension JumpItem {
 
     /// Who said it, then where and when, with its words under them. A phone names some threads its own way.
     init(_ found: FoundMessage, in book: ChannelBook, now: Date, threadTitle: ((String) -> String)? = nil) {
-        let channel = (found.selection.thread.flatMap(book.home(ofThread:)) ?? found.selection.channelID).map(book.title(of:))
+        let channel = (found.selection.thread.flatMap(book.home(ofThread:)) ?? found.selection.channelID).map(book.name(of:))
         let thread = found.selection.thread.map(threadTitle ?? book.title(ofThread:))
         let place = [thread, channel].compactMap { $0 }.filter { !$0.isEmpty }
         self.init(title: book.name(of: found.message.speaker), detail: (place + [CatWords.age(of: found.message.at, now: now)]).joined(separator: " · "), selection: found.selection, found: found)
@@ -122,13 +122,13 @@ extension JumpItem {
     /// Every place, then every thread you can open, newest first, worked out from what's in memory.
     static func all(in book: ChannelBook) -> [JumpItem] {
         let places = ChannelSidebarItem.groups(in: book).flatMap(\.items).map { item in
-            JumpItem(title: item.place.channelID.map(book.title) ?? item.title, detail: nil, selection: ChannelSelection(item.place))
+            JumpItem(title: item.title, detail: nil, selection: ChannelSelection(item.place))
         }
         let threads = book.threads.values
             .filter { !$0.isStarting }
             .sorted { ($0.latest.at, $0.id) > ($1.latest.at, $1.id) }
             .map { thread in
-                JumpItem(title: book.title(ofThread: thread.id), detail: book.title(of: thread.home), selection: .thread(thread.id, in: .channel(thread.home)))
+                JumpItem(title: book.title(ofThread: thread.id), detail: book.name(of: thread.home), selection: .thread(thread.id, in: .channel(thread.home)))
             }
         return places + threads
     }

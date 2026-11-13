@@ -40,7 +40,7 @@ final class PhoneTests: XCTestCase {
     func testEveryPlaceComesBackFromItsKey() {
         let book = book(sentBetween: true, also: [thread("a/b@c", of: pepper)])
         let places: [ChannelSelection] = [
-            .activity, .threads, .channel(.general), .channel(.of(pepper)), .channel(.of(steve)),
+            .activity, .threads, .channel(.of(pepper)), .channel(.of(steve)),
             .thread("a/b@c", in: .channel(.of(pepper))),
             .thread("p", in: .channel(.of(pepper))),
             .thread("a", in: .channel(.of(steve))),
@@ -52,10 +52,12 @@ final class PhoneTests: XCTestCase {
         }
         XCTAssertNil(PhonePlace("home", in: book).selection)
         XCTAssertNil(PhonePlace("c:nobody", in: book).selection, "an unknown key is the list of places")
-        XCTAssertNil(PhonePlace("t:@general", in: book).selection)
-        XCTAssertEqual(PhonePlace(PhonePlace.key(.thread("made-up", in: .channel(.general))), in: book).selection, .channel(.general), "a thread nothing leads to is its place")
+        XCTAssertNil(PhonePlace("t:@shades", in: book).selection)
+        XCTAssertEqual(PhonePlace(PhonePlace.key(.thread("made-up", in: .channel(.of(steve)))), in: book).selection, .channel(.of(steve)), "a thread nothing leads to is its place")
         XCTAssertEqual(PhonePlace("needs", in: book).selection, .activity, "a page still open from before")
-        XCTAssertEqual(PhonePlace("everyone", in: book).selection, .channel(.general))
+        for gone in ["general", "everyone"] {
+            XCTAssertNil(PhonePlace(gone, in: book).selection, "#general went into the cat's conversation, which stays on the Mac")
+        }
     }
 
     func testANewTopicCarriesOnInItsThreadOnceItHasOne() {
@@ -70,9 +72,6 @@ final class PhoneTests: XCTestCase {
 
     func testWordsGoWhereTheWindowWouldSendThem() throws {
         let book = book()
-        let general = try XCTUnwrap(ask("send", key: "general", text: " What's up? ").action(in: book) { "topic" })
-        XCTAssertEqual(general.action, .send("What's up?", to: .router, shownIn: .general))
-
         let channel = try XCTUnwrap(ask("send", key: PhonePlace.key(.channel(.of(steve))), text: "New idea").action(in: book) { "sent-9" })
         XCTAssertEqual(channel.action, .startTopic("New idea", with: steve, id: "sent-9"), "a kitten's channel starts a new thread")
         XCTAssertEqual(channel.opens, PhonePlace.key(.thread("sent-9", in: .channel(.of(steve)))), "which the phone opens")
@@ -83,9 +82,6 @@ final class PhoneTests: XCTestCase {
         var alsoSent = ask("send", key: PhonePlace.key(.thread("a", in: .threads)), text: "Keep the FAQ")
         alsoSent.also = true
         XCTAssertEqual(alsoSent.action(in: book) { "x" }?.action, .send("Keep the FAQ", to: .thread(id: "a", title: "Work"), shownIn: .of(steve), alsoSent: true), "Also send to its channel, from Threads too")
-        var general2 = ask("send", key: "general", text: "Hi")
-        general2.also = true
-        XCTAssertEqual(general2.action(in: book) { "x" }?.action, .send("Hi", to: .router, shownIn: .general), "only a thread's reply can be also sent")
     }
 
     func testAPhoneCantSendAnywhereTheWindowCouldnt() {
@@ -97,7 +93,7 @@ final class PhoneTests: XCTestCase {
             ask("send", key: "threads", text: "Hi"),
             ask("send", key: "shades", text: "Hi"),
             ask("send", key: "home", text: "Hi"),
-            ask("send", key: "general", text: "   "),
+            ask("send", key: "general", text: "Hi"),
             ask("send", key: "general"),
             ask("send", text: "Hi"),
             ask("speak", key: "general", text: "Hi"),
@@ -108,7 +104,7 @@ final class PhoneTests: XCTestCase {
     }
 
     func testAPhoneOnlyReachesAThreadTheWindowLeadsTo() {
-        // Some other project of yours: no kitten's, not Shades' work, and never in #general. T3 lists it all the same.
+        // Some other project of yours: no kitten's, and not Shades' work. T3 lists it all the same.
         let other = AgentThread(id: "other", title: "Deploy billing", projectTitle: "billing", status: .completed, model: "m", updatedAt: noon, projectPath: "/elsewhere/billing")
         var working = thread("w", of: pepper)
         working.status = .running
@@ -128,7 +124,6 @@ final class PhoneTests: XCTestCase {
             cantReachT3: false
         )
         let nowhere: [ChannelSelection] = [
-            .thread("other", in: .channel(.general)),
             .thread("other", in: .activity),
             .thread("p", in: .channel(.of(steve))),
             .thread("p", in: .threads),
@@ -278,7 +273,7 @@ final class PhoneTests: XCTestCase {
         let book = ChannelBook.build(
             kittens: [steve], threads: [thread("a", of: steve)], transcripts: ["a": [Exchange(id: "e1", asker: .you, askedAt: noon, ask: "How's it going?")]],
             isReading: false, unreadable: 0, cantReachT3: false,
-            sent: [SentMessage(channel: .of(steve), message: failed, isReply: true), SentMessage(channel: .general, message: sending)]
+            sent: [SentMessage(channel: .of(steve), message: failed, isReply: true), SentMessage(channel: .of(steve), message: sending)]
         )
         XCTAssertEqual(ask("retry", id: failed.id).action(in: book) { "x" }?.action, .tryAgain("sent-1"))
         XCTAssertNil(ask("retry", id: sending.id).action(in: book) { "x" }, "nothing to try again while it's on its way")
@@ -289,8 +284,8 @@ final class PhoneTests: XCTestCase {
         let shown = try XCTUnwrap(thread.rows.last { $0.kind == "message" })
         XCTAssertEqual(shown.failure, "I can't reach T3 Code. Open it and try again.")
         XCTAssertEqual(shown.retry, true)
-        let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
-        let hello = try XCTUnwrap(general.rows.first { $0.kind == "message" })
+        let channel = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon)
+        let hello = try XCTUnwrap(channel.rows.first { $0.kind == "message" })
         XCTAssertEqual(hello.sending, true)
         XCTAssertNil(hello.retry)
     }
@@ -302,7 +297,7 @@ final class PhoneTests: XCTestCase {
             kittens: [steve], threads: [thread("a", of: steve)],
             transcripts: ["a": [Exchange(id: "e1", asker: .you, askedAt: noon, ask: "How's it going?", reply: "Fine.", repliedAt: noon)]],
             isReading: false, unreadable: 0, cantReachT3: false,
-            sent: [SentMessage(channel: .general, message: sending)],
+            sent: [SentMessage(channel: .of(steve), message: sending)],
             reactions: ["e1:reply": [.eyes]]
         )
         XCTAssertEqual(ask("react", id: "e1:reply", value: "thumbsUp").action(in: book) { "x" }?.action, .react("e1:reply", .thumbsUp))
@@ -314,43 +309,8 @@ final class PhoneTests: XCTestCase {
         let reply = try XCTUnwrap(thread.rows.last { $0.kind == "message" })
         XCTAssertEqual(reply.reactions, [PhoneView.Choice(label: "👀", value: "eyes")])
         XCTAssertEqual(thread.marks.count, Reaction.allCases.count)
-        let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
-        XCTAssertNil(general.rows.first { $0.kind == "message" }?.reactions)
-    }
-
-    /// The line over #general's box can say who an @ names, as the window's does, for every kitten that's set up.
-    func testGeneralsBoxKnowsWhoAnAtGoesTo() {
-        let cali = Kitten(name: "Cali", role: "Travel", covers: "", folder: "/k/cali", planned: true)
-        let book = ChannelBook.build(kittens: [steve, pepper, cali], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
-        let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
-        XCTAssertEqual(general.box?.mentions, ["steve-pawsniak": CatWords.mentioning(steve), "pepper": CatWords.mentioning(pepper)])
-        XCTAssertNil(PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon).box?.mentions)
-        XCTAssertEqual(MessageTarget.mentioned(in: "Ask @Steve-Pawsniak: and @pepper", among: book.mentionable), steve)
-        XCTAssertNil(MessageTarget.mentioned(in: "me@pepper.com @cali", among: book.mentionable))
-    }
-
-    /// The page reads an @ only to label the box, and the Mac decides where the words go, so the two have to agree,
-    /// whatever the name is written in.
-    func testThePagesLineReadsAnAtTheWayTheMacSends() throws {
-        let script = PhonePage.script
-        let start = try XCTUnwrap(script.range(of: "function mentioned("))
-        let end = try XCTUnwrap(script.range(of: "\n}\n", range: start.upperBound..<script.endIndex))
-        let page = try XCTUnwrap(JSContext())
-        page.evaluateScript(String(script[start.lowerBound..<end.upperBound]))
-        let kittens = [
-            Kitten(name: "Steve Pawsniak", role: "", covers: "", folder: "/k/steve"),
-            Kitten(name: "Zoe\u{0308}", role: "", covers: "", folder: "/k/zoe"),
-            Kitten(name: "बिल्ली", role: "", covers: "", folder: "/k/billi"),
-            Kitten(name: "🐾", role: "", covers: "", folder: "/k/paw"),
-        ]
-        let book = ChannelBook.build(kittens: kittens, threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
-        let mentions = try XCTUnwrap(PhoneView(PhonePlace("general", in: book), in: book, now: noon).box?.mentions)
-        let read = try XCTUnwrap(page.objectForKeyedSubscript("mentioned"))
-        for words in ["@steve-pawsniak hi", "@Zoë, hi", "@Zoe\u{0308} hi", "@बिल्ली को खाना दो", "Lunch @ 12", "email @!", "@steve"] {
-            let sent = MessageTarget.mentioned(in: words, among: book.mentionable).map(CatWords.mentioning)
-            let shown = read.call(withArguments: [words, mentions])?.toString()
-            XCTAssertEqual(shown == "null" ? nil : shown, sent, words)
-        }
+        let channel = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon)
+        XCTAssertNil(channel.rows.first { $0.kind == "message" }?.reactions)
     }
 
     func testScrollingBackOnThePhoneLoadsAChannelsOlderPostsButNeverTheCatsDM() {
@@ -481,10 +441,10 @@ final class PhoneTests: XCTestCase {
         let book = book(waiting: waiting)
 
         let home = PhoneView(PhonePlace("home", in: book), in: book, now: noon)
-        XCTAssertEqual(home.places.map(\.title), ["Activity", "Threads", "general", "steve-pawsniak", "pepper"])
-        XCTAssertEqual(home.places.map(\.group), [nil, nil, CatWords.channelsHeading, CatWords.channelsHeading, CatWords.channelsHeading])
+        XCTAssertEqual(home.places.map(\.title), ["Activity", "Threads", "Steve Pawsniak", "Pepper"], "by name, as the sidebar writes them")
+        XCTAssertEqual(home.places.map(\.group), [nil, nil, CatWords.kittensHeading, CatWords.kittensHeading])
         XCTAssertEqual(home.places[0].count, 1)
-        XCTAssertEqual(home.places[3].count, 1, "Steve's channel has its badge")
+        XCTAssertEqual(home.places[2].count, 1, "Steve's channel has its badge")
         XCTAssertNil(home.box)
         XCTAssertEqual(home.rows, [])
 
@@ -496,17 +456,17 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(parent.waiting, true, "it says it needs you")
         XCTAssertEqual(parent.open, PhonePlace.key(.thread("a", in: .channel(.of(steve)))))
         XCTAssertFalse(channel.rows.contains { $0.text == "Fine." }, "replies stay in their thread")
-        XCTAssertEqual(channel.box, PhoneView.Box(label: "Starts a new thread with Steve Pawsniak", placeholder: "Message #steve-pawsniak"))
+        XCTAssertEqual(channel.box, PhoneView.Box(label: "Starts a new thread with Steve Pawsniak", placeholder: "Message Steve Pawsniak"))
         XCTAssertEqual(channel.back, "home")
 
         let thread = PhoneView(PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book), in: book, now: noon)
         XCTAssertEqual(thread.rows.map(\.kind), ChannelRows.thread("a", in: book).map(Self.kind))
         XCTAssertEqual(thread.rows.compactMap(\.text).filter { $0 == "Fine." || $0 == "How's it going?" }, ["How's it going?", "Fine."])
         XCTAssertEqual(thread.rows.last?.choices?.map(\.value), ["decline", "accept", "acceptForSession"], "Deny first, as in the window")
-        XCTAssertEqual(thread.box?.also, "Also send to #steve-pawsniak")
+        XCTAssertEqual(thread.box?.also, "Also send to Steve Pawsniak")
         XCTAssertEqual(thread.title, CatWords.threadTitle)
         XCTAssertEqual(thread.back, PhonePlace.key(.channel(.of(steve))))
-        XCTAssertEqual(thread.backTitle, "#steve-pawsniak")
+        XCTAssertEqual(thread.backTitle, "Steve Pawsniak")
     }
 
     func testThreadsOnThePhoneListsWhatYouWroteInAndOpensEachOnItsOwnPage() throws {
@@ -514,7 +474,7 @@ final class PhoneTests: XCTestCase {
         let threads = PhoneView(PhonePlace("threads", in: book), in: book, now: noon)
         XCTAssertEqual(threads.rows.map(\.kind), ["digest"])
         let digest = try XCTUnwrap(threads.rows.first)
-        XCTAssertEqual(digest.title, "#steve-pawsniak")
+        XCTAssertEqual(digest.title, "Steve Pawsniak")
         XCTAssertEqual(digest.text, "How's it going?")
         XCTAssertEqual(digest.reply?.text, "Fine.")
         XCTAssertEqual(digest.open, PhonePlace.key(.thread("a", in: .threads)))
@@ -591,11 +551,19 @@ extension PhoneTests {
         waiting.status = .waitingForApproval
         let book = ChannelBook.build(kittens: [steve, pepper, cali], threads: [waiting, working], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
         let places = PhoneView(PhonePlace("home", in: book), in: book, now: noon).places
-        XCTAssertEqual(places.map(\.title), ["Activity", "Threads", "general", "steve-pawsniak", "pepper", "cali"], "as the sidebar writes them, beside their icon or cat")
-        XCTAssertEqual(places.map(\.icon), ["activity", "threads", "channel", nil, nil, nil])
-        XCTAssertEqual(places.map(\.cat), [nil, nil, nil, cat(.alert, steve), cat(.work, pepper), cat(.sit, cali)])
-        XCTAssertEqual(places.map(\.dot), [nil, nil, nil, Opal.hex(Opal.error), Opal.hex(Opal.lilac), nil], "needs you, then working")
-        XCTAssertEqual(places.map(\.asleep), [false, false, false, false, false, true])
+        XCTAssertEqual(places.map(\.title), ["Activity", "Threads", "Steve Pawsniak", "Pepper"], "as the sidebar writes them, beside their icon or cat, and no kitten that's only planned")
+        XCTAssertEqual(places.map(\.icon), ["activity", "threads", nil, nil])
+        XCTAssertEqual(places.map(\.cat), [nil, nil, cat(.alert, steve), cat(.work, pepper)])
+        XCTAssertEqual(places.map(\.dot), [nil, nil, Opal.hex(Opal.error), Opal.hex(Opal.lilac)], "needs you, then working")
+
+        // The cat shows first among the kittens once you've shown some of its work here, on its own tile, as in the window.
+        let fix = AgentThread(id: "fix", title: "Fix: the total", projectTitle: nil, status: .completed, model: "m", updatedAt: noon)
+        let shown = ChannelBook.build(kittens: [steve, pepper, cali], threads: [fix, waiting], transcripts: ["fix": [Exchange(id: "f", asker: .you, askedAt: noon, ask: "Fix the total", reply: "Fixed.", repliedAt: noon)]], isReading: false, unreadable: 0, cantReachT3: false, catsWork: ["fix"], onPhone: ["fix"])
+        let withCat = PhoneView(PhonePlace("home", in: shown), in: shown, now: noon).places
+        XCTAssertEqual(withCat.map(\.title), ["Activity", "Threads", "Shades", "Steve Pawsniak", "Pepper"])
+        XCTAssertEqual(withCat[2].cat, "sit/shades", "the cat in its own jacket, not a #")
+        XCTAssertNil(withCat[2].icon)
+        XCTAssertEqual(withCat[2].group, CatWords.kittensHeading)
 
         let idle = ChannelBook.build(kittens: [steve], threads: [thread("a", of: steve)], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
         XCTAssertEqual(PhoneView(PhonePlace("home", in: idle), in: idle, now: noon).places.last?.cat, cat(.sleep, steve), "an idle kitten sleeps")
@@ -609,9 +577,6 @@ extension PhoneTests {
         XCTAssertEqual(channel.cat, cat(.sit, steve))
         XCTAssertEqual(channel.link, PhoneView.Link(label: "1 in progress", open: "activity"), "as the window's header goes to Activity")
         XCTAssertNil(PhoneView(PhonePlace(PhonePlace.key(.channel(.of(pepper))), in: book), in: book, now: noon).link, "nothing open, no link")
-        let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
-        XCTAssertNil(general.cat)
-        XCTAssertNil(general.link)
         XCTAssertNil(PhoneView(PhonePlace("activity", in: book), in: book, now: noon).cat)
     }
 
@@ -637,10 +602,10 @@ extension PhoneTests {
 
         let cats = ChannelBook.build(
             kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false,
-            sent: [SentMessage(channel: .general, message: ChannelMessage(exchangeID: "c", kind: .reply, speaker: .cat, text: "Hi.", at: noon, threadID: "", threadTitle: ""))]
+            sent: [SentMessage(channel: .of(steve), message: ChannelMessage(exchangeID: "c", kind: .reply, speaker: .cat, text: "Hi.", at: noon, threadID: "", threadTitle: ""))]
         )
-        let general = PhoneView(PhonePlace("general", in: cats), in: cats, now: noon)
-        XCTAssertEqual(general.rows.first { $0.kind == "message" }?.cat, "sit/shades", "the cat answers as itself, in its own jacket")
+        let steves = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: cats), in: cats, now: noon)
+        XCTAssertEqual(steves.rows.first { $0.kind == "message" }?.cat, "sit/shades", "the cat speaks as itself, in its own jacket")
     }
 
     func testAMessageGoesToThePhoneAsTheMacReadIt() throws {
@@ -896,13 +861,13 @@ extension PhoneTests {
     /// A message still coming, or on its way, is drawn at 55% as in the window, with secondary words that still read.
     func testAMessageOnItsWayIsPalerInAColourItsWordsReadOn() throws {
         func said(_ speaker: Speaker, _ id: String, going: Bool = false, sending: Bool = false) -> SentMessage {
-            SentMessage(channel: .general, message: ChannelMessage(exchangeID: id, kind: speaker == .you ? .ask : .reply, speaker: speaker, text: "Words", at: noon, threadID: "", threadTitle: "", isStillGoing: going, isSending: sending))
+            SentMessage(channel: .of(steve), message: ChannelMessage(exchangeID: id, kind: speaker == .you ? .ask : .reply, speaker: speaker, text: "Words", at: noon, threadID: "", threadTitle: "", isStillGoing: going, isSending: sending))
         }
         let book = ChannelBook.build(
             kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false,
             sent: [said(.you, "sending", sending: true), said(.kitten(steve.id), "going", going: true), said(.cat, "cat", going: true), said(.you, "sent")]
         )
-        let rows = PhoneView(PhonePlace("general", in: book), in: book, now: noon).rows.filter { $0.kind == "message" }
+        let rows = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon).rows.filter { $0.kind == "message" }
         XCTAssertEqual(rows.map(\.faded), [true, true, true, nil], "only what's still on its way")
         let rules = Dictionary(try Self.rules().map { ($0.selector, $0.body) }, uniquingKeysWith: { first, _ in first })
         XCTAssertEqual(rules[".mine .bubble.faded"]?.contains("var(--selected)) 55%, var(--page))"), true, "yours at 55%")
@@ -927,13 +892,13 @@ extension PhoneTests {
             waiting: Waiting(approvals: [approval], owners: ["ap": steve.id])
         )
         let places = PhoneView(PhonePlace("home", in: book), in: book, now: noon).places.filter { $0.icon == nil }
-        XCTAssertEqual(places.map(\.state), ["Needs you", "Working", "Not set up yet"])
-        XCTAssertEqual(places.map(\.count), [1, nil, nil])
-        XCTAssertEqual(places.map(\.dot), [nil, Opal.hex(Opal.lilac), nil], "Steve's count, with no dot beside it")
+        XCTAssertEqual(places.map(\.state), ["Needs you", "Working"], "and no kitten that's only planned")
+        XCTAssertEqual(places.map(\.count), [1, nil])
+        XCTAssertEqual(places.map(\.dot), [nil, Opal.hex(Opal.lilac)], "Steve's count, with no dot beside it")
         let page = try Self.page(["el", "dot", "lit", "drift", "tile", "places"])
         let json = String(decoding: try JSONEncoder().encode(places), as: UTF8.self)
         let heard = page.evaluateScript("places(\(json)).filter((node) => node.tag === 'button').map((node) => node.attributes['aria-label'])")?.toArray() as? [String]
-        XCTAssertEqual(heard, ["steve-pawsniak, Needs you, 1 waiting", "pepper, Working", "cali, Not set up yet"])
+        XCTAssertEqual(heard, ["Steve Pawsniak, Needs you, 1 waiting", "Pepper, Working"])
     }
 
     /// Tapping what a message said offers its reactions, which a keyboard and VoiceOver can't, so React does the same.
@@ -1059,7 +1024,7 @@ extension PhoneTests {
         let json = String(decoding: try JSONEncoder().encode(places), as: UTF8.self)
         let tiles = page.evaluateScript("places(\(json)).filter((node) => node.tag === 'button').map((node) => node.children[0].className + ' ' + node.children[0].style.props['--light'])")?.toArray() as? [String]
         let jacket = { (kitten: Kitten) in "tile \(Opal.hex(ChannelSpeakerLook.color(of: kitten)!))" }
-        XCTAssertEqual(tiles, ["tile hsl(172 100% 68%)", "tile hsl(258 100% 68%)", "tile hsl(344 100% 68%)", jacket(steve), jacket(pepper)])
+        XCTAssertEqual(tiles, ["tile hsl(172 100% 68%)", "tile hsl(344 100% 68%)", jacket(steve), jacket(pepper)])
     }
 
     /// Allow is the one primary on an approval's card, as on the cat's own, and the card is lit in its kitten's light.

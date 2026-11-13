@@ -33,8 +33,8 @@ enum MessagesAction: Equatable {
     case showPicture(URL)
 }
 
-/// Messages, laid out like Slack: Activity, your threads, #general, a channel for each kitten and a DM with the cat. Each
-/// T3 session is a thread. Opening it captures nothing, and nothing typed in it takes your screen, since you're
+/// Messages, laid out like Slack: Activity, your threads, then the cat and a channel for each kitten. Each T3 session
+/// is a thread. Opening it captures nothing, and nothing typed in it takes your screen, since you're
 /// looking at Messages and not your work.
 extension AppController {
     /// Opens it, at `selection` if it's given. Looking at it covers whatever the cat was nudging you about.
@@ -47,14 +47,13 @@ extension AppController {
         renderBubble()
     }
 
-    /// Where Messages shows a thread, if it does: #general, its kitten's channel or the cat's DM. It's worked out from
-    /// the live list, so the bubble can offer it before Messages has read a word.
+    /// Where Messages shows a thread, if it does: its kitten's channel or the cat's. It's worked out from the live list,
+    /// so the bubble can offer it before Messages has read a word.
     func messagesHome(ofThread id: String) -> ChannelID? {
-        if messagesThreads[id] != nil { return .general }
-        guard let thread = latestThreads.first(where: { $0.id == id }) else { return nil }
+        guard let thread = latestThreads.first(where: { $0.id == id }) else { return messagesThreads[id] != nil ? .shades : nil }
         if isWithShades(thread) { return thread.isLiveTest ? nil : .shades }
         if let kitten = KittenBoard.owner(of: thread, among: loadKittens()) { return .of(kitten) }
-        return isCatsWork(thread) ? .shades : nil
+        return isCatsWork(thread) || messagesThreads[id] != nil ? .shades : nil
     }
 
     /// Where Open goes: Messages, where it shows the thread, unless Settings says T3.
@@ -92,7 +91,7 @@ extension AppController {
         URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL.path
     }
 
-    /// Work the cat started for you outside Messages, which lives in its DM. A fix from before Shades kept these is
+    /// Work the cat started for you outside Messages, which lives with the cat. A fix from before Shades kept these is
     /// known by the title it gave it, in T3's own folder for work with no project.
     func isCatsWork(_ thread: AgentThread) -> Bool {
         Self.isCatsWork(thread, kept: catsWork)
@@ -146,9 +145,7 @@ extension AppController {
     func messagesAction(_ action: MessagesAction) {
         switch action {
         case .send(let words, let target, let channel, let alsoSent, let files):
-            // An @kitten in #general goes straight to that kitten, rather than the router choosing.
-            let named = target == .router && channel == .general ? MessageTarget.mentioned(in: words, among: loadKittens().filter { !$0.planned }) : nil
-            send(words, to: named.map(MessageTarget.newThread) ?? target, shownIn: channel, alsoSent: alsoSent, files: files)
+            send(words, to: target, shownIn: channel, alsoSent: alsoSent, files: files)
         case .startTopic(let words, let kitten, let id, let files):
             send(words, to: .newThread(kitten), shownIn: .of(kitten), echoID: id, files: files)
         case .approval(let request, let decision):
@@ -194,15 +191,9 @@ extension AppController {
     /// A reply also sent to a channel is only words while T3 doesn't have it, so it's kept once T3 does, as the ID of
     /// T3's copy, and read back from its thread after a restart.
     func keepAlsoSent(_ heard: [String: ChannelBook.HeardAlsoSent]) {
-        let new = heard.filter { inbox.alsoSent[$0.key] == nil && inbox.alsoSentToGeneral[$0.key] == nil }
+        let new = heard.keys.filter { inbox.alsoSent[$0] == nil }
         guard !new.isEmpty else { return }
-        for (id, line) in new {
-            if line.channel == .general {
-                inbox.alsoSentToGeneral[id] = Inbox.ShownInGeneral(thread: line.thread, at: now())
-            } else {
-                inbox.alsoSent[id] = now()
-            }
-        }
+        for id in new { inbox.alsoSent[id] = now() }
         keepInbox()
     }
 
@@ -251,16 +242,13 @@ extension AppController {
             let asked = questionsAsked
             messagesTurn = Task {
                 await previous?.value
-                await route(words, sentAt: sentAt, asked: asked, answeringIn: channel ?? .general, echoID: echoID, file: snapshot)
+                await route(words, sentAt: sentAt, asked: asked, echoID: echoID, file: snapshot)
             }
         case .newThread(let kitten):
             echo(startsThread: true)
             // The box waits for the new thread, so what you add next goes there too.
             let title = String(words.prefix { !$0.isNewline }.prefix(60))
-            let sentAt = now()
             give(words, to: kitten, snapshot: snapshot, onStarted: { [weak self] threadID in
-                // Named with an @ in #general, it lives there, as everything started from there does.
-                if channel == .general, let threadID, let self { self.messagesThreads[threadID] = self.messagesThreads[threadID] ?? sentAt }
                 self?.channels.started(echoID, in: threadID, title: title)
             }, refused: { [weak self] in
                 self?.channels.failed(echoID, because: CatWords.cantTakeFiles(kitten.name))
@@ -286,31 +274,27 @@ extension AppController {
     }
 
     /// The same prompt and model as the Ask box, on Messages' own conversation with the router, so nothing from
-    /// your screen is in what it can see, and asking the cat meanwhile can't cut it short. #general and the cat's DM
-    /// share that conversation, and the cat answers in whichever you wrote in. `echoID` is what Messages shows of your
-    /// words meanwhile, which goes with them into whatever thread they start or land in.
+    /// your screen is in what it can see, and asking the cat meanwhile can't cut it short. `echoID` is what Messages
+    /// shows of your words meanwhile, which goes with them into the talk.
     /// A file goes on a router thread of its own, so Messages' conversation with it never holds one.
-    private func route(_ words: String, sentAt: Date, asked: Int, answeringIn place: ChannelID, echoID: String, file: ScreenSnapshot? = nil) async {
+    private func route(_ words: String, sentAt: Date, asked: Int, echoID: String, file: ScreenSnapshot? = nil) async {
         var talk: String?
-        // In #general, whoever takes your words answers in their thread. The DM only has the cat, so it says where
-        // they went, in the words it uses for the same thing once T3 has the thread.
+        // The cat says where your words went, in the words it uses for the same thing once T3 has the thread.
         func passedOn(_ what: String) {
-            if place == .shades { catSays(what, in: place, thread: talk) }
+            catSays(what, thread: talk)
         }
         // Your words say why under them, where they can go again, and the cat says it too if Messages has closed since.
         func notSent(_ why: String) {
             channels.failed(echoID, because: why)
-            if !channels.isOpen { catSays(why, in: place) }
+            if !channels.isOpen { catSays(why) }
         }
-        // A new session lives in #general under your words, wherever it's passed after that.
-        let startedHere = { [weak self] (started: String?) in
-            guard let self, let started else { return }
-            self.messagesThreads[started] = self.messagesThreads[started] ?? sentAt
-            if place == .general {
-                self.channels.started(echoID, in: started)
-            } else {
-                let parent = ChannelMessage(exchangeID: "general-\(echoID)", kind: .ask, speaker: .you, text: words, at: sentAt, threadID: started, threadTitle: "")
-                self.channels.sent(parent, in: .general)
+        // A new session is a thread under your words at once, with its kitten or with the cat, wherever it's passed after
+        // that.
+        func started(in home: ChannelID) -> (String?) -> Void {
+            { [weak self] started in
+                guard let self, let started else { return }
+                self.messagesThreads[started] = self.messagesThreads[started] ?? sentAt
+                self.channels.sent(ChannelMessage(exchangeID: "started-\(echoID)", kind: .ask, speaker: .you, text: words, at: sentAt, threadID: started, threadTitle: ""), in: home)
             }
         }
         await waitForThreadList()
@@ -355,45 +339,40 @@ extension AppController {
             notSent(CatWords.noReply)
             return
         }
-        // In the DM, what you said is part of the talk, and keeps showing there as a reply also sent to it.
-        if place == .shades {
-            talk = threadID
-            channels.started(echoID, in: threadID, alsoSent: true)
-        }
+        // What you said is part of the talk, and keeps showing with the cat as a reply also sent to it.
+        talk = threadID
+        channels.started(echoID, in: threadID, alsoSent: true)
         // As in the Ask box: a correction reaches its owner, in a copy of its own if your words go somewhere else.
         let corrected = reading.corrections.compactMap { kittens.indices.contains($0 - 1) ? kittens[$0 - 1] : nil }
-        if corrected.count < reading.corrections.count { catSays(CatWords.lostTheCorrection, in: place) }
+        if corrected.count < reading.corrections.count { catSays(CatWords.lostTheCorrection) }
         var copies = corrected
         defer { copies.forEach { give(words, to: $0, snapshot: nil, as: .correctionCopy) } }
         switch reading.outcome {
         // There's nothing selected in Messages to replace, so a rewrite is only an answer here.
         case .answer(let text, _) where !text.isEmpty || reading.corrections.isEmpty, .rewrite(let text):
-            let answer = catSays(text.isEmpty ? CatWords.noReply : text, in: place, thread: talk)
-            if place == .general, !text.isEmpty { await keepInGeneral(answerIn: threadID, shownAs: [echoID, answer]) }
+            catSays(text.isEmpty ? CatWords.noReply : text, thread: talk)
             Task { [backend] in try? await backend.settle(threadID: threadID) }
             return
         case .answer:
             if reading.wentNowhere {
                 // The rest was meant for somewhere else, so the owner only gets its copy.
-                catSays(CatWords.lostTheSession, in: place)
+                catSays(CatWords.lostTheSession)
             } else if corrected.count == 1 {
-                give(words, to: corrected[0], snapshot: nil, as: .correction, asked: asked, onStarted: startedHere)
+                give(words, to: corrected[0], snapshot: nil, as: .correction, asked: asked, onStarted: started(in: .of(corrected[0])))
                 copies = []
             }
             if !reading.wentNowhere, !corrected.isEmpty { passedOn(CatWords.passedOnCorrection) }
         case .handoff(let task):
-            handOff(task: task, question: words, snapshot: file, asked: asked, onStarted: startedHere)
+            handOff(task: task, question: words, snapshot: file, asked: asked, onStarted: started(in: .shades))
             passedOn(CatWords.handedOff(task))
         case .route(let session):
             guard sessions.indices.contains(session - 1) else {
-                catSays(CatWords.lostTheSession, in: place)
+                catSays(CatWords.lostTheSession)
                 return
             }
             let thread = sessions[session - 1]
-            // From the first time, so what it said before stays in #general too.
+            // From the first time, so what it said before shows too.
             if KittenBoard.owner(of: thread, among: owners) == nil { messagesThreads[thread.id] = messagesThreads[thread.id] ?? sentAt }
-            // A reply in that thread, also sent to #general, as Slack's "Also send to #general" does.
-            if place == .general { channels.started(echoID, in: thread.id, title: thread.title, alsoSent: true) }
             let home = corrected.first { KittenBoard.isInFolder(thread.projectPath, of: $0) }
             forward(words, to: thread, snapshot: file, correction: home != nil, asked: asked) { [weak self] in
                 self?.channels.failed(echoID, because: CatWords.cantTakeFiles(thread.title))
@@ -404,11 +383,11 @@ extension AppController {
             passedOn(CatWords.passedOnToSession)
         case .kitten(let number):
             guard kittens.indices.contains(number - 1) else {
-                catSays(CatWords.lostTheSession, in: place)
+                catSays(CatWords.lostTheSession)
                 return
             }
             let kitten = kittens[number - 1]
-            give(words, to: kitten, snapshot: file, as: corrected.contains(kitten) ? .correction : .work, asked: asked, onStarted: startedHere)
+            give(words, to: kitten, snapshot: file, as: corrected.contains(kitten) ? .correction : .work, asked: asked, onStarted: started(in: .of(kitten)))
             copies.removeAll { $0 == kitten }
             passedOn(CatWords.passedOnToKitten)
         }
@@ -455,28 +434,12 @@ extension AppController {
         return (holdback.read(fullText: fullText), thread)
     }
 
-    /// The router's own words, where you wrote, or over the cat if you've closed Messages since. In the DM they're a
-    /// reply in the talk, also sent to the DM, and in #general a message of their own. Returns what Messages calls it.
-    @discardableResult
-    private func catSays(_ text: String, in place: ChannelID, thread: String? = nil) -> String {
-        let id = "cat-\(UUID().uuidString)"
-        guard channels.isOpen else {
-            post(caption: place == .shades ? CatWords.shades : "#\(CatWords.general)", text: text, threadID: nil)
-            return id
-        }
-        let message = ChannelMessage(exchangeID: id, kind: .reply, speaker: .cat, text: text, at: now(), threadID: thread ?? "", threadTitle: "")
-        channels.sent(message, in: place, alsoSent: thread != nil)
-        return id
-    }
-
-    /// The cat's answer in #general is a turn of Messages' talk with the router, which T3 keeps, so only which turn
-    /// it was is saved, and #general reads it back from there after a restart. Turns go one at a time, so the latest
-    /// one you asked is this one.
-    private func keepInGeneral(answerIn threadID: String, shownAs sent: [String]) async {
-        guard let turn = await backend.exchanges(threadID: threadID)?.last(where: { $0.asker == .you }) else { return }
-        inbox.answersInGeneral[turn.id] = now()
-        keepInbox()
-        channels.heard(sent, as: turn.id)
+    /// The router's own words, with the cat, or over the cat if you've closed Messages since. They're a reply in the
+    /// talk, also sent to the cat's conversation.
+    private func catSays(_ text: String, thread: String? = nil) {
+        guard channels.isOpen else { return post(caption: CatWords.shades, text: text, threadID: nil) }
+        let message = ChannelMessage(exchangeID: "cat-\(UUID().uuidString)", kind: .reply, speaker: .cat, text: text, at: now(), threadID: thread ?? "", threadTitle: "")
+        channels.sent(message, in: .shades, alsoSent: thread != nil)
     }
 
     func answer(_ question: AgentQuestion, with answers: [[String]]) {

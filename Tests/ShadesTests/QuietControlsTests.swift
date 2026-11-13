@@ -45,7 +45,7 @@ final class QuietControlsTests: XCTestCase {
     func testTabReachesAQuietControlOnlyWithFullKeyboardAccessInAWindowThatAlreadyHasTheKeyboard() {
         let button = QuietButton("Theme ▾")
         let checkbox = QuietCheckbox()
-        checkbox.title = "Also send to #general"
+        checkbox.title = "Also send to Steve Pawsniak"
         checkbox.sizeToFit()
         let window = window(with: button, checkbox)
 
@@ -132,7 +132,7 @@ final class QuietControlsTests: XCTestCase {
     func testSpaceTicksAFocusedCheckbox() {
         var ticks: [Bool] = []
         let checkbox = QuietCheckbox()
-        checkbox.title = "Also send to #general"
+        checkbox.title = "Also send to Steve Pawsniak"
         checkbox.onChange = { ticks.append($0) }
         let window = window(with: checkbox)
         QuietFocus.fullKeyboardAccess = { true }

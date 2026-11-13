@@ -77,7 +77,7 @@ final class OpalSheet: NSView {
 
         section("Controls", y: 412)
         Opal.field(in: NSRect(x: 540, y: 432, width: 280, height: 34), focused: false)
-        words("Message #general", in: NSRect(x: 552, y: 441, width: 260, height: 18), color: MessagesInk.soft)
+        words("Message Shades", in: NSRect(x: 552, y: 441, width: 260, height: 18), color: MessagesInk.soft)
         Opal.field(in: NSRect(x: 844, y: 432, width: 296, height: 34), focused: true)
         words("Typing in a field", in: NSRect(x: 856, y: 441, width: 260, height: 18), color: MessagesInk.text)
 

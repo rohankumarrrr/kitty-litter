@@ -18,7 +18,7 @@ unread Are the plan names on the pricing page final
 wait 1
 new
 draw .verify/shades/unread/3-channel
-channel general
+channel shades
 wait 1
 draw .verify/shades/unread/4-bold
 channel steve

@@ -113,11 +113,9 @@ enum DevFlags {
         feed.isWithShades = { $0.projectPath.map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.path } == router }
         // Where Messages put things, read without loading the inbox, so nothing in Shades' folder is touched.
         let inbox = (try? Data(contentsOf: Settings.directory.appendingPathComponent("inbox.json"))).flatMap { try? JSONDecoder().decode(Inbox.self, from: $0) }
-        feed.inGeneral = { inbox?.inGeneral ?? [:] }
+        feed.messagesThreads = { inbox?.messagesThreads ?? [:] }
         feed.isCatsWork = { AppController.isCatsWork($0, kept: inbox?.catsWork ?? [:]) }
-        feed.answersInGeneral = { Set(inbox?.answersInGeneral.keys ?? [:].keys) }
         feed.alsoSent = { Set(inbox?.alsoSent.keys ?? [:].keys) }
-        feed.alsoSentToGeneral = { inbox?.alsoSentToGeneral.mapValues(\.thread) ?? [:] }
         Task { @MainActor in
             func milliseconds(since start: Date) -> Int { Int(Date().timeIntervalSince(start) * 1000) }
             @MainActor func until(_ done: (ChannelBook) -> Bool) async -> ChannelBook {
@@ -171,9 +169,8 @@ enum DevFlags {
             "asked by someone else: \(asked { $0 == .someoneElse })",
             "replies with no ask: \(unasked.count)",
             "issues: \(book.issueCount)",
-            "posts in #general: \(book.channel(.general)?.posts.count ?? 0)",
-            "posts in the cat's DM: \(book.channel(.shades)?.posts.count ?? 0)",
-            "the cat's own work in its DM: \(threads.filter { $0.home == .shades && book.catsWork.contains($0.id) }.count)",
+            "posts with the cat: \(book.channel(.shades)?.posts.count ?? 0)",
+            "the cat's own work with it: \(threads.filter { $0.home == .shades && !book.talks.contains($0.id) }.count)",
             "milliseconds: \(milliseconds)",
         ].joined(separator: "\n")
     }

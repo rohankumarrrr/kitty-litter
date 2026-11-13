@@ -233,7 +233,7 @@ final class DemoDriver {
 
     /// The same as changing a control in Settings, found by its row: `setting Text size Large` picks Large,
     /// `setting Extra words Pawsniak` types that and presses Return, and a box or a button is pressed, such as
-    /// `setting Do Not Disturb` or `setting #general`. Prints what each control on the page says afterwards.
+    /// `setting Do Not Disturb` or `setting Pepper`. Prints what each control on the page says afterwards.
     private func setting(_ words: String) {
         let controls = allSubviews(of: stage.settingsPanel.panel.contentView).filter { $0 is NSControl || $0 is QuietButton || $0 is SettingsControl }
         func names(_ view: NSView) -> [String] {
@@ -350,9 +350,9 @@ final class DemoDriver {
         }
     }
 
-    /// activity, threads, general, home, the start of a kitten's name for its channel, or a key as it is.
+    /// activity, threads, shades, home, the start of a kitten's name for its channel, or a key as it is.
     private func phoneKey(_ place: String) -> String {
-        if ["activity", "threads", "general", "home"].contains(place) { return place }
+        if ["activity", "threads", "shades", "home"].contains(place) { return place }
         // `steve/demo-steve-yesterday` is that thread, in that kitten's channel.
         let parts = place.split(separator: "/", maxSplits: 1).map(String.init)
         if parts.count == 2, let kitten = Demo.kittens.first(where: { $0.name.lowercased().hasPrefix(parts[0].lowercased()) }) {
@@ -405,7 +405,7 @@ final class DemoDriver {
         switch view.selection.place {
         case .activity: place = "activity"
         case .threads: place = "threads"
-        case .channel(let id): place = view.book?.title(of: id) ?? "?"
+        case .channel(let id): place = view.book?.name(of: id) ?? "?"
         }
         return "place=\(place) thread=\(view.selection.thread ?? "none")"
     }
@@ -451,7 +451,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [reply] [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | arrow up|down | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | toolbar [button] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off|stuck | check | screen on|off | ears on|off|denied | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | voiceover [window]|press [label]|menu [label] | windows | cover [beside] | draw [folder] | opal [folder] [jacket...] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|shades|[kitten] | thread [reply] [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | arrow up|down | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | toolbar [button] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off|stuck | check | screen on|off | ears on|off|denied | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | voiceover [window]|press [label]|menu [label] | windows | cover [beside] | draw [folder] | opal [folder] [jacket...] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -496,12 +496,11 @@ final class DemoDriver {
             // The same as pressing ⌃⌘B: it brings Messages in front of you, or closes it if it's already there.
             controller.messagesHotkeyPressed()
         case "channel":
-            // channel activity | threads | general | shades | the start of a kitten's name, the same as clicking it in the sidebar.
+            // channel activity | threads | shades | the start of a kitten's name, the same as clicking it in the sidebar.
             let kitten = Demo.kittens.first { $0.name.lowercased().hasPrefix(rest.lowercased()) }
             switch rest {
             case "activity": stage.channels.view.select(.activity)
             case "threads": stage.channels.view.select(.threads)
-            case "general": stage.channels.view.select(.channel(.general))
             case "shades": stage.channels.view.select(.channel(.shades))
             default: if let kitten, !rest.isEmpty { stage.channels.view.select(.channel(.of(kitten))) }
             }
@@ -730,7 +729,7 @@ final class DemoDriver {
             // Notifications menu, which it prints after. The channel is named as `channel` names it.
             let words = rest.split(separator: " ").map(String.init)
             let kitten = Demo.kittens.first { $0.name.lowercased().hasPrefix(words.first?.lowercased() ?? "-") }
-            let channel: ChannelID? = words.first == "general" ? .general : words.first == "shades" ? .shades : kitten.map(ChannelID.of)
+            let channel: ChannelID? = words.first == "shades" ? .shades : kitten.map(ChannelID.of)
             guard let channel else { return print("no channel [\(rest)]") }
             let book = controller.waiting
             let current = book.notifications[channel.settingsKey] ?? ChannelNotifications()

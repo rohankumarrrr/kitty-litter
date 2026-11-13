@@ -458,30 +458,56 @@ final class InboxTests: XCTestCase {
     func testWhereMessagesPutThingsIsSavedAsIDsAndAFileFromBeforeItStillLoads() throws {
         let file = try folder().appendingPathComponent("inbox.json")
         var inbox = Inbox(since: start)
-        inbox.inGeneral["handed"] = start
+        inbox.messagesThreads["handed"] = start
         inbox.catsWork["fix"] = start
         inbox.onPhone["fix"] = start
-        inbox.answersInGeneral["turn"] = start
         inbox.alsoSent["turn-2:ask"] = start
-        inbox.alsoSentToGeneral["turn-3:ask"] = Inbox.ShownInGeneral(thread: "steves", at: start)
         try inbox.save(to: file)
         let loaded = Inbox.load(from: file, now: start)
-        XCTAssertEqual(loaded.inGeneral, ["handed": start])
+        XCTAssertEqual(loaded.messagesThreads, ["handed": start])
         XCTAssertEqual(loaded.catsWork, ["fix": start])
         XCTAssertEqual(loaded.onPhone, ["fix": start])
-        XCTAssertEqual(loaded.answersInGeneral, ["turn": start])
         XCTAssertEqual(loaded.alsoSent, ["turn-2:ask": start])
-        XCTAssertEqual(loaded.alsoSentToGeneral, ["turn-3:ask": Inbox.ShownInGeneral(thread: "steves", at: start)], "with the thread it's in")
 
         let older = #"{"entries":[],"handled":{},"since":-999999999}"#
         try older.write(to: file, atomically: true, encoding: .utf8)
         let before = Inbox.load(from: file, now: start)
-        XCTAssertEqual(before.inGeneral, [:])
+        XCTAssertEqual(before.messagesThreads, [:])
         XCTAssertEqual(before.catsWork, [:])
         XCTAssertEqual(before.onPhone, [:])
         XCTAssertEqual(before.alsoSent, [:])
         XCTAssertEqual(before.reactions, [:])
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
+    }
+
+    /// #general went into the cat's conversation, but an inbox from a build that had it has to load whole, and keep
+    /// what it saved about #general, so going back to that build loses nothing.
+    func testAnInboxFromWhenGeneralWasThereLoadsWholeAndKeepsWhatItSavedAboutIt() throws {
+        let file = try folder().appendingPathComponent("inbox.json")
+        let older = #"""
+            {"entries":[{"id":"e","kind":"decision","text":"Merged. Say ship it.","threadID":"t","threadTitle":"Work","at":1000}],
+             "handled":{"t":"run-1"},"since":0,
+             "general":{"handed":1000},"withShades":{"fix":1000},"answeredInGeneral":{"turn-1":1000},
+             "alsoShown":{"turn-2:ask":1000},"alsoShownInGeneral":{"turn-3:ask":{"thread":"steves","at":1000}},
+             "reacted":{"turn-2:ask":{"reactions":["thumbsUp"],"at":1000}}}
+            """#
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try older.write(to: file, atomically: true, encoding: .utf8)
+        let loaded = Inbox.load(from: file, now: start)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path), "it isn't set aside as broken")
+        let then = Date(timeIntervalSinceReferenceDate: 1000)
+        XCTAssertEqual(loaded.entries.map(\.id), ["e"])
+        XCTAssertEqual(loaded.messagesThreads, ["handed": then], "what #general held now shows with the cat or its kitten")
+        XCTAssertEqual(loaded.catsWork, ["fix": then])
+        XCTAssertEqual(loaded.alsoSent, ["turn-2:ask": then])
+        XCTAssertEqual(loaded.reactions, ["turn-2:ask": [.thumbsUp]])
+
+        try loaded.save(to: file)
+        let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? NSDictionary)
+        let before = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(older.utf8)) as? NSDictionary)
+        for key in ["general", "answeredInGeneral", "alsoShownInGeneral", "handled", "entries"] {
+            XCTAssertEqual(saved[key] as? NSObject, before[key] as? NSObject, "\(key) comes through a save as it was")
+        }
     }
 
     /// A reaction is a mark and never words, so all that's kept is which message, by T3's ID, and which mark.
@@ -518,11 +544,11 @@ final class InboxTests: XCTestCase {
     func testOnlyTheNewestPlacesAreKept() {
         var inbox = Inbox(since: start)
         for index in 0...Inbox.placesKept {
-            inbox.inGeneral["t\(index)"] = start.addingTimeInterval(TimeInterval(index))
+            inbox.messagesThreads["t\(index)"] = start.addingTimeInterval(TimeInterval(index))
         }
-        XCTAssertEqual(inbox.inGeneral.count, Inbox.placesKept)
-        XCTAssertNil(inbox.inGeneral["t0"], "the oldest goes")
-        XCTAssertNotNil(inbox.inGeneral["t\(Inbox.placesKept)"])
+        XCTAssertEqual(inbox.messagesThreads.count, Inbox.placesKept)
+        XCTAssertNil(inbox.messagesThreads["t0"], "the oldest goes")
+        XCTAssertNotNil(inbox.messagesThreads["t\(Inbox.placesKept)"])
     }
 
     func testOnlyYouCanReadIt() throws {

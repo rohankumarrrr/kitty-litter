@@ -125,7 +125,7 @@ The face is the system's, SF Pro, unless you pick another in Settings, which eve
 | Figure | 31 | 32 | 34 | 36 | Light (300), tabular | White |
 | Control: a button's words | 12 | 12 | 12 | 12 | Medium | Per style |
 
-- **Labels** head a section or a card ("CHANNELS", "NEXT UP"), never a sentence.
+- **Labels** head a section or a card ("KITTENS", "NEXT UP"), never a sentence.
 - **Figures** are light with tabular digits, so a changing number holds still. A big clock goes to 200. A figure in a row is the body size, still tabular.
 - **The phone** has a 32-point bold large title, white, at the top of each page, and its body follows the phone's own text size.
 - One short line under a name and under a figure, in meta or secondary.
@@ -228,7 +228,7 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 - **Segmented control:** a `raised` capsule track with the chosen segment raised on it in `controlHover`, words body, the chosen one white.
 - **Tabs:** underlined text, never pills. The open tab is white with a 2-point rim-gradient underline. Others are secondary.
 - **Chips:** capsules on `control`, 22 tall, meta-size words in body.
-- **Checkboxes and switches:** the system's, which follow the dark appearance, with the accent in violet. A drawn one is ticked in violet with a white tick, and its empty box has a 1.2-point `dim` edge. A drawn switch is a 32 by 18 capsule, violet with a white knob when it's on, and `control` with a 1.2-point `dim` edge and a body-coloured knob when it's off. A switch is for a whole row in Settings, a checkbox for an option beside other things, such as Also send to #channel.
+- **Checkboxes and switches:** the system's, which follow the dark appearance, with the accent in violet. A drawn one is ticked in violet with a white tick, and its empty box has a 1.2-point `dim` edge. A drawn switch is a 32 by 18 capsule, violet with a white knob when it's on, and `control` with a 1.2-point `dim` edge and a body-coloured knob when it's off. A switch is for a whole row in Settings, a checkbox for an option beside other things, such as Also send to under a kitten's thread.
 - **Lists and tables:** hairline rows in `border` under small-capital headers. A hovered row is `raised`, a selected one `selected`, each with corners 9 inset from the edges.
 - **Menus:** the system's menus, dark. A custom popover is floating glass.
 - **Scrollers:** the system's overlay scrollers.

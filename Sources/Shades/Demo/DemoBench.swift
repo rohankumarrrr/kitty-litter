@@ -30,7 +30,6 @@ enum DemoBench {
         await finishReading(controller)
         let places: [(String, ChannelSelection)] = [
             ("kitten", .channel(.of(steve))),
-            ("general", .channel(.general)),
             ("shades", .channel(.shades)),
             ("threads", .threads),
             ("activity", .activity),

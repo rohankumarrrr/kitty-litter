@@ -17,7 +17,7 @@ report shipped
 wait 7
 channels
 wait 1
-channel general
+channel shades
 wait 1
 draw .verify/shades/notify-finished/0-elsewhere
 notification demo-tidy

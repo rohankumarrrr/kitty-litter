@@ -679,7 +679,7 @@ final class PressWindowsTests: XCTestCase {
     func testAClickLandsOnFontAndEachChannelsNotifications() throws {
         kittens = [steve]
         let (settings, _) = settingsPanel(on: .notifications)
-        for id in ["#general", "#steve-pawsniak", CatWords.shades] {
+        for id in [CatWords.shades, "Steve Pawsniak"] {
             let button = try control(id, in: settings)
             XCTAssertTrue(try Press.hit(button) === button, id)
         }

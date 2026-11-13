@@ -125,7 +125,6 @@ struct PhonePlace: Equatable {
         switch place {
         case .activity: return "activity"
         case .threads: return "threads"
-        case .channel(.general): return "general"
         case .channel(.shades): return "shades"
         case .channel(.kitten(let kitten)): return "c:\(escape(kitten))"
         }
@@ -142,11 +141,11 @@ struct PhonePlace: Equatable {
 
     private static func place(_ key: String) -> ChannelPlace? {
         switch key {
-        // The names before Activity and #general, which a page still open from then can ask for.
+        // The names before Activity, and #general, which went into the cat's conversation, that a page still open from
+        // then can ask for.
         case "activity", "needs": return .activity
         case "threads": return .threads
-        case "general", "everyone": return .channel(.general)
-        case "shades": return .channel(.shades)
+        case "shades", "general", "everyone": return .channel(.shades)
         default: return key.hasPrefix("c:") ? unescape(key.dropFirst(2)).map { .channel(.kitten($0)) } : nil
         }
     }
@@ -174,14 +173,13 @@ struct PhoneView: Encodable, Equatable {
         /// What's waiting on you there.
         var count: Int?
         var unread: Bool
-        /// Its kitten, posed for what it's doing, as `PhoneCat.key` writes it.
+        /// Its kitten, posed for what it's doing, or the cat, as `PhoneCat.key` writes it.
         var cat: String?
         /// What its kitten is doing, in the words VoiceOver says for the window's sidebar.
         var state: String?
         /// The window's dot for a kitten that's working or needs you, which a count says in its place.
         var dot: String?
-        var asleep: Bool
-        /// `activity`, `threads` or `channel`, for the ones without a cat.
+        /// `activity` or `threads`, for the ones without a cat.
         var icon: String?
     }
 
@@ -216,8 +214,6 @@ struct PhoneView: Encodable, Equatable {
         var also: String?
         /// Whether a photo or file can go with your words, which an answer to a question can't.
         var files = true
-        /// In #general, the line for words that @ each kitten, by its channel's name.
-        var mentions: [String: String]?
     }
 
     /// The latest reply under a thread in Threads.
@@ -320,18 +316,14 @@ struct PhoneView: Encodable, Equatable {
         key = place.key
         places = Self.places(in: book)
         cantReachT3 = book.cantReachT3
-        let channel = place.selection?.channelID
-        let also = place.alsoSendTo(in: book).map { CatWords.alsoSendTo(book.title(of: $0)) }
+        let also = place.alsoSendTo(in: book).map { CatWords.alsoSendTo(book.name(of: $0)) }
         box = place.target.map { target in
-            // Composed, as the page reads what's typed, so an accent stored either way still names its kitten.
-            let names = book.mentionable.map { (ChannelBook.slug($0.name).precomposedStringWithCanonicalMapping, CatWords.mentioning($0)) }.filter { !$0.0.isEmpty }
-            let mentions = target == .router && channel == .general ? Dictionary(names, uniquingKeysWith: { first, _ in first }) : nil
-            var label = CatWords.target(target, in: channel)
+            var label = CatWords.target(target)
             // Not by its title, as `title(ofThread:)` says.
             if case .thread(let id, _, let report) = target, book.home(ofThread: id) == .shades {
                 label = CatWords.target(.thread(id: id, title: "", report: report))
             }
-            return Box(label: label, placeholder: CatWords.placeholder(target, in: channel, name: channel.map(book.name)), ready: target.isReady, also: also, files: target.takesFiles, mentions: mentions)
+            return Box(label: label, placeholder: CatWords.placeholder(target), ready: target.isReady, also: also, files: target.takesFiles)
         }
         guard let selection = place.selection else {
             title = CatWords.appName
@@ -341,7 +333,7 @@ struct PhoneView: Encodable, Equatable {
         you = MessagesInk.picture.map { "data:image/jpeg;base64,\($0.base64EncodedString())" }
         if let thread = selection.thread {
             (title, subtitle) = ChannelHeader.words(forThread: thread, in: book)
-            if book.home(ofThread: thread) == .shades { subtitle = book.title(of: .shades) }
+            if book.home(ofThread: thread) == .shades { subtitle = book.name(of: .shades) }
             cat = book.home(ofThread: thread).flatMap { Self.cat(of: $0, in: book) }
             back = PhonePlace.key(selection.closed)
             backTitle = ChannelHeader.words(for: selection.place, in: book).title
@@ -395,17 +387,15 @@ struct PhoneView: Encodable, Equatable {
                 var cat: String?
                 var state: String?
                 var dot: UInt32?
-                var asleep = false
                 var icon: String?
                 switch item.icon {
                 case .kitten(let status):
                     cat = PhoneCat.key(PhoneCat.Pose(status.state), jacket: ChannelSpeakerLook.color(of: status.kitten))
                     state = CatWords.kittenState(status.state)
                     dot = item.badge > 0 ? nil : status.state.dot
-                    asleep = status.state == .notSetUp
+                case .shades: cat = PhoneCat.key(.sit, jacket: nil)
                 case .activity: icon = "activity"
                 case .threads: icon = "threads"
-                case .general, .shades: icon = "channel"
                 }
                 return Place(
                     key: PhonePlace.key(ChannelSelection(item.place)),
@@ -416,7 +406,6 @@ struct PhoneView: Encodable, Equatable {
                     cat: cat,
                     state: state,
                     dot: dot.map(hex),
-                    asleep: asleep,
                     icon: icon
                 )
             }
@@ -502,7 +491,7 @@ struct PhoneView: Encodable, Equatable {
             return Row(
                 kind: "digest",
                 id: digest.threadID,
-                title: book.title(of: digest.channel),
+                title: book.name(of: digest.channel),
                 name: look.name,
                 text: hidden ? Self.title(ofThread: digest.threadID, "", in: book) : digest.parent.text,
                 color: look.bubble.map(hex),
@@ -576,7 +565,8 @@ struct PhoneView: Encodable, Equatable {
     /// The cat's own work is titled from what was on your screen, such as the app or the router's reading of it, so a
     /// phone calls it by your words instead. So is a thread Messages can't place yet, which could be the cat's own work.
     static func title(ofThread id: String, _ title: String, in book: ChannelBook) -> String {
-        if let home = book.home(ofThread: id), home != .shades { return title }
+        // A listed thread Messages doesn't show, such as another project's, keeps its title, as it did in #general.
+        if book.home(ofThread: id).map({ $0 != .shades }) ?? (book.listed[id] != nil) { return title }
         guard let parent = book.threads[id]?.parent, parent.speaker == .you, let words = parent.text else { return CatWords.shades }
         return ChannelRows.firstWords(of: words)
     }

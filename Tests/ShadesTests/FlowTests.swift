@@ -1024,7 +1024,7 @@ final class FlowTests: XCTestCase {
         for (words, routed, mode) in [("Read this x thread", "KITTEN: 1", FakeBackend.Mode.start), ("Read this tweet", "SEND TO: 1", .forward)] {
             backend.routerSays = [words: routed]
             backend.holdQuestion = words
-            controller.messagesAction(.send(words, to: .router, shownIn: .general))
+            controller.messagesAction(.send(words, to: .router, shownIn: .shades))
             for _ in 0..<50 { await Task.yield() }
 
             backend.replies = [[.finished(fullText: "Got the link.")]]
@@ -4562,23 +4562,23 @@ final class FlowTests: XCTestCase {
         controller.channelsPressed()
         backend.streamError = URLError(.notConnectedToInternet)
         await messages("What day is it?", to: .router)
-        let failed = try XCTUnwrap(said(in: .general, of: shownBook).last)
+        let failed = try XCTUnwrap(said(in: .shades, of: shownBook).last)
         XCTAssertEqual(failed.text, "What day is it?")
         XCTAssertEqual(failed.failure, CatWords.noReply)
-        XCTAssertEqual(said(in: .general, of: shownBook).count, 1, "the cat doesn't say it again under it")
+        XCTAssertEqual(said(in: .shades, of: shownBook).count, 1, "the cat doesn't say it again under it")
 
         backend.streamError = nil
         backend.routerSays = ["What day is it?": "It's Tuesday."]
         backend.holdQuestion = "What day is it?"
         controller.messagesAction(.tryAgain(failed.exchangeID))
         await settle()
-        let asked = said(in: .general, of: shownBook).first
+        let asked = said(in: .shades, of: shownBook).first
         XCTAssertNil(asked?.failure)
         XCTAssertEqual(asked?.isSending, false, "the cat has it while it thinks")
         backend.releaseHeld()
         await controller.messagesTurn?.value
         await settle()
-        XCTAssertEqual(everyoneSaid, ["What day is it?", "It's Tuesday."])
+        XCTAssertEqual(shadesSaid, ["What day is it?", "It's Tuesday."])
     }
 
     /// A file counts as your screen, so it only goes where your screen may, as one dropped onto the cat does.
@@ -4599,30 +4599,30 @@ final class FlowTests: XCTestCase {
     }
 
     /// Messages' talk with the router goes to your phone and never holds your screen, so a file gets a router thread of its own.
-    func testAFileInGeneralGoesOnARouterThreadOfItsOwn() async throws {
+    func testAFileToTheCatGoesOnARouterThreadOfItsOwn() async throws {
         backend.routerSays = ["What day is it?": "It's Tuesday.", "What's this?": "A keyboard."]
         controller.channelsPressed()
         await messages("What day is it?", to: .router)
         let conversation = controller.messagesQuick.thread(at: clock)
         XCTAssertNotNil(conversation)
-        controller.messagesAction(.send("What's this?", to: .router, shownIn: .general, files: [picture]))
+        controller.messagesAction(.send("What's this?", to: .router, shownIn: .shades, files: [picture]))
         await settle()
         await controller.messagesTurn?.value
         let routed = try XCTUnwrap(backend.sent.last { $0.prompt.text.contains("Their question: What's this?") })
         XCTAssertEqual(routed.mode, .start, "a thread of its own")
         XCTAssertEqual(routed.prompt.attachments.count, 1)
         XCTAssertEqual(controller.messagesQuick.thread(at: clock), conversation, "and Messages' talk carries on without it")
-        XCTAssertTrue(everyoneSaid.contains("A keyboard."))
+        XCTAssertTrue(shadesSaid.contains("A keyboard."))
 
         var fullAccess = settings
         fullAccess.quickMode = .fullAccess
         controller.apply(fullAccess)
         let before = backend.sent.count
-        controller.messagesAction(.send("And this?", to: .router, shownIn: .general, files: [picture]))
+        controller.messagesAction(.send("And this?", to: .router, shownIn: .shades, files: [picture]))
         await settle()
         await controller.messagesTurn?.value
         XCTAssertEqual(backend.sent.count, before, "a router with full access gets no file")
-        XCTAssertNotNil(shownBook?.channel(.general)?.posts.last.flatMap { if case .message(let message) = $0 { message.failure } else { nil } })
+        XCTAssertNotNil(shownBook?.channel(.shades)?.posts.last.flatMap { if case .message(let message) = $0 { message.failure } else { nil } })
     }
 
     /// A report's only button used to be Open in T3. Messages comes first, and T3 is only for what it doesn't show.
@@ -4698,7 +4698,7 @@ final class FlowTests: XCTestCase {
 
     private let penny = Kitten(name: "Penny", role: "Finance", covers: "their money", folder: "/k/penny")
 
-    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID? = .general, alsoSent: Bool = false) async {
+    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID? = .shades, alsoSent: Bool = false) async {
         controller.messagesAction(.send(words, to: target, shownIn: channel, alsoSent: alsoSent))
         await controller.messagesTurn?.value
         await settle()
@@ -4707,7 +4707,7 @@ final class FlowTests: XCTestCase {
 
     private var shownBook: ChannelBook? { stage.channelsUpdated.last ?? stage.channelsShown.last }
 
-    /// Everything #general shows or leads to: its own messages, and every message in the threads that live there.
+    /// Everything a channel shows or leads to: its own messages, and every message in the threads that live there.
     private func said(in channel: ChannelID, of book: ChannelBook?) -> [ChannelMessage] {
         guard let book else { return [] }
         return (book.channel(channel)?.posts ?? []).flatMap { post -> [ChannelMessage] in
@@ -4718,11 +4718,9 @@ final class FlowTests: XCTestCase {
         }
     }
 
-    private var everyoneSaid: [String] { said(in: .general, of: shownBook).compactMap(\.text) }
-
-    /// What anyone but you said in #general and its threads.
+    /// What anyone but you said, with the cat or any kitten, in the threads that live there.
     private func answers(in book: ChannelBook) -> [String] {
-        said(in: .general, of: book).filter { $0.speaker != .you }.compactMap(\.text)
+        book.channels.flatMap { said(in: $0.id, of: book) }.filter { $0.speaker != .you }.compactMap(\.text)
     }
 
     private func lastSpeaker(in channel: ChannelID) -> Speaker? {
@@ -4770,30 +4768,26 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.channelsUpdated.last?.started["sent-topic"], "thread-1", "so Messages can follow it into its thread")
     }
 
-    func testGeneralGoesThroughTheRouterAndTheKittenGetsOnlyYourWordsInAThreadThatLivesInGeneral() async throws {
+    /// Work the cat gave a kitten from #general lived in #general. Now it lives in the kitten's channel, where the
+    /// kitten's own work is.
+    func testWorkTheCatGivesAKittenLivesInThatKittensChannel() async throws {
         kittens = [steve, penny]
         backend.projects["/k/penny"] = "project-penny"
         backend.replies = [[.finished(fullText: "KITTEN: 2")], [.finished(fullText: "On it.")]]
         controller.channelsPressed()
         await messages("Can I afford a new laptop?", to: .router)
 
-        XCTAssertEqual(backend.sent.count, 2)
-        XCTAssertEqual(backend.sent[1].prompt.projectID, "project-penny")
-        XCTAssertEqual(backend.sent[1].prompt.text, Prompts.forKitten(penny, words: "Can I afford a new laptop?", snapshot: nil, screenshotPath: nil, screenLeftOut: false))
-        XCTAssertEqual(everyoneSaid, ["Can I afford a new laptop?"], "it shows at once, and the kitten's thread answers it")
-        let started = try XCTUnwrap(controller.messagesThreads.keys.first, "the kitten's new session started from #general")
-        XCTAssertEqual(shownBook?.channel(.general)?.posts, [.thread(started)], "a thread with your message as its parent")
-        XCTAssertEqual(shownBook?.threads[started]?.home, .general)
-        XCTAssertEqual(shownBook?.threads[started]?.parent.text, "Can I afford a new laptop?")
-    }
-
-    func testTheRoutersOwnAnswerIsAPlainMessageInGeneral() async {
-        backend.replies = [[.finished(fullText: "It's Tuesday.")]]
-        controller.channelsPressed()
-        await messages("What day is it?", to: .router)
-        XCTAssertEqual(everyoneSaid, ["What day is it?", "It's Tuesday."])
-        XCTAssertEqual(lastSpeaker(in: .general), .cat, "a plain message after yours")
-        XCTAssertTrue(shownBook?.threads.isEmpty == true, "and no thread")
+        let started = try XCTUnwrap(controller.messagesThreads.keys.first, "the kitten's new session")
+        XCTAssertEqual(shownBook?.channel(.of(penny))?.posts, [.thread(started)], "your words start it in Penny's channel at once")
+        XCTAssertEqual(shownBook?.threads[started]?.home, .of(penny))
+        let work = AgentThread(id: started, title: "Can I afford a new laptop?", projectTitle: "Penny", status: .completed, model: "m", updatedAt: clock, projectPath: penny.folder)
+        let said = Exchange(id: "e", asker: .you, askedAt: clock, ask: "Can I afford a new laptop?", reply: "On it.", repliedAt: clock)
+        let book = ChannelBook.build(kittens: kittens, threads: [work], transcripts: [started: [said]], isReading: false, unreadable: 0, cantReachT3: false, messagesThreads: controller.messagesThreads)
+        XCTAssertEqual(book.threads[started]?.home, .of(penny))
+        XCTAssertEqual(book.channel(.of(penny))?.posts, [.thread(started)], "with your words as its parent")
+        XCTAssertEqual(book.channel(.shades)?.posts, [])
+        controller.threadsChanged([work])
+        XCTAssertEqual(controller.messagesHome(ofThread: started), .of(penny), "so the bubble's Open goes there too")
     }
 
     private var shadesSaid: [String] { said(in: .shades, of: shownBook).compactMap(\.text) }
@@ -4810,7 +4804,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(routed.prompt.attachments.isEmpty)
         XCTAssertEqual(shadesSaid, ["What day is it?", "It's Tuesday."])
         XCTAssertEqual(lastSpeaker(in: .shades), .cat)
-        XCTAssertEqual(everyoneSaid, [], "the cat answers where you wrote")
     }
 
     func testShadesSaysWhereYourWordsWentAndTheKittenGetsOnlyThem() async {
@@ -4856,8 +4849,8 @@ final class FlowTests: XCTestCase {
         backend.projects["/k/penny"] = "project-penny"
         backend.routerSays = ["Update my resume": "KITTEN: 1", "Check my budget": "KITTEN: 2"]
         controller.channelsPressed()
-        controller.messagesAction(.send("Update my resume", to: .router, shownIn: .general))
-        controller.messagesAction(.send("Check my budget", to: .router, shownIn: .general))
+        controller.messagesAction(.send("Update my resume", to: .router, shownIn: .shades))
+        controller.messagesAction(.send("Check my budget", to: .router, shownIn: .shades))
         await controller.messagesTurn?.value
         await settle()
         await controller.frontierTask?.value
@@ -4871,9 +4864,9 @@ final class FlowTests: XCTestCase {
         controller.channelsPressed()
         await messages("What day is it?", to: .router)
         XCTAssertTrue(backend.sent.isEmpty)
-        XCTAssertEqual(everyoneSaid, ["What day is it?"])
-        XCTAssertEqual(said(in: .general, of: shownBook).first?.failure, CatWords.frontDoorNoFolder, "it says why under your words")
-        XCTAssertEqual(said(in: .general, of: shownBook).first?.canTryAgain, true)
+        XCTAssertEqual(shadesSaid, ["What day is it?"])
+        XCTAssertEqual(said(in: .shades, of: shownBook).first?.failure, CatWords.frontDoorNoFolder, "it says why under your words")
+        XCTAssertEqual(said(in: .shades, of: shownBook).first?.canTryAgain, true)
     }
 
     func testAQuestionIsAnsweredFromMessagesWithAnOptionOrYourWords() async {
@@ -5188,7 +5181,7 @@ final class FlowTests: XCTestCase {
         backend.routerSays = ["Check my budget": "KITTEN: 2", "What's this?": "A pricing page."]
         backend.holdQuestion = "Check my budget"
         controller.channelsPressed()
-        controller.messagesAction(.send("Check my budget", to: .router, shownIn: .general))
+        controller.messagesAction(.send("Check my budget", to: .router, shownIn: .shades))
         await until { backend.sent.contains { $0.prompt.text.contains("Their question: Check my budget") } }
 
         await controller.beginAsk()
@@ -5217,10 +5210,10 @@ final class FlowTests: XCTestCase {
         await messages("And tomorrow?", to: .router)
         XCTAssertEqual(backend.sent.last?.mode, .followUp)
         XCTAssertEqual(backend.sent.last?.threadID, "thread-2", "and it carries on in that one")
-        XCTAssertEqual(everyoneSaid.suffix(1), ["Okay."])
+        XCTAssertEqual(shadesSaid.suffix(1), ["Okay."])
     }
 
-    func testWorkTheRouterHandsOffFromGeneralIsAThreadThere() async throws {
+    func testWorkTheCatHandsOffIsAThreadWithTheCat() async throws {
         kittens = [steve, penny]
         backend.routerSays = ["Find me a cheaper flight": "HANDOFF: Search for cheaper flights"]
         controller.channelsPressed()
@@ -5230,16 +5223,18 @@ final class FlowTests: XCTestCase {
 
         let work = AgentThread(id: handedTo, title: "Cheaper flights", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
         let said = Exchange(id: "e", asker: .you, askedAt: clock, ask: "Find me a cheaper flight", reply: "Found one for $212.", repliedAt: clock.addingTimeInterval(30))
-        XCTAssertEqual(shownBook?.channel(.general)?.posts, [.thread(handedTo)], "your message starts its thread in #general at once")
+        XCTAssertEqual(self.said(in: .shades, of: shownBook).filter { $0.threadID != handedTo }.compactMap(\.text), ["Find me a cheaper flight", CatWords.handedOff("Search for cheaper flights")], "the cat says where it went")
+        XCTAssertTrue(shownBook?.channel(.shades)?.posts.contains(.thread(handedTo)) == true, "and your words start its thread with the cat at once")
         XCTAssertEqual(shownBook?.threads[handedTo]?.parent.text, "Find me a cheaper flight")
-        let book = ChannelBook.build(kittens: kittens, threads: [work], transcripts: [handedTo: [said]], isReading: false, unreadable: 0, cantReachT3: false, inGeneral: controller.messagesThreads)
+        let book = ChannelBook.build(kittens: kittens, threads: [work], transcripts: [handedTo: [said]], isReading: false, unreadable: 0, cantReachT3: false, messagesThreads: controller.messagesThreads)
         XCTAssertEqual(answers(in: book), ["Found one for $212."])
-        XCTAssertEqual(book.threads[handedTo]?.home, .general)
+        XCTAssertEqual(book.threads[handedTo]?.home, .shades)
+        XCTAssertEqual(book.threads[handedTo]?.parent.text, "Find me a cheaper flight", "under your words")
         XCTAssertEqual(book.threads[handedTo]?.replies.first?.speaker, .cat)
     }
 
-    /// What lived in #general was only remembered while the app ran, so every restart, such as each install, emptied it.
-    func testGeneralKeepsItsThreadsAndTheCatsAnswersAcrossARestart() async throws {
+    /// What Messages started was only remembered while the app ran, so every restart, such as each install, lost it.
+    func testWhatYouToldTheCatAndTheWorkItStartedAreThereAfterARestart() async throws {
         backend.routerSays = ["What day is it?": "It's Tuesday.", "Find me a cheaper flight": "HANDOFF: Search for cheaper flights"]
         let asked = Exchange(id: "turn-1", asker: .you, askedAt: clock, ask: "What day is it?", reply: "It's Tuesday.", repliedAt: clock)
         backend.said["thread-1"] = [asked]
@@ -5248,8 +5243,7 @@ final class FlowTests: XCTestCase {
         await messages("Find me a cheaper flight", to: .router)
         let handedTo = try XCTUnwrap(controller.messagesThreads.keys.first)
         let saved = try XCTUnwrap(savedInbox)
-        XCTAssertEqual(Set(saved.inGeneral.keys), [handedTo], "only IDs are kept")
-        XCTAssertEqual(Set(saved.answersInGeneral.keys), ["turn-1"])
+        XCTAssertEqual(Set(saved.messagesThreads.keys), [handedTo], "only IDs are kept")
 
         let talk = AgentThread(id: "thread-1", title: "What day is it?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: clock, projectPath: "/shades/router")
         let work = AgentThread(id: handedTo, title: "Search for cheaper flights", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
@@ -5267,10 +5261,12 @@ final class FlowTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(5))
         }
         controller.channelsClosed()
-        let general = try XCTUnwrap(book?.channel(.general)?.posts)
-        XCTAssertEqual(general.count, 3, "the cat's answer, and the work under your words")
-        XCTAssertEqual(said(in: .general, of: book).compactMap(\.text), ["What day is it?", "It's Tuesday.", "Find me a cheaper flight", "Found one for $212."])
-        XCTAssertEqual(book?.threads[handedTo]?.home, .general)
+        let posts = try XCTUnwrap(book?.channel(.shades)?.posts)
+        XCTAssertTrue(posts.contains(.thread("thread-1")), "the talk, with the cat's answer")
+        XCTAssertTrue(posts.contains(.thread(handedTo)), "and the work it started")
+        XCTAssertEqual(book?.threads["thread-1"]?.messages.prefix(2).compactMap(\.text), ["What day is it?", "It's Tuesday."])
+        XCTAssertEqual(book?.threads[handedTo]?.messages.compactMap(\.text), ["Find me a cheaper flight", "Found one for $212."], "under your words")
+        XCTAssertEqual(book?.threads[handedTo]?.home, .shades)
     }
 
     /// A reply also sent to a channel was only remembered while the app ran, so every restart took it out of the channel.
@@ -5362,59 +5358,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(restarted.threads["w"]?.replies.first?.reactions, [.thumbsUp])
     }
 
-    /// An @ in #general names who your words are for, so the router doesn't choose.
-    func testAnAtInGeneralGoesStraightToThatKittenWithOnlyYourWords() async throws {
-        let planned = Kitten(name: "Cali", role: "Travel", covers: "trips", folder: "/k/cali", planned: true)
-        kittens = [steve, penny, planned]
-        backend.projects["/k/penny"] = "project-penny"
-        backend.projects["/k/steve"] = "project-steve"
-        controller.channelsPressed()
-        await messages("@penny can I afford a new laptop?", to: .router)
-
-        XCTAssertEqual(backend.sent.count, 1, "the router never ran")
-        XCTAssertEqual(backend.sent[0].prompt.projectID, "project-penny")
-        XCTAssertEqual(backend.sent[0].prompt.text, Prompts.forKitten(penny, words: "@penny can I afford a new laptop?", snapshot: nil, screenshotPath: nil, screenLeftOut: false), "only your words, as you typed them")
-        let started = try XCTUnwrap(controller.messagesThreads.keys.first, "it started from #general, so it lives there")
-        XCTAssertEqual(shownBook?.channel(.general)?.posts, [.thread(started)])
-        XCTAssertEqual(shownBook?.threads[started]?.home, .general)
-
-        await messages("Ask @Steve-Pawsniak, and @penny too, about my resume", to: .router)
-        XCTAssertEqual(backend.sent.last?.prompt.projectID, "project-steve", "the first one named, by its channel's name")
-
-        let before = backend.sent.count
-        for words in ["Email me@penny.com", "@pen, what's my balance?", "@cali plan a trip"] {
-            backend.routerSays = [words: "It's Tuesday."]
-            await messages(words, to: .router)
-        }
-        XCTAssertEqual(backend.sent.dropFirst(before).map(\.prompt.projectID), ["project-router", "project-router", "project-router"], "an email, a name that's no one's, and a kitten that isn't set up go to the router")
-
-        // A kitten whose name has no letters or numbers has no channel's name for an @ to match, so a lone @ isn't it.
-        kittens = [Kitten(name: "🐾", role: "Pets", covers: "the cat", folder: "/k/paw"), steve]
-        backend.projects["/k/paw"] = "project-paw"
-        backend.routerSays = ["Lunch @ 12, can you book it?": "It's Tuesday."]
-        await messages("Lunch @ 12, can you book it?", to: .router)
-        XCTAssertEqual(backend.sent.last?.prompt.projectID, "project-router", "no kitten was named")
-    }
-
-    /// A file still goes only where your screen may, as it would from the kitten's own channel.
-    func testAFileWithAnAtGoesOnlyToAKittenThatSeesYourScreen() async throws {
-        let pepper = Kitten(name: "Pepper", role: "Finance", covers: "their money", folder: "/k/pepper", seesScreen: false)
-        kittens = [pepper, steve]
-        backend.projects["/k/pepper"] = "project-pepper"
-        backend.projects["/k/steve"] = "project-steve"
-        controller.channelsPressed()
-        controller.messagesAction(.send("@pepper what's this?", to: .router, shownIn: .general, files: [picture]))
-        await settle()
-        XCTAssertTrue(backend.sent.isEmpty, "nothing went, not even your words without it")
-        XCTAssertEqual(said(in: .general, of: shownBook).first?.failure, CatWords.cantTakeFiles("Pepper"), "and it says why under them")
-
-        controller.messagesAction(.send("@steve-pawsniak what's this?", to: .router, shownIn: .general, files: [picture]))
-        await settle()
-        let sent = try XCTUnwrap(backend.sent.first)
-        XCTAssertEqual(sent.prompt.projectID, "project-steve")
-        XCTAssertEqual(sent.prompt.attachments.count, 1)
-    }
-
     /// A fix showed nowhere in Messages, so a question asked with Fix left nothing in the cat's DM.
     func testWorkYouStartWithTheCatOutsideMessagesLivesInItsDM() async throws {
         await controller.beginFix()
@@ -5488,7 +5431,7 @@ final class FlowTests: XCTestCase {
         controller.channelsPressed()
         await messages(wrong, to: .router)
         assertWordsOnly(sentTo("project-steve"))
-        XCTAssertFalse(everyoneSaid.contains(CatWords.noReply))
+        XCTAssertFalse(shadesSaid.contains(CatWords.noReply))
     }
 
     func testACorrectionAsAnAsideInEveryoneGetsItsOwnCopy() async {
@@ -5515,7 +5458,7 @@ final class FlowTests: XCTestCase {
         await messages(words, to: .router)
         XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains(note), true)
         XCTAssertNil(sentTo("project-penny"))
-        XCTAssertTrue(everyoneSaid.contains(CatWords.lostTheSession))
+        XCTAssertTrue(shadesSaid.contains(CatWords.lostTheSession))
     }
 
     /// The router's turn can wait on an approval past the conversation's ten minutes, and what it said still counts.
@@ -5528,7 +5471,7 @@ final class FlowTests: XCTestCase {
         backend.held = Task { for await _ in opened { break } }
         backend.replies = [[]]
         backend.afterHeld = [.finished(fullText: "CORRECTION: 1\nKITTEN: 2")]
-        controller.messagesAction(.send("Can I afford a laptop? And by the way \(wrong).", to: .router, shownIn: .general))
+        controller.messagesAction(.send("Can I afford a laptop? And by the way \(wrong).", to: .router, shownIn: .shades))
         for _ in 0..<500 where backend.sent.isEmpty { await Task.yield() }
         for _ in 0..<50 { await Task.yield() }
         backend.held = nil
@@ -5540,7 +5483,7 @@ final class FlowTests: XCTestCase {
         await controller.frontierTask?.value
         XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains(note), true)
         XCTAssertNotNil(sentTo("project-penny"))
-        XCTAssertFalse(everyoneSaid.contains(CatWords.noReply))
+        XCTAssertFalse(shadesSaid.contains(CatWords.noReply))
     }
 
     /// A correction in a planned kitten's area goes to whoever takes those, so the router has to see it there too.
@@ -5595,14 +5538,14 @@ extension FlowTests {
         backend.routerSays = ["What day is it?": "It's Tuesday."]
         backend.holdQuestion = "What day is it?"
         controller.channelsPressed()
-        controller.messagesAction(.send("What day is it?", to: .router, shownIn: .general))
+        controller.messagesAction(.send("What day is it?", to: .router, shownIn: .shades))
         await until { backend.sent.contains { $0.prompt.text.contains("Their question: What day is it?") } }
         controller.channelsClosed()
         backend.releaseHeld()
         await controller.messagesTurn?.value
         await settle()
         controller.channelsPressed()
-        XCTAssertTrue(stage.bubbles.contains(.notice(caption: "#general", text: "It's Tuesday.", threadID: nil)), "with Messages closed, it comes over the cat")
+        XCTAssertTrue(stage.bubbles.contains(.notice(caption: "Shades", text: "It's Tuesday.", threadID: nil)), "with Messages closed, it comes over the cat")
     }
 }
 
@@ -5642,7 +5585,7 @@ extension FlowTests {
         XCTAssertEqual(backend.sent.last?.threadID, workID)
 
         let second = Exchange(id: "second", asker: .you, askedAt: clock, ask: "Check that flight's baggage", reply: "One bag included.", repliedAt: clock.addingTimeInterval(20))
-        let book = ChannelBook.build(kittens: [], threads: [work], transcripts: [workID: [first, second]], isReading: false, unreadable: 0, cantReachT3: false, inGeneral: controller.messagesThreads)
+        let book = ChannelBook.build(kittens: [], threads: [work], transcripts: [workID: [first, second]], isReading: false, unreadable: 0, cantReachT3: false, messagesThreads: controller.messagesThreads)
         XCTAssertEqual(answers(in: book), ["Flight A costs $212.", "One bag included."], "Earlier frontier replies must not disappear when the same thread receives another message")
     }
 
@@ -5662,8 +5605,8 @@ extension FlowTests {
         XCTAssertTrue(controller.dispatchers.contains(worker.id))
 
         let said = Exchange(id: "result", asker: .agent(threadID: dispatcherID), askedAt: clock, ask: "Fix the project", reply: "The project is fixed.", repliedAt: clock.addingTimeInterval(20))
-        let book = ChannelBook.build(kittens: [], threads: [dispatcher, worker], transcripts: [worker.id: [said]], isReading: false, unreadable: 0, cantReachT3: false, inGeneral: controller.messagesThreads)
-        XCTAssertEqual(answers(in: book), ["The project is fixed."], "#general must follow work the frontier dispatcher moves into another thread")
+        let book = ChannelBook.build(kittens: [], threads: [dispatcher, worker], transcripts: [worker.id: [said]], isReading: false, unreadable: 0, cantReachT3: false, messagesThreads: controller.messagesThreads)
+        XCTAssertEqual(answers(in: book), ["The project is fixed."], "Messages must follow work the frontier dispatcher moves into another thread")
     }
 }
 
@@ -5694,7 +5637,7 @@ extension FlowTests {
 
         controller.channelsPressed()
         await until { stage.channelsUpdated.last?.isReading == false }
-        XCTAssertTrue(everyoneSaid.contains(answer), "the frontier's own answer to what you asked in Everyone is gone from Everyone")
+        XCTAssertTrue(shadesSaid.contains(answer), "the frontier's own answer to what you asked in Everyone is gone from Everyone")
     }
 
     /// Fix 6 again: a routed follow-up keeps its first time, but a link in the follow-up's report then throws the whole thread out of Everyone.
@@ -5721,8 +5664,8 @@ extension FlowTests {
         ]]
         controller.channelsPressed()
         await until { stage.channelsUpdated.last?.isReading == false }
-        XCTAssertTrue(everyoneSaid.contains("Flight A costs $212."), "earlier replies hidden after a follow-up")
-        XCTAssertTrue(everyoneSaid.contains(second), "the follow-up's own answer is gone too")
+        XCTAssertTrue(shadesSaid.contains("Flight A costs $212."), "earlier replies hidden after a follow-up")
+        XCTAssertTrue(shadesSaid.contains(second), "the follow-up's own answer is gone too")
     }
 
     /// Fix 1: which threads are the Ask box's is only remembered while the app runs.
@@ -5815,7 +5758,7 @@ extension FlowTests {
         let dispatcherID = try XCTUnwrap(controller.messagesThreads.keys.first)
         let first = Exchange(id: "first-result", asker: .you, askedAt: sentAt, ask: "Find a flight", reply: "Flight A costs $212.", repliedAt: sentAt.addingTimeInterval(20))
         let dispatcher = session(dispatcherID, "Flights")
-        let before = ChannelBook.build(kittens: [], threads: [dispatcher], transcripts: [dispatcherID: [first]], isReading: false, unreadable: 0, cantReachT3: false, inGeneral: controller.messagesThreads)
+        let before = ChannelBook.build(kittens: [], threads: [dispatcher], transcripts: [dispatcherID: [first]], isReading: false, unreadable: 0, cantReachT3: false, messagesThreads: controller.messagesThreads)
         XCTAssertEqual(answers(in: before), ["Flight A costs $212."])
 
         clock.addTimeInterval(180)
@@ -5832,7 +5775,7 @@ extension FlowTests {
         XCTAssertTrue(controller.hiddenThreads.contains(dispatcherID))
         let second = Exchange(id: "passed-on", asker: .you, askedAt: clock, ask: "Book that flight", reply: handoff, repliedAt: clock)
         let result = Exchange(id: "booking-result", asker: .agent(threadID: dispatcherID), askedAt: clock, ask: "Book flight A", reply: "Flight A is booked.", repliedAt: clock.addingTimeInterval(30))
-        let after = ChannelBook.build(kittens: [], threads: [dispatcher, worker], transcripts: [dispatcherID: [first, second], worker.id: [result]], isReading: false, unreadable: 0, cantReachT3: false, inGeneral: controller.messagesThreads)
+        let after = ChannelBook.build(kittens: [], threads: [dispatcher, worker], transcripts: [dispatcherID: [first, second], worker.id: [result]], isReading: false, unreadable: 0, cantReachT3: false, messagesThreads: controller.messagesThreads)
         let replies = answers(in: after)
         XCTAssertTrue(replies.contains("Flight A costs $212."), "Passing on a follow-up must not remove the earlier answer from Everyone")
         XCTAssertTrue(replies.contains("Flight A is booked."))
@@ -5853,9 +5796,9 @@ extension FlowTests {
         await controller.reportTask?.value
         XCTAssertTrue(controller.messagesThreads.keys.contains(worker.id))
         let result = Exchange(id: "budget-result", asker: .agent(threadID: dispatcherID), askedAt: clock, ask: "Check their budget", reply: "The budget balances.", repliedAt: clock.addingTimeInterval(30))
-        let book = ChannelBook.build(kittens: kittens, threads: [dispatcher, worker], transcripts: [worker.id: [result]], isReading: false, unreadable: 0, cantReachT3: false, inGeneral: controller.messagesThreads)
+        let book = ChannelBook.build(kittens: kittens, threads: [dispatcher, worker], transcripts: [worker.id: [result]], isReading: false, unreadable: 0, cantReachT3: false, messagesThreads: controller.messagesThreads)
         let replies = answers(in: book)
-        XCTAssertTrue(replies.contains("The budget balances."), "#general must follow the frontier work even when the worker belongs to a kitten")
+        XCTAssertTrue(replies.contains("The budget balances."), "Messages must follow the frontier work even when the worker belongs to a kitten")
         controller.channelsClosed()
     }
 }
@@ -6098,7 +6041,7 @@ extension FlowTests {
     }
 
     func testWordsForAMessagesBoxYouClosedGoNowhere() async {
-        controller.channelsPressed(selecting: .channel(.general))
+        controller.channelsPressed(selecting: .channel(.shades))
         stage.isMessagesBoxTyping = true
         voice.transcript = Transcript(raw: "words for the original thread", cleaned: "Words for the original thread.", audioSeconds: 1, latencySeconds: 0.1)
         controller.talkDown()
@@ -6327,7 +6270,9 @@ extension FlowTests {
         return work
     }
 
-    func testWordsTheRouterSendsOnToASessionAreAReplyThereAlsoSentToGeneral() async throws {
+    /// Words the router sent on from #general also showed there, as Also send to #general does. With the cat, it says
+    /// where they went instead.
+    func testWordsTheRouterSendsOnToASessionAreAReplyThere() async throws {
         _ = await pennysThread()
         backend.routerSays = ["And January?": "SEND TO: 1"]
         await messages("And January?", to: .router)
@@ -6338,11 +6283,9 @@ extension FlowTests {
         XCTAssertEqual(forwarded.prompt.text, Prompts.forwarded(words: "And January?", snapshot: nil, screenshotPath: nil, screenLeftOut: false), "only your words")
         let book = try XCTUnwrap(shownBook)
         XCTAssertEqual(book.threads["w"]?.home, .of(penny), "the session stays in Penny's channel")
-        XCTAssertEqual(book.threads["w"]?.latest.text, "And January?", "as a reply in its thread")
-        guard case .alsoSent(let reply, "w")? = book.channel(.general)?.posts.last else { return XCTFail("\(book.channel(.general)?.posts ?? [])") }
-        XCTAssertEqual(reply.text, "And January?", "and in #general, as Also send to #general does")
-        XCTAssertEqual(ChannelRows.rows(.channel(.general), in: book).last, .alsoSent(reply, threadID: "w", parent: "How's December?"))
-        XCTAssertTrue(controller.messagesThreads.isEmpty, "a kitten's session isn't moved to #general by a reply")
+        XCTAssertEqual(shadesSaid, ["And January?", CatWords.passedOnToSession], "and the cat says where it went, where you wrote")
+        XCTAssertEqual(book.channel(.of(penny))?.posts, [.thread("w")], "Penny's channel gets no new post")
+        XCTAssertTrue(controller.messagesThreads.isEmpty, "a kitten's session isn't the cat's because of a reply")
     }
 
     func testAReplyAlsoSentFromItsPaneShowsInItsChannelAndSendsOnlyYourWords() async throws {
@@ -6363,15 +6306,6 @@ extension FlowTests {
         XCTAssertEqual(shownBook?.threads["w"]?.latest.text, "Just in the thread")
     }
 
-    func testAHandOffFromTheCatsDMStillLivesInGeneralUnderYourWords() async throws {
-        backend.routerSays = ["Find me a cheaper flight": "HANDOFF: Search for cheaper flights"]
-        controller.channelsPressed()
-        await messages("Find me a cheaper flight", to: .router, in: .shades)
-        let handedTo = try XCTUnwrap(controller.messagesThreads.keys.first)
-        XCTAssertEqual(shownBook?.threads[handedTo]?.home, .general)
-        XCTAssertEqual(shownBook?.threads[handedTo]?.parent.text, "Find me a cheaper flight")
-        XCTAssertEqual(shadesSaid, ["Find me a cheaper flight", CatWords.handedOff("Search for cheaper flights")], "and the DM says where it went")
-    }
 }
 
 extension FlowTests {
@@ -6394,9 +6328,9 @@ extension FlowTests {
         XCTAssertEqual(shownBook?.threads["old"]?.messages.map(\.text), ["Yes, ship it"], "the thread shows just what you sent there")
         XCTAssertEqual(shownBook.map { ChannelRows.thread("old", in: $0) }?.first, shownBook?.threads["old"].map { .message($0.parent) })
 
-        await messages("Hold off until Monday", to: .thread(id: "other", title: "Deploy billing"), in: .general)
+        await messages("Hold off until Monday", to: .thread(id: "other", title: "Deploy billing"), in: .shades)
         XCTAssertEqual(backend.sent.last?.threadID, "other")
-        XCTAssertEqual(shownBook?.channel(.general)?.posts ?? [], [], "and #general gets nothing for another project's thread")
+        XCTAssertEqual(shownBook?.channel(.shades)?.posts ?? [], [], "and the cat's channel gets nothing for another project's thread")
         XCTAssertEqual(shownBook?.threads["other"]?.messages.map(\.text), ["Hold off until Monday"])
     }
 }
@@ -6416,7 +6350,7 @@ extension FlowTests {
             await settle()
             return .ask
         default:
-            controller.channelsPressed(selecting: .channel(.general))
+            controller.channelsPressed(selecting: .channel(.shades))
             stage.isMessagesBoxTyping = true
             return .messages
         }
@@ -6499,7 +6433,7 @@ extension FlowTests {
         controller.talkDown()
         await settle()
         XCTAssertEqual(looks, 1, "the talk key looks when no box takes your words")
-        controller.channelsPressed(selecting: .channel(.general))
+        controller.channelsPressed(selecting: .channel(.shades))
         stage.isMessagesBoxTyping = true
         controller.micPressed(in: .messages)
         await settle()

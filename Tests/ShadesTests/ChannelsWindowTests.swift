@@ -146,12 +146,78 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.pane.shown.compactMap { row -> String? in if case .parent(let post) = row { post.threadID } else { nil } }, ["t"])
     }
 
-    func testTheSidebarHasActivityThreadsEachChannelAndTheDM() throws {
-        let groups = ChannelSidebarItem.groups(in: book())
-        XCTAssertEqual(groups.map(\.heading), [nil, CatWords.channelsHeading, CatWords.directMessages])
-        XCTAssertEqual(groups.map { $0.items.map(\.title) }, [["Activity", "Threads"], ["general", "steve", "pepper"], ["Shades"]])
-        XCTAssertEqual(ChannelSidebarItem.places(in: book()), [.activity, .threads, .channel(.general), .channel(.of(steve)), .channel(.of(pepper)), .channel(.shades)])
-        XCTAssertFalse(groups.contains { $0.items.contains { ["Done", "Needs you", "Everyone"].contains($0.title) } })
+    /// Channels and Direct messages were two sections, with #general, slugs like #steve-pawsniak, and kittens that
+    /// were only planned. Now it's one list of kittens, the cat first, each by its name.
+    func testTheSidebarHasActivityThreadsThenTheCatAndEachKittenByName() throws {
+        let named = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
+        let planned = Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)
+        let built = ChannelBook.build(kittens: [named, pepper, planned], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        let groups = ChannelSidebarItem.groups(in: built)
+        XCTAssertEqual(groups.map(\.heading), [nil, CatWords.kittensHeading])
+        XCTAssertEqual(groups.map { $0.items.map(\.title) }, [["Activity", "Threads"], ["Shades", "Steve Pawsniak", "Pepper"]], "no #general, no slug, and no kitten that's only planned")
+        XCTAssertEqual(ChannelSidebarItem.places(in: built), [.activity, .threads, .channel(.shades), .channel(.of(named)), .channel(.of(pepper))])
+        XCTAssertFalse(groups.contains { $0.items.contains { ["Done", "Needs you", "Everyone", "general"].contains($0.title) } })
+        XCTAssertEqual(CatWords.kittensHeading.uppercased(), "KITTENS", "drawn in small capitals")
+    }
+
+    /// The cat moved from Direct messages to the top of the list, and each kitten under it, so each row is clicked
+    /// where a mouse would click it, and its toolbar names it as the sidebar does.
+    func testClickingTheCatOrAKittenInTheSidebarOpensIt() throws {
+        let named = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1040, height: 620), styleMask: [.borderless], backing: .buffered, defer: true)
+        window.isReleasedWhenClosed = false
+        let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: 1040, height: 620))
+        window.contentView = view
+        view.show(ChannelBook.build(kittens: [named, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false))
+        for (place, title) in [(ChannelPlace.channel(.shades), "Shades"), (.channel(.of(named)), "Steve Pawsniak"), (.channel(.of(pepper)), "Pepper")] {
+            let row = try XCTUnwrap(view.sidebar.row(for: place))
+            XCTAssertTrue(try Press.click(row) === row, "\(title): the click lands on its row")
+            XCTAssertEqual(view.selection, ChannelSelection(place), title)
+            XCTAssertTrue(row.isSelected, title)
+            XCTAssertEqual(header(in: view.pane)?.components(separatedBy: ", ").first, title, "the toolbar names it as the sidebar does")
+        }
+        // ⌘3 is the cat's row now, where #general was, and ⌘4 the first kitten.
+        for (code, place) in [(UInt16(20), ChannelPlace.channel(.shades)), (21, .channel(.of(named)))] {
+            view.perform(try XCTUnwrap(MessagesShortcut(keyCode: code, characters: nil, modifiers: .command)))
+            XCTAssertEqual(view.selection, ChannelSelection(place))
+        }
+        XCTAssertTrue(try XCTUnwrap(view.sidebar.row(for: .channel(.of(pepper)))).accessibilityPerformPress())
+        XCTAssertEqual(view.selection, .channel(.of(pepper)), "and VoiceOver's press opens it too")
+    }
+
+    /// An @ in #general went straight to that kitten. Typed to the cat, it does the same, and the new thread opens
+    /// beside the cat, the way the box in the kitten's own channel opens one.
+    func testAnAtToTheCatGoesStraightToThatKittenInAThreadThatOpensBeside() throws {
+        let named = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
+        let planned = Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)
+        let view = view()
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.show(ChannelBook.build(kittens: [named, pepper, planned], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false))
+        view.select(.channel(.shades))
+        let composer = view.pane.composer
+        let line = { composer.subviews.compactMap { $0 as? NSTextField }.map(\.stringValue) }
+        XCTAssertTrue(line().contains(CatWords.target(.router)))
+        composer.showDraft("@pepper can I afford a new laptop?")
+        XCTAssertTrue(line().contains("Straight to Pepper, in a new thread"), "the line says so as you type: \(line())")
+
+        composer.send("@pepper can I afford a new laptop?")
+        guard case .startTopic(let words, let kitten, let topic, let files)? = sent.last else { return XCTFail("\(sent)") }
+        XCTAssertEqual(words, "@pepper can I afford a new laptop?", "only your words, as you typed them")
+        XCTAssertEqual(kitten, pepper)
+        XCTAssertTrue(files.isEmpty)
+        XCTAssertEqual(view.selection, .thread(topic, in: .channel(.shades)), "it opens beside the cat")
+
+        view.select(.channel(.shades))
+        composer.send("Ask @Steve-Pawsniak, and @pepper too, about my resume")
+        guard case .startTopic(_, let first, _, _)? = sent.last else { return XCTFail("\(sent)") }
+        XCTAssertEqual(first, named, "the first one named, by its name as one word")
+
+        for words in ["Email me@pepper.com", "@pep, what's my balance?", "@cali plan a trip", "Lunch @ 12, can you book it?"] {
+            view.select(.channel(.shades))
+            composer.send(words)
+            XCTAssertEqual(sent.last, .send(words, to: .router, shownIn: .shades), "\(words): an email, a name that's no one's, a kitten that isn't set up and a lone @ go to the cat")
+        }
     }
 
     func testOnlyAKittenThatsWorkingOrNeedsYouMoves() {
@@ -396,7 +462,7 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(ChannelsPanel().title, "The Kitty Litter", "what VoiceOver and window lists call it")
         XCTAssertEqual(CatWords.shortcutGroups.last?.title, "The Kitty Litter")
         XCTAssertTrue(CatWords.shortcutGroups.last?.rows.contains { $0.keys == "⌘W" && $0.does == "Close The Kitty Litter" } == true)
-        XCTAssertEqual(CatWords.placeholder(.router, in: .shades), "Message Shades", "his DM keeps his name")
+        XCTAssertEqual(CatWords.placeholder(.router), "Message Shades", "the cat keeps its name")
     }
 
     func testClosingKeepsEverythingSoItOpensAgainAsYouLeftIt() {
@@ -673,7 +739,7 @@ final class ChannelsWindowTests: XCTestCase {
         view.select(inThread)
         let also = view.threadPane.composer.alsoSend
         XCTAssertFalse(also.isHidden)
-        XCTAssertEqual(also.title, "Also send to #steve", "the thread's home channel")
+        XCTAssertEqual(also.title, "Also send to Steve", "the thread's home channel, by its name")
         XCTAssertFalse(also.isOn)
 
         also.toggle()
@@ -685,14 +751,17 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(view.pane.composer.alsoSend.isHidden, "a channel's own box has none")
     }
 
-    func testAThreadFromGeneralOffersGeneral() {
+    /// A thread Messages started offered Also send to #general. It lives with its kitten now, so it offers that kitten,
+    /// by name.
+    func testAThreadMessagesStartedOffersItsKittenByName() {
+        let named = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
         let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
         let said = Exchange(id: "e", asker: .you, askedAt: at, ask: "Ask", reply: "Reply", repliedAt: at)
-        let built = ChannelBook.build(kittens: [steve], threads: [thread], transcripts: ["t": [said]], isReading: false, unreadable: 0, cantReachT3: false, inGeneral: ["t": at])
+        let built = ChannelBook.build(kittens: [named], threads: [thread], transcripts: ["t": [said]], isReading: false, unreadable: 0, cantReachT3: false, messagesThreads: ["t": at])
         let view = view()
         view.show(built)
-        view.select(.thread("t", in: .channel(.general)))
-        XCTAssertEqual(view.threadPane.composer.alsoSend.title, "Also send to #general")
+        view.select(.thread("t", in: .channel(.of(named))))
+        XCTAssertEqual(view.threadPane.composer.alsoSend.title, "Also send to Steve Pawsniak")
     }
 
     func testClickingAParentOpensItsThreadBesideTheChannel() throws {
@@ -708,7 +777,7 @@ final class ChannelsWindowTests: XCTestCase {
         parent.press()
         XCTAssertEqual(view.selection, inThread)
         XCTAssertFalse(view.threadPane.isHidden)
-        XCTAssertEqual(header(in: view.threadPane), "Thread, #steve  ·  Work · Steve · Done")
+        XCTAssertEqual(header(in: view.threadPane), "Thread, Steve  ·  Work · Steve · Done")
         XCTAssertTrue(view.sidebar.row(for: .channel(.of(steve)))?.isSelected == true, "its channel stays selected")
         XCTAssertEqual(view.pane.shown, ChannelRows.rows(.channel(.of(steve)), in: book()), "and still showing beside it")
         guard case .message(let first) = view.threadPane.shown.first else { return XCTFail("\(view.threadPane.shown)") }

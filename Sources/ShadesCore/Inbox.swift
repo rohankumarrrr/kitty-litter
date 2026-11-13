@@ -62,13 +62,16 @@ public struct Inbox: Codable, Equatable, Sendable {
     /// Threads given a correction. Only IDs, and files from before corrections don't have it.
     private var corrections: Set<String>?
     /// Where Messages put what you said, so a restart leaves it there. Only IDs, and files from before don't have it.
+    /// `general` is named for #general, where those threads lived once.
     private var general: [String: Date]?
     private var withShades: [String: Date]?
+    /// What #general showed, from before it was folded into Shades. Nothing reads or adds to these now, but a file from
+    /// then keeps them, so going back to an older build loses nothing.
     private var answeredInGeneral: [String: Date]?
+    private var alsoShownInGeneral: [String: ShownInGeneral]?
     /// What came in while Do Not Disturb was on. Only IDs, and files from before don't have it.
     private var missed: [Missed]?
     private var alsoShown: [String: Date]?
-    private var alsoShownInGeneral: [String: ShownInGeneral]?
     private var shownOnPhone: [String: Date]?
     private var reacted: [String: Reacted]?
 
@@ -79,8 +82,9 @@ public struct Inbox: Codable, Equatable, Sendable {
         self.since = since
     }
 
-    /// Threads that live in #general, since Messages started them or passed your words to them there, and when.
-    public var inGeneral: [String: Date] {
+    /// Threads Messages started or passed your words to, and when. Each shows with the kitten that has it, or with the
+    /// cat if no kitten does.
+    public var messagesThreads: [String: Date] {
         get { general ?? [:] }
         set { general = Self.newest(newValue) }
     }
@@ -99,12 +103,6 @@ public struct Inbox: Codable, Equatable, Sendable {
         set { shownOnPhone = Self.newest(newValue) }
     }
 
-    /// T3's ID for each turn of Messages' talk with the router that the cat answered itself in #general, and when.
-    public var answersInGeneral: [String: Date] {
-        get { answeredInGeneral ?? [:] }
-        set { answeredInGeneral = Self.newest(newValue) }
-    }
-
     /// What came in while Do Not Disturb was on that you haven't caught up on, in the order it came. The cat's own
     /// lines aren't kept, since they're words and not IDs.
     public var away: [Missed] {
@@ -117,13 +115,6 @@ public struct Inbox: Codable, Equatable, Sendable {
     public var alsoSent: [String: Date] {
         get { alsoShown ?? [:] }
         set { alsoShown = Self.newest(newValue) }
-    }
-
-    /// The same for what you wrote in #general that went into a thread living somewhere else, which shows in #general,
-    /// with that thread, so #general reads it whoever's it is.
-    public var alsoSentToGeneral: [String: ShownInGeneral] {
-        get { alsoShownInGeneral ?? [:] }
-        set { alsoShownInGeneral = Self.newest(newValue) { $0.at } }
     }
 
     /// Your reactions, by T3's ID for each message and whether it's what was asked or the answer, in the order you
@@ -157,14 +148,9 @@ public struct Inbox: Codable, Equatable, Sendable {
     }
 
     /// The thread a message Messages also showed in #general is in, and when. Only IDs.
-    public struct ShownInGeneral: Codable, Equatable, Sendable {
-        public var thread: String
-        public var at: Date
-
-        public init(thread: String, at: Date) {
-            self.thread = thread
-            self.at = at
-        }
+    private struct ShownInGeneral: Codable, Equatable, Sendable {
+        var thread: String
+        var at: Date
     }
 
     private static func newest(_ ids: [String: Date]) -> [String: Date] {

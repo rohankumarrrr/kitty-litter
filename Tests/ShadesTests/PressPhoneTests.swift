@@ -133,7 +133,7 @@ final class PressPhoneTests: XCTestCase {
         try await phone.press(.returnKey)
         try await shows(PhonePlace.home)
         try await expect("$('pair').hidden", true)
-        try await expect("document.querySelectorAll('.place').length", 5)
+        try await expect("document.querySelectorAll('.place').length", 4, "Activity, Threads and each kitten")
     }
 
     func testScanningTheCodeOpensThePagePaired() async throws {
@@ -164,16 +164,16 @@ final class PressPhoneTests: XCTestCase {
 
     func testTappingAPlaceOpensItAndBackComesHome() async throws {
         try await open()
-        try await phone.tap(".place", "steve-pawsniak")
+        try await phone.tap(".place", "Steve Pawsniak")
         try await shows(steveKey)
-        try await expect("$('title').textContent", "#steve-pawsniak")
+        try await expect("$('title').textContent", "Steve Pawsniak")
         try await phone.tap("#back")
         try await shows(PhonePlace.home)
-        try await phone.press(.returnKey, on: ".place", "steve-pawsniak")
+        try await phone.press(.returnKey, on: ".place", "Steve Pawsniak")
         try await shows(steveKey)
         try await phone.press(.space, on: "#back")
         try await shows(PhonePlace.home)
-        for place in ["Activity", "Threads", "general", "pepper"] {
+        for place in ["Activity", "Threads", "Pepper"] {
             try await phone.tap(".place", place)
             try await phone.until("\(place) opens") { try await phone.read("$('title').textContent") as? String != CatWords.appName }
             try await phone.tap("#back")
@@ -200,7 +200,7 @@ final class PressPhoneTests: XCTestCase {
         try await shows("activity")
         try await phone.tap("#back")
         try await shows(PhonePlace.home)
-        try await phone.tap(".place", "steve-pawsniak")
+        try await phone.tap(".place", "Steve Pawsniak")
         try await shows(steveKey)
         try await phone.press(.returnKey, on: "#link")
         try await shows("activity")
@@ -343,7 +343,7 @@ final class PressPhoneTests: XCTestCase {
 
     func testAlsoSendToTheChannelGoesWithTheReply() async throws {
         try await open(at: threadKey)
-        try await expect("$('alsotext').textContent", "Also send to #steve-pawsniak")
+        try await expect("$('alsotext').textContent", "Also send to Steve Pawsniak")
         try await phone.tap("#alsolabel")
         try await expect("$('also').checked", true)
         try await phone.tap("#words")

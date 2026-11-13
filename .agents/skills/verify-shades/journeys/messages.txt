@@ -2,13 +2,15 @@ front
 channels
 wait 1
 draw .verify/shades/messages/0-activity
-channel general
+channel shades
 send I need help with my resume
 wait 4
-draw .verify/shades/messages/1-general
+draw .verify/shades/messages/1-shades
+channel steve
+wait 1
 thread resume
 wait 1
-draw .verify/shades/messages/2-general-thread
+draw .verify/shades/messages/2-steve-thread
 channel steve
 wait 1
 draw .verify/shades/messages/3-channel

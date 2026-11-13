@@ -206,8 +206,6 @@ final class ScreenBoundaryTests: XCTestCase {
 private enum Give: CaseIterable {
     /// Ask, and the router picks a kitten.
     case askKitten
-    /// #general in Messages, and the router picks a kitten.
-    case generalKitten
     /// The cat's DM in Messages, which goes through the router the same way, and it picks a kitten.
     case shadesKitten
     /// The box under a kitten's channel in Messages, which starts a new thread.
@@ -222,15 +220,16 @@ private enum Give: CaseIterable {
     case dropHandOff
     /// The cat's DM in Messages, and the router hands it to the frontier agent.
     case shadesHandOff
-    /// A file attached in #general, and the router picks a kitten.
+    /// A file attached in the cat's box in Messages, and the router picks a kitten.
     case attachKitten
     /// A file attached in the box under a kitten's channel, which starts a new thread.
     case attachTopic
-    /// A file attached in #general, and the router hands it to the frontier agent.
+    /// A file attached in the cat's box, and the router hands it to the frontier agent.
     case attachHandOff
-    /// #general in Messages, with an @ naming the kitten, so the router doesn't choose.
+    /// The cat's box in Messages, with an @ naming the kitten, which the window starts a thread with instead of asking
+    /// the router.
     case mentionKitten
-    /// A file attached in #general, with an @ naming the kitten.
+    /// A file attached in the cat's box, with an @ naming the kitten.
     case attachMention
 
     var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff, .shadesHandOff, .attachHandOff].contains(self) }
@@ -240,8 +239,6 @@ private enum Give: CaseIterable {
 private enum Pass: CaseIterable {
     /// Ask, and the router says it carries on from that thread.
     case askThread
-    /// #general in Messages, and the router says the same.
-    case generalThread
     /// The cat's DM in Messages, and the router says the same.
     case shadesThread
     /// Typing in a thread's pane in Messages, opened from its channel, Threads, Activity or Reply on a message.
@@ -256,8 +253,8 @@ private enum Pass: CaseIterable {
     case dropThread
     /// A file attached in a thread's pane in Messages.
     case attachThread
-    /// A file attached in #general, and the router says it carries on from that thread.
-    case attachGeneralThread
+    /// A file attached in the cat's box, and the router says it carries on from that thread.
+    case attachShadesThread
 }
 
 /// A thread your words can be passed to, described by what decides whose it is.
@@ -392,9 +389,6 @@ private final class World {
         switch route {
         case .askKitten:
             await ask("this one", routerSays: "KITTEN: \(number)")
-        case .generalKitten:
-            await ask("what's this?", routerSays: "It's Page-5ad1.")
-            await messages("this one", to: .router, routerSays: "KITTEN: \(number)")
         case .shadesKitten:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("this one", to: .router, in: .shades, routerSays: "KITTEN: \(number)")
@@ -425,9 +419,9 @@ private final class World {
             await messages("this one", to: .router, routerSays: "HANDOFF: Do what Statement-5ad1 says", files: ScreenBoundaryTests.attachedFiles)
         case .mentionKitten:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
-            await messages("@\(ChannelBook.slug(target)) this one", to: .router, routerSays: "It's Page-5ad1.")
+            await mention("@\(ChannelBook.slug(target)) this one")
         case .attachMention:
-            await messages("@\(ChannelBook.slug(target)) this one", to: .router, routerSays: "It's Page-5ad1.", files: ScreenBoundaryTests.attachedFiles)
+            await mention("@\(ChannelBook.slug(target)) this one", files: ScreenBoundaryTests.attachedFiles)
         }
     }
 
@@ -435,9 +429,6 @@ private final class World {
         switch route {
         case .askThread:
             await ask("and that part?", routerSays: "SEND TO: 1")
-        case .generalThread:
-            await ask("what's this?", routerSays: "It's Page-5ad1.")
-            await messages("and that part?", to: .router, routerSays: "SEND TO: 1")
         case .shadesThread:
             await ask("what's this?", routerSays: "It's Page-5ad1.")
             await messages("and that part?", to: .router, in: .shades, routerSays: "SEND TO: 1")
@@ -458,7 +449,7 @@ private final class World {
             await drop("and that part?", routerSays: "SEND TO: 1")
         case .attachThread:
             await messages("and that part?", to: .thread(id: "w", title: "Fix routing"), files: ScreenBoundaryTests.attachedFiles)
-        case .attachGeneralThread:
+        case .attachShadesThread:
             await messages("and that part?", to: .router, routerSays: "SEND TO: 1", files: ScreenBoundaryTests.attachedFiles)
         }
     }
@@ -493,7 +484,14 @@ private final class World {
         await settle()
     }
 
-    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID = .general, alsoSent: Bool = false, routerSays: String? = nil, files: [Drop] = []) async {
+    /// An @ in the cat's box is read in the window, which sends it the way the box in the kitten's own channel does.
+    private func mention(_ words: String, files: [Drop] = []) async {
+        guard let kitten = MessageTarget.mentioned(in: words, among: kittens.filter { !$0.planned }) else { return XCTFail("no kitten in \(words)") }
+        controller.messagesAction(.startTopic(words, with: kitten, id: "sent-mention", files: files))
+        await settle()
+    }
+
+    private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID = .shades, alsoSent: Bool = false, routerSays: String? = nil, files: [Drop] = []) async {
         if let routerSays { backend.routerSays[words] = routerSays }
         controller.messagesAction(.send(words, to: target, shownIn: channel, alsoSent: alsoSent, files: files))
         await settle()

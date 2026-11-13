@@ -411,8 +411,8 @@ final class ResizeEdge: QuietView {
     }
 }
 
-/// The Messages window: Activity, your threads, #general, a channel for each kitten and your DM with the cat, with a
-/// thread's pane beside them. Closing it keeps everything as it was, so it opens again just as you left it.
+/// The Messages window: Activity, your threads, the cat and a channel for each kitten, with a thread's pane beside
+/// them. Closing it keeps everything as it was, so it opens again just as you left it.
 @MainActor
 final class ChannelsWindow: NSObject, NSWindowDelegate {
     nonisolated static let size = NSSize(width: 1040, height: 620)

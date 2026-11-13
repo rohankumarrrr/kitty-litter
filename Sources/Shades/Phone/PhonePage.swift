@@ -184,9 +184,6 @@ enum PhonePage {
         .place:active, .issue:active, .hit:active, .digest:active, .replybar:active { background: var(--raised); }
         .place .name { flex: 1; color: var(--body); }
         .place.unread .name { color: var(--white); font-weight: 600; }
-        .place.asleep .tile { --light: var(--dim); }
-        .place.asleep .cat { opacity: .45; }
-        .place.asleep .name { color: var(--secondary); }
         .count { background: var(--error); color: var(--page); border-radius: 999px; padding: 1px 8px; font-size: calc(13em / 17); font-weight: 700; font-variant-numeric: tabular-nums; }
         .dot { width: 8px; height: 8px; flex: none; background: var(--secondary); }
         /* The window's pixel art, kept crisp: each of its pixels is a whole number of the phone's at 16 and 32. */
@@ -401,7 +398,7 @@ enum PhonePage {
     static let script = #"""
         'use strict';
         const $ = (id) => document.getElementById(id);
-        const conversation = (key) => key === 'general' || /^(c|t|r):/.test(key);
+        const conversation = (key) => /^(c|t|r):/.test(key);
         const words = {
           unreachable: "Can't reach your Mac. The Kitty Litter has to be running, and your Mac awake.",
           gone: "That's changed since. Have another look.",
@@ -683,7 +680,7 @@ enum PhonePage {
           // A file is for where you attached it, so it never follows you anywhere else.
           if (fresh || !next.box || !next.box.files) unattach();
           if (next.box) {
-            label();
+            $('label').textContent = next.box.label;
             $('words').placeholder = next.box.placeholder;
             sendable();
             $('attach').hidden = !next.box.files;
@@ -887,19 +884,18 @@ enum PhonePage {
           return node;
         }
 
-        // Drawn to match the window's symbols for Activity, Threads and #general.
+        // Drawn to match the window's symbols for Activity and Threads.
         const icons = {
           activity: ['M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z', 'M10 21h4'],
           threads: ['M4 4h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z',
             'M19 9h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-1v3l-4-3h-4a1 1 0 0 1-1-1v-1'],
-          channel: ['M10 4 8 20', 'M16 4l-2 16', 'M4 9h16', 'M3 15h16'],
         };
         function icon(name) {
           const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
           svg.setAttribute('viewBox', '0 0 24 24');
           svg.setAttribute('aria-hidden', 'true');
           svg.setAttribute('class', 'symbol');
-          for (const d of icons[name] || icons.channel) {
+          for (const d of icons[name] || []) {
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', d);
             svg.append(path);
@@ -920,7 +916,7 @@ enum PhonePage {
           for (const place of list) {
             if (place.group && place.group !== group) nodes.push(el('h2', 'group', place.group));
             group = place.group;
-            const button = el('button', 'place' + (place.unread || place.count ? ' unread' : '') + (place.asleep ? ' asleep' : ''));
+            const button = el('button', 'place' + (place.unread || place.count ? ' unread' : ''));
             button.type = 'button';
             // Each on a tile, as the Home Screen's icons are: a kitten's in its own light, and the rest drifting.
             const art = place.icon ? icon(place.icon) : cat(place.cat);
@@ -1331,7 +1327,6 @@ enum PhonePage {
           attached = [];
           chips();
           fit();
-          label();
           if (done.open) go(done.open);
         };
 
@@ -1447,24 +1442,7 @@ enum PhonePage {
           words.style.height = words.scrollHeight + 'px';
         }
         $('words').addEventListener('input', fit);
-        $('words').addEventListener('input', label);
         $('words').addEventListener('input', sendable);
-
-        // Words that @ a kitten in #general go straight to it, and the line says so as you type.
-        function label() {
-          if (!view || !view.box) return;
-          $('label').textContent = mentioned($('words').value, view.box.mentions || {}) || view.box.label;
-        }
-
-        // Read the way the Mac reads it: the first @ and a channel's name, as a word of its own. Marks count with the
-        // letter they're on, as they do on the Mac.
-        function mentioned(text, mentions) {
-          for (const word of text.normalize('NFC').split(/\s+/)) {
-            const name = ((word.match(/^@([\p{L}\p{M}\p{N}_-]+)/u) || [])[1] || '').toLowerCase();
-            if (name && mentions[name]) return mentions[name];
-          }
-          return null;
-        }
 
         $('pairform').onsubmit = async (event) => {
           event.preventDefault();

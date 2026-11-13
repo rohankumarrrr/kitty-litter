@@ -43,7 +43,7 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - Set a channel's notifications from the phone, and see which channels are muted in The Kitty Litter's sidebar. Both are set from the channel's header on the Mac now, and only its header says it's muted.
 - Read a thread's whole history in The Kitty Litter when it opens on its own, even past each kitten's newest 30, instead of saying the rest is in T3.
 - Show a reply's earlier notes in place, under the reply when you press "2 earlier notes". Today pressing it opens the thread in T3, since The Kitty Litter only keeps how many there were.
-- Keep a question you asked in the cat's DM that only got passed on after a restart. Its talk with the router is archived, and T3 doesn't list archived threads, so The Kitty Litter would have to read it by the ID it kept.
+- Keep a question you asked Shades that only got passed on after a restart. Its talk with the router is archived, and T3 doesn't list archived threads, so The Kitty Litter would have to read it by the ID it kept.
 - Send the phone only what changed in The Kitty Litter. It gets every row of the place it's on each time anything changes, about 170 KB for a conversation of 580 rows, and draws them all again, where the window only lays out what's near what you can see.
 - Let the phone page's header and box scroll away at the largest text sizes. Both stay on screen, and at twice the usual size and Larger on the Mac they take most of a phone's height.
 - Work out what The Kitty Litter shows off the main thread, or only for the threads that changed. It's about 12 ms each time anything changes with hundreds of threads, which is most of what's left when a message arrives.
