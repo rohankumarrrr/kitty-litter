@@ -124,18 +124,18 @@ final class AppStage: CatStage {
 
     func start() {
         cat.start()
-        let ask = Hotkeys.shared.register(keyCode: Shortcut.ask.keyCode, modifiers: Shortcut.ask.modifiers) { [weak self] in
-            self?.controller?.askPressed()
+        claim(.ask) { [weak self] in self?.controller?.askPressed() }
+        claim(.fix) { [weak self] in self?.controller?.fixPressed() }
+        claim(.messages) { [weak self] in self?.controller?.messagesHotkeyPressed() }
+    }
+
+    /// The menu only shows a shortcut the app holds, so one another app has isn't offered as working.
+    private func claim(_ shortcut: Shortcut, run: @escaping () -> Void) {
+        if Hotkeys.shared.register(keyCode: shortcut.keyCode, modifiers: shortcut.modifiers, handler: run) == nil {
+            controller?.shortcutTaken(shortcut.label)
+        } else {
+            menuBar.held.append(shortcut)
         }
-        if ask == nil { controller?.shortcutTaken(Shortcut.askLabel) }
-        let fix = Hotkeys.shared.register(keyCode: Shortcut.fix.keyCode, modifiers: Shortcut.fix.modifiers) { [weak self] in
-            self?.controller?.fixPressed()
-        }
-        if fix == nil { controller?.shortcutTaken(Shortcut.fixLabel) }
-        let messages = Hotkeys.shared.register(keyCode: Shortcut.messages.keyCode, modifiers: Shortcut.messages.modifiers) { [weak self] in
-            self?.controller?.messagesHotkeyPressed()
-        }
-        if messages == nil { controller?.shortcutTaken(Shortcut.messagesLabel) }
     }
 
     // MARK: - The cat

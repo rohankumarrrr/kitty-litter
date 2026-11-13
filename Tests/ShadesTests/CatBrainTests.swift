@@ -201,7 +201,7 @@ final class CatBrainTests: XCTestCase {
         for _ in 1...100 { cat.tick() }
         XCTAssertEqual(cat.state, .sleep)
         for roll in 0..<4 {
-            XCTAssertEqual(cat.pet(roll: roll), ["mrrp", "mrow", "...", "prrr"][roll])
+            XCTAssertEqual(cat.pet(roll: roll), ["mrrp", "mrow", "…", "prrr"][roll])
         }
         XCTAssertEqual(cat.state, .sit)
         XCTAssertEqual(cat.pose.frame, .sit)

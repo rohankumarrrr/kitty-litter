@@ -137,7 +137,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
                 row("Phone", phone),
             ]
             if settings.phone {
-                rows.append(row("", plainButton("Pair a phone...", style: .text) { [weak self] in self?.onPairPhone?() }))
+                rows.append(row("", plainButton("Pair a phone…", style: .text) { [weak self] in self?.onPairPhone?() }))
             }
             return rows
         case .privacy:

@@ -26,11 +26,11 @@ final class DemoDriver {
             }
         }
         stage.menuBar.extras = [
-            .init(title: "Try talking") { [weak self] in self?.hold(.talk) },
-            .init(title: "Try dictating") { [weak self] in self?.hold(.dictate) },
-            .init(title: "Ask for permission") { [weak self] in self?.parts.backend.requestApproval() },
-            .init(title: "Ask a question") { [weak self] in self?.parts.backend.askQuestion(threadID: "demo-research") },
-            .init(title: "Finish all the work") { [weak self] in self?.parts.backend.stopEverything() },
+            .init(title: "Try Talking") { [weak self] in self?.hold(.talk) },
+            .init(title: "Try Dictating") { [weak self] in self?.hold(.dictate) },
+            .init(title: "Ask for Permission") { [weak self] in self?.parts.backend.requestApproval() },
+            .init(title: "Ask a Question") { [weak self] in self?.parts.backend.askQuestion(threadID: "demo-research") },
+            .init(title: "Finish All the Work") { [weak self] in self?.parts.backend.stopEverything() },
         ]
         // What VoiceOver was asked to say, which is only ever spoken.
         BubbleController.onAnnounce = { words, priority in
@@ -843,9 +843,11 @@ final class DemoDriver {
         case "menuclose":
             stage.menuBar.closeMenu()
         case "menuitems":
-            // What the cat's menu and the menu bar show, with a check by what's on.
+            // What the cat's menu and the menu bar show, with a check by what's on, and each one's shortcut, badge and tip.
             for item in stage.menuBar.shownItems where !item.isSeparatorItem {
-                print("menu \(item.state == .on ? "✓" : "-") \(item.title)")
+                let key = [Shortcut.ask, .fix, .messages].first { $0.key == item.keyEquivalent && $0.keyModifiers == item.keyEquivalentModifierMask }
+                let extras = [key.map { "key=\($0.label)" }, item.badge?.stringValue.map { "badge=[\($0)]" }, item.toolTip.map { "tip=[\($0)]" }]
+                print((["menu \(item.state == .on ? "✓" : "-") \(item.title)"] + extras.compactMap { $0 }).joined(separator: "  "))
             }
         case "menupress":
             // The same as choosing that item from the menu.

@@ -86,6 +86,7 @@ extension AppController {
             guard link.door.pairing == pairing else { return }
             link.door.closePairing()
             stage.showPairing(nil)
+            say(CatWords.pairingRanOut, unasked: true)
         }
     }
 

@@ -113,7 +113,7 @@ extension AppController {
         guard nudgeOnClose else { return }
         nudgeOnClose = false
         // Only if something's still there to say. Otherwise a note later on would bring it up, which notes don't.
-        guard !CatWords.inboxHeadline(inboxEntries).isEmpty else { return }
+        guard CatWords.inboxSummary(inboxEntries) != nil else { return }
         inboxNudge = true
         renderBubble()
     }

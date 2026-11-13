@@ -68,13 +68,16 @@ final class Hotkeys {
     }
 }
 
-/// The app's fixed shortcuts.
-enum Shortcut {
-    static let ask = (keyCode: kVK_Space, modifiers: optionKey)
-    static let fix = (keyCode: kVK_ANSI_F, modifiers: controlKey | optionKey)
+/// The app's fixed shortcuts, as Carbon claims them and as a menu shows them.
+struct Shortcut: Equatable {
+    let keyCode: Int
+    let modifiers: Int
+    let key: String
+    let keyModifiers: NSEvent.ModifierFlags
+    let label: String
+
+    static let ask = Shortcut(keyCode: kVK_Space, modifiers: optionKey, key: " ", keyModifiers: .option, label: "⌥Space")
+    static let fix = Shortcut(keyCode: kVK_ANSI_F, modifiers: controlKey | optionKey, key: "f", keyModifiers: [.control, .option], label: "⌃⌥F")
     /// ⌃⌘ like the shortcuts people often give their apps, on a letter they rarely take. M is often Messages.
-    static let messages = (keyCode: kVK_ANSI_B, modifiers: controlKey | cmdKey)
-    static let askLabel = "⌥Space"
-    static let fixLabel = "⌃⌥F"
-    static let messagesLabel = "⌃⌘B"
+    static let messages = Shortcut(keyCode: kVK_ANSI_B, modifiers: controlKey | cmdKey, key: "b", keyModifiers: [.control, .command], label: "⌃⌘B")
 }

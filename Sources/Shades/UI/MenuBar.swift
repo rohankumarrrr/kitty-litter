@@ -28,6 +28,8 @@ final class MenuBar: NSObject, NSMenuDelegate {
     var onDoNotDisturb: (() -> Void)?
     /// Extra items, such as setting up permissions or demo mode's controls.
     var extras: [Extra] = []
+    /// The shortcuts the app holds, which are the only ones the menu shows.
+    var held: [Shortcut] = []
 
     override init() {
         super.init()
@@ -82,12 +84,12 @@ final class MenuBar: NSObject, NSMenuDelegate {
         menu.addItem(header)
 
         menu.addItem(.separator())
-        let waiting = messagesSummary?().map { "\($0) · " } ?? ""
-        addAction(CatWords.appName, shortcut: waiting + Shortcut.messagesLabel) { [weak self] in self?.onMessages?() }
-        addAction("Ask...", shortcut: Shortcut.askLabel) { [weak self] in self?.onAsk?() }
-        addAction("Fix what I'm looking at", shortcut: Shortcut.fixLabel) { [weak self] in self?.onFix?() }
-        addAction("Kittens", shortcut: "Shift-click the cat") { [weak self] in self?.onKittens?() }
-        if canPairPhone?() == true { addAction("Pair a phone...") { [weak self] in self?.onPairPhone?() } }
+        let messages = addAction(CatWords.appName, shortcut: .messages) { [weak self] in self?.onMessages?() }
+        messages.badge = messagesSummary?().map { NSMenuItemBadge(string: $0) }
+        addAction("Ask…", shortcut: .ask) { [weak self] in self?.onAsk?() }
+        addAction("Fix What I'm Looking At", shortcut: .fix) { [weak self] in self?.onFix?() }
+        addAction("Kittens") { [weak self] in self?.onKittens?() }.toolTip = "Or Shift-click the cat"
+        if canPairPhone?() == true { addAction(CatWords.pairItem) { [weak self] in self?.onPairPhone?() } }
 
         if !extras.isEmpty {
             menu.addItem(.separator())
@@ -99,22 +101,20 @@ final class MenuBar: NSObject, NSMenuDelegate {
         quiet.state = isDoNotDisturb?() == true ? .on : .off
         bind(quiet) { [weak self] in self?.onDoNotDisturb?() }
         menu.addItem(quiet)
-        addAction("Settings...") { [weak self] in self?.onSettings?() }
+        addAction("Settings…") { [weak self] in self?.onSettings?() }
         addAction("Quit \(CatWords.appName)") { NSApp.terminate(nil) }
     }
 
-    private func addAction(_ title: String, shortcut: String? = nil, run: @escaping () -> Void) {
+    @discardableResult
+    private func addAction(_ title: String, shortcut: Shortcut? = nil, run: @escaping () -> Void) -> NSMenuItem {
         let row = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        if let shortcut {
-            let text = NSMutableAttributedString(string: title, attributes: [.font: NSFont.menuFont(ofSize: 13)])
-            text.append(NSAttributedString(string: "   \(shortcut)", attributes: [
-                .font: NSFont.menuFont(ofSize: 11),
-                .foregroundColor: NSColor.secondaryLabelColor,
-            ]))
-            row.attributedTitle = text
+        if let shortcut, held.contains(shortcut) {
+            row.keyEquivalent = shortcut.key
+            row.keyEquivalentModifierMask = shortcut.keyModifiers
         }
         bind(row, run: run)
         menu.addItem(row)
+        return row
     }
 
     private func bind(_ row: NSMenuItem, run: @escaping () -> Void) {
