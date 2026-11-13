@@ -57,7 +57,7 @@ final class QuietControlsTests: XCTestCase {
         XCTAssertTrue(checkbox.acceptsFirstResponder)
 
         button.isHidden = true
-        XCTAssertFalse(button.canBecomeKeyView, "Tab skips one that isn't showing, such as a row's hover buttons")
+        XCTAssertFalse(button.canBecomeKeyView, "Tab skips one that isn't showing, such as one folded under a message's More")
         button.isHidden = false
 
         window.key = false

@@ -441,6 +441,94 @@ final class MessageWords {
     }
 }
 
+/// A message's actions as icons, floating over the top of its row while you hover or Tab to them, as Slack and Discord
+/// show them. It covers what's under it rather than moving anything, and what doesn't fit goes under More.
+final class MessageToolbar: QuietView {
+    static let side: CGFloat = 26
+    private static let inset: CGFloat = 1
+    static var height: CGFloat { side + inset * 2 }
+
+    /// In the order they show, before any fold into More.
+    let buttons: [QuietButton]
+    let more: QuietButton
+    /// When one of its buttons takes the keyboard or gives it up.
+    var onFocus: (() -> Void)?
+    private var focus: NSKeyValueObservation?
+
+    var isShowing = false { didSet { if isShowing != oldValue { showOrHide() } } }
+
+    var hasFocus: Bool { (window?.firstResponder as? NSView)?.isDescendant(of: self) == true }
+
+    init(_ actions: [(name: String, symbol: String, run: () -> Void)], more: @escaping () -> Void) {
+        buttons = actions.map { Self.button($0.name, symbol: $0.symbol, onPress: $0.run) }
+        self.more = Self.button("More", symbol: "ellipsis", onPress: more)
+        super.init(frame: .zero)
+        (buttons + [self.more]).forEach(addSubview)
+        showOrHide()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// Hidden by being see-through rather than `isHidden`, so Tab can still reach it.
+    private func showOrHide() {
+        alphaValue = isShowing ? 1 : 0
+        // Out of VoiceOver's way while it's hidden, since the message's own actions offer the same.
+        (buttons + [more]).forEach { $0.setAccessibilityElement(isShowing) }
+    }
+
+    /// An icon that says its name when you hover it, and to VoiceOver.
+    static func button(_ name: String, symbol: String, style: QuietButton.Style = .text, onPress: (() -> Void)? = nil) -> QuietButton {
+        let button = QuietButton(name, style: style, onPress: onPress)
+        button.symbol = symbol
+        button.toolTip = name
+        button.setFrameSize(NSSize(width: side, height: side))
+        return button
+    }
+
+    func button(_ name: String) -> QuietButton? { buttons.first { $0.accessibilityLabel() == name } }
+
+    /// As many as fit in `room`, with the rest under More. With no room at all, More still shows.
+    func fit(room: CGFloat) {
+        let fits = Int((room - Self.inset * 2) / Self.side)
+        let shown = fits >= buttons.count ? buttons.count : max(fits - 1, 0)
+        more.isHidden = shown == buttons.count
+        var x = Self.inset
+        for (index, button) in buttons.enumerated() {
+            button.isHidden = index >= shown
+            guard !button.isHidden else { continue }
+            button.frame.origin = NSPoint(x: x, y: Self.inset)
+            x += Self.side
+        }
+        if !more.isHidden {
+            more.frame.origin = NSPoint(x: x, y: Self.inset)
+            x += Self.side
+        }
+        setFrameSize(NSSize(width: x + Self.inset, height: Self.height))
+    }
+
+    static func width(of count: Int) -> CGFloat { CGFloat(count) * side + inset * 2 }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        focus = window?.observe(\.firstResponder) { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.onFocus?() }
+        }
+    }
+
+    // A click between its buttons stays on it, rather than opening the message's thread.
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseUp(with event: NSEvent) {}
+
+    override func draw(_ dirtyRect: NSRect) {
+        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 9, yRadius: 9)
+        MessagesInk.paper.setFill()
+        shape.fill()
+        MessagesInk.line.setStroke()
+        shape.stroke()
+    }
+}
+
 /// One message as a bubble: yours on the right in blue, everyone else's on the left in their own colour.
 final class MessageRowView: ChannelRowView {
     /// About a screenful, which is all a long message shows until you press Show more.
@@ -459,6 +547,8 @@ final class MessageRowView: ChannelRowView {
     private static let tileSide: CGFloat = 110
     private static let fileHeight: CGFloat = 36
     private static let fileGap: CGFloat = 4
+    /// Between who said it and when, and the toolbar beside it.
+    private static let toolbarGap: CGFloat = 8
 
     var onOpen: (() -> Void)?
     var onReply: (() -> Void)?
@@ -489,10 +579,12 @@ final class MessageRowView: ChannelRowView {
     private let failure: ChannelTextBlock?
     private var showMore: QuietButton?
     private var tryAgain: QuietButton?
-    /// Made the first time you hover, since most messages never are.
-    private var hoverButtons: (open: QuietButton, copy: QuietButton, reply: QuietButton, unread: QuietButton, react: QuietButton)?
+    /// Made the first time you hover, since most messages never are, or as it's shown if Tab can reach it.
+    private(set) var toolbar: MessageToolbar?
     /// Your reactions, under what it said. Pressing one takes it off.
     private var reactionChips: [QuietButton] = []
+    /// After your reactions, a way to add another, where Slack puts it.
+    private var addReaction: QuietButton?
     /// A Copy on each code block.
     private(set) var codeButtons: [QuietButton] = []
     private(set) var bubble = NSRect.zero
@@ -556,9 +648,11 @@ final class MessageRowView: ChannelRowView {
         }
     }
 
-    /// Everything the buttons over it do on hover, with React's marks as a menu inside it. A right-click menu opens
-    /// without making The Kitty Litter the active app.
-    override func menu(for event: NSEvent) -> NSMenu? {
+    /// Everything its toolbar does, with React's marks as a menu inside it. A right-click menu opens without making
+    /// The Kitty Litter the active app.
+    override func menu(for event: NSEvent) -> NSMenu? { actionsMenu() }
+
+    private func actionsMenu() -> NSMenu? {
         let actions = actions
         guard !actions.isEmpty else { return nil }
         let menu = NSMenu()
@@ -593,40 +687,72 @@ final class MessageRowView: ChannelRowView {
     private func copyPressed() {
         guard let text = message.text else { return }
         onCopy?(text)
-        hoverButtons?.copy.flash("Copied")
+        toolbar?.button("Copy").map(Self.showCopied)
+    }
+
+    /// A tick in place of the copy mark for a moment, as GitHub's Copy does.
+    private static func showCopied(_ button: QuietButton) {
+        let symbol = button.symbol
+        button.symbol = "checkmark"
+        Timer.scheduledTimer(withTimeInterval: 1.2, repeats: false) { [weak button] _ in
+            MainActor.assumeIsolated { button?.symbol = symbol }
+        }
+    }
+
+    /// Its buttons in the order Slack puts them, the most used first, so they're the last to fold into More.
+    private var toolbarActions: [(name: String, symbol: String, run: () -> Void)] {
+        let all: [(name: String, symbol: String, run: (() -> Void)?)] = [
+            (CatWords.react, "face.smiling", onReact == nil ? nil : { [weak self] in self?.showReactions(from: self?.toolbar?.button(CatWords.react)) }),
+            ("Reply", "text.bubble", onReply),
+            ("Copy", "doc.on.doc", message.text == nil ? nil : { [weak self] in self?.copyPressed() }),
+            (CatWords.markUnread, "envelope.badge", onMarkUnread),
+            (CatWords.openInT3, "arrow.up.forward.app", onOpen),
+        ]
+        return all.compactMap { action in action.run.map { (action.name, action.symbol, $0) } }
     }
 
     override func hoverChanged() {
-        if hovering, hoverButtons == nil {
-            let buttons = (
-                open: QuietButton("Open", style: .text) { [weak self] in self?.onOpen?() },
-                copy: QuietButton("Copy", style: .text) { [weak self] in self?.copyPressed() },
-                reply: QuietButton("Reply", style: .text) { [weak self] in self?.onReply?() },
-                unread: QuietButton(CatWords.markUnread, style: .text) { [weak self] in self?.onMarkUnread?() },
-                react: QuietButton(CatWords.react, style: .text) { [weak self] in self?.showReactions() }
-            )
-            [buttons.open, buttons.copy, buttons.reply, buttons.unread, buttons.react].forEach(addSubview)
-            hoverButtons = buttons
-        }
-        hoverButtons?.copy.isHidden = !hovering || message.text == nil
-        hoverButtons?.open.isHidden = !hovering || onOpen == nil
-        hoverButtons?.reply.isHidden = !hovering || onReply == nil
-        hoverButtons?.unread.isHidden = !hovering || onMarkUnread == nil
-        hoverButtons?.react.isHidden = !hovering || onReact == nil
-        placeHoverButtons(width: bounds.width)
+        if hovering { makeToolbar() }
+        showToolbar()
         needsDisplay = true
     }
 
-    /// Where the buttons showing on hover start, so the head can stop short of them.
-    private var hoverLeft: CGFloat {
-        guard let hoverButtons else { return bounds.width - Self.margin }
-        return [hoverButtons.open, hoverButtons.copy, hoverButtons.reply, hoverButtons.unread, hoverButtons.react].filter { !$0.isHidden }.map(\.frame.minX).min() ?? bounds.width - Self.margin
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // Tab only reaches buttons that are there, so with keyboard navigation on they're made as the row is shown.
+        if window != nil, QuietFocus.fullKeyboardAccess() { makeToolbar() }
     }
 
-    /// A menu of the marks. A menu opens without making The Kitty Litter the active app.
-    func showReactions() {
+    private func makeToolbar() {
+        guard toolbar == nil else { return }
+        let actions = toolbarActions
+        guard !actions.isEmpty else { return }
+        let toolbar = MessageToolbar(actions) { [weak self] in self?.pressMore() }
+        toolbar.onFocus = { [weak self] in self?.showToolbar() }
+        addSubview(toolbar)
+        self.toolbar = toolbar
+        placeToolbar(width: bounds.width)
+    }
+
+    private func showToolbar() {
+        guard let toolbar else { return }
+        let focused = toolbar.hasFocus
+        // Tab can land on a row that's scrolled away, so it comes into view.
+        if focused, !toolbar.isShowing { toolbar.scrollToVisible(toolbar.bounds) }
+        toolbar.isShowing = hovering || focused
+    }
+
+    /// Everything a right-click offers, under More, for what didn't fit.
+    private func pressMore() {
+        guard let menu = actionsMenu(), let more = toolbar?.more else { return }
+        let anchor = convert(more.bounds, from: more)
+        menu.popUp(positioning: nil, at: NSPoint(x: anchor.minX, y: anchor.maxY), in: self)
+    }
+
+    /// A menu of the marks, under what opened it. A menu opens without making The Kitty Litter the active app.
+    func showReactions(from opener: NSView? = nil) {
         guard onReact != nil, message.reactions != nil else { return }
-        let anchor = hoverButtons.flatMap { $0.react.isHidden ? nil : $0.react.frame } ?? NSRect(x: bubble.minX, y: bubble.maxY, width: 0, height: 0)
+        let anchor = opener.map { convert($0.bounds, from: $0) } ?? NSRect(x: bubble.minX, y: bubble.maxY, width: 0, height: 0)
         reactionsMenu().popUp(positioning: nil, at: NSPoint(x: anchor.minX, y: anchor.maxY), in: self)
     }
 
@@ -654,7 +780,7 @@ final class MessageRowView: ChannelRowView {
         guard let words else { return }
         let blocks = words.codeBlocks
         while codeButtons.count < blocks.count {
-            let button = QuietButton("Copy", style: .text)
+            let button = MessageToolbar.button("Copy", symbol: "doc.on.doc")
             addSubview(button)
             codeButtons.append(button)
         }
@@ -664,19 +790,20 @@ final class MessageRowView: ChannelRowView {
             let block = blocks[index]
             button.onPress = { [weak self, weak button] in
                 self?.onCopy?(block.code)
-                button?.flash("Copied")
+                button.map(Self.showCopied)
             }
             button.frame.origin = NSPoint(x: bubble.minX + Self.insetX + block.frame.maxX - button.frame.width, y: bubble.minY + Self.insetY + block.frame.minY + (ChannelMarkdown.copyRoom - button.frame.height) / 2 + 1)
         }
     }
 
-    private func placeHoverButtons(width: CGFloat) {
-        guard let hoverButtons else { return }
-        var right = width - Self.margin + 6
-        for button in [hoverButtons.open, hoverButtons.copy, hoverButtons.reply, hoverButtons.unread, hoverButtons.react] where !button.isHidden {
-            right -= button.frame.width
-            button.frame.origin = NSPoint(x: right, y: headTop - Self.pad)
-        }
+    /// Beside who said it and when, never over them: at the right end for a kitten's, as in Slack, and just short of
+    /// the time over yours. It sits between what's over the bubble and its words, so it covers neither.
+    private func placeToolbar(width: CGFloat) {
+        guard let toolbar else { return }
+        let head = head(width: width).frame
+        let (left, right) = look.isYou ? (Self.textLeft, head.minX - Self.toolbarGap) : (head.maxX + Self.toolbarGap, width - Self.margin)
+        toolbar.fit(room: right - left)
+        toolbar.frame.origin = NSPoint(x: right - toolbar.frame.width, y: max(headTop + Self.headHeight + Self.insetY - MessageToolbar.height, 0))
     }
 
     override func fit(width: CGFloat) -> CGFloat {
@@ -726,7 +853,7 @@ final class MessageRowView: ChannelRowView {
         } else {
             replyBarFrame = .zero
         }
-        placeHoverButtons(width: width)
+        placeToolbar(width: width)
         placeCodeButtons()
         let height = max(bottom + Self.pad, look.hasCat || look.picture != nil ? headTop + Self.pad + Self.headHeight + Self.catSide : 0)
         fitted = (width, isExpanded, height)
@@ -744,13 +871,21 @@ final class MessageRowView: ChannelRowView {
                 addSubview(chip)
                 return chip
             }
+            if onReact != nil {
+                let add = MessageToolbar.button(CatWords.react, symbol: "face.smiling", style: .plain)
+                add.setFrameSize(NSSize(width: reactionChips[0].frame.width, height: add.frame.height))
+                add.onPress = { [weak self, weak add] in self?.showReactions(from: add) }
+                addSubview(add)
+                addReaction = add
+            }
         }
-        var x = look.isYou ? right - reactionChips.reduce(0) { $0 + $1.frame.width + 4 } + 4 : bubble.minX
-        for chip in reactionChips {
+        let chips = reactionChips + [addReaction].compactMap { $0 }
+        var x = look.isYou ? right - chips.reduce(0) { $0 + $1.frame.width + 4 } + 4 : bubble.minX
+        for chip in chips {
             chip.frame.origin = NSPoint(x: x, y: top + 4)
             x += chip.frame.width + 4
         }
-        return top + 4 + (reactionChips.first?.frame.height ?? 0)
+        return top + 4 + (chips.first?.frame.height ?? 0)
     }
 
     /// Each reveal gets the whole time, however soon after the last one it comes.
@@ -778,7 +913,7 @@ final class MessageRowView: ChannelRowView {
             paragraph.alignment = look.isYou ? .right : .left
             NSAttributedString(string: context, attributes: [
                 .font: MessagesInk.font(ofSize: MessagesInk.meta),
-                .foregroundColor: hovering ? MessagesInk.text : MessagesInk.soft,
+                .foregroundColor: hovering && onPress != nil ? MessagesInk.text : MessagesInk.soft,
                 .paragraphStyle: paragraph,
             ]).draw(in: NSRect(x: Self.textLeft + 2, y: Self.pad, width: max((look.isYou ? end(in: bounds.width) : bounds.width - Self.margin) - Self.textLeft - 2, 60), height: MessagesInk.meta + 4))
         }
@@ -882,32 +1017,33 @@ final class MessageRowView: ChannelRowView {
             .draw(in: NSRect(x: fileFrame.minX + 34, y: fileFrame.midY - 9, width: fileFrame.width - 42, height: 18))
     }
 
-    /// Who said it and when, over the bubble. Yours only needs the time.
-    private func drawHead() {
-        let small = MessagesInk.font(ofSize: MessagesInk.meta)
-        let timeLabel = NSAttributedString(string: time, attributes: [.font: small, .foregroundColor: MessagesInk.soft])
-        let timeWidth = ceil(timeLabel.size().width)
-        let baseline = headTop + 1
+    /// Who said it and when, over the bubble, and where it's drawn. Yours only needs the time. It's the same whether or
+    /// not the toolbar shows, and a kitten's leaves room at its end for the toolbar's More, so that never covers it.
+    private func head(width: CGFloat) -> (label: NSAttributedString, frame: NSRect) {
+        let top = headTop + 1
+        let height = MessagesInk.meta + 4
         guard !look.isYou else {
-            if !hovering { timeLabel.draw(at: NSPoint(x: end(in: bounds.width) - timeWidth, y: baseline)) }
-            return
+            let label = NSAttributedString(string: time, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta), .foregroundColor: MessagesInk.soft])
+            let wide = ceil(label.size().width)
+            return (label, NSRect(x: end(in: width) - wide, y: top, width: wide, height: height))
         }
+        var head = look.name
+        if message.earlierNotes > 0 { head += "  ·  \(CatWords.earlierNotes(message.earlierNotes))" }
+        head += "  ·  \(time)"
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
-        // While the buttons show, it's only who said it, in the room they leave. A stub of a name says nothing the cat
-        // beside it doesn't, so with room for less than a few letters it waits until they go.
-        var head = look.name
-        if !hovering {
-            if message.earlierNotes > 0 { head += "  ·  \(CatWords.earlierNotes(message.earlierNotes))" }
-            head += "  ·  \(time)"
-        }
-        let room = (hovering ? hoverLeft - 4 : bounds.width - Self.margin) - Self.textLeft - 2
-        guard !hovering || room >= 40 else { return }
-        NSAttributedString(string: head, attributes: [
+        let label = NSAttributedString(string: head, attributes: [
             .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .medium),
             .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: Self.textLeft + 2, y: baseline, width: max(room, 0), height: MessagesInk.meta + 4))
+        ])
+        let room = width - Self.margin - MessageToolbar.width(of: 1) - Self.toolbarGap - Self.textLeft - 2
+        return (label, NSRect(x: Self.textLeft + 2, y: top, width: max(min(ceil(label.size().width), room), 0), height: height))
+    }
+
+    private func drawHead() {
+        let (label, frame) = head(width: bounds.width)
+        label.draw(in: frame)
     }
 }
 

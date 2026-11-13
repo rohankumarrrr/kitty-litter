@@ -497,6 +497,8 @@ final class ChannelsWindowTests: XCTestCase {
         let copy = try XCTUnwrap(row.codeButtons.first)
         XCTAssertFalse(copy.isHidden)
         XCTAssertTrue(row.bubble.contains(copy.frame), "inside its bubble")
+        XCTAssertEqual(copy.symbol, "doc.on.doc", "the same mark as Copy over a message")
+        XCTAssertEqual(copy.toolTip, "Copy")
         copy.onPress?()
         XCTAssertEqual(copied, ["swift test"], "just the code")
     }
