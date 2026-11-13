@@ -4,9 +4,7 @@ import ShadesCore
 import ShadesT3
 import XCTest
 
-/// Controls pressed the way a mouse presses them: the window works out which view is under the pointer, and that view
-/// gets the press and the release. The events are made here and handed straight to the view, never posted, so nothing
-/// reaches the desktop, and the window is never shown.
+/// Controls pressed the way a mouse and keyboard press them, through `Press`, in a window that's never shown.
 @MainActor
 final class PressTests: XCTestCase {
     private let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
@@ -50,25 +48,6 @@ final class PressTests: XCTestCase {
         return (window, view)
     }
 
-    /// The view a click at `control`'s centre lands on, as the window's own hit-testing finds it.
-    private func hit(_ control: NSView, in window: NSWindow) throws -> NSView {
-        window.contentView?.layoutSubtreeIfNeeded()
-        let centre = control.convert(NSPoint(x: control.bounds.midX, y: control.bounds.midY), to: nil)
-        return try XCTUnwrap(window.contentView?.hitTest(centre), "something is under the pointer")
-    }
-
-    /// Presses whatever is at `control`'s centre, down and then up, and says what that was.
-    @discardableResult
-    private func click(_ control: NSView, in window: NSWindow) throws -> NSView {
-        let target = try hit(control, in: window)
-        let centre = control.convert(NSPoint(x: control.bounds.midX, y: control.bounds.midY), to: nil)
-        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-            let event = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: centre, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
-            type == .leftMouseDown ? target.mouseDown(with: event) : target.mouseUp(with: event)
-        }
-        return target
-    }
-
     private func eventually(_ condition: () -> Bool) async {
         for _ in 0..<200 where !condition() { await Task.yield() }
     }
@@ -79,7 +58,7 @@ final class PressTests: XCTestCase {
                 for inThread in [false, true] {
                     let name = "\(threadID), \(Int(width)) wide, \(inThread ? "in its thread" : "in the channel")"
                     let opened = Opened()
-                    let (window, view) = try messages(width: width, opened: opened)
+                    let (_, view) = try messages(width: width, opened: opened)
                     view.show(book(threadID: threadID))
                     view.select(inThread ? .thread(threadID, in: .channel(.of(steve))) : .channel(.of(steve)))
                     let pane = inThread ? view.threadPane : view.pane
@@ -90,16 +69,30 @@ final class PressTests: XCTestCase {
                     if open.isHidden {
                         // Folded under More, whose menu is the one a right-click opens. Pressing More would hold the
                         // test in the menu's own loop, so its items are chosen straight from that menu.
-                        XCTAssertTrue(try hit(toolbar.more, in: window) === toolbar.more, "\(name): a click lands on More")
+                        XCTAssertTrue(try Press.hit(toolbar.more) === toolbar.more, "\(name): a click lands on More")
                         let menu = try XCTUnwrap(row.menu(for: NSEvent()), name)
                         menu.performActionForItem(at: menu.indexOfItem(withTitle: CatWords.openInT3))
                     } else {
-                        XCTAssertTrue(try click(open, in: window) === open, "\(name): the click lands on Open in T3")
+                        XCTAssertTrue(try Press.click(open) === open, "\(name): the click lands on Open in T3")
                     }
                     await eventually { !opened.links.isEmpty }
                     XCTAssertEqual(opened.links, [link], name)
                 }
             }
         }
+    }
+
+    func testSpaceOnOpenInT3HandsT3TheSameLink() async throws {
+        QuietFocus.fullKeyboardAccess = { true }
+        let opened = Opened()
+        let (_, view) = try messages(width: 1100, opened: opened)
+        view.show(book(threadID: "mcp:launch:8f2c"))
+        view.select(.channel(.of(steve)))
+        let row = try XCTUnwrap(view.pane.shownMessageRows.last)
+        row.isCurrent = true
+        let open = try XCTUnwrap(row.toolbar?.button(CatWords.openInT3))
+        try Press.key(" ", keyCode: 49, on: open)
+        await eventually { !opened.links.isEmpty }
+        XCTAssertEqual(opened.links, ["t3code://threads/env-1/mcp%3Alaunch%3A8f2c"], "Tab reaches it once the arrow keys are on its message, and Space presses it")
     }
 }
