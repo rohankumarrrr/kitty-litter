@@ -2,9 +2,13 @@ import AppKit
 
 /// Where a link you pressed in Messages goes, over the box: its host, then its whole address, as much of it as fits.
 /// Nothing opens until you press Open, so a link's words can't hide where it leads, and nothing in a message can open
-/// anything by itself. A web picture asks the same way, with Show, before the Mac fetches it.
+/// anything by itself. A web picture asks the same way, with Show, before the Mac fetches it. It floats, so it's
+/// Opal's glass, in from the pane's sides.
 final class LinkBar: QuietView {
-    private static let pad: CGFloat = 12
+    /// Inside the glass.
+    private static let pad: CGFloat = 14
+    /// Round the glass, in from the pane.
+    private static let inset = NSSize(width: ChannelRowView.margin, height: 4)
     private static var titleHeight: CGFloat { MessagesInk.meta + 7 }
     private static let buttonGap: CGFloat = 8
 
@@ -59,36 +63,41 @@ final class LinkBar: QuietView {
     }
 
     private func addressHeight(width: CGFloat) -> CGFloat {
-        ceil(address.boundingRect(with: NSSize(width: max(width - Self.pad * 2, 60), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin]).height)
+        ceil(address.boundingRect(with: NSSize(width: max(width - (Self.pad + Self.inset.width) * 2, 60), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin]).height)
     }
 
     /// As tall as the whole address needs, however long it is.
     func height(for width: CGFloat) -> CGFloat {
         guard link != nil else { return 0 }
-        return Self.pad + Self.titleHeight + addressHeight(width: width) + Self.buttonGap + open.frame.height + Self.pad
+        return Self.inset.height * 2 + Self.pad + Self.titleHeight + addressHeight(width: width) + Self.buttonGap + open.frame.height + Self.pad
+    }
+
+    /// Never a null rect, which insetting a hidden, empty bar would give, with an origin at infinity.
+    private var glass: NSRect {
+        NSRect(x: Self.inset.width, y: Self.inset.height, width: max(bounds.width - Self.inset.width * 2, 0), height: max(bounds.height - Self.inset.height * 2, 0))
     }
 
     override func layout() {
         super.layout()
-        let top = bounds.height - Self.pad - open.frame.height
-        open.frame.origin = NSPoint(x: bounds.width - Self.pad - open.frame.width, y: top)
+        let glass = glass
+        let top = glass.maxY - Self.pad - open.frame.height + 4
+        open.frame.origin = NSPoint(x: glass.maxX - Self.pad - open.frame.width + 4, y: top)
         cancel.frame.origin = NSPoint(x: open.frame.minX - 6 - cancel.frame.width, y: top)
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        MessagesInk.hover.setFill()
-        bounds.fill()
-        MessagesInk.line.setFill()
-        NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
+        let glass = glass
+        Opal.glass(NSBezierPath(roundedRect: glass.insetBy(dx: 0.5, dy: 0.5), xRadius: Opal.Corner.popover, yRadius: Opal.Corner.popover))
+        let words = glass.insetBy(dx: Self.pad, dy: Self.pad)
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingMiddle
         NSAttributedString(string: title, attributes: [
             .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .semibold),
             .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: Self.pad, y: Self.pad, width: bounds.width - Self.pad * 2, height: Self.titleHeight))
-        let top = Self.pad + Self.titleHeight
+        ]).draw(in: NSRect(x: words.minX, y: words.minY, width: words.width, height: Self.titleHeight))
+        let top = words.minY + Self.titleHeight
         let room = max(open.frame.minY - Self.buttonGap - top, 0)
-        address.draw(with: NSRect(x: Self.pad, y: top, width: bounds.width - Self.pad * 2, height: min(addressHeight(width: bounds.width), room)), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        address.draw(with: NSRect(x: words.minX, y: top, width: words.width, height: min(addressHeight(width: bounds.width), room)), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
     }
 }

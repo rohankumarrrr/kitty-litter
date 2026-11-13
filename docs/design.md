@@ -260,7 +260,9 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 Where an app you use every day has a settled way of doing something, do it that way.
 
 - **A message's actions never sit above it.** They float as a small icon toolbar of floating glass at the row's top right, over the row, on hover, the way Slack and Discord do. Reactions and the thread's reply bar sit under the message.
-- **Your own messages** sit on the right, on `selected`, like iMessage. Everyone else's are on the left.
+- **Your own messages** sit on the right, on `selected`, like iMessage. Everyone else's are on the left, a kitten's dark and lit at its edge by its colour as a card is (`Opal.card`), never filled with it.
+- **A hovered message** is tinted `raised`, as Slack and Discord tint one.
+- **A list of messages is one stop for Tab.** The arrow keys move between them, with the ring round the one you're on, and Tab goes on into its buttons, as in Slack.
 - **A count** of what needs you is a rose capsule after the name, like a badge in the Dock or Slack.
 - **The open place in a sidebar** is a `selected` row, not a coloured bar.
 - **Return sends** in a box, and Shift-Return is a new line, as in Slack.

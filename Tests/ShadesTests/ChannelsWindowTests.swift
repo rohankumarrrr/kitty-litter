@@ -492,6 +492,16 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(pane.linkBar.title, "Open a link to evil.example?", "the host, however long the rest is")
         XCTAssertLessThanOrEqual(pane.linkBar.frame.maxY, pane.composer.frame.minY, "and never over the box")
         XCTAssertTrue(pane.linkBar.clipsToBounds)
+
+        pane.ask(toOpen: URL(string: "https://github.com/example/kittens/pull/31")!)
+        view.layoutSubtreeIfNeeded()
+        let bar = pane.linkBar
+        XCTAssertLessThanOrEqual(bar.cancel.frame.maxX, bar.open.frame.minX, "Cancel, then Open, side by side: \(bar.cancel.frame) \(bar.open.frame) in \(bar.bounds)")
+        XCTAssertTrue(bar.bounds.insetBy(dx: ChannelRowView.margin, dy: 0).contains(bar.open.frame), "inside its glass")
+
+        let empty = LinkBar(frame: .zero)
+        empty.layoutSubtreeIfNeeded()
+        XCTAssertTrue(empty.open.frame.origin.x.isFinite && empty.open.frame.origin.y.isFinite, "an empty bar never puts its buttons at infinity, which AppKit then draws in the wrong place")
     }
 
     func testACodeBlocksCopyCopiesItsCode() throws {
@@ -1209,7 +1219,7 @@ extension ChannelsWindowTests {
         XCTAssertEqual(theirs.bubble.minX, ChannelRowView.textLeft, accuracy: 1)
         XCTAssertLessThan(yours.bubble.width, yours.bounds.width / 2, "a short message makes a short bubble")
         XCTAssertEqual(yours.fill, Ink.hex(ChannelSpeakerLook.yours))
-        XCTAssertEqual(theirs.fill, Ink.hex(0xb3261e))
+        XCTAssertEqual(theirs.light, .of(0xb3261e), "lit in its colour")
     }
 
     func testAKittenWithoutAColourStillGetsItsOwnEveryTimeAndTheTextReads() {
@@ -1220,7 +1230,8 @@ extension ChannelsWindowTests {
         XCTAssertNil(ChannelSpeakerLook.color(of: KittenBoard.shades), "the cat keeps its black jacket")
 
         let book = ChannelBook.build(kittens: [plain, Kitten(name: "Sunny", role: "", covers: "", folder: "/k/sunny", color: 0xffcc00)], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
-        XCTAssertEqual(ChannelSpeakerLook(.kitten("/k/sunny"), in: book).bubbleText, .black, "dark words on a light bubble")
+        XCTAssertEqual(ChannelSpeakerLook(.kitten("/k/sunny"), in: book).bubbleText, MessagesInk.text, "Opal's body words on its dark bubble, lit at its edge")
+        XCTAssertEqual(ChannelSpeakerLook(.kitten("/k/sunny"), in: book).words, 0x000000, "while a phone fills it in its colour, with dark words")
         XCTAssertEqual(ChannelSpeakerLook(.you, in: book).bubbleText, MessagesInk.text, "Opal's body words on your selected violet-black")
     }
 }
@@ -1674,5 +1685,81 @@ extension ChannelsWindowTests {
             XCTAssertNotNil(button.symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }, name)
             XCTAssertEqual(button.toolTip, name)
         }
+    }
+}
+
+// MARK: - Opal's messages and box
+
+extension ChannelsWindowTests {
+    /// A window that says it has the keyboard, since a test can't make a real one key.
+    private final class KeyWindow: NSWindow {
+        override var isKeyWindow: Bool { true }
+    }
+
+    private func keyWindow(showing view: ChannelsView) -> KeyWindow {
+        let window = KeyWindow(contentRect: view.bounds, styleMask: [.borderless], backing: .buffered, defer: true)
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        return window
+    }
+
+    private func arrow(_ keyCode: UInt16, in window: NSWindow) throws -> NSEvent {
+        let key = String(Character(UnicodeScalar(keyCode == 126 ? NSUpArrowFunctionKey : NSDownArrowFunctionKey)!))
+        return try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: keyCode))
+    }
+
+    func testAMessageIsOneTabStopAndTheArrowKeysMoveBetweenMessages() throws {
+        QuietFocus.fullKeyboardAccess = { true }
+        defer { QuietFocus.fullKeyboardAccess = { NSApplication.shared.isFullKeyboardAccessEnabled } }
+        let view = view()
+        let window = keyWindow(showing: view)
+        var copied: [String] = []
+        view.onCopy = { copied.append($0) }
+        view.show(book(exchanges: 3, text: "Reply"))
+        view.select(inThread)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(subviews(of: view.threadPane).compactMap { $0 as? NSScrollView }.first?.documentView)
+        let stops = { self.subviews(of: list).filter(\.canBecomeKeyView) }
+        XCTAssertTrue(list.canBecomeKeyView, "the messages are one stop for Tab, as a list is")
+        XCTAssertFalse(subviews(of: list).contains { $0 is ChannelTextView && $0.canBecomeKeyView }, "and their words aren't stops of their own")
+
+        XCTAssertTrue(window.makeFirstResponder(list))
+        let messages = view.threadPane.shownMessageRows
+        let newest = try XCTUnwrap(messages.last)
+        XCTAssertFalse(stops().isEmpty, "Tab goes on into the message you're on")
+        XCTAssertTrue(stops().allSatisfy { $0.isDescendant(of: newest) }, "the newest, and only its buttons")
+
+        list.keyDown(with: try arrow(126, in: window))
+        let above = messages[messages.count - 2]
+        XCTAssertTrue(stops().allSatisfy { $0.isDescendant(of: above) } && !stops().isEmpty, "↑ moves to the message above")
+        XCTAssertTrue(NSApp.sendAction(#selector(NSText.copy(_:)), to: list, from: nil))
+        XCTAssertEqual(copied, [above.message.text ?? ""], "and ⌘C copies what it said")
+
+        list.keyDown(with: try arrow(125, in: window))
+        XCTAssertTrue(stops().allSatisfy { $0.isDescendant(of: newest) }, "↓ goes back")
+    }
+
+    func testTheBoxIsAnOpalFieldWithAVioletRingWhileYouTypeAndItsAttachBesideTheMic() throws {
+        let view = view()
+        let window = keyWindow(showing: view)
+        view.show(book())
+        view.select(inThread)
+        view.layoutSubtreeIfNeeded()
+        let composer = view.threadPane.composer
+        let words = try XCTUnwrap(composer.textView.enclosingScrollView).frame
+        let field = NSRect(x: ChannelRowView.margin, y: words.minY - 8, width: composer.bounds.width - ChannelRowView.margin * 2, height: words.height + 16)
+        let attach = try XCTUnwrap(subviews(of: composer).compactMap { $0 as? QuietButton }.first { $0.accessibilityLabel() == CatWords.attachRecent })
+        XCTAssertTrue(field.contains(attach.frame), "Attach is in the field, as Slack and iMessage keep it")
+        XCTAssertEqual(attach.frame.midY, composer.mic.frame.midY, accuracy: 1, "beside the mic")
+
+        func edge() throws -> NSColor {
+            let rep = try XCTUnwrap(ChannelImages.bitmap(of: composer, scale: 2))
+            return try XCTUnwrap(rep.colorAt(x: Int((field.minX + 1) * 2), y: Int(field.midY * 2))?.usingColorSpace(.sRGB))
+        }
+        let violet = Ink.hex(Opal.violet).usingColorSpace(.sRGB)!
+        XCTAssertGreaterThan(abs(try edge().blueComponent - violet.blueComponent), 0.2, "no ring until you type in it")
+        XCTAssertTrue(window.makeFirstResponder(composer.textView))
+        XCTAssertEqual(try edge().blueComponent, violet.blueComponent, accuracy: 0.05, "Opal's violet ring while you do")
+        XCTAssertEqual(try edge().redComponent, violet.redComponent, accuracy: 0.05)
     }
 }

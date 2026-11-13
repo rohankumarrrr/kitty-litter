@@ -47,8 +47,16 @@ final class ChannelsPanel: NSPanel {
             if !isKeyWindow { makeKey() }
         }
         // ⌥ with the arrows, and Esc, have no ⌘, so they'd otherwise go straight to whatever has the keyboard.
-        if event.type == .keyDown, !event.modifierFlags.contains(.command), shortcut(event) { return }
+        if event.type == .keyDown, !event.modifierFlags.contains(.command), shortcut(event) || movesOn(event) { return }
         super.sendEvent(event)
+    }
+
+    /// ⌃Tab on anything but a box moves on as Tab does, as on any Mac, rather than leaving no window with the keyboard.
+    /// In a box AppKit's own takes it out of the box.
+    private func movesOn(_ event: NSEvent) -> Bool {
+        guard event.keyCode == 48, event.modifierFlags.contains(.control), !(firstResponder is NSTextView) else { return false }
+        if event.modifierFlags.contains(.shift) { selectPreviousKeyView(nil) } else { selectNextKeyView(nil) }
+        return true
     }
 
     private func shortcut(_ event: NSEvent) -> Bool {

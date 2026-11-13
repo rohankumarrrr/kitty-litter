@@ -43,7 +43,8 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     /// What goes with your words, until you send them or take them off.
     private(set) var attachments: [Drop] = []
     private var chips: [AttachmentChip] = []
-    private let attachButton = QuietButton(CatWords.attach, style: .text)
+    /// In the field beside the mic, as Slack and iMessage keep theirs.
+    private let attachButton = MessageToolbar.button(CatWords.attachRecent, symbol: "paperclip")
     let mic = QuietButton.mic()
 
     override init(frame: NSRect) {
@@ -79,11 +80,11 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
             guard let self else { return }
             self.onAttach?(self.attachButton)
         }
-        attachButton.setAccessibilityLabel(CatWords.attachRecent)
         addSubview(attachButton)
         mic.onPress = { [weak self] in self?.onMic?() }
         addSubview(mic)
         textView.onAttach = { [weak self] in self?.attach($0) ?? false }
+        textView.onFocus = { [weak self] in self?.needsDisplay = true }
         registerForDraggedTypes(Drop.types)
         restyle()
     }
@@ -218,21 +219,27 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         return min(max(line, used), line * Self.maxLines)
     }
 
+    /// The Opal field you type in.
+    private var field: NSRect {
+        NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight + filesHeight, width: bounds.width - ChannelRowView.margin * 2, height: textHeight + Self.fieldPad * 2)
+    }
+
     override func layout() {
         super.layout()
         let inner = bounds.width - ChannelRowView.margin * 2
-        attachButton.frame.origin = NSPoint(x: bounds.width - ChannelRowView.margin - attachButton.frame.width + 6, y: Self.pad - 2)
-        label.frame = NSRect(x: ChannelRowView.margin - 2, y: Self.pad + 2, width: inner - (attachButton.isHidden ? 0 : attachButton.frame.width), height: 16)
+        label.frame = NSRect(x: ChannelRowView.margin - 2, y: Self.pad + 2, width: inner, height: 16)
         for (index, chip) in chips.enumerated() {
             let column = index % chipsPerRow, row = index / chipsPerRow
             chip.frame = NSRect(x: ChannelRowView.margin + CGFloat(column) * (chipSize + 8), y: Self.pad + Self.labelHeight + CGFloat(row) * Self.fileHeight, width: chipSize, height: Self.fileHeight - 8)
         }
-        let field = NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight + filesHeight, width: inner, height: textHeight + Self.fieldPad * 2)
+        let field = field
         let side = QuietButton.micSide
+        // In the field at its right, level with the last line, so they stay by what you'd send as the box grows.
+        let middle = field.maxY - Self.fieldPad - (textLine + side) / 2
+        mic.frame = NSRect(x: field.maxX - side - 4, y: middle, width: side, height: side)
+        attachButton.frame.origin = NSPoint(x: mic.frame.minX - side, y: middle)
         scroll.frame = field.insetBy(dx: 10, dy: Self.fieldPad)
-        scroll.frame.size.width -= side
-        // In the field at its right, level with the last line, so it stays by what you'd send as the box grows.
-        mic.frame = NSRect(x: field.maxX - side - 4, y: field.maxY - Self.fieldPad - (textLine + side) / 2, width: side, height: side)
+        scroll.frame.size.width = (attachButton.isHidden ? mic.frame.minX : attachButton.frame.minX) - scroll.frame.minX - 2
         textView.minSize = NSSize(width: scroll.frame.width, height: 0)
         textView.maxSize = NSSize(width: scroll.frame.width, height: .greatestFiniteMagnitude)
         alsoSend.sizeToFit()
@@ -240,13 +247,13 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         needsDisplay = true
     }
 
+    /// With the violet ring while you're typing in it.
     override func draw(_ dirtyRect: NSRect) {
-        MessagesInk.line.setFill()
-        NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
-        let field = NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight + filesHeight, width: bounds.width - ChannelRowView.margin * 2, height: textHeight + Self.fieldPad * 2)
-        MessagesInk.hover.setFill()
-        NSBezierPath(roundedRect: field, xRadius: 9, yRadius: 9).fill()
+        Opal.field(in: field, focused: showsRing)
     }
+
+    /// Whether its field has the ring, which only shows while its window has the keyboard.
+    var showsRing: Bool { window?.isKeyWindow == true && window?.firstResponder === textView }
 
     /// A box that goes while its mic hears you, as when its thread's pane closes or you go somewhere with no box, forgets
     /// what you said, since there'd be no mic left to finish it with.
@@ -307,6 +314,30 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
 /// The box's text, which takes files or pictures dropped or pasted into it as attachments rather than as their paths.
 final class ComposerTextView: PlaceholderTextView {
     var onAttach: (([Drop]) -> Bool)?
+    /// It took the keyboard or gave it up, or its window did, which shows or hides the field's ring.
+    var onFocus: (() -> Void)?
+    private var keyObservers: [NSObjectProtocol] = []
+
+    override func becomeFirstResponder() -> Bool {
+        defer { onFocus?() }
+        return super.becomeFirstResponder()
+    }
+
+    override func resignFirstResponder() -> Bool {
+        defer { onFocus?() }
+        return super.resignFirstResponder()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        keyObservers.forEach(NotificationCenter.default.removeObserver)
+        guard let window else { return keyObservers = [] }
+        keyObservers = [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.onFocus?() }
+            }
+        }
+    }
 
     override func paste(_ sender: Any?) {
         let pasteboard = NSPasteboard.general
@@ -334,7 +365,7 @@ final class AttachmentChip: NSView {
     var onRemove: (() -> Void)?
     private let picture = NSImageView()
     private let name = NSTextField(labelWithString: "")
-    private let remove = QuietButton("✕", style: .text)
+    private let remove = MessageToolbar.button(CatWords.closeThread, symbol: "xmark")
 
     init() {
         super.init(frame: .zero)
@@ -361,6 +392,7 @@ final class AttachmentChip: NSView {
         picture.contentTintColor = MessagesInk.soft
         setAccessibilityLabel(CatWords.attached(name))
         remove.setAccessibilityLabel(CatWords.remove(name))
+        remove.toolTip = CatWords.remove(name)
         needsLayout = true
         needsDisplay = true
     }
@@ -374,8 +406,7 @@ final class AttachmentChip: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        MessagesInk.hover.setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 9, yRadius: 9).fill()
+        Opal.field(in: bounds, focused: false)
     }
 }
 
