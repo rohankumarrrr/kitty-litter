@@ -522,7 +522,10 @@ final class AppController {
             channels.refresh()
         }
         if quietChanged { doNotDisturbChanged() }
-        if textChanged { stage.showText(size: updated.textSize, font: updated.messagesFont) }
+        if textChanged {
+            stage.showText(size: updated.textSize, font: updated.messagesFont)
+            phone?.textSize = updated.textSize
+        }
         // A bubble's Open says where it goes.
         if openChanged { renderBubble() }
         stage.settingsChanged(settingsForm)

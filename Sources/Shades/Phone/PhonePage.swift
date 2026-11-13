@@ -82,57 +82,70 @@ enum PhonePage {
         :root {
           --paper: #f9f9f9; --text: #1d1d1f; --soft: #6e6e73; --line: #d2d2d7; --grey: #e9e9eb;
           --you: #0071e3; --on-you: #ffffff; --link: #0070e1; --card: #ffffff; --warn: #c9341c; --badge: #ff3b5c; --alert: #d6324d; --cats: light;
-          font: 17px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+          /* The phone's own text size, 17px where it's left alone. Every size the page writes is in em, as the pixels it
+             comes to at 17, so it grows with it, and with the Mac's, which /app.css sets in --size. */
+          font: 106.25%/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
           -webkit-text-size-adjust: 100%;
+        }
+        /* An iPhone's browser starts at 16px whatever its Text Size says, and only gives the setting here. */
+        @supports (-webkit-touch-callout: none) {
+          :root { font: -apple-system-body; line-height: 1.35; }
         }
         @media (prefers-color-scheme: dark) {
           :root { --paper: #1d1d1f; --text: #f5f5f7; --soft: #98989d; --line: #3a3a3c; --grey: #3a3a3c; --link: #2586e7; --card: #2c2c2e; --warn: #ff6b55; --alert: #ff3b5c; --cats: dark; }
         }
         * { box-sizing: border-box; }
         html, body { margin: 0; background: var(--paper); color: var(--text); }
-        body { min-height: 100dvh; display: flex; flex-direction: column; }
-        button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+        body { min-height: 100dvh; display: flex; flex-direction: column; font-size: var(--size, 100%); }
+        /* Big enough to tap, as Apple's 44 points. Where a row is tighter than that, a button reaches past it with
+           negative margins, so it can be tapped where it is without spreading the page out. */
+        button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; min-width: 44px; min-height: 44px; }
         [hidden] { display: none !important; }
 
         #top { position: sticky; top: 0; z-index: 2; background: var(--paper); border-bottom: 1px solid var(--line);
-          padding: calc(env(safe-area-inset-top) + 10px) 16px 10px; }
-        #back { color: var(--link); font-size: 15px; margin-bottom: 4px; display: block; max-width: 100%;
+          padding: calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 16px) 10px calc(env(safe-area-inset-left) + 16px); }
+        #back { color: var(--link); font-size: calc(15em / 17); margin: -12px 0 -8px; display: block; max-width: 100%;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
-        #head { display: flex; align-items: center; gap: 10px; }
-        #names { flex: 1; min-width: 0; }
-        #link, #unread, #find { color: var(--link); font-size: 15px; flex: none; }
+        /* The buttons go under the names once the names would be narrower than 9em, as at a large text size. */
+        #head { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px; }
+        #names { flex: 1 1 min(9em, 70%); min-width: 0; }
+        #link, #unread, #find { color: var(--link); font-size: calc(15em / 17); flex: none; margin: -8px 0; }
         #jumpnew { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap;
-          background: var(--you); color: var(--on-you); border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600;
+          background: var(--you); color: var(--on-you); border-radius: 999px; padding: 0 16px; font-size: calc(14em / 17); font-weight: 600;
           box-shadow: 0 2px 10px rgba(0, 0, 0, .2); }
         #search { margin-top: 10px; }
-        #query { width: 100%; font: inherit; color: inherit; background: var(--grey); border: 0; border-radius: 10px; padding: 8px 12px; }
+        /* Never under 16px, or an iPhone zooms in on it as you type. */
+        #query { width: 100%; font: inherit; font-size: max(16px, 1em); color: inherit; background: var(--grey); border: 0; border-radius: 10px;
+          padding: 8px 12px; min-height: 44px; }
         .hit { display: block; width: 100%; text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
         .hit:active { background: var(--grey); }
-        .hit small { color: var(--soft); font-size: 13px; }
+        .hit small { color: var(--soft); font-size: calc(13em / 17); }
         .hit p { margin: 4px 0 0; color: var(--soft); overflow-wrap: anywhere; }
         .hit b { color: var(--text); }
         .msg.landed .bubble { box-shadow: 0 0 0 3px var(--you); }
-        #title { font-size: 20px; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
-        #subtitle { margin: 2px 0 0; color: var(--soft); font-size: 13px; }
+        #title { font-size: calc(20em / 17); margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+        #subtitle { margin: 2px 0 0; color: var(--soft); font-size: calc(13em / 17); }
         #subtitle:empty { display: none; }
         /* Across the bottom of the header, so it's in sight however far down you are. Always there, empty, so what it
            says is read out. */
-        #banner { background: var(--warn); color: var(--paper); margin: 10px -16px -10px; padding: 8px 16px; font-size: 14px; }
+        #banner { background: var(--warn); color: var(--paper); font-size: calc(14em / 17);
+          margin: 10px calc(-16px - env(safe-area-inset-right)) -10px calc(-16px - env(safe-area-inset-left));
+          padding: 8px calc(env(safe-area-inset-right) + 16px) 8px calc(env(safe-area-inset-left) + 16px); }
         #banner:empty { margin: 0; padding: 0; }
-        #notify { display: flex; align-items: center; gap: 12px; margin: 12px 12px 0; padding: 10px 14px; border-radius: 14px;
-          background: var(--card); border: 1px solid var(--line); }
-        #notifytext { flex: 1; margin: 0; color: var(--soft); font-size: 14px; }
-        #notifybutton { background: var(--you); color: var(--on-you); border-radius: 999px; padding: 6px 14px; font-size: 15px; }
+        #notify { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 14px;
+          margin: 12px calc(env(safe-area-inset-right) + 12px) 0 calc(env(safe-area-inset-left) + 12px); background: var(--card); border: 1px solid var(--line); }
+        #notifytext { flex: 1; margin: 0; color: var(--soft); font-size: calc(14em / 17); }
+        #notifybutton { background: var(--you); color: var(--on-you); border-radius: 999px; padding: 0 16px; font-size: calc(15em / 17); }
 
-        main { flex: 1; padding: 8px 12px 16px; }
-        .group { color: var(--soft); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 22px 4px 6px; }
+        main { flex: 1; padding: 8px calc(env(safe-area-inset-right) + 12px) 16px calc(env(safe-area-inset-left) + 12px); }
+        .group { color: var(--soft); font-size: calc(12em / 17); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 22px 4px 6px; }
         .place { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 8px; border-radius: 12px; text-align: left; }
         .place:active, .issue:active { background: var(--grey); }
-        .place .name { flex: 1; font-size: 17px; }
+        .place .name { flex: 1; }
         .place.unread .name { font-weight: 600; }
         .place.asleep .cat { opacity: .45; }
         .place.asleep .name { color: var(--soft); }
-        .count { background: var(--badge); color: #000; border-radius: 999px; padding: 1px 8px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .count { background: var(--badge); color: #000; border-radius: 999px; padding: 1px 8px; font-size: calc(13em / 17); font-weight: 700; font-variant-numeric: tabular-nums; }
         .icon { width: 32px; height: 32px; flex: none; display: grid; place-items: center; color: var(--soft); }
         .icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
         .place.unread .icon { color: var(--text); }
@@ -144,7 +157,7 @@ enum PhonePage {
         .you { width: 32px; height: 32px; flex: none; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 .5px var(--line); }
         .you.small { width: 16px; height: 16px; }
 
-        .day { text-align: center; color: var(--soft); font-size: 12px; margin: 18px 0 6px; }
+        .day { text-align: center; color: var(--soft); font-size: calc(12em / 17); margin: 18px 0 6px; }
         .msg { margin: 6px 0; display: flex; flex-direction: column; align-items: flex-start; }
         .msg.mine { align-items: flex-end; }
         .msg.withcat { padding-left: 40px; }
@@ -153,10 +166,9 @@ enum PhonePage {
         .said .cat { margin-left: -40px; }
         .msg.withyou { padding-right: 40px; }
         .said .you { margin-right: -40px; }
-        .meta { color: var(--soft); font-size: 12px; margin: 4px 12px 3px; }
+        .meta { color: var(--soft); font-size: calc(12em / 17); margin: 4px 12px 3px; }
         .bubble { max-width: 86%; padding: 9px 14px; border-radius: 18px; background: var(--grey); color: var(--text);
           white-space: pre-wrap; overflow-wrap: anywhere; }
-        .bubble.going { opacity: .55; }
         .bubble code { font: .9em ui-monospace, Menlo, monospace; }
         .bubble a, .bubble .link { color: inherit; }
         .bubble .link { text-decoration: underline; cursor: pointer; }
@@ -168,113 +180,121 @@ enum PhonePage {
         .bubble .item { display: flex; gap: .4em; }
         .bubble .marker { flex: none; min-width: .8em; }
         .bubble .code { border-radius: 10px; background: color-mix(in srgb, currentColor 9%, transparent); }
-        .bubble pre { margin: 0; padding: 8px 10px; font: 14px/1.4 ui-monospace, Menlo, monospace; white-space: pre; overflow-x: auto; }
-        .bubble .copy { display: block; margin: 0 0 -6px auto; padding: 4px 10px 0; font-size: 13px; }
+        .bubble pre { margin: 0; padding: 8px 10px; font: calc(14em / 17)/1.4 ui-monospace, Menlo, monospace; white-space: pre; overflow-x: auto; }
+        /* On top of the code's first line, so all of it can be tapped. */
+        .bubble .copy { position: relative; display: block; margin: -8px 0 -18px auto; padding: 0 10px; font-size: calc(13em / 17); }
         .bubble .table { overflow-x: auto; }
-        .bubble table { border-collapse: collapse; font-size: 15px; white-space: normal; }
+        .bubble table { border-collapse: collapse; font-size: calc(15em / 17); white-space: normal; }
         .bubble th, .bubble td { overflow-wrap: normal; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); padding: 3px 8px; text-align: left; vertical-align: top; }
         .bubble th { background: color-mix(in srgb, currentColor 6%, transparent); }
         .bubble hr { border: 0; border-top: 1px solid color-mix(in srgb, currentColor 25%, transparent); margin: .6em 0; }
         /* GitHub's own colours for a pull request's state, as the window draws them. */
-        .chip { display: inline-block; border-radius: 999px; padding: 0 8px; font-size: 14px; font-weight: 600; color: #fff; background: #6e7781; white-space: nowrap; }
+        .chip { display: inline-block; border-radius: 999px; padding: 0 8px; font-size: calc(14em / 17); font-weight: 600; color: #fff; background: #6e7781; white-space: nowrap; }
         .chip[data-state=open] { background: #1f883d; }
         .chip[data-state=merged] { background: #8250df; }
         .chip[data-state=closed] { background: #cf222e; }
         /* However long the address, the sheet stays on screen and the address scrolls inside it. Only while it's open,
            since a closed dialog is hidden by the browser's own rule. */
-        #linksheet[open] { position: fixed; inset: auto 12px calc(env(safe-area-inset-bottom) + 12px); margin: 0; width: auto; max-width: none;
+        #linksheet[open] { position: fixed; margin: 0; width: auto; max-width: none;
+          inset: auto calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 12px);
           max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); display: flex; flex-direction: column;
           color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
         #linksheet::backdrop { background: rgba(0, 0, 0, .4); }
-        #linktitle { margin: 0; color: var(--soft); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
-        #linkaddress { margin: 6px 0 0; font: 14px/1.4 ui-monospace, Menlo, monospace; overflow-wrap: anywhere; overflow-y: auto; min-height: 0; }
+        #linktitle { margin: 0; color: var(--soft); font-size: calc(13em / 17); font-weight: 600; overflow-wrap: anywhere; }
+        #linkaddress { margin: 6px 0 0; font: calc(14em / 17)/1.4 ui-monospace, Menlo, monospace; overflow-wrap: anywhere; overflow-y: auto; min-height: 0; }
         #linksheet .buttons { justify-content: flex-end; }
-        #linksheet .buttons .go { background: var(--you); color: var(--on-you); border-radius: 999px; padding: 8px 16px; font-size: 15px; text-decoration: none; }
+        #linksheet .buttons .go { display: inline-flex; align-items: center; min-height: 44px; background: var(--you); color: var(--on-you); border-radius: 999px;
+          padding: 0 16px; font-size: calc(15em / 17); text-decoration: none; }
         /* Thirty lines of 1.35em and the bubble's padding, as many as a long message shows on the Mac. */
         .bubble.cut { max-height: calc(40.5em + 18px); overflow: hidden; -webkit-mask-image: linear-gradient(#000 calc(100% - 4em), transparent); }
-        .more { color: var(--soft); font-size: 14px; margin: 4px 12px 0; }
-        .failure { color: var(--warn); font-size: 13px; margin: 3px 12px 0; }
-        .retry { color: var(--link); font-size: 14px; font-weight: 600; margin: 4px 12px 0; }
+        .more { color: var(--soft); font-size: calc(14em / 17); margin: -8px 12px -12px; }
+        .failure { color: var(--warn); font-size: calc(13em / 17); margin: 3px 12px 0; }
+        .retry { color: var(--link); font-size: calc(14em / 17); font-weight: 600; margin: -8px 12px -12px; }
+        /* Tapping a message offers its reactions. This is the same for a keyboard and VoiceOver, and shows only while
+           it has the keyboard. */
+        .react { color: var(--link); font-size: calc(14em / 17); font-weight: 600; margin: -8px 12px -12px; }
+        .react:not(:focus) { position: absolute; width: 1px; min-width: 0; height: 1px; min-height: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
         .reactions { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 8px 0; }
-        .reactions button { background: var(--grey); border-radius: 999px; padding: 2px 9px; font-size: 15px; }
+        .reactions button { position: relative; min-height: 32px; background: var(--grey); border-radius: 999px; padding: 0 9px; font-size: calc(15em / 17); }
+        .reactions button::after { content: ''; position: absolute; inset: -6px 0; }
         .reactbar { display: flex; gap: 2px; margin: 6px 4px 0; padding: 4px 6px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; }
-        .reactbar button { font-size: 24px; padding: 2px 5px; border-radius: 999px; }
+        .reactbar button { font-size: calc(24em / 17); border-radius: 999px; }
         .reactbar button.on { background: var(--grey); }
-        .context { color: var(--soft); font-size: 12px; margin: 6px 12px 0; text-align: left; }
-        .replybar { display: flex; align-items: center; gap: 6px; margin: 4px 6px 0; padding: 4px 8px; border-radius: 10px; font-size: 13px; }
+        .context { color: var(--soft); font-size: calc(12em / 17); margin: 0 12px -6px; text-align: left; }
+        .replybar { display: flex; align-items: center; gap: 6px; margin: 0 6px -4px; padding: 4px 8px; border-radius: 10px; font-size: calc(13em / 17); }
         .replybar:active { background: var(--grey); }
         .replybar b { color: var(--link); }
         .replybar .waiting { color: var(--alert); font-weight: 600; }
         .replybar span { color: var(--soft); }
-        .replies { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: 13px; margin: 12px 4px 4px; }
+        .replies { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: calc(13em / 17); margin: 12px 4px 4px; }
         .replies::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
         /* Slack's New line, over what's new to you. */
-        .new { display: flex; align-items: center; gap: 10px; color: var(--alert); font-size: 12px; font-weight: 600; margin: 12px 4px 4px; }
+        .new { display: flex; align-items: center; gap: 10px; color: var(--alert); font-size: calc(12em / 17); font-weight: 600; margin: 12px 4px 4px; }
         .new::before { content: ''; flex: 1; border-top: 1px solid var(--badge); }
         .digest { display: block; width: 100%; text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--line); }
         .digest:active { background: var(--grey); }
-        .digest h3 { margin: 0 0 6px; font-size: 14px; }
+        .digest h3 { margin: 0 0 6px; font-size: calc(14em / 17); }
         .digest.unread h3::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--badge); margin-right: 6px; }
         .digest p { margin: 2px 0 6px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         .digest small { color: var(--soft); }
         .digest .who { display: flex; align-items: center; gap: 6px; }
         .digest .more { color: var(--link); font-weight: 600; margin: 0; }
-        #alsolabel { display: flex; align-items: center; gap: 6px; color: var(--soft); font-size: 13px; margin: 6px 4px 0; }
+        #alsolabel { display: flex; align-items: center; gap: 6px; min-height: 44px; color: var(--soft); font-size: calc(13em / 17); margin: 0 4px -8px; }
         .section { display: flex; justify-content: space-between; align-items: baseline; margin: 22px 4px 6px; }
-        .section span { color: var(--soft); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-        .section button { color: var(--link); font-size: 14px; }
+        .section span { color: var(--soft); font-size: calc(12em / 17); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+        .section button { color: var(--link); font-size: calc(14em / 17); margin: -12px 0; }
         .heading { display: flex; align-items: center; gap: 10px; margin: 16px 4px 4px; }
-        .heading p { margin: 0; color: var(--soft); font-size: 13px; }
+        .heading p { margin: 0; color: var(--soft); font-size: calc(13em / 17); }
         .issue { display: block; width: 100%; text-align: left; padding: 8px 4px 8px 46px; border-radius: 10px; }
         .issue .line { display: flex; align-items: center; gap: 8px; }
-        .issue small { display: block; color: var(--soft); font-size: 13px; margin-left: 16px; }
-        .note { color: var(--soft); text-align: center; font-size: 15px; margin: 24px 16px; }
-        .older { display: block; width: calc(100% - 32px); background: none; border: 0; font: inherit; }
+        .issue small { display: block; color: var(--soft); font-size: calc(13em / 17); margin-left: 16px; }
+        .note { color: var(--soft); text-align: center; font-size: calc(15em / 17); margin: 24px 16px; }
+        .older { display: block; width: calc(100% - 32px); background: none; border: 0; font: inherit; margin-block: 12px; }
 
         .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 10px 0; }
-        .card header { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: 13px; }
-        .card header .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 600; font-size: 15px; }
+        .card header { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: calc(13em / 17); }
+        .card header .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 600; font-size: calc(15em / 13); }
         .card .text { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-        .card.approval .text { font: 14px/1.4 ui-monospace, Menlo, monospace; }
+        .card.approval .text { font: calc(14em / 17)/1.4 ui-monospace, Menlo, monospace; }
         .card .answer { margin: 8px 0 0; padding-left: 10px; border-left: 3px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
-        .card .footer { margin: 8px 0 0; color: var(--soft); font-size: 13px; }
+        .card .footer { margin: 8px 0 0; color: var(--soft); font-size: calc(13em / 17); }
         .card .part { margin: 12px 0 0; }
         .card header + .part { margin: 0; }
         .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-        .buttons button, #pairform button { background: var(--grey); border-radius: 999px; padding: 8px 16px; font-size: 15px; }
+        .buttons button, #pairform button { background: var(--grey); border-radius: 999px; padding: 0 16px; font-size: calc(15em / 17); }
         .buttons button.picked { background: var(--you); color: var(--on-you); }
         .buttons button.go { background: var(--you); color: var(--on-you); }
         .buttons button:disabled, #send:disabled { opacity: .4; }
-        .card input, #pairform input { width: 100%; font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line);
-          border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
+        .card input, #pairform input { width: 100%; font: inherit; font-size: max(16px, 1em); color: inherit; background: var(--paper); border: 1px solid var(--line);
+          border-radius: 10px; padding: 8px 10px; min-height: 44px; margin-top: 8px; }
 
         #box { position: sticky; bottom: 0; background: var(--paper); border-top: 1px solid var(--line);
-          padding: 8px 12px calc(env(safe-area-inset-bottom) + 8px); }
-        #label { display: block; color: var(--soft); font-size: 12px; margin: 0 4px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .field { display: flex; align-items: flex-end; gap: 8px; }
-        #words { flex: 1; resize: none; font: inherit; color: inherit; background: var(--grey); border: 0; border-radius: 18px;
-          padding: 8px 14px; max-height: 40vh; }
-        #send { background: var(--you); color: var(--on-you); border-radius: 18px; padding: 8px 14px; font-weight: 600; }
-        .tool { font-size: 20px; padding: 6px 2px; line-height: 1; }
+          padding: 8px calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 12px); }
+        #label { display: block; color: var(--soft); font-size: calc(12em / 17); margin: 0 4px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .field { display: flex; align-items: flex-end; gap: 4px; }
+        #words { flex: 1; resize: none; font: inherit; font-size: max(16px, 1em); color: inherit; background: var(--grey); border: 0; border-radius: 22px;
+          padding: 10px 14px; min-height: 44px; max-height: 40vh; margin-left: 4px; }
+        #send { background: var(--you); color: var(--on-you); border-radius: 22px; padding: 0 14px; margin-left: 4px; font-weight: 600; }
+        .tool { font-size: calc(20em / 17); line-height: 1; }
         .tool:disabled { opacity: .4; }
         #attached { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
-        .attachment { display: flex; align-items: center; gap: 8px; padding: 6px 4px 6px 8px; border-radius: 12px; background: var(--grey); max-width: 100%; min-width: 0; }
+        .attachment { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 8px; border-radius: 12px; background: var(--grey); max-width: 100%; min-width: 0; }
         .attachment img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex: none; }
-        .attachment span { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
-        .attachment button { color: var(--soft); padding: 4px 8px; }
+        .attachment span { font-size: calc(14em / 17); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
+        .attachment button { color: var(--soft); }
         .pictures { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; max-width: 86%; }
         .mine .pictures { margin-left: auto; justify-content: flex-end; }
         .picture { max-width: 66%; max-height: 240px; border-radius: 14px; display: block; }
         .pictures.several .picture { width: 31%; max-width: 120px; height: 96px; object-fit: cover; }
         .web { color: var(--text); text-align: left; }
         .file { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 8px 12px; border-radius: 12px;
-          background: var(--card); border: 1px solid var(--line); font-size: 14px; max-width: 86%; overflow-wrap: anywhere; }
+          background: var(--card); border: 1px solid var(--line); font-size: calc(14em / 17); max-width: 86%; overflow-wrap: anywhere; }
 
-        #pair { padding: calc(env(safe-area-inset-top) + 40px) 24px 24px; }
-        #pair h1 { font-size: 24px; margin: 0 0 8px; }
+        #pair { padding: calc(env(safe-area-inset-top) + 40px) calc(env(safe-area-inset-right) + 24px) 24px calc(env(safe-area-inset-left) + 24px); }
+        #pair h1 { font-size: calc(24em / 17); margin: 0 0 8px; }
         #pair p { color: var(--soft); }
         #pairform { display: flex; gap: 8px; align-items: center; }
-        #pairform input { margin: 0; font-size: 22px; letter-spacing: .1em; text-transform: uppercase; }
+        #pairform input { margin: 0; font-size: calc(22em / 17); letter-spacing: .1em; text-transform: uppercase; }
         """
 
     /// The theme you picked for Messages, over the page's own colours in light and dark alike. Each is a hex colour
@@ -293,6 +313,12 @@ enum PhonePage {
             """
     }
 
+    /// The text size you picked for Messages on the Mac, on top of the phone's own, grown by as much as the window's is.
+    static func size(_ size: TextSize) -> String {
+        guard size != .standard else { return "" }
+        return "\n:root { --size: calc(100% * \(Int(MessagesInk.body(at: size))) / \(Int(MessagesInk.body(at: .standard)))); }\n"
+    }
+
     static let script = #"""
         'use strict';
         const $ = (id) => document.getElementById(id);
@@ -301,7 +327,8 @@ enum PhonePage {
           unreachable: "Can't reach your Mac. The Kitty Litter has to be running, and your Mac awake.",
           gone: "That's changed since. Have another look.",
           wrongCode: "That code didn't work. Turn pairing on again in The Kitty Litter on your Mac for a new one.",
-          answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied',
+          answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied', react: 'React',
+          waiting: (count) => count + ' waiting', unread: 'unread',
           openLink: (host) => 'Open a link to ' + host + '?',
           showPicture: (host) => 'Show a picture from ' + host + '?', pictureFrom: (host) => '🖼 Picture from ' + host,
           couldntShow: "Couldn't show it.", tooMany: 'One message takes up to 10 files.',
@@ -772,6 +799,8 @@ enum PhonePage {
             button.append(el('span', 'name', place.title));
             if (place.count) button.append(el('span', 'count', String(place.count)));
             if (place.dot) button.append(dot(place.dot));
+            // What the cat's pose and the count show, in words, as VoiceOver says the window's sidebar.
+            button.setAttribute('aria-label', [place.title, place.state, place.count && words.waiting(place.count), place.unread && words.unread].filter(Boolean).join(', '));
             button.onclick = () => go(place.key);
             nodes.push(button);
           }
@@ -882,9 +911,11 @@ enum PhonePage {
           if (item.cat) said.append(cat(item.cat));
           if (said.childElementCount || item.text || yours) node.append(said);
           if (item.text) {
-            const bubble = el('div', 'bubble' + (item.going || item.sending ? ' going' : ''));
+            const bubble = el('div', 'bubble');
             bubble.append(...(item.markup ? markup(item.markup) : [item.text]));
-            if (item.color) { bubble.style.background = item.color; bubble.style.color = item.ink; }
+            // Still coming, it's paler, in a colour the Mac worked out for a light page and a dark one with words that read on it.
+            const paint = item.faded ? item.faded[scheme()] : item.color ? { color: item.color, ink: item.ink } : null;
+            if (paint) { bubble.style.background = paint.color; if (paint.ink) bubble.style.color = paint.ink; }
             said.append(bubble);
           }
           if (yours) said.append(you());
@@ -926,6 +957,7 @@ enum PhonePage {
               if (selecting() || event.target.closest('[role=link], button')) return;
               react(node, item);
             });
+            node.append(button(words.react, () => react(node, item), 'react'));
           }
           return node;
         }
@@ -938,9 +970,12 @@ enum PhonePage {
           const bar = el('div', 'reactbar');
           for (const mark of view.marks) {
             const on = item.reactions.some((reaction) => reaction.value === mark.value);
-            bar.append(button(mark.label, () => { bar.remove(); act({ act: 'react', id: item.id, value: mark.value }); }, on ? 'on' : null));
+            const pick = button(mark.label, () => { bar.remove(); act({ act: 'react', id: item.id, value: mark.value }); }, on ? 'on' : null);
+            pick.setAttribute('aria-pressed', String(on));
+            bar.append(pick);
           }
           node.append(bar);
+          bar.firstChild.focus();
         }
 
         // A kitten's markdown as the Mac read it, built as nodes and never markup. Only web addresses are links, and

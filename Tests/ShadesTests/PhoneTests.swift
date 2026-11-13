@@ -829,8 +829,8 @@ extension PhoneTests {
             return String(script[from.lowerBound..<(try XCTUnwrap(script.range(of: end, range: from.upperBound..<script.endIndex))).upperBound])
         }
         let document = """
-            const document = { createElement: (tag) => ({ tag, children: [], dataset: {}, classList: { toggle() {} },
-              append(...nodes) { this.children.push(...nodes); }, setAttribute() {}, querySelectorAll() { return []; } }) };
+            const document = { createElement: (tag) => ({ tag, children: [], dataset: {}, style: {}, attributes: {}, classList: { toggle() {} },
+              append(...nodes) { this.children.push(...nodes); }, setAttribute(name, value) { this.attributes[name] = value; }, querySelectorAll() { return []; } }) };
             const cat = () => document.createElement('img'), time = () => '', act = () => Promise.resolve(null), answers = new Map();
             const said = (node) => [node.textContent, ...node.children.flatMap(said)].filter((text) => text);
             """
@@ -839,5 +839,95 @@ extension PhoneTests {
         let functions = try names.map { try cut(from: "function \($0)(", to: "\n}\n") }
         page.evaluateScript(([document, try cut(from: "const words = {", to: "\n};\n")] + functions).joined(separator: "\n"))
         return page
+    }
+}
+
+// MARK: - Size, labels and reach
+
+extension PhoneTests {
+    /// The page's words grow with the phone's own text size, and with the Mac's on top of it, so none is written in
+    /// pixels. The Mac's grows them as much as the window's 13 points grow.
+    func testThePagesWordsGrowWithThePhonesTextSizeAndTheMacs() throws {
+        let style = PhonePage.style
+        let fixed = try NSRegularExpression(pattern: "font(-size)?: [\\d.]+px").matches(in: style, range: NSRange(style.startIndex..., in: style))
+        XCTAssertEqual(fixed.map { String(style[Range($0.range, in: style)!]) }, [], "every size in em, from the phone's own")
+        XCTAssertTrue(style.contains("font: -apple-system-body"), "which on an iPhone is its Text Size")
+        XCTAssertTrue(style.contains("font-size: var(--size, 100%)"))
+        XCTAssertEqual(PhonePage.size(.standard), "")
+        XCTAssertTrue(PhonePage.size(.small).contains("--size: calc(100% * 12 / 13)"))
+        XCTAssertTrue(PhonePage.size(.larger).contains("--size: calc(100% * 17 / 13)"))
+    }
+
+    /// Apple's 44 points for anything you tap, so a small one such as Search or Try again isn't missed. A reaction's
+    /// pill is drawn smaller, and reaches past itself.
+    func testEveryButtonIsBigEnoughToTap() throws {
+        let rules = try Self.rules()
+        XCTAssertTrue(rules.contains { $0.selector == "button" && $0.body.contains("min-width: 44px; min-height: 44px") })
+        let drawnSmaller = rules.filter { $0.body.range(of: "min-height: ([1-9]|[1-3][0-9]|4[0-3])px", options: .regularExpression) != nil }
+        XCTAssertEqual(drawnSmaller.map(\.selector), [".reactions button"])
+        XCTAssertTrue(rules.contains { $0.selector == ".reactions button::after" && $0.body.contains("inset: -6px 0") })
+    }
+
+    /// Only a cat and a button you can't press are ever see-through. Faded words, such as a message on its way at 55%,
+    /// read at little over 2:1.
+    func testNothingThePageSaysIsSeeThrough() throws {
+        for rule in try Self.rules() where rule.body.contains("opacity:") {
+            XCTAssertTrue(rule.selector.hasSuffix(" .cat") || rule.selector.contains(":disabled"), rule.selector)
+        }
+    }
+
+    /// A message still coming, or on its way, is paler as in the window: one solid colour, worked out for a light page
+    /// and a dark one, since a phone picks its own when there's no theme, with words picked to read on it.
+    func testAMessageOnItsWayIsPalerInAColourItsWordsReadOn() throws {
+        func said(_ speaker: Speaker, _ id: String, going: Bool = false, sending: Bool = false) -> SentMessage {
+            SentMessage(channel: .general, message: ChannelMessage(exchangeID: id, kind: speaker == .you ? .ask : .reply, speaker: speaker, text: "Words", at: noon, threadID: "", threadTitle: "", isStillGoing: going, isSending: sending))
+        }
+        let book = ChannelBook.build(
+            kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false,
+            sent: [said(.you, "sending", sending: true), said(.kitten(steve.id), "going", going: true), said(.cat, "cat", going: true), said(.you, "sent")]
+        )
+        let rows = PhoneView(PhonePlace("general", in: book), in: book, now: noon).rows.filter { $0.kind == "message" }
+        XCTAssertEqual(rows.map { $0.faded != nil }, [true, true, true, false], "only what's still on its way")
+        let page = (light: (paper: UInt32(0xf9f9f9), text: UInt32(0x1d1d1f)), dark: (paper: UInt32(0x1d1d1f), text: UInt32(0xf5f5f7)))
+        for row in rows.dropLast() {
+            for (look, text) in [("light", page.light.text), ("dark", page.dark.text)] {
+                let paint = try XCTUnwrap(row.faded?[look])
+                let fill = try XCTUnwrap(UInt32(paint.color.dropFirst(), radix: 16))
+                let words = try paint.ink.map { try XCTUnwrap(UInt32($0.dropFirst(), radix: 16)) } ?? text
+                XCTAssertGreaterThanOrEqual(ColorTheme.contrast(words, fill), 4.5, "\(row.id ?? "") on a \(look) page")
+            }
+        }
+        XCTAssertNotEqual(rows[0].faded?["light"], rows[0].faded?["dark"], "yours fades toward the page it's on")
+        XCTAssertNil(rows[2].faded?["light"]?.ink, "the cat's grey keeps the page's own words, as the window's does")
+    }
+
+    /// What VoiceOver hears for each place is what it hears in the window's sidebar: its name, what its kitten is doing
+    /// and what's waiting. A count says it needs you, so as in the sidebar the dot shows only without one.
+    func testEachPlaceSaysWhatItsKittenIsDoingAndACountTakesTheDotsPlace() throws {
+        let cali = Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)
+        var working = thread("p", of: pepper)
+        working.status = .running
+        var waiting = thread("a", of: steve)
+        waiting.status = .waitingForApproval
+        let approval = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
+        let book = ChannelBook.build(
+            kittens: [steve, pepper, cali], threads: [waiting, working], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false,
+            waiting: Waiting(approvals: [approval], owners: ["ap": steve.id])
+        )
+        let places = PhoneView(PhonePlace("home", in: book), in: book, now: noon).places.filter { $0.icon == nil }
+        XCTAssertEqual(places.map(\.state), ["Needs you", "Working", "Not set up yet"])
+        XCTAssertEqual(places.map(\.count), [1, nil, nil])
+        XCTAssertEqual(places.map(\.dot), [nil, ColorTheme.hex(0xffc02e), nil], "Steve's count, with no dot beside it")
+        let page = try Self.page(["el", "dot", "places"])
+        let json = String(decoding: try JSONEncoder().encode(places), as: UTF8.self)
+        let heard = page.evaluateScript("places(\(json)).filter((node) => node.tag === 'button').map((node) => node.attributes['aria-label'])")?.toArray() as? [String]
+        XCTAssertEqual(heard, ["steve-pawsniak, Needs you, 1 waiting", "pepper, Working", "cali, Not set up yet"])
+    }
+
+    /// Tapping what a message said offers its reactions, which a keyboard and VoiceOver can't, so React does the same.
+    func testAKeyboardOrVoiceOverCanReactToo() {
+        XCTAssertTrue(PhonePage.script.contains("node.append(button(words.react, () => react(node, item), 'react'));"))
+        XCTAssertTrue(PhonePage.script.contains("bar.firstChild.focus();"), "and the keyboard goes to the marks it offers")
+        XCTAssertTrue(PhonePage.style.contains(".react:not(:focus) { position: absolute;"), "out of sight until it has the keyboard")
     }
 }

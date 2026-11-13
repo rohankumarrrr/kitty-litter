@@ -9,8 +9,9 @@ enum MessagesInk {
     /// How big what's said is, set the same way.
     static var textSize: TextSize = .standard
     /// Points added to every size what's said is drawn at, and the box you type in.
-    private static var textStep: CGFloat {
-        switch textSize {
+    private static var textStep: CGFloat { step(at: textSize) }
+    private static func step(at size: TextSize) -> CGFloat {
+        switch size {
         case .small: -1
         case .standard: 0
         case .large: 2
@@ -18,7 +19,8 @@ enum MessagesInk {
         }
     }
     /// What's said, such as a message, a note or a search hit.
-    static var body: CGFloat { 13 + textStep }
+    static var body: CGFloat { body(at: textSize) }
+    static func body(at size: TextSize) -> CGFloat { 13 + step(at: size) }
     /// Who said it, when and how many. It grows half as fast, so it stays quieter than what it's about.
     static var meta: CGFloat { 11 + textStep / 2 }
     /// Over what's said, such as a heading in a message or a search hit's name.

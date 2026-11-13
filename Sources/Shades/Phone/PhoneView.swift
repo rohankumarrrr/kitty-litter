@@ -176,7 +176,9 @@ struct PhoneView: Encodable, Equatable {
         var unread: Bool
         /// Its kitten, posed for what it's doing, as `PhoneCat.key` writes it.
         var cat: String?
-        /// The window's dot for a kitten that's working or needs you.
+        /// What its kitten is doing, in the words VoiceOver says for the window's sidebar.
+        var state: String?
+        /// The window's dot for a kitten that's working or needs you, which a count says in its place.
         var dot: String?
         var asleep: Bool
         /// `activity`, `threads` or `channel`, for the ones without a cat.
@@ -240,6 +242,12 @@ struct PhoneView: Encodable, Equatable {
         var several = false
     }
 
+    /// A bubble's colour, and its words' colour, where `nil` is the page's own.
+    struct Paint: Encodable, Equatable {
+        var color: String
+        var ink: String?
+    }
+
     /// One row, by `kind`, with only the fields that kind uses.
     struct Row: Encodable, Equatable {
         var kind: String
@@ -252,6 +260,8 @@ struct PhoneView: Encodable, Equatable {
         var footer: String?
         var color: String?
         var ink: String?
+        /// A message that's still coming or on its way, paler as the window draws it, on a `light` page and a `dark` one.
+        var faded: [String: Paint]?
         /// Whoever it's from, or what a heading's kitten is doing, as `PhoneCat.key` writes it. Yours have none.
         var cat: String?
         /// The colour of an issue's dot. `nil` is the soft grey.
@@ -388,13 +398,15 @@ struct PhoneView: Encodable, Equatable {
         ChannelSidebarItem.groups(in: book).flatMap { group in
             group.items.filter { $0.place.channelID != .shades || !book.onPhone.isEmpty }.map { item in
                 var cat: String?
+                var state: String?
                 var dot: UInt32?
                 var asleep = false
                 var icon: String?
                 switch item.icon {
                 case .kitten(let status):
                     cat = PhoneCat.key(PhoneCat.Pose(status.state), jacket: ChannelSpeakerLook.color(of: status.kitten))
-                    dot = status.state.dot
+                    state = CatWords.kittenState(status.state)
+                    dot = item.badge > 0 ? nil : status.state.dot
                     asleep = status.state == .notSetUp
                 case .activity: icon = "activity"
                 case .threads: icon = "threads"
@@ -407,6 +419,7 @@ struct PhoneView: Encodable, Equatable {
                     count: item.badge > 0 ? item.badge : nil,
                     unread: item.place == .channel(.shades) ? !book.unreadThreads.isDisjoint(with: book.onPhone) : item.isUnread,
                     cat: cat,
+                    state: state,
                     dot: dot.map(hex),
                     asleep: asleep,
                     icon: icon
@@ -439,6 +452,7 @@ struct PhoneView: Encodable, Equatable {
             text: text,
             color: look.bubble.map(hex),
             ink: look.words.map(hex),
+            faded: message.isStillGoing || message.isSending ? faded(look) : nil,
             cat: cat(of: look),
             mine: look.isYou,
             going: message.isStillGoing,
@@ -457,6 +471,15 @@ struct PhoneView: Encodable, Equatable {
             markup: text.map { Markup($0, pulls: book.pulls).blocks },
             reactions: message.reactions?.map { Choice(label: $0.emoji, value: $0.rawValue) }
         )
+    }
+
+    /// As one solid colour, rather than see-through, so its words can be picked to read on it. A page without a theme can
+    /// be light or dark, which only the phone knows.
+    private static func faded(_ look: ChannelSpeakerLook) -> [String: Paint] {
+        ["light": false, "dark": true].mapValues { dark in
+            let fill = ChannelSpeakerLook.faded(look.bubble, to: MessageRowView.stillGoingAlpha, dark: dark, theme: MessagesInk.theme)
+            return Paint(color: hex(fill), ink: look.bubble == nil ? nil : hex(ChannelSpeakerLook.blackOrWhite(on: fill)))
+        }
     }
 
     private static func row(_ row: ChannelRow, at place: ChannelPlace, in book: ChannelBook, now: Date) -> Row {

@@ -43,6 +43,7 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - Read a thread's whole history in The Kitty Litter when it opens on its own, even past each kitten's newest 30, instead of saying the rest is in T3.
 - Keep a question you asked in the cat's DM that only got passed on after a restart. Its talk with the router is archived, and T3 doesn't list archived threads, so The Kitty Litter would have to read it by the ID it kept.
 - Send the phone only what changed in The Kitty Litter. It gets every row of the place it's on each time anything changes, about 170 KB for a conversation of 580 rows, and draws them all again, where the window only lays out what's near what you can see.
+- Let the phone page's header and box scroll away at the largest text sizes. Both stay on screen, and at twice the usual size and Larger on the Mac they take most of a phone's height.
 - Work out what The Kitty Litter shows off the main thread, or only for the threads that changed. It's about 12 ms each time anything changes with hundreds of threads, which is most of what's left when a message arrives.
 - A theme for the rest of the cat. Only The Kitty Litter and its phone page take one now, so the bubble, the Ask box and the kitten view keep The Kitty Litter's own colours, and a phone that's already open takes a new theme the next time it opens the page.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
