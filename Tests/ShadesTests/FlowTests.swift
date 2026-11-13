@@ -6371,3 +6371,62 @@ extension FlowTests {
         XCTAssertEqual(looks, 1)
     }
 }
+
+/// A take is worked out after you let go, and a tap of a hold key can cancel it and start another meanwhile.
+extension FlowTests {
+    /// Waits for what was said to be being worked out, failing rather than waiting for ever when nothing is.
+    private func heldEnd() async -> Bool {
+        for _ in 0..<1000 where voice.endsHeld == 0 { await Task.yield() }
+        return voice.endsHeld > 0
+    }
+
+    func testAMicTakeCancelledWhileItsWorkedOutCantGoWithTheTalkKeysLook() async {
+        voice.holdsEnd = true
+        voice.transcript = Transcript(raw: "mic words", cleaned: "Mic words for the box.", audioSeconds: 1, latencySeconds: 0.1)
+        context.snapshotValue = ScreenSnapshot(appName: "BoxApp", windowTitle: "Box", screenshotJPEG: Data([1]))
+        await controller.beginAsk()
+        controller.micPressed(in: .ask)
+        controller.micPressed(in: .ask)
+        let micTake = controller.voiceTask
+        guard await heldEnd() else { return XCTFail("the mic's take never ended") }
+
+        // A tap of the talk key cancels, as the key monitor does, then holding it looks at another screen.
+        let key = controller.settings.talkKey
+        controller.keyPressed(key)
+        controller.cancelListening()
+        voice.transcript = Transcript(raw: "key words", cleaned: "Key words.", audioSeconds: 1, latencySeconds: 0.1)
+        context.snapshotValue = ScreenSnapshot(appName: "KeyApp", windowTitle: "Key", screenshotJPEG: Data([2]))
+        controller.keyPressed(key)
+        voice.finishEnd()
+        await micTake?.value
+        await settle()
+        XCTAssertTrue(backend.sent.isEmpty, "what the mic heard was cancelled, so it goes nowhere")
+        XCTAssertEqual(controller.voiceMode, .talk, "the talk key's take is still going")
+
+        controller.keyReleased(key)
+        guard await heldEnd() else { return XCTFail("letting go of the key has nothing to finish") }
+        voice.finishEnd()
+        await settle()
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("Key words."))
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("KeyApp"), "with the look the key took")
+        XCTAssertFalse(backend.sent.contains { $0.prompt.text.contains("Mic words") })
+    }
+
+    func testDictationCancelledWhileItsWorkedOutLeavesTheMicsTakeAlone() async {
+        voice.holdsEnd = true
+        await controller.beginAsk()
+        controller.dictateDown()
+        controller.keyReleased(controller.settings.dictateKey)
+        let dictation = controller.voiceTask
+        guard await heldEnd() else { return XCTFail("dictation never ended") }
+
+        controller.cancelListening()
+        controller.micPressed(in: .ask)
+        voice.finishEnd()
+        await dictation?.value
+        XCTAssertTrue(inserter.inserted.isEmpty, "cancelled dictation isn't typed")
+        XCTAssertEqual(controller.voiceMode, .talk, "the mic's take is still going")
+        XCTAssertEqual(stage.listeningIn, .ask)
+    }
+}

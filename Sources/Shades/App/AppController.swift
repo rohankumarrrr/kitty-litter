@@ -218,6 +218,9 @@ final class AppController {
         case talk, dictate
     }
     var voiceMode: VoiceMode?
+    /// Moves on with every take and every cancel, so one worked out after it was cancelled or overtaken can't act for
+    /// the take after it.
+    var takes = 0
     var hearing = false
     var voiceProblem: Error?
     var talkLook: Task<Capture, Never>?

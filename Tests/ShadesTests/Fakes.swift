@@ -472,11 +472,18 @@ final class FakeVoice: VoiceEngine {
         if let beginError { throw beginError }
         began += 1
     }
+    /// Holds each `end()` until `finishEnd()`, as the real engine takes a moment to work out what you said.
+    var holdsEnd = false
+    private var heldEnds: [CheckedContinuation<Void, Never>] = []
+    var endsHeld: Int { heldEnds.count }
     func end() async throws -> Transcript {
         ended += 1
+        let said = transcript
+        if holdsEnd { await withCheckedContinuation { heldEnds.append($0) } }
         if let endError { throw endError }
-        return transcript
+        return said
     }
+    func finishEnd() { heldEnds.removeFirst().resume() }
     func cancel() { cancelled += 1 }
 }
 

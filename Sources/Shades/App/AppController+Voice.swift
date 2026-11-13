@@ -75,6 +75,7 @@ extension AppController {
     func talkUp() async {
         // A take that was cancelled, such as by its box closing, has nothing left to finish.
         guard hearing, voiceMode == .talk else { return }
+        let take = takes
         let forMessages = talkToMessages != nil
         hearing = false
         stage.catLevel(0)
@@ -82,6 +83,8 @@ extension AppController {
         renderBubble()
         do {
             let transcript = try await voice.end()
+            // Cancelled while it was worked out, or another take has started, which owns where words go now.
+            guard take == takes else { return }
             voiceMode = nil
             refreshStatus()
             let text = transcript.cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -109,6 +112,7 @@ extension AppController {
             }
             ask(text, capture: capture)
         } catch {
+            guard take == takes else { return }
             voiceMode = nil
             talkLook = nil
             if talkToMessages != nil { stage.releaseMessagesBox() }
@@ -155,11 +159,13 @@ extension AppController {
     }
 
     func dictateUp() async {
+        let take = takes
         hearing = false
         stage.catLevel(0)
         stage.catHold(nil)
         do {
             let transcript = try await voice.end()
+            guard take == takes else { return }
             voiceMode = nil
             refreshStatus()
             let text = transcript.cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -170,6 +176,7 @@ extension AppController {
                 say(CatWords.problem(error, while: .typing))
             }
         } catch {
+            guard take == takes else { return }
             voiceMode = nil
             refreshStatus()
             say(CatWords.problem(error, while: .listening))
@@ -185,6 +192,7 @@ extension AppController {
             return false
         }
         voiceMode = mode
+        takes += 1
         hearing = true
         refreshStatus()
         return true
@@ -192,6 +200,7 @@ extension AppController {
 
     /// Esc while holding the key means forget it.
     func cancelListening() {
+        takes += 1
         voice.cancel()
         hearing = false
         stage.catLevel(0)
