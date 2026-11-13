@@ -2601,7 +2601,7 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(reportedHealth, [findings], "what health.json is written from")
         let t3 = findings.first { $0.check == "T3 Code" }
         XCTAssertEqual(t3?.ok, false)
-        XCTAssertEqual(t3?.fix, "If macOS is showing a Keychain dialog, answer it, then choose Check Myself from my menu.")
+        XCTAssertEqual(t3?.problem, "I'm still connecting to T3 Code, so my agents can't run yet.")
     }
 
     /// T3 had answered once, so Check Myself, which the finding says to press, waited on each kitten's project for good.
@@ -2617,8 +2617,128 @@ final class FlowTests: XCTestCase {
             reported.fulfill()
         }
         await fulfillment(of: [reported], timeout: 5)
-        XCTAssertEqual(findings.first { $0.check == "T3 Code" }?.fix, "If macOS is showing a Keychain dialog, answer it, then choose Check Myself from my menu.")
+        XCTAssertEqual(findings.first { $0.check == "T3 Code" }?.problem, "I'm still connecting to T3 Code, so my agents can't run yet.")
         XCTAssertNil(findings.first { $0.check == "kitten: Steve Pawsniak" && !$0.ok }, "and no kitten is called missing from T3 for it")
+    }
+
+    /// What two installs reported: a new build signing in again took T3 longer than the check waited, so health.json said
+    /// to answer a Keychain dialog that most likely wasn't there, and kept saying it after T3 answered.
+    func testASlowSignInIsStillConnectingAndThenFineWithoutCheckingAgain() async {
+        backend.whileFindingAProject = { [unowned self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            self.controller.threadsChanged([])
+        }
+        controller.t3Wait = 0.1
+        let first = await controller.runHealthCheck().first { $0.check == "T3 Code" }
+        XCTAssertEqual(first?.ok, false)
+        XCTAssertEqual(first?.problem, "I'm still connecting to T3 Code, so my agents can't run yet.")
+        XCTAssertFalse(first?.fix?.contains("Keychain") ?? true, "no dialog is named while it's only slow")
+
+        let deadline = Date().addingTimeInterval(5)
+        while reportedHealth.count < 2, Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+        XCTAssertEqual(reportedHealth.count, 2, "reported again once T3 answered")
+        XCTAssertEqual(reportedHealth.last?.first { $0.check == "T3 Code" }?.ok, true)
+    }
+
+    /// You asked, so once T3 answers you hear how it went, rather than being left with "still connecting".
+    func testCheckMyselfSaysAgainOnceT3Answers() async {
+        backend.whileFindingAProject = { [unowned self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            self.controller.threadsChanged([])
+        }
+        controller.t3Wait = 0.1
+        controller.checkMyselfPressed()
+        await controller.healthTask?.value
+        guard case .notice(_, let waiting, _, _)? = stage.bubble else { return XCTFail("nothing said") }
+        XCTAssertTrue(waiting.contains("I'm still connecting to T3 Code"))
+        await controller.t3Recheck?.value
+        XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
+    }
+
+    /// Check Myself pressed again while the first was still waiting on T3 left the first one's follow-up going, so it
+    /// reported again once T3 answered, and could say stuck on its own, earlier clock.
+    func testOnlyTheNewestOfOverlappingChecksIsReported() async {
+        let (answered, answer) = AsyncStream<Void>.makeStream()
+        backend.silentUntil = Task { for await _ in answered { break } }
+        controller.threadListArrived = true
+        controller.t3Wait = 0.2
+        controller.checkMyselfPressed()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        controller.checkMyselfPressed()
+        await controller.healthTask?.value
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        answer.finish()
+        await controller.t3Recheck?.value
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(reportedHealth.map { $0.first { $0.check == "T3 Code" }?.ok }, [false, true], "the newest check's two reports, and nothing from the one it took over from")
+        XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
+    }
+
+    /// T3 can still answer after the cat has said it's stuck, and then it says so.
+    func testT3AnsweringAfterItWasCalledStuckIsReported() async {
+        let (answered, answer) = AsyncStream<Void>.makeStream()
+        backend.silentUntil = Task { for await _ in answered { break } }
+        controller.threadListArrived = true
+        controller.t3Wait = 0.1
+        controller.t3StuckAfter = 0.1
+        controller.checkMyselfPressed()
+        await controller.healthTask?.value
+        let deadline = Date().addingTimeInterval(5)
+        while reportedHealth.count < 2, Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+        answer.finish()
+        await controller.t3Recheck?.value
+        XCTAssertEqual(reportedHealth.map { $0.first { $0.check == "T3 Code" }?.problem ?? "ok" }, [
+            "I'm still connecting to T3 Code, so my agents can't run yet.",
+            "T3 Code still hasn't answered me, so my agents can't run.",
+            "ok",
+        ])
+        XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
+    }
+
+    /// Once a newer check has its answer, an older one's follow-up says nothing, not even that T3 is stuck, and its own
+    /// answer, coming back last and different, doesn't replace the newer one's.
+    func testAnOlderChecksFollowUpNeverReportsOverANewerCheck() async {
+        let (answered, answer) = AsyncStream<Void>.makeStream()
+        backend.silentUntil = Task { for await _ in answered { break } }
+        controller.threadListArrived = true
+        controller.t3Wait = 0.1
+        controller.t3StuckAfter = 0.2
+        await controller.runHealthCheck()
+        backend.silentUntil = nil
+        let newest = await controller.runHealthCheck()
+        XCTAssertTrue(newest.allSatisfy(\.ok))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        controller.threadListArrived = false
+        answer.finish()
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(reportedHealth.map { $0.allSatisfy(\.ok) }, [false, true], "the older check's stuck and its late answer aren't reported")
+        XCTAssertEqual(controller.health, newest)
+    }
+
+    /// Only a Keychain call can hold signing in for good, so a dialog is named once T3's been quiet past every other limit.
+    func testT3ThatNeverAnswersIsCalledStuckAfterAWhile() async {
+        backend.neverAnswers = true
+        controller.t3Wait = 0.1
+        controller.t3StuckAfter = 0.2
+        await controller.runHealthCheck()
+        let deadline = Date().addingTimeInterval(5)
+        while reportedHealth.count < 2, Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+        let stuck = reportedHealth.last?.first { $0.check == "T3 Code" }
+        XCTAssertEqual(stuck?.problem, "T3 Code still hasn't answered me, so my agents can't run.")
+        XCTAssertEqual(stuck?.fix, "If macOS is showing a Keychain dialog, answer it. If not, quit and reopen T3 Code.")
+    }
+
+    /// A check that went out without T3 mustn't report over a newer one once T3 answers.
+    func testANewerCheckTakesOverFromOneStillWaitingOnT3() async {
+        backend.whileFindingAProject = { try? await Task.sleep(nanoseconds: 300_000_000) }
+        controller.t3Wait = 0.1
+        await controller.runHealthCheck()
+        let first = controller.t3Recheck
+        controller.threadListArrived = true
+        await controller.runHealthCheck()
+        await first?.value
+        XCTAssertEqual(reportedHealth.count, 2, "the first check's late answer isn't reported")
+        XCTAssertEqual(reportedHealth.last?.first { $0.check == "T3 Code" }?.ok, true)
     }
 
     func testAFrontDoorWithoutItsFolderIsFound() async {

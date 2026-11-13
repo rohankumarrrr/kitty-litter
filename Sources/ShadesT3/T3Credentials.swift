@@ -20,11 +20,26 @@ public protocol T3CredentialStoring: Sendable {
     func newestUnreadableSessionID() throws -> String?
 }
 
+/// The login Keychain has no per-query way to promise "never show a dialog", and this is the switch for it. It's
+/// process-wide, so it goes back on straight after, and callers take turns with it: the phone's keys load on the main
+/// thread while signing in to T3 reads off it, and one turning it back on mid-call would let the other's read show a dialog.
+public enum KeychainPrompts {
+    private static let turn = NSLock()
+
+    public static func off<Result>(_ body: () throws -> Result) rethrows -> Result {
+        try turn.withLock {
+            SecKeychainSetUserInteractionAllowed(false)
+            defer { SecKeychainSetUserInteractionAllowed(true) }
+            return try body()
+        }
+    }
+}
+
 /// Keeps the session in the login Keychain.
 ///
-/// Items belong to the exact binary that made them unless the app has a stable signature, so a
-/// rebuilt app can't read them. Asking would pop up a dialog on every rebuild, so this never asks:
-/// an unreadable item just means signing in again.
+/// Items belong to the exact binary that made them unless the app is signed with a Team ID, which a
+/// self-signed certificate doesn't have, so a rebuilt app can't read them. Asking would pop up a
+/// dialog on every rebuild, so this never asks: an unreadable item just means signing in again.
 ///
 /// Reading and adding are safe here, but changing or deleting an item made by another build shows a
 /// dialog even with prompts turned off, and waits on it, so this never calls SecItemUpdate, and `T3Auth`
@@ -39,7 +54,7 @@ public final class KeychainCredentialStore: T3CredentialStoring, @unchecked Send
     }
 
     public func load() throws -> T3Credential? {
-        try withoutPrompts {
+        try KeychainPrompts.off {
             for sessionID in try sessionIDs() {
                 if let token = readToken(sessionID) {
                     return T3Credential(sessionID: sessionID, token: token)
@@ -50,7 +65,7 @@ public final class KeychainCredentialStore: T3CredentialStoring, @unchecked Send
     }
 
     public func save(_ credential: T3Credential) throws {
-        try withoutPrompts {
+        try KeychainPrompts.off {
             var attributes = item(credential.sessionID)
             attributes[kSecValueData as String] = Data(credential.token.utf8)
             attributes[kSecAttrLabel as String] = "Shades: T3 Code sign-in"
@@ -61,7 +76,7 @@ public final class KeychainCredentialStore: T3CredentialStoring, @unchecked Send
     }
 
     public func delete(sessionID: String) throws {
-        try withoutPrompts {
+        try KeychainPrompts.off {
             let status = SecItemDelete(item(sessionID) as CFDictionary)
             guard status == errSecSuccess || status == errSecItemNotFound else {
                 throw T3Error.keychain(status: status)
@@ -70,7 +85,7 @@ public final class KeychainCredentialStore: T3CredentialStoring, @unchecked Send
     }
 
     public func newestUnreadableSessionID() throws -> String? {
-        try withoutPrompts {
+        try KeychainPrompts.off {
             try sessionIDs().first { readToken($0) == nil }
         }
     }
@@ -113,14 +128,6 @@ public final class KeychainCredentialStore: T3CredentialStoring, @unchecked Send
                 return left > right
             }
             .compactMap { $0[kSecAttrAccount as String] as? String }
-    }
-
-    /// The login Keychain has no per-query way to promise "never show a dialog", and this is the
-    /// switch for it. It's process-wide, so it goes back on straight after.
-    private func withoutPrompts<Result>(_ body: () throws -> Result) rethrows -> Result {
-        SecKeychainSetUserInteractionAllowed(false)
-        defer { SecKeychainSetUserInteractionAllowed(true) }
-        return try body()
     }
 }
 

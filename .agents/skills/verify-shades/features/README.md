@@ -34,5 +34,5 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 - [Keyboard](./keyboard.md) covers reaching and pressing every button in Settings and The Kitty Litter with Tab and Space while Keyboard navigation is on, the ring on the one Tab is on, and none of it giving a window the keyboard.
 - [Mic](./mic.md) covers talking into the Ask box or The Kitty Litter's box with its mic, with no look at the screen.
 - [VoiceOver](./voiceover.md) covers what VoiceOver says as the bubble changes, and pressing the cat, a kitten and the sidebar with it.
-- [Check Myself](./check-myself.md) covers the self-check from the cat's menu, and what it says when T3 doesn't answer in time.
+- [Check Myself](./check-myself.md) covers the self-check from the cat's menu, and what it says while T3 is still connecting.
 - [Settings](./settings.md) covers every setting in one place, from the menu or The Kitty Litter: models, keys, notifications, each channel's, font, text size, where Open goes, the phone and the privacy list.
