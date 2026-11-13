@@ -2794,6 +2794,21 @@ final class FlowTests: XCTestCase {
         XCTAssertNotEqual(stage.input?.caption, CatWords.needsScreenRecording)
     }
 
+    /// A self-signed build keeps its permissions, so the screen being off is still about Screen Recording.
+    func testABuildWithoutATeamIsntAnnouncedOrBlamedForTheScreen() async {
+        facts = HealthFacts(isSignedByTeam: false, hasScreenRecording: false)
+        controller.threadListArrived = true
+        controller.startHealthChecks()
+        await controller.healthTask?.value
+        XCTAssertNil(stage.bubble)
+        XCTAssertEqual(reportedHealth.last?.first { $0.check == HealthCheck.signature }, HealthCheck.noTeam)
+        XCTAssertNil(controller.screenBlockedBy)
+
+        context.snapshotValue = ScreenSnapshot(appName: "Safari")
+        await controller.beginAsk()
+        XCTAssertEqual(stage.input?.caption, CatWords.needsScreenRecording)
+    }
+
     func testAPermissionThatsOffIsntAnnouncedAtLaunch() async {
         facts = HealthFacts(hasScreenRecording: false)
         controller.threadListArrived = true
