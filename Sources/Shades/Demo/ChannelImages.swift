@@ -16,6 +16,8 @@ enum ChannelImages {
         var hoversLastReply = false
         /// A message by its ID, in whichever pane shows it.
         var hovers: String?
+        /// How wide you've dragged a thread's pane.
+        var threadWidth: CGFloat?
     }
 
     static func draw(to folder: String) {
@@ -95,6 +97,8 @@ enum ChannelImages {
             Shot(name: "thread-waiting", selection: .thread("demo-pepper-plans", in: .channel(.general)), book: full),
             Shot(name: "narrow-thread", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
             Shot(name: "narrow-thread-hover", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height, hoversLastReply: true),
+            Shot(name: "thread-dragged", selection: thread, book: full, threadWidth: 440),
+            Shot(name: "narrow-thread-dragged", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height, threadWidth: 440),
             Shot(name: "channel-expanded", selection: thread, book: full, expandsLongMessage: true),
             Shot(name: "channel-hover", selection: .channel(steve), book: full, hoversLastMessage: true),
             Shot(name: "channel-hover-replies", selection: .channel(steve), book: full, hovers: "labels-1:ask"),
@@ -125,6 +129,7 @@ enum ChannelImages {
         panel.contentView = view
         panel.setContentSize(NSSize(width: shot.width, height: shot.height))
         panel.appearance = NSAppearance(named: .darkAqua)
+        view.chosenThreadWidth = shot.threadWidth
         view.show(shot.book)
         view.select(shot.selection)
         if shot.expandsLongMessage { (view.threadPane.longMessageRow ?? view.pane.longMessageRow)?.pressShowMore() }
