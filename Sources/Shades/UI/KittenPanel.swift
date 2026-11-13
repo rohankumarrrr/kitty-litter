@@ -9,7 +9,8 @@ final class KittenPanel {
     private static let padding: CGFloat = 8
     private static let tickSeconds: TimeInterval = 0.2
 
-    let panel = QuietPanel()
+    /// Its window, which tests give one that never reaches the screen.
+    let panel: QuietPanel
     private let balloon = BalloonView()
     /// Each group's small capitals, then its kittens, top to bottom.
     private var parts: [NSView] = []
@@ -22,7 +23,9 @@ final class KittenPanel {
     var onOpen: ((KittenStatus) -> Void)?
     var onChange: (() -> Void)?
 
-    init() {
+    init(panel: QuietPanel? = nil) {
+        let panel = panel ?? QuietPanel()
+        self.panel = panel
         panel.contentView = balloon
     }
 

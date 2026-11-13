@@ -27,7 +27,8 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     /// A box beside its setting's name.
     private static let fieldWidth: CGFloat = 230
 
-    let panel = QuietPanel(allowsKey: true)
+    /// Its window, which tests give one that never reaches the screen.
+    let panel: QuietPanel
     var onChange: ((Settings) -> Void)?
     var onDoNotDisturb: (() -> Void)?
     var onNotifications: ((ChannelID, ChannelNotifications) -> Void)?
@@ -40,6 +41,12 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     private var handlers: [Handler] = []
     private let notificationsMenu = NotificationsMenu()
     private let fontMenu = FontMenu()
+
+    init(panel: QuietPanel? = nil) {
+        let panel = panel ?? QuietPanel(allowsKey: true)
+        self.panel = panel
+        super.init()
+    }
 
     func show(_ form: SettingsForm, near corner: NSPoint) {
         self.form = form

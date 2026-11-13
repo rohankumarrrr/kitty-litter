@@ -11,7 +11,8 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
     private static let inside = NSSize(width: 10, height: 7)
     private static let maxLines: CGFloat = 5
 
-    let panel = QuietPanel(allowsKey: true)
+    /// Its window, which tests give one that never reaches the screen.
+    let panel: QuietPanel
     private let balloon = AskBoxView()
     private let scroll = NSScrollView()
     private let textView = PlaceholderTextView()
@@ -24,7 +25,9 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
     var onLayout: (() -> Void)?
     var onMic: (() -> Void)?
 
-    override init() {
+    init(panel: QuietPanel? = nil) {
+        let panel = panel ?? QuietPanel(allowsKey: true)
+        self.panel = panel
         super.init()
         panel.contentView = balloon
         panel.delegate = self
