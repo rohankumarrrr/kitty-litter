@@ -312,7 +312,7 @@ public enum Prompts {
         Sort it into the lines below, and leave out any line with nothing in it.
 
         \(shippedMarker) What's now done and live, in one short sentence. Work waiting on a review, a merge or their say-so hasn't shipped.
-        \(decisionMarker) What they have to decide and the least they need to decide it, in at most 3 short sentences, with the options if given. A pull request waiting on their go-ahead counts.
+        \(decisionMarker) What they have to decide or do themselves and the least they need for it, in at most 3 short sentences, with the options if given. A pull request waiting on their go-ahead counts, and so does anything only they can do, such as running a command, approving something, signing in or saying go ahead.
         \(passedMarker) yes, only if all it did was start another thread to do the work, with nothing else to tell them.
         \(noteMarker) Anything else, such as an answer to something they asked, in at most 3 short sentences. Only when none of the others apply.
 

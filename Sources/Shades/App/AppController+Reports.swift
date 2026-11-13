@@ -40,17 +40,25 @@ extension AppController {
                 passedOn(thread, to: link)
                 return
             }
+            // A kitten's report is sorted rather than summed up, so what it needs from you reaches you even when the
+            // bubble won't show, the same as one with an inbox.
+            let kitten = kitten(of: thread)
+            var sorted: SortedReport?
+            if !failed, kitten != nil, let report, report.contains(where: { !$0.isWhitespace }) {
+                sorted = await self.sorted(report, of: thread)
+            }
+            if let decision = sorted?.decision { flag(decision, of: current) }
             // Held by Do Not Disturb, it's read again from the thread, so there's nothing to sum up.
             guard mayPopUp(.thread(thread.id)) else { return }
-            let words = await words(for: report, of: thread, failed: failed)
-            let kitten = kitten(of: thread)
+            let words = await words(for: report, of: thread, failed: failed, sorted: sorted)
             post(
                 caption: failed ? CatWords.failedCaption(thread) : CatWords.finishedCaption(thread, kitten: kitten),
                 text: words,
                 threadID: thread.id,
                 unasked: true
             )
-            if !failed { notifyFinished(thread, by: kitten) }
+            // A decision has its own notification.
+            if !failed, sorted?.decision == nil { notifyFinished(thread, by: kitten) }
         }
     }
 
@@ -94,11 +102,12 @@ extension AppController {
         )
     }
 
-    private func words(for report: String?, of thread: AgentThread, failed: Bool) async -> String {
+    private func words(for report: String?, of thread: AgentThread, failed: Bool, sorted: SortedReport?) async -> String {
         guard let report, report.contains(where: { !$0.isWhitespace }) else {
             return failed ? CatWords.failedWithoutReport : CatWords.finishedWithoutReport
         }
         if ReportDigest.isShort(report) { return report.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let sorted, sorted.hasLines { return [sorted.shipped, sorted.note, sorted.decision].compactMap { $0 }.joined(separator: " ") }
 
         let prompt = summaryPrompt(Prompts.summary(of: report, title: thread.title, failed: failed), about: thread)
         let summary = await firstOf(seconds: Self.summaryTimeout) { [self] in await summarize(prompt) }

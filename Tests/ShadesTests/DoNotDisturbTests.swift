@@ -91,12 +91,14 @@ final class DoNotDisturbTests: XCTestCase {
 
     // MARK: - Nothing pops up
 
-    func testAKittensReplyWaitsWithoutABubbleOrASummary() async {
+    func testAKittensReplyWaitsWithoutABubbleOrASummaryButWhatItNeedsFromYouIsKept() async {
         kittens = [steve]
         quiet()
-        await finish(work("s", title: "Steve: Resume", folder: steve.folder), report: String(repeating: "Your resume is ready. ", count: 40))
+        await finish(work("s", title: "Steve: Resume", folder: steve.folder), report: String(repeating: "Your resume is ready. ", count: 40), sorted: "DECISION: Send it?")
         XCTAssertNil(stage.bubble)
-        XCTAssertTrue(backend.sent.isEmpty, "nothing to sum up for a bubble that won't show")
+        XCTAssertTrue(notified.isEmpty)
+        XCTAssertEqual(backend.sent.count, 1, "sorted for what needs you, and nothing summed up for a bubble that won't show")
+        XCTAssertEqual(controller.inbox.entries.map(\.text), ["Send it?"])
         XCTAssertEqual(controller.away, [.thread("s")])
     }
 

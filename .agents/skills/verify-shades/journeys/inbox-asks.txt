@@ -1,0 +1,9 @@
+front
+report asks
+wait 7
+draw .verify/shades/inbox-asks/0-bubble
+inbox
+wait 1
+draw .verify/shades/inbox-asks/1-open
+front
+windows

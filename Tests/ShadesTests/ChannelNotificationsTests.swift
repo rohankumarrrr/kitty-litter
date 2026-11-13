@@ -78,10 +78,10 @@ final class ChannelNotificationsTests: XCTestCase {
         set(steve, ChannelNotifications(muted: true))
         XCTAssertEqual(savedSettings?.channelNotifications, ["kitten:/k/steve": ChannelNotifications(muted: true)])
 
-        await finish(work("s", of: steve), report: "Your resume is ready.")
+        await finish(work("s", of: steve), report: "Your resume is ready.", sorted: "DECISION: Send it?")
         XCTAssertNil(stage.bubble)
         XCTAssertTrue(notified.isEmpty)
-        XCTAssertTrue(backend.sent.isEmpty, "nothing to sum up for a bubble that won't show")
+        XCTAssertEqual(controller.inboxEntries.filter(\.needsYou).map(\.text), ["Send it?"], "what it needs from you still waits in Activity")
 
         controller.threadsChanged([asking("r1", of: steve)])
         XCTAssertEqual(stage.came, 0)
@@ -111,6 +111,23 @@ final class ChannelNotificationsTests: XCTestCase {
         controller.threadsChanged([asking("r1", of: steve)])
         XCTAssertEqual(notified.map(\.kind), [.decision, .approval])
         XCTAssertEqual(stage.came, 1, "the cat comes to ask")
+    }
+
+    func testAKittenWithoutAnInboxStillSaysWhenItNeedsYouToDoSomething() async {
+        kittens = [pepper]
+        let report = "Merged the pull request. The sandbox can't write settings, so you need to run `git pull` in your checkout yourself."
+        await finish(work("p", of: pepper), report: report, sorted: "SHIPPED: The pull request is merged.\nDECISION: Run git pull in your checkout yourself.")
+
+        XCTAssertTrue(backend.sent.last?.prompt.text.contains("decide or do themselves") == true, "it was sorted, not summed up")
+        XCTAssertEqual(controller.inboxEntries.filter(\.needsYou).map(\.text), ["Run git pull in your checkout yourself."])
+        XCTAssertEqual(notified.map(\.kind), [.decision], "the decision's notification, and no second one for finishing")
+        XCTAssertEqual(notified.map(\.who), ["Pepper"])
+        guard case .notice(_, let words, "p", _)? = stage.bubble else { return XCTFail("the bubble still says how it went") }
+        XCTAssertEqual(words, "The pull request is merged. Run git pull in your checkout yourself.")
+
+        await finish(work("q", of: pepper), report: "All tidy.", sorted: "NOTE: Nothing else to do.")
+        XCTAssertEqual(notified.map(\.kind), [.decision, .finished], "a report that asks nothing only finishes")
+        XCTAssertEqual(controller.inboxEntries.map(\.threadID), ["p"], "and nothing else of it is filed")
     }
 
     func testOtherChannelsAndTheCatsOwnLinesAreUntouched() async {

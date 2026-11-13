@@ -88,9 +88,21 @@ extension AppController {
         guard let report, report.contains(where: { !$0.isWhitespace }) else {
             return SortedReport(decision: CatWords.finishedWithoutReport)
         }
+        return await sorted(report, of: thread)
+    }
+
+    /// The model's lines for a report that says something, or `nil` if its answer didn't work out.
+    func sorted(_ report: String, of thread: AgentThread) async -> SortedReport? {
         let prompt = summaryPrompt(Prompts.sortReport(report, title: thread.title), about: thread)
         let reply = await firstOf(seconds: Self.summaryTimeout) { [self] in await summarize(prompt) }
         return (reply ?? nil).flatMap(SortedReport.init(reply:))
+    }
+
+    /// What a kitten without an inbox needs from you still waits in Activity and comes as a notification.
+    func flag(_ decision: String, of thread: AgentThread) {
+        inbox.flag(decision, from: thread, at: now(), id: UUID().uuidString)
+        keepInbox()
+        inboxChanged()
     }
 
     /// It's a decision, because a false alarm beats a lost report.
