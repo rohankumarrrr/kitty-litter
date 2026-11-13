@@ -1,7 +1,6 @@
 front
 channels
 wait 1
-colors Cursor/Opal Horizon
 channel steve
 thread pricing copy
 wait 1
@@ -12,8 +11,6 @@ draw .verify/shades/picture/1-channel
 channel threads
 wait 1
 draw .verify/shades/picture/2-threads
-colors shades
-theme light
 channel steve
 wait 1
 draw .verify/shades/picture/3-light

@@ -34,8 +34,8 @@ enum QuietFocus {
         }
     }()
 
-    /// Just inside the shape, so nothing around it clips the ring.
-    static func ring(_ rect: NSRect, radius: CGFloat, color: NSColor = MessagesInk.link) {
+    /// Just inside the shape, so nothing around it clips the ring. Opal's is violet.
+    static func ring(_ rect: NSRect, radius: CGFloat, color: NSColor = MessagesInk.accent) {
         let ring = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: radius - 1, yRadius: radius - 1)
         ring.lineWidth = 2
         color.setStroke()
@@ -46,17 +46,20 @@ enum QuietFocus {
 }
 
 /// A button you press with the mouse, or with Space once Tab has reached it. Only Space presses it, so a stray Return
-/// can't, whatever is on the screen.
+/// can't, whatever is on the screen. Every one is an Opal capsule.
 final class QuietButton: NSView {
     enum Style {
-        case filled, plain, text
+        /// The violet primary, one a view at most.
+        case filled
+        /// Quiet: on Opal's control colour with a faint hairline.
+        case plain
+        /// Just its words, until you point at it.
+        case text
     }
 
     var onPress: (() -> Void)?
     /// A disarmed button shows dim and ignores clicks.
     var isArmed = true { didSet { needsDisplay = true } }
-    /// A filled one's own colours, such as a theme's, in place of the plain pill.
-    var colors: (fill: NSColor, ink: NSColor)? { didSet { needsDisplay = true } }
     /// A symbol drawn in place of its words, which VoiceOver still reads.
     var symbol: String? { didSet { needsDisplay = true } }
     /// Its symbol in the accent, while what it started is going.
@@ -70,13 +73,16 @@ final class QuietButton: NSView {
     private var flashTimer: Timer?
 
     private static let height: CGFloat = 26
+    private static func width(of label: NSAttributedString, _ style: Style) -> CGFloat {
+        ceil(label.size().width) + (style == .text ? 14 : 24)
+    }
 
     init(_ title: String, style: Style = .plain, onPress: (() -> Void)? = nil) {
         self.title = title
         self.style = style
         self.onPress = onPress
         super.init(frame: .zero)
-        setFrameSize(NSSize(width: ceil(label.size().width) + (style == .text ? 12 : 22), height: Self.height))
+        setFrameSize(NSSize(width: Self.width(of: label, style), height: Self.height))
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
         setAccessibilityLabel(title)
@@ -89,7 +95,7 @@ final class QuietButton: NSView {
     func retitle(_ word: String) {
         guard word != title else { return }
         title = word
-        setFrameSize(NSSize(width: ceil(label.size().width) + (style == .text ? 12 : 22), height: Self.height))
+        setFrameSize(NSSize(width: Self.width(of: label, style), height: Self.height))
         setAccessibilityLabel(word)
         needsDisplay = true
     }
@@ -104,41 +110,41 @@ final class QuietButton: NSView {
     }
 
     private var ink: NSColor {
+        guard isArmed else { return Ink.hex(Opal.faint) }
         switch style {
-        case .filled: colors?.ink ?? MessagesInk.pillText
-        case .plain: MessagesInk.text
-        case .text: MessagesInk.soft
+        case .filled: return MessagesInk.strong
+        case .plain: return MessagesInk.text
+        case .text: return hovering || pressing ? MessagesInk.text : MessagesInk.soft
+        }
+    }
+
+    private var fill: UInt32? {
+        let lit = isArmed && (hovering || pressing)
+        switch style {
+        case .filled: return pressing && isArmed ? Opal.primaryPressed : lit ? Opal.primaryHover : Opal.primary
+        case .plain: return pressing && isArmed ? Opal.fieldEdge : lit ? Opal.controlHover : Opal.control
+        case .text: return pressing && isArmed ? Opal.controlHover : lit ? Opal.control : nil
         }
     }
 
     private var label: NSAttributedString {
         NSAttributedString(string: flashed ?? title, attributes: [
             .font: NSFont.systemFont(ofSize: 12, weight: style == .text ? .regular : .medium),
-            .foregroundColor: isArmed ? ink : ink.withAlphaComponent(style == .filled ? 0.75 : 0.45),
+            .foregroundColor: ink,
         ])
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let shape = NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8)
-        switch style {
-        case .filled:
-            let fill = colors?.fill ?? MessagesInk.pill
-            (isArmed ? fill : fill.withAlphaComponent(0.4)).setFill()
+        let radius = bounds.height / 2
+        let shape = NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius)
+        if let fill {
+            Ink.hex(fill).withAlphaComponent(isArmed ? 1 : 0.4).setFill()
             shape.fill()
-            if pressing { NSColor(white: 0.5, alpha: 0.3).setFill(); shape.fill() }
-        case .plain:
-            ((hovering || pressing) && isArmed ? MessagesInk.press : MessagesInk.hover).setFill()
-            shape.fill()
-            // A shade more than hover, so pressing shows. Ink's is see-through, so it shades a theme's too.
-            if pressing && isArmed { Ink.hover.setFill(); shape.fill() }
-        case .text:
-            if pressing && isArmed {
-                MessagesInk.press.setFill()
-                shape.fill()
-            } else if hovering && isArmed {
-                MessagesInk.hover.setFill()
-                shape.fill()
-            }
+        }
+        if style == .plain {
+            let edge = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: radius - 0.5, yRadius: radius - 0.5)
+            Ink.hex(Opal.fieldEdge).setStroke()
+            edge.stroke()
         }
         if let symbol {
             drawSymbol(symbol)
@@ -148,11 +154,11 @@ final class QuietButton: NSView {
             text.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
         }
         if QuietFocus.shows(self) {
-            // A filled one's ring goes inside it, in its ink, since its fill can be the accent.
+            // The primary's ring goes inside it, in white, since its fill is violet already.
             if style == .filled {
-                QuietFocus.ring(bounds.insetBy(dx: 2, dy: 2), radius: 6, color: ink)
+                QuietFocus.ring(bounds.insetBy(dx: 2, dy: 2), radius: radius - 2, color: MessagesInk.strong)
             } else {
-                QuietFocus.ring(bounds, radius: 8)
+                QuietFocus.ring(bounds, radius: radius)
             }
         }
     }
@@ -161,7 +167,7 @@ final class QuietButton: NSView {
         guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .medium))
         else { return }
-        let color = isLit ? MessagesInk.accent : ink
+        let color = isLit ? MessagesInk.link : ink
         let tinted = NSImage(size: image.size, flipped: false) { rect in
             image.draw(in: rect)
             color.set()

@@ -919,7 +919,6 @@ final class ChannelPane: QuietView {
         if jump?.accessibilityLabel() != title {
             jump?.removeFromSuperview()
             let button = QuietButton(title, style: .filled) { [weak self] in self?.jumpToNew() }
-            button.colors = (MessagesInk.accent, MessagesInk.onAccent)
             // It floats over messages, which can be the same colour.
             let shadow = NSShadow()
             shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)

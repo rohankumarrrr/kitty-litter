@@ -58,7 +58,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         textView.allowsUndo = true
         textView.drawsBackground = false
         textView.font = MessagesInk.font(ofSize: MessagesInk.title)
-        textView.insertionPointColor = Ink.accent
+        textView.insertionPointColor = MessagesInk.link
         textView.textContainerInset = .zero
         textView.textContainer?.lineFragmentPadding = 0
         textView.textContainer?.widthTracksTextView = true
@@ -427,10 +427,11 @@ final class QuietCheckbox: NSView {
             tick.line(to: NSPoint(x: box.minX + 6, y: box.maxY - 3.5))
             tick.line(to: NSPoint(x: box.maxX - 3, y: box.minY + 3.5))
             tick.lineWidth = 1.8
-            ChannelSpeakerLook.readable(on: MessagesInk.theme?.accent ?? ChannelSpeakerLook.yours).setStroke()
+            MessagesInk.onAccent.setStroke()
             tick.stroke()
         } else {
-            MessagesInk.line.setStroke()
+            // An edge at the 3:1 a control needs, on glass or the page.
+            MessagesInk.dim.setStroke()
             shape.lineWidth = 1.2
             shape.stroke()
         }

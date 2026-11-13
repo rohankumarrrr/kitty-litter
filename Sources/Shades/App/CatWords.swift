@@ -134,12 +134,6 @@ enum CatWords {
     /// What VoiceOver calls the cat: what pressing it does, then what it is.
     static let catLabel = "Ask \(shades)"
     static let catHelp = "A cat in sunglasses. Pressing it takes one look at your screen and opens the Ask box. Its menu has everything else."
-    static let themeButton = "Theme"
-    static let plainTheme = appName
-    static let noThemesFound = "No themes from T3 Code, Cursor, VS Code or iTerm2"
-    static let dropATheme = "Or drop a theme file onto \(appName)"
-    static let themeUnreadable = "That isn't a theme I can read. Try one from T3 Code, VS Code, Cursor or iTerm2."
-    static let themeNotSaved = "I couldn't save that theme, so it's only until I restart."
     static let shadesRole = "Work I started for you"
     static let threadTitle = "Thread"
     static let newThread = "New thread"

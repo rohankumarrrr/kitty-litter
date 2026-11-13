@@ -1,7 +1,6 @@
 front
 channels
 wait 1
-colors Cursor/Opal Horizon
 draw .verify/shades/messages/0-activity
 channel general
 send I need help with my resume

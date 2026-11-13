@@ -473,13 +473,11 @@ struct PhoneView: Encodable, Equatable {
         )
     }
 
-    /// As one solid colour, rather than see-through, so its words can be picked to read on it. A page without a theme can
-    /// be light or dark, which only the phone knows.
+    /// As one solid colour, rather than see-through, so its words can be picked to read on it. The page is dark in either.
     private static func faded(_ look: ChannelSpeakerLook) -> [String: Paint] {
-        ["light": false, "dark": true].mapValues { dark in
-            let fill = ChannelSpeakerLook.faded(look.bubble, to: MessageRowView.stillGoingAlpha, dark: dark, theme: MessagesInk.theme)
-            return Paint(color: hex(fill), ink: look.bubble == nil ? nil : hex(ChannelSpeakerLook.blackOrWhite(on: fill)))
-        }
+        let fill = ChannelSpeakerLook.faded(look.bubble, to: MessageRowView.stillGoingAlpha)
+        let paint = Paint(color: hex(fill), ink: look.bubble == nil ? nil : hex(ChannelSpeakerLook.blackOrWhite(on: fill)))
+        return ["light": paint, "dark": paint]
     }
 
     private static func row(_ row: ChannelRow, at place: ChannelPlace, in book: ChannelBook, now: Date) -> Row {
@@ -616,6 +614,6 @@ struct PhoneView: Encodable, Equatable {
     }
 
     private static func hex(_ color: UInt32) -> String {
-        ColorTheme.hex(color)
+        Opal.hex(color)
     }
 }

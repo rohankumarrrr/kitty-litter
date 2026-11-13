@@ -1,7 +1,7 @@
 import AppKit
 import ShadesCore
 
-/// `--demo --channels-image`: draws every selection to PNGs, in light and dark, from canned data
+/// `--demo --channels-image`: draws every selection to PNGs from canned data
 /// and with no window on the screen. It stays in Demo so real messages can't reach an image.
 @MainActor
 enum ChannelImages {
@@ -22,10 +22,8 @@ enum ChannelImages {
         let url = URL(fileURLWithPath: folder, isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         for shot in shots() {
-            for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-                guard let png = render(shot, appearance: NSAppearance(named: appearance)) else { continue }
-                try? png.write(to: url.appendingPathComponent("\(shot.name)-\(name).png"))
-            }
+            guard let png = render(shot) else { continue }
+            try? png.write(to: url.appendingPathComponent("\(shot.name).png"))
         }
     }
 
@@ -120,13 +118,13 @@ enum ChannelImages {
         return shots
     }
 
-    private static func render(_ shot: Shot, appearance: NSAppearance?) -> Data? {
+    private static func render(_ shot: Shot) -> Data? {
         // Drawn from the window's own frame, so the window's buttons are in the picture. It's never ordered in.
         let panel = ChannelsPanel()
         let view = ChannelsView(frame: .zero)
         panel.contentView = view
         panel.setContentSize(NSSize(width: shot.width, height: shot.height))
-        panel.appearance = appearance
+        panel.appearance = NSAppearance(named: .darkAqua)
         view.show(shot.book)
         view.select(shot.selection)
         if shot.expandsLongMessage { (view.threadPane.longMessageRow ?? view.pane.longMessageRow)?.pressShowMore() }

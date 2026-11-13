@@ -2,9 +2,9 @@ import AppKit
 import ShadesCore
 
 /// Every setting in one place, a page at a time, from the menu or from Messages. A change takes as you make it, so
-/// there's nothing to save, and the file itself stays easy to edit by hand. Do Not Disturb, the theme and each channel's
-/// notifications go through the same switch and menus they do everywhere else. It draws in Messages' theme, since it
-/// opens over Messages, and every choice from a menu is the same quiet button.
+/// there's nothing to save, and the file itself stays easy to edit by hand. Do Not Disturb and each channel's
+/// notifications go through the same switch and menus they do everywhere else. It's Opal's floating glass, and every
+/// choice from a menu is the same quiet button.
 @MainActor
 final class SettingsPanel: NSObject, NSWindowDelegate {
     enum Page: Int, CaseIterable {
@@ -29,7 +29,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     let panel = QuietPanel(allowsKey: true)
     var onChange: ((Settings) -> Void)?
     var onDoNotDisturb: (() -> Void)?
-    var onTheme: ((NSView) -> Void)?
     var onNotifications: ((ChannelID, ChannelNotifications) -> Void)?
     var onPairPhone: (() -> Void)?
 
@@ -118,7 +117,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             }
             return rows
         case .messages:
-            let theme = menuButton(form.theme?.name ?? CatWords.plainTheme) { [weak self] anchor in self?.onTheme?(anchor) }
             let font = menuButton(settings.messagesFont ?? MessagesInk.systemFaces[0].name) { [weak self] anchor in
                 self?.fontMenu.show(current: settings.messagesFont, under: anchor) { [weak self] picked in
                     self?.edit { $0.messagesFont = picked }
@@ -130,7 +128,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
                 self?.edit { $0.phone = on }
             }
             var rows = [
-                row(CatWords.themeButton, theme),
                 row("Font", font),
                 row("Text size", popup(Self.sizes, settings.textSize) { $0.textSize = $1 }),
                 row("Open threads", popup(Self.opens, settings.openInMessages) { $0.openInMessages = $1 }),
@@ -169,7 +166,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         let root = SettingsRootView { [weak self] in self?.hide() }
         panel.contentView = root
         panel.delegate = self
-        panel.appearance = MessagesInk.appearance
         root.wantsLayer = true
 
         let stack = NSStackView()
@@ -337,7 +333,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         return button
     }
 
-    /// Messages' own box, ticked in the theme's accent where the system's would be in its own.
+    /// Messages' own box, ticked in Opal's violet where the system's would be in its own.
     private func checkbox(_ title: String, _ on: Bool, onToggle: @escaping (Bool) -> Void) -> QuietCheckbox {
         let box = QuietCheckbox()
         box.words = (.systemFont(ofSize: 12), MessagesInk.text)
@@ -350,7 +346,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         return box
     }
 
-    /// A button that opens a menu, the way Theme and Notifications do in Messages, saying what's picked.
+    /// A button that opens a menu, the way Notifications does in Messages, saying what's picked.
     private func menuButton(_ title: String, onPress: @escaping (NSView) -> Void) -> QuietButton {
         let button = plainButton("\(title) ▾", style: .plain) {}
         button.setAccessibilityRole(.popUpButton)
@@ -443,10 +439,6 @@ private final class SettingsRootView: NSView {
     override func insertBacktab(_ sender: Any?) { window?.selectPreviousKeyView(sender) }
 
     override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: BalloonView.radius, yRadius: BalloonView.radius)
-        MessagesInk.paper.setFill()
-        path.fill()
-        MessagesInk.line.setStroke()
-        path.stroke()
+        Opal.glass(NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: BalloonView.radius, yRadius: BalloonView.radius))
     }
 }

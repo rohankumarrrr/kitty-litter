@@ -72,8 +72,6 @@ final class ChannelsPanel: NSPanel {
 /// The sidebar, the pane for the place you're looking at, and beside it a thread's pane when one is open, as Slack
 /// lays them out. They're apart from the window so they can be drawn with no window on the screen.
 final class ChannelsView: QuietView {
-    /// What a theme file can be: T3 Code's and VS Code's are JSON, and iTerm2's a property list or JSON.
-    static let themeFiles: Set<String> = ["json", "itermcolors", "plist"]
     static let threadWidths: ClosedRange<CGFloat> = 320...460
 
     /// How many places and threads ⌘[ can go back through.
@@ -98,8 +96,6 @@ final class ChannelsView: QuietView {
     var onSeen: ((ChannelSelection) -> Void)?
     /// Threads you've marked unread since you came here, which stay unread while you're still looking.
     private(set) var keptUnread: Set<String> = []
-    /// A theme file let go of anywhere on the window.
-    var onDropTheme: ((URL) -> Void)?
     /// Opens a thread in T3.
     var onOpenThread: ((String) -> Void)? { didSet { panes.forEach { $0.onOpenThread = onOpenThread } } }
     var onCopy: ((String) -> Void)? { didSet { panes.forEach { $0.onCopy = onCopy } } }
@@ -244,14 +240,7 @@ final class ChannelsView: QuietView {
         needsDisplay = true
     }
 
-    private func themeFile(in drag: NSDraggingInfo) -> URL? {
-        let files = drag.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
-        guard files.count == 1, let file = files.first, Self.themeFiles.contains(file.pathExtension.lowercased()) else { return nil }
-        return file
-    }
-
-    /// A theme file dresses the window. Any other file or picture goes with what you type in the pane it's let go
-    /// over, as Slack's does.
+    /// A file or picture goes with what you type in the pane it's let go over, as Slack's does.
     private func box(for drag: NSDraggingInfo) -> ChannelComposer? {
         let point = convert(drag.draggingLocation, from: nil)
         let pane = [threadPane, pane].first { !$0.isHidden && $0.frame.contains(point) }
@@ -260,7 +249,6 @@ final class ChannelsView: QuietView {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        if themeFile(in: sender) != nil { return .copy }
         return Drop.all(sender.draggingPasteboard).contains(where: \.isFile) && box(for: sender) != nil ? .copy : []
     }
 
@@ -269,10 +257,6 @@ final class ChannelsView: QuietView {
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        if let file = themeFile(in: sender) {
-            onDropTheme?(file)
-            return true
-        }
         guard let box = box(for: sender) else { return false }
         return box.attach(Drop.all(sender.draggingPasteboard))
     }
@@ -336,15 +320,6 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     /// Open where you can see it, since clicking back into your work leaves it open behind.
     var isInFront: Bool {
         panel.isVisible && panel.isOnActiveSpace && FrontWindow.isOnTop(panel.windowNumber)
-    }
-
-    /// Messages in a theme's colours, or Shades' own with `nil`. Its buttons, scrollers and cats follow the theme's
-    /// light or dark.
-    func apply(_ theme: ColorTheme?) {
-        MessagesInk.theme = theme
-        panel.appearance = MessagesInk.appearance
-        panel.backgroundColor = MessagesInk.paper
-        view.restyle()
     }
 
     /// Messages' words at another size or in another font, where you were.

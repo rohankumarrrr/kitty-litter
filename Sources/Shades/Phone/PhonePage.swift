@@ -297,21 +297,18 @@ enum PhonePage {
         #pairform input { margin: 0; font-size: calc(22em / 17); letter-spacing: .1em; text-transform: uppercase; }
         """
 
-    /// The theme you picked for Messages, over the page's own colours in light and dark alike. Each is a hex colour
-    /// worked out on the Mac, so nothing from the theme's file reaches the page as it was written, and words in any of
-    /// them read at 4.5:1.
-    static func colors(_ theme: ColorTheme?) -> String {
-        guard let theme else { return "" }
-        let hex = ColorTheme.hex
+    /// Opal's colours, over the page's own in light and dark alike, on a phone's pure black.
+    static let colors: String = {
+        let hex = Opal.hex
         return """
 
-            :root { color-scheme: \(theme.isDark ? "dark" : "light"); --cats: \(theme.isDark ? "dark" : "light");
-              --paper: \(hex(theme.paper)); --text: \(hex(theme.text)); --soft: \(hex(ColorTheme.legible(theme.soft, on: theme.hover))); --line: \(hex(theme.line));
-              --grey: \(hex(theme.bubble)); --card: \(hex(theme.hover)); --you: \(hex(theme.accent)); --on-you: \(hex(theme.words(on: theme.accent)));
-              --link: \(hex(theme.link)); --warn: \(hex(theme.danger)); --alert: \(hex(ColorTheme.legible(0xff3b5c, on: theme.paper))); }
+            :root { color-scheme: dark; --cats: dark;
+              --paper: #000000; --text: \(hex(Opal.body)); --soft: \(hex(Opal.secondary)); --line: \(hex(Opal.border));
+              --grey: \(hex(Opal.control)); --card: \(hex(Opal.raised)); --you: \(hex(Opal.primary)); --on-you: \(hex(Opal.white));
+              --link: \(hex(Opal.lilac)); --warn: \(hex(Opal.errorText)); --badge: \(hex(Opal.error)); --alert: \(hex(Opal.errorText)); }
 
             """
-    }
+    }()
 
     /// The text size you picked for Messages on the Mac, on top of the phone's own, grown by as much as the window's is.
     static func size(_ size: TextSize) -> String {

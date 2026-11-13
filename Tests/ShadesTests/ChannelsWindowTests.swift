@@ -1137,7 +1137,7 @@ extension ChannelsWindowTests {
         subviews(of: view).compactMap { $0 as? MessageRowView }
     }
 
-    func testYourBubblesAreOnTheRightInBlueAndAKittensOnTheLeftInItsColour() throws {
+    func testYourBubblesAreOnTheRightAndAKittensOnTheLeftInItsColour() throws {
         let red = Kitten(name: "Ruby", role: "Finance", covers: "", folder: "/k/ruby", color: 0xb3261e)
         let thread = AgentThread(id: "t", title: "Work", projectTitle: "Ruby", status: .completed, model: "m", updatedAt: at, projectPath: "/k/ruby")
         let said = Exchange(id: "e", asker: .you, askedAt: at, ask: "Hi", reply: "Hello there, this is a longer answer.", repliedAt: at.addingTimeInterval(1))
@@ -1159,12 +1159,12 @@ extension ChannelsWindowTests {
         let plain = Kitten(name: "Sam", role: "", covers: "", folder: "/k/sam")
         XCTAssertEqual(ChannelSpeakerLook.color(of: plain), ChannelSpeakerLook.color(of: plain))
         XCTAssertNotNil(ChannelSpeakerLook.color(of: plain))
-        XCTAssertNotEqual(ChannelSpeakerLook.color(of: plain), ChannelSpeakerLook.yours, "blue is yours")
+        XCTAssertNotEqual(ChannelSpeakerLook.color(of: plain), ChannelSpeakerLook.yours, "your colour is yours")
         XCTAssertNil(ChannelSpeakerLook.color(of: KittenBoard.shades), "the cat keeps its black jacket")
 
         let book = ChannelBook.build(kittens: [plain, Kitten(name: "Sunny", role: "", covers: "", folder: "/k/sunny", color: 0xffcc00)], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
         XCTAssertEqual(ChannelSpeakerLook(.kitten("/k/sunny"), in: book).bubbleText, .black, "dark words on a light bubble")
-        XCTAssertEqual(ChannelSpeakerLook(.you, in: book).bubbleText, .white)
+        XCTAssertEqual(ChannelSpeakerLook(.you, in: book).bubbleText, MessagesInk.text, "Opal's body words on your selected violet-black")
     }
 }
 
@@ -1366,71 +1366,25 @@ extension ChannelsWindowTests {
     }
 }
 
-// MARK: - Themes
+// MARK: - Opal
 
 extension ChannelsWindowTests {
-    private static let opal = ColorTheme(name: "Opal Horizon", isDark: true, paper: 0x0c0a10, text: 0xe7e4ec, soft: 0x837d90, accent: 0x7458e8, sidebar: 0x0a080d)
-    private static let paper = ColorTheme(name: "Paper", isDark: false, paper: 0xffffff, text: 0x1d1d1f, accent: 0x0066cc)
-
-    private func themed(_ theme: ColorTheme?, _ body: () throws -> Void) rethrows {
-        MessagesInk.theme = theme
-        defer { MessagesInk.theme = nil }
-        try body()
-    }
-
-    func testLinksAndErrorsReadOnTheWindowInAnyThemeOrNone() {
-        let teal = ColorTheme(name: "Teal Light", isDark: false, paper: 0xfbfbfb, text: 0x403f53, accent: 0x2aa298)
-        for theme in [nil, Self.opal, Self.paper, teal] {
-            themed(theme) {
-                for appearance in [NSAppearance.Name.aqua, .darkAqua] {
-                    let paper = resolved(MessagesInk.paper, in: appearance)
-                    for (role, color) in [("link", MessagesInk.link), ("danger", MessagesInk.danger)] {
-                        let ratio = Self.contrast(resolved(color, in: appearance), paper)
-                        XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(role) in \(theme?.name ?? "Shades' own") \(appearance.rawValue) gives \(ratio)")
-                    }
-                }
-            }
-        }
-    }
-
-    func testAThemeTintsYourMessagesAndTheWindowAndLeavesEveryKittenItsOwnColour() throws {
+    func testYourMessagesSitOnOpalsSelectedAndEveryKittenKeepsItsOwnColour() throws {
         let colours = ChannelSpeakerLook.palette + Demo.kittens.compactMap(ChannelSpeakerLook.color(of:))
         let kittens = colours.enumerated().map { Kitten(name: "K\($0.offset)", role: "", covers: "", folder: "/k/k\($0.offset)", color: $0.element) }
         let book = ChannelBook.build(kittens: kittens, threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
-        for theme in [Self.opal, Self.paper] {
-            try themed(theme) {
-                let yours = ChannelSpeakerLook(.you, in: book)
-                XCTAssertEqual(yours.bubble, theme.yours)
-                XCTAssertGreaterThanOrEqual(ColorTheme.contrast(try XCTUnwrap(yours.words), theme.yours), 4.5, theme.name)
-                XCTAssertEqual(MessagesInk.paper, Ink.hex(theme.paper))
-                XCTAssertEqual(ChannelSpeakerLook.grey, Ink.hex(theme.bubble), "the cat's own messages")
-                for kitten in kittens {
-                    let look = ChannelSpeakerLook(.kitten(kitten.id), in: book)
-                    XCTAssertEqual(look.bubble, kitten.color, "\(kitten.name) keeps its colour in \(theme.name)")
-                    // Yours is a quiet tint and every kitten's is a strong colour, so they never look alike.
-                    XCTAssertGreaterThan(Self.distance(look.bubble!, theme.yours), 100, "\(kitten.name) against yours in \(theme.name)")
-                }
-            }
+        let yours = ChannelSpeakerLook(.you, in: book)
+        XCTAssertEqual(yours.bubble, Opal.selected)
+        XCTAssertGreaterThanOrEqual(Opal.contrast(try XCTUnwrap(yours.words), Opal.selected), 4.5)
+        for kitten in kittens {
+            let look = ChannelSpeakerLook(.kitten(kitten.id), in: book)
+            XCTAssertEqual(look.bubble, kitten.color, "\(kitten.name) keeps its colour")
+            XCTAssertGreaterThan(Self.distance(look.bubble!, Opal.selected), 100, "\(kitten.name) against yours")
         }
     }
 
-    func testTheWholeWindowTakesATheme() throws {
-        let window = ChannelsWindow()
-        window.update(book())
-        window.view.select(.channel(.of(steve)))
-        window.apply(Self.opal)
-        defer { window.apply(nil) }
-        XCTAssertEqual(window.panel.appearance?.name, .darkAqua, "its buttons, scrollers and cats go dark too")
-        let row = try XCTUnwrap(window.view.pane.shownMessageRows.first { $0.isYours })
-        XCTAssertEqual(row.fill, Ink.hex(Self.opal.yours), "rows are made again in the theme's colours")
-
-        window.apply(nil)
-        XCTAssertNil(window.panel.appearance, "and back to following the system")
-        XCTAssertEqual(try XCTUnwrap(window.view.pane.shownMessageRows.first { $0.isYours }).fill, Ink.hex(ChannelSpeakerLook.yours))
-    }
-
-    /// The bubble, the Ask box, the kittens view, the pairing code and the cat's pill stayed system grey in a theme.
-    func testTheCatsOwnWindowsWearTheThemeAndTakeANewOneWhileTheyreUp() throws {
+    /// The bubble, the Ask box, the kittens view and the pairing code float, so they're Opal's glass, and the pill a capsule.
+    func testTheCatsOwnWindowsAreOpalGlass() throws {
         let away = NSRect(x: -20_000, y: -20_000, width: 800, height: 600)
         let cat = NSRect(x: away.midX, y: away.minY, width: 64, height: 64)
         let bubble = BubbleController()
@@ -1447,62 +1401,22 @@ extension ChannelsWindowTests {
         pairing.show(PhonePairingCard(address: "http://example.test", code: "123456"), centeredIn: away)
         pill.say("Purr", over: cat, in: away, seconds: nil)
 
-        let midnight = ColorTheme(name: "Midnight", isDark: true, paper: 0x1f2430, text: 0xcbccc6, soft: 0x707a8c, accent: 0xffcc66)
-        for theme in [Self.opal, Self.paper, midnight, nil] {
-            try themed(theme) {
-                [bubble.restyle, input.restyle, kittens.restyle, pill.restyle, pairing.restyle].forEach { $0() }
-                let name = theme?.name ?? "Shades' own"
-                let paper = MessagesInk.paper
-                let windows: [(String, QuietPanel, NSPoint, NSColor)] = [
-                    ("bubble", bubble.panel, NSPoint(x: 6, y: bubble.view.bounds.midY), paper),
-                    ("Ask box", input.panel, NSPoint(x: 6, y: 50), paper),
-                    ("kittens", kittens.panel, NSPoint(x: 4, y: kittens.frame.height / 2), paper),
-                    ("pairing", pairing.panel, NSPoint(x: 12, y: 12), paper),
-                    ("pill", pill.panel, NSPoint(x: 4, y: pill.panel.frame.height / 2), MessagesInk.pill),
-                ]
-                for (window, panel, point, want) in windows {
-                    let root = try XCTUnwrap(panel.contentView)
-                    XCTAssertTrue(window == "Ask box" || panel.isVisible, "\(window) stays up in \(name)")
-                    XCTAssertEqual(panel.appearance?.name, theme.map { $0.isDark ? .darkAqua : .aqua }, "\(window)'s scrollers and cats in \(name)")
-                    let look = try XCTUnwrap(root.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]))
-                    let picture = try XCTUnwrap(ChannelImages.bitmap(of: root, scale: 1))
-                    let got = try XCTUnwrap(picture.colorAt(x: Int(point.x), y: Int(point.y))?.usingColorSpace(.sRGB))
-                    let wanted = resolved(want, in: look)
-                    let off = [got.redComponent - wanted.redComponent, got.greenComponent - wanted.greenComponent, got.blueComponent - wanted.blueComponent].map { abs($0) * 255 }
-                    XCTAssertLessThanOrEqual(off.max() ?? 0, 2, "\(window) in \(name) drew \(got), not \(wanted)")
-                }
-                XCTAssertEqual(bubble.view.textView.textColor, MessagesInk.text, "what the bubble says, in \(name)")
-                for look in [NSAppearance.Name.aqua, .darkAqua] {
-                    for (words, color, on) in [("words", MessagesInk.text, paper), ("quieter words", MessagesInk.soft, paper), ("the pill's word", MessagesInk.pillText, MessagesInk.pill)] {
-                        let ratio = Self.contrast(resolved(color, in: look), resolved(on, in: look))
-                        XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(words) in \(name) \(look.rawValue) give \(ratio)")
-                    }
-                }
-            }
-        }
-    }
-
-    func testTheThemeMenuOffersItsOwnColoursAndEachAppsThemesAndSaysToDropTheRest() throws {
-        let found = [
-            ColorTheme.Found(theme: Self.paper, app: "T3 Code", file: URL(fileURLWithPath: "/t3/paper.json")),
-            ColorTheme.Found(theme: Self.opal, app: "T3 Code", file: URL(fileURLWithPath: "/t3/opal.json")),
-            ColorTheme.Found(theme: Self.opal, app: "iTerm2", file: URL(fileURLWithPath: "/iterm/opal.json")),
+        let windows: [(String, QuietPanel, NSPoint, UInt32)] = [
+            ("bubble", bubble.panel, NSPoint(x: 6, y: bubble.view.bounds.midY), Opal.raised),
+            ("Ask box", input.panel, NSPoint(x: 6, y: 50), Opal.raised),
+            ("kittens", kittens.panel, NSPoint(x: 4, y: kittens.frame.height / 2), Opal.raised),
+            ("pairing", pairing.panel, NSPoint(x: 12, y: 12), Opal.raised),
+            ("pill", pill.panel, NSPoint(x: 4, y: pill.panel.frame.height / 2), Opal.control),
         ]
-        let menu = ThemeMenu()
-        let items = menu.items(found, current: Self.opal)
-        let shown = items.map { item in
-            item.isSeparatorItem ? "---" : "\(item.state == .on ? "* " : "")\(item.title)\(item.submenu == nil ? "" : " >")\(item.isEnabled ? "" : " (off)")"
+        for (window, panel, point, want) in windows {
+            let root = try XCTUnwrap(panel.contentView)
+            let picture = try XCTUnwrap(ChannelImages.bitmap(of: root, scale: 1))
+            let got = try XCTUnwrap(picture.colorAt(x: Int(point.x), y: Int(point.y))?.usingColorSpace(.sRGB))
+            let wanted = Ink.hex(want)
+            let off = [got.redComponent - wanted.redComponent, got.greenComponent - wanted.greenComponent, got.blueComponent - wanted.blueComponent].map { abs($0) * 255 }
+            XCTAssertLessThanOrEqual(off.max() ?? 0, 3, "\(window) drew \(got), not \(wanted)")
         }
-        XCTAssertEqual(shown, ["The Kitty Litter", "---", "* T3 Code >", "* iTerm2 >", "---", CatWords.dropATheme + " (off)"])
-        let t3 = try XCTUnwrap(items[2].submenu).items
-        XCTAssertEqual(t3.map(\.title), ["Opal Horizon", "Paper"], "by name")
-        XCTAssertEqual(t3.map(\.state), [.on, .off])
-        XCTAssertEqual(t3.map { $0.representedObject as? URL }, [URL(fileURLWithPath: "/t3/opal.json"), URL(fileURLWithPath: "/t3/paper.json")])
-
-        XCTAssertEqual(menu.items([], current: nil).compactMap { $0.isSeparatorItem ? nil : $0.title }, [CatWords.plainTheme, CatWords.noThemesFound, CatWords.dropATheme])
-        XCTAssertEqual(menu.items([], current: nil)[0].state, .on)
-        let dropped = ColorTheme(name: "Dropped", isDark: false, paper: 0xfafafa, text: 0x111111, accent: 0xcc0000)
-        XCTAssertEqual(menu.items(found, current: dropped)[1].title, "Dropped", "a theme you dropped shows as the one in use")
+        XCTAssertEqual(bubble.view.textView.textColor, MessagesInk.text, "what the bubble says")
     }
 
     private static func distance(_ a: UInt32, _ b: UInt32) -> Double {

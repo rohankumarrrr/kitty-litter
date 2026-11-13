@@ -1,55 +1,20 @@
 front
-theme dark
 settings
 wait 1
-draw .verify/shades/settings-look/dark/20-agents
+draw .verify/shades/settings-look/20-agents
 settings voice
 wait 1
-draw .verify/shades/settings-look/dark/21-voice
+draw .verify/shades/settings-look/21-voice
 settings notifications
 wait 1
-draw .verify/shades/settings-look/dark/22-notifications
-settings messages
-wait 1
-draw .verify/shades/settings-look/dark/23-messages
-settings privacy
-wait 1
-draw .verify/shades/settings-look/dark/24-privacy
-theme light
-settings messages
-wait 1
-draw .verify/shades/settings-look/light/23-messages
-settings privacy
-wait 1
-draw .verify/shades/settings-look/light/24-privacy
-setting Done
-theme dark
-colors T3 Code/Opal Horizon
-channels
-wait 2
-sidebar Settings
-wait 1
-settings agents
-wait 1
-draw .verify/shades/settings-look/opal/20-agents
-settings notifications
-wait 1
-draw .verify/shades/settings-look/opal/22-notifications
+draw .verify/shades/settings-look/22-notifications
 settings messages
 setting Phone
 wait 2
-draw .verify/shades/settings-look/opal/23-messages
+draw .verify/shades/settings-look/23-messages
 settings privacy
 wait 1
-draw .verify/shades/settings-look/opal/24-privacy
-settings agents
-setting Front door mode Accept edits
-settings voice
-setting Hold to talk Right Option
-settings messages
-setting Text size Larger
-setting Open threads In T3
-setting Phone
+draw .verify/shades/settings-look/24-privacy
 setting Done
 front
 windows

@@ -30,7 +30,6 @@ final class FlowTests: XCTestCase {
     private var notified: [NeedsYouAlert] = []
     private var withdrawn: [String] = []
     private var cleared = 0
-    private var savedThemes: [ColorTheme?] = []
     private var controller: AppController!
     private var settings: Settings {
         var settings = Settings()
@@ -77,8 +76,7 @@ final class FlowTests: XCTestCase {
                 hidesTestThreads: hidesTestThreads,
                 notify: { [unowned self] in self.notified.append($0) },
                 withdrawNotifications: { [unowned self] in self.withdrawn += $0 },
-                clearNotifications: { [unowned self] in self.cleared += 1 },
-                saveTheme: { [unowned self] in self.savedThemes.append($0) }
+                clearNotifications: { [unowned self] in self.cleared += 1 }
             ),
             stage: stage,
             now: { [unowned self] in self.clock }
@@ -6116,39 +6114,6 @@ extension FlowTests {
         XCTAssertFalse(controller.dropIsOpen)
     }
 }
-
-// MARK: - Themes
-
-extension FlowTests {
-    func testPickingAThemeShowsItInMessagesKeepsItAndTheNextStartHasIt() throws {
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("opal-horizon-\(UUID().uuidString).json")
-        defer { try? FileManager.default.removeItem(at: file) }
-        try Data(##"{ "name": "Opal Horizon", "appearance": "dark", "canvas": "#0c0a10", "accent": "#8a6cff" }"##.utf8).write(to: file)
-
-        controller.themeChosen(.file(file))
-        XCTAssertEqual(controller.theme?.name, "Opal Horizon")
-        XCTAssertEqual(stage.themes.last??.paper, 0x0c0a10)
-        XCTAssertEqual(savedThemes.last??.accent, 0x8a6cff)
-        XCTAssertFalse(log.all.contains("snapshot"), "picking colours looks at nothing")
-
-        controller.themeChosen(.plain)
-        XCTAssertNil(controller.theme)
-        XCTAssertEqual(stage.themes.last, .some(nil))
-        XCTAssertEqual(savedThemes.last, .some(nil))
-    }
-
-    func testAFileThatIsntAThemeChangesNothingAndTheCatSaysSo() throws {
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("notes-\(UUID().uuidString).json")
-        defer { try? FileManager.default.removeItem(at: file) }
-        try Data(#"{ "name": "notes", "version": "1.0.0" }"#.utf8).write(to: file)
-        controller.themeChosen(.file(file))
-        XCTAssertNil(controller.theme)
-        XCTAssertEqual(stage.themes, [])
-        XCTAssertEqual(savedThemes, [])
-        XCTAssertTrue(stage.bubbles.contains { if case .line(CatWords.themeUnreadable, _) = $0 { return true }; return false })
-    }
-}
-
 
 // MARK: - Messages, laid out like Slack
 

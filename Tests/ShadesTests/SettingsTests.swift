@@ -42,7 +42,6 @@ final class SettingsTests: XCTestCase {
     override func tearDown() async throws {
         MessagesInk.textSize = .standard
         MessagesInk.fontFamily = nil
-        MessagesInk.theme = nil
     }
 
     func testAnOlderSettingsFileOpensInMessagesAtTheUsualSize() throws {
@@ -66,7 +65,6 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(shown?.overMessages, true)
         XCTAssertEqual(shown?.form.channels.map(\.title), ["#general", "#steve-pawsniak", "Shades"])
         XCTAssertEqual(shown?.form.channels.map(\.id), [.general, .of(steve), .shades])
-        XCTAssertNil(shown?.form.theme, "Shades' own colours")
     }
 
     func testAChangeMadeElsewhereShowsInSettingsAndItsOwnChangesCantUndoIt() {
@@ -118,7 +116,7 @@ final class SettingsTests: XCTestCase {
         let panel = SettingsPanel()
         var changes: [Settings] = []
         panel.onChange = { changes.append($0) }
-        let form = SettingsForm(settings: settings, theme: nil, channels: [.init(id: .general, title: "#general"), .init(id: .of(steve), title: "#steve-pawsniak")])
+        let form = SettingsForm(settings: settings, channels: [.init(id: .general, title: "#general"), .init(id: .of(steve), title: "#steve-pawsniak")])
         panel.show(form, near: NSPoint(x: 900, y: 800))
         addTeardownBlock { panel.hide() }
         return (panel, { changes })
@@ -164,23 +162,21 @@ final class SettingsTests: XCTestCase {
         }
         XCTAssertEqual(menus, [
             "Front door mode: Auto", "Frontier mode: Auto", "Hold to talk: Right Option", "Hold to dictate: fn",
-            "#general: Everything", "#steve-pawsniak: Everything", "Theme: \(CatWords.plainTheme)", "Font: SF Pro", "Text size: Default",
+            "#general: Everything", "#steve-pawsniak: Everything", "Font: SF Pro", "Text size: Default",
             "Open threads: In \(CatWords.appName) first",
         ])
     }
 
-    func testSettingsDrawsInTheThemeMessagesUses() throws {
-        let sand: UInt32 = 0xf2e6d0
-        MessagesInk.theme = ColorTheme(name: "Sand", isDark: false, paper: sand, text: 0x3b2f22, accent: 0x2f7d6d)
+    func testSettingsIsOpalGlass() throws {
+        let glass = Opal.raised
         let (panel, _) = panel()
-        XCTAssertEqual(panel.panel.appearance?.isDark, false, "its controls follow the theme's light or dark")
         let root = try XCTUnwrap(panel.panel.contentView)
         let picture = try XCTUnwrap(ChannelImages.bitmap(of: root, scale: 1))
         let corner = try XCTUnwrap(picture.colorAt(x: 12, y: picture.pixelsHigh - 12)?.usingColorSpace(.sRGB))
         let drawn = [corner.redComponent, corner.greenComponent, corner.blueComponent].map { UInt32(($0 * 255).rounded()) }
-        let want = [sand >> 16 & 0xff, sand >> 8 & 0xff, sand & 0xff]
+        let want = [glass >> 16 & 0xff, glass >> 8 & 0xff, glass & 0xff]
         for (got, wanted) in zip(drawn, want) {
-            XCTAssertLessThanOrEqual(abs(Int(got) - Int(wanted)), 2, "its paper is the theme's: drew \(drawn), not \(want)")
+            XCTAssertLessThanOrEqual(abs(Int(got) - Int(wanted)), 3, "it floats, so it's Opal's glass: drew \(drawn), not \(want)")
         }
     }
 
@@ -306,11 +302,11 @@ final class SettingsTests: XCTestCase {
         XCTAssertFalse(gone[4].isEnabled, "written by hand, and not on this Mac")
     }
 
-    func testFontIsOnTheMessagesPageUnderTheme() {
+    func testFontIsFirstOnTheMessagesPage() {
         let (panel, _) = panel(Settings(messagesFont: "Georgia"))
         panel.select(.messages)
         let rows = controls(in: panel).map { $0.accessibilityIdentifier() }.filter { !$0.isEmpty }
-        XCTAssertEqual(Array(rows.prefix(2)), [CatWords.themeButton, "Font"])
+        XCTAssertEqual(rows.first, "Font", "with no theme above it, since Opal is the only look")
         let font = controls(in: panel).first { $0.accessibilityIdentifier() == "Font" } as? QuietButton
         XCTAssertEqual(font?.accessibilityValue() as? String, "Georgia")
     }

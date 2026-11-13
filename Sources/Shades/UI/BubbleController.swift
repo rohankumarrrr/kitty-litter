@@ -36,11 +36,6 @@ final class BubbleController {
     var isVisible: Bool { panel.isVisible }
 
     /// In the theme you just picked, even while it's up.
-    func restyle() {
-        view.restyle()
-        panel.wearTheme()
-    }
-
     func show(_ content: BubbleContent?) {
         guard let content else {
             hide()

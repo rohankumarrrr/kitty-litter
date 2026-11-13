@@ -9,6 +9,7 @@ A desktop app for macOS whose cat, Shades, sees your screen when you ask, answer
 - `Sources/ShadesContext`: screen capture, selected text and browser pages, behind `ScreenContextProviding`.
 - `Sources/ShadesVoice`: hold-to-talk and dictation, behind `VoiceEngine` and `TextInserting`.
 - `Sources/Shades`: the cat, its windows and the app that wires it all together.
+- `docs/design.md`: Opal Horizon, the design system and the app's only look. Everything drawn builds on it.
 - `docs/kittens.md`: how specialist agents are set up. Real kittens are personal and live outside this repo.
 - `docs/ROADMAP.md`: ideas saved for later. Version one stays small, so new ideas go there first.
 - `.agents/skills/`: how to prove a change here. `verify-shades` drives the app in demo mode and has its windows draw themselves to pictures, and `verify-screen-boundary` checks that nothing from your screen reaches a kitten that isn't allowed to see it.
@@ -47,7 +48,7 @@ To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-
 
 ## Documentation
 
-This is open source, and people learn it from the docs, so they change in the same commit as the code. `README.md` covers what someone using The Kitty Litter needs, and `docs/` covers how things work: `kittens.md`, `t3-integration.md` and `voice.md`. New ideas go in `docs/ROADMAP.md`, and things that get built come off it.
+This is open source, and people learn it from the docs, so they change in the same commit as the code. `README.md` covers what someone using The Kitty Litter needs, and `docs/` covers how things work: `design.md`, `kittens.md`, `t3-integration.md` and `voice.md`. New ideas go in `docs/ROADMAP.md`, and things that get built come off it.
 
 ## Testing
 

@@ -1,7 +1,6 @@
 front
 channels
 wait 1
-colors Cursor/Opal Horizon
 channel clawde
 thread settings panel
 wait 2
@@ -19,8 +18,6 @@ draw .verify/shades/formatting/2-whole
 link billing page
 wait 1
 draw .verify/shades/formatting/2-labelled-link
-theme light
-colors shades
 channel clawde
 thread settings panel
 wait 2

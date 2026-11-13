@@ -15,10 +15,6 @@ final class SayPill {
     var isVisible: Bool { panel.isVisible }
 
     /// In the theme you just picked.
-    func restyle() {
-        panel.wearTheme()
-    }
-
     func say(_ word: String, over anchor: NSRect, in visible: NSRect, seconds: TimeInterval?) {
         hideTimer?.invalidate()
         pill.text = word

@@ -1,5 +1,4 @@
 front
-theme light
 channels
 channel activity
 question

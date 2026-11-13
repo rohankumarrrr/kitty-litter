@@ -1,4 +1,3 @@
-theme light
 wait 1
 record docs/images/ask.gif cat bubble input
 wait 0.5

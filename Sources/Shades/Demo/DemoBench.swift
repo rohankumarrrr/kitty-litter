@@ -143,14 +143,6 @@ enum DemoBench {
         window.panel.setFrame(frame, display: true)
         report("resize", resizes)
 
-        let opal = controller.installedThemes().first { $0.theme.name == "Opal Horizon" }
-        var themes: [Double] = []
-        for _ in 0..<rounds {
-            if let opal { themes.append(time(window) { controller.themeChosen(.file(opal.file)) }) }
-            themes.append(time(window) { controller.themeChosen(.plain) })
-        }
-        report("theme", themes)
-
         let book = controller.channels.open(threads: [])
         var phones: [Double] = []
         for _ in 0..<rounds * 2 {

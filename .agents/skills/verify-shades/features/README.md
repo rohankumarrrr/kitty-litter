@@ -24,10 +24,10 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 
 - [Ask](./ask.md) covers asking the cat, its answer, pointing at things, passing to a kitten and handing off.
 - [Drop](./drop.md) covers dropping a PDF, picture or link onto the cat, and where it may go.
-- [The Kitty Litter](./messages.md) covers Activity, Threads, #general, a kitten's channel, a thread in the pane beside it, Also send to #channel, the DM with the cat, search, formatting and links, selecting and copying, and themes.
+- [The Kitty Litter](./messages.md) covers Activity, Threads, #general, a kitten's channel, a thread in the pane beside it, Also send to #channel, the DM with the cat, search, formatting and links, selecting and copying, and Opal Horizon, its one look.
 - [Inbox](./inbox.md) covers a kitten's report arriving, its row in The Kitty Litter, replying to it and clearing it.
 - [Approvals](./approvals.md) covers an agent asking to run something, and allowing it.
-- [Phone](./phone.md) covers The Kitty Litter on your phone: turning it on, pairing, reading and answering from the page, its theme, and its text size and tap targets.
+- [Phone](./phone.md) covers The Kitty Litter on your phone: turning it on, pairing, reading and answering from the page, its colours, and its text size and tap targets.
 - [Notifications](./notifications.md) covers the macOS notification for something new in Activity or a finished session, clicking or tapping it to open its thread, taking it back, and each channel's notifications on the Mac and the phone.
 - [Do Not Disturb](./dnd.md) covers the switch, the cat asleep, every pop-up staying quiet, and catching up in Activity.
 - [Kittens](./kittens.md) covers the view of every kitten and how each is doing.
@@ -35,4 +35,4 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 - [Mic](./mic.md) covers talking into the Ask box or The Kitty Litter's box with its mic, with no look at the screen.
 - [VoiceOver](./voiceover.md) covers what VoiceOver says as the bubble changes, and pressing the cat, a kitten and the sidebar with it.
 - [Check Myself](./check-myself.md) covers the self-check from the cat's menu, and what it says when T3 doesn't answer in time.
-- [Settings](./settings.md) covers every setting in one place, from the menu or The Kitty Litter: models, keys, notifications, each channel's, theme, font, text size, where Open goes, the phone and the privacy list.
+- [Settings](./settings.md) covers every setting in one place, from the menu or The Kitty Litter: models, keys, notifications, each channel's, font, text size, where Open goes, the phone and the privacy list.
