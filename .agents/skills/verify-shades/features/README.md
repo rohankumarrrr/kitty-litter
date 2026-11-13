@@ -27,7 +27,7 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 - [The Kitty Litter](./messages.md) covers Activity, Threads, #general, a kitten's channel, a thread in the pane beside it, Also send to #channel, the DM with the cat, search, formatting and links, selecting and copying, and themes.
 - [Inbox](./inbox.md) covers a kitten's report arriving, its row in The Kitty Litter, replying to it and clearing it.
 - [Approvals](./approvals.md) covers an agent asking to run something, and allowing it.
-- [Phone](./phone.md) covers The Kitty Litter on your phone: turning it on, pairing, reading and answering from the page, and its theme.
+- [Phone](./phone.md) covers The Kitty Litter on your phone: turning it on, pairing, reading and answering from the page, its theme, and its text size and tap targets.
 - [Notifications](./notifications.md) covers the macOS notification for something new in Activity or a finished session, clicking or tapping it to open its thread, taking it back, and each channel's notifications on the Mac and the phone.
 - [Do Not Disturb](./dnd.md) covers the switch, the cat asleep, every pop-up staying quiet, and catching up in Activity.
 - [Kittens](./kittens.md) covers the view of every kitten and how each is doing.

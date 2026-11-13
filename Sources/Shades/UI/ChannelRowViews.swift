@@ -176,7 +176,7 @@ struct ChannelSpeakerLook {
     }
 
     /// The colour over the window at `alpha`. `nil` is the grey.
-    private static func faded(_ bubble: UInt32?, to alpha: Double, dark: Bool, theme: ColorTheme?) -> UInt32 {
+    static func faded(_ bubble: UInt32?, to alpha: Double, dark: Bool, theme: ColorTheme?) -> UInt32 {
         let top = bubble ?? theme?.bubble ?? (dark ? 0x3a3a3c : 0xe9e9eb)
         let under: UInt32 = theme?.paper ?? (dark ? 0x1d1d1f : 0xf9f9f9)
         return ColorTheme.mix(under, top, alpha)

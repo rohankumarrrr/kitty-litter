@@ -40,6 +40,7 @@ extension AppController {
             self?.say(CatWords.phonePaired, fades: true)
         }
         link.theme = theme
+        link.textSize = settings.textSize
         phone = link
         phoneTask = Task { [weak self] in
             do {

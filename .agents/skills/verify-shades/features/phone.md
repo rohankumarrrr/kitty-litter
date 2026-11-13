@@ -14,6 +14,7 @@ With **The Kitty Litter on my phone** on in Settings, the cat shows a code and a
 - `phone-notify` sends each new thing in Activity to a subscribed phone, encrypted for it, saying only who and what kind.
 - `phone-formatting` draws a message's lists, tables, quotes, code blocks with Copy and pull request chips from what the Mac read, and tapping a link shows its whole address before Open. See `messages-formatting` in [messages.md](messages.md), whose journey covers both.
 - `phone-theme` gives the page The Kitty Litter's theme, and holds back what's new while you're selecting words.
+- `phone-size` follows the phone's own text size and the Mac's Text size on top of it, makes everything you tap at least 44 points, says each place's state to VoiceOver as the window's sidebar does, offers **React** to a keyboard, and draws a message on its way paler in a colour its words read on.
 - `phone-search` finds a message by its words from **Search** at the top of every page, over what The Kitty Litter has read and only what a phone can open, and tapping one opens its page and scrolls to it. See `messages-search` in [messages.md](messages.md), whose journey covers both.
 
 ## How to get to it (user POV)
@@ -60,6 +61,14 @@ Journey: `journeys/phone-theme.txt`.
 - **Theme.** `colors Cursor/Opal Horizon` before `phone on`, then `phone open steve`. `1-opal` shows the page dark, your bubbles and your squares in reply bars in the violet tint, a violet Send button and "1 in progress", and Steve's bubbles and every cat still in their own colours, drawn with the light outline the window uses on a dark page.
 - **Selecting.** `phone select feels cramped` does what dragging over those words, in a parent on Steve's channel, does, and prints `[phone] selected [feels cramped]`. A new thread started from the window doesn't reach the page's `phone text` while they're selected, and does after `phone unselect`. The web view's pictures don't show a selection.
 
+Journey: `journeys/phone-size.txt`, in light mode, then Opal.
+
+- **Labels.** The first `phone js` prints what VoiceOver says for each place, such as `steve-pawsniak, Needs you, 1 waiting`, and `[dot]` where a dot shows. Steve has a count after `approval`, so no dot.
+- **Reach.** Each `every target at least 44` line measures every button, link and box on the page, and names any smaller. A reaction's pill is drawn 32 pixels tall and takes taps 6 above and below it, which `elementFromPoint` shows in the `chip` line.
+- **On its way.** After `Try again`, the `on its way` line is the contrast of the message's words on its bubble, `8.97:1 at opacity 1`, where it was 2.28:1 see-through. `3-sending` shows it light blue with black words.
+- **React.** `phone press React` puts the keyboard on 👍, the first of 6 marks, and 🎉 then shows under the message in `4-reacted`.
+- **Size.** Small makes the body 15.69px and leaves the box at 16px, so an iPhone doesn't zoom in on it, and Larger makes it 22.23px, from 17px. `7-opal-larger-thread` has Mark unread and Search under the title. `phone js document.documentElement.style.fontSize = '130%'` stands in for the phone's own size, and everything grows from it.
+
 End every journey with `front` and `windows`. The app in front stays whatever it was, and `active=false`.
 
 ## Gotchas
@@ -70,5 +79,7 @@ End every journey with `front` and `windows`. The app in front stays whatever it
 - `phone text` doesn't show the cats, since they're pictures. `swift test --filter PhoneServerTests` checks their address gives the window's art pixel for pixel, and nothing for any other address.
 - A `draw` just before the file runs out can miss the phone, whose picture comes back a moment later. End with a `wait 2`.
 - What goes wrong shows at the bottom of the page's header, so it's in the picture however far down the page is. `phone js attach([new File(['hi'], 'notes.txt', { type: 'text/plain' })]); 'attached'` makes "The Kitty Litter can only read photos and PDFs.", and `phone off` with the page open makes "Can't reach your Mac". `phone link <words>` opens the sheet over a dimmed page, and `phone js document.activeElement.id` then prints `linkcancel`.
+- The demo phone never has the keyboard, since it's off every screen, so `:focus` never applies there and **React** stays out of sight even with `document.activeElement` on it. An iPhone's Text Size, its safe areas turned sideways, and `-apple-system-body` aren't in the demo either, since it's a Mac's web view.
+- Pair before anything else happens. A `phone open` that comes a moment after another code shows gets the pairing page.
 - Tailscale itself isn't in the demo. `swift test --filter PhoneServerTests` runs the server on a free port and checks pairing and what it turns away over HTTP, and checks the helper that takes the page off with a stand-in for the `tailscale` tool.
 - Neither a real push service nor a real phone is in the demo. `swift test --filter WebPushTests` checks the encryption against RFC 8291's own example, and the signature as a push service checks it.

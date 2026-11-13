@@ -158,6 +158,27 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(view["you"] as? String, "data:image/jpeg;base64,\(picture)")
     }
 
+    /// The page's words grow by as much as the window's for the text size picked on the Mac, from the next time it opens,
+    /// and still when the page is turned off and on again.
+    func testThePageTakesTheMacsTextSize() async throws {
+        let style = { String(decoding: try await self.send("GET", "/app.css").body, as: UTF8.self) }
+        let standard = try await style()
+        XCTAssertFalse(standard.contains("--size:"), "at Standard, the phone's own")
+        var settings = controller.settings
+        settings.textSize = .larger
+        controller.settingsEdited(settings)
+        let larger = try await style()
+        XCTAssertTrue(larger.contains("--size: calc(100% * 17 / 13)"))
+        turnOff()
+        settings = controller.settings
+        settings.phone = true
+        controller.apply(settings)
+        await controller.phoneTask?.value
+        port = try XCTUnwrap(controller.phoneListening)
+        let again = try await style()
+        XCTAssertTrue(again.contains("--size: calc(100% * 17 / 13)"))
+    }
+
     func testOnlyAPairedPhoneGetsPastThePage() async throws {
         let page = try await call("GET", "/")
         XCTAssertEqual(page.statusCode, 200, "the page itself holds nothing")
