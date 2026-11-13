@@ -13,6 +13,10 @@ public enum T3Error: LocalizedError, Equatable {
     case rejected(String)
     case attachmentNotSupported(name: String, reason: String)
     case keychain(status: Int32)
+    /// Opening a thread in T3 before T3 has said which environment it is, which its links need.
+    case noEnvironment
+    /// macOS didn't open a thread's link, with its error code.
+    case couldntOpen(code: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -36,6 +40,10 @@ public enum T3Error: LocalizedError, Equatable {
             return "Couldn't attach \(name): \(reason)"
         case let .keychain(status):
             return "Couldn't use the Keychain (\(status))."
+        case .noEnvironment:
+            return "I can't open that in T3 Code until I've reached it. Open T3 Code and try again."
+        case let .couldntOpen(code):
+            return "macOS didn't open T3 Code to show that thread (error \(code)). Check it's installed, then try again."
         }
     }
 }

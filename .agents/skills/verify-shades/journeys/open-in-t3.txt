@@ -1,0 +1,18 @@
+front
+channels
+wait 2
+channel steve
+wait 1
+thread
+wait 2
+toolbar Open in T3
+wait 1
+t3 off
+toolbar Open in T3
+wait 1
+draw .verify/shades/open-in-t3/1-t3-off
+t3 on
+toolbar Open in T3
+wait 1
+front
+windows

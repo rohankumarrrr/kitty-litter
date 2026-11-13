@@ -366,7 +366,7 @@ final class AppController {
     func bubbleAction(_ action: BubbleAction) {
         switch action {
         case .open(let threadID):
-            backend.open(threadID: threadID)
+            openThread(threadID)
         case .show(let threadID):
             showInMessages(threadID)
         case .copy(let text):
@@ -488,8 +488,11 @@ final class AppController {
 
     // MARK: - Settings
 
+    /// Every Open in T3. It says which step went wrong, since that's all there is to go on afterwards.
     func openThread(_ threadID: String) {
-        backend.open(threadID: threadID)
+        Task {
+            do { try await backend.open(threadID: threadID) } catch { say(CatWords.problem(error, while: .agents)) }
+        }
     }
 
     func settingsPressed(overMessages: Bool = false) {

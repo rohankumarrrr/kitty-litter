@@ -106,7 +106,7 @@ private final class FeedBackend: AgentBackend, @unchecked Sendable {
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws { fatalError("Channels never answers") }
     func archive(threadID: String) async throws { fatalError("Channels never archives") }
     func settle(threadID: String) async throws { fatalError("Channels never settles") }
-    func open(threadID: String) { fatalError("The window opens threads, not the feed") }
+    func open(threadID: String) async throws { fatalError("The window opens threads, not the feed") }
 }
 
 @MainActor

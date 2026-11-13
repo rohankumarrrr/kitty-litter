@@ -65,7 +65,7 @@ extension AppController {
     /// The bubble's Open: the thread beside where it lives, and the bubble's done with it. T3 is only for a thread
     /// Messages doesn't show, or for every thread with Settings' Open set to T3.
     func showInMessages(_ threadID: String) {
-        guard settings.openInMessages, let home = messagesHome(ofThread: threadID) else { return backend.open(threadID: threadID) }
+        guard settings.openInMessages, let home = messagesHome(ofThread: threadID) else { return openThread(threadID) }
         if notices.first?.threadID == threadID, notices.first?.questionID == nil { notices.removeFirst() }
         if line?.threadID == threadID { line = nil }
         channelsPressed(selecting: .thread(threadID, in: .channel(home)))

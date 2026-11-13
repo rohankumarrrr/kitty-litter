@@ -95,7 +95,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(stage.textSizes, [.larger], "only when it changes")
     }
 
-    func testWithOpenSetToT3OpenGoesThereEvenForAThreadMessagesShows() {
+    func testWithOpenSetToT3OpenGoesThereEvenForAThreadMessagesShows() async {
         kittens = [steve]
         let steves = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, projectPath: "/k/steve")
         controller.threadsChanged([steves])
@@ -106,6 +106,7 @@ final class SettingsTests: XCTestCase {
         controller.settingsEdited(t3)
         XCTAssertFalse(controller.opensInMessages("s"), "the bubble says Open in T3")
         controller.bubbleAction(.show(threadID: "s"))
+        for _ in 0..<20 { await Task.yield() }
         XCTAssertEqual(backend.opened, ["s"])
         XCTAssertTrue(stage.selections.isEmpty, "and Messages stays shut")
     }

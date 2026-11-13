@@ -159,7 +159,7 @@ extension AppController {
     func inboxAction(_ action: InboxAction) {
         switch action {
         case .open(let threadID):
-            backend.open(threadID: threadID)
+            openThread(threadID)
         case .done(let id):
             inbox.remove(id)
             keepInbox()

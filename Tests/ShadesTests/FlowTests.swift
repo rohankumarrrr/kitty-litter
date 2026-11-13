@@ -3,6 +3,7 @@ import CoreGraphics
 @testable import Shades
 import ShadesContext
 import ShadesCore
+import ShadesT3
 import XCTest
 
 private struct Friendly: LocalizedError {
@@ -2865,6 +2866,7 @@ final class FlowTests: XCTestCase {
         t3.openInMessages = false
         controller.settingsEdited(t3)
         controller.kittenPressed(statuses[0])
+        await settle()
         XCTAssertEqual(backend.opened, ["w"], "Settings' Open threads in T3")
     }
 
@@ -3414,6 +3416,7 @@ final class FlowTests: XCTestCase {
         let decision = try XCTUnwrap(rows.first { $0.kind == .decision })
 
         controller.inboxAction(.open(threadID: "w"))
+        await settle()
         XCTAssertEqual(backend.opened, ["w"])
 
         controller.inboxAction(.done(id: decision.id))
@@ -4643,7 +4646,7 @@ final class FlowTests: XCTestCase {
         XCTAssertNil(controller.kittenColor(ofThread: "gone"))
     }
 
-    func testOpenInTheBubbleShowsTheThreadInMessages() {
+    func testOpenInTheBubbleShowsTheThreadInMessages() async {
         kittens = [steve]
         let steves = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, projectPath: "/k/steve")
         let fix = AgentThread(id: "f", title: "Fix: the logo is squashed", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
@@ -4663,11 +4666,23 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.selections.last, .thread("f", in: .channel(.shades)), "the cat's own work is in its DM")
 
         controller.bubbleAction(.show(threadID: "t3"))
+        await settle()
         XCTAssertEqual(backend.opened, ["t3"], "only what Messages doesn't show opens in T3")
+    }
+
+    func testAnOpenInT3ThatFailsSaysWhichStepRatherThanNothing() async throws {
+        for failure in [T3Error.noEnvironment, .couldntOpen(code: -10814)] {
+            backend.openFails = failure
+            controller.openThread("mcp:launch:8f2c")
+            await settle()
+            guard case .line(let said, _)? = stage.bubble else { return XCTFail("\(failure): nothing said") }
+            XCTAssertEqual(said, failure.localizedDescription)
+        }
     }
 
     func testOpenInT3AndCopy() async {
         controller.bubbleAction(.open(threadID: "t"))
+        await settle()
         XCTAssertEqual(backend.opened, ["t"])
         controller.bubbleAction(.copy("some text"))
         XCTAssertEqual(stage.copied, "some text")
@@ -4995,6 +5010,7 @@ final class FlowTests: XCTestCase {
     func testClickingANotificationForAThreadMessagesDoesntShowOpensItInT3() async throws {
         controller.threadsChanged([thread(.waitingForApproval, approvals: [newRequest()])])
         controller.showInMessages(try XCTUnwrap(notified.first?.threadID))
+        await settle()
         XCTAssertEqual(backend.opened, ["w"])
         XCTAssertTrue(stage.channelsShown.isEmpty)
     }
