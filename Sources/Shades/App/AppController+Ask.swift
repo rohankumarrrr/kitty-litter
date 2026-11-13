@@ -456,6 +456,7 @@ extension AppController {
     }
 
     /// `onStarted` hears the new thread, or `nil` if there isn't one. `asked` is the question it came from, if not the latest.
+    /// `youPicked` leaves out saying who has it, since you can see where it went, but a problem or warning still comes.
     func startFrontier(
         title: String?,
         text: String,
@@ -463,6 +464,7 @@ extension AppController {
         projectID: String? = nil,
         name: String? = nil,
         as errand: Errand = .work,
+        youPicked: Bool = false,
         missesScreen: Bool = false,
         asked: Int? = nil,
         onStarted: ((String?) -> Void)? = nil
@@ -477,7 +479,7 @@ extension AppController {
             runtimeMode: settings.frontierMode,
             projectID: projectID
         )
-        if errand != .correctionCopy { say(CatWords.handingOff(modelName: name)) }
+        if errand != .correctionCopy, !youPicked { say(CatWords.handingOff(modelName: name)) }
         frontierTask = Task {
             var startedThread: String?
             var warning: Int?
@@ -493,7 +495,7 @@ extension AppController {
                         let said = errand == .correctionCopy ? CatWords.correctionSent(to: name) : CatWords.onIt(modelName: name)
                         if missesScreen {
                             warning = sayPassedOn(said, threadID: threadID, missesScreen: true, asked: asked)
-                        } else {
+                        } else if !youPicked {
                             tell(said, threadID: threadID, as: errand, fades: true)
                         }
                     case .needsApproval(let request):
