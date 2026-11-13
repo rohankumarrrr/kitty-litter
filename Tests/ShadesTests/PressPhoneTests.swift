@@ -220,6 +220,16 @@ final class PressPhoneTests: XCTestCase {
         try await shows(threadKey)
     }
 
+    /// A link in a post is a link, as anywhere else. Tapping it also opened the thread, under the link's sheet.
+    func testALinkInAParentAsksWithoutOpeningTheThread() async throws {
+        try await open(at: steveKey)
+        try await phone.tap(".msg .bubble .link")
+        try await phone.until("the link asks") { try await isOpen("linksheet") }
+        try await Task.sleep(nanoseconds: 300_000_000)
+        try await expect("view.key", steveKey, "still on the channel")
+        XCTAssertEqual(phone.watched.last, steveKey)
+    }
+
     func testAReplyAlsoSentToTheChannelOpensItsThread() async throws {
         try await open(at: steveKey)
         try await phone.tap(".context")

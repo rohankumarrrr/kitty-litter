@@ -969,7 +969,10 @@ enum PhonePage {
               const node = message(item);
               const bar = replybar(item);
               if (bar) node.append(bar);
-              node.querySelector('.bubble')?.addEventListener('click', () => { if (!selecting()) go(item.open); });
+              // A link or Copy in it does what it says, and only that.
+              node.querySelector('.bubble')?.addEventListener('click', (event) => {
+                if (!selecting() && !event.target.closest('[role=link], button')) go(item.open);
+              });
               return node;
             }
             case 'replies': return el('div', 'replies', item.text);
