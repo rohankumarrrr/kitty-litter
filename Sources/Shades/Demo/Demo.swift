@@ -454,6 +454,8 @@ final class DemoVoice: VoiceEngine {
     private let words = ["what's", "this", "button", "for"]
     private var startedAt = Date()
     var downloading = false
+    /// As if the Microphone were off for the app in System Settings.
+    var denied = false
 
     init() {
         // One pair of streams for the life of the engine, the same as the real one.
@@ -466,6 +468,7 @@ final class DemoVoice: VoiceEngine {
 
     func begin() throws {
         if downloading { throw DemoError(errorDescription: "Still fetching my ears. Try again in a minute.") }
+        if denied { throw DemoError(errorDescription: CatWords.needsMicrophone) }
         startedAt = Date()
         let words = self.words
         let partialsContinuation = self.partialsContinuation

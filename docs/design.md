@@ -249,6 +249,7 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 - Short, easing out: Opal's curve is `cubic-bezier(.2, .8, .2, 1)`, `Motion.ease`.
 - 120 ms for hover and press, 200 ms for something appearing, 280 ms for something moving.
 - Nothing jumps on load, and nothing moves content when it appears on hover. A hover toolbar floats over the row instead.
+- The cat's bubble and pill fade in over 200 ms and out over 120 ms, and take no clicks on their way out. The Ask box fades in, and goes at once when you press Return or Escape, as Spotlight does.
 - Reduce Motion stills all of it, and the cats hold still. `Motion.isReduced` says when.
 
 ## Which surface gets which
@@ -257,8 +258,8 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 |---|---|
 | The Kitty Litter (the Messages window) | Chrome with the sidebar flush on it; the inset page panel with its toolbar; the horizon at the panel's foot; kittens on Rimlight tiles in their colours; message rows on the page, your own on `selected`; the box as a field |
 | Settings | Floating glass, laid out as macOS's own Settings is: each setting's name on the left in body, a line on what it does under it in meta and secondary, and its control on the right, with hairlines between rows and small capitals over a group. Underlined tabs for its pages, switches, segmented controls, fields and pop-ups. Done is the one primary, at the bottom right |
-| The cat's bubble | A rimlit card in Shades' hue 245, at 20 corners, like an Opal desktop widget, since both float on the desktop. An answer from a kitten is lit in that kitten's colour |
-| The Ask box | Floating glass, a field inside it, its mic a text button |
+| The cat's bubble | A rimlit card in Shades' hue 245, at 20 corners and the widget card's padding, like an Opal desktop widget, since both float on the desktop. A kitten asking or reporting is lit in that kitten's colour. Its stepped tail carries the rim's light down to the cat. A command sits in a code block |
+| The Ask box | Floating glass, a field inside it, its mic a text button in the field, and a dropped file as a chip over what you type |
 | The pill over the cat | A capsule of floating glass with body words |
 | Approvals and questions | In the bubble's card. Allow is the primary, the rest quiet |
 | The kittens view and the pairing code | Floating glass. Kittens on Rimlight tiles, with labels in small capitals and status in lilac, rose or mint |
@@ -279,6 +280,9 @@ Where an app you use every day has a settled way of doing something, do it that 
 - **A notification** names who in its title and says what in its body, as Messages and Slack do, and Notification Center groups it with the rest of its thread.
 - **Times** go after the name in meta, never on their own line.
 - **Destructive actions** say what they do ("Delete", not "OK") and are never the primary.
+- **A card's buttons** sit at its bottom right with the primary last, as in a macOS alert. An option that does more, such as Allow for this session, sits apart at the left.
+- **An error that needs a setting changed** says which, and **Open System Settings** goes to that page.
+- **A long answer** opens at its start, its last line fading to say there's more.
 - **Empty places** say what will appear there and how, in one secondary line, never a big illustration.
 
 ## Don't

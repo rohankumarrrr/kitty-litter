@@ -13,6 +13,10 @@ enum CatWords {
     static let privateApp = "This app is private, so I didn't look."
     static let fullAccessLeavesScreenOut = "Agents with full access don't get your screen, so tell me what's wrong."
     static let needsScreenRecording = "I can't see your screen. Turn on Screen Recording for me in System Settings."
+    static let needsMicrophone = "I can't hear you. Turn on the Microphone for me in System Settings."
+    static let needsAccessibility = "I couldn't type that here. Turn on Accessibility for me in System Settings."
+    static let needsInputMonitoring = "I can't feel your hold keys. Turn on Input Monitoring for me in System Settings."
+    static let openSystemSettings = "Open System Settings"
     static let noReply = "Hm, nothing came back. Try again?"
     static let rewriteCopied = "I couldn't swap it in, so it's copied. Paste it where you want it."
     static let didntCatch = "I didn't catch that."
@@ -452,13 +456,13 @@ enum CatWords {
                 return "Still fetching my ears. Try again in a minute."
             }
             if words.contains("permission") || words.contains("denied") || words.contains("microphone") {
-                return "I can't hear you. Turn on the Microphone for me in System Settings."
+                return needsMicrophone
             }
             return "My ears aren't working just now. Try again?"
         case .typing:
-            return "I couldn't type that here. Turn on Accessibility for me in System Settings."
+            return needsAccessibility
         case .keys:
-            return "I can't feel your hold keys. Turn on Input Monitoring for me in System Settings."
+            return needsInputMonitoring
         }
     }
 }

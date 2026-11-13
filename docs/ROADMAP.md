@@ -27,6 +27,7 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - **Threads that wake themselves.** A kitten's thread picks up again by itself when its own pull request fails CI or gets a review comment, so a fix doesn't wait on you to notice.
 - **Steer or queue from The Kitty Litter.** Enter steers a kitten that's still working, by joining the run it's on, and Option-Enter queues the next task behind it. Today a message always waits for its own run.
 - **Kittens on a schedule.** A kitten that runs at a set time, such as a weekly check on something it looks after, and reports to The Kitty Litter.
+- **A way to fix every error.** A permission error in the bubble now has **Open System Settings**. "I can't reach T3 Code" could open T3 the same way, and the Ask box's line about Screen Recording could take you to its page too.
 - **The cat's eyes as a tool.** Expose "see screen" and "cat say" as an MCP server, so any T3 agent can look at your screen or speak through the cat, and you can ask about your screen from inside T3.
 
 ## Smaller things

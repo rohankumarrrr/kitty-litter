@@ -1,5 +1,6 @@
 import CoreGraphics
 @testable import Shades
+import ShadesContext
 import ShadesCore
 import XCTest
 
@@ -42,6 +43,7 @@ final class FakeStage: CatStage {
     var channelsShown: [ChannelBook] = []
     var channelsUpdated: [ChannelBook] = []
     var copied: String?
+    var openedSettings: [Permissions.Pane] = []
     var arriveImmediately = true
     var isPointerOnBubble = false
     var pendingArrival: (() -> Void)?
@@ -138,6 +140,7 @@ final class FakeStage: CatStage {
         onPairing?(card)
     }
     func copyToPasteboard(_ text: String) { copied = text }
+    func openSettings(_ pane: Permissions.Pane) { openedSettings.append(pane) }
 
     /// What a person does: types into the panel and presses Return.
     func type(_ text: String) {

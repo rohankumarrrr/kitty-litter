@@ -371,6 +371,10 @@ final class AppController {
             answer(request, decision)
         case .openMessages:
             channelsPressed(selecting: .activity)
+        case .settings(let pane):
+            stage.openSettings(pane)
+            line = nil
+            renderBubble()
         }
     }
 

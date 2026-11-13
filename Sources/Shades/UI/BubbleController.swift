@@ -33,7 +33,8 @@ final class BubbleController {
         panel.contentView = view
     }
 
-    var isVisible: Bool { panel.isVisible }
+    /// Up, or on its way. Once dismissed it isn't, though it takes a moment to fade.
+    var isVisible: Bool { content != nil && panel.isVisible }
 
     /// In the theme you just picked, even while it's up.
     func show(_ content: BubbleContent?) {
@@ -64,7 +65,7 @@ final class BubbleController {
         relayout(keepingWidth: !isNew)
         if isNew {
             shownAt = Date()
-            panel.orderFrontRegardless()
+            panel.fadeIn()
             installClickMonitor()
             onVisibilityChange?()
         }
@@ -87,7 +88,7 @@ final class BubbleController {
         armTimer?.invalidate()
         if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         clickMonitor = nil
-        panel.orderOut(nil)
+        panel.fadeOut()
         onVisibilityChange?()
     }
 

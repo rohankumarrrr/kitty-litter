@@ -1,6 +1,6 @@
 # Mic
 
-The mic at the right of the Ask box, and of the box in The Kitty Litter. Pressing it starts talking into that box, pressing it again sends what you said where typing it would, and it never looks at the screen.
+The mic at the right of the Ask box's field, and of the box in The Kitty Litter. Pressing it starts talking into that box, pressing it again sends what you said where typing it would, and it never looks at the screen.
 
 ## Sub-features
 

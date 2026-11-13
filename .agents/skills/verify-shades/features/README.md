@@ -22,7 +22,7 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 
 ## Features
 
-- [Ask](./ask.md) covers asking the cat, its answer, pointing at things, passing to a kitten and handing off.
+- [Ask](./ask.md) covers asking the cat, its answer, pointing at things, passing to a kitten and handing off, and drawing every state of the bubble, the Ask box and the pill.
 - [Drop](./drop.md) covers dropping a PDF, picture or link onto the cat, and where it may go.
 - [The Kitty Litter](./messages.md) covers Activity, Threads, #general, a kitten's channel, a thread in the pane beside it, Also send to #channel, the DM with the cat, search, formatting and links, selecting and copying, and Opal Horizon, its one look.
 - [Inbox](./inbox.md) covers a kitten's report arriving, its row in The Kitty Litter, replying to it and clearing it.

@@ -87,8 +87,8 @@ enum MessagesInk {
     static let link = Ink.hex(Opal.lilac)
     /// Why something didn't work, such as a message that couldn't be sent.
     static let danger = Ink.hex(Opal.errorText)
-    /// The cat's one-word pill.
-    static let pill = Ink.hex(Opal.control)
+    /// The cat's one-word pill, a capsule of floating glass.
+    static let pill = Ink.hex(Opal.raised)
     static let pillText = Ink.hex(Opal.body)
     /// A count of what's waiting on you, in the colour the cat glints when something does.
     static let badge = Ink.hex(Opal.error)

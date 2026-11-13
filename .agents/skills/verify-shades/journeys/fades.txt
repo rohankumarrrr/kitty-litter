@@ -1,0 +1,18 @@
+front
+wait 1
+pet
+wait 0.07
+windows
+wait 0.07
+windows
+wait 2
+ask hello
+wait 4
+esc
+wait 0.04
+windows
+wait 0.04
+windows
+wait 0.2
+windows
+front

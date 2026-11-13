@@ -1196,7 +1196,8 @@ final class FlowTests: XCTestCase {
         controller.dropped(syllabus)
         await controller.flow?.value
         XCTAssertEqual(log.all, ["showInput"])
-        XCTAssertEqual(stage.input?.caption, "Looking at syllabus.pdf")
+        XCTAssertEqual(stage.input?.attachment, "syllabus.pdf", "in the box, as what's attached")
+        XCTAssertNil(stage.input?.caption, "not a line under it as well")
         XCTAssertEqual(stage.input?.allowsEmpty, true)
     }
 
@@ -1280,7 +1281,7 @@ final class FlowTests: XCTestCase {
         controller.dropped(syllabus)
         await asking?.value
         await controller.flow?.value
-        XCTAssertEqual(stage.input?.caption, "Looking at syllabus.pdf")
+        XCTAssertEqual(stage.input?.attachment, "syllabus.pdf")
     }
 
     func testADropThatCantBeReadSaysSo() async {
@@ -4484,6 +4485,26 @@ final class FlowTests: XCTestCase {
     }
 
     /// A report's only button used to be Open in T3. Messages comes first, and T3 is only for what it doesn't show.
+    /// "Turn on the Microphone for me in System Settings" left you to find it, where a macOS app takes you there.
+    func testAnErrorThatNeedsASettingTakesYouThere() {
+        controller.say(CatWords.needsMicrophone)
+        controller.bubbleAction(.settings(.microphone))
+        XCTAssertEqual(stage.openedSettings, [.microphone])
+        XCTAssertNil(stage.bubble, "and the bubble's done with it")
+    }
+
+    /// The bubble is lit by whoever's speaking, so it asks which kitten a thread is.
+    func testABubbleFromAKittensThreadIsLitInItsColour() {
+        kittens = [steve]
+        let steves = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, projectPath: "/k/steve")
+        let fix = AgentThread(id: "f", title: "Fix: the logo is squashed", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
+        controller.threadsChanged([steves, fix])
+        XCTAssertEqual(controller.kittenColor(ofThread: "s"), ChannelSpeakerLook.color(of: steve))
+        XCTAssertNotNil(controller.kittenColor(ofThread: "s"))
+        XCTAssertNil(controller.kittenColor(ofThread: "f"), "no kitten's, so Shades' own")
+        XCTAssertNil(controller.kittenColor(ofThread: "gone"))
+    }
+
     func testOpenInTheBubbleShowsTheThreadInMessages() {
         kittens = [steve]
         let steves = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, projectPath: "/k/steve")
