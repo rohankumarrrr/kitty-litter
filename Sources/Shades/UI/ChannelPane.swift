@@ -1,12 +1,12 @@
 import AppKit
 import ShadesCore
 
-/// The top of a pane: the place you're looking at and a way to what its kitten has open, or for a thread, which
-/// channel it's in, a way to T3 and a way to close it.
+/// A pane's toolbar, pinned to the top of the panel: the place you're looking at, one line about it and a way to what
+/// its kitten has open, or for a thread, which channel it's in, a way to T3 and a way to close it. Dragging it moves the
+/// window, as a Mac window's toolbar does.
 final class ChannelHeader: QuietView {
-    static let height: CGFloat = 66
-    /// What's under the title bar, so nothing clickable has to compete with dragging the window.
-    private static let top: CGFloat = 24
+    static let height: CGFloat = 56
+    private static let tileSide: CGFloat = 30
 
     var onIssues: (() -> Void)?
     var onClose: (() -> Void)?
@@ -16,7 +16,8 @@ final class ChannelHeader: QuietView {
     var onPhone: (() -> Void)?
     private var title = ""
     private var subtitle: String?
-    private var cats: [ChannelSpeakerLook] = []
+    /// Whose cat sits on a tile before the name, lit in its colour.
+    private var cat: ChannelSpeakerLook?
     private var buttons: [QuietButton] = []
 
     /// What the header says for a place, which a phone shows too.
@@ -48,15 +49,15 @@ final class ChannelHeader: QuietView {
 
     func show(_ place: ChannelPlace, in book: ChannelBook) {
         (title, subtitle) = Self.words(for: place, in: book)
-        cats = []
-        var right: [(String, () -> Void)] = []
+        cat = nil
+        var right: [Action] = []
         switch place {
         case .channel(.shades):
-            cats = [ChannelSpeakerLook(.cat, in: book)]
+            cat = ChannelSpeakerLook(.cat, in: book)
         case .channel(.kitten(let kitten)):
-            cats = [ChannelSpeakerLook(.kitten(kitten), in: book)]
+            cat = ChannelSpeakerLook(.kitten(kitten), in: book)
             if let count = book.issues.first(where: { $0.kitten.id == kitten })?.threads.count, count > 0 {
-                right = [(CatWords.issues(count), { [weak self] in self?.onIssues?() })]
+                right = [Action(CatWords.issues(count)) { [weak self] in self?.onIssues?() }]
             }
         case .activity, .threads, .channel(.general):
             break
@@ -66,27 +67,26 @@ final class ChannelHeader: QuietView {
         describe()
     }
 
-    /// Says when the channel's muted, so you know why it's quiet.
-    private func notificationsButton(for id: ChannelID, in book: ChannelBook) -> (String, () -> Void) {
+    /// Says when the channel's muted, with its bell struck through, so you know why it's quiet.
+    private func notificationsButton(for id: ChannelID, in book: ChannelBook) -> Action {
         let current = book.waiting.notifications[id.settingsKey] ?? ChannelNotifications()
         let phone = book.waiting.phone
-        return (current.muted ? CatWords.muted : CatWords.notifications, { [weak self] in
+        return Action(current.muted ? CatWords.muted : CatWords.notifications, symbol: current.muted ? "bell.slash" : "bell") { [weak self] in
             guard let self, let anchor = self.buttons.last else { return }
             self.notificationsMenu.show(current, phone: phone, under: anchor) { [weak self] in self?.onNotifications?(id, $0) }
-        })
+        }
     }
 
     func show(thread id: String, in book: ChannelBook) {
         (title, subtitle) = Self.words(forThread: id, in: book)
-        cats = []
-        var right: [(String, () -> Void)] = []
+        cat = nil
+        var right: [Action] = []
         if book.hasPhone, book.catsWork.contains(id), book.home(ofThread: id) == .shades {
-            right.append((book.onPhone.contains(id) ? CatWords.hideFromPhone : CatWords.showOnPhone, { [weak self] in self?.onPhone?() }))
+            right.append(Action(book.onPhone.contains(id) ? CatWords.hideFromPhone : CatWords.showOnPhone) { [weak self] in self?.onPhone?() })
         }
-        if book.knows(thread: id) { right.append((CatWords.openInT3, { [weak self] in self?.onOpen?() })) }
-        right.append(("✕", { [weak self] in self?.onClose?() }))
+        if book.knows(thread: id) { right.append(Action(CatWords.openInT3, symbol: "arrow.up.forward.app") { [weak self] in self?.onOpen?() }) }
+        right.append(Action(CatWords.closeThread, symbol: "xmark") { [weak self] in self?.onClose?() })
         setButtons(right)
-        buttons.last?.setAccessibilityLabel(CatWords.closeThread)
         describe()
     }
 
@@ -97,46 +97,63 @@ final class ChannelHeader: QuietView {
         needsDisplay = true
     }
 
-    private func setButtons(_ right: [(String, () -> Void)]) {
+    /// One of the toolbar's actions: words, or an icon that says them when you hover it, as Slack's toolbar has.
+    private struct Action {
+        var title: String
+        var symbol: String?
+        var run: () -> Void
+
+        init(_ title: String, symbol: String? = nil, run: @escaping () -> Void) {
+            self.title = title
+            self.symbol = symbol
+            self.run = run
+        }
+    }
+
+    private func setButtons(_ right: [Action]) {
         buttons.forEach { $0.removeFromSuperview() }
         var edge = bounds.width - ChannelRowView.margin + 6
-        buttons = right.reversed().map { title, action in
-            let button = QuietButton(title, style: .text, onPress: action)
+        buttons = right.reversed().map { action in
+            let button = action.symbol.map { MessageToolbar.button(action.title, symbol: $0, onPress: action.run) } ?? QuietButton(action.title, style: .text, onPress: action.run)
             edge -= button.frame.width
-            button.frame.origin = NSPoint(x: edge, y: Self.top + 3)
+            button.frame.origin = NSPoint(x: edge, y: ((Self.height - button.frame.height) / 2).rounded())
             button.autoresizingMask = [.minXMargin]
             return button
         }.reversed()
         buttons.forEach(addSubview)
     }
 
+    override func mouseDown(with event: NSEvent) {
+        window?.performDrag(with: event)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
-        let side: CGFloat = 32
-        var left = ChannelRowView.catLeft
-        for (index, cat) in cats.enumerated() {
-            let frame = NSRect(x: left + CGFloat(index) * side / 2, y: Self.top, width: side, height: side)
-            CatStamp.draw(CatPose(frame: .sit), jacket: cat.jacket, in: frame, on: self)
+        var left = ChannelRowView.margin
+        if let cat {
+            let tile = NSRect(x: left, y: ((Self.height - Self.tileSide) / 2).rounded(), width: Self.tileSide, height: Self.tileSide)
+            Opal.tile(in: tile, light: cat.jacket.map(Opal.Light.of) ?? .shades)
+            CatStamp.draw(CatPose(frame: .sit), jacket: cat.jacket, in: tile.insetBy(dx: 3, dy: 3), on: self)
+            left = tile.maxX + 10
         }
-        left = cats.isEmpty ? left : left + side + CGFloat(cats.count - 1) * side / 2 + 12
 
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
-        let room = (buttons.first?.frame.minX ?? bounds.width - ChannelRowView.margin) - left - 8
+        let room = max((buttons.first?.frame.minX ?? bounds.width - ChannelRowView.margin) - left - 8, 0)
         let name = NSAttributedString(string: title, attributes: [
-            .font: MessagesInk.font(ofSize: 14, weight: .semibold),
-            .foregroundColor: MessagesInk.text,
+            .font: MessagesInk.font(ofSize: MessagesInk.toolbarTitle, weight: .semibold),
+            .foregroundColor: MessagesInk.strong,
             .paragraphStyle: truncating,
         ])
-        if let subtitle, !subtitle.isEmpty {
-            name.draw(in: NSRect(x: left, y: Self.top - 1, width: room, height: 18))
-            NSAttributedString(string: subtitle, attributes: [
-                .font: MessagesInk.font(ofSize: 11),
-                .foregroundColor: MessagesInk.soft,
-                .paragraphStyle: truncating,
-            ]).draw(in: NSRect(x: left, y: Self.top + 18, width: room, height: 14))
-        } else {
-            name.draw(in: NSRect(x: left, y: Self.top + 7, width: room, height: 18))
-        }
+        let line = subtitle.flatMap { $0.isEmpty ? nil : NSAttributedString(string: $0, attributes: [
+            .font: MessagesInk.font(ofSize: MessagesInk.meta),
+            .foregroundColor: MessagesInk.soft,
+            .paragraphStyle: truncating,
+        ]) }
+        let nameHeight = ceil(name.size().height)
+        let lineHeight = line.map { ceil($0.size().height) + 1 } ?? 0
+        let top = ((bounds.height - nameHeight - lineHeight) / 2).rounded()
+        name.draw(in: NSRect(x: left, y: top, width: room, height: nameHeight))
+        line?.draw(in: NSRect(x: left, y: top + nameHeight + 1, width: room, height: lineHeight))
 
         MessagesInk.line.setFill()
         NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1).fill()

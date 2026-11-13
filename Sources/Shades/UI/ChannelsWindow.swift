@@ -21,7 +21,7 @@ final class ChannelsPanel: NSPanel {
         collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
         isReleasedWhenClosed = false
         contentMinSize = ChannelsWindow.minimumSize
-        backgroundColor = MessagesInk.paper
+        backgroundColor = MessagesInk.sidebar
         animationBehavior = .none
         becomesKeyOnlyIfNeeded = true
         // Rows come and go, so Tab works out its way round again whenever they do.
@@ -69,8 +69,9 @@ final class ChannelsPanel: NSPanel {
     }
 }
 
-/// The sidebar, the pane for the place you're looking at, and beside it a thread's pane when one is open, as Slack
-/// lays them out. They're apart from the window so they can be drawn with no window on the screen.
+/// The sidebar flush on the window's chrome, then the pane for the place you're looking at and beside it a thread's pane
+/// when one is open, as Slack lays them out, together in one page panel inset from the window, as Opal lays out a main
+/// window. They're apart from the window so they can be drawn with no window on the screen.
 final class ChannelsView: QuietView {
     /// How wide a thread's pane opens until you drag its edge, and the narrowest you can drag it.
     static let threadWidths: ClosedRange<CGFloat> = 320...460
@@ -84,6 +85,7 @@ final class ChannelsView: QuietView {
     let pane = ChannelPane(role: .place)
     let threadPane = ChannelPane(role: .thread)
     let threadEdge = ThreadEdge()
+    private let panelEdge = PanelEdge()
     let jumpBox = JumpBoxView()
     let cheatsheet = CheatsheetView()
     private(set) var selection: ChannelSelection = .activity
@@ -131,6 +133,7 @@ final class ChannelsView: QuietView {
         addSubview(pane)
         addSubview(threadPane)
         addSubview(threadEdge)
+        addSubview(panelEdge)
         threadPane.isHidden = true
         threadEdge.isHidden = true
         threadEdge.onDrag = { [weak self] x in self?.dragThreadEdge(to: x) }
@@ -172,29 +175,36 @@ final class ChannelsView: QuietView {
     /// How wide a thread's pane is beside the rest of the window: as wide as you `chose` by dragging its edge, or 45%
     /// of the room until you have, and never so wide that the place beside it is too narrow to read.
     static func threadWidth(in width: CGFloat, chosen: CGFloat? = nil) -> CGFloat {
-        let room = width - ChannelSidebar.width
+        let room = width - ChannelSidebar.width - Opal.Space.inset
         let wanted = chosen ?? min(max(room * 0.45, threadWidths.lowerBound), threadWidths.upperBound)
         return max(min(wanted, room - narrowestPlace), threadWidths.lowerBound)
     }
 
-    /// The edge let go of at `x`, which makes the thread's pane reach from there to the window's right side, as far as
+    /// The edge let go of at `x`, which makes the thread's pane reach from there to the panel's right side, as far as
     /// it can.
     func dragThreadEdge(to x: CGFloat) {
-        chosenThreadWidth = Self.threadWidth(in: bounds.width, chosen: bounds.width - x)
+        chosenThreadWidth = Self.threadWidth(in: bounds.width, chosen: panel.maxX - x)
+    }
+
+    /// The page the place and its thread sit on: flush against the sidebar, and inset from the window on its other sides.
+    var panel: NSRect {
+        let inset = Opal.Space.inset
+        return NSRect(x: ChannelSidebar.width, y: inset, width: max(bounds.width - ChannelSidebar.width - inset, 0), height: max(bounds.height - inset * 2, 0))
     }
 
     private func arrange() {
-        let width = ChannelSidebar.width
-        sidebar.frame = NSRect(x: 0, y: 0, width: width, height: bounds.height)
+        sidebar.frame = NSRect(x: 0, y: 0, width: ChannelSidebar.width, height: bounds.height)
+        let panel = panel
         let thread = selection.thread == nil ? 0 : Self.threadWidth(in: bounds.width, chosen: chosenThreadWidth)
         threadPane.isHidden = thread == 0
         threadEdge.isHidden = thread == 0
-        pane.frame = NSRect(x: width, y: 0, width: max(bounds.width - width - thread, 0), height: bounds.height)
+        pane.frame = NSRect(x: panel.minX, y: panel.minY, width: max(panel.width - thread, 0), height: panel.height)
         if thread > 0 {
-            threadPane.frame = NSRect(x: bounds.width - thread, y: 0, width: thread, height: bounds.height)
+            threadPane.frame = NSRect(x: panel.maxX - thread, y: panel.minY, width: thread, height: panel.height)
             // Mostly over the thread's side, so the channel's scroller beside it still takes its own drags.
-            threadEdge.frame = NSRect(x: threadPane.frame.minX - 2, y: 0, width: 6, height: bounds.height)
+            threadEdge.frame = NSRect(x: threadPane.frame.minX - 2, y: panel.minY, width: 6, height: panel.height)
         }
+        panelEdge.frame = panel
         jumpBox.frame = bounds
         cheatsheet.frame = bounds
     }
@@ -292,11 +302,31 @@ final class ChannelsView: QuietView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        MessagesInk.paper.setFill()
+        MessagesInk.sidebar.setFill()
         dirtyRect.fill()
+        let panel = panel
+        MessagesInk.paper.setFill()
+        NSBezierPath(roundedRect: panel, xRadius: Opal.Corner.panel, yRadius: Opal.Corner.panel).fill()
         guard selection.thread != nil else { return }
         MessagesInk.line.setFill()
-        NSRect(x: threadPane.frame.minX, y: 0, width: 1, height: bounds.height).fill()
+        NSRect(x: threadPane.frame.minX, y: panel.minY, width: 1, height: panel.height).fill()
+    }
+}
+
+/// The panel's rounded corners and its edge, drawn over what scrolls in it, since the panes inside are square. It never
+/// takes a click.
+final class PanelEdge: QuietView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let radius = Opal.Corner.panel
+        let outside = NSBezierPath(rect: bounds)
+        outside.append(NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius))
+        outside.windingRule = .evenOdd
+        MessagesInk.sidebar.setFill()
+        outside.fill()
+        Ink.hex(Opal.chromeBorder).setStroke()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: radius - 0.5, yRadius: radius - 0.5).stroke()
     }
 }
 
@@ -325,8 +355,9 @@ final class ThreadEdge: QuietView {
 @MainActor
 final class ChannelsWindow: NSObject, NSWindowDelegate {
     nonisolated static let size = NSSize(width: 1040, height: 620)
-    /// Room for the sidebar, a channel and a thread's pane beside it.
-    nonisolated static let minimumSize = NSSize(width: 900, height: 440)
+    /// Room for the sidebar, then a channel and a thread's pane beside it at their narrowest, 360 and 320, in the panel
+    /// inset 8 from the window's edge.
+    nonisolated static let minimumSize = NSSize(width: 908, height: 440)
     private static let frameName = "Channels"
     private static let threadWidthKey = "ChannelsThreadWidth"
     private static let tickSeconds: TimeInterval = 0.2

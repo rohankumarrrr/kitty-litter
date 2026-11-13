@@ -49,7 +49,6 @@ final class OpalSheet: NSView {
     override func draw(_ dirtyRect: NSRect) {
         Ink.hex(Opal.page).setFill()
         bounds.fill()
-        Opal.horizon(in: NSRect(x: 0, y: bounds.height - 120, width: bounds.width, height: 120))
 
         heading("Opal Horizon", "Every primitive, drawn by the helpers the windows use", y: 28)
 
