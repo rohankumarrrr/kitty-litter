@@ -21,13 +21,6 @@ wait 3
 phone text
 draw .verify/shades/phone/4-allowed
 wait 2
-phone go general
-wait 3
-phone send Hello from my phone
-wait 5
-phone text
-draw .verify/shades/phone/5-everyone
-wait 2
 phone go steve
 wait 3
 draw .verify/shades/phone/6-dm

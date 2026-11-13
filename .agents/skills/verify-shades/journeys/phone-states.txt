@@ -22,9 +22,9 @@ wait 2
 phone press Done
 wait 3
 draw .verify/shades/phone-states/small/03-activity-quiet
-phone go general
+phone go threads
 wait 3
-draw .verify/shades/phone-states/small/04-general
+draw .verify/shades/phone-states/small/04-threads
 phone go steve
 wait 3
 draw .verify/shades/phone-states/small/05-channel
@@ -77,9 +77,9 @@ wait 2
 phone press Done
 wait 3
 draw .verify/shades/phone-states/default/03-activity-quiet
-phone go general
+phone go threads
 wait 3
-draw .verify/shades/phone-states/default/04-general
+draw .verify/shades/phone-states/default/04-threads
 phone go steve
 wait 3
 draw .verify/shades/phone-states/default/05-channel
@@ -132,9 +132,9 @@ wait 2
 phone press Done
 wait 3
 draw .verify/shades/phone-states/large/03-activity-quiet
-phone go general
+phone go threads
 wait 3
-draw .verify/shades/phone-states/large/04-general
+draw .verify/shades/phone-states/large/04-threads
 phone go steve
 wait 3
 draw .verify/shades/phone-states/large/05-channel
@@ -187,9 +187,9 @@ wait 2
 phone press Done
 wait 3
 draw .verify/shades/phone-states/larger/03-activity-quiet
-phone go general
+phone go threads
 wait 3
-draw .verify/shades/phone-states/larger/04-general
+draw .verify/shades/phone-states/larger/04-threads
 phone go steve
 wait 3
 draw .verify/shades/phone-states/larger/05-channel

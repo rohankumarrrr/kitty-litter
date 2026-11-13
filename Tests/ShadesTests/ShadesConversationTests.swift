@@ -92,7 +92,7 @@ final class ShadesConversationTests: XCTestCase {
             isReading: false, unreadable: 0, cantReachT3: false, catsWork: ["fix"]
         )
         XCTAssertEqual(built.threads["fix"]?.home, .shades)
-        for place in [PhonePlace.key(.thread("fix", in: .channel(.shades))), PhonePlace.key(.thread("fix", in: .activity)), PhonePlace.key(.thread("fix", in: .channel(.general)))] {
+        for place in [PhonePlace.key(.thread("fix", in: .channel(.shades))), PhonePlace.key(.thread("fix", in: .activity)), PhonePlace.key(.thread("fix", in: .channel(.of(steve))))] {
             let opened = PhonePlace(place, in: built)
             XCTAssertNil(opened.target, "\(place) has no box on the phone")
             XCTAssertNil(send(place, in: built), "and nothing goes into it from the phone")

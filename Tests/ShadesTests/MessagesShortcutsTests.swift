@@ -122,12 +122,12 @@ final class MessagesShortcutsTests: XCTestCase {
         view.perform(.nextPlace)
         XCTAssertEqual(view.selection, .threads)
         view.perform(.nextPlace)
-        XCTAssertEqual(view.selection, .channel(.general))
+        XCTAssertEqual(view.selection, .channel(.shades), "the cat, first of the kittens")
         view.perform(.previousPlace)
         XCTAssertEqual(view.selection, .threads)
-        view.select(.channel(.shades))
+        view.select(.channel(.of(pepper)))
         view.perform(.nextPlace)
-        XCTAssertEqual(view.selection, .channel(.shades), "it stops at the bottom")
+        XCTAssertEqual(view.selection, .channel(.of(pepper)), "it stops at the bottom")
         view.open(thread: "s1", from: .channel(.of(steve)))
         view.perform(.nextPlace)
         XCTAssertEqual(view.selection, .channel(.of(pepper)), "and moving closes the thread")
@@ -160,9 +160,9 @@ final class MessagesShortcutsTests: XCTestCase {
         view.perform(.forward)
         view.perform(.forward)
         XCTAssertEqual(view.selection, .thread("s2", in: .channel(.of(steve))))
-        view.select(.channel(.general))
+        view.select(.channel(.shades))
         view.perform(.forward)
-        XCTAssertEqual(view.selection, .channel(.general), "going somewhere new drops what was ahead")
+        XCTAssertEqual(view.selection, .channel(.shades), "going somewhere new drops what was ahead")
         view.perform(.back)
         XCTAssertEqual(view.selection, .thread("s2", in: .channel(.of(steve))))
     }
@@ -220,12 +220,13 @@ final class MessagesShortcutsTests: XCTestCase {
     func testTheJumpBoxFiltersPlacesAndThreadsByName() {
         let book = book()
         let titles = { (query: String) in JumpItem.matching(query, in: book).map(\.title) }
-        XCTAssertEqual(titles("pep"), ["#pepper", "Budget"], "a place by its name first, then what's in it")
+        XCTAssertEqual(titles("pep"), ["Pepper", "Budget"], "a place by its name first, then what's in it")
         XCTAssertEqual(titles("cover"), ["Cover letter"], "a thread by its title")
-        XCTAssertEqual(titles("steve"), ["#steve", "Interview prep", "Cover letter", "Resume"], "the place first, then its threads, newest first")
+        XCTAssertEqual(titles("steve"), ["Steve", "Interview prep", "Cover letter", "Resume"], "the place first, then its threads, newest first")
         XCTAssertEqual(titles("letter cover"), ["Cover letter"], "every word, in any order")
         XCTAssertEqual(titles("zebra"), [])
-        XCTAssertEqual(Array(titles("").prefix(6)), ["Activity", "Threads", "#general", "#steve", "#pepper", "Shades"], "with nothing typed, every place")
+        XCTAssertEqual(Array(titles("").prefix(5)), ["Activity", "Threads", "Shades", "Steve", "Pepper"], "with nothing typed, every place, as the sidebar names it")
+        XCTAssertTrue(titles("general").isEmpty, "and there's no #general to jump to")
         XCTAssertEqual(JumpItem.matching("cover", in: book).first?.selection, .thread("s2", in: .channel(.of(steve))))
     }
 
@@ -424,7 +425,7 @@ extension MessagesShortcutsTests {
         let view = view()
         var sent: [MessagesAction] = []
         view.onAction = { sent.append($0) }
-        view.select(.channel(.general))
+        view.select(.channel(.shades))
         let composer = view.pane.composer
         composer.textView.string = "What's on my calendar?"
         view.perform(.place(4))
@@ -437,7 +438,7 @@ extension MessagesShortcutsTests {
         view.perform(.place(3))
         XCTAssertEqual(composer.textView.string, "What's on my calendar?")
         composer.send(composer.textView.string)
-        XCTAssertEqual(sent, [.send("What's on my calendar?", to: .router, shownIn: .general)])
+        XCTAssertEqual(sent, [.send("What's on my calendar?", to: .router, shownIn: .shades)])
     }
 
     func testAReplyLeftInAClosedThreadStaysThere() {

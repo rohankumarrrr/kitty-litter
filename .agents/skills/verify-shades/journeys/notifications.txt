@@ -1,7 +1,7 @@
 front
 channels
 wait 1
-channel general
+channel shades
 wait 1
 draw .verify/shades/notifications/0-elsewhere
 approval command npm test

@@ -30,11 +30,11 @@ final class ChannelBookTests: XCTestCase {
         waiting: Waiting = Waiting(),
         sent: [SentMessage] = [],
         isUnread: @escaping (AgentThread) -> Bool = { _ in false },
-        inGeneral: [String: Date] = [:]
+        messagesThreads: [String: Date] = [:]
     ) -> ChannelBook {
         ChannelBook.build(
             kittens: kittens ?? [steve, pepper], threads: threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false,
-            waiting: waiting, sent: sent, isUnread: isUnread, inGeneral: inGeneral
+            waiting: waiting, sent: sent, isUnread: isUnread, messagesThreads: messagesThreads
         )
     }
 
@@ -42,10 +42,10 @@ final class ChannelBookTests: XCTestCase {
         thread?.messages.map { "\($0.speaker == .you ? "you" : $0.speaker == .cat ? "cat" : $0.speaker == .someoneElse ? "someone" : "kitten"): \($0.text ?? "-")" } ?? []
     }
 
-    func testThePlacesAreGeneralAChannelForEachKittenAndTheCatsDM() {
-        XCTAssertEqual(book(kittens: [steve]).channels.map(\.id), [.general, .kitten(steve.id), .shades])
+    func testThePlacesAreTheCatThenAChannelForEachKitten() {
+        XCTAssertEqual(book(kittens: [steve]).channels.map(\.id), [.shades, .kitten(steve.id)])
         let more = book(kittens: [steve, pepper, cali])
-        XCTAssertEqual(more.channels.map(\.id), [.general, .of(steve), .of(pepper), .of(cali), .shades])
+        XCTAssertEqual(more.channels.map(\.id), [.shades, .of(steve), .of(pepper), .of(cali)])
         XCTAssertTrue(more.channels.allSatisfy(\.posts.isEmpty))
     }
 
@@ -54,18 +54,18 @@ final class ChannelBookTests: XCTestCase {
         let elsewhere = thread("fix", project: "Shades", title: "Steve: Fix login")
         let built = book(threads: [elsewhere])
         XCTAssertEqual(built.listed["fix"]?.title, "Fix login")
-        XCTAssertEqual(built.home(ofThread: "fix"), .of(steve), "so Also send names #steve, not #general")
-        XCTAssertEqual(book(threads: [elsewhere], inGeneral: ["fix": at]).home(ofThread: "fix"), .general, "unless it was started in #general")
+        XCTAssertEqual(built.home(ofThread: "fix"), .of(steve), "so Also send names Steve")
+        XCTAssertEqual(book(threads: [elsewhere], messagesThreads: ["fix": at]).home(ofThread: "fix"), .of(steve), "even when Messages started it")
     }
 
-    func testAChannelIsNamedTheWaySlackNamesOne() {
+    /// Channels were named the way Slack names one, as #steve-pawsniak, where the cat was just Shades.
+    func testAChannelIsNamedForItsKittenTheWayTheCatIs() {
         let named = Kitten(name: "Steve Pawsniak", role: "", covers: "", folder: "/k/sp")
         let built = book(kittens: [named, Kitten(name: "Dr. Mew  2", role: "", covers: "", folder: "/k/m")])
-        XCTAssertEqual(built.name(of: .of(named)), "steve-pawsniak")
-        XCTAssertEqual(built.title(of: .of(named)), "#steve-pawsniak")
-        XCTAssertEqual(built.name(of: ChannelID.kitten("/k/m")), "dr-mew-2")
-        XCTAssertEqual(built.title(of: .general), "#general")
-        XCTAssertEqual(built.title(of: .shades), "Shades")
+        XCTAssertEqual(built.name(of: .of(named)), "Steve Pawsniak")
+        XCTAssertEqual(built.name(of: ChannelID.kitten("/k/m")), "Dr. Mew  2", "as its kitten.json writes it")
+        XCTAssertEqual(built.name(of: .shades), "Shades")
+        XCTAssertEqual(ChannelBook.slug(named.name), "steve-pawsniak", "which is still how an @ names it")
     }
 
     func testEachSessionIsAThreadWhoseParentIsYourAskAndTheRestAreReplies() throws {
@@ -76,7 +76,7 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(thread.home, .of(steve))
         XCTAssertEqual(thread.owner, steve.id)
         XCTAssertEqual(built.channel(.of(steve))?.posts, [.thread("t")], "the channel shows only its parent")
-        XCTAssertEqual(built.channel(.general)?.posts, [])
+        XCTAssertEqual(built.channel(.shades)?.posts, [])
     }
 
     func testAMessageFromAnotherKittenIsAReplyInTheSessionsThreadNotAPairOfKittens() throws {
@@ -88,7 +88,7 @@ final class ChannelBookTests: XCTestCase {
         let steves = try XCTUnwrap(built.threads["s"])
         XCTAssertEqual(steves.replies.map(\.speaker), [.kitten(steve.id), .kitten(pepper.id), .kitten(steve.id)])
         XCTAssertEqual(steves.repliers, [.kitten(steve.id), .kitten(pepper.id)])
-        XCTAssertEqual(built.channels.map(\.id), [.general, .of(steve), .of(pepper), .shades], "no channel for the pair")
+        XCTAssertEqual(built.channels.map(\.id), [.shades, .of(steve), .of(pepper)], "no channel for the pair")
     }
 
     func testASessionAnotherKittenStartedHasItsAskAsTheParentInTheOwnersChannel() throws {
@@ -357,19 +357,22 @@ final class ChannelBookTests: XCTestCase {
 
     // MARK: - Home channels
 
-    func testAThreadStartedFromGeneralLivesThereAndOtherwiseInItsKittensChannel() throws {
+    /// Threads Messages started lived in #general, which is gone, so each lives with whoever has it now.
+    func testAThreadMessagesStartedLivesWithItsKittenOrElseWithTheCat() throws {
         let built = book(
-            threads: [thread("from-general"), thread("own"), thread("cats", project: nil)],
-            transcripts: ["from-general": [exchange("a")], "own": [exchange("b")], "cats": [exchange("c", ask: nil, reply: "Done.")]],
-            inGeneral: ["from-general": at, "cats": at]
+            threads: [thread("from-messages"), thread("own"), thread("cats", project: nil)],
+            transcripts: ["from-messages": [exchange("a")], "own": [exchange("b")], "cats": [exchange("c", ask: nil, reply: "Done.")]],
+            messagesThreads: ["from-messages": at, "cats": at]
         )
-        XCTAssertEqual(built.threads["from-general"]?.home, .general)
-        XCTAssertEqual(built.threads["from-general"]?.owner, steve.id, "still its kitten's work")
+        XCTAssertEqual(built.threads["from-messages"]?.home, .of(steve))
+        XCTAssertEqual(built.threads["from-messages"]?.owner, steve.id)
         XCTAssertEqual(built.threads["own"]?.home, .of(steve))
-        XCTAssertEqual(built.threads["cats"]?.home, .general, "the cat's own work no kitten owns")
+        XCTAssertEqual(built.threads["cats"]?.home, .shades, "the cat's own work no kitten owns")
         XCTAssertEqual(built.threads["cats"]?.parent.speaker, .cat)
-        XCTAssertEqual(built.channel(.general)?.posts, [.thread("from-general"), .thread("cats")])
-        XCTAssertEqual(built.channel(.of(steve))?.posts, [.thread("own")])
+        XCTAssertEqual(built.channel(.of(steve))?.posts, [.thread("from-messages"), .thread("own")])
+        XCTAssertEqual(built.channel(.shades)?.posts, [.thread("cats")])
+        XCTAssertEqual(MessageTarget.reply(in: "cats", of: built), .thread(id: "cats", title: "Work"), "and it still takes a reply, as it did")
+        XCTAssertEqual(built.home(ofThread: "cats"), .shades)
     }
 
     func testTheCatsOwnWorkOnlyShowsIfMessagesPassedYourWordsToIt() {
@@ -399,75 +402,29 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(MessageTarget.reply(in: "fix", of: built), .thread(id: "fix", title: "Fix: Where could I find a keyboard like this?"), "you can follow it up in Messages, not only in T3")
     }
 
-    func testWorkStartedFromGeneralStaysThereEvenIfTheCatAlsoKnowsIt() {
-        let built = ChannelBook.build(
-            kittens: [steve], threads: [thread("handed", project: nil)], transcripts: ["handed": [exchange("h")]],
-            isReading: false, unreadable: 0, cantReachT3: false, inGeneral: ["handed": at], catsWork: ["handed"]
-        )
-        XCTAssertEqual(built.threads["handed"]?.home, .general)
-    }
-
-    /// The cat's answers in #general were kept in memory only, so every restart, such as each install, emptied it.
-    func testTheCatsAnswersInGeneralAreReadBackFromItsTalkAfterARestart() {
-        let talk = talk("r")
-        let transcript = [
-            exchange("asked-in-dm", ask: "Hi", reply: "Hello."),
-            exchange("asked-in-general", ask: "What day is it?", reply: "Friday.", asked: 10),
-        ]
-        let built = ChannelBook.build(
-            kittens: [steve], threads: [talk], transcripts: ["r": transcript],
-            isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r"], answersInGeneral: ["asked-in-general"]
-        )
-        let general = built.channel(.general)?.posts.compactMap { post -> String? in
-            guard case .message(let message) = post else { return nil }
-            XCTAssertEqual(message.threadID, "", "a plain message, not the router's thread")
-            return "\(message.speaker == .you ? "you" : "cat"): \(message.text ?? "-")"
-        }
-        XCTAssertEqual(general, ["you: What day is it?", "cat: Friday."])
-        XCTAssertEqual(built.channel(.shades)?.posts, [.thread("r")], "the talk is still in the DM")
-    }
-
-    func testTheCatsAnswerInGeneralShowsOnceWhenT3HasIt() {
-        var asked = echo("What day is it?", at: 9, in: .general)
-        var answered = echo("Friday.", at: 12, in: .general, speaker: .cat)
-        asked.heardAs = "turn"
-        answered.heardAs = "turn"
-        let waiting = ChannelBook.build(
-            kittens: [steve], threads: [talk("r")], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false,
-            sent: [asked, answered], withShades: ["r"], answersInGeneral: ["turn"]
-        )
-        XCTAssertEqual(waiting.channel(.general)?.posts, [.message(asked.message), .message(answered.message)], "it shows at once")
-        let read = ChannelBook.build(
-            kittens: [steve], threads: [talk("r")], transcripts: ["r": [exchange("turn", ask: "What day is it?", reply: "Friday.", asked: 10)]],
-            isReading: false, unreadable: 0, cantReachT3: false, sent: [asked, answered], withShades: ["r"], answersInGeneral: ["turn"]
-        )
-        XCTAssertEqual(read.channel(.general)?.posts.count, 2, "and once T3 has it, only T3's copy")
-        XCTAssertFalse(read.channel(.general)?.posts.contains(.message(asked.message)) ?? true)
-    }
-
-    func testWorkTheCatPassedOnFromGeneralSpeaksAsTheCat() throws {
+    func testWorkTheCatPassedOnFromMessagesSpeaksAsTheCat() throws {
         let built = book(
             threads: [thread("dispatcher", project: nil), thread("worker", project: "Pepper")],
             transcripts: ["worker": [exchange("w", asker: .agent(threadID: "dispatcher"), ask: "Check the budget", reply: "It's fine.")]],
-            inGeneral: ["dispatcher": at, "worker": at]
+            messagesThreads: ["dispatcher": at, "worker": at]
         )
         XCTAssertEqual(try XCTUnwrap(built.threads["worker"]).parent.speaker, .cat)
-        XCTAssertEqual(built.threads["worker"]?.home, .general)
+        XCTAssertEqual(built.threads["worker"]?.home, .of(pepper))
     }
 
     func testYourWordsStartAThreadTheyGoToEvenBeforeT3HasIt() throws {
-        let sent = echo("Find a flight", in: .general, thread: "handed")
-        let waiting = book(threads: [], sent: [sent], inGeneral: ["handed": at])
+        let sent = echo("Find a flight", in: .shades, thread: "handed")
+        let waiting = book(threads: [], sent: [sent], messagesThreads: ["handed": at])
         let thread = try XCTUnwrap(waiting.threads["handed"])
         XCTAssertEqual(thread.parent.text, "Find a flight")
-        XCTAssertEqual(thread.home, .general)
-        XCTAssertEqual(waiting.channel(.general)?.posts, [.thread("handed")])
+        XCTAssertEqual(thread.home, .shades)
+        XCTAssertEqual(waiting.channel(.shades)?.posts, [.thread("handed")])
 
         // The frontier agent's prompt carries no words of yours, so what you said stays its parent.
         let read = book(
             threads: [self.thread("handed", project: nil)],
             transcripts: ["handed": [exchange("h", ask: nil, reply: "Found one for $212.", asked: 5)]],
-            sent: [sent], inGeneral: ["handed": at]
+            sent: [sent], messagesThreads: ["handed": at]
         )
         XCTAssertEqual(said(read.threads["handed"]), ["you: Find a flight", "cat: Found one for $212."])
     }
@@ -528,18 +485,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(both.channel(.of(steve))?.posts.count, 2, "shown once while it's in memory too")
     }
 
-    func testWhatYouWroteInGeneralThatWentToAKittensThreadStaysInGeneralAfterARestart() throws {
-        let said = ["t": [exchange("e", ask: "Rewrite it", asked: 0), exchange("f", ask: "and the FAQ?", reply: "Done.", asked: 11)]]
-        var routed = echo("and the FAQ?", at: 10, in: .general, thread: "t", alsoSent: true)
-        routed.message.threadTitle = "Work"
-        XCTAssertEqual(book(threads: [thread("t")], transcripts: said, sent: [routed]).alsoSentHeard, ["f:ask": .init(thread: "t", channel: .general)])
-
-        let restarted = ChannelBook.build(kittens: [steve], threads: [thread("t")], transcripts: said, isReading: false, unreadable: 0, cantReachT3: false, alsoSentToGeneral: ["f:ask"])
-        let echoed = try XCTUnwrap(restarted.threads["t"]?.replies.first { $0.id == "f:ask" })
-        XCTAssertEqual(restarted.channel(.general)?.posts, [.alsoSent(echoed, thread: "t")])
-        XCTAssertEqual(restarted.channel(.of(steve))?.posts, [.thread("t")], "the thread stays its kitten's")
-    }
-
     func testTheSameWordsAlsoSentTwiceAreKeptAsTwoMessages() {
         let said = ["t": [
             exchange("first", ask: "Rewrite it", asked: 0),
@@ -578,9 +523,9 @@ final class ChannelBookTests: XCTestCase {
     }
 
     func testWhatYouSentShowsAtOnceAndGoesOnceT3HasIt() {
-        let waitingForT3 = book(threads: [thread("s")], transcripts: ["s": []], sent: [echo("Anyone?", in: .general)])
-        XCTAssertEqual(waitingForT3.channel(.general)?.posts.count, 1)
-        XCTAssertEqual(waitingForT3.channel(.general)?.posts.first, .message(echo("Anyone?", in: .general).message))
+        let waitingForT3 = book(threads: [thread("s")], transcripts: ["s": []], sent: [echo("Anyone?", in: .shades)])
+        XCTAssertEqual(waitingForT3.channel(.shades)?.posts.count, 1)
+        XCTAssertEqual(waitingForT3.channel(.shades)?.posts.first, .message(echo("Anyone?", in: .shades).message))
     }
 
     func testAnOldMessageWithTheSameWordsDoesntHideANewOne() {
@@ -588,9 +533,9 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(built.threads["s"]?.messages.filter { $0.speaker == .you }.count, 2)
     }
 
-    func testTheCatsOwnAnswerInGeneralIsAPlainMessageAfterYours() {
-        let built = book(sent: [echo("What day is it?", in: .general), echo("It's Tuesday.", at: 2, in: .general, speaker: .cat)])
-        XCTAssertEqual(built.channel(.general)?.posts.map { post -> Speaker? in if case .message(let message) = post { message.speaker } else { nil } }, [.you, .cat])
+    func testTheCatsOwnAnswerIsAPlainMessageAfterYoursUntilItHasATalk() {
+        let built = book(sent: [echo("What day is it?", in: .shades), echo("It's Tuesday.", at: 2, in: .shades, speaker: .cat)])
+        XCTAssertEqual(built.channel(.shades)?.posts.map { post -> Speaker? in if case .message(let message) = post { message.speaker } else { nil } }, [.you, .cat])
         XCTAssertTrue(built.threads.isEmpty)
         XCTAssertEqual(built.name(of: .cat), "Shades")
     }
@@ -603,13 +548,15 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertTrue(built.isUnread(.of(steve)))
         XCTAssertFalse(built.isUnread(.of(pepper)))
         XCTAssertEqual(built.unreadThreads, ["s"], "only threads that are shown")
-        XCTAssertFalse(built.isUnread(.general))
+        XCTAssertFalse(built.isUnread(.shades))
     }
 
-    func testGeneralIsUnreadWhenAThreadThatLivesThereIs() {
-        let built = book(threads: [thread("s")], transcripts: ["s": [exchange("e")]], isUnread: { _ in true }, inGeneral: ["s": at])
-        XCTAssertTrue(built.isUnread(.general))
-        XCTAssertTrue(built.isUnread(.of(steve)), "and its kitten has a run you haven't seen")
+    /// #general went bold for an unread thread of the cat's own, which lives with the cat now.
+    func testTheCatIsUnreadWhenAThreadOfItsOwnWorkIs() {
+        let built = book(threads: [thread("s"), thread("c", project: nil)], transcripts: ["s": [exchange("e")], "c": [exchange("f")]], isUnread: { _ in true }, messagesThreads: ["s": at, "c": at])
+        XCTAssertTrue(built.isUnread(.shades))
+        XCTAssertTrue(built.isUnread(.of(steve)), "and a kitten's is its own")
+        XCTAssertEqual(ChannelSidebarItem.groups(in: built).flatMap(\.items).first { $0.place == .channel(.shades) }?.isUnread, true, "which the sidebar shows")
     }
 
     func testAChannelsBadgeCountsWhatItsKittenIsWaitingOnYouFor() {
@@ -625,10 +572,10 @@ final class ChannelBookTests: XCTestCase {
         let built = book(threads: [thread("s"), thread("p", project: "Pepper")], waiting: waiting)
         XCTAssertEqual(built.badge(of: .of(steve)), 2)
         XCTAssertEqual(built.badge(of: .of(pepper)), 1, "a decision counts and something shipped doesn't")
-        XCTAssertEqual(built.badge(of: .general), 0)
+        XCTAssertEqual(built.badge(of: .shades), 0)
         XCTAssertEqual(built.waiting.count, 3, "Activity's total")
         let items = ChannelSidebarItem.groups(in: built).flatMap(\.items)
-        XCTAssertEqual(items.map(\.badge), [3, 0, 0, 2, 1, 0])
+        XCTAssertEqual(items.map(\.badge), [3, 0, 0, 2, 1])
     }
 
     func testWaitingItemsKnowTheirKittenAndReportsAreTracedThroughTheirThread() {
@@ -693,23 +640,13 @@ extension ChannelBookTests {
         ])
         XCTAssertEqual(built.threads["r"]?.home, .shades)
         XCTAssertEqual(built.channel(.shades)?.posts, [.thread("r")])
-        XCTAssertEqual(built.channel(.general)?.posts, [], "#general is the kittens, not the cat's own threads")
-        XCTAssertFalse(built.yours.contains { $0.id == "r" }, "and Threads leaves talks in the DM")
+        XCTAssertFalse(built.yours.contains { $0.id == "r" }, "and Threads leaves talks with the cat")
     }
 
     func testALiveTestOfTheCatIsntShown() {
         let built = ChannelBook.build(kittens: [steve], threads: [talk("r", title: "Shades test: ask")], transcripts: ["r": [exchange("1")]], isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r"])
         XCTAssertNil(built.threads["r"])
         XCTAssertEqual(built.channel(.shades)?.posts, [])
-    }
-
-    func testWhatYouSaidInGeneralStaysThereWhenTheRouterHasIt() {
-        let sent = echo("What day is it?", in: .general)
-        let built = ChannelBook.build(
-            kittens: [steve], threads: [talk("r")], transcripts: ["r": [exchange("1", ask: "What day is it?", reply: "Friday.")]],
-            isReading: false, unreadable: 0, cantReachT3: false, sent: [sent], withShades: ["r"]
-        )
-        XCTAssertEqual(built.channel(.general)?.posts, [.message(sent.message)], "the router's copy is in the cat's DM, not #general's")
     }
 
     func testWhatYouSaidToTheCatAndItsAnswerKeepShowingInItsDMOnceTheRouterHasThem() throws {

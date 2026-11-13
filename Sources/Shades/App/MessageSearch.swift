@@ -133,7 +133,7 @@ enum MessageSearch {
     }
 
     /// Every message with words, newest first, with where the window opens it. A message in a channel comes before
-    /// the same one in a thread, so the cat's answer in #general opens there rather than in its DM.
+    /// the same one in a thread, so a reply also sent to a channel opens there.
     fileprivate static func said(in book: ChannelBook) -> [(ChannelMessage, ChannelSelection)] {
         let loose = book.channels.flatMap { channel in
             channel.posts.compactMap { post -> (ChannelMessage, ChannelSelection)? in

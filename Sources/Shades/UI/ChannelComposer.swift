@@ -29,10 +29,8 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     private(set) var target: MessageTarget?
     /// The line over the box as the place sets it, before anything typed changes it.
     private var standardLabel = ""
-    /// Who an @ in the words can go straight to, which is only ever in #general.
+    /// Who an @ in the words can go straight to, which is only ever in the cat's box.
     private var mentionable: [Kitten] = []
-    /// Where the box is, since the cat's DM and #general both go to the router.
-    private var channel: ChannelID?
     /// Words typed for somewhere that's gone wait in the box, and Return doesn't send them anywhere else.
     var isHeld = false
     /// A thread's "Also send to #channel", under its box, as Slack has it.
@@ -161,28 +159,26 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// `channel` is where the box is, which says who the router's answers come from, and `name` is its name as the
-    /// sidebar writes it. `alsoSendTo` offers a thread's reply to its channel too.
-    func show(_ target: MessageTarget?, label: String? = nil, in channel: ChannelID? = nil, name: String? = nil, alsoSendTo: String? = nil, mentionable: [Kitten] = []) {
+    /// `alsoSendTo` offers a thread's reply to its channel too.
+    func show(_ target: MessageTarget?, label: String? = nil, alsoSendTo: String? = nil, mentionable: [Kitten] = []) {
         let changed = target != self.target || (alsoSendTo == nil) != alsoSend.isHidden
         // A file is for where you attached it, so it never follows the box anywhere else.
-        if target != self.target || channel != self.channel, !attachments.isEmpty { _ = takeAttachments() }
+        if target != self.target, !attachments.isEmpty { _ = takeAttachments() }
         self.target = target
-        self.channel = channel
         isHidden = target == nil
         attachButton.isHidden = target?.takesFiles != true
         alsoSend.isHidden = alsoSendTo == nil
         if let alsoSendTo { alsoSend.title = alsoSendTo }
         guard let target else { return }
-        standardLabel = label ?? CatWords.target(target, in: channel)
+        standardLabel = label ?? CatWords.target(target)
         // Words held for somewhere that's gone say so, whoever they name.
-        self.mentionable = target == .router && channel == .general && label == nil ? mentionable : []
+        self.mentionable = target == .router && label == nil ? mentionable : []
         showWhereWordsGo()
-        textView.placeholder = CatWords.placeholder(target, in: channel, name: name)
+        textView.placeholder = CatWords.placeholder(target)
         if changed { needsLayout = true }
     }
 
-    /// Words that @ a kitten in #general go straight to it, and the line says so as you type.
+    /// Words to the cat that @ a kitten go straight to it, and the line says so as you type.
     private func showWhereWordsGo() {
         label.stringValue = MessageTarget.mentioned(in: textView.string, among: mentionable).map(CatWords.mentioning) ?? standardLabel
     }

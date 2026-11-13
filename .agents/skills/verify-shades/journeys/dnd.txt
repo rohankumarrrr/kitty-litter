@@ -19,7 +19,7 @@ windows
 draw .verify/shades/dnd/1-held
 channels
 wait 1
-channel general
+channel shades
 wait 2
 draw .verify/shades/dnd/2-switch
 sidebar Do Not Disturb is on

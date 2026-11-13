@@ -1203,7 +1203,7 @@ final class ThreadDigestRowView: ChannelRowView {
     init(digest: ThreadDigest, in book: ChannelBook, now: @escaping () -> Date) {
         self.digest = digest
         self.now = now
-        channel = book.title(of: digest.channel)
+        channel = book.name(of: digest.channel)
         said = ([digest.parent] + [digest.latest].compactMap { $0 }).map { (ChannelSpeakerLook($0.speaker, in: book), $0) }
         super.init(frame: .zero)
         setAccessibilityElement(true)

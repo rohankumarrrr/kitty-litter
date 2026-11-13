@@ -52,12 +52,10 @@ enum ChannelImages {
             waiting: DemoChannels.waiting,
             sent: [
                 SentMessage(channel: .of(Demo.kittens[0]), message: DemoChannels.alsoSentEcho, alsoSent: true),
-                SentMessage(channel: .general, message: ChannelMessage(exchangeID: "demo-general", kind: .ask, speaker: .you, text: "What day is the launch?", at: Date().addingTimeInterval(-300), threadID: "", threadTitle: "")),
-                SentMessage(channel: .general, message: ChannelMessage(exchangeID: "demo-general-cat", kind: .reply, speaker: .cat, text: "Thursday, the 12th.", at: Date().addingTimeInterval(-290), threadID: "", threadTitle: "")),
             ],
             isUnread: { $0.id == "demo-steve-yesterday" || $0.id == "demo-steve-copy" },
-            // As if you'd asked for the plan names in #general, which gave them to Pepper.
-            inGeneral: ["demo-pepper-plans": Date().addingTimeInterval(-1_300)],
+            // As if you'd asked the cat for the plan names, and it gave them to Pepper.
+            messagesThreads: ["demo-pepper-plans": Date().addingTimeInterval(-1_300)],
             withShades: DemoChannels.talks,
             reactions: ["copy-2:reply": [.thumbsUp, .check]]
         )
@@ -83,11 +81,10 @@ enum ChannelImages {
         var shots = [
             Shot(name: "activity", selection: .activity, book: full),
             Shot(name: "threads", selection: .threads, book: full),
-            Shot(name: "general", selection: .channel(.general), book: full),
             Shot(name: "shades", selection: .channel(.shades), book: full),
             Shot(name: "shades-thread", selection: .thread("demo-shades-plans", in: .channel(.shades)), book: full),
         ]
-        for status in full.statuses {
+        for status in full.statuses where !status.kitten.planned {
             shots.append(Shot(name: "channel-\(slug(status.kitten.name))", selection: .channel(.of(status.kitten)), book: full))
         }
 
@@ -97,7 +94,7 @@ enum ChannelImages {
         shots += [
             Shot(name: "thread", selection: thread, book: full),
             Shot(name: "thread-from-threads", selection: .thread("demo-steve-copy", in: .threads), book: full),
-            Shot(name: "thread-waiting", selection: .thread("demo-pepper-plans", in: .channel(.general)), book: full),
+            Shot(name: "thread-waiting", selection: .thread("demo-pepper-plans", in: .channel(.of(Demo.kittens[1]))), book: full),
             Shot(name: "narrow-thread", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
             Shot(name: "narrow-thread-hover", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height, hoversLastReply: true),
             Shot(name: "thread-dragged", selection: thread, book: full, threadWidth: 440),

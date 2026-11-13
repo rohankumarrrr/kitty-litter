@@ -63,10 +63,10 @@ final class MessageSearchTests: XCTestCase {
 
     func testAThreadsMessageOpensInItsThreadAndALooseOneInItsChannel() throws {
         let loose = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Remind me about the invoice", at: at, threadID: "", threadTitle: "")
-        let book = book(["a": [exchange("e1", ask: "Tidy the invoice template", reply: "Done.", minutes: 0)]], sent: [SentMessage(channel: .general, message: loose)])
+        let book = book(["a": [exchange("e1", ask: "Tidy the invoice template", reply: "Done.", minutes: 0)]], sent: [SentMessage(channel: .shades, message: loose)])
         let found = MessageSearch.find("invoice", in: book, limit: 8).found
         XCTAssertEqual(found.map(\.message.id), ["sent-1:ask", "e1:ask"])
-        XCTAssertEqual(found.map(\.selection), [.channel(.general), .thread("a", in: .channel(.of(steve)))])
+        XCTAssertEqual(found.map(\.selection), [.channel(.shades), .thread("a", in: .channel(.of(steve)))])
     }
 
     func testALongSnippetStartsNearTheWordsAndSaysWhereItsCut() throws {

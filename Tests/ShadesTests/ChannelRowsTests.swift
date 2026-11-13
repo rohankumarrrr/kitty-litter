@@ -326,9 +326,17 @@ final class ChannelRowsTests: XCTestCase {
         ChannelBook.build(kittens: [steve, pepper, cali], threads: [thread("a")], transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, waiting: waiting)
     }
 
-    func testGeneralGoesThroughTheRouterAndOnlyReadingPlacesHaveNoBox() {
+    /// An @ names a kitten by its name written as one word, the first one that's set up, as a word of its own.
+    func testAnAtNamesTheFirstKittenThatsSetUpByItsNameAsOneWord() {
+        let named = Kitten(name: "Steve Pawsniak", role: "", covers: "", folder: "/k/sp")
+        let built = ChannelBook.build(kittens: [named, pepper, cali], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        XCTAssertEqual(MessageTarget.mentioned(in: "Ask @Steve-Pawsniak: and @pepper", among: built.mentionable), named)
+        XCTAssertNil(MessageTarget.mentioned(in: "me@pepper.com @cali", among: built.mentionable), "an email, and a kitten that's only planned")
+    }
+
+    func testTheCatGoesThroughTheRouterAndOnlyReadingPlacesHaveNoBox() {
         let built = book(threads: [thread("a")], transcripts: ["a": [exchange("e")]])
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.general), in: built), .router)
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.shades), in: built), .router)
         XCTAssertNil(MessageTarget.standard(for: .activity, in: built))
         XCTAssertNil(MessageTarget.standard(for: .threads, in: built))
         XCTAssertNil(MessageTarget.standard(for: .channel(.of(cali)), in: built), "a kitten that isn't set up takes nothing")
@@ -407,7 +415,7 @@ final class ChannelRowsTests: XCTestCase {
         let posted = try XCTUnwrap(built.threads["s"])
         XCTAssertEqual(posted.home, .of(steve))
         XCTAssertFalse(posted.messages.contains { $0.speaker == .someoneElse }, "nobody else was in it")
-        XCTAssertEqual(ChannelRows.rows(.channel(.general), in: built), [.note(CatWords.generalEmpty)])
+        XCTAssertEqual(ChannelRows.rows(.channel(.shades), in: built), [.note(CatWords.shadesEmpty)])
     }
 
     func testAnEmptyThreadSaysWhy() {
@@ -432,10 +440,6 @@ final class ChannelRowsTests: XCTestCase {
         ])
     }
 
-    func testGeneralWithNothingSaidSaysWhereItGoes() {
-        XCTAssertEqual(ChannelRows.rows(.channel(.general), in: book()), [.note("Say something and it goes to whoever it's for.")])
-    }
-
     func testShadesOwnWorkComesFirstInProgress() {
         let own = AgentThread(id: "own", title: "Find a cheaper flight", projectTitle: nil, status: .running, model: "m", updatedAt: noon)
         let built = ChannelBook.build(kittens: [steve, pepper, cali], threads: [thread("a")], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false, waiting: Waiting(shadesWork: [own]))
@@ -454,11 +458,11 @@ extension ChannelRowsTests {
     func testTheCatsBoxGoesThroughTheRouterAndItsThreadsTakeNothingStraightIn() {
         let talk = AgentThread(id: "r", title: "Which plan?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: noon, projectPath: "/shades/router")
         let built = ChannelBook.build(kittens: [steve], threads: [talk], transcripts: ["r": [exchange("1")]], isReading: false, unreadable: 0, cantReachT3: false, withShades: ["r"])
-        XCTAssertEqual(MessageTarget.standard(for: .channel(.shades), in: built), .router, "the same way #general goes, so the app acts on what the router says")
+        XCTAssertEqual(MessageTarget.standard(for: .channel(.shades), in: built), .router, "so the app acts on what the router says")
         XCTAssertNil(MessageTarget.reply(in: "r", of: built), "the router answers in lines the app acts on, so nothing goes straight into one of its threads")
-        XCTAssertEqual(CatWords.target(.router, in: .shades), "To me, without looking at your screen")
-        XCTAssertEqual(CatWords.placeholder(.router, in: .shades), "Message Shades")
-        XCTAssertEqual(CatWords.placeholder(.router, in: .general), "Message #general")
+        XCTAssertEqual(CatWords.target(.router), "To me, without looking at your screen")
+        XCTAssertEqual(CatWords.placeholder(.router), "Message Shades")
+        XCTAssertEqual(CatWords.placeholder(.newThread(steve)), "Message \(steve.name)", "a kitten's box names it the way the sidebar does, with no #")
         XCTAssertEqual(parents(ChannelRows.rows(.channel(.shades), in: built)).map(\.threadID), ["r"])
         XCTAssertNil(ChannelHeader.words(forThread: "r", in: built).subtitle?.range(of: "Shades router"), "the router's folder isn't a project you'd know")
         let empty = ChannelBook.build(kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)

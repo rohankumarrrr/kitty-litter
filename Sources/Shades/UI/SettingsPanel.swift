@@ -146,7 +146,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
                     row(CatWords.doNotDisturb, note: "Nothing pops up until you turn it off. What came in waits in Activity.", quiet),
                     row(Self.finishedTitle, note: "Anything that needs you always notifies.", finished),
                 ]),
-                Group(label: CatWords.channelsHeading, rows: channels),
+                Group(label: CatWords.kittensHeading, rows: channels),
             ]
         case .messages:
             let font = menuButton(settings.messagesFont ?? MessagesInk.systemFaces[0].name) { [weak self] anchor in

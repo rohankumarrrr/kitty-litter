@@ -27,19 +27,17 @@ final class ChannelHeader: QuietView {
             return (CatWords.activityTitle, CatWords.activitySubtitle)
         case .threads:
             return (CatWords.threadsTitle, CatWords.threadsSubtitle)
-        case .channel(.general):
-            return (book.title(of: .general), CatWords.generalSubtitle)
         case .channel(.shades):
             return (CatWords.shades, CatWords.shadesSubtitle)
         case .channel(let id):
             let status = book.statuses.first { .of($0.kitten) == id }
-            return (book.title(of: id), status.map { "\($0.kitten.role) · \(CatWords.kittenState($0.state))" })
+            return (book.name(of: id), status.map { "\($0.kitten.role) · \(CatWords.kittenState($0.state))" })
         }
     }
 
     /// For a thread: which channel it's in, then its title, project and how it's going.
     static func words(forThread id: String, in book: ChannelBook) -> (title: String, subtitle: String?) {
-        let home = book.home(ofThread: id).map(book.title) ?? ""
+        let home = book.home(ofThread: id).map(book.name) ?? ""
         let name = book.title(ofThread: id)
         // The router's own folder isn't a project you'd know.
         let details = book.talks.contains(id) ? nil : book.listed[id].map(CatWords.threadDetails)
@@ -59,7 +57,7 @@ final class ChannelHeader: QuietView {
             if let count = book.issues.first(where: { $0.kitten.id == kitten })?.threads.count, count > 0 {
                 right = [Action(CatWords.issues(count)) { [weak self] in self?.onIssues?() }]
             }
-        case .activity, .threads, .channel(.general):
+        case .activity, .threads:
             break
         }
         if case .channel(let id) = place { right.append(notificationsButton(for: id, in: book)) }
@@ -395,7 +393,10 @@ final class ChannelPane: QuietView {
         }
         composer.onSend = { [weak self] words, target, files in
             guard let self else { return }
-            switch target {
+            // Words to the cat that @ a kitten go straight to it instead, in a new thread that opens here, the way the box
+            // in the kitten's own channel starts one.
+            let named = target == .router ? MessageTarget.mentioned(in: words, among: self.book?.mentionable ?? []) : nil
+            switch named.map(MessageTarget.newThread) ?? target {
             case .question(let question):
                 guard self.part(of: question)?.part.takesOwnWords == true else {
                     NSSound.beep()
@@ -412,7 +413,8 @@ final class ChannelPane: QuietView {
             case .thread(let id, _, _):
                 let alsoSent = self.composer.alsoSends
                 self.composer.alsoSends = false
-                self.onAction?(.send(words, to: target, shownIn: self.book?.home(ofThread: id), alsoSent: alsoSent, files: files))
+                // A thread Messages doesn't place still shows what you sent in its pane.
+                self.onAction?(.send(words, to: target, shownIn: self.book?.home(ofThread: id) ?? .shades, alsoSent: alsoSent, files: files))
                 self.updateComposer()
                 self.arrange(force: true)
             default:
@@ -636,7 +638,7 @@ final class ChannelPane: QuietView {
 
     /// Opens a report's thread beside its channel, ready to type.
     func reply(to entry: InboxEntry) {
-        onOpen?(entry.threadID, .channel(book?.home(of: book?.kitten(of: entry.id)) ?? .general), true, entry)
+        onOpen?(entry.threadID, .channel(book?.home(of: book?.kitten(of: entry.id)) ?? .shades), true, entry)
     }
 
     /// Leaves what you'd typed where you typed it, and brings back what you'd typed in `selection`'s box, still going
@@ -688,14 +690,13 @@ final class ChannelPane: QuietView {
         if !composer.hasDraft { held = nil }
         if let held { target = held }
         if case .thread(let id, _, _)? = target, let home = book?.home(ofThread: id), home != .shades {
-            also = book.map { CatWords.alsoSendTo($0.title(of: home)) }
+            also = book.map { CatWords.alsoSendTo($0.name(of: home)) }
         }
         var label: String?
         if case .question(let question)? = target, let part = part(of: question) { label = CatWords.answering(part.part.text) }
         if held != nil { label = CatWords.heldDraft }
-        let channel = selection.channelID
         composer.isHeld = held != nil
-        composer.show(target, label: label, in: channel, name: channel.flatMap { book?.name(of: $0) }, alsoSendTo: also, mentionable: book?.mentionable ?? [])
+        composer.show(target, label: label, alsoSendTo: also, mentionable: book?.mentionable ?? [])
     }
 
     /// The talk key went down while you were typing here.

@@ -128,10 +128,7 @@ enum CatWords {
     static let threadsTitle = "Threads"
     static let threadsSubtitle = "Every thread you've written in"
     static let threadsEmpty = "Threads you write in show up here."
-    static let channelsHeading = "Channels"
-    static let general = "general"
-    static let generalSubtitle = "Goes to whoever it's for"
-    static let generalEmpty = "Say something and it goes to whoever it's for."
+    static let kittensHeading = "Kittens"
     static let shadesSubtitle = "What you've asked me"
     static let shadesOnPhone = "Work you chose to show here"
     static let shadesEmpty = "Say something, or ask me anywhere, and it shows up here."
@@ -182,7 +179,6 @@ enum CatWords {
     static let heldDraft = "That question was answered meanwhile, so this won't send"
     static func part(_ index: Int, of count: Int, _ text: String) -> String { count > 1 ? "\(index + 1) of \(count): \(text)" : text }
     static let unreadableQuestion = "They asked something I couldn't read."
-    static let directMessages = "Direct messages"
     static let shortcutsButton = "⌘/ Shortcuts"
     static let settingsButton = "Settings"
     static let allFonts = "All Fonts"
@@ -243,9 +239,9 @@ enum CatWords {
     static func reportsTitle(_ kind: InboxEntry.Kind) -> String { kind == .shipped ? "Shipped" : "Also" }
 
     /// The line over the box, saying where what you type goes.
-    static func target(_ target: MessageTarget, in channel: ChannelID? = nil) -> String {
+    static func target(_ target: MessageTarget) -> String {
         switch target {
-        case .router: return channel == .shades ? "To me, without looking at your screen" : "To whoever it's for"
+        case .router: return "To me, without looking at your screen"
         case .newThread(let kitten): return "Starts a new thread with \(kitten.name)"
         case .thread(_, let title, _): return title.isEmpty ? "Replies in this thread" : "Replies in \(title)"
         case .starting(let kitten): return "Starting a new thread with \(kitten.name)…"
@@ -254,15 +250,14 @@ enum CatWords {
     }
 
     static func answering(_ text: String) -> String { "Answering: \(text.isEmpty ? "their question" : text)" }
-    /// The line over #general's box once your words @ a kitten.
-    static func mentioning(_ kitten: Kitten) -> String { "Straight to \(kitten.name), in a new thread here" }
+    /// The line over the cat's box once your words @ a kitten.
+    static func mentioning(_ kitten: Kitten) -> String { "Straight to \(kitten.name), in a new thread" }
     static let react = "React"
 
-    /// `name` is the channel's, as the sidebar writes it.
-    static func placeholder(_ target: MessageTarget, in channel: ChannelID? = nil, name: String? = nil) -> String {
+    static func placeholder(_ target: MessageTarget) -> String {
         switch target {
-        case .router: return channel == .shades ? "Message Shades" : "Message #\(name ?? general)"
-        case .newThread(let kitten): return "Message #\(name ?? kitten.name)"
+        case .router: return "Message \(shades)"
+        case .newThread(let kitten): return "Message \(kitten.name)"
         case .thread, .starting: return "Reply…"
         case .question: return "Your answer"
         }

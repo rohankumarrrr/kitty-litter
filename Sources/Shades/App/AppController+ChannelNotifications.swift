@@ -48,7 +48,6 @@ extension ChannelID {
     /// What Settings calls it.
     var settingsKey: String {
         switch self {
-        case .general: "general"
         case .shades: "shades"
         case .kitten(let id): "kitten:\(id)"
         }

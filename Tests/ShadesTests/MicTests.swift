@@ -62,7 +62,7 @@ final class MicTests: XCTestCase {
         view.closeThread()
         XCTAssertEqual(stopped, 1, "its thread's pane closed")
 
-        view.select(.channel(.general))
+        view.select(.channel(.shades))
         view.showListening(in: view.pane)
         view.select(.activity)
         XCTAssertEqual(stopped, 2, "Activity has no box")
@@ -75,7 +75,7 @@ final class MicTests: XCTestCase {
 
     func testTheMicsWordsDontRunUnderIt() {
         let composer = ChannelComposer(frame: NSRect(x: 0, y: 0, width: 600, height: 120))
-        composer.show(.router, in: .general)
+        composer.show(.router)
         composer.layoutSubtreeIfNeeded()
         let words = composer.textView.enclosingScrollView!.frame
         XCTAssertLessThanOrEqual(words.maxX, composer.mic.frame.minX, "the text stops before the mic")

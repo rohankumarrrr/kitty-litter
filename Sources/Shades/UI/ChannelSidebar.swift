@@ -6,7 +6,6 @@ struct ChannelSidebarItem: Equatable {
     enum Icon: Equatable {
         case activity
         case threads
-        case general
         case kitten(KittenStatus)
         case shades
     }
@@ -21,13 +20,13 @@ struct ChannelSidebarItem: Equatable {
     static func groups(in book: ChannelBook) -> [(heading: String?, items: [ChannelSidebarItem])] {
         let activity = ChannelSidebarItem(place: .activity, title: CatWords.activityTitle, icon: .activity, badge: book.waiting.count)
         let threads = ChannelSidebarItem(place: .threads, title: CatWords.threadsTitle, icon: .threads, isUnread: book.yours.contains { book.unreadThreads.contains($0.id) })
-        let general = ChannelSidebarItem(place: .channel(.general), title: book.name(of: .general), icon: .general, isUnread: book.isUnread(.general))
-        let kittens = book.statuses.map { status in
+        let shades = ChannelSidebarItem(place: .channel(.shades), title: CatWords.shades, icon: .shades, isUnread: book.isUnread(.shades))
+        // A kitten that's only planned isn't there until it's set up.
+        let kittens = book.statuses.filter { !$0.kitten.planned }.map { status in
             let id = ChannelID.of(status.kitten)
             return ChannelSidebarItem(place: .channel(id), title: book.name(of: id), icon: .kitten(status), badge: book.badge(of: id), isUnread: book.isUnread(id))
         }
-        let shades = ChannelSidebarItem(place: .channel(.shades), title: CatWords.shades, icon: .shades)
-        return [(nil, [activity, threads]), (CatWords.channelsHeading, [general] + kittens), (CatWords.directMessages, [shades])]
+        return [(nil, [activity, threads]), (CatWords.kittensHeading, [shades] + kittens)]
     }
 
     /// Every place, top to bottom, the way the sidebar lists them.
@@ -36,8 +35,8 @@ struct ChannelSidebarItem: Equatable {
     }
 }
 
-/// The left side of the window, flush on its chrome: Activity and Threads, then #general and a channel for each kitten,
-/// then the DM.
+/// The left side of the window, flush on its chrome: Activity and Threads, then the cat and each kitten, as Slack lists
+/// its channels.
 final class ChannelSidebar: QuietView {
     /// How wide it is until you drag its edge.
     static let width: CGFloat = 220
@@ -212,11 +211,6 @@ final class ChannelSidebarRow: ChannelRowView {
         return status.state.dotColor != nil
     }
 
-    private var isFaded: Bool {
-        guard case .kitten(let status) = item.icon else { return false }
-        return status.state == .notSetUp
-    }
-
     func update(tick: Int) {
         self.tick = tick
         if isLive { needsDisplay = true }
@@ -237,10 +231,8 @@ final class ChannelSidebarRow: ChannelRowView {
         switch item.icon {
         case .kitten(let status):
             let color = ChannelSpeakerLook.color(of: status.kitten)
-            faded(isFaded) {
-                Opal.tile(in: tile, light: color.map(Opal.Light.of) ?? .shades)
-                CatStamp.draw(status.pose(tick: isLive ? tick : 0), jacket: color, in: cat, on: self)
-            }
+            Opal.tile(in: tile, light: color.map(Opal.Light.of) ?? .shades)
+            CatStamp.draw(status.pose(tick: isLive ? tick : 0), jacket: color, in: cat, on: self)
             // A count says it needs you in the same rose, so the dot shows only without one. The pose and the words
             // VoiceOver hears carry the state, so the dot is decoration.
             if item.badge == 0, let dot = status.state.dotColor { drawDot(dot, on: tile) }
@@ -251,8 +243,6 @@ final class ChannelSidebarRow: ChannelRowView {
             drawGlyph("bell.fill", on: tile)
         case .threads:
             drawGlyph("bubble.left.and.bubble.right.fill", on: tile)
-        case .general:
-            drawGlyph("number", on: tile)
         }
 
         let lit = item.isUnread || item.badge > 0
@@ -273,22 +263,11 @@ final class ChannelSidebarRow: ChannelRowView {
         truncating.lineBreakMode = .byTruncatingTail
         let name = NSAttributedString(string: item.title, attributes: [
             .font: MessagesInk.font(ofSize: MessagesInk.body, weight: lit ? .semibold : isSelected ? .medium : .regular),
-            .foregroundColor: !isFaded && (lit || isSelected) ? MessagesInk.strong : MessagesInk.soft,
+            .foregroundColor: lit || isSelected ? MessagesInk.strong : MessagesInk.soft,
             .paragraphStyle: truncating,
         ])
         let height = ceil(name.size().height)
         name.draw(in: NSRect(x: left, y: ((bounds.height - height) / 2).rounded(), width: max(right - left, 0), height: height))
-    }
-
-    /// A kitten that isn't set up yet shows faintly, its tile and all.
-    private func faded(_ isFaded: Bool, _ draw: () -> Void) {
-        guard isFaded, let context = NSGraphicsContext.current?.cgContext else { return draw() }
-        context.saveGState()
-        context.setAlpha(0.4)
-        context.beginTransparencyLayer(auxiliaryInfo: nil)
-        draw()
-        context.endTransparencyLayer()
-        context.restoreGState()
     }
 
     /// A status dot on the tile's corner, ringed in what the row sits on, as Slack marks who's around.

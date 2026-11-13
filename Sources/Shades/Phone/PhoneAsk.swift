@@ -34,7 +34,8 @@ struct PhoneAsk: Decodable {
             case .router:
                 return (.send(words, to: target, shownIn: place.selection?.channelID, files: attached), nil)
             case .thread(let id, _, _):
-                let home = book.home(ofThread: id)
+                // A thread Messages doesn't place still shows what you sent on its page.
+                let home = book.home(ofThread: id) ?? .shades
                 return (.send(words, to: target, shownIn: home, alsoSent: also == true && place.alsoSendTo(in: book) != nil, files: attached), nil)
             case .newThread(let kitten):
                 let topic = newTopic()

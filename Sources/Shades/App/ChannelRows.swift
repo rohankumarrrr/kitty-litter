@@ -1,7 +1,7 @@
 import Foundation
 import ShadesCore
 
-/// A row of the sidebar: Activity and Threads at the top, then each channel and the DM.
+/// A row of the sidebar: Activity and Threads at the top, then the cat and each kitten.
 enum ChannelPlace: Hashable {
     /// What's waiting on you, what's shipped, and what each kitten is on.
     case activity
@@ -102,7 +102,7 @@ enum ChannelRow: Equatable {
 
 /// Where what you type in Messages goes. None of them carry your screen, and each carries only your words.
 enum MessageTarget: Equatable {
-    /// #general and the cat's DM: through the router, as the Ask box sends it, on Messages' own conversation with it.
+    /// The cat's box: through the router, as the Ask box sends it, on Messages' own conversation with it.
     case router
     /// A new thread in the kitten's folder.
     case newThread(Kitten)
@@ -119,7 +119,7 @@ enum MessageTarget: Equatable {
         switch place {
         case .activity, .threads:
             return nil
-        case .channel(.general), .channel(.shades):
+        case .channel(.shades):
             return .router
         case .channel(let id):
             return book.writableKitten(in: id).map(MessageTarget.newThread)
@@ -130,8 +130,8 @@ enum MessageTarget: Equatable {
     /// have their answer so far, since your words answer the next one.
     static func reply(in id: String, of book: ChannelBook, answered: [String: Int] = [:]) -> MessageTarget? {
         // The router answers in lines the app acts on, so nothing goes straight into one of its threads. Work the cat
-        // started for you is a session like any other, so its DM takes a reply into it.
-        guard !book.talks.contains(id), book.home(ofThread: id) != .shades || book.catsWork.contains(id) else { return nil }
+        // started for you is a session like any other, so it takes a reply, if it's work Messages shows.
+        guard !book.talks.contains(id), book.home(ofThread: id) != .shades || book.catsWork.contains(id) || book.threads[id] != nil else { return nil }
         let thread = book.threads[id]
         if let thread, thread.isStarting, let kitten = thread.owner.flatMap({ book.kitten($0) }) {
             return thread.parent.failure == nil ? .starting(kitten) : .newThread(kitten)
@@ -144,12 +144,12 @@ enum MessageTarget: Equatable {
         return .thread(id: id, title: book.title(ofThread: id))
     }
 
-    /// The kitten an @ in your words names, by its channel's name, such as `@steve-pawsniak`: the first one, as a word
-    /// of its own, so an email address isn't one. Only your words are read for it.
+    /// The kitten an @ in your words names, by its name written as one word, such as `@steve-pawsniak`: the first one,
+    /// as a word of its own, so an email address isn't one. Only your words are read for it.
     static func mentioned(in words: String, among kittens: [Kitten]) -> Kitten? {
         for word in words.split(whereSeparator: \.isWhitespace) where word.hasPrefix("@") {
             let name = word.dropFirst().prefix { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }.lowercased()
-            // A lone @ names no one, even a kitten whose name has no letters or numbers to make a channel's name of.
+            // A lone @ names no one, even a kitten whose name has no letters or numbers to make a word of.
             if !name.isEmpty, let kitten = kittens.first(where: { ChannelBook.slug($0.name) == name }) { return kitten }
         }
         return nil
@@ -408,7 +408,6 @@ enum ChannelRows {
         if book.unreadable > 0 { return .note(CatWords.couldntRead(book.unreadable)) }
         if isCut { return .older(isLoading: channel?.isLoadingOlder == true) }
         switch id {
-        case .general: return .note(CatWords.generalEmpty)
         case .shades: return .note(CatWords.shadesEmpty)
         case .kitten(let kitten): return .note(CatWords.noThreadsYet(book.kitten(kitten)?.name ?? CatWords.someoneElse))
         }

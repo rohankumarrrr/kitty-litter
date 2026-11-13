@@ -24,16 +24,16 @@ Preconditions:
 
 Journey: `journeys/notifications.txt`.
 
-- **Elsewhere.** `channels`, then `channel general`. `channels.png` in `0-elsewhere` shows #general selected.
+- **Elsewhere.** `channels`, then `channel shades`. `channels.png` in `0-elsewhere` shows Shades selected.
 - **New.** `approval command npm test`, `report decision` and `question`, with their waits. The output says `[demo] notified: Steve Pawsniak needs an approval, which opens demo-tidy`, `[demo] notified: Clawde needs a decision, which opens demo-login` and `[demo] notified: An agent has a question, which opens demo-research`, with nothing about the command, the report or the question.
-- **Click.** `notification`, then `wait 2`. It stands in for clicking a notification about `demo-tidy`, the approval's thread. `channels.png` in `1-clicked` shows "Tidy up the pricing page" open beside #steve-pawsniak with the approval's Deny and Allow in it, and Activity's count of 3 in the sidebar: the approval, the question and the decision.
+- **Click.** `notification`, then `wait 2`. It stands in for clicking a notification about `demo-tidy`, the approval's thread. `channels.png` in `1-clicked` shows "Tidy up the pricing page" open beside Steve Pawsniak with the approval's Deny and Allow in it, and Activity's count of 3 in the sidebar: the approval, the question and the decision.
 - **Withdraw.** `allow`, then `wait 1`. The output says `[demo] took back 1 notification` before `[demo] accept: npm test`, and `channels.png` in `2-answered` has a count of 2.
 
 Journey: `journeys/notify-finished.txt`, which also covers the phone.
 
 - **Off.** `finish demo-research` before `notify-finished on`. The output has the cat's report and no `[demo] notified`.
 - **On.** `notify-finished on`, then `finish demo-tidy`. The output says `[demo] notified: Steve Pawsniak finished, which opens demo-tidy`, then `[demo] pushed to web.push.apple.com: {"title":"Steve Pawsniak finished","tag":"demo-tidy","key":"t:demo-tidy@c:%2Fdemo%2Fsteve"}`, with nothing from the report. `report shipped` says `[demo] notified: Clawde finished, which opens demo-icon`.
-- **Click.** `notification demo-tidy` from #general. `1-clicked/channels.png` shows "Tidy up the pricing page" open beside #steve-pawsniak.
+- **Click.** `notification demo-tidy` from Shades. `1-clicked/channels.png` shows "Tidy up the pricing page" open beside Steve Pawsniak.
 - **Tap.** `phone open t:demo-tidy@c:%2Fdemo%2Fsteve` opens the page the push names, as tapping it does. `phone text` and `2-tapped` show the thread's own page, with Steve at the top and its conversation.
 - **Settings.** `settings`, `settings notifications`, then `draw`. `3-settings/settings.png` shows Settings' Notifications page with When a session finishes switched on, since `notify-finished on` turned it on, and each channel with what it tells you.
 
@@ -41,10 +41,10 @@ Journey: `journeys/channel-notifications.txt`. `notifications <channel> [mute | 
 
 - **Menu.** `notifications clawde` prints Mute, then On this Mac and On your phone, each with `* Everything`. After `mac needsYou` and `phone nothing`, those two are ticked instead.
 - **Needs you only.** `report shipped` gives no `[demo] notified` and no `[demo] pushed`, though `notify-finished on` would otherwise notify it. `report decision` says `[demo] notified: Clawde needs a decision, which opens demo-login`, with no `[demo] pushed`, since the phone is set to Nothing.
-- **Muted.** `notifications steve mute` ticks Mute. `0-muted/channels.png` shows #steve-pawsniak with Muted at the top right beside "1 in progress". `finish demo-tidy` and `approval command npm test` give no `[demo] notified` and no `[demo] pushed`, and `windows` has the bubble not showing. `1-quiet/channels.png` still says Muted, with the approval as Needs you on Steve's thread and a count of 1 beside his channel.
+- **Muted.** `notifications steve mute` ticks Mute. `0-muted/channels.png` shows Steve Pawsniak with Muted at the top right beside "1 in progress". `finish demo-tidy` and `approval command npm test` give no `[demo] notified` and no `[demo] pushed`, and `windows` has the bubble not showing. `1-quiet/channels.png` still says Muted, with the approval as Needs you on Steve's thread and a count of 1 beside his channel.
 - **Unmuted.** `notifications steve mute` again brings back Everything on both, and `2-unmuted/channels.png` says Notifications at the top right.
 
-- **Open.** Journey `journeys/open.txt`. `finish demo-tidy`, `wait 8`, then `buttons` prints `button Open`, and nothing about T3. `1-report/bubble.png` shows Steve's report with Open under it. `bubble Open` presses it and prints `pressed Open`, and `2-opened/channels.png` shows "Tidy up the pricing page" open beside #steve-pawsniak, with no bubble left. `approval command swift test` and `report decision` put cards in Activity, and `3-activity/channels.png` shows the approval with Deny, Allow, Allow for this session and View thread, and Clawde's decision with Reply, Done and Open in T3, since the demo has nothing for The Kitty Litter to read in that thread.
+- **Open.** Journey `journeys/open.txt`. `finish demo-tidy`, `wait 8`, then `buttons` prints `button Open`, and nothing about T3. `1-report/bubble.png` shows Steve's report with Open under it. `bubble Open` presses it and prints `pressed Open`, and `2-opened/channels.png` shows "Tidy up the pricing page" open beside Steve Pawsniak, with no bubble left. `approval command swift test` and `report decision` put cards in Activity, and `3-activity/channels.png` shows the approval with Deny, Allow, Allow for this session and View thread, and Clawde's decision with Reply, Done and Open in T3, since the demo has nothing for The Kitty Litter to read in that thread.
 
 ## Gotchas
 

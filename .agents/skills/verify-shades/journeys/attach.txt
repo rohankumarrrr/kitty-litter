@@ -20,15 +20,15 @@ attach pdf
 send What does this say about plan names?
 wait 2
 draw .verify/shades/attach/3-pepper
-channel general
+channel shades
 wait 1
 attach pdf
 send
 wait 5
-draw .verify/shades/attach/4-general
+draw .verify/shades/attach/4-shades
 phone on
 wait 3
-phone open general
+phone open steve
 wait 4
 phone attach
 wait 2

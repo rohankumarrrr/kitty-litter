@@ -3,7 +3,7 @@ record docs/images/messages.gif channels
 wait 0.5
 channels
 wait 2.5
-channel general
+channel shades
 wait 2.5
 send Can you look over my resume before the interview?
 wait 6
