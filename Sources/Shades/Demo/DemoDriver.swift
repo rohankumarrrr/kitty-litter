@@ -117,7 +117,7 @@ final class DemoDriver {
             // Runs a line of script on the page and prints what it comes to, such as where its rows are.
             runOnPhone(rest)
         case "attach":
-            // The same as taking a photo with the page's camera button: a made-up picture goes up, as the page sends one.
+            // The same as picking a photo from the page's + button: a made-up picture goes up, as the page sends one.
             guard let phone else { return print("The page isn't open. Try: phone open") }
             Task {
                 print("[phone] \(await phone.runAsync(DemoPhone.attachPicture(named: rest.isEmpty ? "keyboard" : rest)))")

@@ -79,7 +79,7 @@ final class DemoPhone {
         (try? JSONSerialization.data(withJSONObject: text, options: .fragmentsAllowed)).map { String(decoding: $0, as: UTF8.self) } ?? "''"
     }
 
-    /// A made-up photo, drawn on the page and attached the way its camera button attaches one.
+    /// A made-up photo, drawn on the page and attached the way its + button attaches one.
     /// A made-up photo with `name` written on it, as the page's 📎 or 📷 would add one.
     static func attachPicture(named name: String) -> String {
         """

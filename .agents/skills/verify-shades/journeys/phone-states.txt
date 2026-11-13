@@ -1,0 +1,235 @@
+front
+phone on
+wait 3
+phone pair
+wait 1
+settings
+wait 1
+settings messages
+setting Text size Small
+setting Done
+phone open
+wait 4
+draw .verify/shades/phone-states/small/01-home
+approval command npm run build && npm test
+report decision
+wait 2
+phone go activity
+wait 3
+draw .verify/shades/phone-states/small/02-activity-waiting
+phone press Allow
+wait 2
+phone press Done
+wait 3
+draw .verify/shades/phone-states/small/03-activity-quiet
+phone go general
+wait 3
+draw .verify/shades/phone-states/small/04-general
+phone go steve
+wait 3
+draw .verify/shades/phone-states/small/05-channel
+phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve
+wait 3
+draw .verify/shades/phone-states/small/06-thread
+t3 off
+phone send One more thing
+wait 3
+draw .verify/shades/phone-states/small/07-failed
+t3 on
+phone press Try again
+wait 0.5
+draw .verify/shades/phone-states/small/08-sending
+wait 3
+phone go t:demo-clawde-main@c:%2Fdemo%2Fclawde
+wait 3
+draw .verify/shades/phone-states/small/09-formatting
+phone link kittens
+wait 1
+draw .verify/shades/phone-states/small/10-link-sheet
+phone press Cancel
+phone js $('find').click(); 'search open'
+wait 1
+draw .verify/shades/phone-states/small/11-search
+phone search silkscreen
+wait 1.5
+draw .verify/shades/phone-states/small/12-search-found
+phone search zebra crossing
+wait 1.5
+draw .verify/shades/phone-states/small/13-search-empty
+phone press Cancel
+wait 1
+settings
+wait 1
+settings messages
+setting Text size Default
+setting Done
+phone open
+wait 4
+draw .verify/shades/phone-states/default/01-home
+approval command npm run build && npm test
+report decision
+wait 2
+phone go activity
+wait 3
+draw .verify/shades/phone-states/default/02-activity-waiting
+phone press Allow
+wait 2
+phone press Done
+wait 3
+draw .verify/shades/phone-states/default/03-activity-quiet
+phone go general
+wait 3
+draw .verify/shades/phone-states/default/04-general
+phone go steve
+wait 3
+draw .verify/shades/phone-states/default/05-channel
+phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve
+wait 3
+draw .verify/shades/phone-states/default/06-thread
+t3 off
+phone send One more thing
+wait 3
+draw .verify/shades/phone-states/default/07-failed
+t3 on
+phone press Try again
+wait 0.5
+draw .verify/shades/phone-states/default/08-sending
+wait 3
+phone go t:demo-clawde-main@c:%2Fdemo%2Fclawde
+wait 3
+draw .verify/shades/phone-states/default/09-formatting
+phone link kittens
+wait 1
+draw .verify/shades/phone-states/default/10-link-sheet
+phone press Cancel
+phone js $('find').click(); 'search open'
+wait 1
+draw .verify/shades/phone-states/default/11-search
+phone search silkscreen
+wait 1.5
+draw .verify/shades/phone-states/default/12-search-found
+phone search zebra crossing
+wait 1.5
+draw .verify/shades/phone-states/default/13-search-empty
+phone press Cancel
+wait 1
+settings
+wait 1
+settings messages
+setting Text size Large
+setting Done
+phone open
+wait 4
+draw .verify/shades/phone-states/large/01-home
+approval command npm run build && npm test
+report decision
+wait 2
+phone go activity
+wait 3
+draw .verify/shades/phone-states/large/02-activity-waiting
+phone press Allow
+wait 2
+phone press Done
+wait 3
+draw .verify/shades/phone-states/large/03-activity-quiet
+phone go general
+wait 3
+draw .verify/shades/phone-states/large/04-general
+phone go steve
+wait 3
+draw .verify/shades/phone-states/large/05-channel
+phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve
+wait 3
+draw .verify/shades/phone-states/large/06-thread
+t3 off
+phone send One more thing
+wait 3
+draw .verify/shades/phone-states/large/07-failed
+t3 on
+phone press Try again
+wait 0.5
+draw .verify/shades/phone-states/large/08-sending
+wait 3
+phone go t:demo-clawde-main@c:%2Fdemo%2Fclawde
+wait 3
+draw .verify/shades/phone-states/large/09-formatting
+phone link kittens
+wait 1
+draw .verify/shades/phone-states/large/10-link-sheet
+phone press Cancel
+phone js $('find').click(); 'search open'
+wait 1
+draw .verify/shades/phone-states/large/11-search
+phone search silkscreen
+wait 1.5
+draw .verify/shades/phone-states/large/12-search-found
+phone search zebra crossing
+wait 1.5
+draw .verify/shades/phone-states/large/13-search-empty
+phone press Cancel
+wait 1
+settings
+wait 1
+settings messages
+setting Text size Larger
+setting Done
+phone open
+wait 4
+draw .verify/shades/phone-states/larger/01-home
+approval command npm run build && npm test
+report decision
+wait 2
+phone go activity
+wait 3
+draw .verify/shades/phone-states/larger/02-activity-waiting
+phone press Allow
+wait 2
+phone press Done
+wait 3
+draw .verify/shades/phone-states/larger/03-activity-quiet
+phone go general
+wait 3
+draw .verify/shades/phone-states/larger/04-general
+phone go steve
+wait 3
+draw .verify/shades/phone-states/larger/05-channel
+phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve
+wait 3
+draw .verify/shades/phone-states/larger/06-thread
+t3 off
+phone send One more thing
+wait 3
+draw .verify/shades/phone-states/larger/07-failed
+t3 on
+phone press Try again
+wait 0.5
+draw .verify/shades/phone-states/larger/08-sending
+wait 3
+phone go t:demo-clawde-main@c:%2Fdemo%2Fclawde
+wait 3
+draw .verify/shades/phone-states/larger/09-formatting
+phone link kittens
+wait 1
+draw .verify/shades/phone-states/larger/10-link-sheet
+phone press Cancel
+phone js $('find').click(); 'search open'
+wait 1
+draw .verify/shades/phone-states/larger/11-search
+phone search silkscreen
+wait 1.5
+draw .verify/shades/phone-states/larger/12-search-found
+phone search zebra crossing
+wait 1.5
+draw .verify/shades/phone-states/larger/13-search-empty
+phone press Cancel
+wait 1
+phone js pairing(); 'pairing page'
+wait 1
+draw .verify/shades/phone-states/larger/14-pairing
+phone js $('code').value = 'WRONGONE'; $('pairform').requestSubmit(); 'wrong code'
+wait 2
+draw .verify/shades/phone-states/larger/15-wrong-code
+wait 2
+phone close
+front
+windows

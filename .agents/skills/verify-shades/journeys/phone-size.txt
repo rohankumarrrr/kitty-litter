@@ -22,14 +22,14 @@ draw .verify/shades/phone-size/2-failed
 t3 on
 phone press Try again
 wait 0.5
-phone js (() => { const rgb = (s) => s.match(/[\d.]+/g).slice(0, 3).map(Number); const lum = (c) => c.map((v) => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }).reduce((a, v, i) => a + v * [.2126, .7152, .0722][i], 0); const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + .05) / (y + .05); }; const b = [...document.querySelectorAll('.msg')].find((m) => m.querySelector('.meta').textContent.startsWith('Sending')).querySelector('.bubble'); const s = getComputedStyle(b); return 'on its way: ' + ratio(rgb(s.color), rgb(s.backgroundColor)).toFixed(2) + ':1 at opacity ' + s.opacity; })()
+phone js (() => { const rgba = (s) => { const v = s.match(/[\d.]+/g).map(Number); return [v.slice(0, 3), v.length > 3 ? v[3] : 1]; }; const lum = (c) => c.map((v) => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }).reduce((a, v, i) => a + v * [.2126, .7152, .0722][i], 0); const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + .05) / (y + .05); }; const b = [...document.querySelectorAll('.msg')].find((m) => m.querySelector('.meta').textContent.startsWith('Sending')).querySelector('.bubble'); const s = getComputedStyle(b); const [under] = rgba(s.backgroundColor); const [ink, alpha] = rgba(s.color); const words = ink.map((v, i) => v * alpha + under[i] * (1 - alpha)); return 'on its way: ' + ratio(words, under).toFixed(2) + ':1, its words at ' + alpha + ' on its fill at opacity ' + s.opacity; })()
 draw .verify/shades/phone-size/3-sending
 wait 4
 phone go t:demo-clawde-main@c:%2Fdemo%2Fclawde
 wait 3
 phone js (() => { const b = document.querySelector('.react'); b.focus(); return 'React has the keyboard: ' + (document.activeElement === b) + ', ' + b.getBoundingClientRect().height + 'px while the demo phone has no keyboard'; })()
 phone press React
-phone js 'keyboard on ' + document.activeElement.textContent + ' of ' + document.querySelectorAll('.reactbar button').length + ' marks'
+phone js 'keyboard on ' + document.activeElement.textContent + ' of ' + document.querySelectorAll('#marks button').length + ' marks'
 phone press 🎉
 wait 2
 phone js (() => { const chip = document.querySelector('.reactions button'); const r = chip.getBoundingClientRect(); const x = r.left + r.width / 2; return 'chip ' + Math.round(r.height) + 'px, tapped 5px above and below: ' + [-5, r.height + 5].map((dy) => document.elementFromPoint(x, r.top + dy) === chip).join(' '); })()
@@ -55,7 +55,7 @@ phone js [...document.querySelectorAll('button, a, input:not([type=checkbox]), t
 draw .verify/shades/phone-size/6-opal-larger
 phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve
 wait 3
-phone js 'buttons ' + (Math.abs($('find').getBoundingClientRect().top - $('title').getBoundingClientRect().top) > 30 ? 'under the title' : 'beside the title')
+phone js scrollTo(0, 0); 'buttons ' + ($('find').getBoundingClientRect().bottom <= $('title').getBoundingClientRect().top ? 'in the bar over the title' : 'beside the title')
 draw .verify/shades/phone-size/7-opal-larger-thread
 wait 2
 phone close

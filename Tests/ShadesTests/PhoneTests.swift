@@ -386,18 +386,21 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(door.pair(pairing.code, now: noon.addingTimeInterval(601)), "and ten minutes on it's gone too")
     }
 
+    /// A phone's pure black, with words in white at the 100, 80 and 62% an Opal iPhone's widgets use, and Opal's light.
     func testThePageIsOpalOnAPhonesBlack() {
-        for line in ["color-scheme: dark", "--paper: #000000", "--text: #e7e4ec", "--soft: #a09aad", "--you: #7458e8", "--on-you: #ffffff", "--link: #b9a6ff"] {
+        for line in ["color-scheme: dark", "--page: #000000", "--white: #ffffff", "--body: rgba(255, 255, 255, 0.8)", "--secondary: rgba(255, 255, 255, 0.62)",
+                     "--primary: #7458e8", "--lilac: #b9a6ff", "--selected: #1e1830"] {
             XCTAssertTrue(PhonePage.colors.contains(line), line)
         }
+        XCTAssertFalse(PhonePage.style.contains("prefers-color-scheme"), "Opal is dark only, whatever the phone's set to")
     }
 
     func testEverythingThePageWritesInAColourReads() throws {
-        for (look, isDark) in [("a light phone", false), ("a dark phone", true)] {
-            let colors = try Self.colors(isDark: isDark)
-            for (rule, words, under) in try Self.words(in: colors) {
-                XCTAssertGreaterThanOrEqual(Opal.contrast(words, under), 4.5, "\(rule) on \(look)")
-            }
+        let colors = try Self.colors()
+        let words = try Self.words(in: colors)
+        XCTAssertGreaterThan(words.count, 40, "every rule that colours words is measured")
+        for (rule, words, under) in words {
+            XCTAssertGreaterThanOrEqual(Opal.contrast(words, under), 4.5, rule)
         }
     }
 
@@ -416,32 +419,52 @@ final class PhoneTests: XCTestCase {
         }
     }
 
-    /// The page's colours as a browser in light or dark settles them, with Opal's over them.
-    private static func colors(isDark: Bool) throws -> [String: UInt32] {
-        let sheets = PhonePage.style.components(separatedBy: "@media (prefers-color-scheme: dark)")
-        let pattern = try NSRegularExpression(pattern: "--([a-z-]+): #([0-9a-f]{6})")
-        var colors: [String: UInt32] = [:]
-        for sheet in [sheets[0]] + (isDark ? [sheets[1]] : []) + [PhonePage.colors] {
-            for match in pattern.matches(in: sheet, range: NSRange(sheet.startIndex..., in: sheet)) {
-                colors[String(sheet[Range(match.range(at: 1), in: sheet)!])] = UInt32(sheet[Range(match.range(at: 2), in: sheet)!], radix: 16)
-            }
+    /// Opal's colours as the page has them, each white at an opacity as it comes to on what it's written on.
+    private static func colors() throws -> [String: PageColor] {
+        let sheet = PhonePage.colors
+        let pattern = try NSRegularExpression(pattern: "--([a-z-]+): (#[0-9a-f]{6}|rgba\\([^)]*\\))")
+        var colors: [String: PageColor] = [:]
+        for match in pattern.matches(in: sheet, range: NSRange(sheet.startIndex..., in: sheet)) {
+            colors[String(sheet[Range(match.range(at: 1), in: sheet)!])] = PageColor(String(sheet[Range(match.range(at: 2), in: sheet)!]))
         }
         return colors
     }
 
-    /// Each rule that colours words, with the colour they're in and the one they're on: the rule's own background, or the page.
-    private static func words(in colors: [String: UInt32]) throws -> [(rule: String, words: UInt32, under: UInt32)] {
-        func value(_ property: String, in body: String) -> UInt32? {
+    /// A colour as the page writes it: solid, or see-through over whatever it's on.
+    private struct PageColor {
+        var color: UInt32
+        var alpha: Double
+
+        init?(_ text: String) {
+            if text.hasPrefix("#") {
+                let digits = text.dropFirst()
+                guard let color = UInt32(digits.count == 3 ? digits.map { "\($0)\($0)" }.joined() : String(digits), radix: 16) else { return nil }
+                (self.color, alpha) = (color, 1)
+                return
+            }
+            let parts = text.drop { $0 != "(" }.dropFirst().prefix { $0 != ")" }.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            guard parts.count == 4 else { return nil }
+            color = parts.prefix(3).reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
+            alpha = parts[3]
+        }
+
+        func on(_ under: UInt32) -> UInt32 { Opal.mix(under, color, alpha) }
+    }
+
+    /// Each rule that colours words, with the colour they come to and the one they're on: the rule's own background,
+    /// or the page.
+    private static func words(in colors: [String: PageColor]) throws -> [(rule: String, words: UInt32, under: UInt32)] {
+        func value(_ property: String, in body: String) -> PageColor? {
             guard let found = body.range(of: "(?<![-\\w])\(property): [^;}]+", options: .regularExpression) else { return nil }
             let value = body[found].dropFirst(property.count + 2).trimmingCharacters(in: .whitespaces)
-            if value.hasPrefix("var(--") { return colors[String(value.dropFirst(6).prefix { $0 != ")" })] }
-            guard value.hasPrefix("#") else { return nil }
-            let digits = value.dropFirst()
-            return UInt32(digits.count == 3 ? digits.map { "\($0)\($0)" }.joined() : String(digits), radix: 16)
+            if value.hasPrefix("var(--") { return colors[String(value.dropFirst(6).prefix { $0 != ")" && $0 != "," })] }
+            return PageColor(value)
         }
+        let page = try XCTUnwrap(colors["page"], "the page's black").color
         return try rules().compactMap { rule in
             guard rule.selector != ":root", let words = value("color", in: rule.body) else { return nil }
-            return (rule.selector, words, value("background", in: rule.body) ?? colors["paper"]!)
+            let under = value("background", in: rule.body)?.on(page) ?? page
+            return (rule.selector, words.on(under), under)
         }
     }
 
@@ -743,9 +766,7 @@ extension PhoneTests {
     }
 
     func testThePageDrawsTheWindowsCatsAndIcons() {
-        XCTAssertTrue(PhonePage.script.contains("'/cat/' + scheme() + '/' + key + '.png'"))
-        XCTAssertTrue(PhonePage.style.contains("--cats: light") && PhonePage.style.contains("--cats: dark"), "light or dark, as the page is")
-        XCTAssertTrue(PhonePage.colors.contains("--cats: dark"), "and Opal's are dark")
+        XCTAssertTrue(PhonePage.script.contains("node.src = '/cat/dark/' + key + '.png';"), "with the light outline the window draws on a dark page")
         for emoji in ["🔔", "💬"] { XCTAssertFalse(PhonePage.script.contains(emoji), "drawn to match the window instead") }
     }
 }
@@ -784,12 +805,12 @@ extension PhoneTests {
     /// away, with the keyboard on Cancel, never on Open, so a held Enter can't open what you haven't read.
     func testALinksSheetIsModalOverADimmedPageWithTheKeyboardOnCancel() throws {
         let html = PhonePage.html
-        XCTAssertTrue(html.contains(#"<dialog id="linksheet" aria-labelledby="linktitle">"#))
+        XCTAssertTrue(html.contains(#"<dialog id="linksheet" class="sheet" aria-labelledby="linktitle">"#))
         let cancel = try XCTUnwrap(html.range(of: #"<button id="linkcancel" type="button" autofocus>Cancel</button>"#))
         XCTAssertLessThan(cancel.lowerBound, try XCTUnwrap(html.range(of: #"<a id="linkopen""#)).lowerBound)
         XCTAssertTrue(PhonePage.script.contains("$('linksheet').showModal();"))
         XCTAssertFalse(PhonePage.script.contains("$('linksheet').hidden"))
-        XCTAssertTrue(PhonePage.style.contains("#linksheet::backdrop { background:"))
+        XCTAssertTrue(PhonePage.style.contains("dialog::backdrop { background:"))
         XCTAssertTrue(PhonePage.script.contains("if (event.key === 'Enter') { event.preventDefault(); ask(part.link); }"), "the Enter that shows it goes no further")
     }
 
@@ -802,7 +823,7 @@ extension PhoneTests {
             AgentQuestion(id: "one", threadID: "a", threadTitle: "Work", text: "Which font?", form: AnswerForm(parts: [font])),
             AgentQuestion(id: "t3", threadID: "a", threadTitle: "Work", text: "Which font?", form: nil),
         ]))
-        let page = try Self.page(["el", "button", "card", "question", "chosen", "mark"])
+        let page = try Self.page(["el", "button", "lit", "card", "question", "chosen", "mark"])
         var said: [String: [String]] = [:]
         for row in PhoneView(PhonePlace("activity", in: book), in: book, now: noon).rows where row.kind == "question" {
             let json = String(decoding: try JSONEncoder().encode(row), as: UTF8.self)
@@ -822,8 +843,11 @@ extension PhoneTests {
             return String(script[from.lowerBound..<(try XCTUnwrap(script.range(of: end, range: from.upperBound..<script.endIndex))).upperBound])
         }
         let document = """
-            const document = { createElement: (tag) => ({ tag, children: [], dataset: {}, style: {}, attributes: {}, classList: { toggle() {} },
-              append(...nodes) { this.children.push(...nodes); }, setAttribute(name, value) { this.attributes[name] = value; }, querySelectorAll() { return []; } }) };
+            const document = { createElement: (tag) => ({ tag, children: [], dataset: {}, attributes: {}, classList: { toggle() {} },
+              style: { props: {}, setProperty(name, value) { this.props[name] = value; }, removeProperty(name) { delete this.props[name]; } },
+              get childElementCount() { return this.children.length; },
+              append(...nodes) { this.children.push(...nodes); }, after(...nodes) { this.children.push(...nodes); }, addEventListener() {},
+              setAttribute(name, value) { this.attributes[name] = value; }, querySelector() { return null; }, querySelectorAll() { return []; } }) };
             const cat = () => document.createElement('img'), time = () => '', act = () => Promise.resolve(null), answers = new Map();
             const said = (node) => [node.textContent, ...node.children.flatMap(said)].filter((text) => text);
             """
@@ -869,8 +893,7 @@ extension PhoneTests {
         }
     }
 
-    /// A message still coming, or on its way, is paler as in the window: one solid colour, the same on a light phone or a
-    /// dark one since the page is Opal's dark either way, with words picked to read on it.
+    /// A message still coming, or on its way, is drawn at 55% as in the window, with secondary words that still read.
     func testAMessageOnItsWayIsPalerInAColourItsWordsReadOn() throws {
         func said(_ speaker: Speaker, _ id: String, going: Bool = false, sending: Bool = false) -> SentMessage {
             SentMessage(channel: .general, message: ChannelMessage(exchangeID: id, kind: speaker == .you ? .ask : .reply, speaker: speaker, text: "Words", at: noon, threadID: "", threadTitle: "", isStillGoing: going, isSending: sending))
@@ -880,17 +903,14 @@ extension PhoneTests {
             sent: [said(.you, "sending", sending: true), said(.kitten(steve.id), "going", going: true), said(.cat, "cat", going: true), said(.you, "sent")]
         )
         let rows = PhoneView(PhonePlace("general", in: book), in: book, now: noon).rows.filter { $0.kind == "message" }
-        XCTAssertEqual(rows.map { $0.faded != nil }, [true, true, true, false], "only what's still on its way")
-        for row in rows.dropLast() {
-            for (look, text) in [("light", Opal.body), ("dark", Opal.body)] {
-                let paint = try XCTUnwrap(row.faded?[look])
-                let fill = try XCTUnwrap(UInt32(paint.color.dropFirst(), radix: 16))
-                let words = try paint.ink.map { try XCTUnwrap(UInt32($0.dropFirst(), radix: 16)) } ?? text
-                XCTAssertGreaterThanOrEqual(Opal.contrast(words, fill), 4.5, "\(row.id ?? "") on a \(look) phone")
-            }
-        }
-        XCTAssertEqual(rows[0].faded?["light"], rows[0].faded?["dark"], "the page is Opal's dark on either")
-        XCTAssertNil(rows[2].faded?["light"]?.ink, "the cat's grey keeps the page's own words, as the window's does")
+        XCTAssertEqual(rows.map(\.faded), [true, true, true, nil], "only what's still on its way")
+        let rules = Dictionary(try Self.rules().map { ($0.selector, $0.body) }, uniquingKeysWith: { first, _ in first })
+        XCTAssertEqual(rules[".mine .bubble.faded"]?.contains("var(--selected)) 55%, var(--page))"), true, "yours at 55%")
+        XCTAssertEqual(rules[".bubble.lit.faded"]?.contains("var(--light) 55%, transparent)"), true, "and anyone else's light at 55%")
+        let secondary = try XCTUnwrap(Self.colors()["secondary"])
+        let yours = Opal.mix(0, Opal.selected, 0.55)
+        XCTAssertGreaterThanOrEqual(Opal.contrast(secondary.on(yours), yours), 4.5, "secondary words on yours at 55%")
+        XCTAssertGreaterThanOrEqual(Opal.contrast(secondary.on(Opal.cardTop), Opal.cardTop), 4.5, "and on a lit bubble's black glass")
     }
 
     /// What VoiceOver hears for each place is what it hears in the window's sidebar: its name, what its kitten is doing
@@ -910,7 +930,7 @@ extension PhoneTests {
         XCTAssertEqual(places.map(\.state), ["Needs you", "Working", "Not set up yet"])
         XCTAssertEqual(places.map(\.count), [1, nil, nil])
         XCTAssertEqual(places.map(\.dot), [nil, Opal.hex(Opal.lilac), nil], "Steve's count, with no dot beside it")
-        let page = try Self.page(["el", "dot", "places"])
+        let page = try Self.page(["el", "dot", "lit", "drift", "tile", "places"])
         let json = String(decoding: try JSONEncoder().encode(places), as: UTF8.self)
         let heard = page.evaluateScript("places(\(json)).filter((node) => node.tag === 'button').map((node) => node.attributes['aria-label'])")?.toArray() as? [String]
         XCTAssertEqual(heard, ["steve-pawsniak, Needs you, 1 waiting", "pepper, Working", "cali, Not set up yet"])
@@ -918,8 +938,208 @@ extension PhoneTests {
 
     /// Tapping what a message said offers its reactions, which a keyboard and VoiceOver can't, so React does the same.
     func testAKeyboardOrVoiceOverCanReactToo() {
-        XCTAssertTrue(PhonePage.script.contains("node.append(button(words.react, () => react(node, item), 'react'));"))
-        XCTAssertTrue(PhonePage.script.contains("bar.firstChild.focus();"), "and the keyboard goes to the marks it offers")
+        XCTAssertTrue(PhonePage.script.contains("node.append(button(words.react, () => react(item), 'react'));"))
+        XCTAssertTrue(PhonePage.script.contains("$('marks').firstChild.focus();"), "and the keyboard goes to the marks it offers")
         XCTAssertTrue(PhonePage.style.contains(".react:not(:focus) { position: absolute;"), "out of sight until it has the keyboard")
+    }
+}
+
+// MARK: - Opal, the way an iPhone does it
+
+extension PhoneTests {
+    private static func ruleBodies() throws -> [String: String] {
+        Dictionary(try rules().map { ($0.selector, $0.body) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// An iPhone's large title: 32 points, bold and white at the top of each page. Once it's scrolled up under the bar,
+    /// the bar takes it, small, on its glass.
+    func testEachPageHasALargeTitleThatFoldsIntoTheBar() throws {
+        let rules = try Self.ruleBodies()
+        XCTAssertEqual(rules["#title"]?.contains("color: var(--white); font-size: calc(32em / 17); font-weight: 700"), true)
+        let page = try Self.page(["collapse"])
+        page.evaluateScript("""
+            const box = (top, bottom) => ({ getBoundingClientRect: () => ({ top, bottom }) });
+            const parts = { top: { classList: { on: null, toggle(name, on) { this.on = on; } } }, head: { hidden: false }, bar: box(0, 44), title: box(60, 100) };
+            const $ = (id) => parts[id];
+            """)
+        page.evaluateScript("collapse()")
+        XCTAssertEqual(page.evaluateScript("parts.top.classList.on")?.toBool(), false, "over the large title, the bar is the page's black")
+        page.evaluateScript("parts.title = box(30, 70); collapse()")
+        XCTAssertEqual(page.evaluateScript("parts.top.classList.on")?.toBool(), true, "and it takes the title once it goes under")
+        XCTAssertEqual(rules["#top.collapsed"]?.contains("background: var(--glass)"), true)
+        XCTAssertEqual(rules["#top.collapsed #bartitle"]?.contains("visibility: visible"), true)
+    }
+
+    /// Search has the bar while it's open, with Cancel beside its field, as on an iPhone, and going anywhere, Back
+    /// included, puts it away. Nothing of the page you left stays in the header while the next one comes.
+    func testSearchHasTheBarAndGoingAnywherePutsItAway() throws {
+        let html = PhonePage.html
+        let form = try XCTUnwrap(html.range(of: #"<form id="search" hidden>"#))
+        let end = try XCTUnwrap(html.range(of: "</form>", range: form.upperBound..<html.endIndex))
+        XCTAssertTrue(html[form.lowerBound..<end.upperBound].contains(#"<button id="searchcancel" type="button">Cancel</button>"#))
+        let page = try Self.page(["go"])
+        page.evaluateScript("""
+            const parts = {};
+            const $ = (id) => parts[id] || (parts[id] = { hidden: false, textContent: 'from before', replaceChildren() {} });
+            let key = 'c:steve', keptUnread = null, jumped = false, view = {}, closed = false;
+            const history = { pushState() {} };
+            function listen() {}
+            function banner() {}
+            function searching(open) { closed = !open; $('search').hidden = !open; }
+            """)
+        page.evaluateScript("go('home', false)")
+        XCTAssertEqual(page.evaluateScript("closed")?.toBool(), true, "Back put Search away")
+        XCTAssertEqual(page.evaluateScript("['title', 'subtitle', 'bartitle'].map((id) => $(id).textContent).join('')")?.toString(), "", "and the old title")
+        XCTAssertEqual(page.evaluateScript("['back', 'headcat', 'link', 'unread'].every((id) => $(id).hidden)")?.toBool(), true, "and the old buttons")
+    }
+
+    /// The box is iMessage's: one + for a photo or a file, which on an iPhone offers the camera too, and the arrow inside
+    /// the field, armed only once there's something to send. Return makes a new line, as its key says.
+    func testTheBoxIsIMessagesAndSendIsArmedOnlyWithSomethingToSend() throws {
+        let html = PhonePage.html
+        XCTAssertTrue(html.contains(#"<textarea id="words" rows="1"></textarea>"#), "no Send on a key that only makes a new line")
+        XCTAssertFalse(html.contains(#"id="camera""#), "the + offers the camera")
+        XCTAssertEqual(html.components(separatedBy: #"type="file""#).count, 2, "one picker")
+        XCTAssertTrue(html.contains(#"<span class="unseen">Send</span>"#), "what VoiceOver says for the arrow")
+        let page = try Self.page(["sendable"])
+        page.evaluateScript("""
+            const parts = { send: { disabled: false }, words: { value: '' } };
+            const $ = (id) => parts[id];
+            let view = { box: { ready: true } }, uploading = false, attached = [];
+            const armed = () => { sendable(); return !parts.send.disabled; };
+            """)
+        XCTAssertEqual(page.evaluateScript("armed()")?.toBool(), false, "nothing to send")
+        XCTAssertEqual(page.evaluateScript("parts.words.value = '  '; armed()")?.toBool(), false, "only spaces")
+        XCTAssertEqual(page.evaluateScript("parts.words.value = 'Hi'; armed()")?.toBool(), true)
+        XCTAssertEqual(page.evaluateScript("uploading = true; armed()")?.toBool(), false, "while a photo goes up")
+        XCTAssertEqual(page.evaluateScript("uploading = false; parts.words.value = ''; attached = [{}]; armed()")?.toBool(), true, "a photo on its own")
+        XCTAssertEqual(page.evaluateScript("view.box.ready = false; armed()")?.toBool(), false, "a new thread that's still starting")
+    }
+
+    /// Reactions come up in a sheet from the foot, as Slack's do, so nothing on the page moves and nothing sits over
+    /// the message. Every sheet has 24-point corners, the link's included.
+    func testReactionsComeUpInASheetSoNothingOnThePageMoves() throws {
+        XCTAssertTrue(PhonePage.html.contains(#"<dialog id="reactsheet" class="sheet" aria-label="React">"#))
+        let script = PhonePage.script
+        let start = try XCTUnwrap(script.range(of: "function react(item) {"))
+        let react = String(script[start.upperBound..<(try XCTUnwrap(script.range(of: "\n}\n", range: start.upperBound..<script.endIndex))).lowerBound])
+        XCTAssertTrue(react.contains("$('reactsheet').showModal();"))
+        XCTAssertFalse(react.contains(".append("), "never into the page beside the message")
+        XCTAssertFalse(script.contains("reactbar"))
+        XCTAssertEqual(try Self.ruleBodies()[".sheet[open]"]?.contains("border-radius: 24px"), true)
+    }
+
+    /// A kitten's message is lit at its edge in its jacket's colour, as the window draws it, with body words on black
+    /// glass, never dark words on a fill. Yours stays filled in your colour. The stylesheet alone says how each looks.
+    func testAKittensMessageIsLitAtItsEdgeAndYoursIsFilled() throws {
+        let page = try Self.page(["el", "button", "lit", "message"])
+        page.evaluateScript("""
+            let view = { marks: [] };
+            const selecting = () => false, react = () => {}, ask = () => {}, markup = () => [];
+            const bubbles = (node) => (node.children || []).flatMap((child) => (child.className || '').startsWith('bubble') ? [child] : bubbles(child));
+            const look = (item) => { const b = bubbles(message(item))[0]; return b.className + ' ' + JSON.stringify(b.style.props); };
+            """)
+        XCTAssertEqual(page.evaluateScript("look({ kind: 'message', mine: true, color: '#1e1830', text: 'Hi', at: 0 })")?.toString(), ##"bubble {"--fill":"#1e1830"}"##)
+        XCTAssertEqual(page.evaluateScript("look({ kind: 'message', name: 'Steve', cat: 'sit/56afb3', color: '#56afb3', text: 'Hi', at: 0 })")?.toString(), ##"bubble lit {"--light":"#56afb3"}"##)
+        XCTAssertEqual(page.evaluateScript("look({ kind: 'message', name: 'Shades', cat: 'sit/shades', text: 'Hi', at: 0, faded: true })")?.toString(), "bubble lit faded {}", "the cat's own, in Shades' light")
+        let rules = try Self.ruleBodies()
+        XCTAssertEqual(rules[".card, .lit"]?.contains("linear-gradient(var(--card-top), var(--card-bottom))"), true, "black glass")
+        XCTAssertEqual(rules[".card::after, .lit::after"]?.contains("linear-gradient(transparent 58%"), true, "its rim brightening into its bottom edge")
+        XCTAssertEqual(rules[".bubble"]?.contains("color: var(--body)"), true, "with body words")
+        XCTAssertFalse(PhonePage.script.contains("bubble.style.color"), "and never words of its own")
+    }
+
+    /// Every place is on a Rimlight tile, as an Opal Dock icon: a kitten's in its own light, and the rest drifting teal
+    /// to pink down the list.
+    func testEachPlaceIsOnATileInItsKittensLight() throws {
+        let book = ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        let places = PhoneView(PhonePlace("home", in: book), in: book, now: noon).places
+        let page = try Self.page(["el", "dot", "lit", "drift", "tile", "places"])
+        page.evaluateScript("function icon() { return document.createElement('svg'); }")
+        let json = String(decoding: try JSONEncoder().encode(places), as: UTF8.self)
+        let tiles = page.evaluateScript("places(\(json)).filter((node) => node.tag === 'button').map((node) => node.children[0].className + ' ' + node.children[0].style.props['--light'])")?.toArray() as? [String]
+        let jacket = { (kitten: Kitten) in "tile \(Opal.hex(ChannelSpeakerLook.color(of: kitten)!))" }
+        XCTAssertEqual(tiles, ["tile hsl(172 100% 68%)", "tile hsl(258 100% 68%)", "tile hsl(344 100% 68%)", jacket(steve), jacket(pepper)])
+    }
+
+    /// Allow is the one primary on an approval's card, as on the cat's own, and the card is lit in its kitten's light.
+    func testAllowIsTheOnePrimaryOnAnApprovalsCard() throws {
+        let command = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
+        let book = book(waiting: Waiting(approvals: [command], owners: ["ap": steve.id]))
+        let row = try XCTUnwrap(PhoneView(PhonePlace("activity", in: book), in: book, now: noon).rows.first { $0.kind == "approval" })
+        let page = try Self.page(["el", "button", "lit", "card", "question", "chosen", "mark"])
+        let json = String(decoding: try JSONEncoder().encode(row), as: UTF8.self)
+        page.evaluateScript("const node = card(\(json)); const buttons = node.children.find((child) => child.className === 'buttons').children;")
+        XCTAssertEqual(page.evaluateScript("buttons.map((b) => b.textContent + ':' + (b.className || 'quiet')).join(', ')")?.toString(), "Deny:quiet, Allow:go, Allow for this session:quiet")
+        XCTAssertEqual(page.evaluateScript("node.style.props['--light']")?.toString(), Opal.hex(ChannelSpeakerLook.color(of: steve)!))
+    }
+
+    /// A picture comes in after the page is drawn, so opening a conversation with one in it landed above its newest
+    /// message, behind the box. If you were at the foot, the picture keeps you there, as iMessage does, and it never
+    /// pulls you down from where you'd scrolled to.
+    func testAPictureThatComesInLateKeepsAConversationAtItsFoot() throws {
+        let page = try Self.page(["el", "button", "lit", "message", "settle"])
+        page.evaluateScript("""
+            let view = { marks: [] }, atFoot = true, jumped = false, scrolledTo = null;
+            const selecting = () => false, react = () => {}, ask = () => {}, markup = () => [];
+            const window = { scrollTo(x, y) { scrolledTo = y; } };
+            document.body = { scrollHeight: 1383 };
+            const $ = () => ({ hidden: true });
+            const photos = (node) => (node.children || []).flatMap((child) => child.className === 'picture' ? [child] : photos(child));
+            const photo = photos(message({ kind: 'message', mine: true, color: '#1e1830', text: 'Here', at: 0, files: [{ name: 'photo.jpg', picture: 'data:image/jpeg;base64,' }] }))[0];
+            """)
+        page.evaluateScript("photo.onload()")
+        XCTAssertEqual(page.evaluateScript("scrolledTo")?.toInt32(), 1383, "back to the foot once it's in")
+        page.evaluateScript("scrolledTo = null; atFoot = false; photo.onload()")
+        XCTAssertEqual(page.evaluateScript("scrolledTo === null")?.toBool(), true, "and never from where you'd scrolled to")
+
+        let foot = try Self.page(["foot"])
+        foot.evaluateScript("""
+            let atFoot = false, footY = 0;
+            const key = 'c:steve', conversation = () => true;
+            const window = { innerHeight: 844, scrollY: 701 };
+            document.body = { scrollHeight: 1545 };
+            """)
+        foot.evaluateScript("foot(); document.body.scrollHeight = 1672; foot()")
+        XCTAssertEqual(foot.evaluateScript("atFoot")?.toBool(), true, "a picture growing the page under you leaves you at the foot")
+        foot.evaluateScript("window.scrollY = 400; foot()")
+        XCTAssertEqual(foot.evaluateScript("atFoot")?.toBool(), false, "scrolling up leaves it")
+        foot.evaluateScript("window.scrollY = 828; foot()")
+        XCTAssertEqual(foot.evaluateScript("atFoot")?.toBool(), true, "and scrolling back down comes back to it")
+    }
+
+    /// Your square in a reply bar has an edge, as in the window, since your colour is too close to the phone's black.
+    func testYourSquareHasAnEdgeOnThePhonesBlack() throws {
+        XCTAssertEqual(try Self.ruleBodies()[".face"]?.contains("box-shadow: inset 0 0 0 1px var(--dim)"), true)
+        XCTAssertGreaterThanOrEqual(Opal.contrast(Opal.dim, 0), 3, "the 3:1 a shape needs")
+        XCTAssertLessThan(Opal.contrast(Opal.selected, 0), 3, "which your colour alone isn't")
+    }
+
+    /// Added to the Home Screen, it opens on pure black under a status bar it draws behind, as an iPhone's own apps do.
+    func testOnTheHomeScreenItOpensOnPureBlack() throws {
+        let manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(PhonePage.manifest.utf8)) as? [String: Any])
+        XCTAssertEqual(manifest["background_color"] as? String, "#000000")
+        XCTAssertEqual(manifest["theme_color"] as? String, "#000000")
+        XCTAssertTrue(PhonePage.html.contains(#"<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">"#))
+        XCTAssertTrue(PhonePage.html.contains(#"<meta name="color-scheme" content="dark">"#))
+    }
+
+    /// The horizon belongs to the wallpaper alone, so the page draws none: no arc at its foot, and no room kept at the
+    /// end of a list to scroll clear of one.
+    func testThePageDrawsNoHorizon() throws {
+        let sheet = PhonePage.style + PhonePage.colors
+        for part in ["html::after", "--horizon", "image/svg+xml", "#box[hidden]) main"] { XCTAssertFalse(sheet.contains(part), part) }
+        XCTAssertEqual(try Self.ruleBodies()["main"]?.contains("24px calc(env(safe-area-inset-left) + 16px)"), true, "a list ends as any page does")
+    }
+
+    /// A pull request's state is in Opal's status colours rather than GitHub's fills, and an error sits on Opal's error
+    /// surface rather than a block of rose.
+    func testStatesAndErrorsAreInOpalsStatusColours() throws {
+        let rules = try Self.ruleBodies()
+        XCTAssertEqual(rules[".chip[data-state=open]"]?.contains("color: var(--good)"), true)
+        XCTAssertEqual(rules[".chip[data-state=merged]"]?.contains("color: var(--lilac)"), true)
+        XCTAssertEqual(rules[".chip[data-state=closed]"]?.contains("color: var(--error-text)"), true)
+        XCTAssertFalse(PhonePage.style.contains("#1f883d") || PhonePage.style.contains("#8250df") || PhonePage.style.contains("#cf222e"))
+        XCTAssertEqual(rules["#banner"]?.contains("color: var(--error-text); background: var(--error-surface)"), true)
     }
 }
