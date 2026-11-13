@@ -145,6 +145,27 @@ final class MarkupTests: XCTestCase {
         XCTAssertLessThan(cut, full)
     }
 
+    func testWordsAreCutToThirtyLinesOnlyPastForty() {
+        func lines(_ count: Int) -> ChannelTextBlock {
+            ChannelTextBlock(ChannelMarkdown.attributed((1...count).map { "Line \($0)" }.joined(separator: "\n")))
+        }
+        let forty = lines(40)
+        forty.fit(width: 400, maxLines: 30)
+        XCTAssertFalse(forty.isCut, "a Show more would hide only ten lines")
+        let long = lines(41)
+        let full = long.fit(width: 400)
+        let cut = long.fit(width: 400, maxLines: 30)
+        XCTAssertTrue(long.isCut)
+        XCTAssertEqual(cut / full, 30 / 41, accuracy: 0.02)
+    }
+
+    func testATableRowCountsAsOneLine() {
+        let rows = (1...20).map { "| \($0) | b | c |" }.joined(separator: "\n")
+        let block = ChannelTextBlock(ChannelMarkdown.attributed("| A | B | C |\n| --- | --- | --- |\n" + rows))
+        block.fit(width: 400, maxLines: 30)
+        XCTAssertFalse(block.isCut, "21 rows of three cells")
+    }
+
     func testFormattedWordsLayOutAtAnyWidth() {
         for width in stride(from: CGFloat(60), through: 400, by: 10) {
             let block = ChannelTextBlock(ChannelMarkdown.attributed(formatted))
