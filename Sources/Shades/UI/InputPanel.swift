@@ -38,7 +38,6 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
         textView.allowsUndo = true
         textView.drawsBackground = false
         textView.font = .systemFont(ofSize: 14)
-        textView.textColor = Ink.text
         textView.insertionPointColor = Ink.accent
         textView.textContainerInset = .zero
         textView.textContainer?.lineFragmentPadding = 0
@@ -50,12 +49,19 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
         textView.isAutomaticDashSubstitutionEnabled = false
 
         caption.font = .systemFont(ofSize: 11)
-        caption.textColor = Ink.soft
         caption.isHidden = true
         balloon.addSubview(caption)
 
         mic.onPress = { [weak self] in self?.onMic?() }
         balloon.addSubview(mic)
+        restyle()
+    }
+
+    /// In the theme you just picked.
+    func restyle() {
+        textView.textColor = MessagesInk.text
+        caption.textColor = MessagesInk.soft
+        panel.wearTheme()
     }
 
     var isVisible: Bool { panel.isVisible }
@@ -206,7 +212,7 @@ class PlaceholderTextView: NSTextView {
         guard string.isEmpty else { return }
         NSAttributedString(string: placeholder, attributes: [
             .font: font ?? .systemFont(ofSize: 14),
-            .foregroundColor: Ink.soft,
+            .foregroundColor: MessagesInk.soft,
         ]).draw(at: .zero)
     }
 

@@ -28,6 +28,11 @@ final class KittenPanel {
     var isVisible: Bool { panel.isVisible }
     var frame: NSRect { panel.frame }
 
+    /// In the theme you just picked, kittens and all, even while it's up.
+    func restyle() {
+        panel.wearTheme()
+    }
+
     /// Opens the panel, or brings it up to date if it's already open.
     func show(_ statuses: [KittenStatus]) {
         rows.forEach { $0.removeFromSuperview() }
@@ -158,7 +163,7 @@ final class KittenRow: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         if hovering {
-            Ink.hover.setFill()
+            MessagesInk.hover.setFill()
             NSBezierPath(roundedRect: bounds, xRadius: 9, yRadius: 9).fill()
         }
         drawKitten()
@@ -170,12 +175,12 @@ final class KittenRow: NSView {
         truncating.lineBreakMode = .byTruncatingTail
         NSAttributedString(string: status.kitten.name, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium),
-            .foregroundColor: notSetUp ? Ink.soft : Ink.text,
+            .foregroundColor: notSetUp ? MessagesInk.soft : MessagesInk.text,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: left, y: 6, width: width, height: 17))
         NSAttributedString(string: "\(status.kitten.role) · \(CatWords.kittenState(status.state))", attributes: [
             .font: NSFont.systemFont(ofSize: 11),
-            .foregroundColor: Ink.soft,
+            .foregroundColor: MessagesInk.soft,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: left, y: 24, width: width, height: 14))
 
@@ -204,7 +209,7 @@ final class KittenRow: NSView {
         switch state {
         case .working: return Ink.hex(CatGlint.thinking(bright: true).color!)
         case .needsYou: return Ink.hex(CatGlint.attention(bright: true).color!)
-        case .idle: return Ink.soft
+        case .idle: return MessagesInk.soft
         case .notSetUp: return .clear
         }
     }

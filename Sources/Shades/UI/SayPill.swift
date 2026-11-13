@@ -3,7 +3,7 @@ import AppKit
 /// The one-word things the cat says, as the small dark pill from the site.
 @MainActor
 final class SayPill {
-    private let panel = QuietPanel(shadow: false)
+    let panel = QuietPanel(shadow: false)
     private let pill = PillView()
     private var hideTimer: Timer?
 
@@ -13,6 +13,11 @@ final class SayPill {
     }
 
     var isVisible: Bool { panel.isVisible }
+
+    /// In the theme you just picked.
+    func restyle() {
+        panel.wearTheme()
+    }
 
     func say(_ word: String, over anchor: NSRect, in visible: NSRect, seconds: TimeInterval?) {
         hideTimer?.invalidate()
@@ -44,7 +49,7 @@ private final class PillView: NSView {
     var text = "" { didSet { needsDisplay = true } }
 
     private var label: NSAttributedString {
-        NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: Ink.pillText])
+        NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: MessagesInk.pillText])
     }
 
     override var fittingSize: NSSize {
@@ -53,7 +58,7 @@ private final class PillView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        Ink.pill.setFill()
+        MessagesInk.pill.setFill()
         let radius = min(10, bounds.height / 2)
         NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
         let text = label

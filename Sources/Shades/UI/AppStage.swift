@@ -268,6 +268,11 @@ final class AppStage: CatStage {
 
     func showTheme(_ theme: ColorTheme?) {
         channels.apply(theme)
+        bubble.restyle()
+        input.restyle()
+        kittens.restyle()
+        pill.restyle()
+        pairing.restyle()
     }
 
     /// Only looks for themes when you open it.

@@ -1,8 +1,8 @@
 import AppKit
 import ShadesCore
 
-/// Messages' colours: the theme you picked, or Ink's own. Only Messages, Settings and the phone take a theme, so the
-/// cat's other windows stay as they are. Kittens keep their own colours either way.
+/// The app's colours: the theme you picked in Messages, or Ink's own. Every window takes them, from Messages and
+/// Settings to the cat's bubble, Ask box and panels, so it all looks like one app. Kittens keep their own colours either way.
 enum MessagesInk {
     /// Set when the app starts and when you pick one, and read as Messages draws, all on the main thread.
     static var theme: ColorTheme?
@@ -63,7 +63,8 @@ enum MessagesInk {
     static var paper: NSColor { themed(\.paper) ?? Ink.paper }
     static var sidebar: NSColor { themed(\.sidebar) ?? Ink.hover }
     static var text: NSColor { themed(\.text) ?? Ink.text }
-    static var soft: NSColor { themed(\.soft) ?? Ink.soft }
+    /// Quieter words, such as times and captions, held to 4.5:1 even on a row you hover, as the phone's are.
+    static var soft: NSColor { theme.map { Ink.hex(ColorTheme.legible($0.soft, on: $0.hover)) } ?? Ink.soft }
     static var line: NSColor { themed(\.line) ?? Ink.line }
     static var hover: NSColor { themed(\.hover) ?? Ink.hover }
     static var press: NSColor { themed(\.press) ?? Ink.press }
@@ -74,6 +75,9 @@ enum MessagesInk {
     static var link: NSColor { legible(\.link, else: ChannelSpeakerLook.yours) }
     /// Why something didn't work, such as a message that couldn't be sent.
     static var danger: NSColor { legible(\.danger, else: ColorTheme.red) }
+    /// The cat's one-word pill and a filled button: the theme's words as the fill, and its paper as the ink.
+    static var pill: NSColor { themed(\.text) ?? Ink.pill }
+    static var pillText: NSColor { themed(\.paper) ?? Ink.pillText }
     /// A count of what's waiting on you, in the colour the cat glints when something does.
     static var badge: NSColor { Ink.hex(CatGlint.attention(bright: true).color!) }
     static var onBadge: NSColor { ChannelSpeakerLook.readable(on: CatGlint.attention(bright: true).color!) }

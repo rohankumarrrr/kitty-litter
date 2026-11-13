@@ -64,15 +64,14 @@ final class BubbleView: BalloonView {
 
         for label in [caption, counter] {
             label.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-            label.textColor = Ink.soft
             label.lineBreakMode = .byTruncatingTail
             label.isHidden = true
             addSubview(label)
         }
         heading.font = .systemFont(ofSize: 13, weight: .semibold)
-        heading.textColor = Ink.text
         heading.isHidden = true
         addSubview(heading)
+        restyle()
     }
 
     @available(*, unavailable)
@@ -104,7 +103,7 @@ final class BubbleView: BalloonView {
         style.lineSpacing = 2
         let attributed = NSAttributedString(string: body, attributes: [
             .font: font,
-            .foregroundColor: words.isSoft ? Ink.soft : Ink.text,
+            .foregroundColor: words.isSoft ? MessagesInk.soft : MessagesInk.text,
             .paragraphStyle: style,
         ])
         if textView.string != body || textView.font != font {
@@ -113,6 +112,14 @@ final class BubbleView: BalloonView {
         // Anything worth keeping can be selected, and "Thinking..." isn't.
         textView.isSelectable = content.hasSelectableText
         return layout(limitHeight: limitHeight, code: code)
+    }
+
+    /// Its words in the theme's colours, after you pick another.
+    func restyle() {
+        caption.textColor = MessagesInk.soft
+        counter.textColor = MessagesInk.soft
+        heading.textColor = MessagesInk.text
+        if let content { textView.textColor = content.words().isSoft ? MessagesInk.soft : MessagesInk.text }
     }
 
     func advanceThinking() {
@@ -317,8 +324,9 @@ final class EdgeFade: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override func draw(_ dirtyRect: NSRect) {
-        let clear = Ink.paper.withAlphaComponent(0)
-        NSGradient(starting: top ? clear : Ink.paper, ending: top ? Ink.paper : clear)?.draw(in: bounds, angle: 90)
+        let paper = MessagesInk.paper
+        let clear = paper.withAlphaComponent(0)
+        NSGradient(starting: top ? clear : paper, ending: top ? paper : clear)?.draw(in: bounds, angle: 90)
     }
 
     // Only paint, so clicks, selecting and scrolling reach the text under it.

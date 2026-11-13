@@ -37,7 +37,7 @@ It prints `front another app`, a `window <name> ...` line for each of `cat`, `bu
 Find the feature in [features/README.md](features/README.md), run its journey from `journeys/`, then read the output and the pictures. To try something the map doesn't cover, write a journey file under `.verify/shades/` and run that. The commands, one a line:
 
 - `wait <seconds>` holds back the lines after it. Each feature file says how long its steps take.
-- `draw <folder>` has each window that's showing draw itself to `<folder>/<name>.png`, and prints `drew <name> <path>`. `input` is the Ask box and `channels` is The Kitty Litter.
+- `draw <folder>` has each window that's showing draw itself to `<folder>/<name>.png`, and prints `drew <name> <path>`. `input` is the Ask box, `channels` is The Kitty Litter and `pill` is the word over the cat.
 - `windows` prints each window's frame, whether it's showing and whether it has the keyboard, then the cat's state and `active=`.
 - `front` prints `The Kitty Litter` when this copy is in front, `another app` when anything else is, and `nothing` when nothing is. The `front=` on `key`, `highlight` and `tab` lines says the same. Your installed copy in front counts as another app.
 - `record <file.gif> <window>...` records those windows, or `phone`, as a looping GIF until `record stop`, and keeps each frame as a picture in `.verify/shades/record/<name>/`. See [Recordings](#recordings).
