@@ -451,7 +451,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf [messages|cat|phone|idle seconds] | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|shades|[kitten] | thread [reply] [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | arrow up|down | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | toolbar [button] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off|stuck | check | team on|off | screen on|off | ears on|off|denied | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | voiceover [window]|press [label]|menu [label] | windows | cover [beside] | draw [folder] | opal [folder] [jacket...] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf [messages|cat|phone|idle seconds] | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|shades|[kitten] | thread [reply] [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | arrow up|down | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | toolbar [button] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off|stuck | check | team on|off | screen on|off | ears on|off|denied | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | voiceover [window]|press [label]|menu [label] | windows | cover [beside] | draw [folder] | opal [folder] [jacket...] | wait [seconds] | buttons | bubble [button] | words | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -859,6 +859,13 @@ final class DemoDriver {
             let button = stage.bubble.view.subviews.compactMap { $0 as? QuietButton }.first { $0.accessibilityLabel() == rest }
             print(button == nil ? "no bubble button [\(rest)]" : "pressed \(rest)")
             button?.onPress?()
+        case "words":
+            // The same as clicking into the bubble's words, which gives it the keyboard when they can be selected.
+            let bubble = stage.bubble
+            guard bubble.isVisible, bubble.view.textView.needsPanelToBecomeKey else { return print("no words to click into") }
+            bubble.panel.makeKey()
+            bubble.panel.makeFirstResponder(bubble.view.textView)
+            print("words key=\(bubble.panel.isKeyWindow) front=\(front)")
         case "buttons":
             for case let button as QuietButton in stage.bubble.view.subviews {
                 let frame = stage.bubble.panel.convertToScreen(button.convert(button.bounds, to: nil))
