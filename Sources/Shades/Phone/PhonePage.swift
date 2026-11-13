@@ -250,10 +250,11 @@ enum PhonePage {
         .more { color: var(--secondary); font-size: calc(14em / 17); margin: -8px 12px -12px; }
         .failure { color: var(--error-text); font-size: calc(13em / 17); margin: 3px 12px 0; }
         .retry { color: var(--lilac); font-size: calc(14em / 17); font-weight: 600; margin: -8px 12px -12px; }
-        /* Tapping a message offers its reactions. This is the same for a keyboard and VoiceOver, and shows only while
-           it has the keyboard. */
-        .react { color: var(--lilac); font-size: calc(14em / 17); font-weight: 600; margin: -8px 12px -12px; }
-        .react:not(:focus) { position: absolute; width: 1px; min-width: 0; height: 1px; min-height: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+        /* Tapping a message offers its reactions, and tapping a post opens its thread. A keyboard and VoiceOver get a
+           button for each, React, and Open thread where there's no reply bar to press, shown only while it has the
+           keyboard. */
+        .open, .react { color: var(--lilac); font-size: calc(14em / 17); font-weight: 600; margin: -8px 12px -12px; }
+        .open:not(:focus), .react:not(:focus) { position: absolute; width: 1px; min-width: 0; height: 1px; min-height: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
         .reactions { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 8px 0; }
         .reactions button { position: relative; min-height: 32px; background: var(--control); box-shadow: inset 0 0 0 1px var(--field-edge);
           border-radius: 999px; padding: 0 10px; font-size: calc(15em / 17); }
@@ -405,7 +406,7 @@ enum PhonePage {
           unreachable: "Can't reach your Mac. The Kitty Litter has to be running, and your Mac awake.",
           gone: "That's changed since. Have another look.",
           wrongCode: "That code didn't work. Turn pairing on again in The Kitty Litter on your Mac for a new one.",
-          answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied', react: 'React',
+          answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied', react: 'React', openThread: 'Open thread',
           waiting: (count) => count + ' waiting', unread: 'unread',
           openLink: (host) => 'Open a link to ' + host + '?',
           showPicture: (host) => 'Show a picture from ' + host + '?', pictureFrom: (host) => '🖼 Picture from ' + host,
@@ -969,6 +970,7 @@ enum PhonePage {
               const node = message(item);
               const bar = replybar(item);
               if (bar) node.append(bar);
+              else node.append(button(words.openThread, () => go(item.open), 'open'));
               // A link or Copy in it does what it says, and only that.
               node.querySelector('.bubble')?.addEventListener('click', (event) => {
                 if (!selecting() && !event.target.closest('[role=link], button')) go(item.open);

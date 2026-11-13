@@ -220,6 +220,18 @@ final class PressPhoneTests: XCTestCase {
         try await shows(threadKey)
     }
 
+    /// A post nobody has answered has no reply bar, so its words were the only way in, which a keyboard can't get to.
+    func testAParentWithNoRepliesOpensFromTheKeyboardToo() async throws {
+        let quiet = PhonePlace.key(.thread("n", in: .channel(.of(steve))))
+        try await open(at: steveKey)
+        try await phone.tap(".msg .bubble", "Nobody answered. See https://example.com/notes")
+        try await shows(quiet)
+        try await phone.tap("#back")
+        try await shows(steveKey)
+        try await phone.press(.returnKey, on: ".open", "Open thread")
+        try await shows(quiet)
+    }
+
     /// A link in a post is a link, as anywhere else. Tapping it also opened the thread, under the link's sheet.
     func testALinkInAParentAsksWithoutOpeningTheThread() async throws {
         try await open(at: steveKey)
