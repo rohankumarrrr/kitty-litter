@@ -14,10 +14,12 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
     private let scroll = NSScrollView()
     private let textView = PlaceholderTextView()
     private let caption = NSTextField(wrappingLabelWithString: "")
+    let mic = QuietButton.mic()
     private var request: InputRequest?
 
     var anchor: () -> (frame: NSRect, visible: NSRect) = { (.zero, .zero) }
     var onLayout: (() -> Void)?
+    var onMic: (() -> Void)?
 
     override init() {
         super.init()
@@ -51,6 +53,9 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
         caption.textColor = Ink.soft
         caption.isHidden = true
         balloon.addSubview(caption)
+
+        mic.onPress = { [weak self] in self?.onMic?() }
+        balloon.addSubview(mic)
     }
 
     var isVisible: Bool { panel.isVisible }
@@ -91,6 +96,7 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
     private func relayout() {
         let padding = Self.padding
         let inner = Self.width - padding * 2
+        let textWidth = inner - QuietButton.micSide
         textView.layoutManager?.ensureLayout(for: textView.textContainer!)
         let used = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0
         let lines = max(Self.lineHeight, ceil(used))
@@ -109,10 +115,13 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
         apply(placement)
 
         let body = balloon.body
-        scroll.frame = NSRect(x: padding, y: body.maxY - padding - visibleText, width: inner, height: visibleText)
-        textView.minSize = NSSize(width: inner, height: 0)
-        textView.maxSize = NSSize(width: inner, height: .greatestFiniteMagnitude)
-        textView.frame = NSRect(x: 0, y: 0, width: inner, height: lines)
+        scroll.frame = NSRect(x: padding, y: body.maxY - padding - visibleText, width: textWidth, height: visibleText)
+        textView.minSize = NSSize(width: textWidth, height: 0)
+        textView.maxSize = NSSize(width: textWidth, height: .greatestFiniteMagnitude)
+        textView.frame = NSRect(x: 0, y: 0, width: textWidth, height: lines)
+        // Level with the first line, reaching a little into the padding, as the Attach button does in Messages.
+        let side = QuietButton.micSide
+        mic.frame = NSRect(x: padding + inner - side + 6, y: body.maxY - padding - (Self.lineHeight + side) / 2, width: side, height: side)
         caption.frame = NSRect(x: padding - 2, y: body.minY + padding - 2, width: inner + 4, height: captionHeight)
         balloon.needsDisplay = true
         panel.invalidateShadow()

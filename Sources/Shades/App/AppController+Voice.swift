@@ -5,7 +5,7 @@ import ShadesCore
 extension AppController {
     /// A box is up that what you say belongs in, so nothing needs a look at the screen.
     var boxTakesVoice: Bool { fixIsOpen || dropIsOpen }
-    private var talkBoxIsStillUp: Bool { boxTakesVoice && talkBox == boxesOpened }
+    private var talkBoxIsStillUp: Bool { stage.isInputVisible && talkBox == boxesOpened }
 
     func keyPressed(_ key: HoldKey) {
         if key == settings.talkKey {
@@ -23,12 +23,38 @@ extension AppController {
         }
     }
 
-    func talkDown() {
+    /// A box's mic was pressed. The first press talks into that box, as the talk key does while you type there, and the
+    /// next one finishes what you said.
+    func micPressed(in box: VoiceBox) {
+        switch voiceMode {
+        case nil:
+            talkDown(into: box)
+        // Only a take for a box finishes here, so a mic can't send a look the talk key took to the router.
+        case .talk where hearing && boxTakesVoiceNow:
+            voiceTask = Task { await talkUp() }
+        default:
+            break
+        }
+    }
+
+    /// `box` is the box whose mic was pressed. Without one, it's the talk key.
+    func talkDown(into box: VoiceBox? = nil) {
         guard voiceMode == nil else { return }
-        // Messages' box only counts if you're typing in it, not if it's open behind your work. When you are, it has the
-        // keyboard, so it wins over a Fix or drop box left open behind it.
-        talkToMessages = stage.isMessagesBoxTyping ? messagesClosings : nil
-        talkBox = boxTakesVoice && talkToMessages == nil ? boxesOpened : nil
+        switch box {
+        case nil:
+            // Messages' box only counts if you're typing in it, not if it's open behind your work. When you are, it has
+            // the keyboard, so it wins over a Fix or drop box left open behind it.
+            talkToMessages = stage.isMessagesBoxTyping ? messagesClosings : nil
+            talkBox = boxTakesVoice && talkToMessages == nil ? boxesOpened : nil
+        case .ask:
+            talkToMessages = nil
+            talkBox = stage.isInputVisible ? boxesOpened : nil
+        case .messages:
+            talkToMessages = stage.isMessagesBoxTyping ? messagesClosings : nil
+            talkBox = nil
+        }
+        // A mic is only ever for its own box, so it never looks at the screen.
+        guard box == nil || boxTakesVoiceNow else { return }
         if talkToMessages != nil { stage.holdMessagesBox() }
         // The look happens as the key goes down: that's the moment you mean.
         if !boxTakesVoiceNow { talkLook = startLook(CaptureOptions()) }
@@ -47,6 +73,8 @@ extension AppController {
     }
 
     func talkUp() async {
+        // A take that was cancelled, such as by its box closing, has nothing left to finish.
+        guard hearing, voiceMode == .talk else { return }
         let forMessages = talkToMessages != nil
         hearing = false
         stage.catLevel(0)
@@ -92,6 +120,34 @@ extension AppController {
 
     /// A box what you say belongs in was up when the key went down, so nothing needs a look at the screen.
     private var boxTakesVoiceNow: Bool { talkBox != nil || talkToMessages != nil }
+
+    /// The box that's hearing you, for its mic to show it.
+    var listeningBox: VoiceBox? {
+        guard hearing, voiceMode == .talk else { return nil }
+        return talkToMessages != nil ? .messages : talkBox != nil ? .ask : nil
+    }
+
+    /// Every box over the cat goes up through here, numbered so words meant for one can't land in the next. What you're
+    /// saying into it is forgotten when it closes, since there's nowhere left for it and no mic left to finish it with.
+    func showBox(_ request: InputRequest) {
+        boxesOpened += 1
+        let box = boxesOpened
+        var request = request
+        let submit = request.onSubmit, cancel = request.onCancel
+        request.onSubmit = { [weak self] text in
+            self?.boxClosed(box)
+            submit(text)
+        }
+        request.onCancel = { [weak self] in
+            self?.boxClosed(box)
+            cancel()
+        }
+        stage.showInput(request)
+    }
+
+    private func boxClosed(_ box: Int) {
+        if hearing, talkBox == box { cancelListening() }
+    }
 
     func dictateDown() {
         guard voiceMode == nil, beginListening(.dictate) else { return }

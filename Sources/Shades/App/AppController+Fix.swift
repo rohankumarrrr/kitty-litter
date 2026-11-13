@@ -37,8 +37,7 @@ extension AppController {
             caption = CatWords.fixCaption(modelName: frontierName)
         }
         fixIsOpen = true
-        boxesOpened += 1
-        stage.showInput(InputRequest(
+        showBox(InputRequest(
             placeholder: canSee ? CatWords.fixPlaceholder(talkKey: settings.talkKey) : CatWords.tellMeWhatsWrong,
             caption: caption,
             allowsEmpty: canSee,

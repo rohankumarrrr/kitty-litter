@@ -164,7 +164,7 @@ Each cell is a single press, so read this as a direction rather than a precise f
 
 ## The first word
 
-The microphone stays off until the key goes down, so nothing can be buffered in advance, and the only defence is opening it fast. Here's what a slow open costs, measured by cutting speech off the front of clips:
+The microphone stays off until the key goes down, or a box's mic is pressed, so nothing can be buffered in advance, and the only defence is opening it fast. Here's what a slow open costs, measured by cutting speech off the front of clips:
 
 | Speech lost at the start | First word right | First word right with 100 ms of silence added | WER with that silence |
 |---:|---:|---:|---:|
@@ -204,7 +204,17 @@ The tail works the same way in reverse. After the key comes up the mic stays on 
 
 `probe-voice keys-selftest` confirmed the tap tells all seven keys apart using synthetic events. The gesture rules above are unit tested, and nothing has been tried with fingers yet.
 
-Hold-to-talk fills the text box instead of going to the router when the box is waiting for your words, as when you're describing what to fix, or when you're typing in the box in The Kitty Litter. No new look at the screen happens, and saying it counts as pressing Return. In The Kitty Litter, what you say goes after anything you'd typed, to wherever the line over the box said when the key went down. That line stays put while you talk, so a question arriving can't take your words as its answer, and if where it pointed has gone by the time you let go, such as a question answered in T3, your words wait in the box instead. Your words don't show over the cat while they're going into a box. The Kitty Litter only counts while its box has the keyboard, and then it wins over a Fix box left open behind it. Open behind your work, it doesn't change what the talk key does, and closing it while you talk sends your words nowhere, even if you open it again before letting go. Where your words go is decided when the key goes down, so if the box closes before you've finished, they go nowhere rather than to the router, and a question you started before opening the box stays a question.
+Hold-to-talk fills the text box instead of going to the router when the box is waiting for your words, as when you're describing what to fix, or when you're typing in the box in The Kitty Litter. No new look at the screen happens, and saying it counts as pressing Return. In The Kitty Litter, what you say goes after anything you'd typed, to wherever the line over the box said when the key went down. That line stays put while you talk, so a question arriving can't take your words as its answer, and if where it pointed has gone by the time you let go, such as a question answered in T3, your words wait in the box instead. Your words don't show over the cat while they're going into a box. The Kitty Litter only counts while its box has the keyboard, and then it wins over a Fix box left open behind it. Open behind your work, it doesn't change what the talk key does, and closing it while you talk sends your words nowhere, even if you open it again before letting go. Where your words go is decided when the key goes down, so if the box closes before you've finished, they go nowhere rather than to the router, and a question you started before opening the box stays a question. Closing the box also turns the mic off there and then, rather than when you let go.
+
+### The mic in a box
+
+The Ask box, and the box in The Kitty Litter, each have a mic at the right of where you type, for talking without knowing the key. Pressing it starts a take, and pressing it again finishes it. Its tooltip names your talk key, from Settings › Voice. It goes through the same box path as holding the key while you type there (`micPressed` and `talkDown(into:)` in `AppController+Voice.swift`), with the same rules, and three differences:
+
+- **It never looks at the screen.** The talk key looks when no box takes your words. A mic is always in a box, so it never does, and a mic pressed in a box that's gone does nothing. In the plain Ask box, what you say is sent as if you'd typed it, with the look the box took when it opened, which is what typing there does.
+- **It only finishes a take for a box.** A take the talk key started for the screen stays the key's, so a mic can't send that look to the router.
+- **Pressing it gives The Kitty Litter's box the keyboard**, as clicking into it would, without making The Kitty Litter the active app. So what you say goes where the line over that box says, and finishing with the mic after you've clicked into another app still sends it there.
+
+The mic shows it's hearing you while it does, and VoiceOver hears it as **Speak**, then **Done speaking**. Esc forgets what you said, as it does with the key: in the Ask box it closes the box, and in The Kitty Litter it leaves the pane open. Closing the box, or clicking away from the Ask box, which closes it, turns the mic off and sends nothing. The engine's 5-minute limit still turns the mic off on its own. If the mic or the speech model isn't ready, the cat says why, as it does for the key. The phone page has no mic, since your phone's keyboard already has dictation.
 
 Secure Keyboard Entry and password fields can hide key events from taps, which is why that timer exists. It may also mean hold keys don't start there, which is fine, since there's nowhere safe to type.
 
@@ -289,7 +299,7 @@ Task { for await level in engine.levels { /* 0 to 1 */ } }
 
 ```xml
 <key>NSMicrophoneUsageDescription</key>
-<string>The Kitty Litter listens only while you hold your talk or dictate key, and your voice stays on your Mac.</string>
+<string>The Kitty Litter listens only while you hold your talk or dictate key, or from pressing a mic until you press it again, and your voice stays on your Mac.</string>
 ```
 
 macOS kills an app that opens the mic without this.

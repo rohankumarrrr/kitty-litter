@@ -389,6 +389,7 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
     var regionCancelled = false
 
     func snapshot(_ options: CaptureOptions) async throws -> ScreenSnapshot {
+        print("[demo] looked at the screen")
         try await Task.sleep(nanoseconds: 80_000_000)
         // Missing permissions mean missing fields rather than errors, as with the real thing.
         if fails { return ScreenSnapshot(appName: "Safari", bundleID: "com.apple.Safari", windowTitle: "Pricing") }

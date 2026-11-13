@@ -22,7 +22,7 @@ The recordings here come from demo mode, with made-up kittens and a pretend pric
 
 **Fix what I'm looking at.** Press ⌃⌥F and drag a box around whatever's wrong. Say what's wrong, or just press Return. A frontier agent works out which of your projects it is, and fixes it in its own worktree, so your checkout stays untouched.
 
-**Talk and dictate.** Hold right Option to talk to the cat. Hold Fn to dictate into any app, and your rambling comes out as clean text: fillers gone, self-corrections applied. Speech recognition and cleanup both run on your Mac.
+**Talk and dictate.** Hold right Option to talk to the cat. Or press the mic in the Ask box, or in The Kitty Litter's box, then press it again when you've finished, and what you said goes where typing it would, with no look at your screen. Hold Fn to dictate into any app, and your rambling comes out as clean text: fillers gone, self-corrections applied. Speech recognition and cleanup both run on your Mac.
 
 <img src="docs/images/talk.gif" width="372" alt="Holding the talk key, the cat showing what it heard, then answering">
 

@@ -1,0 +1,36 @@
+front
+ask
+wait 1
+voiceover input
+draw .verify/shades/mic/1-ask
+voiceover press Speak
+wait 1.6
+voiceover input
+draw .verify/shades/mic/2-ask-listening
+voiceover press Done speaking
+wait 2.5
+draw .verify/shades/mic/3-ask-answered
+esc
+wait 0.5
+ask
+wait 1
+voiceover press Speak
+wait 0.8
+esc
+wait 1
+windows
+channels
+wait 2
+channel general
+wait 1
+voiceover box
+voiceover press Speak
+wait 1.6
+voiceover box
+draw .verify/shades/mic/4-general-listening
+windows
+voiceover press Done speaking
+wait 2.5
+draw .verify/shades/mic/5-general-sent
+front
+windows

@@ -455,6 +455,7 @@ final class AppController {
             status = .none
         }
         stage.catStatus(status)
+        stage.showListening(in: listeningBox)
     }
 
     /// One short line from the cat. It stays until you dismiss it, since a problem often says what to do about it,

@@ -106,6 +106,8 @@ extension AppController {
         // A phone that's looking keeps it reading. Once it stops too, what's been read waits for the next look.
         if phone?.isHolding != true { channels.close() }
         messagesClosings += 1
+        // What you were saying into its box has nowhere to go now, so the mic needn't stay open for it.
+        if listeningBox == .messages { cancelListening() }
         if awaySeen {
             awaySeen = false
             away = []

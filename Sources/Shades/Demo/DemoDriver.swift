@@ -423,6 +423,9 @@ final class DemoDriver {
             ("bubble", stage.bubble.view),
             ("kittens", stage.kittens.panel.contentView),
             ("sidebar", stage.channels.view.sidebar),
+            ("input", stage.input.panel.contentView),
+            ("box", stage.channels.view.pane.composer),
+            ("threadbox", stage.channels.view.threadPane.composer),
             ("pairing", stage.pairing.panel.contentView),
         ]
         func elements(in view: NSView) -> [NSView] {
@@ -430,7 +433,7 @@ final class DemoDriver {
             return (view.isAccessibilityElement() ? [view] : []) + view.subviews.flatMap(elements)
         }
         return roots.flatMap { name, root -> [(window: String, view: NSView)] in
-            guard let root, root.window?.isVisible == true else { return [] }
+            guard let root, root.window?.isVisible == true, !root.isHiddenOrHasHiddenAncestor else { return [] }
             return elements(in: root).map { (name, $0) }
         }
     }

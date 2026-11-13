@@ -45,6 +45,11 @@ struct InputRequest {
     var onCancel: () -> Void
 }
 
+/// A box with a mic in it, which takes what you say in place of typing, with no look at the screen.
+enum VoiceBox {
+    case ask, messages
+}
+
 /// How the flows reach the windows, so they can be tested without any.
 @MainActor
 protocol CatStage: AnyObject {
@@ -78,6 +83,8 @@ protocol CatStage: AnyObject {
     /// Sends this as if it had been typed and Return pressed.
     func submitInput(_ text: String)
     func hideInput()
+    /// The mic in the box that's hearing you shows it, or none does with `nil`.
+    func showListening(in box: VoiceBox?)
 
     // The kittens
     var isKittensVisible: Bool { get }
