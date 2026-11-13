@@ -1,5 +1,4 @@
 front
-theme light
 phone on
 wait 3
 phone pair

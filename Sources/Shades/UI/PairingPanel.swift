@@ -20,7 +20,6 @@ final class PairingPanel {
 
     let panel = QuietPanel(allowsKey: false)
     var onClose: (() -> Void)?
-    private var shown: (card: PhonePairingCard, visible: NSRect)?
 
     init() {
         panel.sharingType = .none
@@ -28,14 +27,7 @@ final class PairingPanel {
 
     var isVisible: Bool { panel.isVisible }
 
-    /// Made again in the theme you just picked, if it's up.
-    func restyle() {
-        if let shown { show(shown.card, centeredIn: shown.visible) }
-        panel.wearTheme()
-    }
-
     func show(_ card: PhonePairingCard, centeredIn visible: NSRect) {
-        shown = (card, visible)
         let root = PairingRootView()
         let stack = NSStackView()
         stack.orientation = .vertical
@@ -99,7 +91,6 @@ final class PairingPanel {
     }
 
     func hide() {
-        shown = nil
         panel.orderOut(nil)
         panel.contentView = nil
     }
@@ -130,10 +121,6 @@ private final class PairingRootView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: BalloonView.radius, yRadius: BalloonView.radius)
-        MessagesInk.paper.setFill()
-        path.fill()
-        MessagesInk.line.setStroke()
-        path.stroke()
+        Opal.glass(NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: BalloonView.radius, yRadius: BalloonView.radius))
     }
 }

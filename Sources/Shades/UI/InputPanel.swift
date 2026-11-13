@@ -38,7 +38,7 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
         textView.allowsUndo = true
         textView.drawsBackground = false
         textView.font = .systemFont(ofSize: 14)
-        textView.insertionPointColor = Ink.accent
+        textView.insertionPointColor = MessagesInk.link
         textView.textContainerInset = .zero
         textView.textContainer?.lineFragmentPadding = 0
         textView.textContainer?.widthTracksTextView = true
@@ -54,16 +54,11 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
 
         mic.onPress = { [weak self] in self?.onMic?() }
         balloon.addSubview(mic)
-        restyle()
+        textView.textColor = MessagesInk.text
+        caption.textColor = MessagesInk.soft
     }
 
     /// In the theme you just picked.
-    func restyle() {
-        textView.textColor = MessagesInk.text
-        caption.textColor = MessagesInk.soft
-        panel.wearTheme()
-    }
-
     var isVisible: Bool { panel.isVisible }
     var frame: NSRect { panel.frame }
     var typedText: String { textView.string }

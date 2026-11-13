@@ -1,11 +1,11 @@
 import AppKit
 
-/// A soft rounded message, like the site's, with a small stepped tail that matches the pixels of the cat.
+/// A floating panel of Opal's glass, with a small stepped tail that matches the pixels of the cat.
 class BalloonView: NSView {
     var tailX: CGFloat? { didSet { needsDisplay = true } }
     var tailOnTop = false { didSet { needsDisplay = true } }
 
-    static let radius: CGFloat = 14
+    static let radius = Opal.Corner.popover
     private static let step: CGFloat = 4
 
     /// The part of the view that's message rather than tail.
@@ -17,12 +17,7 @@ class BalloonView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let path = outline()
-        MessagesInk.paper.setFill()
-        path.fill()
-        MessagesInk.line.setStroke()
-        path.lineWidth = 1
-        path.stroke()
+        Opal.glass(outline())
     }
 
     private func outline() -> NSBezierPath {

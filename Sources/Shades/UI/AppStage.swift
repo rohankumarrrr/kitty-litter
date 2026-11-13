@@ -15,7 +15,6 @@ final class AppStage: CatStage {
     let kittens = KittenPanel()
     let channels = ChannelsWindow()
     let settingsPanel = SettingsPanel()
-    let themeMenu = ThemeMenu()
     let recentFiles = RecentFiles()
     let pairing = PairingPanel()
     let menuBar = MenuBar()
@@ -96,12 +95,10 @@ final class AppStage: CatStage {
             self?.controller?.messagesAction(.seen(selection, keepingUnread: self?.channels.view.keptUnread ?? []))
         }
         channels.view.onShowOnPhone = { [weak self] id in self?.controller?.showOnPhonePressed(id) }
-        channels.view.sidebar.onTheme = { [weak self] anchor in self?.showThemeMenu(under: anchor) }
         channels.view.onAttach = { [weak self] composer, anchor in self?.showRecentFiles(for: composer, under: anchor) }
         channels.view.onMic = { [weak self] in self?.controller?.micPressed(in: .messages) }
         channels.view.onStopListening = { [weak self] in self?.controller?.cancelListening() }
         input.onMic = { [weak self] in self?.controller?.micPressed(in: .ask) }
-        channels.view.onDropTheme = { [weak self] file in self?.controller?.themeChosen(.file(file)) }
         channels.view.onCloseWindow = { [weak self] in self?.hideChannels() }
 
         menuBar.onAsk = { [weak self] in self?.controller?.askPressed() }
@@ -120,7 +117,6 @@ final class AppStage: CatStage {
         channels.view.onSettings = { [weak self] in self?.controller?.settingsPressed(overMessages: true) }
         settingsPanel.onChange = { [weak self] in self?.controller?.settingsEdited($0) }
         settingsPanel.onDoNotDisturb = { [weak self] in self?.controller?.doNotDisturbPressed() }
-        settingsPanel.onTheme = { [weak self] anchor in self?.showThemeMenu(under: anchor) }
         settingsPanel.onNotifications = { [weak self] channel, picked in self?.controller?.setNotifications(picked, for: channel) }
         settingsPanel.onPairPhone = { [weak self] in self?.controller?.pairPhone() }
     }
@@ -264,23 +260,6 @@ final class AppStage: CatStage {
 
     func hideChannels() {
         channels.panel.close()
-    }
-
-    func showTheme(_ theme: ColorTheme?) {
-        channels.apply(theme)
-        bubble.restyle()
-        input.restyle()
-        kittens.restyle()
-        pill.restyle()
-        pairing.restyle()
-    }
-
-    /// Only looks for themes when you open it.
-    private func showThemeMenu(under anchor: NSView) {
-        guard let controller else { return }
-        themeMenu.show(controller.installedThemes(), current: controller.theme, under: anchor) { [weak controller] choice in
-            controller?.themeChosen(choice)
-        }
     }
 
     /// Only looks for recent files when you press Attach, off the main thread, since Spotlight can take a moment. What

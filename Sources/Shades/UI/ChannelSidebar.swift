@@ -46,13 +46,10 @@ final class ChannelSidebar: QuietView {
     private static let footerHeight: CGFloat = 68
 
     var onSelect: ((ChannelPlace) -> Void)?
-    /// Theme was pressed, so its menu can open under it.
-    var onTheme: ((NSView) -> Void)?
     var onShortcuts: (() -> Void)?
     var onSettings: (() -> Void)?
     var onDoNotDisturb: (() -> Void)?
     private(set) var rows: [ChannelSidebarRow] = []
-    let themeButton = QuietButton(CatWords.themeButton, style: .text)
     let shortcutsButton = QuietButton(CatWords.shortcutsButton, style: .text)
     let settingsButton = QuietButton(CatWords.settingsButton, style: .text)
     /// One switch, which says so when it's on.
@@ -68,7 +65,6 @@ final class ChannelSidebar: QuietView {
         super.init(frame: frame)
         scroll.documentView = list
         addSubview(scroll)
-        addSubview(themeButton)
         addSubview(shortcutsButton)
         addSubview(settingsButton)
         addSubview(quietButton)
@@ -81,10 +77,6 @@ final class ChannelSidebar: QuietView {
         quietOnButton.setAccessibilityValue(1)
         quietButton.onPress = { [weak self] in self?.onDoNotDisturb?() }
         quietOnButton.onPress = { [weak self] in self?.onDoNotDisturb?() }
-        themeButton.onPress = { [weak self] in
-            guard let self else { return }
-            self.onTheme?(self.themeButton)
-        }
         shortcutsButton.onPress = { [weak self] in self?.onShortcuts?() }
         settingsButton.onPress = { [weak self] in self?.onSettings?() }
     }
@@ -155,9 +147,8 @@ final class ChannelSidebar: QuietView {
         let top = bounds.height - Self.footerHeight + 6
         quietButton.frame.origin = NSPoint(x: 10, y: top)
         quietOnButton.frame.origin = NSPoint(x: 10, y: top)
-        themeButton.frame.origin = NSPoint(x: 10, y: top + quietButton.frame.height + 4)
-        shortcutsButton.frame.origin = NSPoint(x: themeButton.frame.maxX + 4, y: themeButton.frame.minY)
-        settingsButton.frame.origin = NSPoint(x: shortcutsButton.frame.maxX + 4, y: themeButton.frame.minY)
+        shortcutsButton.frame.origin = NSPoint(x: 10, y: top + quietButton.frame.height + 4)
+        settingsButton.frame.origin = NSPoint(x: shortcutsButton.frame.maxX + 4, y: shortcutsButton.frame.minY)
     }
 
     override func draw(_ dirtyRect: NSRect) {

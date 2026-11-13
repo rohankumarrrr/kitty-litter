@@ -38,7 +38,7 @@ enum PhoneCat {
 
     /// What the page puts in a cat's address, such as `sit/7458e8`.
     static func key(_ pose: Pose, jacket: UInt32?) -> String {
-        "\(pose.rawValue)/\(jacket.map { String(ColorTheme.hex($0).dropFirst()) } ?? own)"
+        "\(pose.rawValue)/\(jacket.map { String(Opal.hex($0).dropFirst()) } ?? own)"
     }
 
     /// The picture at `/cat/<light|dark>/<pose>/<jacket>.png`, or `nil` for any other address.

@@ -57,19 +57,3 @@ class QuietPanel: NSPanel {
         "z": Selector(("undo:")),
     ]
 }
-
-extension QuietPanel {
-    /// In the theme you picked in Messages: its light or dark for scrollers, selections and cats, and everything in it
-    /// drawn again in its colours.
-    func wearTheme() {
-        appearance = MessagesInk.appearance
-        contentView?.redrawAll()
-    }
-}
-
-private extension NSView {
-    func redrawAll() {
-        needsDisplay = true
-        subviews.forEach { $0.redrawAll() }
-    }
-}

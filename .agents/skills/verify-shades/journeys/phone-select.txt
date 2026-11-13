@@ -1,12 +1,11 @@
 front
-colors Cursor/Opal Horizon
 phone on
 wait 3
 phone pair
 wait 1
 phone open steve
 wait 4
-draw .verify/shades/phone-theme/1-opal
+draw .verify/shades/phone-select/1-steve
 phone select feels cramped
 wait 1
 channels
@@ -15,12 +14,12 @@ channel steve
 send How did the interview prep go?
 wait 4
 phone text
-draw .verify/shades/phone-theme/2-held-while-selected
+draw .verify/shades/phone-select/2-held-while-selected
 phone unselect
 wait 2
 phone text
 wait 2
-draw .verify/shades/phone-theme/3-after-unselect
+draw .verify/shades/phone-select/3-after-unselect
 wait 4
 front
 windows

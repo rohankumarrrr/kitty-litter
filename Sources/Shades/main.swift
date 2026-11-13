@@ -7,6 +7,8 @@ import ShadesVoice
 MainActor.assumeIsolated {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
+    // Opal is dark only, menus and scrollers included.
+    app.appearance = NSAppearance(named: .darkAqua)
 
     let wantsDemo = CommandLine.arguments.contains("--demo")
     if DevFlags.wantsChannelsCheck { DevFlags.checkChannels() }
@@ -26,7 +28,7 @@ MainActor.assumeIsolated {
         driver = DemoDriver(parts: parts, controller: controller, stage: stage)
     } else {
         // Any copy but the installed app, built from source, bundled elsewhere or trying a flow out, keeps to itself:
-        // its own sign-in, and none of the app's inbox, notifications, theme, phone keys or phone page.
+        // its own sign-in, and none of the app's inbox, notifications, phone keys or phone page.
         let keepsToItself = !DevFlags.isInstalledApp()
         let signIn = DevFlags.signInService()
         // Copies that aren't installed share one service and can run at once, so one can't tell another's sign-in
@@ -83,12 +85,6 @@ MainActor.assumeIsolated {
                 sendPush: { request in
                     (try? await URLSession(configuration: .ephemeral).data(for: request)).flatMap { ($0.1 as? HTTPURLResponse)?.statusCode }
                 },
-                theme: ColorTheme.load(),
-                // It leaves the real theme alone.
-                saveTheme: { theme in
-                    if !keepsToItself { try ColorTheme.save(theme) }
-                },
-                installedThemes: { ColorTheme.installed(home: FileManager.default.homeDirectoryForCurrentUser, t3Home: T3Backend.defaultHome) },
                 recentFiles: { RecentFiles.find() },
                 webPicture: { await WebPicture.fetch($0) }
             ),

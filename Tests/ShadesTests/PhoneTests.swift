@@ -386,24 +386,17 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(door.pair(pairing.code, now: noon.addingTimeInterval(601)), "and ten minutes on it's gone too")
     }
 
-    func testThePageTakesMessagesThemeAsColoursAlone() {
-        XCTAssertEqual(PhonePage.colors(nil), "")
-        let theme = ColorTheme(name: "Opal; } body { display: none } :root {", isDark: true, paper: 0x0c0a10, text: 0xe7e4ec, accent: 0x7458e8)
-        let css = PhonePage.colors(theme)
-        for line in ["color-scheme: dark", "--paper: #0c0a10", "--text: #e7e4ec", "--you: #7458e8", "--grey: \(ColorTheme.hex(theme.bubble))", "--on-you: #"] {
-            XCTAssertTrue(css.contains(line), line)
+    func testThePageIsOpalOnAPhonesBlack() {
+        for line in ["color-scheme: dark", "--paper: #000000", "--text: #e7e4ec", "--soft: #a09aad", "--you: #7458e8", "--on-you: #ffffff", "--link: #b9a6ff"] {
+            XCTAssertTrue(PhonePage.colors.contains(line), line)
         }
-        XCTAssertFalse(css.contains("display"), "only colours worked out on the Mac, never the theme's own words")
-        XCTAssertTrue(PhonePage.style.contains("--on-you: #ffffff"), "and without one, the page's own")
     }
 
     func testEverythingThePageWritesInAColourReads() throws {
-        let opal = ColorTheme(name: "Opal", isDark: true, paper: 0x0c0a10, text: 0xe7e4ec, soft: 0xa09aad, accent: 0x8a6cff, error: 0xff97b1)
-        let teal = ColorTheme(name: "Teal Light", isDark: false, paper: 0xfbfbfb, text: 0x403f53, accent: 0x2aa298)
-        for (look, isDark, theme) in [("light", false, nil), ("dark", true, nil), ("Opal", true, opal), ("Teal Light", false, teal)] {
-            let colors = try Self.colors(isDark: isDark, theme: theme)
+        for (look, isDark) in [("a light phone", false), ("a dark phone", true)] {
+            let colors = try Self.colors(isDark: isDark)
             for (rule, words, under) in try Self.words(in: colors) {
-                XCTAssertGreaterThanOrEqual(ColorTheme.contrast(words, under), 4.5, "\(rule) in \(look)")
+                XCTAssertGreaterThanOrEqual(Opal.contrast(words, under), 4.5, "\(rule) on \(look)")
             }
         }
     }
@@ -423,12 +416,12 @@ final class PhoneTests: XCTestCase {
         }
     }
 
-    /// The page's colours as a browser in light or dark settles them, with Messages' theme over them.
-    private static func colors(isDark: Bool, theme: ColorTheme?) throws -> [String: UInt32] {
+    /// The page's colours as a browser in light or dark settles them, with Opal's over them.
+    private static func colors(isDark: Bool) throws -> [String: UInt32] {
         let sheets = PhonePage.style.components(separatedBy: "@media (prefers-color-scheme: dark)")
         let pattern = try NSRegularExpression(pattern: "--([a-z-]+): #([0-9a-f]{6})")
         var colors: [String: UInt32] = [:]
-        for sheet in [sheets[0]] + (isDark ? [sheets[1]] : []) + [PhonePage.colors(theme)] {
+        for sheet in [sheets[0]] + (isDark ? [sheets[1]] : []) + [PhonePage.colors] {
             for match in pattern.matches(in: sheet, range: NSRange(sheet.startIndex..., in: sheet)) {
                 colors[String(sheet[Range(match.range(at: 1), in: sheet)!])] = UInt32(sheet[Range(match.range(at: 2), in: sheet)!], radix: 16)
             }
@@ -578,7 +571,7 @@ extension PhoneTests {
         XCTAssertEqual(places.map(\.title), ["Activity", "Threads", "general", "steve-pawsniak", "pepper", "cali"], "as the sidebar writes them, beside their icon or cat")
         XCTAssertEqual(places.map(\.icon), ["activity", "threads", "channel", nil, nil, nil])
         XCTAssertEqual(places.map(\.cat), [nil, nil, nil, cat(.alert, steve), cat(.work, pepper), cat(.sit, cali)])
-        XCTAssertEqual(places.map(\.dot), [nil, nil, nil, ColorTheme.hex(0xff3b5c), ColorTheme.hex(0xffc02e), nil], "needs you, then working")
+        XCTAssertEqual(places.map(\.dot), [nil, nil, nil, Opal.hex(Opal.error), Opal.hex(Opal.lilac), nil], "needs you, then working")
         XCTAssertEqual(places.map(\.asleep), [false, false, false, false, false, true])
 
         let idle = ChannelBook.build(kittens: [steve], threads: [thread("a", of: steve)], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
@@ -691,7 +684,7 @@ extension PhoneTests {
             isReading: false, unreadable: 0, cantReachT3: false
         )
         let parent = try XCTUnwrap(PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon).rows.first { $0.kind == "parent" })
-        let you = ChannelSpeakerLook(.you, in: book).bubble.map(ColorTheme.hex)
+        let you = ChannelSpeakerLook(.you, in: book).bubble.map(Opal.hex)
         XCTAssertEqual(parent.faces, [
             PhoneView.Face(cat: cat(.sit, steve), color: nil),
             PhoneView.Face(cat: PhoneCat.key(.sit, jacket: ChannelSpeakerLook.otherJacket), color: nil),
@@ -718,7 +711,7 @@ extension PhoneTests {
         let book = book(sentBetween: true)
         let digest = try XCTUnwrap(PhoneView(PhonePlace("threads", in: book), in: book, now: noon).rows.first)
         XCTAssertNil(digest.cat, "you asked")
-        XCTAssertEqual(digest.color, ChannelSpeakerLook(.you, in: book).bubble.map(ColorTheme.hex), "so it's your square")
+        XCTAssertEqual(digest.color, ChannelSpeakerLook(.you, in: book).bubble.map(Opal.hex), "so it's your square")
         XCTAssertEqual(digest.reply?.cat, cat(.sit, steve))
     }
 
@@ -739,7 +732,7 @@ extension PhoneTests {
         let headings = Dictionary(uniqueKeysWithValues: rows.filter { $0.kind == "heading" }.map { ($0.name ?? "", $0.cat) })
         XCTAssertEqual(headings, ["Pepper": cat(.work, pepper), "Steve Pawsniak": cat(.sleep, steve)], "as each one's row in the window draws it")
         let dots = Dictionary(uniqueKeysWithValues: rows.filter { $0.kind == "issue" }.map { ($0.title ?? "", $0.dot) })
-        XCTAssertEqual(dots, ["Build": ColorTheme.hex(0xffc02e), "Deploy": ColorTheme.hex(0xff3b30)], "working, and failed")
+        XCTAssertEqual(dots, ["Build": Opal.hex(Opal.lilac), "Deploy": Opal.hex(Opal.error)], "working, and failed")
         let cards = rows.filter { ["approval", "report"].contains($0.kind) }
         XCTAssertEqual(cards.map(\.cat), [cat(.alert, pepper), cat(.alert, pepper)], "a card's cat has its eyes lit")
         XCTAssertEqual(cards.map(\.choices), [
@@ -752,7 +745,7 @@ extension PhoneTests {
     func testThePageDrawsTheWindowsCatsAndIcons() {
         XCTAssertTrue(PhonePage.script.contains("'/cat/' + scheme() + '/' + key + '.png'"))
         XCTAssertTrue(PhonePage.style.contains("--cats: light") && PhonePage.style.contains("--cats: dark"), "light or dark, as the page is")
-        XCTAssertTrue(PhonePage.colors(ColorTheme(name: "Opal", isDark: true, paper: 0x0c0a10, text: 0xe7e4ec, accent: 0x7458e8)).contains("--cats: dark"), "and as the theme is")
+        XCTAssertTrue(PhonePage.colors.contains("--cats: dark"), "and Opal's are dark")
         for emoji in ["🔔", "💬"] { XCTAssertFalse(PhonePage.script.contains(emoji), "drawn to match the window instead") }
     }
 }
@@ -876,8 +869,8 @@ extension PhoneTests {
         }
     }
 
-    /// A message still coming, or on its way, is paler as in the window: one solid colour, worked out for a light page
-    /// and a dark one, since a phone picks its own when there's no theme, with words picked to read on it.
+    /// A message still coming, or on its way, is paler as in the window: one solid colour, the same on a light phone or a
+    /// dark one since the page is Opal's dark either way, with words picked to read on it.
     func testAMessageOnItsWayIsPalerInAColourItsWordsReadOn() throws {
         func said(_ speaker: Speaker, _ id: String, going: Bool = false, sending: Bool = false) -> SentMessage {
             SentMessage(channel: .general, message: ChannelMessage(exchangeID: id, kind: speaker == .you ? .ask : .reply, speaker: speaker, text: "Words", at: noon, threadID: "", threadTitle: "", isStillGoing: going, isSending: sending))
@@ -888,16 +881,15 @@ extension PhoneTests {
         )
         let rows = PhoneView(PhonePlace("general", in: book), in: book, now: noon).rows.filter { $0.kind == "message" }
         XCTAssertEqual(rows.map { $0.faded != nil }, [true, true, true, false], "only what's still on its way")
-        let page = (light: (paper: UInt32(0xf9f9f9), text: UInt32(0x1d1d1f)), dark: (paper: UInt32(0x1d1d1f), text: UInt32(0xf5f5f7)))
         for row in rows.dropLast() {
-            for (look, text) in [("light", page.light.text), ("dark", page.dark.text)] {
+            for (look, text) in [("light", Opal.body), ("dark", Opal.body)] {
                 let paint = try XCTUnwrap(row.faded?[look])
                 let fill = try XCTUnwrap(UInt32(paint.color.dropFirst(), radix: 16))
                 let words = try paint.ink.map { try XCTUnwrap(UInt32($0.dropFirst(), radix: 16)) } ?? text
-                XCTAssertGreaterThanOrEqual(ColorTheme.contrast(words, fill), 4.5, "\(row.id ?? "") on a \(look) page")
+                XCTAssertGreaterThanOrEqual(Opal.contrast(words, fill), 4.5, "\(row.id ?? "") on a \(look) phone")
             }
         }
-        XCTAssertNotEqual(rows[0].faded?["light"], rows[0].faded?["dark"], "yours fades toward the page it's on")
+        XCTAssertEqual(rows[0].faded?["light"], rows[0].faded?["dark"], "the page is Opal's dark on either")
         XCTAssertNil(rows[2].faded?["light"]?.ink, "the cat's grey keeps the page's own words, as the window's does")
     }
 
@@ -917,7 +909,7 @@ extension PhoneTests {
         let places = PhoneView(PhonePlace("home", in: book), in: book, now: noon).places.filter { $0.icon == nil }
         XCTAssertEqual(places.map(\.state), ["Needs you", "Working", "Not set up yet"])
         XCTAssertEqual(places.map(\.count), [1, nil, nil])
-        XCTAssertEqual(places.map(\.dot), [nil, ColorTheme.hex(0xffc02e), nil], "Steve's count, with no dot beside it")
+        XCTAssertEqual(places.map(\.dot), [nil, Opal.hex(Opal.lilac), nil], "Steve's count, with no dot beside it")
         let page = try Self.page(["el", "dot", "places"])
         let json = String(decoding: try JSONEncoder().encode(places), as: UTF8.self)
         let heard = page.evaluateScript("places(\(json)).filter((node) => node.tag === 'button').map((node) => node.attributes['aria-label'])")?.toArray() as? [String]

@@ -580,25 +580,6 @@ enum Demo {
         return url
     }
 
-    /// Made-up theme files where T3 Code, Cursor and iTerm2 keep theirs, in a temporary folder standing in for your
-    /// home, so the theme menu has something to offer without reading the real ones.
-    static func sampleThemes() -> URL {
-        let home = FileManager.default.temporaryDirectory.appendingPathComponent("shades-demo-themes", isDirectory: true)
-        let files = [
-            ".t3/userdata/themes/opal-horizon.json": ##"{ "version": 1, "name": "Opal Horizon", "appearance": "dark", "canvas": "#0C0A10", "accent": "#8A6CFF" }"##,
-            ".t3/userdata/themes/paper.json": ##"{ "version": 1, "name": "Paper", "appearance": "light", "canvas": "#FBFAF7", "accent": "#B4532A" }"##,
-            ".cursor/extensions/demo.opal-horizon-1.0.0/package.json": ##"{ "name": "opal-horizon", "publisher": "demo", "version": "1.0.0", "contributes": { "themes": [ { "label": "Opal Horizon", "uiTheme": "vs-dark", "path": "./themes/opal-horizon.json" } ] } }"##,
-            ".cursor/extensions/demo.opal-horizon-1.0.0/themes/opal-horizon.json": ##"{ "name": "Opal Horizon", "type": "dark", "colors": { "editor.background": "#0C0A10", "editor.foreground": "#E7E4EC", "descriptionForeground": "#837D90", "sideBar.background": "#0A080D", "sideBar.border": "#FFFFFF0F", "button.background": "#7458E8" } }"##,
-            "Library/Application Support/iTerm2/DynamicProfiles/opal-horizon.json": ##"{ "Profiles": [ { "Name": "Opal Horizon", "Background Color": { "Red Component": 0.047, "Green Component": 0.039, "Blue Component": 0.063 }, "Foreground Color": { "Red Component": 0.906, "Green Component": 0.894, "Blue Component": 0.925 }, "Cursor Color": { "Red Component": 0.725, "Green Component": 0.651, "Blue Component": 1 } } ] }"##,
-        ]
-        for (path, text) in files {
-            let file = home.appendingPathComponent(path)
-            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? Data(text.utf8).write(to: file)
-        }
-        return home
-    }
-
     /// Enough of a team to show every state in the kitten view.
     /// A phone's half of a push subscription, which `phone subscribe` hands the page.
     static let phone = P256.KeyAgreement.PrivateKey()
@@ -609,10 +590,10 @@ enum Demo {
 
     static let kittens = [
         Kitten(name: "Steve Pawsniak", role: "Professional", covers: "Their career, resume and interviews.", folder: "/demo/steve"),
-        Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: 0xb3261e, seesScreen: false),
-        Kitten(name: "Clawde", role: "The system", covers: "The Kitty Litter and the other kittens.", folder: "/demo/clawde", color: 0xd9730d, seesScreen: false, usesInbox: true),
-        Kitten(name: "Cali", role: "Scheduling", covers: "Their time.", folder: "/demo/cali", planned: true, color: 0x1e7fb3),
-        Kitten(name: "Furbit", role: "Health", covers: "Their health.", folder: "/demo/furbit", planned: true, color: 0x2e9e4f),
+        Kitten(name: "Pepper", role: "Finance", covers: "Their money.", folder: "/demo/pepper", color: Opal.kittens[4], seesScreen: false),
+        Kitten(name: "Clawde", role: "The system", covers: "The Kitty Litter and the other kittens.", folder: "/demo/clawde", color: Opal.kittens[3], seesScreen: false, usesInbox: true),
+        Kitten(name: "Cali", role: "Scheduling", covers: "Their time.", folder: "/demo/cali", planned: true, color: Opal.kittens[1]),
+        Kitten(name: "Furbit", role: "Health", covers: "Their health.", folder: "/demo/furbit", planned: true, color: Opal.kittens[7]),
     ]
 
     static func make() -> Parts {
@@ -641,11 +622,6 @@ enum Demo {
                 let opened = request.httpBody.flatMap { try? WebPush.decrypt($0, with: Demo.phone, auth: Demo.phoneAuth) }
                 print("[demo] pushed to \(request.url?.host ?? "?"): \(opened.map { String(decoding: $0, as: UTF8.self) } ?? "nothing it could open")")
                 return 201
-            },
-            saveTheme: { print("[demo] \(CatWords.appName) in \($0.map { "\($0.name)'s colours" } ?? "\(CatWords.appName)'s own colours"), not saved in demo mode") },
-            installedThemes: {
-                let home = Demo.sampleThemes()
-                return ColorTheme.installed(home: home, t3Home: home.appendingPathComponent(".t3", isDirectory: true))
             },
             recentFiles: { [Demo.samplePictureFile(), Demo.samplePDF()].compactMap { $0 } },
             // Nothing leaves the Mac, so a web picture you press Show on is a made-up one.

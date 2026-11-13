@@ -1,7 +1,6 @@
 front
 channels
 wait 1.5
-colors Cursor/Opal Horizon
 channel steve
 wait 0.5
 key next-thread

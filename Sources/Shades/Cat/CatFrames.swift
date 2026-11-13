@@ -1,7 +1,7 @@
 /// The cat, drawn as text so it can recolour with the theme. The art comes from the
 /// cat on rohan-is.me: a black leather jacket and small dark sunglasses.
 ///
-///   . clear   k outline   w fur   j jacket   z zip   s lens   g glint   p pink   o orange
+///   . clear   k outline   w fur   j jacket   z zip   s lens   g glint   p pink
 enum CatFrame: String, CaseIterable {
     case sit, blink, scratch1, scratch2, bat1, bat2, sleep1, sleep2, run1, run2, up1, up2, down1, down2
 

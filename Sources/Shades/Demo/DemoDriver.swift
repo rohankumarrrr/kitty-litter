@@ -252,9 +252,9 @@ final class DemoDriver {
             field.stringValue = choice
             field.sendAction(field.action, to: field.target)
         case let button as QuietButton where button.accessibilityRole() == .popUpButton:
-            // A menu waits for a click, so this picks from a row's own choices the way the click would. Theme, Font
-            // and a channel's make theirs as they open, so `colors`, `font` and `notifications` stand in for those.
-            guard let menu = button.menu else { return print("\(label) opens a menu: use notifications, colors or font") }
+            // A menu waits for a click, so this picks from a row's own choices the way the click would. Font
+            // and a channel's make theirs as they open, so `font` and `notifications` stand in for those.
+            guard let menu = button.menu else { return print("\(label) opens a menu: use notifications or font") }
             guard let index = menu.items.firstIndex(where: { $0.title == choice }) else { return print("no choice [\(choice)] in \(label)") }
             menu.performActionForItem(at: index)
         case let button as QuietButton:
@@ -445,7 +445,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | theme light|dark|system | themes | colors [app/name]|[file]|shades | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off|stuck | check | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | voiceover [window]|press [label]|menu [label] | windows | cover [beside] | draw [folder] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off|stuck | check | screen on|off | ears on|off | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | voiceover [window]|press [label]|menu [label] | windows | cover [beside] | draw [folder] | opal [folder] [jacket...] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -728,16 +728,6 @@ final class DemoDriver {
             if values.count == 2 { stage.cat.run(to: CGPoint(x: values[0], y: values[1])) }
         case "home":
             stage.catGoHome()
-        case "theme":
-            NSApp.appearance = rest == "dark" ? NSAppearance(named: .darkAqua) : rest == "light" ? NSAppearance(named: .aqua) : nil
-        case "themes":
-            // What Theme in Messages offers, in the order it does.
-            for item in stage.themeMenu.items(controller.installedThemes(), current: controller.theme) {
-                print(item.isSeparatorItem ? "theme ---" : "theme \(item.state == .on ? "*" : " ") \(item.title)\(item.isEnabled ? "" : " (a note)")")
-                for theme in item.submenu?.items ?? [] {
-                    print("theme   \(theme.state == .on ? "*" : " ") \(theme.title) \((theme.representedObject as? URL)?.path ?? "")")
-                }
-            }
         case "fonts":
             // What Font in Settings offers: the system's faces, then how many families All fonts has.
             for item in FontMenu().items(current: controller.settings.messagesFont, families: NSFontManager.shared.availableFontFamilies) {
@@ -753,12 +743,6 @@ final class DemoDriver {
             settings.messagesFont = picked.representedObject as? String
             controller.settingsEdited(settings)
             print("font \(settings.messagesFont ?? "system")")
-        case "colors":
-            // The same as picking a theme from that menu, by its app and name such as "Cursor/Opal Horizon", or
-            // dropping a theme file onto Messages.
-            let listed = controller.installedThemes().first { "\($0.app)/\($0.theme.name)" == rest }
-            controller.themeChosen(rest == "shades" ? .plain : .file(listed?.file ?? URL(fileURLWithPath: (rest as NSString).expandingTildeInPath)))
-            print("colors \(controller.theme.map { "\($0.name) paper=\(ColorTheme.hex($0.paper)) text=\(ColorTheme.hex($0.text)) accent=\(ColorTheme.hex($0.accent)) yours=\(ColorTheme.hex($0.yours))" } ?? CatWords.plainTheme)")
         case "picture":
             // As if you'd given it a picture with --picture, with a drawn stand-in, and shown at once.
             MessagesInk.picture = rest == "off" ? nil : DemoPicture.jpeg
@@ -812,6 +796,12 @@ final class DemoDriver {
                 print("window \(name) id=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) frame=\(NSStringFromRect(window.frame)) clicks=\(!window.ignoresMouseEvents)")
             }
             print("state \(stage.cat.brain.state) pose=\(stage.cat.brain.pose.frame.rawValue) active=\(NSApp.isActive)")
+        case "opal":
+            // Opal's primitives on one sheet, and a row of cats in any jackets given after the folder.
+            let parts = rest.split(separator: " ").map(String.init)
+            let jackets = parts.dropFirst().compactMap { UInt32($0.replacingOccurrences(of: "#", with: ""), radix: 16) }
+            let file = OpalSheet.draw(to: parts.first ?? ".verify/shades/opal", jackets: jackets)
+            print(file.map { "drew opal \($0.path)" } ?? "couldn't draw opal")
         case "draw":
             // Each window draws itself into a picture, so nothing reads the screen.
             let folder = URL(fileURLWithPath: rest.isEmpty ? ".verify/shades/windows" : rest, isDirectory: true)

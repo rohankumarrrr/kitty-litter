@@ -109,8 +109,6 @@ protocol CatStage: AnyObject {
     func sendInMessages(_ text: String)
     /// You said nothing after all.
     func releaseMessagesBox()
-    /// Every window in a theme's colours, or Shades' own with `nil`.
-    func showTheme(_ theme: ColorTheme?)
 
     // Everything else
     /// For the menu bar: how things are going, and whether anything needs you.
@@ -126,7 +124,7 @@ protocol CatStage: AnyObject {
     func copyToPasteboard(_ text: String)
 }
 
-/// What Settings shows: everything in the settings file, and the theme and channels that live elsewhere.
+/// What Settings shows: everything in the settings file, and the channels that live elsewhere.
 struct SettingsForm: Equatable {
     struct Channel: Equatable {
         var id: ChannelID
@@ -134,8 +132,6 @@ struct SettingsForm: Equatable {
     }
 
     var settings: Settings
-    /// The theme Messages is in, which Settings draws in too, or `nil` for Shades' own colours.
-    var theme: ColorTheme?
     /// Every channel in Messages, in the sidebar's order, for what each tells you.
     var channels: [Channel]
 }

@@ -107,7 +107,7 @@ enum ChannelMarkdown {
         if span.italic == true { runFont = NSFontManager.shared.convert(runFont, toHaveTrait: .italicFontMask) }
         if span.code == true {
             runFont = .monospacedSystemFont(ofSize: font.pointSize - 1, weight: .regular)
-            attributes[.backgroundColor] = Ink.hover
+            attributes[.backgroundColor] = MessagesInk.hover
         }
         if span.strike == true { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
         var text = span.text

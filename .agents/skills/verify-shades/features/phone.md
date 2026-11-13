@@ -13,7 +13,7 @@ With **The Kitty Litter on my phone** on in Settings, the cat shows a code and a
 - `phone-send` sends in #general through the router, starts a new thread from a kitten's channel, which opens on its own page, and replies in a thread, with its Also send to #channel. What you send says "Sending…" until T3 has it, and what never got there has Try again. `journeys/delivery.txt` ends with it, as [The Kitty Litter](./messages.md) describes under Delivery.
 - `phone-notify` sends each new thing in Activity to a subscribed phone, encrypted for it, saying only who and what kind.
 - `phone-formatting` draws a message's lists, tables, quotes, code blocks with Copy and pull request chips from what the Mac read, and tapping a link shows its whole address before Open. See `messages-formatting` in [messages.md](messages.md), whose journey covers both.
-- `phone-theme` gives the page The Kitty Litter's theme, and holds back what's new while you're selecting words.
+- `phone-select` holds back what's new while you're selecting words, on the page's Opal colours: a phone's black, with violet for what you press and lilac for links.
 - `phone-size` follows the phone's own text size and the Mac's Text size on top of it, makes everything you tap at least 44 points, says each place's state to VoiceOver as the window's sidebar does, offers **React** to a keyboard, and draws a message on its way paler in a colour its words read on.
 - `phone-search` finds a message by its words from **Search** at the top of every page, over what The Kitty Litter has read and only what a phone can open, and tapping one opens its page and scrolls to it. See `messages-search` in [messages.md](messages.md), whose journey covers both.
 
@@ -55,10 +55,10 @@ Journey: `journeys/phone-switch.txt`.
 - **Thread.** `phone go t:demo-1@shades` is the thread's own page, headed "Shades" with no title, your words, the cat's "Done." and "Replies in this thread" over its box, in `4-phone-thread`. `phone send Is there a cheaper one?` prints `[demo] forwarded to demo-1 with 0 attachments: Is there a cheaper one?`.
 - **Hide.** `header Hide from phone` sends the page back to the list of places, with no Direct messages, in `5-hidden`.
 
-Journey: `journeys/phone-theme.txt`.
+Journey: `journeys/phone-select.txt`.
 
 - **Load older.** Journey `journeys/phone-older.txt`. `busy`, then `phone open pepper`, scrolled to the top, where the first row is "Load older messages". `phone js` runs a line of script on the page and prints what it comes to, here each row on the screen with how far down it is. After `phone press Load older messages`, the `after` line has a larger `scrollY`, with the lowest posts at the same heights as in `before`, since the older threads come in above them, and among them where one started between two you could see.
-- **Theme.** `colors Cursor/Opal Horizon` before `phone on`, then `phone open steve`. `1-opal` shows the page dark, your bubbles and your squares in reply bars in the violet tint, a violet Send button and "1 in progress", and Steve's bubbles and every cat still in their own colours, drawn with the light outline the window uses on a dark page.
+- **Colours.** `phone open steve`. `1-steve` shows the page on a phone's black, your bubbles on Opal's selected violet-black, a violet Send button and "1 in progress", and Steve's bubbles and every cat in their own colours, drawn with the light outline the window uses on a dark page.
 - **Selecting.** `phone select feels cramped` does what dragging over those words, in a parent on Steve's channel, does, and prints `[phone] selected [feels cramped]`. A new thread started from the window doesn't reach the page's `phone text` while they're selected, and does after `phone unselect`. The web view's pictures don't show a selection.
 
 Journey: `journeys/phone-size.txt`, in light mode, then Opal.

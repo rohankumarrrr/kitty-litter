@@ -96,10 +96,10 @@ extension KittenStatus.State {
 
 struct ChannelSpeakerLook {
     static let otherJacket: UInt32 = 0x8f8f95
-    /// Yours, as in iMessage, a shade deeper so white words on it read well.
-    static let yours: UInt32 = 0x0071e3
-    /// For a kitten with no colour of its own. Blue is left for you.
-    static let palette: [UInt32] = [0x34c759, 0xff9500, 0xaf52de, 0xff2d55, 0x30b0c7, 0xa2845e, 0x5856d6, 0xffcc00]
+    /// Yours, on Opal's selected violet-black.
+    static let yours = Opal.selected
+    /// For a kitten with no colour of its own.
+    static let palette = Opal.kittens
 
     var name: String
     var hasCat: Bool
@@ -119,14 +119,8 @@ struct ChannelSpeakerLook {
         picture = isYou ? MessagesInk.pictureImage : nil
         let own = book.status(of: speaker).flatMap { Self.color(of: $0.kitten) }
         jacket = own ?? (speaker == .someoneElse ? Self.otherJacket : nil)
-        // A theme tints your bubbles, and never a kitten's, so each kitten still looks like itself.
-        if isYou, let theme = MessagesInk.theme {
-            bubble = theme.yours
-            words = theme.words(on: theme.yours)
-        } else {
-            bubble = isYou ? Self.yours : own
-            words = bubble.map { Self.blackOrWhite(on: $0) }
-        }
+        bubble = isYou ? Self.yours : own
+        words = isYou ? Opal.body : bubble.map { Self.blackOrWhite(on: $0) }
     }
 
     /// Its colour from kitten.json, or one picked from its folder so it's the same every time. The cat keeps its black jacket.
@@ -137,19 +131,16 @@ struct ChannelSpeakerLook {
         return palette[Int(seed % UInt32(palette.count))]
     }
 
-    static var grey: NSColor {
-        if let theme = MessagesInk.theme { return Ink.hex(theme.bubble) }
-        return NSColor(name: nil) { $0.isDark ? Ink.hex(0x3a3a3c) : Ink.hex(0xe9e9eb) }
-    }
+    static let grey = Ink.hex(Opal.controlHover)
 
     var bubbleFill: NSColor { bubble.map(Ink.hex) ?? Self.grey }
 
-    /// Where a kitten's cat goes, when you have no picture. A theme's tint for your messages can be too close to its
-    /// window to see, so then it gets an edge, at the 3:1 a shape needs.
+    /// Where a kitten's cat goes, when you have no picture. Your colour is too close to the window to see, so it gets
+    /// an edge, at the 3:1 a shape needs.
     static func drawYourSquare(in rect: NSRect, radius: CGFloat) {
-        Ink.hex(MessagesInk.theme?.yours ?? yours).setFill()
+        Ink.hex(yours).setFill()
         NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-        guard let theme = MessagesInk.theme, ColorTheme.contrast(theme.yours, theme.paper) < 3 else { return }
+        guard Opal.contrast(yours, Opal.page) < 3 else { return }
         MessagesInk.link.setStroke()
         NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: radius - 0.5, yRadius: radius - 0.5).stroke()
     }
@@ -157,29 +148,24 @@ struct ChannelSpeakerLook {
     /// Whichever reads better on the bubble.
     var bubbleText: NSColor {
         guard let bubble else { return MessagesInk.text }
-        if isYou, let theme = MessagesInk.theme { return Ink.hex(theme.words(on: bubble)) }
+        if isYou { return MessagesInk.text }
         return Self.readable(on: bubble)
     }
 
-    /// A reply that's still coming is paler. It's worked out as one solid colour for light and dark, so its words can
-    /// be picked to read on it too.
+    /// A reply that's still coming is paler. It's worked out as one solid colour, so its words can be picked to read
+    /// on it too.
     func fill(fadedTo alpha: Double) -> NSColor {
-        let bubble = bubble
-        let theme = MessagesInk.theme
-        return NSColor(name: nil) { Ink.hex(Self.faded(bubble, to: alpha, dark: $0.isDark, theme: theme)) }
+        Ink.hex(Self.faded(bubble, to: alpha))
     }
 
     func text(fadedTo alpha: Double) -> NSColor {
         guard let bubble else { return MessagesInk.text }
-        let theme = MessagesInk.theme
-        return NSColor(name: nil) { Self.readable(on: Self.faded(bubble, to: alpha, dark: $0.isDark, theme: theme)) }
+        return Self.readable(on: Self.faded(bubble, to: alpha))
     }
 
     /// The colour over the window at `alpha`. `nil` is the grey.
-    static func faded(_ bubble: UInt32?, to alpha: Double, dark: Bool, theme: ColorTheme?) -> UInt32 {
-        let top = bubble ?? theme?.bubble ?? (dark ? 0x3a3a3c : 0xe9e9eb)
-        let under: UInt32 = theme?.paper ?? (dark ? 0x1d1d1f : 0xf9f9f9)
-        return ColorTheme.mix(under, top, alpha)
+    static func faded(_ bubble: UInt32?, to alpha: Double) -> UInt32 {
+        Opal.mix(Opal.page, bubble ?? Opal.controlHover, alpha)
     }
 
     /// Whichever of black and white has more contrast with it.
@@ -193,11 +179,11 @@ struct ChannelSpeakerLook {
 
     /// As WCAG measures it, from 1 to 21.
     static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
-        ColorTheme.contrast(a, b)
+        Opal.contrast(a, b)
     }
 
     static func luminance(_ color: UInt32) -> Double {
-        ColorTheme.luminance(color)
+        Opal.luminance(color)
     }
 }
 
@@ -414,22 +400,22 @@ final class MessageWords {
     let words: ChannelTextBlock?
     let failure: ChannelTextBlock?
     private let markup: Markup?
-    /// The bubble, theme, text size and font its words are drawn for.
-    private var paint: (bubble: UInt32?, theme: ColorTheme?, size: TextSize, font: String?)
+    /// The bubble, text size and font its words are drawn for.
+    private var paint: (bubble: UInt32?, size: TextSize, font: String?)
 
     init(_ message: ChannelMessage, look: ChannelSpeakerLook, pulls: [String: String] = [:]) {
         self.message = message
         self.pulls = pulls
-        paint = (look.bubble, MessagesInk.theme, MessagesInk.textSize, MessagesInk.fontFamily)
+        paint = (look.bubble, MessagesInk.textSize, MessagesInk.fontFamily)
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
         markup = said.map { Markup($0, pulls: pulls) }
         words = markup.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: Self.color(of: message, look: look))) }
         failure = message.failure.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: MessagesInk.danger)) }
     }
 
-    /// Draws the words for `look` as it is now, which a theme, text size or font can change.
+    /// Draws the words for `look` as it is now, which a text size or font can change.
     func paint(for look: ChannelSpeakerLook) {
-        let now = (look.bubble, MessagesInk.theme, MessagesInk.textSize, MessagesInk.fontFamily)
+        let now = (look.bubble, MessagesInk.textSize, MessagesInk.fontFamily)
         guard paint != now, let markup else { return }
         paint = now
         words?.restyle(ChannelMarkdown.attributed(markup, color: Self.color(of: message, look: look)))

@@ -1,12 +1,11 @@
 import AppKit
 import ShadesCore
 
-/// The app's colours: the theme you picked in Messages, or Ink's own. Every window takes them, from Messages and
-/// Settings to the cat's bubble, Ask box and panels, so it all looks like one app. Kittens keep their own colours either way.
+/// The roles every window draws with, from Messages and Settings to the cat's bubble, Ask box and panels, each one of
+/// Opal's tokens, and the type roles at the text size and font you picked. `docs/design.md` says which goes where.
 enum MessagesInk {
-    /// Set when the app starts and when you pick one, and read as Messages draws, all on the main thread.
-    static var theme: ColorTheme?
-    /// How big what's said is, set the same way.
+    /// How big what's said is, set when the app starts and when you pick one, and read as Messages draws, all on the
+    /// main thread.
     static var textSize: TextSize = .standard
     /// Points added to every size what's said is drawn at, and the box you type in.
     private static var textStep: CGFloat { step(at: textSize) }
@@ -25,6 +24,10 @@ enum MessagesInk {
     static var meta: CGFloat { 11 + textStep / 2 }
     /// Over what's said, such as a heading in a message or a search hit's name.
     static var title: CGFloat { 14 + textStep }
+    /// A window's name, in its toolbar.
+    static var toolbarTitle: CGFloat { 15 + textStep }
+    /// Small capitals over a section or a card, such as CHANNELS. They grow as meta does.
+    static var label: CGFloat { meta }
     /// The family Messages draws its words in, set the same way. `nil` is the system's.
     static var fontFamily: String?
     /// The system's own faces, which no family name reaches, by the names Font Book gives them.
@@ -60,39 +63,43 @@ enum MessagesInk {
     static var picture: Data? { didSet { pictureImage = picture.flatMap(NSImage.init(data:)) } }
     private(set) static var pictureImage: NSImage?
 
-    static var paper: NSColor { themed(\.paper) ?? Ink.paper }
-    static var sidebar: NSColor { themed(\.sidebar) ?? Ink.hover }
-    static var text: NSColor { themed(\.text) ?? Ink.text }
-    /// Quieter words, such as times and captions, held to 4.5:1 even on a row you hover, as the phone's are.
-    static var soft: NSColor { theme.map { Ink.hex(ColorTheme.legible($0.soft, on: $0.hover)) } ?? Ink.soft }
-    static var line: NSColor { themed(\.line) ?? Ink.line }
-    static var hover: NSColor { themed(\.hover) ?? Ink.hover }
-    static var press: NSColor { themed(\.press) ?? Ink.press }
-    /// The theme's accent, or the blue of your own messages, for what's filled with it, such as a ticked box.
-    static var accent: NSColor { themed(\.accent) ?? Ink.hex(ChannelSpeakerLook.yours) }
-    static var onAccent: NSColor { ChannelSpeakerLook.readable(on: theme?.accent ?? ChannelSpeakerLook.yours) }
-    /// Reply bars and links, which Slack draws in its accent, made darker or lighter if they wouldn't read.
-    static var link: NSColor { legible(\.link, else: ChannelSpeakerLook.yours) }
+    /// The content: a main window's inset panel and a floating panel's body.
+    static let paper = Ink.hex(Opal.page)
+    /// The chrome a main window's sidebar sits flush on.
+    static let sidebar = Ink.hex(Opal.chrome)
+    static let raised = Ink.hex(Opal.raised)
+    /// Titles and figures.
+    static let strong = Ink.hex(Opal.white)
+    static let text = Ink.hex(Opal.body)
+    /// Quieter words, such as times and captions, which read at 4.5:1 even on a row you hover or pick.
+    static let soft = Ink.hex(Opal.secondary)
+    /// Quieter still, only on paper, the sidebar or raised, and a control's edge.
+    static let dim = Ink.hex(Opal.dim)
+    /// Small capitals' words.
+    static let labelColor = Ink.hex(Opal.white).withAlphaComponent(Opal.labelAlpha)
+    static let line = Ink.hex(Opal.border)
+    static let hover = Ink.hex(Opal.raised)
+    static let press = Ink.hex(Opal.selected)
+    /// What's filled with the accent, such as a ticked box, the focus ring or an unread bar. Never words.
+    static let accent = Ink.hex(Opal.violet)
+    static let onAccent = Ink.hex(Opal.white)
+    /// Words in the accent, such as reply bars and links.
+    static let link = Ink.hex(Opal.lilac)
     /// Why something didn't work, such as a message that couldn't be sent.
-    static var danger: NSColor { legible(\.danger, else: ColorTheme.red) }
-    /// The cat's one-word pill and a filled button: the theme's words as the fill, and its paper as the ink.
-    static var pill: NSColor { themed(\.text) ?? Ink.pill }
-    static var pillText: NSColor { themed(\.paper) ?? Ink.pillText }
+    static let danger = Ink.hex(Opal.errorText)
+    /// The cat's one-word pill.
+    static let pill = Ink.hex(Opal.control)
+    static let pillText = Ink.hex(Opal.body)
     /// A count of what's waiting on you, in the colour the cat glints when something does.
-    static var badge: NSColor { Ink.hex(CatGlint.attention(bright: true).color!) }
-    static var onBadge: NSColor { ChannelSpeakerLook.readable(on: CatGlint.attention(bright: true).color!) }
+    static let badge = Ink.hex(Opal.error)
+    static let onBadge = Ink.hex(Opal.page)
 
-    /// The theme's light or dark, for the buttons, scrollers and cats it shares with the rest of the app. `nil` follows the system.
-    static var appearance: NSAppearance? {
-        theme.flatMap { NSAppearance(named: $0.isDark ? .darkAqua : .aqua) }
-    }
-
-    private static func themed(_ color: KeyPath<ColorTheme, UInt32>) -> NSColor? {
-        theme.map { Ink.hex($0[keyPath: color]) }
-    }
-
-    /// The theme's colour, or `own` made to read on Ink's paper in light or dark.
-    private static func legible(_ color: KeyPath<ColorTheme, UInt32>, else own: UInt32) -> NSColor {
-        themed(color) ?? NSColor(name: nil) { Ink.hex(ColorTheme.legible(own, on: $0.isDark ? 0x1d1d1f : 0xf9f9f9)) }
+    /// Small capitals, such as CHANNELS: tracked out, medium, and white at 55%.
+    static func label(_ words: String, size: CGFloat = MessagesInk.label) -> NSAttributedString {
+        NSAttributedString(string: words.uppercased(), attributes: [
+            .font: font(ofSize: size, weight: .medium),
+            .foregroundColor: labelColor,
+            .kern: size * 0.09,
+        ])
     }
 }

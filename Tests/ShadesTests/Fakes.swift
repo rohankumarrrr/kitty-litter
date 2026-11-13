@@ -117,8 +117,6 @@ final class FakeStage: CatStage {
         messagesBoxHeld = false
     }
     func releaseMessagesBox() { messagesBoxHeld = false }
-    var themes: [ColorTheme?] = []
-    func showTheme(_ theme: ColorTheme?) { themes.append(theme) }
     /// What Settings was opened with, and where, then what it's showing since.
     var settingsShown: [(form: SettingsForm, overMessages: Bool)] = []
     var settingsForms: [SettingsForm] = []

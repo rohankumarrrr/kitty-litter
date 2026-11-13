@@ -45,7 +45,7 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - Send the phone only what changed in The Kitty Litter. It gets every row of the place it's on each time anything changes, about 170 KB for a conversation of 580 rows, and draws them all again, where the window only lays out what's near what you can see.
 - Let the phone page's header and box scroll away at the largest text sizes. Both stay on screen, and at twice the usual size and Larger on the Mac they take most of a phone's height.
 - Work out what The Kitty Litter shows off the main thread, or only for the threads that changed. It's about 12 ms each time anything changes with hundreds of threads, which is most of what's left when a message arrives.
-- Give a phone that's already open a new theme as soon as you pick it. Today it takes it the next time it opens the page.
+- A light version of Opal Horizon, for Macs in light mode. The Kitty Litter is dark only today.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
 - Rename `Shades.app` itself, and its folder in Application Support and its Keychain items, to The Kitty Litter, once there's a way to prove macOS keeps its permissions and `install.sh`'s rollback handles the old name.
 - Remember project nicknames, so the frontier agent can skip the search next time.

@@ -196,7 +196,8 @@ final class CatController {
     }
 
     private func apply() {
-        let theme: CatTheme = view.effectiveAppearance.isDark ? .dark : .light
+        // The cat sits on your wallpaper, so it follows the system's light or dark, where every window of ours is Opal's dark.
+        let theme: CatTheme = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark" ? .dark : .light
         let pose = heldPose ?? brain.pose
         if pose != shown || theme != shownTheme {
             shown = pose

@@ -1,5 +1,4 @@
 front
-colors Cursor/Opal Horizon
 channels
 wait 1
 channel steve

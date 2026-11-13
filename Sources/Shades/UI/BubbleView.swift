@@ -71,7 +71,9 @@ final class BubbleView: BalloonView {
         heading.font = .systemFont(ofSize: 13, weight: .semibold)
         heading.isHidden = true
         addSubview(heading)
-        restyle()
+        caption.textColor = MessagesInk.soft
+        counter.textColor = MessagesInk.soft
+        heading.textColor = MessagesInk.text
     }
 
     @available(*, unavailable)
@@ -112,14 +114,6 @@ final class BubbleView: BalloonView {
         // Anything worth keeping can be selected, and "Thinking..." isn't.
         textView.isSelectable = content.hasSelectableText
         return layout(limitHeight: limitHeight, code: code)
-    }
-
-    /// Its words in the theme's colours, after you pick another.
-    func restyle() {
-        caption.textColor = MessagesInk.soft
-        counter.textColor = MessagesInk.soft
-        heading.textColor = MessagesInk.text
-        if let content { textView.textColor = content.words().isSoft ? MessagesInk.soft : MessagesInk.text }
     }
 
     func advanceThinking() {

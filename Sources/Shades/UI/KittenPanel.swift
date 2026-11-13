@@ -29,10 +29,6 @@ final class KittenPanel {
     var frame: NSRect { panel.frame }
 
     /// In the theme you just picked, kittens and all, even while it's up.
-    func restyle() {
-        panel.wearTheme()
-    }
-
     /// Opens the panel, or brings it up to date if it's already open.
     func show(_ statuses: [KittenStatus]) {
         rows.forEach { $0.removeFromSuperview() }

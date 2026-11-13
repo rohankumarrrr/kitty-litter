@@ -40,16 +40,12 @@ final class AppController {
     let servePhone: (UInt16) async throws -> String
     let stopServingPhone: () async -> Void
     let sendPush: (URLRequest) async -> Int?
-    let saveTheme: (ColorTheme?) throws -> Void
-    let installedThemes: () -> [ColorTheme.Found]
     let recentFiles: @Sendable () -> [URL]
     let stage: CatStage
     let now: () -> Date
     let launchedAt: Date
     let channels: ChannelFeed
     private(set) var settings: Settings
-    /// Messages' colours, or `nil` for Shades' own.
-    var theme: ColorTheme?
 
     var quick = QuickSession()
     var watch = AgentWatch()
@@ -272,9 +268,6 @@ final class AppController {
         servePhone = dependencies.servePhone
         stopServingPhone = dependencies.stopServingPhone
         sendPush = dependencies.sendPush
-        theme = dependencies.theme
-        saveTheme = dependencies.saveTheme
-        installedThemes = dependencies.installedThemes
         recentFiles = dependencies.recentFiles
         self.stage = stage
         self.now = now
@@ -326,7 +319,6 @@ final class AppController {
         keys.onRelease = { [weak self] key in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.keyReleased(key) } }
         }
-        stage.showTheme(theme)
         stage.showText(size: settings.textSize, font: settings.messagesFont)
         stage.catDoNotDisturb(settings.doNotDisturb)
         // Turned off before you caught up, it still has that to say.
@@ -498,7 +490,7 @@ final class AppController {
         let channels = [SettingsForm.Channel(id: .general, title: "#\(CatWords.general)")]
             + loadKittens().map { SettingsForm.Channel(id: .of($0), title: "#\(ChannelBook.slug($0.name))") }
             + [SettingsForm.Channel(id: .shades, title: CatWords.shades)]
-        return SettingsForm(settings: settings, theme: theme, channels: channels)
+        return SettingsForm(settings: settings, channels: channels)
     }
 
     /// A change made in Settings. Do Not Disturb and each channel's notifications have their own way in, there and
