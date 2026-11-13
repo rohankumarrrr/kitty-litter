@@ -271,23 +271,44 @@ final class PhoneServerTests: XCTestCase {
     /// cats a phone had just loaded by how fast they came back.
     func testACatsAddressKeepsNothingSoStrangersCantFillMemoryOrTellWhatAPhoneLoaded() {
         let link = PhoneLink(keys: MemoryPhoneKeys(), grace: 0, hold: { nil }, release: {}, act: { _ in }, sendPush: { _ in nil }, now: { Date() })
-        func get(_ path: String) -> (status: Int, seconds: TimeInterval) {
+        func get(_ path: String) -> (status: Int, body: Data, seconds: TimeInterval) {
             let started = DispatchTime.now().uptimeNanoseconds
             let response = link.respond(to: PhoneServer.Request(method: "GET", path: path, query: [:], headers: [:], body: Data()))
             let seconds = Double(DispatchTime.now().uptimeNanoseconds - started) / 1e9
-            guard case .full(let status, _, _) = response else { return (-1, seconds) }
-            return (status, seconds)
+            guard case .full(let status, _, let body) = response else { return (-1, Data(), seconds) }
+            return (status, body, seconds)
         }
         func median(_ times: [TimeInterval]) -> TimeInterval { times.sorted()[times.count / 2] }
-        let loaded = (0..<21).map { "/cat/light/work/\(String(format: "%06x", 0x100000 + $0)).png" }
+        let cat = { (n: Int) in "/cat/light/work/\(String(format: "%06x", n)).png" }
+
+        // Asked twice, with the first answer still held, the second is drawn again rather than handed back from a store.
+        let first = get(cat(0x100000)).body
+        let second = get(cat(0x100000)).body
+        XCTAssertEqual(first, second, "the same picture")
+        XCTAssertNotEqual(first.withUnsafeBytes { UInt(bitPattern: $0.baseAddress) }, second.withUnsafeBytes { UInt(bitPattern: $0.baseAddress) }, "drawn afresh, never kept")
+
+        // And it takes as long. A kept answer comes back in about a microsecond, where drawing one takes about 0.2 ms, so a
+        // cache would make the ones a phone loaded about 150 times faster. Taken in turns, so whatever else the machine is
+        // doing falls on both alike, and compared by medians against a quarter, which leaves room for a busy runner.
+        let loaded = (0..<101).map { cat(0x200000 + $0) }
         loaded.forEach { _ = get($0) }
-        let again = median(loaded.map { get($0).seconds })
-        let fresh = median((0..<21).map { get("/cat/light/work/\(String(format: "%06x", 0x200000 + $0)).png").seconds })
-        XCTAssertGreaterThan(again, fresh / 2, "a cat a phone just loaded comes back no faster than one it didn't")
+        var again: [TimeInterval] = []
+        var fresh: [TimeInterval] = []
+        for (n, path) in loaded.enumerated() {
+            let unseen = cat(0x300000 + n)
+            if n.isMultiple(of: 2) {
+                again.append(get(path).seconds)
+                fresh.append(get(unseen).seconds)
+            } else {
+                fresh.append(get(unseen).seconds)
+                again.append(get(path).seconds)
+            }
+        }
+        XCTAssertGreaterThan(median(again), median(fresh) / 4, "a cat a phone just loaded comes back no faster than one it didn't")
 
         let before = footprint()
         // Each request drains its own autorelease pool, as the server's run loop does between requests.
-        for n in 0..<20_000 { autoreleasepool { XCTAssertEqual(get("/cat/dark/sit/\(String(format: "%06x", 0x300000 + n)).png").status, 200) } }
+        for n in 0..<20_000 { autoreleasepool { XCTAssertEqual(get("/cat/dark/sit/\(String(format: "%06x", 0x400000 + n)).png").status, 200) } }
         XCTAssertLessThan(footprint() - before, 4 << 20, "asking for colours doesn't fill memory")
     }
 
