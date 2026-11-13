@@ -50,6 +50,22 @@ enum CatWords {
         "\(name) can't take files. Put a link or the text in your message instead."
     }
 
+    static let speak = "Speak"
+    static let doneSpeaking = "Done speaking"
+    static func speakTip(talkKey: HoldKey) -> String {
+        talkKey == .off ? "Speak instead of typing" : "Speak instead of typing, or hold \(keyName(talkKey))"
+    }
+
+    static func keyName(_ key: HoldKey) -> String {
+        switch key {
+        case .fn: return "fn"
+        case .rightOption: return "Right Option"
+        case .rightCommand: return "Right Command"
+        case .rightControl: return "Right Control"
+        case .off: return "Off"
+        }
+    }
+
     static func fixPlaceholder(talkKey: HoldKey) -> String {
         talkKey == .off ? "What's wrong? Or just press Return" : "What's wrong? Say it, or just press Return"
     }

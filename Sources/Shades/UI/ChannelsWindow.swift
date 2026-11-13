@@ -108,6 +108,11 @@ final class ChannelsView: QuietView {
     var onShowOnPhone: ((String) -> Void)? { didSet { panes.forEach { $0.onShowOnPhone = onShowOnPhone } } }
     /// Attach in a box, which offers recent files.
     var onAttach: ((ChannelComposer, NSView) -> Void)? { didSet { panes.forEach { $0.onAttach = onAttach } } }
+    /// A box's mic, pressed once its box has the keyboard, so what you say goes where its line says.
+    var onMic: (() -> Void)?
+    var onStopListening: (() -> Void)?
+    /// What the mics say when the pointer rests on them.
+    var micTip = "" { didSet { panes.forEach { $0.composer.mic.toolTip = micTip } } }
 
     private var panes: [ChannelPane] { [pane, threadPane] }
 
@@ -135,6 +140,11 @@ final class ChannelsView: QuietView {
             pane.onClose = { [weak self] in self?.closeThread() }
             pane.onMarkUnread = { [weak self] thread, message in self?.markUnread(thread, from: message) }
             pane.composer.onEscape = { [weak self] in self?.perform(.escape) }
+            pane.composer.onMic = { [weak self, weak pane] in
+                pane?.focusComposer()
+                self?.onMic?()
+            }
+            pane.composer.onStopListening = { [weak self] in self?.onStopListening?() }
         }
         registerForDraggedTypes(Drop.types)
     }
@@ -217,6 +227,11 @@ final class ChannelsView: QuietView {
     /// The pane whose box has the keyboard.
     var typingPane: ChannelPane? {
         panes.first { !$0.isHidden && window?.firstResponder === $0.composer.textView && $0.composer.target != nil }
+    }
+
+    /// The mic in the box you're talking into shows it, or none does.
+    func showListening(in listening: ChannelPane?) {
+        panes.forEach { $0.composer.mic.showListening($0 === listening) }
     }
 
     /// Draws everything again in the colours there are now, since a row keeps the colours it was made with.

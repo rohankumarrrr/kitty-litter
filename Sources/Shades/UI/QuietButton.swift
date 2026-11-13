@@ -59,6 +59,10 @@ final class QuietButton: NSView {
     var colors: (fill: NSColor, ink: NSColor)? { didSet { needsDisplay = true } }
     /// Draws in the theme Messages uses, as Settings does, where the cat's other windows keep Ink's own.
     var isThemed = false { didSet { needsDisplay = true } }
+    /// A symbol drawn in place of its words, which VoiceOver still reads.
+    var symbol: String? { didSet { needsDisplay = true } }
+    /// Its symbol in the accent, while what it started is going.
+    var isLit = false { didSet { needsDisplay = true } }
 
     let style: Style
     private var title: String
@@ -141,9 +145,13 @@ final class QuietButton: NSView {
                 shape.fill()
             }
         }
-        let text = label
-        let size = text.size()
-        text.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+        if let symbol {
+            drawSymbol(symbol)
+        } else {
+            let text = label
+            let size = text.size()
+            text.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+        }
         if QuietFocus.shows(self) {
             // A filled one's ring goes inside it, in its ink, since its fill can be the accent.
             if style == .filled {
@@ -152,6 +160,21 @@ final class QuietButton: NSView {
                 QuietFocus.ring(bounds, radius: 8)
             }
         }
+    }
+
+    private func drawSymbol(_ name: String) {
+        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .medium))
+        else { return }
+        let color = isLit ? (isThemed ? MessagesInk.accent : Ink.accent) : ink
+        let tinted = NSImage(size: image.size, flipped: false) { rect in
+            image.draw(in: rect)
+            color.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        let size = image.size
+        tinted.draw(in: NSRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height))
     }
 
     override var acceptsFirstResponder: Bool { QuietFocus.allows(self) }
@@ -202,5 +225,25 @@ final class QuietButton: NSView {
         guard isArmed else { return false }
         onPress?()
         return true
+    }
+}
+
+extension QuietButton {
+    static let micSide: CGFloat = 26
+
+    /// A box's mic, which talks into it in place of typing.
+    static func mic() -> QuietButton {
+        let mic = QuietButton(CatWords.speak, style: .text)
+        mic.symbol = "mic"
+        mic.setFrameSize(NSSize(width: micSide, height: micSide))
+        return mic
+    }
+
+    /// While it hears you it says so, and VoiceOver hears what pressing it does now.
+    func showListening(_ listening: Bool) {
+        guard listening != isLit else { return }
+        isLit = listening
+        symbol = listening ? "mic.fill" : "mic"
+        setAccessibilityLabel(listening ? CatWords.doneSpeaking : CatWords.speak)
     }
 }

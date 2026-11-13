@@ -87,6 +87,8 @@ final class FakeStage: CatStage {
         input = nil
         request?.onCancel()
     }
+    var listeningIn: VoiceBox?
+    func showListening(in box: VoiceBox?) { listeningIn = box }
     func showStatus(_ status: String, needsYou: Bool) {
         statusText = status
         statusNeedsYou = needsYou
@@ -456,6 +458,7 @@ final class FakeVoice: VoiceEngine {
     var beginError: Error?
     var vocabulary: [String] = []
     var began = 0
+    var ended = 0
     var cancelled = 0
 
     init() {
@@ -469,10 +472,18 @@ final class FakeVoice: VoiceEngine {
         if let beginError { throw beginError }
         began += 1
     }
+    /// Holds each `end()` until `finishEnd()`, as the real engine takes a moment to work out what you said.
+    var holdsEnd = false
+    private var heldEnds: [CheckedContinuation<Void, Never>] = []
+    var endsHeld: Int { heldEnds.count }
     func end() async throws -> Transcript {
+        ended += 1
+        let said = transcript
+        if holdsEnd { await withCheckedContinuation { heldEnds.append($0) } }
         if let endError { throw endError }
-        return transcript
+        return said
     }
+    func finishEnd() { heldEnds.removeFirst().resume() }
     func cancel() { cancelled += 1 }
 }
 

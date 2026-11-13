@@ -64,7 +64,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>The Kitty Litter listens only while you hold your talk or dictate key, and your voice stays on your Mac.</string>
+    <string>The Kitty Litter listens only while you hold your talk or dictate key, or from pressing a mic until you press it again, and your voice stays on your Mac.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>So the cat can read the page you're looking at when you ask.</string>
 </dict>

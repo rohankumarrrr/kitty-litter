@@ -6239,3 +6239,217 @@ extension FlowTests {
         XCTAssertEqual(shownBook?.threads["other"]?.messages.map(\.text), ["Hold off until Monday"])
     }
 }
+
+/// The mic in a box: it talks into that box, and only that box, and never looks at the screen.
+extension FlowTests {
+    private func openBox(_ kind: String) async -> VoiceBox {
+        switch kind {
+        case "ask":
+            await controller.beginAsk()
+            return .ask
+        case "fix":
+            await controller.beginFix()
+            return .ask
+        case "drop":
+            controller.dropped(ScreenSnapshot(url: URL(fileURLWithPath: "/files/notes.pdf"), pageText: "Notes", droppedNames: ["notes.pdf"]))
+            await settle()
+            return .ask
+        default:
+            controller.channelsPressed(selecting: .channel(.general))
+            stage.isMessagesBoxTyping = true
+            return .messages
+        }
+    }
+
+    private var looks: Int { log.all.filter { $0 == "snapshot" }.count }
+
+    func testAMicTalksIntoItsBoxWithNoLookAtTheScreen() async throws {
+        for kind in ["ask", "fix", "drop", "messages"] {
+            try await setUp()
+            voice.transcript = Transcript(raw: "the total is wrong", cleaned: "The total is wrong.", audioSeconds: 1, latencySeconds: 0.1)
+            let box = await openBox(kind)
+            let before = looks
+            XCTAssertEqual(voice.began, 0, "\(kind): opening a box leaves the mic shut")
+
+            controller.micPressed(in: box)
+            XCTAssertEqual(voice.began, 1, kind)
+            XCTAssertEqual(stage.listeningIn, box, "\(kind): its mic shows it's hearing you")
+            XCTAssertEqual(stage.status, .listening, kind)
+            controller.micPressed(in: box)
+            await settle()
+
+            XCTAssertNil(stage.listeningIn, "\(kind): and stops once you've finished")
+            XCTAssertEqual(looks, before, "\(kind): the mic never looks at the screen")
+            if box == .messages {
+                XCTAssertEqual(stage.sentInMessages, ["The total is wrong."], kind)
+                XCTAssertTrue(backend.sent.isEmpty, kind)
+            } else {
+                XCTAssertNil(stage.input, "\(kind): saying it counts as pressing Return")
+                XCTAssertTrue(backend.sent.contains { $0.prompt.text.contains("The total is wrong.") }, "\(kind): it went where typing it would")
+            }
+        }
+    }
+
+    func testClosingABoxShutsItsMicAndSendsNothing() async throws {
+        for kind in ["ask", "fix", "drop", "messages"] {
+            // The talk key looks at the screen over a plain Ask box rather than talking into it.
+            for byKey in kind == "ask" ? [false] : [false, true] {
+                try await setUp()
+                let box = await openBox(kind)
+                let before = looks
+                byKey ? controller.talkDown() : controller.micPressed(in: box)
+                XCTAssertEqual(voice.began, 1, kind)
+
+                if box == .messages {
+                    stage.isMessagesBoxTyping = false
+                    controller.channelsClosed()
+                } else {
+                    stage.hideInput()
+                }
+                XCTAssertEqual(voice.cancelled, 1, "\(kind)\(byKey ? " by key" : ""): the mic shuts with its box")
+                XCTAssertNil(stage.listeningIn, kind)
+                XCTAssertNotEqual(stage.status, .listening, kind)
+
+                // Letting go of the key, or a mic somewhere else, has nothing left to finish.
+                controller.keyReleased(controller.settings.talkKey)
+                controller.micPressed(in: box)
+                await settle()
+                XCTAssertEqual(voice.began, 1, "\(kind): a mic in a box that's gone doesn't open")
+                XCTAssertEqual(looks, before, kind)
+                XCTAssertTrue(backend.sent.isEmpty, "\(kind): nothing goes to the router")
+                XCTAssertTrue(stage.sentInMessages.isEmpty, kind)
+                XCTAssertFalse(stage.messagesBoxHeld, kind)
+            }
+        }
+    }
+
+    func testTypingAndPressingReturnWhileTheMicHearsYouSendsWhatYouTyped() async {
+        await controller.beginAsk()
+        controller.micPressed(in: .ask)
+        stage.type("what's this?")
+        await settle()
+        XCTAssertEqual(voice.cancelled, 1, "the mic shuts with the box")
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("Their question: what's this?"))
+        XCTAssertFalse(backend.sent[0].prompt.text.contains("What is this?"), "what the mic heard goes nowhere")
+    }
+
+    func testAMicCantFinishWhatTheTalkKeyStartedForTheScreen() async {
+        controller.talkDown()
+        await settle()
+        XCTAssertEqual(looks, 1, "the talk key looks when no box takes your words")
+        controller.channelsPressed(selecting: .channel(.general))
+        stage.isMessagesBoxTyping = true
+        controller.micPressed(in: .messages)
+        await settle()
+        XCTAssertEqual(voice.began, 1)
+        XCTAssertTrue(backend.sent.isEmpty, "the look the key took stays with the key")
+        XCTAssertTrue(stage.sentInMessages.isEmpty)
+    }
+
+    func testPressingAMicAgainAndAgainFinishesOnce() async {
+        await controller.beginAsk()
+        controller.micPressed(in: .ask)
+        controller.micPressed(in: .ask)
+        controller.micPressed(in: .ask)
+        await settle()
+        controller.micPressed(in: .ask)
+        await settle()
+        XCTAssertEqual(voice.ended, 1, "a take is only finished once")
+        XCTAssertEqual(voice.began, 1, "the box has gone, so there's nothing to start")
+        XCTAssertEqual(backend.sent.count, 1)
+    }
+
+    func testAMicThatCantHearYouSaysWhy() async {
+        await controller.beginAsk()
+        voice.beginError = Friendly(errorDescription: "I need the microphone.")
+        controller.micPressed(in: .ask)
+        guard case .line(let text, _)? = stage.bubble else { return XCTFail("the cat says why") }
+        XCTAssertTrue(text.contains("I need the microphone."), text)
+        XCTAssertNil(stage.listeningIn)
+        XCTAssertNotNil(stage.input, "your box stays up")
+        XCTAssertEqual(looks, 1)
+    }
+}
+
+/// A take is worked out after you let go, and a tap of a hold key can cancel it and start another meanwhile.
+extension FlowTests {
+    /// Waits for what was said to be being worked out, failing rather than waiting for ever when nothing is.
+    private func heldEnd() async -> Bool {
+        for _ in 0..<1000 where voice.endsHeld == 0 { await Task.yield() }
+        return voice.endsHeld > 0
+    }
+
+    func testAMicTakeCancelledWhileItsWorkedOutCantGoWithTheTalkKeysLook() async {
+        voice.holdsEnd = true
+        voice.transcript = Transcript(raw: "mic words", cleaned: "Mic words for the box.", audioSeconds: 1, latencySeconds: 0.1)
+        context.snapshotValue = ScreenSnapshot(appName: "BoxApp", windowTitle: "Box", screenshotJPEG: Data([1]))
+        await controller.beginAsk()
+        controller.micPressed(in: .ask)
+        controller.micPressed(in: .ask)
+        let micTake = controller.voiceTask
+        guard await heldEnd() else { return XCTFail("the mic's take never ended") }
+
+        // A tap of the talk key cancels, as the key monitor does, then holding it looks at another screen.
+        let key = controller.settings.talkKey
+        controller.keyPressed(key)
+        controller.cancelListening()
+        voice.transcript = Transcript(raw: "key words", cleaned: "Key words.", audioSeconds: 1, latencySeconds: 0.1)
+        context.snapshotValue = ScreenSnapshot(appName: "KeyApp", windowTitle: "Key", screenshotJPEG: Data([2]))
+        controller.keyPressed(key)
+        voice.finishEnd()
+        await micTake?.value
+        await settle()
+        XCTAssertTrue(backend.sent.isEmpty, "what the mic heard was cancelled, so it goes nowhere")
+        XCTAssertEqual(controller.voiceMode, .talk, "the talk key's take is still going")
+
+        controller.keyReleased(key)
+        guard await heldEnd() else { return XCTFail("letting go of the key has nothing to finish") }
+        voice.finishEnd()
+        await settle()
+        XCTAssertEqual(backend.sent.count, 1)
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("Key words."))
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("KeyApp"), "with the look the key took")
+        XCTAssertFalse(backend.sent.contains { $0.prompt.text.contains("Mic words") })
+    }
+
+    func testDictationCancelledWhileItsWorkedOutLeavesTheMicsTakeAlone() async {
+        voice.holdsEnd = true
+        await controller.beginAsk()
+        controller.dictateDown()
+        controller.keyReleased(controller.settings.dictateKey)
+        let dictation = controller.voiceTask
+        guard await heldEnd() else { return XCTFail("dictation never ended") }
+
+        controller.cancelListening()
+        controller.micPressed(in: .ask)
+        voice.finishEnd()
+        await dictation?.value
+        XCTAssertTrue(inserter.inserted.isEmpty, "cancelled dictation isn't typed")
+        XCTAssertEqual(controller.voiceMode, .talk, "the mic's take is still going")
+        XCTAssertEqual(stage.listeningIn, .ask)
+    }
+}
+
+extension FlowTests {
+    func testAMicTakeFinishesAtTheEnginesLimit() async throws {
+        controller.longestMicTake = 0.01
+        await controller.beginAsk()
+        controller.micPressed(in: .ask)
+        XCTAssertEqual(stage.listeningIn, .ask)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        await settle()
+        XCTAssertEqual(voice.ended, 1, "the engine has turned the mic off by then, so the take ends")
+        XCTAssertNil(stage.listeningIn, "and the mic stops showing it's hearing you")
+        XCTAssertTrue(backend.sent.contains { $0.prompt.text.contains("What is this?") }, "what you said still goes")
+    }
+
+    func testABoxThatReplacesAnotherShutsTheMicForTheOldOne() async {
+        await controller.beginAsk()
+        controller.micPressed(in: .ask)
+        controller.showBox(InputRequest(placeholder: "What's wrong?", caption: nil, allowsEmpty: true, onSubmit: { _ in }, onCancel: {}))
+        XCTAssertEqual(voice.cancelled, 1)
+        XCTAssertNil(stage.listeningIn)
+        XCTAssertNil(controller.voiceMode)
+    }
+}

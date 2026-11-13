@@ -150,7 +150,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     }
 
     private static let modes: [(String, RuntimeMode)] = RuntimeMode.allCases.map { (modeName($0), $0) }
-    private static let keys: [(String, HoldKey)] = HoldKey.allCases.map { (keyName($0), $0) }
+    private static let keys: [(String, HoldKey)] = HoldKey.allCases.map { (CatWords.keyName($0), $0) }
     private static let sizes: [(String, TextSize)] = [("Small", .small), ("Default", .standard), ("Large", .large), ("Larger", .larger)]
     private static let opens: [(String, Bool)] = [("In \(CatWords.appName) first", true), ("In T3", false)]
 
@@ -408,16 +408,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         case .autoAcceptEdits: return "Accept edits"
         case .auto: return "Auto"
         case .fullAccess: return "Full access"
-        }
-    }
-
-    private static func keyName(_ key: HoldKey) -> String {
-        switch key {
-        case .fn: return "fn"
-        case .rightOption: return "Right Option"
-        case .rightCommand: return "Right Command"
-        case .rightControl: return "Right Control"
-        case .off: return "Off"
         }
     }
 }

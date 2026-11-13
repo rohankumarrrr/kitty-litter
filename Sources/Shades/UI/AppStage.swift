@@ -98,6 +98,9 @@ final class AppStage: CatStage {
         channels.view.onShowOnPhone = { [weak self] id in self?.controller?.showOnPhonePressed(id) }
         channels.view.sidebar.onTheme = { [weak self] anchor in self?.showThemeMenu(under: anchor) }
         channels.view.onAttach = { [weak self] composer, anchor in self?.showRecentFiles(for: composer, under: anchor) }
+        channels.view.onMic = { [weak self] in self?.controller?.micPressed(in: .messages) }
+        channels.view.onStopListening = { [weak self] in self?.controller?.cancelListening() }
+        input.onMic = { [weak self] in self?.controller?.micPressed(in: .ask) }
         channels.view.onDropTheme = { [weak self] file in self?.controller?.themeChosen(.file(file)) }
         channels.view.onCloseWindow = { [weak self] in self?.hideChannels() }
 
@@ -124,6 +127,7 @@ final class AppStage: CatStage {
 
     func start() {
         cat.start()
+        if let controller { showTalkKey(controller.settings.talkKey) }
         claim(.ask) { [weak self] in self?.controller?.askPressed() }
         claim(.fix) { [weak self] in self?.controller?.fixPressed() }
         claim(.messages) { [weak self] in self?.controller?.messagesHotkeyPressed() }
@@ -220,6 +224,18 @@ final class AppStage: CatStage {
         input.cancel()
     }
 
+    func showListening(in box: VoiceBox?) {
+        input.mic.showListening(box == .ask)
+        channels.view.showListening(in: box == .messages ? spokenPane : nil)
+    }
+
+    /// The mics name the talk key, so it's easier to find.
+    private func showTalkKey(_ key: HoldKey) {
+        let tip = CatWords.speakTip(talkKey: key)
+        input.mic.toolTip = tip
+        channels.view.micTip = tip
+    }
+
     // MARK: - The kittens
 
     var isKittensVisible: Bool { kittens.isVisible }
@@ -310,6 +326,7 @@ final class AppStage: CatStage {
 
     func settingsChanged(_ form: SettingsForm) {
         settingsPanel.update(form)
+        showTalkKey(form.settings.talkKey)
     }
 
     func showText(size: TextSize, font: String?) {

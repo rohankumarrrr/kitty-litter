@@ -64,8 +64,7 @@ extension AppController {
         if let dropped {
             let capture = Task { Capture(snapshot: dropped, error: nil) }
             dropIsOpen = true
-            boxesOpened += 1
-            stage.showInput(InputRequest(
+            showBox(InputRequest(
                 placeholder: CatWords.askAboutDrop,
                 caption: CatWords.looking(at: dropped),
                 allowsEmpty: true,
@@ -81,7 +80,7 @@ extension AppController {
         // The look at the screen comes first, before anything can take focus.
         let capture = startLook(CaptureOptions())
         let early = await firstOf(seconds: Self.panelWait) { await capture.value }
-        stage.showInput(InputRequest(
+        showBox(InputRequest(
             placeholder: CatWords.askPlaceholder,
             caption: early.flatMap(askCaption),
             allowsEmpty: false,

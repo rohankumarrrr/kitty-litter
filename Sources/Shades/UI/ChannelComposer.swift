@@ -21,6 +21,10 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     var onResize: (() -> Void)?
     /// Esc in the box, which closes a thread's pane as it does anywhere else in the window.
     var onEscape: (() -> Void)?
+    /// The mic, which starts saying something into this box, and then finishes it.
+    var onMic: (() -> Void)?
+    /// Esc while the mic is hearing you, which forgets what you said.
+    var onStopListening: (() -> Void)?
 
     private(set) var target: MessageTarget?
     /// The line over the box as the place sets it, before anything typed changes it.
@@ -40,6 +44,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     private(set) var attachments: [Drop] = []
     private var chips: [AttachmentChip] = []
     private let attachButton = QuietButton(CatWords.attach, style: .text)
+    let mic = QuietButton.mic()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -76,6 +81,9 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         }
         attachButton.setAccessibilityLabel(CatWords.attachRecent)
         addSubview(attachButton)
+        mic.isThemed = true
+        mic.onPress = { [weak self] in self?.onMic?() }
+        addSubview(mic)
         textView.onAttach = { [weak self] in self?.attach($0) ?? false }
         registerForDraggedTypes(Drop.types)
         restyle()
@@ -138,6 +146,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         textView.textColor = MessagesInk.text
         textView.font = MessagesInk.font(ofSize: MessagesInk.title)
         alsoSend.needsDisplay = true
+        mic.needsDisplay = true
         needsDisplay = true
         // Another text size makes the box taller or shorter.
         onResize?()
@@ -197,9 +206,13 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         chips.isEmpty ? 0 : CGFloat((chips.count + chipsPerRow - 1) / chipsPerRow) * Self.fileHeight
     }
 
+    /// A line of the font it's drawn in, so its words show whole at every text size.
+    private var textLine: CGFloat {
+        ceil(NSLayoutManager().defaultLineHeight(for: textView.font ?? .systemFont(ofSize: 14)))
+    }
+
     private var textHeight: CGFloat {
-        // A line of the font it's drawn in, so its words show whole at every text size.
-        let line = ceil(NSLayoutManager().defaultLineHeight(for: textView.font ?? .systemFont(ofSize: 14)))
+        let line = textLine
         guard let manager = textView.layoutManager, let container = textView.textContainer else { return line }
         manager.ensureLayout(for: container)
         let used = ceil(manager.usedRect(for: container).height)
@@ -216,7 +229,11 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
             chip.frame = NSRect(x: ChannelRowView.margin + CGFloat(column) * (chipSize + 8), y: Self.pad + Self.labelHeight + CGFloat(row) * Self.fileHeight, width: chipSize, height: Self.fileHeight - 8)
         }
         let field = NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight + filesHeight, width: inner, height: textHeight + Self.fieldPad * 2)
+        let side = QuietButton.micSide
         scroll.frame = field.insetBy(dx: 10, dy: Self.fieldPad)
+        scroll.frame.size.width -= side
+        // In the field at its right, level with the last line, so it stays by what you'd send as the box grows.
+        mic.frame = NSRect(x: field.maxX - side - 4, y: field.maxY - Self.fieldPad - (textLine + side) / 2, width: side, height: side)
         textView.minSize = NSSize(width: scroll.frame.width, height: 0)
         textView.maxSize = NSSize(width: scroll.frame.width, height: .greatestFiniteMagnitude)
         alsoSend.sizeToFit()
@@ -232,6 +249,13 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         NSBezierPath(roundedRect: field, xRadius: 9, yRadius: 9).fill()
     }
 
+    /// A box that goes while its mic hears you, as when its thread's pane closes or you go somewhere with no box, forgets
+    /// what you said, since there'd be no mic left to finish it with.
+    override func viewDidHide() {
+        super.viewDidHide()
+        if mic.isLit { onStopListening?() }
+    }
+
     func textDidChange(_ notification: Notification) {
         showWhereWordsGo()
         onResize?()
@@ -244,7 +268,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
             send()
             return true
         case #selector(NSResponder.cancelOperation(_:)):
-            onEscape?()
+            if mic.isLit { onStopListening?() } else { onEscape?() }
             return true
         default:
             return false
