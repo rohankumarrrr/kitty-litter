@@ -408,6 +408,8 @@ final class ChannelTextView: NSTextView {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var needsPanelToBecomeKey: Bool { true }
+    // Pressing in them selects, but Tab passes them by: a message is one stop, in its list.
+    override var canBecomeKeyView: Bool { false }
 
     /// A right-click is about these words too, so Copy in its menu has them.
     override func rightMouseDown(with event: NSEvent) {

@@ -107,10 +107,13 @@ struct ChannelSpeakerLook {
     /// Yours, where a kitten's cat goes, if you've given it one.
     var picture: NSImage?
     var jacket: UInt32?
-    /// `nil` is the grey that the cat and anyone unknown get.
+    /// Its colour, which a phone fills its bubble with. `nil` is the grey that the cat and anyone unknown get.
     var bubble: UInt32?
     /// The words on `bubble`. `nil` is the window's own text colour.
     var words: UInt32?
+    /// What lights a kitten's bubble and tile on the Mac, in its colour, or the cat's in its own hue. Colour comes in
+    /// only as light, so their bubbles are dark. Yours, and anyone else's, aren't lit.
+    var light: Opal.Light?
 
     init(_ speaker: Speaker, in book: ChannelBook) {
         name = book.name(of: speaker)
@@ -121,6 +124,7 @@ struct ChannelSpeakerLook {
         jacket = own ?? (speaker == .someoneElse ? Self.otherJacket : nil)
         bubble = isYou ? Self.yours : own
         words = isYou ? Opal.body : bubble.map { Self.blackOrWhite(on: $0) }
+        light = own.map(Opal.Light.of) ?? (speaker == .cat ? .shades : nil)
     }
 
     /// Its colour from kitten.json, or one picked from its folder so it's the same every time. The cat keeps its black jacket.
@@ -133,7 +137,9 @@ struct ChannelSpeakerLook {
 
     static let grey = Ink.hex(Opal.controlHover)
 
-    var bubbleFill: NSColor { bubble.map(Ink.hex) ?? Self.grey }
+    /// What its words sit on: yours on Opal's selected, a lit bubble on the card's black, and anyone else's on the grey.
+    var bubbleFill: NSColor { Ink.hex(body) }
+    private var body: UInt32 { isYou ? Self.yours : light != nil ? Opal.cardTop : Opal.controlHover }
 
     /// Where a kitten's cat goes, when you have no picture. Your colour is too close to the window to see, so it gets
     /// an edge, at the 3:1 a shape needs.
@@ -145,23 +151,16 @@ struct ChannelSpeakerLook {
         NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: radius - 0.5, yRadius: radius - 0.5).stroke()
     }
 
-    /// Whichever reads better on the bubble.
-    var bubbleText: NSColor {
-        guard let bubble else { return MessagesInk.text }
-        if isYou { return MessagesInk.text }
-        return Self.readable(on: bubble)
-    }
+    /// Every bubble on the Mac is dark, so its words are Opal's body.
+    var bubbleText: NSColor { MessagesInk.text }
 
-    /// A reply that's still coming is paler. It's worked out as one solid colour, so its words can be picked to read
-    /// on it too.
+    /// A reply that's still coming, or yours on its way, is drawn see-through, which comes to this over the page.
     func fill(fadedTo alpha: Double) -> NSColor {
-        Ink.hex(Self.faded(bubble, to: alpha))
+        Ink.hex(Opal.mix(Opal.page, body, alpha))
     }
 
-    func text(fadedTo alpha: Double) -> NSColor {
-        guard let bubble else { return MessagesInk.text }
-        return Self.readable(on: Self.faded(bubble, to: alpha))
-    }
+    /// Quieter words, which still read on it.
+    func text(fadedTo alpha: Double) -> NSColor { MessagesInk.soft }
 
     /// The colour over the window at `alpha`. `nil` is the grey.
     static func faded(_ bubble: UInt32?, to alpha: Double) -> UInt32 {
@@ -188,12 +187,28 @@ struct ChannelSpeakerLook {
 }
 
 /// One row of the pane. It lays itself out at a width and says how tall that makes it.
-class ChannelRowView: QuietView {
+class ChannelRowView: QuietView, TabGate {
     static let textLeft: CGFloat = 64
     static let catLeft: CGFloat = 20
     static let margin: CGFloat = 20
 
     var hovering = false { didSet { if hovering != oldValue { hoverChanged() } } }
+    /// The row the arrow keys are on in its list, whose buttons Tab goes into next, as Slack's messages work.
+    var isCurrent = false { didSet { if isCurrent != oldValue { focusChanged() } } }
+    /// It's current and its list has the keyboard, so it draws a ring.
+    var isFocused = false { didSet { if isFocused != oldValue { focusChanged() } } }
+    /// Whether the arrow keys stop on it.
+    var takesFocus: Bool { isPressable }
+    var letsTabIn: Bool { isCurrent }
+    func focusChanged() { needsDisplay = true }
+
+    /// The ring round a row the arrow keys are on, the shape of its hover.
+    func drawFocus() {
+        if showsRing { QuietFocus.ring(bounds.insetBy(dx: 8, dy: 1), radius: Opal.Corner.control) }
+    }
+
+    /// Only while its window has the keyboard, as any focus ring.
+    var showsRing: Bool { isFocused && window?.isKeyWindow == true }
     /// Held down on a row that does something when pressed, so it shows before you let go.
     private(set) var isPressed = false { didSet { if isPressed != oldValue { needsDisplay = true } } }
     /// Hover's fill, or press's while it's held.
@@ -253,22 +268,22 @@ final class DayRowView: ChannelRowView {
 
     override func fit(width: CGFloat) -> CGFloat { 36 }
 
+    /// A hairline across, with the day in a capsule over its middle, as Slack marks one.
     override func draw(_ dirtyRect: NSRect) {
         let label = NSAttributedString(string: CatWords.day(date, now: now()), attributes: [
             .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .medium),
             .foregroundColor: MessagesInk.soft,
         ])
         let size = label.size()
-        let middle = bounds.midY.rounded() + 0.5
-        let gap: CGFloat = 10
+        MessagesInk.line.setFill()
+        NSRect(x: Self.margin, y: bounds.midY.rounded(), width: max(bounds.width - Self.margin * 2, 0), height: 1).fill()
+        let pill = NSRect(x: (bounds.midX - size.width / 2 - 10).rounded(), y: (bounds.midY - 11).rounded(), width: ceil(size.width) + 20, height: 22)
+        let shape = NSBezierPath(roundedRect: pill.insetBy(dx: 0.5, dy: 0.5), xRadius: 10.5, yRadius: 10.5)
+        MessagesInk.paper.setFill()
+        shape.fill()
         MessagesInk.line.setStroke()
-        for (from, to) in [(Self.margin, bounds.midX - size.width / 2 - gap), (bounds.midX + size.width / 2 + gap, bounds.width - Self.margin)] {
-            let line = NSBezierPath()
-            line.move(to: NSPoint(x: from, y: middle))
-            line.line(to: NSPoint(x: to, y: middle))
-            line.stroke()
-        }
-        label.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
+        shape.stroke()
+        label.draw(at: NSPoint(x: pill.midX - size.width / 2, y: pill.midY - size.height / 2))
     }
 }
 
@@ -286,19 +301,15 @@ final class NewRowView: ChannelRowView {
 
     override func fit(width: CGFloat) -> CGFloat { 24 }
 
+    /// The line in the rim's light, with New at its end, as Slack has it.
     override func draw(_ dirtyRect: NSRect) {
         let label = NSAttributedString(string: CatWords.new, attributes: [
             .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .semibold),
-            .foregroundColor: MessagesInk.badge,
+            .foregroundColor: MessagesInk.strong,
         ])
         let size = label.size()
         let right = bounds.width - Self.margin
-        let middle = bounds.midY.rounded() + 0.5
-        MessagesInk.badge.setStroke()
-        let line = NSBezierPath()
-        line.move(to: NSPoint(x: Self.margin, y: middle))
-        line.line(to: NSPoint(x: right - size.width - 8, y: middle))
-        line.stroke()
+        Opal.rimLine(in: NSRect(x: Self.margin, y: bounds.midY.rounded(), width: max(right - size.width - 8 - Self.margin, 0), height: 1))
         label.draw(at: NSPoint(x: right - size.width, y: bounds.midY - size.height / 2))
     }
 }
@@ -356,8 +367,8 @@ struct ReplyBar {
 
     func draw(in rect: NSRect, on view: NSView, hovering: Bool, now: Date) {
         if hovering {
-            MessagesInk.hover.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
+            Ink.hex(Opal.controlHover).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: Opal.Corner.control, yRadius: Opal.Corner.control).fill()
         }
         var x = rect.minX + 4
         let faceTop = rect.midY - Self.face / 2
@@ -450,6 +461,13 @@ final class MessageToolbar: QuietView {
         self.more = Self.button("More", symbol: "ellipsis", onPress: more)
         super.init(frame: .zero)
         (buttons + [self.more]).forEach(addSubview)
+        // The live window's shadow, which a picture the window draws of itself leaves out.
+        let lift = NSShadow()
+        lift.shadowColor = NSColor.black.withAlphaComponent(0.4)
+        lift.shadowBlurRadius = 8
+        lift.shadowOffset = NSSize(width: 0, height: -2)
+        wantsLayer = true
+        shadow = lift
         showOrHide()
     }
 
@@ -506,20 +524,18 @@ final class MessageToolbar: QuietView {
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {}
 
+    /// Opal's floating glass, since it floats over the row.
     override func draw(_ dirtyRect: NSRect) {
-        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 9, yRadius: 9)
-        MessagesInk.paper.setFill()
-        shape.fill()
-        MessagesInk.line.setStroke()
-        shape.stroke()
+        Opal.glass(NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: Opal.Corner.control, yRadius: Opal.Corner.control))
     }
 }
 
-/// One message as a bubble: yours on the right in blue, everyone else's on the left in their own colour.
+/// One message as a bubble: yours on the right on Opal's selected violet-black, and everyone else's on the left, dark
+/// and lit at its edge in their own colour, beside their cat on its tile.
 final class MessageRowView: ChannelRowView {
     /// About a screenful, which is all a long message shows until you press Show more.
     private static let clampedLines = 30
-    private static let catSide: CGFloat = 28
+    private static let catSide: CGFloat = 32
     private static let pad: CGFloat = 5
     private static var headHeight: CGFloat { MessagesInk.meta + 7 }
     private static var contextHeight: CGFloat { MessagesInk.meta + 5 }
@@ -535,6 +551,8 @@ final class MessageRowView: ChannelRowView {
     private static let fileGap: CGFloat = 4
     /// Between who said it and when, and the toolbar beside it.
     private static let toolbarGap: CGFloat = 8
+    /// A reaction, as Opal's chips are.
+    private static let chipHeight: CGFloat = 22
 
     var onOpen: (() -> Void)?
     var onReply: (() -> Void)?
@@ -583,6 +601,8 @@ final class MessageRowView: ChannelRowView {
     var webPictures: [URL] { message.files.compactMap { $0.thumbnail == nil ? $0.source?.webAddress : nil } }
     private var failureTop: CGFloat = 0
     private var replyBarFrame = NSRect.zero
+    /// "2 earlier notes" in its name line, which opens the thread in T3, where they are.
+    private var notesFrame: NSRect?
     private var headTop: CGFloat { context == nil ? Self.pad : Self.pad + Self.contextHeight }
     /// A row is laid out again each time the rows around it are, so it keeps its answer until something it depends on changes.
     private var fitted: (width: CGFloat, isExpanded: Bool, height: CGFloat)?
@@ -605,11 +625,13 @@ final class MessageRowView: ChannelRowView {
     override func accessibilityLabel() -> String? {
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
         let reactions = message.reactions?.map(\.emoji).joined(separator: " ")
-        return ([context, look.name, time, said] + message.files.map { CatWords.attached($0.name) } + [message.failure, reactions.flatMap { $0.isEmpty ? nil : $0 }, replyBar?.accessibilityWords(now: Date())]).compactMap { $0 }.joined(separator: ", ")
+        let notes = message.earlierNotes > 0 ? CatWords.earlierNotes(message.earlierNotes) : nil
+        return ([context, look.name, notes, time, said] + message.files.map { CatWords.attached($0.name) } + [message.failure, reactions.flatMap { $0.isEmpty ? nil : $0 }, replyBar?.accessibilityWords(now: Date())]).compactMap { $0 }.joined(separator: ", ")
     }
 
     override var isPressable: Bool { onPress != nil }
     override func press() { onPress?() }
+    override var takesFocus: Bool { true }
 
     /// What you can do to it, which VoiceOver and a right-click both offer, in this order.
     private var actions: [(name: String, run: () -> Void)] {
@@ -660,6 +682,7 @@ final class MessageRowView: ChannelRowView {
     var isCut: Bool { words?.isCut ?? false }
     var isYours: Bool { look.isYou }
     var fill: NSColor { look.bubbleFill }
+    var light: Opal.Light? { look.light }
 
     func pressShowMore() { onShowMore?() }
 
@@ -674,6 +697,13 @@ final class MessageRowView: ChannelRowView {
         guard let text = message.text else { return }
         onCopy?(text)
         toolbar?.button("Copy").map(Self.showCopied)
+    }
+
+    /// ⌘C while the arrow keys are on it copies what it said. `false` if it said nothing.
+    func copyMessage() -> Bool {
+        guard message.text != nil else { return false }
+        copyPressed()
+        return true
     }
 
     /// A tick in place of the copy mark for a moment, as GitHub's Copy does.
@@ -703,10 +733,11 @@ final class MessageRowView: ChannelRowView {
         needsDisplay = true
     }
 
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        // Tab only reaches buttons that are there, so with keyboard navigation on they're made as the row is shown.
-        if window != nil, QuietFocus.fullKeyboardAccess() { makeToolbar() }
+    /// Tab only reaches buttons that are there, so they're made once the arrow keys come to it.
+    override func focusChanged() {
+        if isCurrent { makeToolbar() }
+        showToolbar()
+        needsDisplay = true
     }
 
     private func makeToolbar() {
@@ -720,12 +751,13 @@ final class MessageRowView: ChannelRowView {
         placeToolbar(width: bounds.width)
     }
 
+    /// While you point at it, the arrow keys are on it, or Tab is on one of its buttons.
     private func showToolbar() {
         guard let toolbar else { return }
-        let focused = toolbar.hasFocus
+        let focused = toolbar.hasFocus || (window?.firstResponder as? NSView)?.isDescendant(of: self) == true
         // Tab can land on a row that's scrolled away, so it comes into view.
         if focused, !toolbar.isShowing { toolbar.scrollToVisible(toolbar.bounds) }
-        toolbar.isShowing = hovering || focused
+        toolbar.isShowing = hovering || showsRing || focused
     }
 
     /// Everything a right-click offers, under More, for what didn't fit.
@@ -841,6 +873,7 @@ final class MessageRowView: ChannelRowView {
         }
         placeToolbar(width: width)
         placeCodeButtons()
+        placeNotes(width: width)
         let height = max(bottom + Self.pad, look.hasCat || look.picture != nil ? headTop + Self.pad + Self.headHeight + Self.catSide : 0)
         fitted = (width, isExpanded, height)
         return height
@@ -854,12 +887,13 @@ final class MessageRowView: ChannelRowView {
             reactionChips = reactions.map { reaction in
                 let chip = QuietButton(reaction.emoji, style: .plain) { [weak self] in self?.onReact?(reaction) }
                 chip.isArmed = onReact != nil
+                chip.setFrameSize(NSSize(width: chip.frame.width - 4, height: Self.chipHeight))
                 addSubview(chip)
                 return chip
             }
             if onReact != nil {
                 let add = MessageToolbar.button(CatWords.react, symbol: "face.smiling", style: .plain)
-                add.setFrameSize(NSSize(width: reactionChips[0].frame.width, height: add.frame.height))
+                add.setFrameSize(NSSize(width: reactionChips[0].frame.width, height: Self.chipHeight))
                 add.onPress = { [weak self, weak add] in self?.showReactions(from: add) }
                 addSubview(add)
                 addReaction = add
@@ -884,13 +918,11 @@ final class MessageRowView: ChannelRowView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        if isFound {
-            MessagesInk.accent.withAlphaComponent(0.16).setFill()
-            NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1), xRadius: 8, yRadius: 8).fill()
-        }
-        if isPressed {
-            MessagesInk.press.setFill()
-            NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1), xRadius: 8, yRadius: 8).fill()
+        // Pointed at, it's tinted, as Slack and Discord tint a message, and picked out once Search finds it.
+        let ground = isFound ? MessagesInk.accent.withAlphaComponent(0.16) : highlight
+        if let ground {
+            ground.setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1), xRadius: Opal.Corner.control, yRadius: Opal.Corner.control).fill()
         }
         if let context {
             // Over the bubble it's about: yours on the right, everyone else's on the left.
@@ -908,17 +940,43 @@ final class MessageRowView: ChannelRowView {
         }
         let top = max(headTop + Self.headHeight, bubble.maxY - Self.catSide)
         if look.hasCat {
-            CatStamp.draw(CatPose(frame: .sit), jacket: look.jacket, in: NSRect(x: Self.catLeft, y: top, width: Self.catSide, height: Self.catSide), on: self)
+            let cat = NSRect(x: Self.catLeft, y: top, width: Self.catSide, height: Self.catSide)
+            if let light = look.light {
+                Opal.tile(in: cat, light: light)
+                CatStamp.draw(CatPose(frame: .sit), jacket: look.jacket, in: cat.insetBy(dx: 4, dy: 4), on: self)
+            } else {
+                CatStamp.draw(CatPose(frame: .sit), jacket: look.jacket, in: cat, on: self)
+            }
         } else if let picture = look.picture {
             PictureStamp.draw(picture, in: NSRect(x: bounds.width - Self.catLeft - Self.catSide, y: top, width: Self.catSide, height: Self.catSide))
         }
         drawHead()
-        if bubble.height > 0 {
-            let radius = min(16, bubble.height / 2)
-            (message.isStillGoing || message.isSending ? look.fill(fadedTo: Self.stillGoingAlpha) : fill).setFill()
+        if bubble.height > 0 { drawBubble() }
+        for (index, frame) in fileFrames.enumerated() where webButtons[index] == nil { drawFile(message.files[index], picture: pictures[index], in: frame) }
+        drawFocus()
+    }
+
+    /// A kitten's, or the cat's, dark and lit at its edge, since colour comes in only as light, and yours filled on
+    /// Opal's selected. One still coming, or on its way, is see-through.
+    private func drawBubble() {
+        let radius = min(16, bubble.height / 2)
+        let context = NSGraphicsContext.current?.cgContext
+        let isFaded = message.isStillGoing || message.isSending
+        if isFaded {
+            context?.saveGState()
+            context?.setAlpha(Self.stillGoingAlpha)
+            context?.beginTransparencyLayer(auxiliaryInfo: nil)
+        }
+        if let light = look.light {
+            Opal.card(in: bubble, radius: radius, light: light)
+        } else {
+            fill.setFill()
             NSBezierPath(roundedRect: bubble, xRadius: radius, yRadius: radius).fill()
         }
-        for (index, frame) in fileFrames.enumerated() where webButtons[index] == nil { drawFile(message.files[index], picture: pictures[index], in: frame) }
+        if isFaded {
+            context?.endTransparencyLayer()
+            context?.restoreGState()
+        }
     }
 
     /// A file stays the size of the buttons beside it, whatever the text size.
@@ -1013,16 +1071,17 @@ final class MessageRowView: ChannelRowView {
             let wide = ceil(label.size().width)
             return (label, NSRect(x: end(in: width) - wide, y: top, width: wide, height: height))
         }
-        var head = look.name
-        if message.earlierNotes > 0 { head += "  ·  \(CatWords.earlierNotes(message.earlierNotes))" }
-        head += "  ·  \(time)"
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
-        let label = NSAttributedString(string: head, attributes: [
-            .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .medium),
-            .foregroundColor: MessagesInk.soft,
-            .paragraphStyle: truncating,
-        ])
+        let font = MessagesInk.font(ofSize: MessagesInk.meta, weight: .medium)
+        let label = NSMutableAttributedString(string: look.name, attributes: [.font: font, .foregroundColor: MessagesInk.soft, .paragraphStyle: truncating])
+        if message.earlierNotes > 0 {
+            label.append(NSAttributedString(string: "  ·  ", attributes: [.font: font, .foregroundColor: MessagesInk.soft]))
+            // Only T3 has what they said, so they're a way there.
+            label.append(NSAttributedString(string: CatWords.earlierNotes(message.earlierNotes), attributes: [.font: font, .foregroundColor: onOpen == nil ? MessagesInk.soft : MessagesInk.link, .earlierNotes: true]))
+        }
+        label.append(NSAttributedString(string: "  ·  \(time)", attributes: [.font: font, .foregroundColor: MessagesInk.soft]))
+        label.addAttribute(.paragraphStyle, value: truncating, range: NSRange(location: 0, length: label.length))
         let room = width - Self.margin - MessageToolbar.width(of: 1) - Self.toolbarGap - Self.textLeft - 2
         return (label, NSRect(x: Self.textLeft + 2, y: top, width: max(min(ceil(label.size().width), room), 0), height: height))
     }
@@ -1031,6 +1090,55 @@ final class MessageRowView: ChannelRowView {
         let (label, frame) = head(width: bounds.width)
         label.draw(in: frame)
     }
+
+    /// Where "2 earlier notes" is drawn, when pressing it can open the thread in T3.
+    private func placeNotes(width: CGFloat) {
+        removeAllToolTips()
+        notesFrame = nil
+        guard message.earlierNotes > 0, onOpen != nil else { return }
+        let (label, frame) = head(width: width)
+        var found: NSRange?
+        label.enumerateAttribute(.earlierNotes, in: NSRange(location: 0, length: label.length)) { value, range, _ in
+            if value != nil { found = range }
+        }
+        guard let range = found else { return }
+        let before = label.attributedSubstring(from: NSRange(location: 0, length: range.location)).size().width
+        let notes = NSRect(x: frame.minX + before, y: frame.minY, width: label.attributedSubstring(from: range).size().width, height: frame.height)
+        guard notes.maxX <= frame.maxX else { return }
+        notesFrame = notes
+        addToolTip(notes, owner: CatWords.seeEarlierNotes as NSString, userData: nil)
+        window?.invalidateCursorRects(for: self)
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        if let notesFrame { addCursorRect(notesFrame, cursor: .pointingHand) }
+    }
+
+    private var pressingNotes = false
+
+    private func isOnNotes(_ event: NSEvent) -> Bool {
+        notesFrame?.contains(convert(event.locationInWindow, from: nil)) == true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        pressingNotes = isOnNotes(event)
+        if !pressingNotes { super.mouseDown(with: event) }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        if !pressingNotes { super.mouseDragged(with: event) }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard pressingNotes else { return super.mouseUp(with: event) }
+        pressingNotes = false
+        if isOnNotes(event) { onOpen?() }
+    }
+}
+
+private extension NSAttributedString.Key {
+    static let earlierNotes = NSAttributedString.Key("ShadesEarlierNotes")
 }
 
 /// The line in a thread's pane between its parent and its replies.
@@ -1121,7 +1229,7 @@ final class ThreadDigestRowView: ChannelRowView {
     override func draw(_ dirtyRect: NSRect) {
         if let highlight {
             highlight.setFill()
-            NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 2), xRadius: 8, yRadius: 8).fill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 2), xRadius: Opal.Corner.control, yRadius: Opal.Corner.control).fill()
         }
         MessagesInk.line.setFill()
         NSRect(x: Self.margin, y: bounds.height - 1, width: bounds.width - Self.margin * 2, height: 1).fill()
@@ -1129,12 +1237,13 @@ final class ThreadDigestRowView: ChannelRowView {
         var x = Self.catLeft
         let name = NSAttributedString(string: channel, attributes: [
             .font: MessagesInk.font(ofSize: MessagesInk.meta + 1, weight: digest.isUnread ? .bold : .semibold),
-            .foregroundColor: MessagesInk.text,
+            .foregroundColor: digest.isUnread ? MessagesInk.strong : MessagesInk.text,
         ])
+        // Unread in Opal's violet, as its unread marks are, since rose says something needs you.
         if digest.isUnread {
-            MessagesInk.badge.setFill()
-            NSBezierPath(ovalIn: NSRect(x: x, y: 10 + (name.size().height - 7) / 2, width: 7, height: 7)).fill()
-            x += 13
+            MessagesInk.accent.setFill()
+            NSBezierPath(ovalIn: NSRect(x: x, y: 10 + (name.size().height - 8) / 2, width: 8, height: 8)).fill()
+            x += 14
         }
         name.draw(at: NSPoint(x: x, y: 10))
 
@@ -1143,7 +1252,10 @@ final class ThreadDigestRowView: ChannelRowView {
         let room = max(bounds.width - Self.textLeft - Self.margin, 60)
         for ((look, message), block) in zip(said, blocks) {
             let cat = NSRect(x: Self.catLeft + 8, y: block.top - 16, width: Self.catSide, height: Self.catSide)
-            if look.hasCat {
+            if look.hasCat, let light = look.light {
+                Opal.tile(in: cat, light: light)
+                CatStamp.draw(CatPose(frame: .sit), jacket: look.jacket, in: cat.insetBy(dx: 3, dy: 3), on: self)
+            } else if look.hasCat {
                 CatStamp.draw(CatPose(frame: .sit), jacket: look.jacket, in: cat, on: self)
             } else if let picture = look.picture {
                 PictureStamp.draw(picture, in: cat.insetBy(dx: 1, dy: 1))
@@ -1162,6 +1274,7 @@ final class ThreadDigestRowView: ChannelRowView {
                 .foregroundColor: MessagesInk.link,
             ]).draw(at: NSPoint(x: Self.textLeft, y: last.top + last.height + 6))
         }
+        drawFocus()
     }
 }
 
@@ -1184,7 +1297,10 @@ final class HeadingRowView: ChannelRowView {
     override func fit(width: CGFloat) -> CGFloat { Self.subTop + MessagesInk.meta + 9 }
 
     override func draw(_ dirtyRect: NSRect) {
-        CatStamp.draw(status.pose(tick: 0), jacket: ChannelSpeakerLook.color(of: status.kitten), in: NSRect(x: Self.catLeft, y: 14, width: 32, height: 32), on: self)
+        let color = ChannelSpeakerLook.color(of: status.kitten)
+        let tile = NSRect(x: Self.catLeft, y: 14, width: 32, height: 32)
+        Opal.tile(in: tile, light: color.map(Opal.Light.of) ?? .shades)
+        CatStamp.draw(status.pose(tick: 0), jacket: color, in: tile.insetBy(dx: 4, dy: 4), on: self)
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         let width = bounds.width - Self.textLeft - Self.margin
@@ -1229,10 +1345,10 @@ final class IssueRowView: ChannelRowView {
         let left = Self.textLeft
         if let highlight {
             highlight.setFill()
-            NSBezierPath(roundedRect: NSRect(x: left - 8, y: 1, width: bounds.width - left - Self.margin + 16, height: bounds.height - 2), xRadius: 7, yRadius: 7).fill()
+            NSBezierPath(roundedRect: NSRect(x: left - 8, y: 1, width: bounds.width - left - Self.margin + 16, height: bounds.height - 2), xRadius: Opal.Corner.control, yRadius: Opal.Corner.control).fill()
         }
         thread.dotColor.setFill()
-        NSBezierPath(rect: NSRect(x: left, y: bounds.midY - 4, width: 8, height: 8)).fill()
+        NSBezierPath(ovalIn: NSRect(x: left, y: (bounds.midY - 4).rounded(), width: 8, height: 8)).fill()
 
         var edge = bounds.width - Self.margin
         let details = [CatWords.age(of: thread.updatedAt, now: now()), CatWords.status(thread), thread.pullRequest.map(CatWords.pullRequest)]
@@ -1251,6 +1367,9 @@ final class IssueRowView: ChannelRowView {
             .foregroundColor: MessagesInk.text,
             .paragraphStyle: truncating,
         ]).draw(in: NSRect(x: left + 16, y: 6, width: max(edge - left - 16, 40), height: MessagesInk.body + 4))
+        if showsRing {
+            QuietFocus.ring(NSRect(x: left - 8, y: 1, width: bounds.width - left - Self.margin + 16, height: bounds.height - 2), radius: Opal.Corner.control)
+        }
     }
 }
 
@@ -1297,12 +1416,19 @@ final class OlderRowView: ChannelRowView {
         addSubview(button)
     }
 
+    override var isPressable: Bool { button.isArmed }
+    override func press() { button.onPress?() }
+
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
     override func fit(width: CGFloat) -> CGFloat {
         button.frame.origin = NSPoint(x: ((width - button.frame.width) / 2).rounded(), y: 6)
         return button.frame.height + 12
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if showsRing { QuietFocus.ring(button.frame, radius: button.frame.height / 2) }
     }
 }
 
@@ -1329,12 +1455,12 @@ final class SectionRowView: ChannelRowView {
         return 36
     }
 
+    /// The arrow keys stop on a section only for its Clear.
+    override var takesFocus: Bool { clear != nil }
+
     override func draw(_ dirtyRect: NSRect) {
-        NSAttributedString(string: title.uppercased(), attributes: [
-            .font: MessagesInk.font(ofSize: MessagesInk.meta - 1, weight: .semibold),
-            .foregroundColor: MessagesInk.soft,
-            .kern: 0.5,
-        ]).draw(at: NSPoint(x: Self.catLeft, y: 16))
+        MessagesInk.label(title).draw(at: NSPoint(x: Self.catLeft, y: 16))
+        drawFocus()
     }
 }
 
@@ -1393,6 +1519,7 @@ final class CardRowView: ChannelRowView {
     required init?(coder: NSCoder) { fatalError() }
 
     override var textBlocks: [ChannelTextBlock] { [words, answer].compactMap { $0 } }
+    override var takesFocus: Bool { true }
 
     override func fit(width: CGFloat) -> CGFloat {
         let room = max(width - Self.textLeft - Self.margin, 60)
@@ -1422,8 +1549,9 @@ final class CardRowView: ChannelRowView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let cat = NSRect(x: Self.catLeft, y: Self.pad + 1, width: Self.catSide, height: Self.catSide)
-        CatStamp.draw(CatPose(frame: .sit, glint: .attention(bright: true)), jacket: look.jacket, in: cat, on: self)
+        let tile = NSRect(x: Self.catLeft, y: Self.pad + 1, width: Self.catSide, height: Self.catSide)
+        Opal.tile(in: tile, light: look.light ?? .shades)
+        CatStamp.draw(CatPose(frame: .sit, glint: .attention(bright: true)), jacket: look.jacket, in: tile.insetBy(dx: 4, dy: 4), on: self)
 
         let left = Self.textLeft
         var right = bounds.width - Self.margin
@@ -1449,5 +1577,6 @@ final class CardRowView: ChannelRowView {
             NSAttributedString(string: footer, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta), .foregroundColor: MessagesInk.soft])
                 .draw(at: NSPoint(x: left, y: footerTop))
         }
+        drawFocus()
     }
 }

@@ -273,7 +273,7 @@ final class DemoDriver {
 
     /// Hands Tab, Shift-Tab, Ctrl-Tab or Space to whichever window has the keyboard, the way the key arrives there, without
     /// posting anything to the system. Prints what has the keyboard afterwards.
-    private func pressKey(_ characters: String, control: Bool = false) {
+    private func pressKey(_ characters: String, keyCode: UInt16? = nil, control: Bool = false) {
         guard let (name, window) = windows.first(where: { $0.1.isKeyWindow }) else { return print("no window has the keyboard") }
         // A menu opens on the real desktop and waits there for a click, so `setting` picks from one instead.
         if characters == " ", let button = window.firstResponder as? QuietButton, button.accessibilityRole() == .popUpButton {
@@ -283,7 +283,7 @@ final class DemoDriver {
             let event = NSEvent.keyEvent(
                 with: type, location: .zero, modifierFlags: characters == "\u{19}" ? .shift : control ? .control : [], timestamp: ProcessInfo.processInfo.systemUptime,
                 windowNumber: window.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters,
-                isARepeat: false, keyCode: characters == " " ? 49 : 48
+                isARepeat: false, keyCode: keyCode ?? (characters == " " ? 49 : 48)
             )
             event.map(window.sendEvent)
         }
@@ -451,7 +451,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off|stuck | check | screen on|off | ears on|off|denied | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | voiceover [window]|press [label]|menu [label] | windows | cover [beside] | draw [folder] | opal [folder] [jacket...] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [reply] [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | arrow up|down | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off|stuck | check | screen on|off | ears on|off|denied | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | voiceover [window]|press [label]|menu [label] | windows | cover [beside] | draw [folder] | opal [folder] [jacket...] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -507,9 +507,12 @@ final class DemoDriver {
             }
         case "thread":
             // The same as clicking the reply bar under the newest thread showing, or under the one whose words include these.
-            let chosen = rest.isEmpty ? shownThreads.last : shownThreads.last { $0.words.localizedCaseInsensitiveContains(rest) }
+            // `thread reply` is pressing Reply on it instead, which puts the keyboard in its box.
+            let typing = rest == "reply" || rest.hasPrefix("reply ")
+            let words = typing ? String(rest.dropFirst(5)).trimmingCharacters(in: .whitespaces) : rest
+            let chosen = words.isEmpty ? shownThreads.last : shownThreads.last { $0.words.localizedCaseInsensitiveContains(words) }
             if let chosen {
-                stage.channels.view.open(thread: chosen.id)
+                stage.channels.view.open(thread: chosen.id, typing: typing)
                 print("thread \(chosen.id)")
             } else {
                 print("no thread shows [\(rest)]")
@@ -533,6 +536,10 @@ final class DemoDriver {
             print("keyboard navigation \(rest == "off" ? "off" : "on")")
         case "tab", "space":
             pressKey(word == "space" ? " " : rest == "back" ? "\u{19}" : "\t", control: rest == "control")
+        case "arrow":
+            // ↑ or ↓, handed to the window with the keyboard the way `tab` is.
+            let up = rest == "up"
+            pressKey(String(Character(UnicodeScalar(up ? NSUpArrowFunctionKey : NSDownArrowFunctionKey)!)), keyCode: up ? 126 : 125)
         case "jump":
             // The same as typing into ⌘K's box, which opens it first if it isn't open.
             let view = stage.channels.view

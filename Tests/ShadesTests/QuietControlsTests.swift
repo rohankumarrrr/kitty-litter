@@ -89,6 +89,23 @@ final class QuietControlsTests: XCTestCase {
         XCTAssertTrue(window.firstResponder === pair)
     }
 
+    func testTabLandingOnAButtonScrolledAwayBringsItIntoView() {
+        QuietFocus.fullKeyboardAccess = { true }
+        let window = window()
+        window.key = true
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
+        let page = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 1000))
+        scroll.documentView = page
+        let copy = QuietButton("Copy")
+        copy.frame.origin = NSPoint(x: 10, y: 900)
+        page.addSubview(copy)
+        window.contentView?.addSubview(scroll)
+        XCTAssertFalse(scroll.documentVisibleRect.intersects(copy.frame))
+
+        XCTAssertTrue(window.makeFirstResponder(copy))
+        XCTAssertTrue(scroll.documentVisibleRect.contains(copy.frame), "the ring is never on something you can't see")
+    }
+
     func testAButtonUnderTheTitleBarIsPressedRatherThanDraggingTheWindow() {
         XCTAssertFalse(QuietButton("Notifications", style: .text).mouseDownCanMoveWindow)
     }

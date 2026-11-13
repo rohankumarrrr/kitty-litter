@@ -301,10 +301,13 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         return NSRect(x: (bounds.width - width) / 2, y: 70, width: width, height: height)
     }
 
+    /// Room before the field for its magnifying glass, as Spotlight has.
+    private static let glassRoom: CGFloat = 26
+
     override func layout() {
         super.layout()
         let card = card
-        field.frame = NSRect(x: card.minX + 16, y: card.minY + 12, width: card.width - 32, height: MessagesInk.title + 10)
+        field.frame = NSRect(x: card.minX + 16 + Self.glassRoom, y: card.minY + 12, width: card.width - 32 - Self.glassRoom, height: MessagesInk.title + 10)
     }
 
     func controlTextDidChange(_ notification: Notification) {
@@ -334,16 +337,21 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        MessagesInk.paper.withAlphaComponent(0.6).setFill()
+        MessagesInk.sidebar.withAlphaComponent(0.55).setFill()
         bounds.fill(using: .sourceOver)
         let card = card
-        let shape = NSBezierPath(roundedRect: card, xRadius: 12, yRadius: 12)
-        MessagesInk.sidebar.setFill()
-        shape.fill()
-        MessagesInk.line.setStroke()
-        shape.stroke()
+        Opal.glass(NSBezierPath(roundedRect: card, xRadius: Opal.Corner.popover, yRadius: Opal.Corner.popover))
         MessagesInk.line.setFill()
         NSRect(x: card.minX, y: card.minY + Self.fieldHeight, width: card.width, height: 1).fill()
+        if let glass = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)?.withSymbolConfiguration(.init(pointSize: MessagesInk.title, weight: .medium)) {
+            let tinted = NSImage(size: glass.size, flipped: false) { rect in
+                glass.draw(in: rect)
+                MessagesInk.soft.set()
+                rect.fill(using: .sourceAtop)
+                return true
+            }
+            tinted.draw(in: NSRect(x: card.minX + 18, y: field.frame.midY - glass.size.height / 2, width: glass.size.width, height: glass.size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        }
 
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
@@ -356,7 +364,7 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
             let row = NSRect(x: card.minX + 6, y: card.minY + Self.fieldHeight + 6 + CGFloat(index) * rowHeight, width: card.width - 12, height: rowHeight - 4)
             if index == highlighted {
                 MessagesInk.press.setFill()
-                NSBezierPath(roundedRect: row, xRadius: 7, yRadius: 7).fill()
+                NSBezierPath(roundedRect: row, xRadius: Opal.Corner.control, yRadius: Opal.Corner.control).fill()
             }
             let line = NSMutableAttributedString(string: item.title, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.title, weight: .medium), .foregroundColor: MessagesInk.text])
             if let detail = item.detail {
@@ -389,11 +397,10 @@ final class CheatsheetView: QuietView {
     private static let headingHeight: CGFloat = 34
 
     var onClose: (() -> Void)?
-    private let close = QuietButton("✕", style: .text)
+    private let close = MessageToolbar.button(CatWords.closeThread, symbol: "xmark")
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        close.setAccessibilityLabel(CatWords.closeThread)
         close.onPress = { [weak self] in self?.onClose?() }
         addSubview(close)
         setAccessibilityElement(true)
@@ -420,32 +427,31 @@ final class CheatsheetView: QuietView {
         if !card.contains(convert(event.locationInWindow, from: nil)) { onClose?() }
     }
 
+    /// Floating glass, with each shortcut's keys on a chip.
     override func draw(_ dirtyRect: NSRect) {
-        MessagesInk.paper.withAlphaComponent(0.6).setFill()
+        MessagesInk.sidebar.withAlphaComponent(0.55).setFill()
         bounds.fill(using: .sourceOver)
         let card = card
-        let shape = NSBezierPath(roundedRect: card, xRadius: 12, yRadius: 12)
-        MessagesInk.sidebar.setFill()
-        shape.fill()
-        MessagesInk.line.setStroke()
-        shape.stroke()
+        Opal.glass(NSBezierPath(roundedRect: card, xRadius: Opal.Corner.popover, yRadius: Opal.Corner.popover))
 
-        NSAttributedString(string: CatWords.shortcutsTitle, attributes: [.font: MessagesInk.font(ofSize: 16, weight: .semibold), .foregroundColor: MessagesInk.text])
+        NSAttributedString(string: CatWords.shortcutsTitle, attributes: [.font: MessagesInk.font(ofSize: 15, weight: .semibold), .foregroundColor: MessagesInk.strong])
             .draw(at: NSPoint(x: card.minX + 22, y: card.minY + 18))
         var y = card.minY + 56
         for group in CatWords.shortcutGroups {
-            NSAttributedString(string: group.title.uppercased(), attributes: [.font: MessagesInk.font(ofSize: 10, weight: .semibold), .foregroundColor: MessagesInk.soft, .kern: 0.5])
-                .draw(at: NSPoint(x: card.minX + 22, y: y + 14))
+            MessagesInk.label(group.title, size: 11).draw(at: NSPoint(x: card.minX + 22, y: y + 13))
             y += Self.headingHeight
             for row in group.rows {
                 NSAttributedString(string: row.does, attributes: [.font: MessagesInk.font(ofSize: 13), .foregroundColor: MessagesInk.text])
                     .draw(at: NSPoint(x: card.minX + 22, y: y + 4))
                 let keys = NSAttributedString(string: row.keys, attributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .medium), .foregroundColor: MessagesInk.text])
                 let size = keys.size()
-                let pill = NSRect(x: card.maxX - 22 - size.width - 12, y: y + 2, width: size.width + 12, height: 20)
-                MessagesInk.hover.setFill()
-                NSBezierPath(roundedRect: pill, xRadius: 5, yRadius: 5).fill()
-                keys.draw(at: NSPoint(x: pill.minX + 6, y: pill.midY - size.height / 2))
+                let chip = NSRect(x: card.maxX - 22 - ceil(size.width) - 16, y: y + 2, width: ceil(size.width) + 16, height: 22)
+                let shape = NSBezierPath(roundedRect: chip.insetBy(dx: 0.5, dy: 0.5), xRadius: 10.5, yRadius: 10.5)
+                Ink.hex(Opal.control).setFill()
+                shape.fill()
+                Ink.hex(Opal.fieldEdge).setStroke()
+                shape.stroke()
+                keys.draw(at: NSPoint(x: chip.midX - size.width / 2, y: chip.midY - size.height / 2))
                 y += Self.rowHeight
             }
         }

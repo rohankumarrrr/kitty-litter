@@ -93,7 +93,8 @@ final class MessageRowTests: XCTestCase {
         for (name, make, width) in cases {
             let row = make()
             let (still, hovered) = try drawn(row, width: width)
-            let toolbar = try XCTUnwrap(changed(from: still, to: hovered), "\(name): the toolbar shows")
+            let toolbar = try XCTUnwrap(row.toolbar?.frame, "\(name): the toolbar shows")
+            XCTAssertNotNil(changed(from: still, to: hovered), name)
             // It may float over the bubble's top edge, as Slack's does over a message, but stops where the words start.
             let overTheBubble = NSRect(x: toolbar.minX, y: toolbar.minY, width: toolbar.width, height: max(row.bubble.minY - toolbar.minY, 0))
             XCTAssertFalse(hasInk(still, in: overTheBubble), "\(name): nothing it covers over the bubble is drawn, such as the name or the time, at \(toolbar)")
@@ -124,7 +125,7 @@ final class MessageRowTests: XCTestCase {
         XCTAssertTrue(narrow.bounds.contains(folded.frame))
     }
 
-    func testTabReachesTheToolbarAndShowsIt() throws {
+    func testTabReachesTheToolbarOfTheMessageTheArrowKeysAreOnAndShowsIt() throws {
         QuietFocus.fullKeyboardAccess = { true }
         let window = KeyWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 200), styleMask: [.borderless], backing: .buffered, defer: true)
         window.isReleasedWhenClosed = false
@@ -132,6 +133,7 @@ final class MessageRowTests: XCTestCase {
         row.frame = NSRect(x: 0, y: 0, width: 640, height: row.fit(width: 640))
         window.contentView?.addSubview(row)
         row.hovering = false
+        row.isCurrent = true
         let toolbar = try XCTUnwrap(row.toolbar, "there for Tab before any hover")
         let first = try XCTUnwrap(toolbar.buttons.first)
         XCTAssertTrue(first.canBecomeKeyView)
@@ -142,6 +144,61 @@ final class MessageRowTests: XCTestCase {
 
         window.makeFirstResponder(nil)
         XCTAssertEqual(ChannelImages.png(of: row), hidden, "and gone once Tab moves on")
+
+        row.isCurrent = false
+        XCTAssertFalse(first.canBecomeKeyView, "a message the arrow keys aren't on keeps Tab out")
+    }
+
+    func testAHoveredMessageIsTintedAsSlackAndDiscordTintOne() throws {
+        let row = row(.kitten(steve.id))
+        let (still, hovered) = try drawn(row, width: 640)
+        let side = NSPoint(x: 12, y: row.bounds.midY)
+        XCTAssertFalse(hasInk(still, in: NSRect(origin: side, size: NSSize(width: 1, height: 1))), "nothing behind it at rest")
+        let tint = try XCTUnwrap(hovered.colorAt(x: Int(side.x * 2), y: Int(side.y * 2))?.usingColorSpace(.sRGB))
+        let raised = Ink.hex(Opal.raised).usingColorSpace(.sRGB)!
+        XCTAssertEqual(tint.redComponent, raised.redComponent, accuracy: 0.02, "Opal's raised behind it while you point at it")
+        XCTAssertEqual(tint.blueComponent, raised.blueComponent, accuracy: 0.02)
+    }
+
+    func testAKittensBubbleIsDarkAndLitAtItsEdgeInItsColour() throws {
+        let row = row(.kitten(steve.id), text: "Moved the plans onto the new grid, and checked every width the site supports.")
+        let (still, _) = try drawn(row, width: 640)
+        let color = try XCTUnwrap(ChannelSpeakerLook.color(of: steve))
+        let body = try XCTUnwrap(still.colorAt(x: Int((row.bubble.minX + 16) * 2), y: Int((row.bubble.minY + 3) * 2))?.usingColorSpace(.sRGB))
+        XCTAssertLessThan(Opal.luminance(hex(body)), 0.02, "its body is black glass, not filled in its colour")
+        let edge = try XCTUnwrap(still.colorAt(x: Int(row.bubble.midX * 2), y: Int((row.bubble.maxY - 0.5) * 2))?.usingColorSpace(.sRGB))
+        XCTAssertLessThan(distance(hex(edge), color), distance(hex(edge), Opal.page), "its bottom edge is lit in its colour")
+    }
+
+    func testEarlierNotesAreAWayToSeeThemInT3() throws {
+        let window = KeyWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 200), styleMask: [.borderless], backing: .buffered, defer: true)
+        window.isReleasedWhenClosed = false
+        let row = row(.kitten(steve.id), notes: 2)
+        var opened = 0
+        row.onOpen = { opened += 1 }
+        row.frame = NSRect(x: 0, y: 0, width: 640, height: row.fit(width: 640))
+        window.contentView?.addSubview(row)
+        XCTAssertTrue(row.accessibilityLabel()?.contains(CatWords.earlierNotes(2)) == true, "VoiceOver hears them")
+
+        let font = MessagesInk.font(ofSize: MessagesInk.meta, weight: .medium)
+        let before = NSAttributedString(string: "\(steve.name)  ·  ", attributes: [.font: font]).size().width
+        let point = row.convert(NSPoint(x: ChannelRowView.textLeft + 2 + before + 6, y: 13), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+            type == .leftMouseDown ? row.mouseDown(with: event) : row.mouseUp(with: event)
+        }
+        XCTAssertEqual(opened, 1, "pressing them opens the thread in T3, the only place they are")
+    }
+
+    private func hex(_ color: NSColor) -> UInt32 {
+        [color.redComponent, color.greenComponent, color.blueComponent].reduce(UInt32(0)) { $0 << 8 | UInt32(($1 * 255).rounded()) }
+    }
+
+    private func distance(_ a: UInt32, _ b: UInt32) -> Double {
+        [16, 8, 0].map { shift -> Double in
+            let d = Double((a >> UInt32(shift)) & 0xff) - Double((b >> UInt32(shift)) & 0xff)
+            return d * d
+        }.reduce(0, +).squareRoot()
     }
 
     func testReactionsEndWithAWayToAddOneUnderTheMessage() throws {

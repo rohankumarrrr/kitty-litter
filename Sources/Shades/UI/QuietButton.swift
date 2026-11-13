@@ -43,6 +43,23 @@ enum QuietFocus {
     }
 
     static func isSpace(_ event: NSEvent) -> Bool { event.charactersIgnoringModifiers == " " }
+
+    /// Whether every view it's inside lets Tab in.
+    static func isOpen(_ view: NSView) -> Bool {
+        var ancestor = view.superview
+        while let next = ancestor {
+            if (next as? TabGate)?.letsTabIn == false { return false }
+            ancestor = next.superview
+        }
+        return true
+    }
+}
+
+/// A view that keeps Tab out of the controls inside it until it lets it in, such as a message the arrow keys aren't on,
+/// so a list of them is one stop for Tab, as in Slack.
+@MainActor
+protocol TabGate: NSView {
+    var letsTabIn: Bool { get }
 }
 
 /// A button you press with the mouse, or with Space once Tab has reached it. Only Space presses it, so a stray Return
@@ -195,7 +212,7 @@ final class QuietButton: NSView {
 
     override var acceptsFirstResponder: Bool { QuietFocus.allows(self) }
     // AppKit's own reads the system's setting itself, which the demo and tests stand in for.
-    override var canBecomeKeyView: Bool { QuietFocus.allows(self) && !isHiddenOrHasHiddenAncestor }
+    override var canBecomeKeyView: Bool { QuietFocus.allows(self) && !isHiddenOrHasHiddenAncestor && QuietFocus.isOpen(self) }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var needsPanelToBecomeKey: Bool { false }
     // One under a window's title bar, such as a toolbar's, is pressed rather than dragging the window.
@@ -220,6 +237,8 @@ final class QuietButton: NSView {
 
     override func becomeFirstResponder() -> Bool {
         QuietFocus.took(self)
+        // Tab can land on one that's scrolled away, such as a code block's Copy.
+        scrollToVisible(bounds)
         return true
     }
 

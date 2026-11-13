@@ -160,6 +160,70 @@ final class ChannelHeader: QuietView {
     }
 }
 
+/// What a pane scrolls through, and one stop for Tab, as a list is on a Mac: the arrow keys move between its rows, as
+/// Slack's do between messages, Tab goes on into the row you're on and then out, and Space presses a row that opens
+/// something. Clicking never gives it the keyboard.
+final class MessageList: QuietView {
+    /// It took the keyboard, or gave it up.
+    var onFocus: ((Bool) -> Void)?
+    /// ↑ or ↓.
+    var onStep: ((Int) -> Void)?
+    var onSpace: (() -> Void)?
+    /// ⌘C, which copies what the row you're on said.
+    var onCopy: (() -> Bool)?
+    /// Its window gained or lost the keyboard, which shows or hides the ring.
+    var onKeyChange: (() -> Void)?
+    private var keyObservers: [NSObjectProtocol] = []
+
+    override var acceptsFirstResponder: Bool {
+        guard window?.isKeyWindow == true else { return false }
+        let type = NSApplication.shared.currentEvent?.type
+        return type != .leftMouseDown && type != .rightMouseDown && type != .otherMouseDown
+    }
+
+    override var canBecomeKeyView: Bool { acceptsFirstResponder && !isHiddenOrHasHiddenAncestor }
+
+    override func becomeFirstResponder() -> Bool {
+        QuietFocus.took(self)
+        onFocus?(true)
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        onFocus?(false)
+        return true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        let plain = event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty
+        switch (event.keyCode, plain) {
+        case (126, true), (125, true):
+            // From one of the row's buttons too, which hands the keyboard back here.
+            if window?.firstResponder !== self { window?.makeFirstResponder(self) }
+            onStep?(event.keyCode == 126 ? -1 : 1)
+        case (_, true) where QuietFocus.isSpace(event) && window?.firstResponder === self:
+            onSpace?()
+        default:
+            super.keyDown(with: event)
+        }
+    }
+
+    @objc func copy(_ sender: Any?) {
+        if onCopy?() != true { NSSound.beep() }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        keyObservers.forEach(NotificationCenter.default.removeObserver)
+        guard let window else { return keyObservers = [] }
+        keyObservers = [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.onKeyChange?() }
+            }
+        }
+    }
+}
+
 /// Answers to the parts of a question so far, by its ID, shared by both panes, since a question shows in Activity and
 /// in its thread. Nothing goes until every part has one, as T3 wants.
 final class PartAnswers {
@@ -231,7 +295,18 @@ final class ChannelPane: QuietView {
     private let now: () -> Date = Date.init
     private let header = ChannelHeader()
     private let scroll = QuietScrollView()
-    private let document = QuietView()
+    /// Its rows, which the arrow keys move through once Tab brings the keyboard here.
+    let list = MessageList()
+    /// The row the arrow keys are on, kept while you're away so Tab comes back to it.
+    private weak var current: ChannelRowView? {
+        didSet {
+            guard current !== oldValue else { return }
+            oldValue?.isFocused = false
+            oldValue?.isCurrent = false
+            current?.isCurrent = true
+            current?.isFocused = window?.firstResponder === list
+        }
+    }
     let composer = ChannelComposer()
     let linkBar = LinkBar()
     private(set) var selection: ChannelSelection = .activity
@@ -269,10 +344,20 @@ final class ChannelPane: QuietView {
     /// Showing something scrolls it too, but only you scrolling back to the top loads what's older.
     private var isShowing = false
 
+    private var document: MessageList { list }
+
     init(role: Role) {
         self.role = role
         super.init(frame: .zero)
         scroll.documentView = document
+        list.onFocus = { [weak self] in self?.listFocused($0) }
+        list.onStep = { [weak self] in self?.step($0) }
+        list.onSpace = { [weak self] in
+            guard let row = self?.current, row.isPressable else { return NSSound.beep() }
+            row.press()
+        }
+        list.onCopy = { [weak self] in (self?.current as? MessageRowView)?.copyMessage() ?? false }
+        list.onKeyChange = { [weak self] in self?.current?.focusChanged() }
         addSubview(scroll)
         addSubview(header)
         addSubview(composer)
@@ -445,6 +530,7 @@ final class ChannelPane: QuietView {
         // Older posts that came in above what you're reading are laid out the way scrolling up to them would.
         pageIfNeeded()
         if pullsChanged, !isNewSelection { restyle() }
+        keepCurrent()
         showJump()
     }
 
@@ -510,6 +596,7 @@ final class ChannelPane: QuietView {
         stack()
         scrollOffset = offset
         attach()
+        keepCurrent()
         showJump()
     }
 
@@ -913,6 +1000,59 @@ final class ChannelPane: QuietView {
             }
         }
     }
+
+    // MARK: The arrow keys
+
+    /// Tab brought the keyboard to the list: back to the row you were on, or the newest you can see in a conversation
+    /// and the top one in Activity and Threads.
+    private func listFocused(_ focused: Bool) {
+        if focused, current.map({ row in !views.contains { $0 === row } }) ?? true {
+            let seen = scroll.contentView.bounds
+            let showing = views.indices.filter { views[$0].takesFocus && frames[$0].intersects(seen) }
+            current = (followsLatest ? showing.last : showing.first).map { views[$0] }
+        }
+        current?.isFocused = focused
+        if focused, let current { reveal(current) }
+    }
+
+    /// The row above or below that the arrow keys stop on, laying out older rows first if it's above them.
+    private func step(_ step: Int) {
+        guard var index = current.flatMap({ row in views.firstIndex { $0 === row } }) else { return listFocused(true) }
+        repeat {
+            index += step
+            if index < 0, first > 0 {
+                let before = views.count
+                layOutPageAbove()
+                index += views.count - before
+            }
+        } while views.indices.contains(index) && !views[index].takesFocus
+        guard views.indices.contains(index) else { return }
+        current = views[index]
+        reveal(views[index])
+    }
+
+    /// Scrolls just far enough for the whole row to show, or its top if it's taller than the pane.
+    private func reveal(_ row: ChannelRowView) {
+        guard let index = views.firstIndex(where: { $0 === row }) else { return }
+        let frame = frames[index]
+        let seen = scroll.contentView.bounds
+        if frame.minY < seen.minY || frame.height > seen.height {
+            scrollOffset = max(frame.minY - Self.topPad, 0)
+        } else if frame.maxY > seen.maxY {
+            scrollOffset = min(frame.maxY + Self.topPad - seen.height, bottomOffset)
+        }
+        attach()
+    }
+
+    /// After a refresh, the same row, or none if it's gone. With the keyboard still here, the arrow keys land somewhere.
+    private func keepCurrent() {
+        if let row = current, views.contains(where: { $0 === row }) { return }
+        current = nil
+        if window?.firstResponder === list { listFocused(true) }
+    }
+
+    /// The row the arrow keys are on.
+    var currentRow: ChannelRowView? { current }
 
     /// How tall the part of the pane you can scroll through is.
     var visibleHeight: CGFloat { scroll.contentSize.height }

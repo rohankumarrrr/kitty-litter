@@ -235,6 +235,8 @@ enum CatWords {
     }
     static func couldntRead(_ count: Int) -> String { "Couldn't read \(count) \(count == 1 ? "thread" : "threads"). I'll try again." }
     static func earlierNotes(_ count: Int) -> String { "\(count) earlier \(count == 1 ? "note" : "notes")" }
+    /// What pressing a reply's earlier notes does, since only T3 has them.
+    static let seeEarlierNotes = "Open in T3 to see them"
     /// Its threads still going, which is what Activity lists under In progress.
     static func issues(_ count: Int) -> String { "\(count) in progress" }
     static func reportsTitle(_ kind: InboxEntry.Kind) -> String { kind == .shipped ? "Shipped" : "Also" }

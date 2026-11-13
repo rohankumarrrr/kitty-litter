@@ -40,24 +40,38 @@ tab
 draw .verify/shades/keyboard/3-allow
 space
 wait 1
-channel general
+key 3
 wait 1
-tab
 tab
 tab
 tab
 tab
 draw .verify/shades/keyboard/4-notifications
-channel steve
+key 4
 wait 1
-thread pricing copy
+tab
+tab
+tab
+tab
+tab
+tab
+draw .verify/shades/keyboard/5-messages
+arrow up
+draw .verify/shades/keyboard/6-message-above
+tab
+draw .verify/shades/keyboard/7-its-buttons
+tab control
+thread reply pricing copy
 wait 2
 draft Keep the FAQ
-tab back
-tab back
 tab control
+tab
+tab
 space
-draw .verify/shades/keyboard/5-also-send
+draw .verify/shades/keyboard/8-also-send
+tab back
+tab back
+tab back
 keyboard off
 tab
 front
