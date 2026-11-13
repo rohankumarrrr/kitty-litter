@@ -28,6 +28,8 @@ struct HealthFacts: Equatable {
     var isBundled = true
     var isSignedWithIdentity = true
     var signatureIsValid = true
+    /// Signed by an Apple developer team, so the next build can read what this one saved in the Keychain.
+    var isSignedByTeam = true
     var hasScreenRecording = true
     var hasAccessibility = true
     var hasInputMonitoring = true
@@ -67,6 +69,20 @@ enum T3Silence: Equatable {
 
 enum HealthCheck {
     static let signature = "signature"
+    /// macOS ignores the permissions of a copy signed like this.
+    static let badSignature = HealthFinding(
+        check: signature,
+        ok: false,
+        problem: "This copy of me isn't signed properly, so macOS ignores my permissions, whatever System Settings shows.",
+        fix: "Run scripts/install.sh."
+    )
+    /// Without a team, macOS ties what a build saves in the Keychain to that exact build.
+    static let noTeam = HealthFinding(
+        check: signature,
+        ok: false,
+        problem: "I'm not signed by a developer team, so the next install of me can't read what I keep in the Keychain. A paired phone will need pairing again, and I'll sign in to T3 Code again.",
+        fix: "Add your Apple ID in Xcode › Settings › Accounts, make an Apple Development certificate under Manage Certificates, then run scripts/install.sh."
+    )
 
     static func findings(from facts: HealthFacts) -> [HealthFinding] {
         var results: [HealthFinding] = []
@@ -76,7 +92,7 @@ enum HealthCheck {
         // gets said instead of those. A copy that isn't a bundle gets its permissions some other way.
         let signatureGood = !facts.isBundled || (facts.isSignedWithIdentity && facts.signatureIsValid)
         if signatureGood {
-            results.append(.good(signature))
+            results.append((!facts.isBundled || facts.isSignedByTeam) ? .good(signature) : noTeam)
             results.append(facts.hasScreenRecording ? .good("screen recording") : HealthFinding(
                 check: "screen recording",
                 ok: false,
@@ -102,12 +118,7 @@ enum HealthCheck {
                 fix: "Turn it on in System Settings."
             ) : .good("microphone"))
         } else {
-            results.append(HealthFinding(
-                check: signature,
-                ok: false,
-                problem: "This copy of me isn't signed properly, so macOS ignores my permissions, whatever System Settings shows.",
-                fix: "Run scripts/install.sh."
-            ))
+            results.append(badSignature)
         }
 
         switch facts.t3Silence {

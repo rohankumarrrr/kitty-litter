@@ -29,8 +29,8 @@ extension AppController {
             let findings = await runHealthCheck()
             // Your permissions are your business, and the caption says so when it matters.
             // A bad signature isn't something you'd ever think to look for, so it gets said.
-            if let bad = findings.first(where: { $0.check == HealthCheck.signature && !$0.ok }) {
-                say(CatWords.finding(bad), unasked: true)
+            if findings.contains(HealthCheck.badSignature) {
+                say(CatWords.finding(HealthCheck.badSignature), unasked: true)
             }
         }
     }
@@ -140,6 +140,6 @@ extension AppController {
 
     /// Why the screen can't be seen, if the real reason isn't what it looks like.
     var screenBlockedBy: String? {
-        health?.first { $0.check == HealthCheck.signature && !$0.ok }.map(CatWords.finding)
+        health?.first { $0 == HealthCheck.badSignature }.map(CatWords.finding)
     }
 }

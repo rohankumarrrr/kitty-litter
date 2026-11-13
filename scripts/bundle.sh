@@ -7,13 +7,18 @@
 #
 # It signs with the first identity it finds, in this order:
 #   1. $SHADES_SIGN_IDENTITY, if you set it
-#   2. "Shades Dev", the self-signed certificate from scripts/make-dev-cert.sh
-#   3. Your "Apple Development" or "Developer ID Application" certificate
+#   2. Your "Apple Development" or "Developer ID Application" certificate. With its Team ID,
+#      the next build can read what this one saved in the Keychain, so your phone stays paired
+#      and T3 Code stays signed in. Xcode makes a free one: add your Apple ID in Settings ›
+#      Accounts, then Manage Certificates › + › Apple Development.
+#   3. "Shades Dev", the self-signed certificate from scripts/make-dev-cert.sh. macOS keeps
+#      permissions across builds, but each build can only read its own Keychain items.
 #   4. Ad hoc, with a warning. An ad-hoc signature changes on every build, so macOS
 #      forgets its permissions each time. Run scripts/make-dev-cert.sh to stop that.
 set -euo pipefail
 
 root="${0:A:h:h}"
+source "$root/scripts/signing.sh"
 out="${1:-$root/build}"
 app="$out/Shades.app"
 
@@ -72,29 +77,11 @@ cat > "$app/Contents/Info.plist" <<PLIST
 PLIST
 plutil -lint -s "$app/Contents/Info.plist"
 
-find_identity() {
-  local identities
-  identities="$(security find-identity -p codesigning 2>/dev/null || true)"
-  if [[ -n "${SHADES_SIGN_IDENTITY:-}" ]]; then
-    print -r -- "$SHADES_SIGN_IDENTITY"
-    return
-  fi
-  local wanted
-  for wanted in '"Shades Dev"' '"Apple Development' '"Developer ID Application'; do
-    # The certificate's hash, so two with the same name can't make signing ambiguous.
-    local match="$(print -r -- "$identities" | grep -F -- "$wanted" | head -1 | awk '{print $2}')"
-    if [[ -n "$match" ]]; then
-      print -r -- "$match"
-      return
-    fi
-  done
-}
-
-identity="$(find_identity)"
+identity="${SHADES_SIGN_IDENTITY:-$(signing_identity "$(security find-identity -v -p codesigning 2>/dev/null || true)")}"
 if [[ -n "$identity" ]]; then
   codesign --force --sign "$identity" "$app/Contents/Frameworks/llama.framework"
   codesign --force --sign "$identity" --identifier me.rohan-is.shades "$app"
-  echo "Signed with $(security find-identity -p codesigning 2>/dev/null | grep -F -- "$identity" | head -1 | sed -E 's/.*"(.*)".*/\1/')."
+  echo "Signed with $(signing_kind "$(security find-identity -p codesigning 2>/dev/null || true)" "$identity")."
 else
   codesign --force --sign - "$app/Contents/Frameworks/llama.framework"
   codesign --force --sign - --identifier me.rohan-is.shades "$app"

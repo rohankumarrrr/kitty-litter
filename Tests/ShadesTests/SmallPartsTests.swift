@@ -712,6 +712,26 @@ final class HealthCheckTests: XCTestCase {
         XCTAssertEqual(HealthCheck.findings(from: facts).filter { !$0.ok }.map(\.check), [HealthCheck.signature])
     }
 
+    func testABuildSignedByATeamHasAGoodSignature() {
+        let finding = HealthCheck.findings(from: HealthFacts(isSignedByTeam: true)).first { $0.check == HealthCheck.signature }
+        XCTAssertEqual(finding, .good(HealthCheck.signature))
+    }
+
+    /// A self-signed certificate keeps permissions, but the Keychain ties each item to the build that saved it.
+    func testABuildWithoutATeamSaysItCostsThePairingButStillChecksPermissions() throws {
+        let facts = HealthFacts(isSignedByTeam: false, hasScreenRecording: false)
+        let problems = HealthCheck.findings(from: facts).filter { !$0.ok }
+        XCTAssertEqual(problems.map(\.check), [HealthCheck.signature, "screen recording"])
+        let signature = try XCTUnwrap(problems.first)
+        XCTAssertEqual(signature, HealthCheck.noTeam)
+        XCTAssertTrue(try XCTUnwrap(signature.problem).contains("A paired phone will need pairing again"), "true whether or not a phone was ever paired")
+        XCTAssertTrue(try XCTUnwrap(signature.fix).contains("Apple Development"))
+    }
+
+    func testARunWithoutABundleDoesntCareAboutItsTeam() {
+        XCTAssertTrue(HealthCheck.findings(from: HealthFacts(isBundled: false, isSignedByTeam: false)).allSatisfy(\.ok))
+    }
+
     func testEachMissingThingIsNamed() {
         let facts = HealthFacts(
             hasScreenRecording: false,

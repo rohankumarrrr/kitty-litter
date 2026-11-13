@@ -12,6 +12,7 @@ enum SystemHealth {
         let signature = readSignature()
         facts.isSignedWithIdentity = signature.hasIdentity
         facts.signatureIsValid = signature.isValid
+        facts.isSignedByTeam = signature.hasTeam
         facts.hasScreenRecording = Permissions.hasScreenRecording
         facts.hasAccessibility = Permissions.hasAccessibility
         facts.hasInputMonitoring = KeyHoldMonitor.hasPermission
@@ -26,21 +27,23 @@ enum SystemHealth {
         return facts
     }
 
-    /// An ad hoc signature has no certificates, and that's the kind macOS forgets on every build.
-    private static func readSignature() -> (hasIdentity: Bool, isValid: Bool) {
+    /// An ad hoc signature has no certificates, and that's the kind macOS forgets on every build. A self-signed one has
+    /// no team, and that's the kind whose Keychain items the next build can't read.
+    private static func readSignature() -> (hasIdentity: Bool, isValid: Bool, hasTeam: Bool) {
         var code: SecCode?
-        guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return (false, false) }
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return (false, false, false) }
 
         var staticCode: SecStaticCode?
-        guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return (false, false) }
+        guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return (false, false, false) }
 
         var info: CFDictionary?
         let readInfo = SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info)
         let details = info as? [String: Any]
         let certificates = details?[kSecCodeInfoCertificates as String] as? [Any]
         let hasIdentity = readInfo == errSecSuccess && certificates?.isEmpty == false
+        let hasTeam = (details?[kSecCodeInfoTeamIdentifier as String] as? String)?.isEmpty == false
         let isValid = SecStaticCodeCheckValidity(staticCode, [], nil) == errSecSuccess
-        return (hasIdentity, isValid)
+        return (hasIdentity, isValid, hasTeam)
     }
 
     /// Written whole, so a reader never sees half of it.

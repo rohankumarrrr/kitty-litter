@@ -388,6 +388,11 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     }
 }
 
+/// What the self-check finds about this copy of the demo: all good, unless a journey says otherwise.
+final class DemoFacts {
+    var found = HealthFacts()
+}
+
 /// A fake pair of eyes that always sees the same pricing page.
 final class DemoContext: ScreenContextProviding, @unchecked Sendable {
     var isPrivate = false
@@ -542,6 +547,7 @@ enum Demo {
         var voice: DemoVoice
         var inserter: DemoInserter
         var keys: DemoKeys
+        var facts: DemoFacts
     }
 
     /// A made-up one-page syllabus in a temporary file, for dropping onto the cat.
@@ -611,6 +617,7 @@ enum Demo {
         let voice = DemoVoice()
         let inserter = DemoInserter()
         let keys = DemoKeys()
+        let facts = DemoFacts()
         let dependencies = AppDependencies(
             backend: backend,
             context: context,
@@ -620,6 +627,7 @@ enum Demo {
             settings: Settings(),
             saveSettings: { _ in print("[demo] settings aren't saved in demo mode") },
             kittens: { Demo.kittens },
+            systemFacts: { facts.found },
             routerFolder: { DemoChannels.routerFolder },
             // Nothing's written, so a journey can see each report the real app would write to health.json.
             reportHealth: { findings in
@@ -644,6 +652,6 @@ enum Demo {
                 return Demo.samplePicture()
             }
         )
-        return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys)
+        return Parts(dependencies: dependencies, backend: backend, context: context, voice: voice, inserter: inserter, keys: keys, facts: facts)
     }
 }
