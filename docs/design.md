@@ -67,6 +67,8 @@ Every value here is a token in `Opal.swift`. Use the role, never a raw hex.
 
 Violet isn't for words: it falls under 4.5:1 on a hovered row. Words in the accent use lilac. White on the primary is 4.88:1, so the primary's hover moves only a quarter of the way toward violet, the furthest white still reads at 4.5:1, and pressing darkens it.
 
+Selected words in a message are drawn the other way round, so they read whatever they sit on: light words go to `page` on violet (5.3:1), and black words on a kitten's bubble go to `body` on `page`, since violet can be as light as that bubble. They look the same with or without the keyboard. Without it, AppKit swaps in its own grey, which black words disappeared under, so The Kitty Litter keeps Opal's.
+
 ### Status
 
 | Role | Token | Colour | Tinted surface |
@@ -296,5 +298,6 @@ Where an app you use every day has a settled way of doing something, do it that 
 - `Sources/Shades/UI/MessagesInk.swift`: the roles views draw with, such as `paper`, `text`, `soft` and `link`, mapped onto Opal's tokens, and the type roles at your text size and font.
 - `Sources/Shades/UI/QuietButton.swift` and `QuietPanel.swift`: the buttons, the focus ring, and the floating panels.
 - `Sources/Shades/UI/Motion.swift`: the curve, the durations, and Reduce Motion.
+- `Tests/ShadesTests/SelectionTests.swift`: fails on selected words under 4.5:1 or hard to see on any surface, and on a selection drawn differently without the keyboard.
 - `Tests/ShadesTests/DesignTests.swift`: fails on any orange in `Sources/`, on any word role under 4.5:1 on a surface it sits on, on a kitten colour that's too loud, too pale, too close to another or to a status, and on a token that drifts from Opal's value.
 - `swift run shades --demo --no-script --commands .agents/skills/verify-shades/journeys/opal.txt` draws a sheet of every primitive to `.verify/shades/opal/`.

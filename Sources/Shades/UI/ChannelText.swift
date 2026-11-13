@@ -176,10 +176,24 @@ private extension NSTextBlock {
     }
 }
 
-/// Draws each pull request's chip as a pill behind its words.
+/// Draws each pull request's chip as a pill behind its words, and a selection the same with or without the keyboard.
 private final class ChipLayoutManager: NSLayoutManager {
+    /// What AppKit fills a selection with while the window doesn't have the keyboard, which is most of the time, since
+    /// Messages never makes Shades the active app. Its grey hid words coloured for `MessagesInk.selection(on:)`.
+    private static let systemSelection: [NSColor] = [.unemphasizedSelectedContentBackgroundColor, .unemphasizedSelectedTextBackgroundColor]
+
+    override func fillBackgroundRectArray(_ rectArray: UnsafePointer<NSRect>, count rectCount: Int, forCharacterRange charRange: NSRange, color: NSColor) {
+        guard Self.systemSelection.contains(color), let fill = firstTextView?.selectedTextAttributes[.backgroundColor] as? NSColor else {
+            return super.fillBackgroundRectArray(rectArray, count: rectCount, forCharacterRange: charRange, color: color)
+        }
+        fill.setFill()
+        super.fillBackgroundRectArray(rectArray, count: rectCount, forCharacterRange: charRange, color: fill)
+        color.setFill()
+    }
+
     override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
-        super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
+        // Chips first, so a selection shows over them, as their words are coloured for it then.
+        defer { super.drawBackground(forGlyphRange: glyphsToShow, at: origin) }
         guard let storage = textStorage, let container = textContainers.first else { return }
         let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
         storage.enumerateAttribute(.channelChip, in: characters) { value, range, _ in
@@ -313,11 +327,8 @@ final class ChannelTextBlock {
         storage.length > 0 ? storage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor : nil
     }
 
-    /// A tint of the words' own colour shows on any bubble, where the system's blue might not.
     private static func selection(on words: NSColor?) -> [NSAttributedString.Key: Any] {
-        [.backgroundColor: NSColor(name: nil) { _ in
-            (words ?? MessagesInk.text).usingColorSpace(.sRGB)?.withAlphaComponent(0.3) ?? .selectedTextBackgroundColor
-        }]
+        MessagesInk.selection(on: words ?? MessagesInk.text)
     }
 
     /// What each line's words take up, with the cells side by side in a table's row as one line.
