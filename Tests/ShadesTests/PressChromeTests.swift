@@ -156,6 +156,105 @@ final class PressChromeTests: XCTestCase {
         try space(in: panel)
     }
 
+    // MARK: - The header
+
+    func testAThreadsHeaderShowsOnPhoneOpensInT3AndClosesByMouse() throws {
+        let (_, view, calls) = messages(book(hasPhone: true))
+        view.select(.thread("fix", in: .channel(.shades)))
+        try click(try button(CatWords.showOnPhone, in: view.threadPane), "Show on phone")
+        XCTAssertEqual(calls.phone, ["fix"])
+        try click(try button(CatWords.openInT3, in: view.threadPane), "Open in T3")
+        XCTAssertEqual(calls.openedInT3, ["fix"])
+        try click(try button(CatWords.closeThread, in: view.threadPane), "✕")
+        XCTAssertEqual(view.selection, .channel(.shades))
+        XCTAssertTrue(view.threadPane.isHidden)
+    }
+
+    func testAThreadsHeaderShowsOnPhoneOpensInT3AndClosesByKeyboard() throws {
+        QuietFocus.fullKeyboardAccess = { true }
+        let (panel, view, calls) = messages(book(hasPhone: true))
+        view.select(.thread("fix", in: .channel(.shades)))
+        try tabAndSpace(try button(CatWords.showOnPhone, in: view.threadPane), in: panel)
+        XCTAssertEqual(calls.phone, ["fix"])
+        try tabAndSpace(try button(CatWords.openInT3, in: view.threadPane), in: panel)
+        XCTAssertEqual(calls.openedInT3, ["fix"])
+        try tabAndSpace(try button(CatWords.closeThread, in: view.threadPane), in: panel)
+        XCTAssertEqual(view.selection, .channel(.shades))
+    }
+
+    func testAChannelsInProgressGoesToActivityByMouseAndKeyboard() throws {
+        let (panel, view, _) = messages(book())
+        view.select(.channel(.of(steve)))
+        try click(try button(CatWords.issues(1), in: view.pane), "1 in progress")
+        XCTAssertEqual(view.selection, .activity)
+
+        QuietFocus.fullKeyboardAccess = { true }
+        view.select(.channel(.of(steve)))
+        try tabAndSpace(try button(CatWords.issues(1), in: view.pane), in: panel)
+        XCTAssertEqual(view.selection, .activity)
+    }
+
+    // MARK: - The sidebar
+
+    func testEverySidebarRowShowsItsPlaceWhenClicked() throws {
+        let (_, view, _) = messages(book())
+        let places: [ChannelPlace] = [.threads, .channel(.general), .channel(.of(steve)), .channel(.of(pepper)), .channel(.shades), .activity]
+        XCTAssertEqual(Set(places.map { "\($0)" }), Set(ChannelSidebarItem.places(in: book()).map { "\($0)" }), "every row")
+        for place in places {
+            let row = try XCTUnwrap(view.sidebar.row(for: place))
+            try click(row, row.item.title)
+            XCTAssertEqual(view.selection, ChannelSelection(place), row.item.title)
+            XCTAssertTrue(row.isSelected)
+        }
+    }
+
+    func testTheSidebarsPlacesAreReachedByTheirKeys() throws {
+        let (panel, view, _) = messages(book())
+        let places = ChannelSidebarItem.places(in: book())
+        for (index, place) in places.enumerated() {
+            let digit = ["1", "2", "3", "4", "5", "6"][index]
+            let code: UInt16 = [18, 19, 20, 21, 23, 22][index]
+            try key(digit, keyCode: code, modifiers: .command, in: panel)
+            XCTAssertEqual(view.selection, ChannelSelection(place), "⌘\(digit)")
+        }
+        try key("1", keyCode: 18, modifiers: .command, in: panel)
+        try arrow(false, modifiers: .option, in: panel)
+        XCTAssertEqual(view.selection, ChannelSelection(places[1]), "⌥↓")
+        try arrow(true, modifiers: .option, in: panel)
+        XCTAssertEqual(view.selection, ChannelSelection(places[0]), "⌥↑")
+    }
+
+    func testDoNotDisturbShortcutsAndSettingsWorkByMouse() throws {
+        let (_, view, calls) = messages(book())
+        try click(view.sidebar.quietButton, "Do Not Disturb")
+        XCTAssertEqual(calls.actions, [.doNotDisturb])
+        var quiet = book()
+        quiet.waiting.doNotDisturb = true
+        view.show(quiet)
+        try click(view.sidebar.quietOnButton, "Do Not Disturb, on")
+        XCTAssertEqual(calls.actions, [.doNotDisturb, .doNotDisturb], "and again to turn it off")
+
+        try click(view.sidebar.shortcutsButton, "⌘/ Shortcuts")
+        XCTAssertFalse(view.cheatsheet.isHidden)
+        view.cheatsheet.isHidden = true
+        try click(view.sidebar.settingsButton, "Settings")
+        XCTAssertEqual(calls.settings, 1)
+    }
+
+    func testDoNotDisturbShortcutsAndSettingsWorkByKeyboard() throws {
+        QuietFocus.fullKeyboardAccess = { true }
+        let (panel, view, calls) = messages(book())
+        try tabAndSpace(view.sidebar.quietButton, in: panel)
+        XCTAssertEqual(calls.actions, [.doNotDisturb])
+        try tabAndSpace(view.sidebar.shortcutsButton, in: panel)
+        XCTAssertFalse(view.cheatsheet.isHidden)
+        view.cheatsheet.isHidden = true
+        try tabAndSpace(view.sidebar.settingsButton, in: panel)
+        XCTAssertEqual(calls.settings, 1)
+        try key(",", keyCode: 43, modifiers: .command, in: panel)
+        XCTAssertEqual(calls.settings, 2, "⌘,")
+    }
+
     // MARK: - The thread pane's edge
 
     func testDraggingTheThreadPanesEdgeChangesItsWidthWithinItsLimits() throws {
@@ -195,3 +294,475 @@ final class PressChromeTests: XCTestCase {
         XCTAssertEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound, "and so does the thread")
     }
 }
+
+// MARK: - Threads and Activity
+
+extension PressChromeTests {
+    private var approval: ApprovalRequest {
+        ApprovalRequest(id: "ap", threadID: "s1", threadTitle: "Resume", kind: .command, summary: "Run: ls", createdAt: at)
+    }
+
+    private var question: AgentQuestion {
+        AgentQuestion(id: "q", threadID: "s1", threadTitle: "Resume", text: "Which font?", form: AnswerForm(parts: [AnswerForm.Part(key: "f", text: "Which font?", options: ["Serif", "Sans"], values: ["serif", "sans"], takesOwnWords: false)]))
+    }
+
+    private var months: AgentQuestion {
+        AgentQuestion(id: "q2", threadID: "p1", threadTitle: "Budget", text: "Which months?", form: AnswerForm(parts: [AnswerForm.Part(key: "m", text: "Which months?", options: ["Dec", "Jan"], values: ["dec", "jan"], takesOwnWords: false, picksSeveral: true)]))
+    }
+
+    private var decision: InboxEntry {
+        InboxEntry(id: "d", kind: .decision, text: "Merged. Say ship it.", threadID: "s1", threadTitle: "Resume", at: at)
+    }
+
+    /// Shipped work in a thread Messages hasn't read, so it opens in T3.
+    private var shipped: InboxEntry {
+        InboxEntry(id: "sh", kind: .shipped, text: "Shipped the old work.", threadID: "gone", threadTitle: "Old work", at: at)
+    }
+
+    /// An approval, a question with one answer, one you pick several for, a decision and something shipped.
+    private func activityBook() -> ChannelBook {
+        book(waiting: Waiting(approvals: [approval], questions: [question, months], owners: ["ap": steve.id, "q": steve.id, "q2": pepper.id], reports: [decision, shipped]))
+    }
+
+    private func rows(in pane: ChannelPane) -> [ChannelRowView] {
+        subviews(of: pane.list).compactMap { $0 as? ChannelRowView }
+    }
+
+    /// The card that says `text`, scrolled to where you can see it.
+    private func card(_ text: String, in view: ChannelsView, file: StaticString = #filePath, line: UInt = #line) throws -> CardRowView {
+        let card = try XCTUnwrap(rows(in: view.pane).compactMap { $0 as? CardRowView }.first { $0.accessibilityLabel()?.contains(text) == true }, "a card saying \(text)", file: file, line: line)
+        card.scrollToVisible(card.bounds)
+        return card
+    }
+
+    private func cardButton(_ title: String, on text: String, in view: ChannelsView, file: StaticString = #filePath, line: UInt = #line) throws -> QuietButton {
+        let card = try card(text, in: view, file: file, line: line)
+        return try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == title }, "\(title) on \(text)", file: file, line: line)
+    }
+
+    /// Tab to the pane's messages, then the arrow keys down to `row`, the way a person gets to a row and its buttons.
+    private func arrow(to row: () throws -> ChannelRowView, in pane: ChannelPane, panel: NSWindow, file: StaticString = #filePath, line: UInt = #line) throws {
+        tab(to: pane.list, in: panel, file: file, line: line)
+        let target = try row()
+        for _ in 0..<40 where pane.currentRow !== target { try arrow(false, in: panel) }
+        XCTAssertTrue(pane.currentRow === target, "the arrow keys reach it", file: file, line: line)
+    }
+
+    /// Each button on Activity's cards, pressed by mouse and then by keyboard in a fresh window, and what it did.
+    private func pressEveryWay(_ title: String, on text: String, file: StaticString = #filePath, line: UInt = #line, check: (ChannelsView, Calls, String) throws -> Void) throws {
+        for byKeyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { byKeyboard }
+            let (panel, view, calls) = messages(activityBook())
+            if byKeyboard {
+                try arrow(to: { try card(text, in: view) }, in: view.pane, panel: panel, file: file, line: line)
+                try tabAndSpace(try cardButton(title, on: text, in: view, file: file, line: line), in: panel, file: file, line: line)
+            } else {
+                try click(try cardButton(title, on: text, in: view, file: file, line: line), title, file: file, line: line)
+            }
+            try check(view, calls, "\(title) on \(text) \(byKeyboard ? "by keyboard" : "by mouse")")
+        }
+    }
+
+    func testAnApprovalsButtonsAnswerItOrOpenItsThread() throws {
+        for (title, decision) in [("Deny", ApprovalDecision.decline), ("Allow", .accept), ("Allow for this session", .acceptForSession)] {
+            try pressEveryWay(title, on: "Run: ls") { _, calls, name in
+                XCTAssertEqual(calls.actions, [.approval(approval, decision)], name)
+            }
+        }
+        try pressEveryWay(CatWords.viewThread, on: "Run: ls") { view, calls, name in
+            XCTAssertEqual(view.selection, .thread("s1", in: .channel(.of(steve))), name)
+            XCTAssertEqual(calls.actions, [], name)
+        }
+    }
+
+    func testAQuestionsOptionsAnswerIt() throws {
+        for (option, value) in [("Serif", "serif"), ("Sans", "sans")] {
+            try pressEveryWay(option, on: "Which font?") { _, calls, name in
+                XCTAssertEqual(calls.actions, [.answer(question, [[value]])], name)
+            }
+        }
+        try pressEveryWay(CatWords.viewThread, on: "Which font?") { view, _, name in
+            XCTAssertEqual(view.selection, .thread("s1", in: .channel(.of(steve))), name)
+        }
+    }
+
+    func testPickingSeveralOptionsSendsThemOnlyOnceSubmitIsPressed() throws {
+        for byKeyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { byKeyboard }
+            let (panel, view, calls) = messages(activityBook())
+            func press(_ title: String) throws {
+                let button = try cardButton(title, on: "Which months?", in: view)
+                if byKeyboard {
+                    try arrow(to: { try card("Which months?", in: view) }, in: view.pane, panel: panel)
+                    try tabAndSpace(button, in: panel)
+                } else {
+                    try click(button, title)
+                }
+            }
+            let name = byKeyboard ? "by keyboard" : "by mouse"
+            try press(CatWords.sendPicked)
+            XCTAssertEqual(calls.actions, [], "\(name): nothing's picked, so Send does nothing")
+            try press("Dec")
+            XCTAssertEqual(try cardButton("Dec", on: "Which months?", in: view).accessibilityValue() as? Int, 1, "\(name): picked")
+            XCTAssertEqual(calls.actions, [], "\(name): picking only marks it")
+            try press("Jan")
+            try press("Jan")
+            try press(CatWords.sendPicked)
+            XCTAssertEqual(calls.actions, [.answer(months, [["dec"]])], name)
+        }
+    }
+
+    func testAReportsReplyDoneAndWayToItsThreadWork() throws {
+        try pressEveryWay("Reply", on: "Merged. Say ship it.") { view, _, name in
+            XCTAssertEqual(view.selection, .thread("s1", in: .channel(.of(steve))), name)
+            XCTAssertTrue(view.window?.firstResponder === view.threadPane.composer.textView, "\(name): ready to type")
+        }
+        try pressEveryWay("Done", on: "Merged. Say ship it.") { _, calls, name in
+            XCTAssertEqual(calls.actions, [.inbox(.done(id: "d"))], name)
+        }
+        try pressEveryWay(CatWords.viewThread, on: "Merged. Say ship it.") { view, _, name in
+            XCTAssertEqual(view.selection, .thread("s1", in: .channel(.of(steve))), name)
+        }
+        try pressEveryWay("Ask", on: "Shipped the old work.") { view, _, name in
+            XCTAssertEqual(view.selection.thread, "gone", name)
+            XCTAssertTrue(view.window?.firstResponder === view.threadPane.composer.textView, "\(name): ready to type")
+        }
+        try pressEveryWay(CatWords.openInT3, on: "Shipped the old work.") { _, calls, name in
+            XCTAssertEqual(calls.openedInT3, ["gone"], name)
+        }
+    }
+
+    func testClearingASectionOfActivityByMouseAndKeyboard() throws {
+        for byKeyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { byKeyboard }
+            let (panel, view, calls) = messages(activityBook())
+            func section() throws -> SectionRowView {
+                let row = try XCTUnwrap(rows(in: view.pane).compactMap { $0 as? SectionRowView }.first { $0.clear != nil })
+                row.scrollToVisible(row.bounds)
+                return row
+            }
+            let clear = try XCTUnwrap(try section().clear)
+            if byKeyboard {
+                try arrow(to: section, in: view.pane, panel: panel)
+                try tabAndSpace(clear, in: panel)
+            } else {
+                try click(clear, "Clear")
+            }
+            XCTAssertEqual(calls.actions, [.inbox(.clear(.shipped))], byKeyboard ? "by keyboard" : "by mouse")
+        }
+    }
+
+    func testWhatsInProgressInActivityOpensBesideItsChannel() throws {
+        for byKeyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { byKeyboard }
+            let (panel, view, _) = messages(book())
+            func issue() throws -> IssueRowView {
+                let row = try XCTUnwrap(rows(in: view.pane).compactMap { $0 as? IssueRowView }.first)
+                row.scrollToVisible(row.bounds)
+                return row
+            }
+            if byKeyboard {
+                try arrow(to: issue, in: view.pane, panel: panel)
+                try space(in: panel)
+            } else {
+                try click(try issue(), "Cover letter, in progress")
+            }
+            XCTAssertEqual(view.selection, .thread("s2", in: .channel(.of(steve))), byKeyboard ? "by keyboard" : "by mouse")
+        }
+    }
+
+    func testThreadsRowsOpenEachThreadBesideTheList() throws {
+        for byKeyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { byKeyboard }
+            let (panel, view, _) = messages(book())
+            view.select(.threads)
+            let ids = book().yours.map(\.id)
+            XCTAssertGreaterThan(ids.count, 1)
+            for (index, id) in ids.enumerated() {
+                view.select(.threads)
+                func row() throws -> ThreadDigestRowView {
+                    let rows = rows(in: view.pane).compactMap { $0 as? ThreadDigestRowView }
+                    XCTAssertEqual(rows.count, ids.count)
+                    let row = rows[index]
+                    row.scrollToVisible(row.bounds)
+                    return row
+                }
+                if byKeyboard {
+                    try arrow(to: row, in: view.pane, panel: panel)
+                    try space(in: panel)
+                } else {
+                    try click(try row(), "a thread in Threads")
+                }
+                XCTAssertEqual(view.selection, .thread(id, in: .threads), "\(id) \(byKeyboard ? "by keyboard" : "by mouse")")
+            }
+        }
+    }
+}
+
+// MARK: - The box
+
+extension PressChromeTests {
+    private func threadBox() -> (KeyPanel, ChannelsView, Calls, ChannelComposer) {
+        let (panel, view, calls) = messages(book())
+        view.select(.thread("s1", in: .channel(.of(steve))))
+        view.layoutSubtreeIfNeeded()
+        return (panel, view, calls, view.threadPane.composer)
+    }
+
+    func testAttachAndTheMicWorkByMouseAndKeyboard() throws {
+        for byKeyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { byKeyboard }
+            let (panel, _, calls, composer) = threadBox()
+            let name = byKeyboard ? "by keyboard" : "by mouse"
+            let attach = try button(CatWords.attachRecent, in: composer)
+            byKeyboard ? try tabAndSpace(attach, in: panel) : try click(attach, "Attach")
+            XCTAssertEqual(calls.attach, 1, name)
+            byKeyboard ? try tabAndSpace(composer.mic, in: panel) : try click(composer.mic, "the mic")
+            XCTAssertEqual(calls.mic, 1, name)
+            XCTAssertTrue(panel.firstResponder === composer.textView, "\(name): what you say goes in this box")
+        }
+    }
+
+    func testAnAttachmentsCrossTakesItOff() throws {
+        for byKeyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { byKeyboard }
+            let (panel, view, _, composer) = threadBox()
+            XCTAssertTrue(composer.attach([.bytes(Data("notes".utf8), name: "notes.txt"), .bytes(Data("plan".utf8), name: "plan.txt")]))
+            view.threadPane.arrange(force: true)
+            view.layoutSubtreeIfNeeded()
+            let cross = try button(CatWords.remove("notes.txt"), in: composer)
+            byKeyboard ? try tabAndSpace(cross, in: panel) : try click(cross, "✕ on notes.txt")
+            XCTAssertEqual(composer.attachments.map(\.name), ["plan.txt"], byKeyboard ? "by keyboard" : "by mouse")
+        }
+    }
+
+    func testAlsoSendTicksByMouseAndKeyboardAndReturnSendsWithIt() throws {
+        for byKeyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { byKeyboard }
+            let (panel, _, calls, composer) = threadBox()
+            let name = byKeyboard ? "by keyboard" : "by mouse"
+            XCTAssertFalse(composer.alsoSend.isHidden, "\(name): Steve's thread offers his channel")
+            if byKeyboard {
+                tab(to: composer.alsoSend, in: panel)
+                try space(in: panel)
+            } else {
+                try click(composer.alsoSend, "Also send")
+            }
+            XCTAssertTrue(composer.alsoSends, name)
+
+            XCTAssertTrue(try Press.hit(composer.textView) === composer.textView, "\(name): a click in the box lands on its words")
+            panel.makeFirstResponder(composer.textView)
+            composer.textView.insertText("Looks good", replacementRange: composer.textView.selectedRange())
+            try returnKey(in: panel)
+            guard case .send(let words, let target, let shownIn, let alsoSent, _)? = calls.actions.last else { return XCTFail("\(name): Return sent nothing, \(calls.actions)") }
+            XCTAssertEqual(words, "Looks good", name)
+            XCTAssertEqual(target, .thread(id: "s1", title: "Resume"), name)
+            XCTAssertEqual(shownIn, .of(steve), name)
+            XCTAssertTrue(alsoSent, name)
+            XCTAssertEqual(composer.textView.string, "", "\(name): and the box is empty again")
+            XCTAssertFalse(composer.alsoSends, "\(name): and unticks")
+        }
+    }
+}
+
+// MARK: - Shortcuts
+
+extension PressChromeTests {
+    private func jumpRow(_ index: Int, in box: JumpBoxView) -> NSPoint {
+        let rowHeight = MessagesInk.title + 26
+        return NSPoint(x: box.bounds.midX, y: 70 + MessagesInk.title + 32 + (CGFloat(index) + 0.5) * rowHeight)
+    }
+
+    func testCommandKOpensTheJumpBoxWhoseRowsArrowsAndReturnWork() throws {
+        let (panel, view, _) = messages(book())
+        try key("k", keyCode: 40, modifiers: .command, in: panel)
+        XCTAssertFalse(view.jumpBox.isHidden, "⌘K")
+        let field = try XCTUnwrap(panel.firstResponder as? NSTextView, "typing goes in its box")
+        XCTAssertTrue(field.delegate === view.jumpBox.field)
+
+        field.insertText("budget", replacementRange: field.selectedRange())
+        XCTAssertEqual(view.jumpBox.items.map(\.title), ["Budget"])
+        try returnKey(in: panel)
+        XCTAssertTrue(view.jumpBox.isHidden)
+        XCTAssertEqual(view.selection, .thread("p1", in: .channel(.of(pepper))), "Return opens it")
+
+        try key("k", keyCode: 40, modifiers: .command, in: panel)
+        XCTAssertEqual(view.jumpBox.highlighted, 0)
+        try arrow(false, in: panel)
+        try arrow(false, in: panel)
+        try arrow(true, in: panel)
+        XCTAssertEqual(view.jumpBox.highlighted, 1, "↓↓↑")
+        try returnKey(in: panel)
+        XCTAssertEqual(view.selection, .threads, "the second row")
+
+        try key("k", keyCode: 40, modifiers: .command, in: panel)
+        let titles = view.jumpBox.items.map(\.title)
+        let row = try XCTUnwrap(titles.firstIndex(of: "#pepper"))
+        XCTAssertTrue(try click(at: jumpRow(row, in: view.jumpBox), in: view.jumpBox) === view.jumpBox, "a click on a row lands on the box")
+        XCTAssertTrue(view.jumpBox.isHidden)
+        XCTAssertEqual(view.selection, .channel(.of(pepper)), "clicking a row opens it")
+
+        try key("k", keyCode: 40, modifiers: .command, in: panel)
+        try click(at: NSPoint(x: 300, y: view.bounds.height - 10), in: view.jumpBox)
+        XCTAssertTrue(view.jumpBox.isHidden, "a click outside it closes it")
+        try key("k", keyCode: 40, modifiers: .command, in: panel)
+        try key("k", keyCode: 40, modifiers: .command, in: panel)
+        XCTAssertTrue(view.jumpBox.isHidden, "and ⌘K again")
+        try key("k", keyCode: 40, modifiers: .command, in: panel)
+        try escape(in: panel)
+        XCTAssertTrue(view.jumpBox.isHidden, "and Esc")
+        XCTAssertFalse(panel.firstResponder is NSTextView, "taking the keyboard out of it")
+    }
+
+    func testCommandFFindsAMessageAndReturnOpensIt() throws {
+        let (panel, view, _) = messages(book())
+        try key("f", keyCode: 3, modifiers: .command, in: panel)
+        XCTAssertFalse(view.jumpBox.isHidden, "⌘F")
+        XCTAssertEqual(view.jumpBox.mode, .search)
+        let field = try XCTUnwrap(panel.firstResponder as? NSTextView)
+        field.insertText("cover letter", replacementRange: field.selectedRange())
+        XCTAssertEqual(view.jumpBox.items.map(\.found?.message.id), ["s2-0:ask"])
+        try returnKey(in: panel)
+        XCTAssertEqual(view.selection, .thread("s2", in: .channel(.of(steve))))
+        XCTAssertTrue(view.threadPane.shownMessageRows.contains { $0.isFound }, "with the message marked")
+
+        try key("f", keyCode: 3, modifiers: .command, in: panel)
+        try key("k", keyCode: 40, modifiers: .command, in: panel)
+        XCTAssertEqual(view.jumpBox.mode, .jump, "⌘K turns it into the jump box")
+        try key("f", keyCode: 3, modifiers: .command, in: panel)
+        try key("f", keyCode: 3, modifiers: .command, in: panel)
+        XCTAssertTrue(view.jumpBox.isHidden, "⌘F again closes it")
+    }
+
+    func testCommandSlashShowsTheShortcutsWhichCloseEveryWay() throws {
+        let (panel, view, _) = messages(book())
+        try key("/", keyCode: 44, modifiers: .command, in: panel)
+        XCTAssertFalse(view.cheatsheet.isHidden, "⌘/")
+        try click(try button(CatWords.closeThread, in: view.cheatsheet), "the shortcuts' ✕")
+        XCTAssertTrue(view.cheatsheet.isHidden)
+
+        try key("/", keyCode: 44, modifiers: .command, in: panel)
+        try click(at: NSPoint(x: 300, y: view.bounds.height - 4), in: view.cheatsheet)
+        XCTAssertTrue(view.cheatsheet.isHidden, "a click outside it")
+
+        try key("/", keyCode: 44, modifiers: .command, in: panel)
+        try key("/", keyCode: 44, modifiers: .command, in: panel)
+        XCTAssertTrue(view.cheatsheet.isHidden, "⌘/ again")
+
+        try key("/", keyCode: 44, modifiers: .command, in: panel)
+        try escape(in: panel)
+        XCTAssertTrue(view.cheatsheet.isHidden, "Esc")
+
+        QuietFocus.fullKeyboardAccess = { true }
+        try key("/", keyCode: 44, modifiers: .command, in: panel)
+        try tabAndSpace(try button(CatWords.closeThread, in: view.cheatsheet), in: panel)
+        XCTAssertTrue(view.cheatsheet.isHidden, "Tab to its ✕ and Space")
+    }
+
+    func testEscClosesTheJumpBoxThenTheShortcutsThenTheThread() throws {
+        let (panel, view, _) = messages(book())
+        view.select(.thread("s1", in: .channel(.of(steve))))
+        try key("k", keyCode: 40, modifiers: .command, in: panel)
+        try escape(in: panel)
+        XCTAssertTrue(view.jumpBox.isHidden)
+        XCTAssertNotNil(view.selection.thread)
+        try key("/", keyCode: 44, modifiers: .command, in: panel)
+        try escape(in: panel)
+        XCTAssertTrue(view.cheatsheet.isHidden)
+        XCTAssertNotNil(view.selection.thread)
+        try escape(in: panel)
+        XCTAssertEqual(view.selection, .channel(.of(steve)))
+
+        view.select(.thread("s1", in: .channel(.of(steve))))
+        view.threadPane.focusComposer()
+        try escape(in: panel)
+        XCTAssertEqual(view.selection, .channel(.of(steve)), "and from its box")
+    }
+}
+
+// MARK: - New messages and older ones
+
+extension PressChromeTests {
+    func testNewMessagesTakesYouUpToTheNewLine() throws {
+        for byKeyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { byKeyboard }
+            var unread = book(exchanges: 30)
+            unread.newFrom = ["s1": "s1-2:reply"]
+            let (panel, view, _) = messages(unread)
+            view.select(.thread("s1", in: .channel(.of(steve))))
+            view.layoutSubtreeIfNeeded()
+            let title = try XCTUnwrap(view.threadPane.jumpTitle, "the New line is above what you can see")
+            let jump = try button(title, in: view.threadPane)
+            byKeyboard ? try tabAndSpace(jump, in: panel) : try click(jump, title)
+            XCTAssertNil(view.threadPane.jumpTitle, "\(byKeyboard ? "by keyboard" : "by mouse"): the line's in view")
+        }
+    }
+
+    func testLoadOlderMessagesLoadsThemByMouseAndKeyboard() throws {
+        let threads = (0..<40).map { thread("o\($0)", of: steve, title: "Work \($0)") }
+        let said = Dictionary(uniqueKeysWithValues: (1..<40).map { ("o\($0)", self.said("o\($0)", "Ask", at: TimeInterval($0 * 10))) })
+        let cut = ChannelBook.build(kittens: [steve, pepper], threads: threads, transcripts: said, isReading: false, unreadable: 0, cantReachT3: false)
+        for byKeyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { byKeyboard }
+            let (panel, view, calls) = messages(cut)
+            view.select(.channel(.of(steve)))
+            view.layoutSubtreeIfNeeded()
+            XCTAssertEqual(view.pane.shown.first, .older(isLoading: false))
+            func older() throws -> OlderRowView {
+                for _ in 0..<5 { view.pane.scrollOffset = 0 }
+                return try XCTUnwrap(rows(in: view.pane).first as? OlderRowView)
+            }
+            let row = try older()
+            if byKeyboard {
+                tab(to: view.pane.list, in: panel)
+                for _ in 0..<120 where view.pane.currentRow !== row { try arrow(true, in: panel) }
+                XCTAssertTrue(view.pane.currentRow === row, "↑ reaches it")
+            }
+            // Scrolling back to it asks for older ones by itself, which the feed answers once, so this counts the press.
+            calls.actions = []
+            if byKeyboard {
+                try space(in: panel)
+            } else {
+                try click(try XCTUnwrap(subviews(of: row).first as? QuietButton), CatWords.loadOlder)
+            }
+            XCTAssertEqual(calls.actions, [.older(.of(steve))], byKeyboard ? "by keyboard" : "by mouse")
+        }
+    }
+}
+
+// MARK: - The bell
+
+extension PressChromeTests {
+    func testAChannelsBellOpensItsNotificationsWhoseItemsSetThem() throws {
+        var opened: [(menu: NSMenu, anchor: NSView)] = []
+        let popUp = NotificationsMenu.popUp
+        NotificationsMenu.popUp = { opened.append(($0, $1)) }
+        defer { NotificationsMenu.popUp = popUp }
+        for byKeyboard in [false, true] {
+            QuietFocus.fullKeyboardAccess = { byKeyboard }
+            opened = []
+            var quietPhone = book()
+            quietPhone.waiting.phone = true
+            let (panel, view, calls) = messages(quietPhone)
+            view.select(.channel(.of(steve)))
+            let name = byKeyboard ? "by keyboard" : "by mouse"
+            let bell = try button(CatWords.notifications, in: view.pane)
+            byKeyboard ? try tabAndSpace(bell, in: panel) : try click(bell, "the bell")
+            let shown = try XCTUnwrap(opened.first, "\(name): the bell opens its menu")
+            XCTAssertEqual(opened.count, 1, name)
+            XCTAssertTrue(shown.anchor === bell, "\(name): under the bell")
+
+            let menu = shown.menu
+            let picks = menu.items.filter { $0.action != nil }
+            XCTAssertEqual(picks.first?.title, CatWords.mute, name)
+            XCTAssertGreaterThan(picks.count, NotifyLevel.allCases.count, "\(name): the Mac's levels and the phone's")
+            for item in picks {
+                menu.performActionForItem(at: menu.index(of: item))
+                XCTAssertEqual(calls.actions.last, .notifications(.of(steve), try XCTUnwrap(item.representedObject as? ChannelNotifications)), "\(name): \(item.title)")
+            }
+            XCTAssertEqual(calls.actions.count, picks.count, name)
+            XCTAssertEqual(calls.actions.first, .notifications(.of(steve), ChannelNotifications(muted: true)), "\(name): Mute mutes it")
+        }
+    }
+}
+

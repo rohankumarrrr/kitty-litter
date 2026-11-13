@@ -5,6 +5,11 @@ import ShadesCore
 /// without making Shades the active app, the way Theme's does.
 @MainActor
 final class NotificationsMenu: NSObject {
+    /// Opens a menu under its button. Tests stand in for it, since a real menu holds them in its own loop.
+    static var popUp: (NSMenu, NSView) -> Void = { menu, anchor in
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.isFlipped ? anchor.bounds.height : 0), in: anchor)
+    }
+
     private var onPick: ((ChannelNotifications) -> Void)?
 
     func show(_ current: ChannelNotifications, phone: Bool, under anchor: NSView, onPick: @escaping (ChannelNotifications) -> Void) {
@@ -12,7 +17,7 @@ final class NotificationsMenu: NSObject {
         let menu = NSMenu()
         menu.autoenablesItems = false
         items(current, phone: phone).forEach(menu.addItem)
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.isFlipped ? anchor.bounds.height : 0), in: anchor)
+        Self.popUp(menu, anchor)
     }
 
     /// Each item carries what picking it makes the channel's notifications. Picking a level unmutes it, since that's
