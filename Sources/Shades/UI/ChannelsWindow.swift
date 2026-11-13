@@ -6,7 +6,7 @@ import ShadesCore
 /// stays in front and the cat can still tell what you're looking at. It takes the keyboard only when
 /// you click into the box at the bottom, the way the Ask box does, and nothing typed there takes your
 /// screen. It isn't a `QuietPanel`, because those float over everything, and this one is big enough to get in the way.
-final class ChannelsPanel: NSPanel {
+class ChannelsPanel: NSPanel {
     init() {
         super.init(
             contentRect: NSRect(origin: .zero, size: ChannelsWindow.size),
@@ -247,7 +247,7 @@ final class ChannelsView: QuietView {
         if !isSidebarHidden {
             sidebar.frame = NSRect(x: 0, y: 0, width: panel.minX, height: bounds.height)
             // Mostly over the panel, so the sidebar's scroller still takes its own drags.
-            sidebarEdge.frame = NSRect(x: panel.minX - 2, y: panel.minY, width: 6, height: panel.height)
+            sidebarEdge.frame = NSRect(x: panel.minX - ResizeEdge.lineInset, y: panel.minY, width: 6, height: panel.height)
         }
         let thread = selection.thread == nil ? 0 : Self.threadWidth(in: panel.width, chosen: chosenThreadWidth)
         threadPane.isHidden = thread == 0
@@ -256,7 +256,7 @@ final class ChannelsView: QuietView {
         if thread > 0 {
             threadPane.frame = NSRect(x: panel.maxX - thread, y: panel.minY, width: thread, height: panel.height)
             // Mostly over the thread's side, so the channel's scroller beside it still takes its own drags.
-            threadEdge.frame = NSRect(x: threadPane.frame.minX - 2, y: panel.minY, width: 6, height: panel.height)
+            threadEdge.frame = NSRect(x: threadPane.frame.minX - ResizeEdge.lineInset, y: panel.minY, width: 6, height: panel.height)
         }
         panelEdge.frame = panel
         jumpBox.frame = bounds
@@ -387,8 +387,13 @@ final class PanelEdge: QuietView {
 /// The line between the sidebar and the panel, or between a place and its thread's pane, which you drag to make one
 /// wider or narrower, as in Slack. It draws nothing, since the panel's edge and `ChannelsView` draw the lines.
 final class ResizeEdge: QuietView {
-    /// Where the pointer is, across the window.
+    /// How far into it the line is.
+    static let lineInset: CGFloat = 2
+
+    /// Where the line goes, across the window.
     var onDrag: ((CGFloat) -> Void)?
+    /// How far from the line you took hold of it, so the line stays that far from the pointer rather than jumping to it.
+    private var grab: CGFloat = 0
 
     override var mouseDownCanMoveWindow: Bool { false }
 
@@ -396,11 +401,13 @@ final class ResizeEdge: QuietView {
         addCursorRect(bounds, cursor: .resizeLeftRight)
     }
 
-    override func mouseDown(with event: NSEvent) {}
+    override func mouseDown(with event: NSEvent) {
+        grab = convert(event.locationInWindow, from: nil).x - Self.lineInset
+    }
 
     override func mouseDragged(with event: NSEvent) {
         guard let superview else { return }
-        onDrag?(superview.convert(event.locationInWindow, from: nil).x)
+        onDrag?(superview.convert(event.locationInWindow, from: nil).x - grab)
     }
 }
 
