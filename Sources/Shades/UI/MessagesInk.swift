@@ -94,6 +94,17 @@ enum MessagesInk {
     static let badge = Ink.hex(Opal.error)
     static let onBadge = Ink.hex(Opal.page)
 
+    /// Selected words, drawn the other way round so they read at 5.3:1 whatever they sit on: light words go dark on
+    /// violet, and dark ones, on a kitten's bubble light enough for black words, go to body on the page, since violet
+    /// can be as light as that bubble. A tint of the words' own colour fell under 4.5:1 on most kittens' bubbles.
+    static func selection(on words: NSColor) -> [NSAttributedString.Key: Any] {
+        let srgb = words.usingColorSpace(.sRGB) ?? text
+        let rgb = [srgb.redComponent, srgb.greenComponent, srgb.blueComponent]
+            .reduce(UInt32(0)) { $0 << 8 | UInt32((min(max($1, 0), 1) * 255).rounded()) }
+        let isLight = Opal.contrast(rgb, Opal.page) >= Opal.contrast(rgb, Opal.white)
+        return isLight ? [.backgroundColor: accent, .foregroundColor: paper] : [.backgroundColor: paper, .foregroundColor: text]
+    }
+
     /// Small capitals, such as CHANNELS: tracked out, medium, and white at 55%.
     static func label(_ words: String, size: CGFloat = MessagesInk.label) -> NSAttributedString {
         NSAttributedString(string: words.uppercased(), attributes: [

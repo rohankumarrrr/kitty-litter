@@ -10,5 +10,14 @@ highlight the new grid
 copy
 wait 1
 draw .verify/shades/select/1-highlighted
+ask
+wait 1
+draw .verify/shades/select/2-without-keyboard
+esc
+highlight page final
+ask
+wait 1
+draw .verify/shades/select/3-black-words
+esc
 front
 windows
