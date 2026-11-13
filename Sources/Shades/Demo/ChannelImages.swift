@@ -14,6 +14,8 @@ enum ChannelImages {
         var expandsLongMessage = false
         var hoversLastMessage = false
         var hoversLastReply = false
+        /// A message by its ID, in whichever pane shows it.
+        var hovers: String?
     }
 
     static func draw(to folder: String) {
@@ -53,7 +55,8 @@ enum ChannelImages {
             isUnread: { $0.id == "demo-steve-yesterday" || $0.id == "demo-steve-copy" },
             // As if you'd asked for the plan names in #general, which gave them to Pepper.
             inGeneral: ["demo-pepper-plans": Date().addingTimeInterval(-1_300)],
-            withShades: DemoChannels.talks
+            withShades: DemoChannels.talks,
+            reactions: ["copy-2:reply": [.thumbsUp, .check]]
         )
     }
 
@@ -96,6 +99,10 @@ enum ChannelImages {
             Shot(name: "narrow-thread-hover", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height, hoversLastReply: true),
             Shot(name: "channel-expanded", selection: thread, book: full, expandsLongMessage: true),
             Shot(name: "channel-hover", selection: .channel(steve), book: full, hoversLastMessage: true),
+            Shot(name: "channel-hover-replies", selection: .channel(steve), book: full, hovers: "labels-1:ask"),
+            Shot(name: "channel-hover-yours", selection: .channel(steve), book: full, hovers: "copy-1:ask"),
+            Shot(name: "thread-hover-reactions", selection: thread, book: full, hovers: "copy-2:reply"),
+            Shot(name: "narrow-thread-hover-reactions", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height, hovers: "copy-2:reply"),
             Shot(name: "crowded", selection: .activity, book: crowded(), height: ChannelsWindow.minimumSize.height),
             Shot(name: "crowded-thread", selection: .thread(longNamed.id, in: .channel(.of(longNamed))), book: crowded(), width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
             Shot(name: "narrow-channel", selection: .channel(steve), book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
@@ -125,6 +132,7 @@ enum ChannelImages {
         if shot.expandsLongMessage { (view.threadPane.longMessageRow ?? view.pane.longMessageRow)?.pressShowMore() }
         if shot.hoversLastMessage { view.pane.shownMessageRows.last?.hovering = true }
         if shot.hoversLastReply { view.threadPane.shownMessageRows.last { !$0.isYours }?.hovering = true }
+        if let id = shot.hovers { (view.pane.shownMessageRows + view.threadPane.shownMessageRows).first { $0.message.id == id }?.hovering = true }
         hideScrollers(in: view)
         return png(of: view.superview ?? view)
     }
