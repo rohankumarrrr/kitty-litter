@@ -94,6 +94,7 @@ extension AppController {
         var facts = systemFacts()
         facts.inboxSaves = !inboxSaveFailed
         facts.shortcutsTaken = takenShortcuts
+        facts.phoneNeedsPairingAgain = phone?.door.needsPairingAgain ?? false
         facts.t3Silence = t3.silence
         facts.reachedT3 = t3.reached
         facts.kittensNotInT3 = t3.kittensNotInT3

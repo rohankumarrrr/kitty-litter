@@ -136,6 +136,22 @@ final class PhoneServerTests: XCTestCase {
     }
 
     /// It used to close without a word, and it's open for ten minutes, so you may well have looked away.
+    /// A new build can't read the pairing the last one saved, so the phone is locked out until it pairs again, and the
+    /// self-check said nothing about it.
+    func testTheSelfCheckSaysWhenThePhoneNeedsPairingAgain() async {
+        controller.threadListWait = 0
+        let before = await controller.runHealthCheck()
+        XCTAssertNil(before.first { $0.check == "phone" }, "nothing's said while there's nothing wrong")
+        keys.unreadable = [PhoneKeys.paired]
+        controller.stopPhone()
+        controller.startPhone()
+        await controller.phoneTask?.value
+        let finding = await controller.runHealthCheck().first { $0.check == "phone" }
+        XCTAssertEqual(finding?.ok, false)
+        XCTAssertEqual(finding?.problem, "Your phone needs pairing again, since this build of me can't read its pairing.")
+        XCTAssertEqual(finding?.fix, "Choose Pair Phone… from my menu, then scan the code or type it on your phone.")
+    }
+
     func testACodeThatRunsOutSaysSoAndHowToGetANewOne() async {
         stage.onPairing = { [unowned self] card in if card != nil { self.ahead = 601 } }
         controller.pairPhone()
