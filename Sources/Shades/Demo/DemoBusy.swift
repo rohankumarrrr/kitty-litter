@@ -39,6 +39,7 @@ enum DemoBusy {
         "It's in a pull request, waiting for you to say *ship it*.",
         "The comparison table had eleven rows, and four of them said the same thing in different words.",
         "I left the testimonials alone, since they're real quotes.",
+        "The plans now come from one list:\n\n```\nlet plans = [\"Free\", \"Pro\", \"Team\"]\nprint(plans.joined(separator: \", \"))\n```",
     ]
 
     static let threads: [AgentThread] = {

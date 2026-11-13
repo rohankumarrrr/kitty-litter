@@ -186,28 +186,35 @@ final class QuietButton: NSView {
     }
 
     private func drawChevrons(rightOf x: CGFloat) {
-        guard let image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 8, weight: .semibold))
-        else { return }
+        guard let image = Self.symbol("chevron.up.chevron.down", size: 8, weight: .semibold, color: ink) else { return }
         let size = image.size
-        tinted(image, ink).draw(in: NSRect(x: x + 5, y: (bounds.height - size.height) / 2, width: size.width, height: size.height))
+        image.draw(in: NSRect(x: x + 5, y: (bounds.height - size.height) / 2, width: size.width, height: size.height))
     }
 
-    private func tinted(_ image: NSImage, _ color: NSColor) -> NSImage {
-        NSImage(size: image.size, flipped: false) { rect in
+    private func drawSymbol(_ name: String) {
+        guard let image = Self.symbol(name, size: 13, weight: .medium, color: isLit ? MessagesInk.link : ink) else { return }
+        let size = image.size
+        image.draw(in: NSRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height))
+    }
+
+    /// Each symbol in each colour, made once, since a long conversation draws the same few again on every step of a
+    /// scroll.
+    private static var symbols: [String: NSImage] = [:]
+
+    private static func symbol(_ name: String, size: CGFloat, weight: NSFont.Weight, color: NSColor) -> NSImage? {
+        let key = "\(name) \(size) \(weight.rawValue) \(color)"
+        if let tinted = symbols[key] { return tinted }
+        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: size, weight: weight))
+        else { return nil }
+        let tinted = NSImage(size: image.size, flipped: false) { rect in
             image.draw(in: rect)
             color.set()
             rect.fill(using: .sourceAtop)
             return true
         }
-    }
-
-    private func drawSymbol(_ name: String) {
-        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .medium))
-        else { return }
-        let size = image.size
-        tinted(image, isLit ? MessagesInk.link : ink).draw(in: NSRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height))
+        symbols[key] = tinted
+        return tinted
     }
 
     override var acceptsFirstResponder: Bool { QuietFocus.allows(self) }

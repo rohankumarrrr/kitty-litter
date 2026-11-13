@@ -170,7 +170,7 @@ True black glass, lit only along its bottom edge. It's Opal's desktop widget car
 - **Glow:** over the bottom 72% of the card, an ellipse centred 12% below the bottom edge, 70% of the card wide and 90% of the glow's height tall in radius, from the light at 30% to clear at 72% of the way out.
 - **Rim:** a 1.2-point line around the edge, clear down to 58% of the height, the light at 55% by 82%, and full at the bottom.
 - **Its light:** a hue as `hsl(h, 100%, 68%)` for the rim and `hsl(h, 100%, 60%)` for the glow. Shades' is hue 245. A kitten's card uses its own colour for both.
-- `Opal.card(in:radius:light:)`.
+- `Opal.card(in:radius:light:)`. It keeps what it draws by size, place between pixels and light, since every message in sight draws its card again on each step of a scroll: drawn afresh, a card costs about forty plain fills, and kept, about one. A card with a shape of its own, such as the bubble's with its tail, is drawn afresh. What's kept stays under 16 MB and goes when The Kitty Litter closes.
 
 ### Floating glass
 
@@ -189,7 +189,7 @@ A white glyph on a black tile, lit from below in its hue: an Opal Dock icon, and
 - The rim is 1.5 points at a 40-point tile, scaled with it: white at 22% across the top, clear down the sides, brightening into the light along the bottom.
 - The glyph is white. A pixel cat goes on it as it is.
 - A kitten's tile takes the kitten's colour. A tile that isn't a kitten's, such as a section's in a sidebar, takes a hue drifting down the list from 172° to 344°, teal to pink.
-- `Opal.tile(in:light:)`.
+- `Opal.tile(in:light:)`, kept the same way as the card.
 
 ### The rim gradient
 

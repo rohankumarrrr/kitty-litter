@@ -31,22 +31,118 @@ extension Opal {
     /// True black glass, lit only along its bottom edge. `shape` is its outline when that's more than `rect` rounded, such
     /// as the cat's bubble with its tail, which the light carries on around.
     static func card(in rect: NSRect, radius: CGFloat = Corner.card, light: Light, shape: NSBezierPath? = nil) {
-        let shape = shape ?? NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
+        guard let shape else {
+            return kept("card \(radius)", in: rect, light: light) { drawCard(in: $0, light: light, shape: NSBezierPath(roundedRect: $0, xRadius: radius, yRadius: radius)) }
+        }
+        drawCard(in: rect, light: light, shape: shape)
+    }
+
+    static func drawCard(in rect: NSRect, light: Light, shape: NSBezierPath) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
         NSGraphicsContext.saveGraphicsState()
         shape.addClip()
-        vertical(NSGradient(colors: [Ink.hex(cardTop).withAlphaComponent(cardTopAlpha), Ink.hex(cardBottom).withAlphaComponent(cardBottomAlpha)])!, in: rect)
+        vertical(cardGlass, in: rect)
         // radial-gradient(70% 90% at 50% 112%, glow 30%, transparent 72%) over the bottom 72%.
         let glowHeight = rect.height * 0.72
-        glow(light.glow, alpha: 0.3, end: 0.72, center: NSPoint(x: rect.midX, y: bottom(of: rect) - up * glowHeight * 0.12), radii: NSSize(width: rect.width * 0.7, height: glowHeight * 0.9))
+        glow(cached(&cardGlows, light.glow) { fading($0, alpha: 0.3, end: 0.72) }, center: NSPoint(x: rect.midX, y: bottom(of: rect) - up * glowHeight * 0.12), radii: NSSize(width: rect.width * 0.7, height: glowHeight * 0.9))
+        // The hairline is one colour all the way round, so a line twice its width, cut by the shape, is it.
+        NSColor(white: 1, alpha: 0.07).setStroke()
+        context.addPath(shape.cgPath)
+        context.setLineWidth(2)
+        context.strokePath()
+        // The rim is clear down to 58% of the way, so only the band below that is shaded, down past the bottom of the
+        // shape, a bubble's tail and all.
+        let outline = shape.bounds.union(rect).insetBy(dx: -2, dy: -2)
+        let line = isFlipped ? rect.maxY - rect.height * 0.42 - 2 : rect.minY + rect.height * 0.42 + 2
+        context.clip(to: isFlipped
+            ? NSRect(x: outline.minX, y: line, width: outline.width, height: max(outline.maxY - line, 0))
+            : NSRect(x: outline.minX, y: outline.minY, width: outline.width, height: max(line - outline.minY, 0)))
+        context.addPath(shape.cgPath)
+        context.setLineWidth(2.4)
+        context.replacePathWithStrokedPath()
+        context.clip()
+        vertical(cached(&cardRims, light.rim) { rim in
+            NSGradient(colors: [.clear, .clear, Ink.hex(rim).withAlphaComponent(0.55), Ink.hex(rim)], atLocations: [0, 0.58, 0.82, 1], colorSpace: .sRGB)!
+        }, in: rect)
         NSGraphicsContext.restoreGraphicsState()
+    }
 
-        let hairline = NSColor(white: 1, alpha: 0.07)
-        ring(shape, width: 1, gradient: NSGradient(starting: hairline, ending: hairline)!, over: rect)
-        ring(shape, width: 1.2, gradient: NSGradient(
-            colors: [.clear, .clear, Ink.hex(light.rim).withAlphaComponent(0.55), Ink.hex(light.rim)],
-            atLocations: [0, 0.58, 0.82, 1],
-            colorSpace: .sRGB
-        )!, over: rect)
+    private static let cardGlass = NSGradient(colors: [Ink.hex(cardTop).withAlphaComponent(cardTopAlpha), Ink.hex(cardBottom).withAlphaComponent(cardBottomAlpha)])!
+    private static let tileGlass = NSGradient(colors: [Ink.hex(cardTop), Ink.hex(cardBottom)])!
+    // Each light's gradients, made once, since a long conversation draws the same few over and over.
+    private static var cardGlows: [UInt32: NSGradient] = [:]
+    private static var cardRims: [UInt32: NSGradient] = [:]
+    private static var tileGlows: [UInt32: NSGradient] = [:]
+    private static var tileRims: [UInt32: NSGradient] = [:]
+
+    /// Cards and tiles as they were last drawn, by size, place between pixels and light, since every message in sight
+    /// draws its card again on each step of a scroll. A screenful or two is kept, the oldest going first, and all of
+    /// it goes when The Kitty Litter closes.
+    private static var kept: [String: (image: CGImage, bytes: Int)] = [:]
+    private static var keptOrder: [String] = []
+    static let keptLimit = 16 << 20
+    /// What the kept pictures hold, at the screen's pixels.
+    private(set) static var keptBytes = 0
+
+    static func forgetKept() {
+        kept = [:]
+        keptOrder = []
+        keptBytes = 0
+    }
+
+    private static func kept(_ kind: String, in rect: NSRect, light: Light, draw: (NSRect) -> Void) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        // Drawn on the very pixels it lands on, with the card where it falls between them, so it's copied rather than
+        // smoothed. A window's drawing doesn't say its colours, so those are the screen's, which it draws in.
+        let pixels = context.convertToDeviceSpace(rect).integral
+        let box = context.convertToUserSpace(pixels)
+        let inside = rect.offsetBy(dx: -box.minX, dy: -box.minY)
+        let flipped = isFlipped
+        guard let space = context.colorSpace ?? NSScreen.main?.colorSpace?.cgColorSpace ?? CGColorSpace(name: CGColorSpace.sRGB) else { return draw(rect) }
+        let key = "\(kind) \(inside) \(pixels.size) \(light.rim) \(light.glow) \(flipped) \(space.name.map { $0 as String } ?? "")"
+        guard let image = kept[key]?.image ?? keep(key, pixels: pixels, box: box, space: space, flipped: flipped, draw: { draw(inside) }) else { return draw(rect) }
+        context.saveGState()
+        context.interpolationQuality = .none
+        if flipped {
+            context.translateBy(x: box.minX, y: box.maxY)
+            context.scaleBy(x: 1, y: -1)
+            context.draw(image, in: CGRect(origin: .zero, size: box.size))
+        } else {
+            context.draw(image, in: box)
+        }
+        context.restoreGState()
+    }
+
+    private static func keep(_ key: String, pixels: NSRect, box: NSRect, space: CGColorSpace, flipped: Bool, draw: () -> Void) -> CGImage? {
+        guard pixels.width >= 1, pixels.height >= 1,
+              let bitmap = CGContext(data: nil, width: Int(pixels.width), height: Int(pixels.height), bitsPerComponent: 8, bytesPerRow: 0, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else { return nil }
+        bitmap.scaleBy(x: pixels.width / box.width, y: pixels.height / box.height)
+        if flipped {
+            bitmap.translateBy(x: 0, y: box.height)
+            bitmap.scaleBy(x: 1, y: -1)
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: bitmap, flipped: flipped)
+        draw()
+        NSGraphicsContext.restoreGraphicsState()
+        guard let image = bitmap.makeImage() else { return nil }
+        let bytes = image.bytesPerRow * image.height
+        // shortcut: the oldest drawn goes first rather than the least used, which is fine while a screenful fits.
+        while keptBytes + bytes > keptLimit, !keptOrder.isEmpty {
+            keptBytes -= kept.removeValue(forKey: keptOrder.removeFirst())?.bytes ?? 0
+        }
+        kept[key] = (image, bytes)
+        keptOrder.append(key)
+        keptBytes += bytes
+        return image
+    }
+
+    private static func cached(_ gradients: inout [UInt32: NSGradient], _ color: UInt32, make: (UInt32) -> NSGradient) -> NSGradient {
+        if let gradient = gradients[color] { return gradient }
+        let gradient = make(color)
+        gradients[color] = gradient
+        return gradient
     }
 
     /// What floats over other windows: dense violet-black glass with a hairline. `path` is the panel's shape, a
@@ -61,19 +157,21 @@ extension Opal {
 
     /// A black tile lit from below, for a glyph or a kitten's cat to go on.
     static func tile(in rect: NSRect, light: Light) {
+        kept("tile", in: rect, light: light) { drawTile(in: $0, light: light) }
+    }
+
+    static func drawTile(in rect: NSRect, light: Light) {
         let side = min(rect.width, rect.height)
         let radius = side * 0.225
         let shape = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
         NSGraphicsContext.saveGraphicsState()
         shape.addClip()
-        vertical(NSGradient(colors: [Ink.hex(cardTop), Ink.hex(cardBottom)])!, in: rect)
-        glow(light.glow, alpha: 0.45, end: 1, center: NSPoint(x: rect.midX, y: bottom(of: rect)), radii: NSSize(width: rect.width, height: rect.height * 0.6))
+        vertical(tileGlass, in: rect)
+        glow(cached(&tileGlows, light.glow) { fading($0, alpha: 0.45, end: 1) }, center: NSPoint(x: rect.midX, y: bottom(of: rect)), radii: NSSize(width: rect.width, height: rect.height * 0.6))
         NSGraphicsContext.restoreGraphicsState()
-        ring(shape, width: 1.5 * side / 40, gradient: NSGradient(
-            colors: [NSColor(white: 1, alpha: 0.22), .clear, .clear, Ink.hex(light.rim)],
-            atLocations: [0, 0.4, 0.6, 1],
-            colorSpace: .sRGB
-        )!, over: rect)
+        ring(shape, width: 1.5 * side / 40, gradient: cached(&tileRims, light.rim) { rim in
+            NSGradient(colors: [NSColor(white: 1, alpha: 0.22), .clear, .clear, Ink.hex(rim)], atLocations: [0, 0.4, 0.6, 1], colorSpace: .sRGB)!
+        }, over: rect)
     }
 
     /// A line of the rim's light, such as the open tab's underline or the unread line.
@@ -121,10 +219,14 @@ extension Opal {
         gradient.draw(from: NSPoint(x: rect.midX, y: top(of: rect)), to: NSPoint(x: rect.midX, y: bottom(of: rect)), options: [.drawsBeforeStartingLocation, .drawsAfterEndingLocation])
     }
 
-    /// An elliptical glow from `color` at `alpha` in the middle to clear at `end` of the way out.
-    private static func glow(_ color: UInt32, alpha: CGFloat, end: CGFloat, center: NSPoint, radii: NSSize) {
+    /// `color` at `alpha` in the middle, clear at `end` of the way out.
+    private static func fading(_ color: UInt32, alpha: CGFloat, end: CGFloat) -> NSGradient {
+        NSGradient(colors: [Ink.hex(color).withAlphaComponent(alpha), Ink.hex(color).withAlphaComponent(0)], atLocations: [0, end], colorSpace: .sRGB)!
+    }
+
+    /// An elliptical glow, `gradient` from the middle out.
+    private static func glow(_ gradient: NSGradient, center: NSPoint, radii: NSSize) {
         guard radii.width > 0, radii.height > 0 else { return }
-        let gradient = NSGradient(colors: [Ink.hex(color).withAlphaComponent(alpha), Ink.hex(color).withAlphaComponent(0)], atLocations: [0, end], colorSpace: .sRGB)!
         NSGraphicsContext.saveGraphicsState()
         let squash = NSAffineTransform()
         squash.translateX(by: center.x, yBy: center.y)
