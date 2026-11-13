@@ -81,7 +81,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         }
         attachButton.setAccessibilityLabel(CatWords.attachRecent)
         addSubview(attachButton)
-        mic.isThemed = true
         mic.onPress = { [weak self] in self?.onMic?() }
         addSubview(mic)
         textView.onAttach = { [weak self] in self?.attach($0) ?? false }

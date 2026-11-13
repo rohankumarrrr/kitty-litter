@@ -1,0 +1,32 @@
+front
+record .verify/shades/cat-theme/cat-theme.gif cat bubble input kittens pairing pill
+theme light
+colors T3 Code/Paper
+pet
+draw .verify/shades/cat-theme/0-paper-pill
+wait 2
+ask
+wait 1
+draw .verify/shades/cat-theme/1-paper-ask
+esc
+approval command npm test
+wait 4
+kittens
+wait 1
+phone on
+wait 3
+phone pair
+wait 1
+draw .verify/shades/cat-theme/2-paper-open
+colors Cursor/Opal Horizon
+wait 1
+draw .verify/shades/cat-theme/3-opal-open
+colors shades
+wait 1
+draw .verify/shades/cat-theme/4-own-light-open
+theme dark
+wait 1
+draw .verify/shades/cat-theme/5-own-dark-open
+record stop
+front
+windows

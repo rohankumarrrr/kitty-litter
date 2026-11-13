@@ -194,7 +194,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         rows(for: page, form).forEach(stack.addArrangedSubview)
 
         let done = plainButton("Done", style: .filled) { [weak self] in self?.hide() }
-        done.colors = (MessagesInk.text, MessagesInk.paper)
         let reveal = plainButton("Open settings folder", style: .text) { NSWorkspace.shared.open(Settings.directory) }
         let buttons = NSStackView(views: [done, reveal])
         buttons.spacing = 6
@@ -365,7 +364,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
 
     private func plainButton(_ title: String, style: QuietButton.Style, onPress: @escaping () -> Void) -> QuietButton {
         let button = QuietButton(title, style: style, onPress: onPress)
-        button.isThemed = true
         button.widthAnchor.constraint(equalToConstant: min(button.frame.width, Self.controlWidth)).isActive = true
         button.heightAnchor.constraint(equalToConstant: button.frame.height).isActive = true
         return button

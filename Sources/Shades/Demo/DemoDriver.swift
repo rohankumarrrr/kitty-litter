@@ -413,6 +413,7 @@ final class DemoDriver {
             ("channels", stage.channels.panel),
             ("pairing", stage.pairing.panel),
             ("settings", stage.settingsPanel.panel),
+            ("pill", stage.pill.panel),
         ]
     }
 

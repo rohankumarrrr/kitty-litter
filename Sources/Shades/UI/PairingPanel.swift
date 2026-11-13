@@ -20,6 +20,7 @@ final class PairingPanel {
 
     let panel = QuietPanel(allowsKey: false)
     var onClose: (() -> Void)?
+    private var shown: (card: PhonePairingCard, visible: NSRect)?
 
     init() {
         panel.sharingType = .none
@@ -27,7 +28,14 @@ final class PairingPanel {
 
     var isVisible: Bool { panel.isVisible }
 
+    /// Made again in the theme you just picked, if it's up.
+    func restyle() {
+        if let shown { show(shown.card, centeredIn: shown.visible) }
+        panel.wearTheme()
+    }
+
     func show(_ card: PhonePairingCard, centeredIn visible: NSRect) {
+        shown = (card, visible)
         let root = PairingRootView()
         let stack = NSStackView()
         stack.orientation = .vertical
@@ -38,6 +46,7 @@ final class PairingPanel {
 
         let title = NSTextField(labelWithString: CatWords.pairTitle)
         title.font = .systemFont(ofSize: 15, weight: .semibold)
+        title.textColor = MessagesInk.text
         stack.addArrangedSubview(title)
 
         if let link = card.link, let picture = Self.picture(of: link) {
@@ -54,11 +63,12 @@ final class PairingPanel {
 
         let code = NSTextField(labelWithString: card.code)
         code.font = .monospacedSystemFont(ofSize: 26, weight: .semibold)
+        code.textColor = MessagesInk.text
         stack.addArrangedSubview(code)
 
         let words = NSTextField(wrappingLabelWithString: CatWords.pairHow(card.address))
         words.font = .systemFont(ofSize: 12)
-        words.textColor = Ink.soft
+        words.textColor = MessagesInk.soft
         words.alignment = .center
         words.preferredMaxLayoutWidth = Self.width - Self.padding * 2
         stack.addArrangedSubview(words)
@@ -89,6 +99,7 @@ final class PairingPanel {
     }
 
     func hide() {
+        shown = nil
         panel.orderOut(nil)
         panel.contentView = nil
     }
@@ -120,9 +131,9 @@ private final class PairingRootView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: BalloonView.radius, yRadius: BalloonView.radius)
-        Ink.paper.setFill()
+        MessagesInk.paper.setFill()
         path.fill()
-        Ink.line.setStroke()
+        MessagesInk.line.setStroke()
         path.stroke()
     }
 }

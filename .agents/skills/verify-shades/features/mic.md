@@ -6,7 +6,7 @@ The mic at the right of the Ask box, and of the box in The Kitty Litter. Pressin
 
 - `mic-ask` talks into the Ask box, plain, Fix or drop. What you say shows in the box as you say it, and finishing counts as pressing Return.
 - `mic-messages` gives The Kitty Litter's box the keyboard, then talks into it, and what you said goes where the line over the box says.
-- `mic-shows` lights the mic in the box's accent while it hears you. VoiceOver hears it as Speak, then Done speaking, and its help names the talk key.
+- `mic-shows` lights the mic in the theme's accent while it hears you. VoiceOver hears it as Speak, then Done speaking, and its help names the talk key.
 - `mic-cancel` forgets what you said when the box closes, or on Esc, with nothing sent.
 
 ## How to get to it (user POV)

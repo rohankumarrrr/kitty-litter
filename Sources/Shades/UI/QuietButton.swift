@@ -57,8 +57,6 @@ final class QuietButton: NSView {
     var isArmed = true { didSet { needsDisplay = true } }
     /// A filled one's own colours, such as a theme's, in place of the plain pill.
     var colors: (fill: NSColor, ink: NSColor)? { didSet { needsDisplay = true } }
-    /// Draws in the theme Messages uses, as Settings does, where the cat's other windows keep Ink's own.
-    var isThemed = false { didSet { needsDisplay = true } }
     /// A symbol drawn in place of its words, which VoiceOver still reads.
     var symbol: String? { didSet { needsDisplay = true } }
     /// Its symbol in the accent, while what it started is going.
@@ -107,14 +105,11 @@ final class QuietButton: NSView {
 
     private var ink: NSColor {
         switch style {
-        case .filled: colors?.ink ?? Ink.pillText
-        case .plain: isThemed ? MessagesInk.text : Ink.text
-        case .text: isThemed ? MessagesInk.soft : Ink.soft
+        case .filled: colors?.ink ?? MessagesInk.pillText
+        case .plain: MessagesInk.text
+        case .text: MessagesInk.soft
         }
     }
-
-    private var hoverFill: NSColor { isThemed ? MessagesInk.hover : Ink.hover }
-    private var pressFill: NSColor { isThemed ? MessagesInk.press : Ink.press }
 
     private var label: NSAttributedString {
         NSAttributedString(string: flashed ?? title, attributes: [
@@ -127,21 +122,21 @@ final class QuietButton: NSView {
         let shape = NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8)
         switch style {
         case .filled:
-            let fill = colors?.fill ?? Ink.pill
+            let fill = colors?.fill ?? MessagesInk.pill
             (isArmed ? fill : fill.withAlphaComponent(0.4)).setFill()
             shape.fill()
             if pressing { NSColor(white: 0.5, alpha: 0.3).setFill(); shape.fill() }
         case .plain:
-            ((hovering || pressing) && isArmed ? pressFill : hoverFill).setFill()
+            ((hovering || pressing) && isArmed ? MessagesInk.press : MessagesInk.hover).setFill()
             shape.fill()
             // A shade more than hover, so pressing shows. Ink's is see-through, so it shades a theme's too.
             if pressing && isArmed { Ink.hover.setFill(); shape.fill() }
         case .text:
             if pressing && isArmed {
-                pressFill.setFill()
+                MessagesInk.press.setFill()
                 shape.fill()
             } else if hovering && isArmed {
-                hoverFill.setFill()
+                MessagesInk.hover.setFill()
                 shape.fill()
             }
         }
@@ -166,7 +161,7 @@ final class QuietButton: NSView {
         guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .medium))
         else { return }
-        let color = isLit ? (isThemed ? MessagesInk.accent : Ink.accent) : ink
+        let color = isLit ? MessagesInk.accent : ink
         let tinted = NSImage(size: image.size, flipped: false) { rect in
             image.draw(in: rect)
             color.set()

@@ -1,8 +1,8 @@
 import Foundation
 import ShadesCore
 
-/// Messages' colours, from a theme another app on your Mac already has, or a theme file dropped onto Messages.
-/// Only Messages and the phone take them, and kittens keep their own.
+/// The app's colours, from a theme another app on your Mac already has, or a theme file dropped onto Messages.
+/// Every window and the phone take them, and kittens keep their own.
 extension AppController {
     enum ThemeChoice: Equatable {
         case file(URL)

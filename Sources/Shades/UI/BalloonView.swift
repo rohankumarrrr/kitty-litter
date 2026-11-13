@@ -18,9 +18,9 @@ class BalloonView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let path = outline()
-        Ink.paper.setFill()
+        MessagesInk.paper.setFill()
         path.fill()
-        Ink.line.setStroke()
+        MessagesInk.line.setStroke()
         path.lineWidth = 1
         path.stroke()
     }

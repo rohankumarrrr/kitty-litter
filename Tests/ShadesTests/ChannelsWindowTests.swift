@@ -1427,6 +1427,59 @@ extension ChannelsWindowTests {
         XCTAssertEqual(try XCTUnwrap(window.view.pane.shownMessageRows.first { $0.isYours }).fill, Ink.hex(ChannelSpeakerLook.yours))
     }
 
+    /// The bubble, the Ask box, the kittens view, the pairing code and the cat's pill stayed system grey in a theme.
+    func testTheCatsOwnWindowsWearTheThemeAndTakeANewOneWhileTheyreUp() throws {
+        let away = NSRect(x: -20_000, y: -20_000, width: 800, height: 600)
+        let cat = NSRect(x: away.midX, y: away.minY, width: 64, height: 64)
+        let bubble = BubbleController()
+        bubble.anchor = { (cat, away) }
+        let input = InputPanel()
+        let kittens = KittenPanel()
+        kittens.anchor = { (cat, away) }
+        let pairing = PairingPanel()
+        let pill = SayPill()
+        defer { [bubble.hide, kittens.hide, pairing.hide, pill.hide].forEach { $0() } }
+        let request = ApprovalRequest(id: "r", threadID: "t", threadTitle: "Work", kind: .command, summary: "npm test", createdAt: Date())
+        bubble.show(.approval(request, position: 1, total: 1))
+        kittens.show([KittenStatus(kitten: steve, state: .idle)])
+        pairing.show(PhonePairingCard(address: "http://example.test", code: "123456"), centeredIn: away)
+        pill.say("Purr", over: cat, in: away, seconds: nil)
+
+        let midnight = ColorTheme(name: "Midnight", isDark: true, paper: 0x1f2430, text: 0xcbccc6, soft: 0x707a8c, accent: 0xffcc66)
+        for theme in [Self.opal, Self.paper, midnight, nil] {
+            try themed(theme) {
+                [bubble.restyle, input.restyle, kittens.restyle, pill.restyle, pairing.restyle].forEach { $0() }
+                let name = theme?.name ?? "Shades' own"
+                let paper = MessagesInk.paper
+                let windows: [(String, QuietPanel, NSPoint, NSColor)] = [
+                    ("bubble", bubble.panel, NSPoint(x: 6, y: bubble.view.bounds.midY), paper),
+                    ("Ask box", input.panel, NSPoint(x: 6, y: 50), paper),
+                    ("kittens", kittens.panel, NSPoint(x: 4, y: kittens.frame.height / 2), paper),
+                    ("pairing", pairing.panel, NSPoint(x: 12, y: 12), paper),
+                    ("pill", pill.panel, NSPoint(x: 4, y: pill.panel.frame.height / 2), MessagesInk.pill),
+                ]
+                for (window, panel, point, want) in windows {
+                    let root = try XCTUnwrap(panel.contentView)
+                    XCTAssertTrue(window == "Ask box" || panel.isVisible, "\(window) stays up in \(name)")
+                    XCTAssertEqual(panel.appearance?.name, theme.map { $0.isDark ? .darkAqua : .aqua }, "\(window)'s scrollers and cats in \(name)")
+                    let look = try XCTUnwrap(root.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]))
+                    let picture = try XCTUnwrap(ChannelImages.bitmap(of: root, scale: 1))
+                    let got = try XCTUnwrap(picture.colorAt(x: Int(point.x), y: Int(point.y))?.usingColorSpace(.sRGB))
+                    let wanted = resolved(want, in: look)
+                    let off = [got.redComponent - wanted.redComponent, got.greenComponent - wanted.greenComponent, got.blueComponent - wanted.blueComponent].map { abs($0) * 255 }
+                    XCTAssertLessThanOrEqual(off.max() ?? 0, 2, "\(window) in \(name) drew \(got), not \(wanted)")
+                }
+                XCTAssertEqual(bubble.view.textView.textColor, MessagesInk.text, "what the bubble says, in \(name)")
+                for look in [NSAppearance.Name.aqua, .darkAqua] {
+                    for (words, color, on) in [("words", MessagesInk.text, paper), ("quieter words", MessagesInk.soft, paper), ("the pill's word", MessagesInk.pillText, MessagesInk.pill)] {
+                        let ratio = Self.contrast(resolved(color, in: look), resolved(on, in: look))
+                        XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(words) in \(name) \(look.rawValue) give \(ratio)")
+                    }
+                }
+            }
+        }
+    }
+
     func testTheThemeMenuOffersItsOwnColoursAndEachAppsThemesAndSaysToDropTheRest() throws {
         let found = [
             ColorTheme.Found(theme: Self.paper, app: "T3 Code", file: URL(fileURLWithPath: "/t3/paper.json")),
