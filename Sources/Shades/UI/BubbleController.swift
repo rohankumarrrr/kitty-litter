@@ -11,7 +11,8 @@ final class BubbleController {
     /// A notice turns up unasked, so a click that was already on its way shouldn't lose it unread.
     private static let noticeClickAwayGrace: TimeInterval = 6
 
-    let panel = QuietPanel(allowsKey: true)
+    /// Its window, which tests give one that never reaches the screen.
+    let panel: QuietPanel
     let view = BubbleView(frame: .zero)
     private(set) var content: BubbleContent?
 
@@ -29,8 +30,12 @@ final class BubbleController {
     /// an approval isn't read twice.
     private var said: Set<String> = []
 
-    init() {
+    init(panel: QuietPanel? = nil) {
+        let panel = panel ?? QuietPanel(allowsKey: true)
+        self.panel = panel
         panel.contentView = view
+        // Its buttons change with what it shows, so Tab's way round them is worked out each time.
+        panel.autorecalculatesKeyViewLoop = true
     }
 
     /// Up, or on its way. Once dismissed it isn't, though it takes a moment to fade.

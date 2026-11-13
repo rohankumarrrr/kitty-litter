@@ -27,11 +27,14 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     /// A box beside its setting's name.
     private static let fieldWidth: CGFloat = 230
 
-    let panel = QuietPanel(allowsKey: true)
+    /// Its window, which tests give one that never reaches the screen.
+    let panel: QuietPanel
     var onChange: ((Settings) -> Void)?
     var onDoNotDisturb: (() -> Void)?
     var onNotifications: ((ChannelID, ChannelNotifications) -> Void)?
     var onPairPhone: (() -> Void)?
+    /// Where Open settings folder shows the folder. Tests stand in for Finder.
+    var openFolder: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
     private(set) var page = Page.agents
     private(set) var form: SettingsForm?
@@ -40,6 +43,12 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     private var handlers: [Handler] = []
     private let notificationsMenu = NotificationsMenu()
     private let fontMenu = FontMenu()
+
+    init(panel: QuietPanel? = nil) {
+        let panel = panel ?? QuietPanel(allowsKey: true)
+        self.panel = panel
+        super.init()
+    }
 
     func show(_ form: SettingsForm, near corner: NSPoint) {
         self.form = form
@@ -220,7 +229,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         }
 
         // Done on the right, as macOS puts the button that finishes, and the folder on the left.
-        let reveal = plainButton("Open settings folder", style: .text) { NSWorkspace.shared.open(Settings.directory) }
+        let reveal = plainButton("Open settings folder", style: .text) { [weak self] in self?.openFolder(Settings.directory) }
         let done = plainButton("Done", style: .filled) { [weak self] in self?.hide() }
         let gap = NSView()
         gap.setContentHuggingPriority(.init(1), for: .horizontal)
@@ -527,6 +536,8 @@ private final class SettingsRootView: NSView {
     }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var acceptsFirstResponder: Bool { true }
+    /// It holds the keyboard as Settings opens, but shows no ring, so Tab goes round without stopping on it.
+    override var canBecomeKeyView: Bool { false }
     /// Esc closes it, while no box has the keyboard too.
     override func keyDown(with event: NSEvent) { interpretKeyEvents([event]) }
     /// Tab still goes round the page from here, which nothing else in the chain does once a key is read this way.

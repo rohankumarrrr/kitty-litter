@@ -297,7 +297,8 @@ final class ChannelTextBlock {
     }
 
     func show(in superview: NSView) {
-        if view.superview !== superview { superview.addSubview(view) }
+        // Under everything else in the row, such as a code block's Copy, which is made before the words have a view.
+        if view.superview !== superview { superview.addSubview(view, positioned: .below, relativeTo: nil) }
         view.frame = NSRect(x: origin.x, y: origin.y, width: right, height: height)
     }
 

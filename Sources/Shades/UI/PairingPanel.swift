@@ -18,10 +18,13 @@ final class PairingPanel {
     private static let padding: CGFloat = 24
     private static let pictureSide: CGFloat = 200
 
-    let panel = QuietPanel(allowsKey: false)
+    /// Its window, which tests give one that never reaches the screen.
+    let panel: QuietPanel
     var onClose: (() -> Void)?
 
-    init() {
+    init(panel: QuietPanel? = nil) {
+        let panel = panel ?? QuietPanel(allowsKey: false)
+        self.panel = panel
         panel.sharingType = .none
     }
 
