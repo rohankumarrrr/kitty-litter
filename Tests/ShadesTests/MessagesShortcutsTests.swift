@@ -274,7 +274,7 @@ final class MessagesShortcutsTests: XCTestCase {
     }
 
     func testSearchOpensAMessagesThreadAndScrollsToItHoweverFarBack() throws {
-        let exchanges = (0..<80).map { index in
+        let exchanges = (0..<80).map { (index: Int) -> Exchange in
             Exchange(id: "x\(index)", asker: .you, askedAt: at.addingTimeInterval(TimeInterval(index * 60)), ask: index == 3 ? "Where did the coupon box go?" : "Ask \(index)", reply: "Done \(index).", repliedAt: at.addingTimeInterval(TimeInterval(index * 60 + 1)))
         }
         let book = ChannelBook.build(kittens: [steve, pepper], threads: [thread("long", of: steve, title: "Checkout")], transcripts: ["long": exchanges], isReading: false, unreadable: 0, cantReachT3: false)

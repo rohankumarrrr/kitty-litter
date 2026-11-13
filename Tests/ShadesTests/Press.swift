@@ -6,6 +6,18 @@ import XCTest
 /// nothing reaches the desktop. The control must be in a window, which is never shown.
 @MainActor
 enum Press {
+    /// The window `NSApp.keyWindow` reports, which a test sets to the one it says has the keyboard. From macOS 27 a
+    /// window's own Tab handling moves on only in the app's key window, which a window that's never shown can't be.
+    nonisolated(unsafe) static weak var keyWindow: NSWindow? {
+        didSet { _ = reportsKeyWindow }
+    }
+
+    nonisolated private static let reportsKeyWindow: Void = {
+        guard let real = class_getInstanceMethod(NSApplication.self, #selector(getter: NSApplication.keyWindow)),
+              let standIn = class_getInstanceMethod(NSApplication.self, #selector(getter: NSApplication.pressKeyWindow))
+        else { return }
+        method_exchangeImplementations(real, standIn)
+    }()
     /// The view a click at `control`'s centre, or at `point` in it, lands on, as its window's own hit-testing finds it,
     /// title bar included.
     static func hit(_ control: NSView, at point: NSPoint? = nil, file: StaticString = #filePath, line: UInt = #line) throws -> NSView {
@@ -36,4 +48,9 @@ enum Press {
             type == .keyDown ? view.keyDown(with: event) : view.keyUp(with: event)
         }
     }
+}
+
+extension NSApplication {
+    /// Swapped with `keyWindow` once a test says which window has the keyboard, so calling itself here reaches the real one.
+    @objc fileprivate var pressKeyWindow: NSWindow? { Press.keyWindow ?? self.pressKeyWindow }
 }

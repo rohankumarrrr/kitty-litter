@@ -1,0 +1,11 @@
+front
+keyboard on
+ask What's on this page?
+wait 4
+words
+tab
+tab
+draw .verify/shades/keyboard-bubble/1-open-in-t3
+space
+wait 1
+front

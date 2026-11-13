@@ -9,9 +9,11 @@ import XCTest
 @MainActor
 final class PressWindowsTests: XCTestCase {
     /// A panel that never reaches the screen. It says it's showing once it's asked to, and has the keyboard once a test
-    /// says it does.
+    /// says it does, to AppKit too.
     private final class HiddenPanel: QuietPanel {
-        var key = false
+        var key = false {
+            didSet { Press.keyWindow = key ? self : nil }
+        }
         private var shown = false
         override var isVisible: Bool { shown }
         override var isKeyWindow: Bool { key }
@@ -61,6 +63,7 @@ final class PressWindowsTests: XCTestCase {
 
     override func tearDown() async throws {
         Motion.forced = motion
+        Press.keyWindow = nil
         QuietFocus.fullKeyboardAccess = { NSApplication.shared.isFullKeyboardAccessEnabled }
         MessagesInk.textSize = .standard
         MessagesInk.fontFamily = nil
