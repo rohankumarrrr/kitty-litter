@@ -80,8 +80,6 @@ final class ChannelsView: QuietView {
 
     /// How many places and threads ⌘[ can go back through.
     static let historyKept = 50
-    /// How tall the horizon at the panel's foot is, its glow and all.
-    private static let horizonHeight: CGFloat = 96
 
     let sidebar = ChannelSidebar()
     let pane = ChannelPane(role: .place)
@@ -309,7 +307,6 @@ final class ChannelsView: QuietView {
         let panel = panel
         MessagesInk.paper.setFill()
         NSBezierPath(roundedRect: panel, xRadius: Opal.Corner.panel, yRadius: Opal.Corner.panel).fill()
-        Opal.horizon(in: NSRect(x: panel.minX, y: panel.maxY - Self.horizonHeight, width: panel.width, height: Self.horizonHeight))
         guard selection.thread != nil else { return }
         MessagesInk.line.setFill()
         NSRect(x: threadPane.frame.minX, y: panel.minY, width: 1, height: panel.height).fill()

@@ -1,7 +1,7 @@
 import AppKit
 
-/// Opal's light, drawn the same way everywhere: the rimlit card, floating glass, the horizon, the Rimlight tile, the
-/// rim gradient, the meter and the field. Each draws in the current view, flipped or not, and `docs/design.md` has the
+/// Opal's light, drawn the same way everywhere: the rimlit card, floating glass, the Rimlight tile, the rim gradient,
+/// the meter and the field. Each draws in the current view, flipped or not, and `docs/design.md` has the
 /// recipe each follows.
 @MainActor
 extension Opal {
@@ -57,38 +57,6 @@ extension Opal {
         NSColor(white: 1, alpha: 0.08).setStroke()
         path.lineWidth = 1
         path.stroke()
-    }
-
-    /// The limb of a planet at the foot of a main window's panel, lit in the rim's light. Its ends meet the panel's
-    /// bottom corners and its top is 28 points up.
-    static func horizon(in rect: NSRect) {
-        guard let context = NSGraphicsContext.current?.cgContext, rect.width > 0 else { return }
-        let rise: CGFloat = 28
-        let radius = rect.width * rect.width / (8 * rise) + rise / 2
-        let center = NSPoint(x: rect.midX, y: bottom(of: rect) + up * (rise - radius))
-        let planet = CGPath(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2), transform: nil)
-        let across = (CGPoint(x: rect.minX, y: rect.midY), CGPoint(x: rect.maxX, y: rect.midY))
-        let colors = { (alpha: CGFloat) in [rimCyan, rimViolet, rimPink].map { Ink.hex($0).withAlphaComponent(alpha).cgColor } as CFArray }
-        let space = CGColorSpace(name: CGColorSpace.sRGB)!
-
-        context.saveGState()
-        context.clip(to: rect)
-        // The glow rising 56 points from the limb, in the rim's colours, faded with distance from it.
-        context.beginTransparencyLayer(auxiliaryInfo: nil)
-        context.drawLinearGradient(CGGradient(colorsSpace: space, colors: colors(0.1), locations: [0, 0.5, 1])!, start: across.0, end: across.1, options: [])
-        context.setBlendMode(.destinationIn)
-        let fade = CGGradient(colorsSpace: space, colors: [NSColor.black.cgColor, NSColor.black.withAlphaComponent(0).cgColor] as CFArray, locations: [0, 1])!
-        context.drawRadialGradient(fade, startCenter: center, startRadius: radius, endCenter: center, endRadius: radius + 56, options: [.drawsAfterEndLocation])
-        context.endTransparencyLayer()
-        context.addPath(planet)
-        context.setFillColor(Ink.hex(Opal.planet).cgColor)
-        context.fillPath()
-        context.addPath(planet)
-        context.setLineWidth(1)
-        context.replacePathWithStrokedPath()
-        context.clip()
-        context.drawLinearGradient(CGGradient(colorsSpace: space, colors: colors(0.7), locations: [0, 0.5, 1])!, start: across.0, end: across.1, options: [])
-        context.restoreGState()
     }
 
     /// A black tile lit from below, for a glyph or a kitten's cat to go on.

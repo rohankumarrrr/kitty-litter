@@ -52,8 +52,6 @@ enum Opal {
     static let cardBottom: UInt32 = 0x060508
     static let cardTopAlpha: CGFloat = 0.91
     static let cardBottomAlpha: CGFloat = 0.94
-    /// Below the horizon.
-    static let planet: UInt32 = 0x060508
 
     /// Each kitten's one identity colour, picked from this in its kitten.json: teal, sky, cornflower, indigo, orchid,
     /// plum, rosewood and sage.

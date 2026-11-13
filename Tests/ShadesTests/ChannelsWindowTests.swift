@@ -1626,7 +1626,7 @@ extension ChannelsWindowTests {
         return abs(color.redComponent - want.redComponent) < 0.02 && abs(color.greenComponent - want.greenComponent) < 0.02 && abs(color.blueComponent - want.blueComponent) < 0.02
     }
 
-    func testTheSidebarSitsOnTheChromeAndThePlaceOnAnInsetPanelWithTheHorizonAtItsFoot() throws {
+    func testTheSidebarSitsOnTheChromeAndThePlaceOnAPlainInsetPanel() throws {
         let view = view()
         view.show(book())
         view.select(.activity)
@@ -1639,28 +1639,9 @@ extension ChannelsWindowTests {
         XCTAssertTrue(isClose(try color(rep, at: NSPoint(x: panel.midX, y: 3), in: view), to: Opal.chrome))
         XCTAssertTrue(isClose(try color(rep, at: NSPoint(x: panel.minX + 1, y: panel.minY + 1), in: view), to: Opal.chrome), "the panel's corners are round")
         XCTAssertTrue(isClose(try color(rep, at: NSPoint(x: panel.maxX - 30, y: panel.minY + ChannelHeader.height + 30), in: view), to: Opal.page), "the place is on the page")
-
-        XCTAssertTrue(isClose(try color(rep, at: NSPoint(x: panel.midX, y: panel.maxY - 6), in: view), to: Opal.planet), "the planet below the horizon")
-        let limb = try (20...34).map { try color(rep, at: NSPoint(x: panel.midX, y: panel.maxY - CGFloat($0)), in: view) }
-        XCTAssertTrue(limb.contains { $0.blueComponent > 0.4 }, "its limb is lit in the rim's light 28 points up")
-    }
-
-    func testTheBoxAndTheLastRowComeToRestAboveTheHorizon() throws {
-        let view = view()
-        view.show(book(threads: 30))
-        view.select(.thread("t0", in: .channel(.of(steve))))
-        view.layoutSubtreeIfNeeded()
-        for pane in [view.pane, view.threadPane] {
-            let box = view.convert(pane.composer.frame, from: pane)
-            XCTAssertGreaterThan(box.height, 0)
-            XCTAssertLessThanOrEqual(box.maxY, panel(of: view).maxY - 18, "with the box's own padding, its words end over the limb, 28 points up at its highest")
+        for up in [4, 16, 28, 48] {
+            XCTAssertTrue(isClose(try color(rep, at: NSPoint(x: panel.midX, y: panel.maxY - CGFloat(up)), in: view), to: Opal.page), "its foot is plain page, \(up) points up, with nothing drawn across it")
         }
-
-        view.select(.threads)
-        view.layoutSubtreeIfNeeded()
-        view.pane.scrollOffset += view.pane.distanceFromBottom
-        let lowest = try XCTUnwrap(subviews(of: view.pane).compactMap { $0 as? ThreadDigestRowView }.map { view.convert($0.frame, from: $0.superview).maxY }.max())
-        XCTAssertLessThanOrEqual(lowest, panel(of: view).maxY - 28, "with no box, the last row comes to rest above it")
     }
 
     func testTheSidebarGrowsWithYourTextSize() throws {

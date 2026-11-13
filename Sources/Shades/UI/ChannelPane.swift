@@ -195,9 +195,6 @@ final class ChannelPane: QuietView {
     private static let stickyDistance: CGFloat = 40
     private static let topPad: CGFloat = 6
     private static let bottomPad: CGFloat = 14
-    /// Kept clear at the pane's foot, on top of the box's or the rows' own padding, so the horizon's limb, 28 points
-    /// up at its highest, never runs through words.
-    private static let limb: CGFloat = 18
     /// How many rows are laid out at a time.
     static let page = 60
     /// How far past what you can see rows are kept in the window, so scrolling finds them ready.
@@ -348,12 +345,11 @@ final class ChannelPane: QuietView {
 
     func arrange(force: Bool = false) {
         let box = composer.height
-        let foot = box > 0 ? Self.limb : 0
-        let bar = min(linkBar.height(for: bounds.width), max(bounds.height - ChannelHeader.height - box - foot, 0))
+        let bar = min(linkBar.height(for: bounds.width), max(bounds.height - ChannelHeader.height - box, 0))
         header.frame = NSRect(x: 0, y: 0, width: bounds.width, height: ChannelHeader.height)
-        scroll.frame = NSRect(x: 0, y: ChannelHeader.height, width: bounds.width, height: max(bounds.height - ChannelHeader.height - box - bar - foot, 0))
-        linkBar.frame = NSRect(x: 0, y: bounds.height - foot - box - bar, width: bounds.width, height: bar)
-        composer.frame = NSRect(x: 0, y: bounds.height - foot - box, width: bounds.width, height: box)
+        scroll.frame = NSRect(x: 0, y: ChannelHeader.height, width: bounds.width, height: max(bounds.height - ChannelHeader.height - box - bar, 0))
+        linkBar.frame = NSRect(x: 0, y: bounds.height - box - bar, width: bounds.width, height: bar)
+        composer.frame = NSRect(x: 0, y: bounds.height - box, width: bounds.width, height: box)
         if force { composer.needsLayout = true }
         guard stackedSize != scroll.contentSize else { return }
         let wasAtBottom = isNearBottom
@@ -891,8 +887,7 @@ final class ChannelPane: QuietView {
         let width = stackedSize.width
         let clipHeight = stackedSize.height
         let heights = views.map { $0.fit(width: width) }
-        // With no box under them, the rows scroll over the horizon and the last one comes to rest above it.
-        let total = heights.reduce(0, +) + Self.topPad + Self.bottomPad + (composer.height > 0 ? 0 : Self.limb)
+        let total = heights.reduce(0, +) + Self.topPad + Self.bottomPad
         var y = isLoneNote ? max((clipHeight - total) / 2, 0) : Self.topPad
         frames = heights.map { height in
             defer { y += height }

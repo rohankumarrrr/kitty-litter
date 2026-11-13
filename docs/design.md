@@ -9,7 +9,7 @@ This page is the spec. Every surface is built from it, and `DesignTests` checks 
 - [Kittens](#kittens)
 - [Type](#type)
 - [Shape and space](#shape-and-space)
-- [Light](#light): the rimlit card, floating glass, the horizon, the Rimlight tile, the rim gradient, the meter
+- [Light](#light): the rimlit card, floating glass, the Rimlight tile, the rim gradient, the meter
 - [Controls](#controls)
 - [Motion](#motion)
 - [Which surface gets which](#which-surface-gets-which)
@@ -19,7 +19,7 @@ This page is the spec. Every surface is built from it, and `DesignTests` checks 
 
 ## Principles
 
-- **Colour enters only as light.** Surfaces are violet-black. Colour comes in along an edge: a card lit from below, a tab underlined in the rim's light, a horizon at a window's foot. Nothing's body is tinted or washed in a gradient.
+- **Colour enters only as light.** Surfaces are violet-black. Colour comes in along an edge: a card lit from below, a tab underlined in the rim's light, the line over what's new. Nothing's body is tinted or washed in a gradient.
 - **The glow stays faint.** If it's the first thing you notice, it's too loud.
 - **High contrast.** Titles and figures are white, and everything you read holds 4.5:1. Low-contrast grey on grey reads as unfinished.
 - **Glass is only for what floats.** Menus, popovers, the Ask box and anything over other windows. Never content.
@@ -85,7 +85,7 @@ Selected words in a message are drawn the other way round, so they read whatever
 
 ### The rim
 
-`rimCyan` `#45CFFF` → `rimViolet` `#805CFF` → `rimPink` `#FF4FB8`, left to right or top to bottom. It's the only gradient, and only ever a line or a glow: a tab's underline, a meter's fill, the unread line, the horizon.
+`rimCyan` `#45CFFF` → `rimViolet` `#805CFF` → `rimPink` `#FF4FB8`, left to right or top to bottom. It's the only gradient, and only ever a line or a glow: a tab's underline, a meter's fill, the unread line.
 
 ## Kittens
 
@@ -180,17 +180,6 @@ What floats over other windows: menus, popovers, the Ask box, the kittens view, 
 - Words on it follow the [Words](#words) table for `raised`.
 - `Opal.glass(_:)` fills and edges any path, a balloon's tail included.
 
-### The horizon
-
-The limb of a planet at the foot of a main window's inset panel, lit in the rim's light.
-
-- A hairline arc across the panel's full width: its ends meet the panel's bottom corners, and its top, in the middle, is 28 points above the bottom.
-- The arc is stroked 1 point in the rim gradient, cyan at the left through violet to pink at the right, at 70%.
-- Above it, a glow in the same gradient rises 56 points, from 10% at the arc to clear.
-- Below it, the planet, in `#060508`.
-- It sits behind content and never takes a click. Content scrolls over it and comes to rest above it: a box, and a list's last row, end clear of its limb, so it never runs through words. It's the only colour a main window has when nothing needs you.
-- `Opal.horizon(in:)`.
-
 ### The Rimlight tile
 
 A white glyph on a black tile, lit from below in its hue: an Opal Dock icon, and the frame for a kitten's cat.
@@ -204,7 +193,7 @@ A white glyph on a black tile, lit from below in its hue: an Opal Dock icon, and
 
 ### The rim gradient
 
-The rim's three stops as a line: under the open tab (2 points, under the label's width), the unread line (1 point, across the pane), a meter's fill, and the horizon. `Opal.rim` is the gradient, and `Opal.rimLine(in:)` draws a line of it.
+The rim's three stops as a line: under the open tab (2 points, under the label's width), the unread line (1 point, across the pane), and a meter's fill. `Opal.rim` is the gradient, and `Opal.rimLine(in:)` draws a line of it.
 
 ### The meter
 
@@ -256,7 +245,7 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 
 | Surface | Gets |
 |---|---|
-| The Kitty Litter (the Messages window) | Chrome with the sidebar flush on it; the inset page panel with its toolbar; the horizon at the panel's foot; kittens on Rimlight tiles in their colours; message rows on the page, your own on `selected`; the box as a field |
+| The Kitty Litter (the Messages window) | Chrome with the sidebar flush on it; the inset page panel with its toolbar; kittens on Rimlight tiles in their colours; message rows on the page, your own on `selected`; the box as a field |
 | Settings | Floating glass, laid out as macOS's own Settings is: each setting's name on the left in body, a line on what it does under it in meta and secondary, and its control on the right, with hairlines between rows and small capitals over a group. Underlined tabs for its pages, switches, segmented controls, fields and pop-ups. Done is the one primary, at the bottom right |
 | The cat's bubble | A rimlit card in Shades' hue 245, at 20 corners and the widget card's padding, like an Opal desktop widget, since both float on the desktop. A kitten asking or reporting is lit in that kitten's colour. Its stepped tail carries the rim's light down to the cat. A command sits in a code block |
 | The Ask box | Floating glass, a field inside it, its mic a text button in the field, and a dropped file as a chip over what you type |
@@ -301,7 +290,7 @@ Where an app you use every day has a settled way of doing something, do it that 
 ## In code
 
 - `Sources/Shades/UI/Opal.swift`: every colour token, the kitten palette, the rim's stops, the corners and spacing, and the colour arithmetic (mixing, luminance, contrast).
-- `Sources/Shades/UI/OpalLight.swift`: the drawing helpers: `card`, `glass`, `horizon`, `tile`, `rim` and `rimLine`, `meter`, `field`.
+- `Sources/Shades/UI/OpalLight.swift`: the drawing helpers: `card`, `glass`, `tile`, `rim` and `rimLine`, `meter`, `field`.
 - `Sources/Shades/UI/MessagesInk.swift`: the roles views draw with, such as `paper`, `text`, `soft` and `link`, mapped onto Opal's tokens, and the type roles at your text size and font.
 - `Sources/Shades/UI/QuietButton.swift` and `QuietPanel.swift`: the buttons, the focus ring, and the floating panels.
 - `Sources/Shades/UI/SettingsControls.swift`: Settings' underlined tab, segmented control, switch and field.
