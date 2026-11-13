@@ -2,5 +2,17 @@ front
 kittens
 wait 1
 draw .verify/shades/kittens/0-open
+kittens
+question demo-login
+wait 3
+esc
+wait 1
+kittens
+wait 1
+draw .verify/shades/kittens/1-needs-you
+voiceover kittens
+voiceover press Pepper
+wait 2
+draw .verify/shades/kittens/2-pepper
 front
 windows

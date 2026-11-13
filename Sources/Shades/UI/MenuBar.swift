@@ -88,7 +88,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         messages.badge = messagesSummary?().map { NSMenuItemBadge(string: $0) }
         addAction("Ask…", shortcut: .ask) { [weak self] in self?.onAsk?() }
         addAction("Fix What I'm Looking At", shortcut: .fix) { [weak self] in self?.onFix?() }
-        addAction("Kittens") { [weak self] in self?.onKittens?() }.toolTip = "Or Shift-click the cat"
+        addAction(CatWords.kittensTitle) { [weak self] in self?.onKittens?() }.toolTip = "Or Shift-click the cat"
         if canPairPhone?() == true { addAction(CatWords.pairItem) { [weak self] in self?.onPairPhone?() } }
 
         if !extras.isEmpty {
@@ -101,6 +101,8 @@ final class MenuBar: NSObject, NSMenuDelegate {
         quiet.state = isDoNotDisturb?() == true ? .on : .off
         bind(quiet) { [weak self] in self?.onDoNotDisturb?() }
         menu.addItem(quiet)
+        // Settings… and Quit end the menu on their own, as they do in every Mac app's.
+        menu.addItem(.separator())
         addAction("Settings…") { [weak self] in self?.onSettings?() }
         addAction("Quit \(CatWords.appName)") { NSApp.terminate(nil) }
     }

@@ -6,14 +6,14 @@ setting Front door mode Accept edits
 settings voice
 setting Extra words Pawsniak, Clawde
 settings notifications
-setting Also when a session finishes
+setting When a session finishes
 notifications steve mute
 wait 1
 draw .verify/shades/settings/2-notifications
 settings messages
 setting Phone
 wait 2
-setting Open threads In T3
+setting Open threads in T3
 setting Text size Larger
 channels
 wait 2

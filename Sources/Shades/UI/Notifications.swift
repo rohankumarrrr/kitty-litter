@@ -18,17 +18,29 @@ final class NeedsYouNotifications: NSObject, UNUserNotificationCenterDelegate {
     /// macOS asks you once, the first time there's something to say.
     func post(_ alert: NeedsYouAlert) {
         guard let center else { return }
-        let title = CatWords.notification(alert)
+        let content = Self.content(alert)
         let id = alert.id
-        let thread = alert.threadID
         center.requestAuthorization(options: [.alert, .sound]) { allowed, _ in
             guard allowed else { return }
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.userInfo = ["thread": thread]
-            content.sound = .default
             center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
         }
+    }
+
+    /// Who in its title and what in its body, as Messages and Slack write theirs, and grouped by thread in
+    /// Notification Center. Work no kitten owns has no one to name, so macOS titles it with the app's name.
+    static func content(_ alert: NeedsYouAlert) -> UNNotificationContent {
+        let content = UNMutableNotificationContent()
+        if let who = alert.who {
+            let what = CatWords.notificationWhat(alert.kind)
+            content.title = who
+            content.body = what.prefix(1).uppercased() + what.dropFirst()
+        } else {
+            content.body = CatWords.notification(alert)
+        }
+        content.threadIdentifier = alert.threadID
+        content.userInfo = ["thread": alert.threadID]
+        content.sound = .default
+        return content
     }
 
     func withdraw(_ ids: [String]) {

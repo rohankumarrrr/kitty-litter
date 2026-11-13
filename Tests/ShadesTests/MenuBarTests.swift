@@ -27,4 +27,13 @@ final class MenuBarTests: XCTestCase {
         XCTAssertEqual(try item("Kittens", in: bar).toolTip, "Or Shift-click the cat")
         XCTAssertFalse(bar.shownItems.contains { $0.title.contains("...") }, "an ellipsis is one character")
     }
+
+    func testSettingsAndQuitEndTheMenuOnTheirOwn() throws {
+        let bar = MenuBar()
+        let items = bar.shownItems
+        let settings = try XCTUnwrap(items.firstIndex { $0.title == "Settings…" })
+        XCTAssertTrue(items[settings - 1].isSeparatorItem, "Do Not Disturb isn't in with them")
+        XCTAssertEqual(items[settings + 1].title, "Quit \(CatWords.appName)")
+        XCTAssertEqual(settings + 2, items.count)
+    }
 }

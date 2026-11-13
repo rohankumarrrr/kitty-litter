@@ -64,6 +64,8 @@ final class QuietButton: NSView {
     var symbol: String? { didSet { needsDisplay = true } }
     /// Its symbol in the accent, while what it started is going.
     var isLit = false { didSet { needsDisplay = true } }
+    /// Up and down chevrons after its words, as macOS marks a button that picks from a menu.
+    var showsChevrons = false { didSet { setFrameSize(NSSize(width: naturalWidth, height: Self.height)); needsDisplay = true } }
 
     let style: Style
     private var title: String
@@ -73,8 +75,9 @@ final class QuietButton: NSView {
     private var flashTimer: Timer?
 
     private static let height: CGFloat = 26
-    private static func width(of label: NSAttributedString, _ style: Style) -> CGFloat {
-        ceil(label.size().width) + (style == .text ? 14 : 24)
+    private static let chevronsWidth: CGFloat = 13
+    private var naturalWidth: CGFloat {
+        ceil(label.size().width) + (style == .text ? 14 : 24) + (showsChevrons ? Self.chevronsWidth : 0)
     }
 
     init(_ title: String, style: Style = .plain, onPress: (() -> Void)? = nil) {
@@ -82,7 +85,7 @@ final class QuietButton: NSView {
         self.style = style
         self.onPress = onPress
         super.init(frame: .zero)
-        setFrameSize(NSSize(width: Self.width(of: label, style), height: Self.height))
+        setFrameSize(NSSize(width: naturalWidth, height: Self.height))
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
         setAccessibilityLabel(title)
@@ -95,7 +98,7 @@ final class QuietButton: NSView {
     func retitle(_ word: String) {
         guard word != title else { return }
         title = word
-        setFrameSize(NSSize(width: Self.width(of: label, style), height: Self.height))
+        setFrameSize(NSSize(width: naturalWidth, height: Self.height))
         setAccessibilityLabel(word)
         needsDisplay = true
     }
@@ -151,7 +154,9 @@ final class QuietButton: NSView {
         } else {
             let text = label
             let size = text.size()
-            text.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+            let room = bounds.width - (showsChevrons ? Self.chevronsWidth : 0)
+            text.draw(at: NSPoint(x: (room - size.width) / 2, y: (bounds.height - size.height) / 2))
+            if showsChevrons { drawChevrons(rightOf: (room + size.width) / 2) }
         }
         if QuietFocus.shows(self) {
             // The primary's ring goes inside it, in white, since its fill is violet already.
@@ -163,19 +168,29 @@ final class QuietButton: NSView {
         }
     }
 
-    private func drawSymbol(_ name: String) {
-        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .medium))
+    private func drawChevrons(rightOf x: CGFloat) {
+        guard let image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 8, weight: .semibold))
         else { return }
-        let color = isLit ? MessagesInk.link : ink
-        let tinted = NSImage(size: image.size, flipped: false) { rect in
+        let size = image.size
+        tinted(image, ink).draw(in: NSRect(x: x + 5, y: (bounds.height - size.height) / 2, width: size.width, height: size.height))
+    }
+
+    private func tinted(_ image: NSImage, _ color: NSColor) -> NSImage {
+        NSImage(size: image.size, flipped: false) { rect in
             image.draw(in: rect)
             color.set()
             rect.fill(using: .sourceAtop)
             return true
         }
+    }
+
+    private func drawSymbol(_ name: String) {
+        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .medium))
+        else { return }
         let size = image.size
-        tinted.draw(in: NSRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height))
+        tinted(image, isLit ? MessagesInk.link : ink).draw(in: NSRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height))
     }
 
     override var acceptsFirstResponder: Bool { QuietFocus.allows(self) }

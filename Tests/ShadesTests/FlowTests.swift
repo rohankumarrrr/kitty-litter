@@ -2726,6 +2726,27 @@ final class FlowTests: XCTestCase {
         XCTAssertNil(stage.kittens)
     }
 
+    func testAKittenOpensWhereOpenGoesOrItsChannelIfItsDoneNothing() async {
+        let pepper = Kitten(name: "Pepper", role: "Finance", covers: "money", folder: "/k/pepper")
+        kittens = [steve, pepper]
+        let work = AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .running, model: "m", updatedAt: clock, projectPath: "/k/steve")
+        controller.threadsChanged([work])
+        let statuses = controller.kittenStatuses
+
+        controller.kittenPressed(statuses[0])
+        XCTAssertEqual(stage.selections.last, .thread("w", in: .channel(.of(steve))), "beside its channel, as Open does")
+        XCTAssertTrue(backend.opened.isEmpty)
+
+        controller.kittenPressed(statuses[1])
+        XCTAssertEqual(stage.selections.last, .channel(.of(pepper)), "nothing to open yet, so its channel")
+
+        var t3 = controller.settings
+        t3.openInMessages = false
+        controller.settingsEdited(t3)
+        controller.kittenPressed(statuses[0])
+        XCTAssertEqual(backend.opened, ["w"], "Settings' Open threads in T3")
+    }
+
     func testMessagesReadsAheadOnlyOnceLaunchHasSettled() async throws {
         kittens = [steve]
         let work = AgentThread(id: "w", title: "Tailor resume", projectTitle: "Steve Pawsniak", status: .completed, model: "m", updatedAt: clock, projectPath: steve.folder)

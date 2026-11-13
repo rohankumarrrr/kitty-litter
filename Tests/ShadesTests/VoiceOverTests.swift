@@ -29,17 +29,15 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertEqual(view.accessibilityLabel(), "Ask Shades")
     }
 
-    func testPressingAKittenWithVoiceOverOpensItsThread() {
-        var opened: [String] = []
-        let working = KittenRow(status: KittenStatus(kitten: steve, state: .working(sessions: 1), threadID: "t1"), renderer: CatRenderer())
-        working.onPress = { opened.append($0) }
-        XCTAssertTrue(working.accessibilityPerformPress())
-        XCTAssertEqual(opened, ["t1"], "the same as clicking it")
-
-        let new = KittenRow(status: KittenStatus(kitten: steve, state: .notSetUp), renderer: CatRenderer())
-        new.onPress = { opened.append($0) }
-        XCTAssertFalse(new.accessibilityPerformPress(), "a kitten with nothing to open is only words")
-        XCTAssertEqual(opened, ["t1"])
+    func testPressingAKittenWithVoiceOverDoesWhatAClickDoes() {
+        var pressed: [String] = []
+        for status in [KittenStatus(kitten: steve, state: .working(sessions: 1), threadID: "t1"), KittenStatus(kitten: steve, state: .notSetUp)] {
+            let row = KittenRow(status: status)
+            row.onPress = { pressed.append(status.threadID ?? "its channel") }
+            XCTAssertEqual(row.accessibilityRole(), .button)
+            XCTAssertTrue(row.accessibilityPerformPress())
+        }
+        XCTAssertEqual(pressed, ["t1", "its channel"], "a kitten with nothing to open yet still opens its channel")
     }
 
     func testVoiceOverHearsWhatTheBubbleShowsAndNothingMore() {
