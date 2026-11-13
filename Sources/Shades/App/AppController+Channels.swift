@@ -248,19 +248,19 @@ extension AppController {
             echo(startsThread: true)
             // The box waits for the new thread, so what you add next goes there too.
             let title = String(words.prefix { !$0.isNewline }.prefix(60))
-            give(words, to: kitten, snapshot: snapshot, onStarted: { [weak self] threadID in
+            give(words, to: kitten, snapshot: snapshot, youPicked: true, onStarted: { [weak self] threadID in
                 self?.channels.started(echoID, in: threadID, title: title)
             }, refused: { [weak self] in
                 self?.channels.failed(echoID, because: CatWords.cantTakeFiles(kitten.name))
             })
         case .thread(let id, let title, let report):
             echo(threadID: id, title: title, isReply: true)
-            guard let snapshot else { return reply(words, toThread: id, title: title, marking: report, echoID: echoID) }
+            guard let snapshot else { return reply(words, toThread: id, marking: report, echoID: echoID) }
             // The same as carrying on in a thread from the Ask box, which only takes what you dropped where your screen may go.
             guard let thread = latestThreads.first(where: { $0.id == id }) ?? channels.listed(id) else {
                 return channels.failed(echoID, because: CatWords.cantTakeFiles(title))
             }
-            forward(words, to: thread, snapshot: snapshot) { [weak self] in
+            forward(words, to: thread, snapshot: snapshot, youPicked: true) { [weak self] in
                 self?.channels.failed(echoID, because: CatWords.cantTakeFiles(title))
             } unheard: { [weak self] in
                 self?.channels.failed(echoID, because: $0)

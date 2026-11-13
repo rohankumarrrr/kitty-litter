@@ -3389,7 +3389,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(sent.prompt.text.hasPrefix("What's the risk?\n\n---\n"))
         XCTAssertFalse(sent.prompt.text.contains("Ship the fix?"), "what the row says isn't yours")
         XCTAssertFalse(sent.prompt.text.contains("secret report"))
-        XCTAssertEqual(stage.bubble, .line("Sent that to Clawde: Fix login.", threadID: "w"))
         XCTAssertNotNil(rows[0].repliedAt)
         XCTAssertFalse(rows[0].needsYou)
         XCTAssertEqual(stage.channelsUpdated.last?.waiting.reports.first?.repliedAt, rows[0].repliedAt, "the row dims straight away")
@@ -4768,6 +4767,44 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.channelsUpdated.last?.started["sent-topic"], "thread-1", "so Messages can follow it into its thread")
     }
 
+    /// Each line the cat said over itself, and each notice's caption.
+    private var catSaid: [String] {
+        stage.bubbles.compactMap { bubble in
+            switch bubble {
+            case .line(let text, _): return text
+            case .notice(let caption, _, _, _): return caption
+            default: return nil
+            }
+        }
+    }
+
+    /// Replying in a kitten's thread in Messages brought the cat up to say "Sent that to…", when Messages already
+    /// showed where it went.
+    func testTheCatDoesntSayWhereWordsWentWhenYouPickedWhereInMessages() async throws {
+        kittens = [steve, penny]
+        backend.projects["/k/penny"] = "project-penny"
+        controller.threadsChanged([AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: penny.folder)])
+        controller.channelsPressed()
+
+        await messages("And January?", to: .thread(id: "w", title: "Budget"), in: .of(penny))
+        controller.messagesAction(.send("Like this?", to: .thread(id: "w", title: "Budget"), shownIn: .of(penny), files: [picture]))
+        await settle()
+        controller.messagesAction(.startTopic("How's December looking?", with: penny, id: "sent-topic"))
+        await settle()
+        XCTAssertEqual(backend.sent.map(\.mode), [.forward, .forward, .start], "each went")
+        XCTAssertEqual(catSaid, [], "and the cat said nothing about it")
+
+        backend.forwardError = URLError(.notConnectedToInternet)
+        await messages("And February?", to: .thread(id: "w", title: "Budget"), in: .of(penny))
+        let problem = CatWords.problem(URLError(.notConnectedToInternet), while: .agents)
+        XCTAssertEqual(shownBook?.threads["w"]?.latest.failure, problem)
+        XCTAssertEqual(catSaid, [problem], "one that didn't go still says so")
+
+        backend.replies = [[.finished(fullText: "KITTEN: 2")], [.finished(fullText: "On it.")]]
+        await messages("Can I afford a new laptop?", to: .router)
+        XCTAssertEqual(Array(catSaid.dropFirst()), ["Passing it to Penny…", "Penny has this."], "and where the cat picked, it says where")
+    }
+
     /// Work the cat gave a kitten from #general lived in #general. Now it lives in the kitten's channel, where the
     /// kitten's own work is.
     func testWorkTheCatGivesAKittenLivesInThatKittensChannel() async throws {
@@ -4979,7 +5016,7 @@ final class FlowTests: XCTestCase {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")
         backend.streamError = URLError(.notConnectedToInternet)
-        controller.reply("Yes, ship it", toThread: rows[0].threadID, title: rows[0].threadTitle, marking: rows[0].id, echoID: "sent-1")
+        controller.reply("Yes, ship it", toThread: rows[0].threadID, marking: rows[0].id, echoID: "sent-1")
         await controller.forwardTask?.value
         XCTAssertTrue(rows[0].needsYou, "it's back")
         XCTAssertEqual(notified.count, 1)
@@ -5045,7 +5082,7 @@ final class FlowTests: XCTestCase {
         kittens = [inboxKitten]
         notifyingWhenFinished()
         await finish(work(), sorted: "DECISION: Ship the fix?")
-        controller.reply("Yes, ship it", toThread: rows[0].threadID, title: rows[0].threadTitle, marking: rows[0].id, echoID: "sent-1")
+        controller.reply("Yes, ship it", toThread: rows[0].threadID, marking: rows[0].id, echoID: "sent-1")
         await controller.forwardTask?.value
         XCTAssertEqual(withdrawn, [rows[0].id])
         XCTAssertEqual(notified.count, 1)

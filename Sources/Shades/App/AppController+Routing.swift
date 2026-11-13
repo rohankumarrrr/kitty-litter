@@ -151,7 +151,8 @@ extension AppController {
     /// `onStarted` hears the new thread, or `nil` if there isn't one.
     /// `asked` is `questionsAsked` when you sent them, if that was before now.
     /// `refused` is for where you sent it to say why a file couldn't go, which otherwise only the cat says.
-    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, as errand: Errand = .work, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil, refused: (() -> Void)? = nil) {
+    /// `youPicked` is for a kitten you picked yourself, where you can see its thread start, so the cat doesn't say who has it.
+    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, as errand: Errand = .work, youPicked: Bool = false, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil, refused: (() -> Void)? = nil) {
         // As with a session, a kitten with full access doesn't get to see text from a page. Nor does
         // one whose thread would count as a kitten's that isn't meant to see it, in a project they share.
         let sharesWithScreenless = loadKittens().contains {
@@ -190,6 +191,7 @@ extension AppController {
                 projectID: projectID,
                 name: kitten.name,
                 as: errand,
+                youPicked: youPicked,
                 missesScreen: missesScreen,
                 asked: asked,
                 onStarted: onStarted
@@ -200,11 +202,13 @@ extension AppController {
     /// Passes your words to a session that already has the context. The session's reply comes
     /// back the usual way, as a notice when it finishes.
     /// `refused` hears if it couldn't take what you dropped, so nothing went, and `unheard` why T3 never heard your words.
+    /// `youPicked` is for a thread you picked yourself, where you can see your words land, so the cat doesn't say where.
     func forward(
         _ words: String,
         to thread: AgentThread,
         snapshot: ScreenSnapshot?,
         correction: Bool = false,
+        youPicked: Bool = false,
         asked: Int? = nil,
         refused: (() -> Void)? = nil,
         unheard: ((String) -> Void)? = nil
@@ -229,7 +233,7 @@ extension AppController {
                 dispatchers.remove(thread.id)
                 noteCorrection(in: thread.id)
             }
-            say(CatWords.sentTo(thread), threadID: thread.id, fades: true)
+            if !youPicked { say(CatWords.sentTo(thread), threadID: thread.id, fades: true) }
             let shared = seesScreen ? snapshot : nil
             let text = Prompts.forwarded(
                 words: words,
