@@ -16,6 +16,8 @@ extension AppController {
         defer { picking = false }
         stage.hideInput()
         guard let region = await context.pickRegion() else { return }
+        // Asked before the cat runs there, from where the windows are rather than anything captured.
+        let onOwnWindow = stage.isOwnWindow(at: region)
         stage.catRun(toRegion: region) {}
         // Nothing gets pointed at here, and the box waits on this look.
         let capture = await startLook(CaptureOptions(includeElements: false, focusRegion: region)).value
@@ -43,7 +45,7 @@ extension AppController {
             allowsEmpty: canSee,
             onSubmit: { [weak self] description in
                 self?.fixIsOpen = false
-                self?.sendFix(description, snapshot: snapshot)
+                self?.sendFix(description, snapshot: snapshot, onOwnWindow: onOwnWindow)
             },
             onCancel: { [weak self] in
                 self?.fixIsOpen = false
@@ -52,7 +54,7 @@ extension AppController {
         ))
     }
 
-    func sendFix(_ description: String, snapshot: ScreenSnapshot) {
+    func sendFix(_ description: String, snapshot: ScreenSnapshot, onOwnWindow: Bool = false) {
         let said = description.isEmpty ? nil : description
         // An agent with full access can do anything, so text from a page doesn't get to reach it.
         let shared = settings.frontierMode == .fullAccess ? nil : snapshot
@@ -60,7 +62,7 @@ extension AppController {
         let what = said ?? shared?.appName.map { "Something in \($0)" } ?? "Something on screen"
         startFrontier(
             title: "\(Self.fixTitle)\(what)",
-            text: Prompts.fix(description: said, snapshot: shared, screenshotPath: path),
+            text: Prompts.fix(description: said, snapshot: shared, screenshotPath: path, onOwnWindow: onOwnWindow),
             snapshot: shared
         )
         // A moment at the spot to say it's on it, then back home, unless it's needed elsewhere.

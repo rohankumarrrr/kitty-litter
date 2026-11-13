@@ -1,0 +1,19 @@
+front
+channels
+wait 1
+windows
+fix
+wait 1
+submit The selected words look redacted
+wait 2
+draw .verify/shades/fix-own-window/1-on-the-kitty-litter
+messages
+wait 1
+windows
+fix
+wait 1
+submit The logo is squashed
+wait 2
+draw .verify/shades/fix-own-window/2-elsewhere
+front
+windows

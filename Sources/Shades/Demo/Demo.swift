@@ -44,6 +44,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         let id = nextID()
         print("[demo] started \(id) with \(prompt.attachments.count) attachments: \(Self.oneLine(prompt.text))")
+        if prompt.text.contains(Prompts.ownWindowNote) { print("[demo] told \(id) the marked spot is on The Kitty Litter's own window") }
         if prompt.text.contains("<report>") {
             let reply = sortedReplies.first { prompt.text.contains("Task: \($0.key)") }?.value ?? ""
             return AsyncThrowingStream { continuation in

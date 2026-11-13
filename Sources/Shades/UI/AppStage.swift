@@ -196,6 +196,13 @@ final class AppStage: CatStage {
         bubble.reposition()
     }
 
+    /// Asks the window server which window a click there would reach, which reads where windows are and nothing in
+    /// them. The cat and its word let clicks through, so they never count, and one of ours behind your work doesn't.
+    func isOwnWindow(at region: CGRect) -> Bool {
+        let front = NSWindow.windowNumber(at: NSPoint(x: region.midX, y: region.midY), belowWindowWithWindowNumber: 0)
+        return NSApp.windows.contains { $0.isVisible && $0.windowNumber == front }
+    }
+
     // MARK: - The bubble and input
 
     func showBubble(_ content: BubbleContent?) {

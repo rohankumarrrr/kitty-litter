@@ -47,6 +47,8 @@ final class FakeStage: CatStage {
     var arriveImmediately = true
     var isPointerOnBubble = false
     var pendingArrival: (() -> Void)?
+    /// One of the app's own windows is in front where a spot is marked.
+    var ownWindowAt: CGRect?
 
     init(log: Log) { self.log = log }
 
@@ -72,6 +74,7 @@ final class FakeStage: CatStage {
         arrived()
     }
     func catGoHome() { wentHome += 1 }
+    func isOwnWindow(at region: CGRect) -> Bool { ownWindowAt?.contains(CGPoint(x: region.midX, y: region.midY)) == true }
     func showBubble(_ content: BubbleContent?) { bubbles.append(content) }
     var isInputVisible: Bool { input != nil }
     func showInput(_ request: InputRequest) {
