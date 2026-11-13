@@ -1074,16 +1074,33 @@ final class MessageRowView: ChannelRowView {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         let font = MessagesInk.font(ofSize: MessagesInk.meta, weight: .medium)
-        let label = NSMutableAttributedString(string: look.name, attributes: [.font: font, .foregroundColor: MessagesInk.soft, .paragraphStyle: truncating])
+        let after = NSMutableAttributedString()
         if message.earlierNotes > 0 {
-            label.append(NSAttributedString(string: "  ·  ", attributes: [.font: font, .foregroundColor: MessagesInk.soft]))
+            after.append(NSAttributedString(string: "  ·  ", attributes: [.font: font, .foregroundColor: MessagesInk.soft]))
             // Only T3 has what they said, so they're a way there.
-            label.append(NSAttributedString(string: CatWords.earlierNotes(message.earlierNotes), attributes: [.font: font, .foregroundColor: onOpen == nil ? MessagesInk.soft : MessagesInk.link, .earlierNotes: true]))
+            after.append(NSAttributedString(string: CatWords.earlierNotes(message.earlierNotes), attributes: [.font: font, .foregroundColor: onOpen == nil ? MessagesInk.soft : MessagesInk.link, .earlierNotes: true]))
         }
-        label.append(NSAttributedString(string: "  ·  \(time)", attributes: [.font: font, .foregroundColor: MessagesInk.soft]))
-        label.addAttribute(.paragraphStyle, value: truncating, range: NSRange(location: 0, length: label.length))
+        after.append(NSAttributedString(string: "  ·  \(time)", attributes: [.font: font, .foregroundColor: MessagesInk.soft]))
         let room = width - Self.margin - MessageToolbar.width(of: 1) - Self.toolbarGap - Self.textLeft - 2
-        return (label, NSRect(x: Self.textLeft + 2, y: top, width: max(min(ceil(label.size().width), room), 0), height: height))
+        let label = NSMutableAttributedString(string: look.name, attributes: [.font: font, .foregroundColor: MessagesInk.soft])
+        label.append(after)
+        var wide = ceil(label.size().width)
+        if wide > room {
+            // Short of room, the name gives way, since its cat says who it is, and the notes stay whole to press.
+            let name = Self.shortened(look.name, to: room - ceil(after.size().width), font: font)
+            label.replaceCharacters(in: NSRange(location: 0, length: (look.name as NSString).length), with: name)
+            wide = ceil(label.size().width)
+        }
+        label.addAttribute(.paragraphStyle, value: truncating, range: NSRange(location: 0, length: label.length))
+        return (label, NSRect(x: Self.textLeft + 2, y: top, width: max(min(wide, room), 0), height: height))
+    }
+
+    /// `name` cut to fit in `width`, ending in an ellipsis, and never shorter than its first letter.
+    private static func shortened(_ name: String, to width: CGFloat, font: NSFont) -> String {
+        let fits = { (words: String) in ceil(NSAttributedString(string: words, attributes: [.font: font]).size().width) <= width }
+        var kept = name
+        while kept.count > 1, !fits(kept + "…") { kept.removeLast() }
+        return kept.trimmingCharacters(in: .whitespaces) + "…"
     }
 
     private func drawHead() {
