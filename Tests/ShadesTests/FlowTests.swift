@@ -2655,6 +2655,25 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
     }
 
+    /// Check Myself pressed again while the first was still waiting on T3 left the first one's follow-up going, so it
+    /// reported again once T3 answered, and could say stuck on its own, earlier clock.
+    func testOnlyTheNewestOfOverlappingChecksIsReported() async {
+        let (answered, answer) = AsyncStream<Void>.makeStream()
+        backend.silentUntil = Task { for await _ in answered { break } }
+        controller.threadListArrived = true
+        controller.t3Wait = 0.2
+        controller.checkMyselfPressed()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        controller.checkMyselfPressed()
+        await controller.healthTask?.value
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        answer.finish()
+        await controller.t3Recheck?.value
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(reportedHealth.map { $0.first { $0.check == "T3 Code" }?.ok }, [false, true], "the newest check's two reports, and nothing from the one it took over from")
+        XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
+    }
+
     /// Only a Keychain call can hold signing in for good, so a dialog is named once T3's been quiet past every other limit.
     func testT3ThatNeverAnswersIsCalledStuckAfterAWhile() async {
         backend.neverAnswers = true

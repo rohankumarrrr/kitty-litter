@@ -38,7 +38,7 @@ extension AppController {
     /// You asked: go through everything, and say how it went, and again if T3 answers late.
     func checkMyselfPressed() {
         healthTask = Task {
-            sayHowItWent(await runHealthCheck(then: { [weak self] in self?.sayHowItWent($0) }))
+            await runHealthCheck(each: { [weak self] in self?.sayHowItWent($0) })
         }
     }
 
@@ -50,30 +50,28 @@ extension AppController {
         post(caption: CatWords.selfCheckCaption, text: text, threadID: nil)
     }
 
-    /// `later` hears each report that goes out after this returns, once T3 answers or is stuck.
+    /// `each` hears every report this check writes, the late ones too, until a newer check takes over.
     @discardableResult
-    func runHealthCheck(then later: (([HealthFinding]) -> Void)? = nil) async -> [HealthFinding] {
-        t3Recheck?.cancel()
+    func runHealthCheck(each: (([HealthFinding]) -> Void)? = nil) async -> [HealthFinding] {
+        healthChecks += 1
+        let check = healthChecks
         let kittens = loadKittens().filter { !$0.planned }
         let asking = Task { await askT3(about: kittens) }
         // A new build can't read the last one's sign-in, so it signs in again, which can take T3 a while, and nothing can
         // cut a Keychain dialog short. So the report goes out after `t3Wait` either way, and again once T3 answers. The
         // install waits for the first, and a copy that never reports gets rolled back.
         if let answers = await within(t3Wait, { await asking.value }) {
-            return report(answers, kittens: kittens)
+            return report(answers, kittens: kittens, check: check, each: each)
         }
-        t3Recheck = Task {
-            var late = await within(t3StuckAfter, { await asking.value })
-            if late == nil, !Task.isCancelled {
-                let findings = report(T3Answers(silence: .stuck), kittens: kittens)
-                later?(findings)
-                late = await asking.value
+        if check == healthChecks {
+            t3Recheck = Task {
+                if await within(t3StuckAfter, { await asking.value }) == nil {
+                    report(T3Answers(silence: .stuck), kittens: kittens, check: check, each: each)
+                }
+                report(await asking.value, kittens: kittens, check: check, each: each)
             }
-            guard let late, !Task.isCancelled else { return }
-            let findings = report(late, kittens: kittens)
-            later?(findings)
         }
-        return report(T3Answers(silence: .connecting), kittens: kittens)
+        return report(T3Answers(silence: .connecting), kittens: kittens, check: check, each: each)
     }
 
     /// Everything the self-check asks T3, as one, so an answer that comes late can still be reported whole.
@@ -92,7 +90,7 @@ extension AppController {
     }
 
     @discardableResult
-    private func report(_ t3: T3Answers, kittens: [Kitten]) -> [HealthFinding] {
+    private func report(_ t3: T3Answers, kittens: [Kitten], check: Int, each: (([HealthFinding]) -> Void)?) -> [HealthFinding] {
         var facts = systemFacts()
         facts.inboxSaves = !inboxSaveFailed
         facts.shortcutsTaken = takenShortcuts
@@ -118,8 +116,11 @@ extension AppController {
         }
 
         let findings = HealthCheck.findings(from: facts)
+        // A newer check has started, so what this one found is already out of date.
+        guard check == healthChecks else { return findings }
         health = findings
         reportHealth(findings)
+        each?(findings)
         return findings
     }
 

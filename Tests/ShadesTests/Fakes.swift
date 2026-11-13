@@ -355,9 +355,12 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     // These run off the main actor, and more than one at once when turns overlap, so what they share is locked.
     /// T3 never answers, as when signing in waits on a Keychain dialog.
     var neverAnswers = false
+    /// T3 answers nothing until this ends, then everything at once, as when a new build has signed in again.
+    var silentUntil: Task<Void, Never>?
 
     func projectID(atPath path: String) async -> String? {
         if lock.withLock({ neverAnswers }) { try? await Task.sleep(nanoseconds: 3_600_000_000_000) }
+        if let silent = lock.withLock({ silentUntil }) { await silent.value }
         let happening = lock.withLock { () -> (() async -> Void)? in
             defer { whileFindingAProject = nil }
             return whileFindingAProject

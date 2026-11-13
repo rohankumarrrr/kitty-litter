@@ -203,6 +203,8 @@ final class AppController {
     var t3StuckAfter: TimeInterval = 120
     /// Reports again once T3 answers a self-check that went out without it.
     var t3Recheck: Task<Void, Never>?
+    /// Goes up with every self-check, so only the newest one's findings are written or said.
+    var healthChecks = 0
     /// How long after T3's first list Messages reads ahead, so it never competes with everything else a launch asks T3.
     var warmDelay: Duration = .seconds(15)
     /// Whether the quick thread is on its first turn, with no conversation worth keeping yet.
