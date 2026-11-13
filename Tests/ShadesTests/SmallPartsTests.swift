@@ -724,7 +724,7 @@ final class HealthCheckTests: XCTestCase {
         XCTAssertEqual(problems.map(\.check), [HealthCheck.signature, "screen recording"])
         let signature = try XCTUnwrap(problems.first)
         XCTAssertEqual(signature, HealthCheck.noTeam)
-        XCTAssertTrue(try XCTUnwrap(signature.problem).contains("phone will need pairing again"))
+        XCTAssertTrue(try XCTUnwrap(signature.problem).contains("A paired phone will need pairing again"), "true whether or not a phone was ever paired")
         XCTAssertTrue(try XCTUnwrap(signature.fix).contains("Apple Development"))
     }
 

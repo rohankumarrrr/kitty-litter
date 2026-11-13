@@ -80,7 +80,7 @@ enum HealthCheck {
     static let noTeam = HealthFinding(
         check: signature,
         ok: false,
-        problem: "I'm not signed by a developer team, so the next install of me can't read what I keep in the Keychain. Your phone will need pairing again, and I'll sign in to T3 Code again.",
+        problem: "I'm not signed by a developer team, so the next install of me can't read what I keep in the Keychain. A paired phone will need pairing again, and I'll sign in to T3 Code again.",
         fix: "Add your Apple ID in Xcode › Settings › Accounts, make an Apple Development certificate under Manage Certificates, then run scripts/install.sh."
     )
 
