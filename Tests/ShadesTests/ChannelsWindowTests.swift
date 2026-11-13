@@ -756,7 +756,7 @@ final class ChannelsWindowTests: XCTestCase {
             return window.view
         }
         func drag(_ view: ChannelsView, to x: CGFloat) throws {
-            let edge = try XCTUnwrap(view.hitTest(NSPoint(x: view.threadPane.frame.minX, y: 200)) as? ThreadEdge, "the pointer meets the edge, not a pane")
+            let edge = try XCTUnwrap(view.hitTest(NSPoint(x: view.threadPane.frame.minX, y: 200)) as? ResizeEdge, "the pointer meets the edge, not a pane")
             let event = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDragged, location: NSPoint(x: x, y: 200), modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
             edge.mouseDragged(with: event)
             view.layoutSubtreeIfNeeded()
@@ -764,7 +764,7 @@ final class ChannelsWindowTests: XCTestCase {
         let window = ChannelsWindow(defaults: defaults)
         let view = opened(window)
         let width = ChannelsWindow.size.width
-        XCTAssertEqual(view.threadPane.frame.width, ChannelsView.threadWidth(in: width), "today's width until you drag it")
+        XCTAssertEqual(view.threadPane.frame.width, ChannelsView.threadWidth(in: view.panel.width), "today's width until you drag it")
 
         try drag(view, to: view.threadPane.frame.maxX - 440)
         XCTAssertEqual(view.threadPane.frame.width, 440)
@@ -790,6 +790,125 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.threadPane.frame.width, 440, "and gives it back")
 
         XCTAssertEqual(opened(ChannelsWindow(defaults: defaults)).threadPane.frame.width, 440, "kept across a launch")
+    }
+
+    func testADraggedSidebarKeepsItsWidthWithinLimitsHidesAsAMacsDoesAndStaysThatWayAcrossALaunch() throws {
+        let suite = "ChannelsWindowTests.sidebarWidth"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        func opened(_ window: ChannelsWindow) -> ChannelsView {
+            window.panel.setContentSize(ChannelsWindow.size)
+            window.view.show(book(threads: 2))
+            window.view.select(.thread("t0", in: .channel(.of(steve))))
+            window.view.layoutSubtreeIfNeeded()
+            return window.view
+        }
+        // What the window's own hit test finds under the pointer, then its mouse down, drags and up, in-process.
+        func edge(of view: ChannelsView) throws -> ResizeEdge {
+            let frame = try XCTUnwrap(view.superview)
+            let found = frame.hitTest(view.convert(NSPoint(x: view.panel.minX, y: 200), to: nil))
+            XCTAssertTrue(found === view.sidebarEdge, "the pointer meets the sidebar's edge, not a row or the place")
+            return try XCTUnwrap(found as? ResizeEdge)
+        }
+        func send(_ type: NSEvent.EventType, to edge: ResizeEdge, at x: CGFloat) throws {
+            let at = edge.superview?.convert(NSPoint(x: x, y: 200), to: nil) ?? .zero
+            let event = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: at, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+            switch type {
+            case .leftMouseDown: edge.mouseDown(with: event)
+            case .leftMouseDragged: edge.mouseDragged(with: event)
+            default: edge.mouseUp(with: event)
+            }
+            edge.superview?.layoutSubtreeIfNeeded()
+        }
+        func drag(_ view: ChannelsView, to x: CGFloat) throws {
+            let edge = try edge(of: view)
+            try send(.leftMouseDown, to: edge, at: view.panel.minX)
+            try send(.leftMouseDragged, to: edge, at: x)
+            try send(.leftMouseUp, to: edge, at: x)
+        }
+        let window = ChannelsWindow(defaults: defaults)
+        let view = opened(window)
+        XCTAssertEqual(view.sidebar.frame.width, ChannelSidebar.width, "today's width until you drag it")
+
+        try drag(view, to: 300)
+        XCTAssertEqual(view.sidebar.frame.width, 300)
+        XCTAssertEqual(view.pane.frame.minX, 300, "the place sits flush against it")
+        XCTAssertTrue(view.sidebar.rows.allSatisfy { $0.frame.width == 300 - 16 }, "and its rows follow")
+        XCTAssertEqual(view.threadPane.frame.maxX, ChannelsWindow.size.width - Opal.Space.inset)
+
+        try drag(view, to: 1000)
+        XCTAssertLessThanOrEqual(view.sidebar.frame.width, ChannelsView.sidebarWidths.upperBound)
+        XCTAssertGreaterThanOrEqual(view.pane.frame.width, ChannelsView.narrowestPlace, "the place still reads")
+        XCTAssertGreaterThanOrEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound, "and so does the thread")
+        try drag(view, to: 100)
+        XCTAssertEqual(view.sidebar.frame.width, ChannelsView.sidebarWidths.lowerBound, "no narrower than its names can read")
+        XCTAssertFalse(view.sidebar.isHidden)
+
+        let held = try edge(of: view)
+        try send(.leftMouseDown, to: held, at: view.panel.minX)
+        try send(.leftMouseDragged, to: held, at: 40)
+        XCTAssertTrue(view.sidebar.isHidden, "past half its narrowest it hides, as a Mac's sidebars do")
+        XCTAssertTrue(view.sidebarEdge.isHidden)
+        XCTAssertEqual(view.pane.frame.minX, Opal.Space.inset, "and the panel's inset from the window on all four sides")
+        try send(.leftMouseDragged, to: held, at: 260)
+        try send(.leftMouseUp, to: held, at: 260)
+        XCTAssertFalse(view.sidebar.isHidden, "coming back in the same drag shows it again")
+        XCTAssertEqual(view.sidebar.frame.width, 260)
+
+        XCTAssertTrue(view.perform(.toggleSidebar))
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(view.sidebar.isHidden, "⌘B hides it")
+        XCTAssertEqual(view.panel, NSRect(x: Opal.Space.inset, y: Opal.Space.inset, width: ChannelsWindow.size.width - Opal.Space.inset * 2, height: ChannelsWindow.size.height - Opal.Space.inset * 2))
+        XCTAssertGreaterThan(view.pane.frame.width, ChannelsView.narrowestPlace, "and the place gets its room")
+        let header = try XCTUnwrap(subviews(of: view.pane).compactMap { $0 as? ChannelHeader }.first)
+        XCTAssertNotNil(header.windowButtonsEnd, "the window's buttons sit over the place's toolbar, which starts after them")
+        XCTAssertTrue(view.perform(.toggleSidebar))
+        view.layoutSubtreeIfNeeded()
+        XCTAssertFalse(view.sidebar.isHidden)
+        XCTAssertEqual(view.sidebar.frame.width, 260, "and shows it again as wide as it was")
+        XCTAssertNil(header.windowButtonsEnd, "and they're back on the sidebar")
+
+        window.panel.setContentSize(ChannelsWindow.minimumSize)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.sidebar.frame.width, ChannelSidebar.width, "a narrower window takes from the sidebar before the place or the thread")
+        XCTAssertEqual(view.pane.frame.width, ChannelsView.narrowestPlace)
+        XCTAssertEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound)
+        window.panel.setContentSize(ChannelsWindow.size)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.sidebar.frame.width, 260, "and gives it back")
+
+        view.perform(.toggleSidebar)
+        let relaunched = opened(ChannelsWindow(defaults: defaults))
+        XCTAssertTrue(relaunched.sidebar.isHidden, "still hidden after a launch, as a Mac's sidebars stay")
+        relaunched.perform(.toggleSidebar)
+        relaunched.layoutSubtreeIfNeeded()
+        XCTAssertEqual(relaunched.sidebar.frame.width, 260, "and as wide as you left it")
+    }
+
+    func testCommandBHidesTheSidebarFromABoxWithWordsInItAndLeavesThemThere() throws {
+        QuietFocus.fullKeyboardAccess = { true }
+        defer { QuietFocus.fullKeyboardAccess = { NSApplication.shared.isFullKeyboardAccessEnabled } }
+        let view = view()
+        let window = keyWindow(showing: view)
+        view.show(book())
+        view.select(inThread)
+        view.layoutSubtreeIfNeeded()
+        let box = view.threadPane.composer.textView
+        XCTAssertTrue(window.makeFirstResponder(box))
+        box.insertText("Half a thought", replacementRange: NSRange(location: NSNotFound, length: 0))
+        let key = try XCTUnwrap(MessagesShortcut(keyCode: 11, characters: "b", modifiers: .command))
+        XCTAssertFalse(key == .escape || key.movesInText, "the box doesn't keep it for itself")
+        XCTAssertTrue(view.perform(key))
+        XCTAssertTrue(view.isSidebarHidden)
+        XCTAssertTrue(window.firstResponder === box, "the box keeps the keyboard")
+        XCTAssertEqual(box.string, "Half a thought", "and its words, none of them bold")
+
+        view.perform(key)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(window.makeFirstResponder(view.sidebar.shortcutsButton), "Tab can reach the sidebar's buttons")
+        view.perform(key)
+        XCTAssertFalse((window.firstResponder as? NSView)?.isDescendant(of: view.sidebar) ?? false, "and none keeps the keyboard once it's hidden")
     }
 
     func testThreadsOpensEachThreadBesideTheList() throws {

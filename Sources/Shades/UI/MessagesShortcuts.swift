@@ -24,6 +24,8 @@ enum MessagesShortcut: Hashable {
     case threads, activity
     /// ⌘N, the box of the place you're on.
     case compose
+    /// ⌘B, which hides the sidebar or shows it again, as in T3 Code.
+    case toggleSidebar
     /// ⌘W.
     case close
     /// ⌘/, every shortcut.
@@ -65,6 +67,7 @@ enum MessagesShortcut: Hashable {
             case (_, "k"): self = .jump
             case (_, "f"): self = .search
             case (_, "n"): self = .compose
+            case (_, "b"): self = .toggleSidebar
             case (_, "w"): self = .close
             case (_, "/"): self = .cheatsheet
             case (_, ","): self = .settings
@@ -411,10 +414,22 @@ final class CheatsheetView: QuietView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    private var card: NSRect {
-        let rows = CatWords.shortcutGroups.reduce(0) { $0 + $1.rows.count }
-        let height = 56 + CGFloat(CatWords.shortcutGroups.count) * Self.headingHeight + CGFloat(rows) * Self.rowHeight + 16
-        let width = min(Self.width, bounds.width - 40)
+    private typealias Groups = ArraySlice<(title: String, rows: [(keys: String, does: String)])>
+
+    private static func height(of groups: Groups) -> CGFloat {
+        56 + CGFloat(groups.count) * headingHeight + CGFloat(groups.reduce(0) { $0 + $1.rows.count }) * rowHeight + 16
+    }
+
+    /// One column, or the first group beside the rest where one won't fit, as in a short window.
+    private var columns: [Groups] {
+        let groups = CatWords.shortcutGroups[...]
+        return Self.height(of: groups) + 30 <= bounds.height ? [groups] : [groups.prefix(1), groups.dropFirst()]
+    }
+
+    var card: NSRect {
+        let columns = columns
+        let height = columns.map(Self.height).max() ?? 0
+        let width = min(Self.width * CGFloat(columns.count), bounds.width - 40)
         return NSRect(x: (bounds.width - width) / 2, y: max((bounds.height - height) / 2, 20), width: width, height: height)
     }
 
@@ -436,23 +451,28 @@ final class CheatsheetView: QuietView {
 
         NSAttributedString(string: CatWords.shortcutsTitle, attributes: [.font: MessagesInk.font(ofSize: 15, weight: .semibold), .foregroundColor: MessagesInk.strong])
             .draw(at: NSPoint(x: card.minX + 22, y: card.minY + 18))
-        var y = card.minY + 56
-        for group in CatWords.shortcutGroups {
-            MessagesInk.label(group.title, size: 11).draw(at: NSPoint(x: card.minX + 22, y: y + 13))
-            y += Self.headingHeight
-            for row in group.rows {
-                NSAttributedString(string: row.does, attributes: [.font: MessagesInk.font(ofSize: 13), .foregroundColor: MessagesInk.text])
-                    .draw(at: NSPoint(x: card.minX + 22, y: y + 4))
-                let keys = NSAttributedString(string: row.keys, attributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .medium), .foregroundColor: MessagesInk.text])
-                let size = keys.size()
-                let chip = NSRect(x: card.maxX - 22 - ceil(size.width) - 16, y: y + 2, width: ceil(size.width) + 16, height: 22)
-                let shape = NSBezierPath(roundedRect: chip.insetBy(dx: 0.5, dy: 0.5), xRadius: 10.5, yRadius: 10.5)
-                Ink.hex(Opal.control).setFill()
-                shape.fill()
-                Ink.hex(Opal.fieldEdge).setStroke()
-                shape.stroke()
-                keys.draw(at: NSPoint(x: chip.midX - size.width / 2, y: chip.midY - size.height / 2))
-                y += Self.rowHeight
+        let columns = columns
+        let columnWidth = card.width / CGFloat(columns.count)
+        for (index, column) in columns.enumerated() {
+            let left = card.minX + CGFloat(index) * columnWidth
+            var y = card.minY + 56
+            for group in column {
+                MessagesInk.label(group.title, size: 11).draw(at: NSPoint(x: left + 22, y: y + 13))
+                y += Self.headingHeight
+                for row in group.rows {
+                    NSAttributedString(string: row.does, attributes: [.font: MessagesInk.font(ofSize: 13), .foregroundColor: MessagesInk.text])
+                        .draw(at: NSPoint(x: left + 22, y: y + 4))
+                    let keys = NSAttributedString(string: row.keys, attributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .medium), .foregroundColor: MessagesInk.text])
+                    let size = keys.size()
+                    let chip = NSRect(x: left + columnWidth - 22 - ceil(size.width) - 16, y: y + 2, width: ceil(size.width) + 16, height: 22)
+                    let shape = NSBezierPath(roundedRect: chip.insetBy(dx: 0.5, dy: 0.5), xRadius: 10.5, yRadius: 10.5)
+                    Ink.hex(Opal.control).setFill()
+                    shape.fill()
+                    Ink.hex(Opal.fieldEdge).setStroke()
+                    shape.stroke()
+                    keys.draw(at: NSPoint(x: chip.midX - size.width / 2, y: chip.midY - size.height / 2))
+                    y += Self.rowHeight
+                }
             }
         }
     }
@@ -505,6 +525,9 @@ extension ChannelsView {
             return true
         case .activity:
             select(.activity)
+            return true
+        case .toggleSidebar:
+            isSidebarHidden.toggle()
             return true
         case .compose:
             // The place's own box, or the thread's where the place has none, such as Threads.

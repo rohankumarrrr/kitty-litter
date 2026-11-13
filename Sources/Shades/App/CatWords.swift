@@ -207,6 +207,7 @@ enum CatWords {
             ("⌘F", "Search messages"),
             ("⌘⇧T", "Threads"),
             ("⌘⇧M", "Activity"),
+            ("⌘B", "Hide or show the sidebar"),
         ]),
         ("Threads", [
             ("⌘⇧[  ⌘⇧]", "Thread above or below"),

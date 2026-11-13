@@ -127,8 +127,19 @@ final class ChannelHeader: QuietView {
         window?.performDrag(with: event)
     }
 
+    /// Where the window's own buttons end, while they sit over the header, as they do with the sidebar hidden.
+    var windowButtonsEnd: CGFloat? {
+        [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton]
+            .compactMap { window?.standardWindowButton($0) }
+            .filter { !$0.isHidden }
+            .map { convert($0.bounds, from: $0) }
+            .filter { $0.intersects(bounds) }
+            .map(\.maxX).max()
+    }
+
     override func draw(_ dirtyRect: NSRect) {
-        var left = ChannelRowView.margin
+        // After the window's buttons, as a Mac toolbar starts, when there's no sidebar for them to sit on.
+        var left = windowButtonsEnd.map { max($0 + 14, ChannelRowView.margin) } ?? ChannelRowView.margin
         if let cat {
             let tile = NSRect(x: left, y: ((Self.height - Self.tileSide) / 2).rounded(), width: Self.tileSide, height: Self.tileSide)
             Opal.tile(in: tile, light: cat.jacket.map(Opal.Light.of) ?? .shades)

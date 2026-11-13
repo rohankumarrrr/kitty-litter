@@ -143,6 +143,19 @@ enum DemoBench {
         window.panel.setFrame(frame, display: true)
         report("resize", resizes)
 
+        // Narrower, since the narrowest window has no room for a wider sidebar.
+        var drags: [Double] = []
+        for step in 1...10 {
+            drags.append(time(window) { view.dragSidebarEdge(to: ChannelSidebar.width - CGFloat(step * 4)) })
+        }
+        view.chosenSidebarWidth = nil
+        report("drag-sidebar", drags)
+        var hides: [Double] = []
+        for _ in 0..<rounds * 2 {
+            hides.append(time(window) { view.perform(.toggleSidebar) })
+        }
+        report("key-sidebar", hides)
+
         let book = controller.channels.open(threads: [])
         var phones: [Double] = []
         for _ in 0..<rounds * 2 {

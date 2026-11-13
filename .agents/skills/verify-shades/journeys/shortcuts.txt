@@ -41,6 +41,10 @@ key shortcuts
 wait 0.5
 draw .verify/shades/shortcuts/7-shortcuts
 key esc
+key sidebar
+wait 0.5
+draw .verify/shades/shortcuts/8-no-sidebar
+key sidebar
 key 4
 key new
 windows

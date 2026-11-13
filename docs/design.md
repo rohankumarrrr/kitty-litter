@@ -142,7 +142,7 @@ The face is the system's, SF Pro, unless you pick another in Settings, which eve
 | Sheet | 24 |
 | Button, chip, segmented control, count | Capsule |
 
-- **A main window:** the sidebar sits flush on the chrome. The content is one panel in `page`, inset 8 from the window on its three free sides, with 15 corners and a `chromeBorder` hairline at its edge. Its toolbar is pinned to the panel's top: the title in the toolbar role, one line under it, and its actions on the right, as icons with their names as tooltips where Slack's are icons.
+- **A main window:** the sidebar sits flush on the chrome. The content is one panel in `page`, inset 8 from the window on its three free sides, with 15 corners and a `chromeBorder` hairline at its edge. With the sidebar hidden it's inset 8 on all four, and its toolbar starts after the window's own buttons, which sit over its corner, as a Mac toolbar does. Its toolbar is pinned to the panel's top: the title in the toolbar role, one line under it, and its actions on the right, as icons with their names as tooltips where Slack's are icons.
 - **Spacing:** 24 between containers and 24 inside a card on the Mac, 16 and 18 on a phone. Inside a list, 8 between rows' contents and 12 at the sides.
 - **Hit targets:** 26 tall for a Mac control, 44 on the phone.
 - **Hairlines** are 1 point, in `border` on content and `chromeBorder` on the chrome.

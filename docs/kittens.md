@@ -108,6 +108,7 @@ Links used to come out as plain words, so that nothing in a message could act, a
 | ⌘F | The same box, finding a message by its words. Opening one scrolls to it and marks it for a moment |
 | ⌘⇧T | Threads |
 | ⌘⇧M | Activity |
+| ⌘B | Hides the sidebar, or brings it back as wide as you left it, as ⌘B does in T3 Code. Dragging its edge most of the way to the window's hides it too, as a Mac's sidebars do |
 | ⌘⇧[ ⌘⇧] | The thread above or below in the place you're on, opening it beside it. In a channel that's its threads top to bottom, in Threads that list, and in Activity the ones a click there opens beside a channel. With none open, the newest |
 | Esc | Closes the jump box, the shortcuts, or the thread's pane, in that order |
 | ⌘N | Puts the keyboard in the place's box, or the thread's where the place has none |

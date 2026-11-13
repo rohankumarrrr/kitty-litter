@@ -85,6 +85,8 @@ final class ChannelsView: QuietView {
     static let threadWidths: ClosedRange<CGFloat> = 320...460
     /// The narrowest the place beside a thread's pane gets, however wide you drag the thread's.
     static let narrowestPlace: CGFloat = 360
+    /// The narrowest and widest you can drag the sidebar.
+    static let sidebarWidths: ClosedRange<CGFloat> = 180...360
 
     /// How many places and threads ⌘[ can go back through.
     static let historyKept = 50
@@ -92,7 +94,8 @@ final class ChannelsView: QuietView {
     let sidebar = ChannelSidebar()
     let pane = ChannelPane(role: .place)
     let threadPane = ChannelPane(role: .thread)
-    let threadEdge = ThreadEdge()
+    let sidebarEdge = ResizeEdge()
+    let threadEdge = ResizeEdge()
     private let panelEdge = PanelEdge()
     let jumpBox = JumpBoxView()
     let cheatsheet = CheatsheetView()
@@ -119,6 +122,26 @@ final class ChannelsView: QuietView {
         }
     }
     var onChooseThreadWidth: ((CGFloat?) -> Void)?
+    /// How wide you've dragged the sidebar, or `nil` until you have. It comes back this wide after ⌘B hides it.
+    var chosenSidebarWidth: CGFloat? {
+        didSet {
+            needsLayout = true
+            needsDisplay = true
+            onChooseSidebarWidth?(chosenSidebarWidth)
+        }
+    }
+    var onChooseSidebarWidth: ((CGFloat?) -> Void)?
+    /// ⌘B, or the sidebar's edge dragged most of the way to the window's, hides it, as a Mac's sidebars hide.
+    var isSidebarHidden = false {
+        didSet {
+            guard isSidebarHidden != oldValue else { return }
+            if isSidebarHidden, let responder = window?.firstResponder as? NSView, responder.isDescendant(of: sidebar) { window?.makeFirstResponder(nil) }
+            needsLayout = true
+            needsDisplay = true
+            onHideSidebar?(isSidebarHidden)
+        }
+    }
+    var onHideSidebar: ((Bool) -> Void)?
     /// Opens a thread in T3.
     var onOpenThread: ((String) -> Void)? { didSet { panes.forEach { $0.onOpenThread = onOpenThread } } }
     var onCopy: ((String) -> Void)? { didSet { panes.forEach { $0.onCopy = onCopy } } }
@@ -140,10 +163,12 @@ final class ChannelsView: QuietView {
         addSubview(sidebar)
         addSubview(pane)
         addSubview(threadPane)
+        addSubview(sidebarEdge)
         addSubview(threadEdge)
         addSubview(panelEdge)
         threadPane.isHidden = true
         threadEdge.isHidden = true
+        sidebarEdge.onDrag = { [weak self] x in self?.dragSidebarEdge(to: x) }
         threadEdge.onDrag = { [weak self] x in self?.dragThreadEdge(to: x) }
         threadPane.parts = pane.parts
         jumpBox.isHidden = true
@@ -180,30 +205,51 @@ final class ChannelsView: QuietView {
         arrange()
     }
 
-    /// How wide a thread's pane is beside the rest of the window: as wide as you `chose` by dragging its edge, or 45%
-    /// of the room until you have, and never so wide that the place beside it is too narrow to read.
-    static func threadWidth(in width: CGFloat, chosen: CGFloat? = nil) -> CGFloat {
-        let room = width - ChannelSidebar.width - Opal.Space.inset
+    /// How wide a thread's pane is in a panel `room` wide: as wide as you `chose` by dragging its edge, or 45% of the
+    /// room until you have, and never so wide that the place beside it is too narrow to read.
+    static func threadWidth(in room: CGFloat, chosen: CGFloat? = nil) -> CGFloat {
         let wanted = chosen ?? min(max(room * 0.45, threadWidths.lowerBound), threadWidths.upperBound)
         return max(min(wanted, room - narrowestPlace), threadWidths.lowerBound)
+    }
+
+    /// How wide the sidebar is in a window `width` wide: as wide as you `chose` by dragging its edge, or 220 until you
+    /// have. A narrower window takes it back towards 220, which always leaves a place and a thread's pane room to read.
+    static func sidebarWidth(in width: CGFloat, chosen: CGFloat? = nil) -> CGFloat {
+        let wanted = min(max(chosen ?? ChannelSidebar.width, sidebarWidths.lowerBound), sidebarWidths.upperBound)
+        let room = width - Opal.Space.inset - narrowestPlace - threadWidths.lowerBound
+        return min(wanted, max(room, ChannelSidebar.width))
     }
 
     /// The edge let go of at `x`, which makes the thread's pane reach from there to the panel's right side, as far as
     /// it can.
     func dragThreadEdge(to x: CGFloat) {
-        chosenThreadWidth = Self.threadWidth(in: bounds.width, chosen: panel.maxX - x)
+        chosenThreadWidth = Self.threadWidth(in: panel.width, chosen: panel.maxX - x)
     }
 
-    /// The page the place and its thread sit on: flush against the sidebar, and inset from the window on its other sides.
+    /// The sidebar's edge let go of at `x`. Past half its narrowest it hides, and back over that it shows again.
+    func dragSidebarEdge(to x: CGFloat) {
+        isSidebarHidden = x < Self.sidebarWidths.lowerBound / 2
+        if !isSidebarHidden { chosenSidebarWidth = Self.sidebarWidth(in: bounds.width, chosen: x) }
+    }
+
+    /// The page the place and its thread sit on: flush against the sidebar, and inset from the window on its other
+    /// sides, or on all four while the sidebar's hidden.
     var panel: NSRect {
         let inset = Opal.Space.inset
-        return NSRect(x: ChannelSidebar.width, y: inset, width: max(bounds.width - ChannelSidebar.width - inset, 0), height: max(bounds.height - inset * 2, 0))
+        let left = isSidebarHidden ? inset : Self.sidebarWidth(in: bounds.width, chosen: chosenSidebarWidth)
+        return NSRect(x: left, y: inset, width: max(bounds.width - left - inset, 0), height: max(bounds.height - inset * 2, 0))
     }
 
     private func arrange() {
-        sidebar.frame = NSRect(x: 0, y: 0, width: ChannelSidebar.width, height: bounds.height)
         let panel = panel
-        let thread = selection.thread == nil ? 0 : Self.threadWidth(in: bounds.width, chosen: chosenThreadWidth)
+        sidebar.isHidden = isSidebarHidden
+        sidebarEdge.isHidden = isSidebarHidden
+        if !isSidebarHidden {
+            sidebar.frame = NSRect(x: 0, y: 0, width: panel.minX, height: bounds.height)
+            // Mostly over the panel, so the sidebar's scroller still takes its own drags.
+            sidebarEdge.frame = NSRect(x: panel.minX - 2, y: panel.minY, width: 6, height: panel.height)
+        }
+        let thread = selection.thread == nil ? 0 : Self.threadWidth(in: panel.width, chosen: chosenThreadWidth)
         threadPane.isHidden = thread == 0
         threadEdge.isHidden = thread == 0
         pane.frame = NSRect(x: panel.minX, y: panel.minY, width: max(panel.width - thread, 0), height: panel.height)
@@ -338,9 +384,9 @@ final class PanelEdge: QuietView {
     }
 }
 
-/// The line between a place and its thread's pane, which you drag to make the thread's pane wider or narrower, as in
-/// Slack. It draws nothing, since `ChannelsView` draws the line.
-final class ThreadEdge: QuietView {
+/// The line between the sidebar and the panel, or between a place and its thread's pane, which you drag to make one
+/// wider or narrower, as in Slack. It draws nothing, since the panel's edge and `ChannelsView` draw the lines.
+final class ResizeEdge: QuietView {
     /// Where the pointer is, across the window.
     var onDrag: ((CGFloat) -> Void)?
 
@@ -368,6 +414,8 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     nonisolated static let minimumSize = NSSize(width: 908, height: 440)
     private static let frameName = "Channels"
     private static let threadWidthKey = "ChannelsThreadWidth"
+    private static let sidebarWidthKey = "ChannelsSidebarWidth"
+    private static let sidebarHiddenKey = "ChannelsSidebarHidden"
     private static let tickSeconds: TimeInterval = 0.2
     private static let ticksPerTimeRefresh = 300
 
@@ -385,6 +433,10 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         panel.delegate = self
         view.chosenThreadWidth = (defaults.object(forKey: Self.threadWidthKey) as? Double).map { CGFloat($0) }
         view.onChooseThreadWidth = { defaults.set($0.map(Double.init), forKey: Self.threadWidthKey) }
+        view.chosenSidebarWidth = (defaults.object(forKey: Self.sidebarWidthKey) as? Double).map { CGFloat($0) }
+        view.onChooseSidebarWidth = { defaults.set($0.map(Double.init), forKey: Self.sidebarWidthKey) }
+        view.isSidebarHidden = defaults.bool(forKey: Self.sidebarHiddenKey)
+        view.onHideSidebar = { defaults.set($0, forKey: Self.sidebarHiddenKey) }
     }
 
     /// Opens it on the cat's screen the first time and where you left it after that, or brings it to the front.

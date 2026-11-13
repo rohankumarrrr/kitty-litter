@@ -383,7 +383,7 @@ final class DemoDriver {
             "previous-place": .previousPlace, "next-place": .nextPlace,
             "previous-unread": .previousUnread, "next-unread": .nextUnread,
             "back": .back, "forward": .forward, "jump": .jump, "search": .search, "esc": .escape,
-            "threads": .threads, "activity": .activity, "new": .compose, "close": .close, "shortcuts": .cheatsheet,
+            "threads": .threads, "activity": .activity, "new": .compose, "close": .close, "shortcuts": .cheatsheet, "sidebar": .toggleSidebar,
         ]
         for number in 1...9 { named["\(number)"] = .place(number) }
         return named

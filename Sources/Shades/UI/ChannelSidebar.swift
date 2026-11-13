@@ -39,6 +39,7 @@ struct ChannelSidebarItem: Equatable {
 /// The left side of the window, flush on its chrome: Activity and Threads, then #general and a channel for each kitten,
 /// then the DM.
 final class ChannelSidebar: QuietView {
+    /// How wide it is until you drag its edge.
     static let width: CGFloat = 220
     /// Leaves room for the window's buttons.
     private static let top: CGFloat = 38
@@ -122,13 +123,13 @@ final class ChannelSidebar: QuietView {
                 let row = ChannelSidebarRow(item: item, light: .drifting(rows.count, of: count))
                 row.onPress = { [weak self] in self?.onSelect?(item.place) }
                 row.update(tick: tick)
-                row.frame = NSRect(x: 8, y: y, width: Self.width - 16, height: Self.rowHeight)
+                row.frame = NSRect(x: 8, y: y, width: bounds.width - 16, height: Self.rowHeight)
                 list.addSubview(row)
                 rows.append(row)
                 y += Self.rowHeight
             }
         }
-        list.frame = NSRect(x: 0, y: 0, width: Self.width, height: y + 12)
+        list.frame = NSRect(x: 0, y: 0, width: bounds.width, height: y + 12)
     }
 
     private func addHeading(_ text: String, at y: CGFloat) -> CGFloat {
@@ -142,6 +143,9 @@ final class ChannelSidebar: QuietView {
     override func layout() {
         super.layout()
         scroll.frame = NSRect(x: 0, y: Self.top, width: bounds.width - 1, height: max(bounds.height - Self.top - Self.footerHeight, 0))
+        // You can drag it wider or narrower, and the rows follow.
+        list.frame.size.width = bounds.width
+        rows.forEach { $0.frame.size.width = bounds.width - 16 }
         let top = bounds.height - Self.footerHeight + 6
         quietButton.frame.origin = NSPoint(x: 10, y: top)
         quietOnButton.frame.origin = NSPoint(x: 10, y: top)

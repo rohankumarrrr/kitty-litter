@@ -18,6 +18,9 @@ enum ChannelImages {
         var hovers: String?
         /// How wide you've dragged a thread's pane.
         var threadWidth: CGFloat?
+        /// How wide you've dragged the sidebar, and whether ⌘B has hidden it.
+        var sidebarWidth: CGFloat?
+        var hidesSidebar = false
     }
 
     static func draw(to folder: String) {
@@ -99,6 +102,12 @@ enum ChannelImages {
             Shot(name: "narrow-thread-hover", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height, hoversLastReply: true),
             Shot(name: "thread-dragged", selection: thread, book: full, threadWidth: 440),
             Shot(name: "narrow-thread-dragged", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height, threadWidth: 440),
+            Shot(name: "sidebar-dragged", selection: thread, book: full, sidebarWidth: 340),
+            Shot(name: "sidebar-narrowest", selection: .activity, book: crowded(), sidebarWidth: 0),
+            Shot(name: "narrow-sidebar-dragged", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height, sidebarWidth: 340),
+            Shot(name: "sidebar-hidden", selection: thread, book: full, hidesSidebar: true),
+            Shot(name: "sidebar-hidden-channel", selection: .channel(steve), book: full, hidesSidebar: true),
+            Shot(name: "narrow-sidebar-hidden", selection: thread, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height, hidesSidebar: true),
             Shot(name: "channel-expanded", selection: thread, book: full, expandsLongMessage: true),
             Shot(name: "channel-hover", selection: .channel(steve), book: full, hoversLastMessage: true),
             Shot(name: "channel-hover-replies", selection: .channel(steve), book: full, hovers: "labels-1:ask"),
@@ -130,6 +139,8 @@ enum ChannelImages {
         panel.setContentSize(NSSize(width: shot.width, height: shot.height))
         panel.appearance = NSAppearance(named: .darkAqua)
         view.chosenThreadWidth = shot.threadWidth
+        view.chosenSidebarWidth = shot.sidebarWidth
+        view.isSidebarHidden = shot.hidesSidebar
         view.show(shot.book)
         view.select(shot.selection)
         if shot.expandsLongMessage { (view.threadPane.longMessageRow ?? view.pane.longMessageRow)?.pressShowMore() }
