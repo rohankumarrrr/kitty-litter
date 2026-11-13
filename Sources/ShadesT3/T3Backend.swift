@@ -12,6 +12,8 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
     private let hub: T3ThreadHub
     private let home: URL
     private let uploads: URLSession
+    /// Hands a `t3code://` link to macOS. Tests stand in for it, so nothing opens.
+    private let openLink: @Sendable (URL) async throws -> Void
     private let scratchRoot: String
     private let lock = NSLock()
     private var scratchProjectID: String?
@@ -29,13 +31,15 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
     ///   - renewBefore: Signs in again once this little is left, so a session never runs out mid-task.
     ///   - revokesWhatItCantRead: Revokes a saved sign-in this build can't read, which a build signed differently
     ///     left. Copies that share where they keep it and run side by side can't, since another may still be using it.
+    ///   - openLink: Hands a thread's link to macOS, which throws if it can't open it.
     public init(
         home: URL? = nil,
         credentials: T3CredentialStoring = KeychainCredentialStore(),
         label: String = "Shades",
         sessionTTL: String = "30d",
         renewBefore: TimeInterval = 7 * 24 * 60 * 60,
-        revokesWhatItCantRead: Bool = true
+        revokesWhatItCantRead: Bool = true,
+        openLink: @escaping @Sendable (URL) async throws -> Void = { _ = try await NSWorkspace.shared.open($0, configuration: NSWorkspace.OpenConfiguration()) }
     ) {
         let home = home ?? T3Auth.defaultHome
         let auth = T3Auth(home: home, store: credentials, label: label, ttl: sessionTTL, renewBefore: renewBefore, revokesWhatItCantRead: revokesWhatItCantRead)
@@ -49,6 +53,7 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         self.scratchRoot = scratchRoot
         hub = T3ThreadHub(socket: socket, scratchRoot: scratchRoot)
         uploads = URLSession(configuration: .ephemeral)
+        self.openLink = openLink
     }
 
     // MARK: AgentBackend
@@ -301,12 +306,13 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         return ThreadOrigin(title: projection.thread.title, projectPath: path, startedBy: projection.startedBy)
     }
 
-    public func open(threadID: String) {
-        Task { [self] in
-            guard let environmentID = await environmentID(),
-                  let url = T3Wire.threadLink(environmentID: environmentID, threadID: threadID)
-            else { return }
-            NSWorkspace.shared.open(url)
+    public func open(threadID: String) async throws {
+        guard let environmentID = await environmentID() else { throw T3Error.noEnvironment }
+        guard let url = T3Wire.threadLink(environmentID: environmentID, threadID: threadID) else { throw T3Error.couldntOpen(code: 0) }
+        do {
+            try await openLink(url)
+        } catch {
+            throw T3Error.couldntOpen(code: (error as NSError).code)
         }
     }
 

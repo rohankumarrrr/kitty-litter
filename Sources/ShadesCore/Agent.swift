@@ -354,8 +354,8 @@ public protocol AgentBackend: AnyObject, Sendable {
     /// Answers a question that has a `form`, with one answer for each of its parts, in order: the values of the
     /// options picked, or your own words alone.
     func answer(_ question: AgentQuestion, with answers: [[String]]) async throws
-    /// Shows the thread in T3 Code.
-    func open(threadID: String)
+    /// Shows the thread in T3 Code, or throws which step went wrong.
+    func open(threadID: String) async throws
     /// The project registered at this folder, if any.
     func projectID(atPath path: String) async -> String?
     /// Registers this folder as a project, and gives back its ID.

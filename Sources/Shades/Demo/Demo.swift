@@ -3,6 +3,7 @@ import CoreGraphics
 import CryptoKit
 import Foundation
 import ShadesCore
+import ShadesT3
 
 // `swift run shades --demo`: pretend versions of everything, so the whole app runs
 // without T3, permissions or a microphone. Nothing here leaves this process.
@@ -215,7 +216,9 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    func open(threadID: String) {
+    func open(threadID: String) async throws {
+        // As the real one can't, with no word from T3 of which environment it is.
+        if connectFails { throw T3Error.noEnvironment }
         print("[demo] would open \(threadID) in T3")
         DispatchQueue.main.async { self.onOpen?(threadID) }
     }

@@ -423,8 +423,12 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         return origins[threadID] ?? ThreadOrigin(title: "Work", projectPath: nil, startedBy: .person)
     }
 
-    func open(threadID: String) {
+    /// What opening a thread in T3 throws, standing in for a step that went wrong.
+    var openFails: Error?
+
+    func open(threadID: String) async throws {
         lock.withLock { _opened.append(threadID) }
+        if let openFails { throw openFails }
     }
 }
 

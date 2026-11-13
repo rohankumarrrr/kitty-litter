@@ -451,7 +451,7 @@ final class DemoDriver {
         let rest = String(trimmed.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
         switch word {
         case "help":
-            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [reply] [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | arrow up|down | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off|stuck | check | screen on|off | ears on|off|denied | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | voiceover [window]|press [label]|menu [label] | windows | cover [beside] | draw [folder] | opal [folder] [jacket...] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
+            print("busy | perf | ask [question] | drop pdf|[path]|[link] | select [text] | replace | fix | kittens | channels | messages | channel activity|threads|general|shades|[kitten] | thread [reply] [words] | back | also on|off | attach pdf|picture|[path] | recent [n] | webpicture [show] | key [shortcut] | keyboard on|off | tab [back|control] | arrow up|down | space | jump [words] | search [words] | jump-down | jump-up | jump-open | scroll [points] | unread [words] | toolbar [button] | new [jump] | send [words] | draft [words] | retry | react [reaction] | pose [frame] | submit [text] | esc | talk | dictate | settings [page] | setting [row] [choice] | phone on|off|pair|open|go|send|press|search|answer|subscribe|text|select|link|unselect|close | type [words] | record [file.gif] [windows]|stop | allow | deny | session | handoff yes|no | approval [kind] [summary] | report decision|shipped|note|long | inbox [reply|done|clear] | card [button] | notification [thread] | notify-finished on|off | notifications [channel] [mute|mac [level]|phone [level]] | finish [thread] | quiet | pet | run x y | home | fonts | font [name] | picture on|off | highlight [words] | link [words] | more | copy | private on|off | t3 on|off|stuck | check | screen on|off | ears on|off|denied | menu | menuclose | menuitems | menupress [item] | header [button] | sidebar [button] | dnd | voiceover [window]|press [label]|menu [label] | windows | cover [beside] | draw [folder] | opal [folder] [jacket...] | wait [seconds] | buttons | bubble [button] | typed | front | quit")
         case "ask":
             if rest.isEmpty {
                 controller.askPressed()
@@ -580,6 +580,30 @@ final class DemoDriver {
             let view = stage.channels.view
             let pane = view.threadPane.isHidden ? view.pane : view.threadPane
             if let row = pane.longMessageRow { row.pressShowMore() } else { print("no message is cut") }
+        case "toolbar":
+            // The same as pointing at the newest message in the thread's pane, or the place's, and clicking the button in
+            // its bar with these words. The window finds what's under the button's centre, as it would for the pointer,
+            // and that gets the press and the release, made here and handed straight to it, so nothing is posted.
+            let view = stage.channels.view
+            let pane = view.threadPane.isHidden ? view.pane : view.threadPane
+            guard let row = pane.shownMessageRows.last else { return print("no message shows") }
+            row.hovering = true
+            guard let button = row.toolbar?.button(rest) else { return print("no [\(rest)] in its bar") }
+            let panel = stage.channels.panel
+            let shown = button.isHidden ? row.toolbar?.more : button
+            guard let shown, let frame = panel.contentView?.superview else { return }
+            let centre = shown.convert(NSPoint(x: shown.bounds.midX, y: shown.bounds.midY), to: nil)
+            let hit = frame.hitTest(frame.convert(centre, from: nil))
+            print("toolbar [\(rest)] \(button.isHidden ? "is under More, " : "")lands on \(hit === shown ? "it" : hit.map { String(describing: type(of: $0)) } ?? "nothing")")
+            if button.isHidden, let menu = row.menu(for: NSEvent()) {
+                // More's menu is the right-click one. Opening it would hold the demo in the menu's loop, so its item is chosen.
+                return menu.performActionForItem(at: menu.indexOfItem(withTitle: rest))
+            }
+            guard let hit else { return }
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                guard let event = NSEvent.mouseEvent(with: type, location: centre, modifierFlags: [], timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else { return }
+                type == .leftMouseDown ? hit.mouseDown(with: event) : hit.mouseUp(with: event)
+            }
         case "unread":
             // The same as pressing Mark unread on the newest message whose words include these, in the thread's pane if
             // one's open.

@@ -447,7 +447,7 @@ func probeOpen() async throws {
     }
 
     let before = await lastVisited()
-    backend.open(threadID: threadID)
+    try await backend.open(threadID: threadID)
     var after = before
     for _ in 0..<40 where after == before {
         try await Task.sleep(for: .milliseconds(250))

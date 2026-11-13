@@ -210,7 +210,9 @@ A user message's turn item lists what came with it, as `attachments: [{"type":"i
 
 ### Opening a thread
 
-`t3code://threads/<environmentId>/<threadId>`, with both parts percent-encoded. The app comes to the front and navigates there. The thread's `lastVisitedAt` updating is a good way to check it worked.
+`t3code://threads/<environmentId>/<threadId>`, with both parts percent-encoded as `encodeURIComponent` does, the way T3 builds its own thread links. A thread ID can hold colons, and even a `%`, as `thread:project:mcp%3A…` does, so a `%` goes as `%25`. The app comes to the front and its router goes to `/<environmentId>/<threadId>`, decoding both. The thread's `lastVisitedAt` updating is a good way to check it worked.
+
+The environment ID is the `environmentId` from `/.well-known/t3/environment`, read as The Kitty Litter connects, or else `userdata/environment-id`. Both are the server's own persisted ID, the one its links are built from, so they can't differ from what T3 routes on. If The Kitty Litter has neither, or macOS doesn't open the link, the cat says which, with macOS's error code, rather than nothing.
 
 ## What's stable and what isn't
 
