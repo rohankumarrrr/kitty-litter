@@ -725,6 +725,55 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.threadPane.frame.maxX, ChannelsWindow.minimumSize.width)
     }
 
+    func testADraggedThreadPaneKeepsItsWidthWithinLimitsAndAcrossALaunch() throws {
+        let suite = "ChannelsWindowTests.threadWidth"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        func opened(_ window: ChannelsWindow, size: NSSize = ChannelsWindow.size) -> ChannelsView {
+            window.panel.setContentSize(size)
+            window.view.show(book(threads: 2))
+            window.view.select(.thread("t0", in: .channel(.of(steve))))
+            window.view.layoutSubtreeIfNeeded()
+            return window.view
+        }
+        func drag(_ view: ChannelsView, to x: CGFloat) throws {
+            let edge = try XCTUnwrap(view.hitTest(NSPoint(x: view.threadPane.frame.minX, y: 200)) as? ThreadEdge, "the pointer meets the edge, not a pane")
+            let event = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDragged, location: NSPoint(x: x, y: 200), modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+            edge.mouseDragged(with: event)
+            view.layoutSubtreeIfNeeded()
+        }
+        let window = ChannelsWindow(defaults: defaults)
+        let view = opened(window)
+        let width = ChannelsWindow.size.width
+        XCTAssertEqual(view.threadPane.frame.width, ChannelsView.threadWidth(in: width), "today's width until you drag it")
+
+        try drag(view, to: width - 440)
+        XCTAssertEqual(view.threadPane.frame.width, 440)
+        XCTAssertEqual(view.pane.frame.maxX, view.threadPane.frame.minX)
+        view.closeThread()
+        view.select(.thread("t1", in: .channel(.of(steve))))
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.threadPane.frame.width, 440, "another thread opens as wide")
+
+        try drag(view, to: 0)
+        XCTAssertEqual(view.pane.frame.width, ChannelsView.narrowestPlace, "the place still reads")
+        try drag(view, to: width)
+        XCTAssertEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound, "the thread still reads")
+
+        try drag(view, to: width - 440)
+        window.panel.setContentSize(ChannelsWindow.minimumSize)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.pane.frame.width, ChannelsView.narrowestPlace, "a narrower window takes from the thread only once the place can't give")
+        XCTAssertGreaterThanOrEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound)
+        XCTAssertEqual(view.threadPane.frame.maxX, ChannelsWindow.minimumSize.width)
+        window.panel.setContentSize(ChannelsWindow.size)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.threadPane.frame.width, 440, "and gives it back")
+
+        XCTAssertEqual(opened(ChannelsWindow(defaults: defaults)).threadPane.frame.width, 440, "kept across a launch")
+    }
+
     func testThreadsOpensEachThreadBesideTheList() throws {
         let view = view()
         view.show(book(exchanges: 3))

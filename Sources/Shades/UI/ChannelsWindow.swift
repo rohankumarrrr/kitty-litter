@@ -72,7 +72,10 @@ final class ChannelsPanel: NSPanel {
 /// The sidebar, the pane for the place you're looking at, and beside it a thread's pane when one is open, as Slack
 /// lays them out. They're apart from the window so they can be drawn with no window on the screen.
 final class ChannelsView: QuietView {
+    /// How wide a thread's pane opens until you drag its edge, and the narrowest you can drag it.
     static let threadWidths: ClosedRange<CGFloat> = 320...460
+    /// The narrowest the place beside a thread's pane gets, however wide you drag the thread's.
+    static let narrowestPlace: CGFloat = 360
 
     /// How many places and threads ⌘[ can go back through.
     static let historyKept = 50
@@ -80,6 +83,7 @@ final class ChannelsView: QuietView {
     let sidebar = ChannelSidebar()
     let pane = ChannelPane(role: .place)
     let threadPane = ChannelPane(role: .thread)
+    let threadEdge = ThreadEdge()
     let jumpBox = JumpBoxView()
     let cheatsheet = CheatsheetView()
     private(set) var selection: ChannelSelection = .activity
@@ -96,6 +100,15 @@ final class ChannelsView: QuietView {
     var onSeen: ((ChannelSelection) -> Void)?
     /// Threads you've marked unread since you came here, which stay unread while you're still looking.
     private(set) var keptUnread: Set<String> = []
+    /// How wide you've dragged a thread's pane, for every thread after it, or `nil` until you have.
+    var chosenThreadWidth: CGFloat? {
+        didSet {
+            needsLayout = true
+            needsDisplay = true
+            onChooseThreadWidth?(chosenThreadWidth)
+        }
+    }
+    var onChooseThreadWidth: ((CGFloat?) -> Void)?
     /// Opens a thread in T3.
     var onOpenThread: ((String) -> Void)? { didSet { panes.forEach { $0.onOpenThread = onOpenThread } } }
     var onCopy: ((String) -> Void)? { didSet { panes.forEach { $0.onCopy = onCopy } } }
@@ -117,7 +130,10 @@ final class ChannelsView: QuietView {
         addSubview(sidebar)
         addSubview(pane)
         addSubview(threadPane)
+        addSubview(threadEdge)
         threadPane.isHidden = true
+        threadEdge.isHidden = true
+        threadEdge.onDrag = { [weak self] x in self?.dragThreadEdge(to: x) }
         threadPane.parts = pane.parts
         jumpBox.isHidden = true
         cheatsheet.isHidden = true
@@ -153,18 +169,32 @@ final class ChannelsView: QuietView {
         arrange()
     }
 
-    /// How wide a thread's pane is beside the rest of the window.
-    static func threadWidth(in width: CGFloat) -> CGFloat {
-        min(max((width - ChannelSidebar.width) * 0.45, threadWidths.lowerBound), threadWidths.upperBound)
+    /// How wide a thread's pane is beside the rest of the window: as wide as you `chose` by dragging its edge, or 45%
+    /// of the room until you have, and never so wide that the place beside it is too narrow to read.
+    static func threadWidth(in width: CGFloat, chosen: CGFloat? = nil) -> CGFloat {
+        let room = width - ChannelSidebar.width
+        let wanted = chosen ?? min(max(room * 0.45, threadWidths.lowerBound), threadWidths.upperBound)
+        return max(min(wanted, room - narrowestPlace), threadWidths.lowerBound)
+    }
+
+    /// The edge let go of at `x`, which makes the thread's pane reach from there to the window's right side, as far as
+    /// it can.
+    func dragThreadEdge(to x: CGFloat) {
+        chosenThreadWidth = Self.threadWidth(in: bounds.width, chosen: bounds.width - x)
     }
 
     private func arrange() {
         let width = ChannelSidebar.width
         sidebar.frame = NSRect(x: 0, y: 0, width: width, height: bounds.height)
-        let thread = selection.thread == nil ? 0 : Self.threadWidth(in: bounds.width)
+        let thread = selection.thread == nil ? 0 : Self.threadWidth(in: bounds.width, chosen: chosenThreadWidth)
         threadPane.isHidden = thread == 0
+        threadEdge.isHidden = thread == 0
         pane.frame = NSRect(x: width, y: 0, width: max(bounds.width - width - thread, 0), height: bounds.height)
-        if thread > 0 { threadPane.frame = NSRect(x: bounds.width - thread, y: 0, width: thread, height: bounds.height) }
+        if thread > 0 {
+            threadPane.frame = NSRect(x: bounds.width - thread, y: 0, width: thread, height: bounds.height)
+            // Mostly over the thread's side, so the channel's scroller beside it still takes its own drags.
+            threadEdge.frame = NSRect(x: threadPane.frame.minX - 2, y: 0, width: 6, height: bounds.height)
+        }
         jumpBox.frame = bounds
         cheatsheet.frame = bounds
     }
@@ -270,6 +300,26 @@ final class ChannelsView: QuietView {
     }
 }
 
+/// The line between a place and its thread's pane, which you drag to make the thread's pane wider or narrower, as in
+/// Slack. It draws nothing, since `ChannelsView` draws the line.
+final class ThreadEdge: QuietView {
+    /// Where the pointer is, across the window.
+    var onDrag: ((CGFloat) -> Void)?
+
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .resizeLeftRight)
+    }
+
+    override func mouseDown(with event: NSEvent) {}
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let superview else { return }
+        onDrag?(superview.convert(event.locationInWindow, from: nil).x)
+    }
+}
+
 /// The Messages window: Activity, your threads, #general, a channel for each kitten and your DM with the cat, with a
 /// thread's pane beside them. Closing it keeps everything as it was, so it opens again just as you left it.
 @MainActor
@@ -278,6 +328,7 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     /// Room for the sidebar, a channel and a thread's pane beside it.
     nonisolated static let minimumSize = NSSize(width: 900, height: 440)
     private static let frameName = "Channels"
+    private static let threadWidthKey = "ChannelsThreadWidth"
     private static let tickSeconds: TimeInterval = 0.2
     private static let ticksPerTimeRefresh = 300
 
@@ -289,10 +340,12 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     private var timer: Timer?
     private var tick = 0
 
-    override init() {
+    init(defaults: UserDefaults = .standard) {
         super.init()
         panel.contentView = view
         panel.delegate = self
+        view.chosenThreadWidth = (defaults.object(forKey: Self.threadWidthKey) as? Double).map { CGFloat($0) }
+        view.onChooseThreadWidth = { defaults.set($0.map(Double.init), forKey: Self.threadWidthKey) }
     }
 
     /// Opens it on the cat's screen the first time and where you left it after that, or brings it to the front.
