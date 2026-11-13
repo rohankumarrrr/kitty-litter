@@ -18,6 +18,12 @@ signing_identity() {
   done
 }
 
+# The kind of certificate $2 is, such as "Apple Development", from `security find-identity`'s output in $1. Only the
+# kind, since the rest of its name is whose it is.
+signing_kind() {
+  awk -v wanted="$2" 'index($0, wanted) { sub(/^[^"]*"/, ""); sub(/[":].*/, ""); print; exit }' <<< "$1"
+}
+
 # The Team ID in `codesign -dvv`'s output in $1, or nothing for a signature without one.
 signing_team() {
   awk -F= '$1 == "TeamIdentifier" && $2 != "not set" { print $2; exit }' <<< "$1"
@@ -31,6 +37,12 @@ may_replace() {
   if [[ "$new" != *"Authority="* && " $* " != *" --ad-hoc "* ]]; then
     echo "This build is signed ad hoc, so macOS would forget The Kitty Litter's permissions."
     echo "Run scripts/make-dev-cert.sh first, or pass --ad-hoc to install it anyway."
+    return 1
+  fi
+  # A copy cut short, such as by a failed install, can't say whose it is, and may still be a team's.
+  if [[ -n "$installed" && "$installed" != *"Executable="* && " $* " != *" --change-team "* ]]; then
+    echo "The installed copy's signature can't be read, so there's no telling whether this build could read what it"
+    echo "saved in the Keychain. Run scripts/install.sh --rollback, or pass --change-team to install it anyway."
     return 1
   fi
   # Moving onto a team, from "Shades Dev" or from nothing, is the way forward. Moving off one loses it all again.

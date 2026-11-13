@@ -53,20 +53,21 @@ restore() {
   open "$app"
 }
 
-if [[ "${1:-}" == "--rollback" ]]; then
+# Flags go in any order, and --pull passes the rest on.
+if [[ " $* " == *" --rollback "* ]]; then
   restore
   echo "Back on the last working copy."
   exit 0
 fi
 
-if [[ "${1:-}" == "--pull" ]]; then
+if [[ " $* " == *" --pull "* ]]; then
   if [[ -n "$(git -C "$root" status --porcelain)" ]]; then
     echo "$root has uncommitted work, so nothing was installed."
     exit 1
   fi
   git -C "$root" pull --ff-only
   # Run what was just pulled, not the copy of this script that's already going.
-  exec "$root/scripts/install.sh"
+  exec "$root/scripts/install.sh" "${@:#--pull}"
 fi
 
 next="$(mktemp -d)"

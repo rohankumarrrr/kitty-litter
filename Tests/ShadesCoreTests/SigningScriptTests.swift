@@ -45,6 +45,12 @@ final class SigningScriptTests: XCTestCase {
         XCTAssertEqual(picked.output, "3333333333333333333333333333333333333333")
     }
 
+    func testTheSignedWithLineNamesOnlyTheKindOfCertificate() throws {
+        let listed = identities(Self.selfSigned, Self.development)
+        XCTAssertEqual(try run("signing_kind", listed, "1111111111111111111111111111111111111111").output, "Apple Development")
+        XCTAssertEqual(try run("signing_kind", listed, "3333333333333333333333333333333333333333").output, "Shades Dev")
+    }
+
     func testNoCertificateMeansAdHoc() throws {
         let picked = try run("signing_identity", "     0 valid identities found")
         XCTAssertEqual(picked.status, 0)
@@ -106,6 +112,19 @@ final class SigningScriptTests: XCTestCase {
         XCTAssertEqual(try run("may_replace", teamA, "").status, 0, "onto a Mac without the app")
     }
 
+    /// A copy cut short says nothing about its team, but what it saved in the Keychain may still be the team's.
+    func testAnInstalledCopyWhoseSignatureCantBeReadIsntTakenForOneWithoutATeam() throws {
+        for unreadable in [
+            "/Applications/Shades.app: code object is not signed at all",
+            "/Applications/Shades.app: bundle format unrecognized, invalid, or unsuitable",
+        ] {
+            let refused = try run("may_replace", shadesDev, unreadable)
+            XCTAssertEqual(refused.status, 1, unreadable)
+            XCTAssertTrue(refused.output.contains("--change-team"))
+            XCTAssertEqual(try run("may_replace", shadesDev, unreadable, "--change-team").status, 0, unreadable)
+        }
+    }
+
     func testShadesDevStillReplacesShadesDev() throws {
         XCTAssertEqual(try run("may_replace", shadesDev, shadesDev).status, 0)
     }
@@ -122,5 +141,90 @@ final class SigningScriptTests: XCTestCase {
         XCTAssertEqual(try run("may_replace", adHoc, teamA, "--ad-hoc").status, 1)
         XCTAssertEqual(try run("may_replace", adHoc, teamA, "--change-team").status, 1)
         XCTAssertEqual(try run("may_replace", adHoc, teamA, "--ad-hoc", "--change-team").status, 0)
+    }
+
+    // MARK: How install.sh reads its flags
+
+    /// A copy of install.sh in a folder of its own, installing over a team-signed copy there with a "Shades Dev" build.
+    /// bundle.sh, codesign and git are stand-ins, and it stops where it would start replacing the app.
+    private func install(_ arguments: String..., dirty: Bool = false) throws -> (status: Int32, output: String) {
+        let files = FileManager.default
+        let root = files.temporaryDirectory.appendingPathComponent("install-\(UUID().uuidString)")
+        defer { try? files.removeItem(at: root) }
+        let scripts = root.appendingPathComponent("scripts"), bin = root.appendingPathComponent("bin")
+        for folder in [scripts, bin, root.appendingPathComponent("home"), root.appendingPathComponent("Applications/Shades.app")] {
+            try files.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        func write(_ text: String, to file: URL) throws {
+            try text.write(to: file, atomically: true, encoding: .utf8)
+            try files.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+        }
+        try write(try String(contentsOf: script, encoding: .utf8), to: scripts.appendingPathComponent("signing.sh"))
+        let real = try String(contentsOf: script.deletingLastPathComponent().appendingPathComponent("install.sh"), encoding: .utf8)
+        let check = #"may_replace "$signature" "$installed" "$@" || exit 1"#
+        let copy = real
+            .replacingOccurrences(of: "app=/Applications/Shades.app", with: #"app="$root/Applications/Shades.app""#)
+            .replacingOccurrences(of: check, with: check + #"; echo "would install with [$*]"; exit 0"#)
+        XCTAssertFalse(copy.contains("app=/Applications/Shades.app"), "the copy installs into its own folder")
+        XCTAssertTrue(copy.contains("would install"), "the copy stops before replacing anything")
+        try write(copy, to: scripts.appendingPathComponent("install.sh"))
+        try write("#!/bin/zsh\nmkdir -p \"$1/Shades.app\"\n", to: scripts.appendingPathComponent("bundle.sh"))
+        try write("""
+            #!/bin/zsh
+            [[ "$1" == --verify ]] && exit 0
+            if [[ "${@[-1]}" == */Applications/Shades.app ]]; then
+              print "Executable=${@[-1]}/Contents/MacOS/Shades\nAuthority=Apple Development: Jane Appleseed (AB12CD34EF)\nTeamIdentifier=TEAM111111"
+            else
+              print "Executable=${@[-1]}/Contents/MacOS/Shades\nAuthority=Shades Dev\nTeamIdentifier=not set"
+            fi
+            """, to: bin.appendingPathComponent("codesign"))
+        try write("""
+            #!/bin/zsh
+            case "$*" in
+              *status*) [[ -n "${DIRTY:-}" ]] && print " M Sources/Shades/App/HealthCheck.swift" ;;
+              *pull*) print "pulled" ;;
+            esac
+            exit 0
+            """, to: bin.appendingPathComponent("git"))
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-f", scripts.appendingPathComponent("install.sh").path] + arguments
+        var environment = ProcessInfo.processInfo.environment
+        environment["PATH"] = bin.path + ":" + (environment["PATH"] ?? "/usr/bin:/bin")
+        environment["HOME"] = root.appendingPathComponent("home").path
+        environment["DIRTY"] = dirty ? "1" : nil
+        process.environment = environment
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return (process.terminationStatus, String(decoding: data, as: UTF8.self))
+    }
+
+    func testTheCopyMeetsTheTeamCheck() throws {
+        XCTAssertTrue(try install().output.contains("pass\n--change-team"), "refused without the flag")
+        XCTAssertTrue(try install("--change-team").output.contains("would install with [--change-team]"))
+    }
+
+    func testPullPassesChangeTeamOn() throws {
+        let installed = try install("--pull", "--change-team")
+        XCTAssertTrue(installed.output.contains("pulled"))
+        XCTAssertTrue(installed.output.contains("would install with [--change-team]"), installed.output)
+    }
+
+    func testPullAfterAnotherFlagStillStopsOnUncommittedWork() throws {
+        let stopped = try install("--change-team", "--pull", dirty: true)
+        XCTAssertEqual(stopped.status, 1)
+        XCTAssertTrue(stopped.output.contains("has uncommitted work"), stopped.output)
+        XCTAssertFalse(stopped.output.contains("would install"))
+    }
+
+    func testRollbackAfterAnotherFlagStillRollsBack() throws {
+        let rolled = try install("--change-team", "--rollback")
+        XCTAssertTrue(rolled.output.contains("There's no earlier copy to go back to."), rolled.output)
+        XCTAssertFalse(rolled.output.contains("would install"))
     }
 }

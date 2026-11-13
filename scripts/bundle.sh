@@ -81,8 +81,7 @@ identity="${SHADES_SIGN_IDENTITY:-$(signing_identity "$(security find-identity -
 if [[ -n "$identity" ]]; then
   codesign --force --sign "$identity" "$app/Contents/Frameworks/llama.framework"
   codesign --force --sign "$identity" --identifier me.rohan-is.shades "$app"
-  # Only the kind of certificate, since the rest of its name is whose it is.
-  echo "Signed with $(security find-identity -p codesigning 2>/dev/null | grep -F -- "$identity" | head -1 | sed -E 's/.*"([^":]*).*/\1/')."
+  echo "Signed with $(signing_kind "$(security find-identity -p codesigning 2>/dev/null || true)" "$identity")."
 else
   codesign --force --sign - "$app/Contents/Frameworks/llama.framework"
   codesign --force --sign - --identifier me.rohan-is.shades "$app"
