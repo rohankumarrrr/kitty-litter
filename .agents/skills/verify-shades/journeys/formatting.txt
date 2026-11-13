@@ -6,15 +6,16 @@ channel clawde
 thread settings panel
 wait 2
 draw .verify/shades/formatting/0-thread
-more
-wait 1
-draw .verify/shades/formatting/0-whole
 link kittens
 wait 1
 draw .verify/shades/formatting/1-link-bar
 channel steve
 thread pricing copy
 wait 2
+draw .verify/shades/formatting/2-cut
+more
+wait 1
+draw .verify/shades/formatting/2-whole
 link billing page
 wait 1
 draw .verify/shades/formatting/2-labelled-link
@@ -23,8 +24,6 @@ colors shades
 channel clawde
 thread settings panel
 wait 2
-more
-wait 1
 draw .verify/shades/formatting/3-light
 phone on
 wait 2
@@ -36,6 +35,17 @@ draw .verify/shades/formatting/4-phone
 phone link kittens
 wait 1
 draw .verify/shades/formatting/5-phone-link
+phone press Cancel
+phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve
+wait 3
+phone js [...document.querySelectorAll('#rows .bubble')].map((b) => Math.round(b.scrollHeight / parseFloat(getComputedStyle(b).lineHeight)) + (b.classList.contains('cut') ? ' cut' : '')).join(', ') + ' lines'
+phone js document.querySelector('#rows button.more').scrollIntoView({ block: 'center' }); 'scrolled to Show more'
+wait 1
+draw .verify/shades/formatting/6-phone-cut
+phone press Show more
+wait 1
+phone js document.querySelectorAll('#rows .bubble.cut').length + ' cut, and the button says ' + document.querySelector('#rows button.more').textContent
+draw .verify/shades/formatting/7-phone-whole
 wait 2
 phone close
 front

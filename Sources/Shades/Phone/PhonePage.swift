@@ -190,7 +190,8 @@ enum PhonePage {
         #linkaddress { margin: 6px 0 0; font: 14px/1.4 ui-monospace, Menlo, monospace; overflow-wrap: anywhere; overflow-y: auto; min-height: 0; }
         #linksheet .buttons { justify-content: flex-end; }
         #linksheet .buttons .go { background: var(--you); color: var(--on-you); border-radius: 999px; padding: 8px 16px; font-size: 15px; text-decoration: none; }
-        .bubble.cut { max-height: 16.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); }
+        /* Thirty lines of 1.35em and the bubble's padding, as many as a long message shows on the Mac. */
+        .bubble.cut { max-height: calc(40.5em + 18px); overflow: hidden; -webkit-mask-image: linear-gradient(#000 calc(100% - 4em), transparent); }
         .more { color: var(--soft); font-size: 14px; margin: 4px 12px 0; }
         .failure { color: var(--warn); font-size: 13px; margin: 3px 12px 0; }
         .retry { color: var(--link); font-size: 14px; font-weight: 600; margin: 4px 12px 0; }
@@ -582,6 +583,7 @@ enum PhonePage {
             if (item.id) node.dataset.id = item.id;
             return node;
           })));
+          cutLong();
           $('notify').hidden = key !== 'home' || !$('notifytext').textContent;
           if (conversation(key) && (fresh || nearBottom)) window.scrollTo(0, document.body.scrollHeight);
           else if (fresh) window.scrollTo(0, 0);
@@ -599,6 +601,26 @@ enum PhonePage {
           }
           showJump();
           seen();
+        }
+
+        // As on the Mac, a message is cut to 30 lines only once it's over 40, by how tall it really is, since a Show
+        // more that hides only a few lines is no help. Every height is read before any is cut, so it's laid out once.
+        function cutLong() {
+          const long = [...$('rows').querySelectorAll('.msg > .said > .bubble')]
+            .filter((bubble) => bubble.scrollHeight > 40 * parseFloat(getComputedStyle(bubble).lineHeight));
+          for (const bubble of long) {
+            const id = bubble.closest('.msg').dataset.id;
+            const open = expanded.has(id);
+            bubble.classList.toggle('cut', !open);
+            const more = el('button', 'more', open ? words.less : words.more);
+            more.type = 'button';
+            more.onclick = () => {
+              if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
+              const cut = bubble.classList.toggle('cut');
+              more.textContent = cut ? words.more : words.less;
+            };
+            bubble.parentNode.after(more);
+          }
         }
 
         // A conversation counts as seen only while it's in front of you, not while Search covers it.
@@ -864,18 +886,6 @@ enum PhonePage {
             bubble.append(...(item.markup ? markup(item.markup) : [item.text]));
             if (item.color) { bubble.style.background = item.color; bubble.style.color = item.ink; }
             said.append(bubble);
-            if (item.text.length > 600) {
-              const open = expanded.has(item.id);
-              bubble.classList.toggle('cut', !open);
-              const more = el('button', 'more', open ? words.less : words.more);
-              more.type = 'button';
-              more.onclick = () => {
-                if (expanded.has(item.id)) expanded.delete(item.id); else expanded.add(item.id);
-                const cut = bubble.classList.toggle('cut');
-                more.textContent = cut ? words.more : words.less;
-              };
-              node.append(more);
-            }
           }
           if (yours) said.append(you());
           if (item.files) {

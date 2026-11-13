@@ -8,7 +8,7 @@ final class ChannelsWindowTests: XCTestCase {
     private let steve = Kitten(name: "Steve", role: "Professional", covers: "", folder: "/k/steve")
     private let pepper = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper")
     private let at = Date(timeIntervalSince1970: 1_000_000)
-    private let long = (1...40).map { "Line \($0) of something long." }.joined(separator: "\n")
+    private let long = (1...41).map { "Line \($0) of something long." }.joined(separator: "\n")
 
     private func view(height: CGFloat = 560) -> ChannelsView {
         ChannelsView(frame: NSRect(x: 0, y: 0, width: 820, height: height))
@@ -232,11 +232,11 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.threadPane.shownMessageRows.filter(\.isCut).count, 1, "and the new one starts cut")
     }
 
-    func testAShortMessageIsntCut() {
+    func testAMessageOfFortyLinesIsntCut() {
         let view = view()
-        view.show(book())
+        view.show(book(text: (1...40).map { "Line \($0) of something long." }.joined(separator: "\n")))
         view.select(inThread)
-        XCTAssertNil(view.threadPane.longMessageRow)
+        XCTAssertNil(view.threadPane.longMessageRow, "a Show more would hide only ten lines")
     }
 
     func testSelectingAChannelGoesToTheBottomAndActivityToTheTop() {

@@ -443,7 +443,8 @@ final class MessageWords {
 
 /// One message as a bubble: yours on the right in blue, everyone else's on the left in their own colour.
 final class MessageRowView: ChannelRowView {
-    private static let clampedLines = 12
+    /// About a screenful, which is all a long message shows until you press Show more.
+    private static let clampedLines = 30
     private static let catSide: CGFloat = 28
     private static let pad: CGFloat = 5
     private static var headHeight: CGFloat { MessagesInk.meta + 7 }

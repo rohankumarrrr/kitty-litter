@@ -230,19 +230,22 @@ final class ChannelTextBlock {
         self.hasBlocks = hasBlocks
     }
 
+    /// Lays the words out `width` wide, cut to `maxLines` once they're a third longer than that, since a Show more
+    /// that hides only a few lines is no help.
     @discardableResult
     func fit(width: CGFloat, maxLines: Int? = nil) -> CGFloat {
         if let fitted, fitted.width == width, fitted.maxLines == maxLines { return height }
         fitted = (width, maxLines)
         container.size = NSSize(width: width, height: .greatestFiniteMagnitude)
-        // One line past the most it can show is enough to tell it's cut, however long it goes on. TextKit never
-        // finishes stopping partway through a code block or table, so words with those are laid out whole.
-        container.maximumNumberOfLines = hasBlocks ? 0 : maxLines.map { $0 + 1 } ?? 0
+        let cutPast = maxLines.map { $0 + $0 / 3 }
+        // One line past the most it can show whole is enough to tell it's cut, however long it goes on. TextKit
+        // never finishes stopping partway through a code block or table, so words with those are laid out whole.
+        container.maximumNumberOfLines = hasBlocks ? 0 : cutPast.map { $0 + 1 } ?? 0
         container.lineBreakMode = .byWordWrapping
         isCut = false
         let rects = lineRects
         let lines = rects.map(\.width)
-        if let maxLines, lines.count > maxLines {
+        if let maxLines, let cutPast, lines.count > cutPast {
             // A blank line at the end would look like the end of the message, so it stops short of one.
             let lastWithWords = lines.prefix(maxLines).lastIndex { $0 > 0 } ?? maxLines - 1
             if !hasBlocks {
@@ -317,14 +320,14 @@ final class ChannelTextBlock {
         }]
     }
 
-    /// What each line's words take up.
+    /// What each line's words take up, with the cells side by side in a table's row as one line.
     private var lineRects: [NSRect] {
         layoutManager.ensureLayout(for: container)
-        var rects: [NSRect] = []
+        var rows: [CGFloat: NSRect] = [:]
         layoutManager.enumerateLineFragments(forGlyphRange: layoutManager.glyphRange(for: container)) { _, used, _, _, _ in
-            rects.append(used)
+            rows[used.minY] = rows[used.minY].map { $0.union(used) } ?? used
         }
-        return rects
+        return rows.values.sorted { $0.minY < $1.minY }
     }
 }
 
