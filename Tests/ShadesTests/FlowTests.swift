@@ -2674,6 +2674,47 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
     }
 
+    /// T3 can still answer after the cat has said it's stuck, and then it says so.
+    func testT3AnsweringAfterItWasCalledStuckIsReported() async {
+        let (answered, answer) = AsyncStream<Void>.makeStream()
+        backend.silentUntil = Task { for await _ in answered { break } }
+        controller.threadListArrived = true
+        controller.t3Wait = 0.1
+        controller.t3StuckAfter = 0.1
+        controller.checkMyselfPressed()
+        await controller.healthTask?.value
+        let deadline = Date().addingTimeInterval(5)
+        while reportedHealth.count < 2, Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+        answer.finish()
+        await controller.t3Recheck?.value
+        XCTAssertEqual(reportedHealth.map { $0.first { $0.check == "T3 Code" }?.problem ?? "ok" }, [
+            "I'm still connecting to T3 Code, so my agents can't run yet.",
+            "T3 Code still hasn't answered me, so my agents can't run.",
+            "ok",
+        ])
+        XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
+    }
+
+    /// Once a newer check has its answer, an older one's follow-up says nothing, not even that T3 is stuck, and its own
+    /// answer, coming back last and different, doesn't replace the newer one's.
+    func testAnOlderChecksFollowUpNeverReportsOverANewerCheck() async {
+        let (answered, answer) = AsyncStream<Void>.makeStream()
+        backend.silentUntil = Task { for await _ in answered { break } }
+        controller.threadListArrived = true
+        controller.t3Wait = 0.1
+        controller.t3StuckAfter = 0.2
+        await controller.runHealthCheck()
+        backend.silentUntil = nil
+        let newest = await controller.runHealthCheck()
+        XCTAssertTrue(newest.allSatisfy(\.ok))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        controller.threadListArrived = false
+        answer.finish()
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(reportedHealth.map { $0.allSatisfy(\.ok) }, [false, true], "the older check's stuck and its late answer aren't reported")
+        XCTAssertEqual(controller.health, newest)
+    }
+
     /// Only a Keychain call can hold signing in for good, so a dialog is named once T3's been quiet past every other limit.
     func testT3ThatNeverAnswersIsCalledStuckAfterAWhile() async {
         backend.neverAnswers = true
