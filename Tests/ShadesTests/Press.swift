@@ -6,21 +6,22 @@ import XCTest
 /// nothing reaches the desktop. The control must be in a window, which is never shown.
 @MainActor
 enum Press {
-    /// The view a click at `control`'s centre lands on, as its window's own hit-testing finds it, title bar included.
-    static func hit(_ control: NSView, file: StaticString = #filePath, line: UInt = #line) throws -> NSView {
+    /// The view a click at `control`'s centre, or at `point` in it, lands on, as its window's own hit-testing finds it,
+    /// title bar included.
+    static func hit(_ control: NSView, at point: NSPoint? = nil, file: StaticString = #filePath, line: UInt = #line) throws -> NSView {
         let window = try XCTUnwrap(control.window, "\(type(of: control)) is in a window", file: file, line: line)
         window.contentView?.layoutSubtreeIfNeeded()
         let root = try XCTUnwrap(window.contentView?.superview ?? window.contentView, file: file, line: line)
-        let centre = control.convert(NSPoint(x: control.bounds.midX, y: control.bounds.midY), to: nil)
+        let centre = control.convert(point ?? NSPoint(x: control.bounds.midX, y: control.bounds.midY), to: nil)
         return try XCTUnwrap(root.hitTest(root.convert(centre, from: nil)), "something is under the pointer", file: file, line: line)
     }
 
-    /// Presses whatever is at `control`'s centre, down and then up, and gives back what that was.
+    /// Presses whatever is at `control`'s centre, or at `point` in it, down and then up, and gives back what that was.
     @discardableResult
-    static func click(_ control: NSView, file: StaticString = #filePath, line: UInt = #line) throws -> NSView {
-        let target = try hit(control, file: file, line: line)
+    static func click(_ control: NSView, at point: NSPoint? = nil, file: StaticString = #filePath, line: UInt = #line) throws -> NSView {
+        let target = try hit(control, at: point, file: file, line: line)
         let window = try XCTUnwrap(control.window, file: file, line: line)
-        let centre = control.convert(NSPoint(x: control.bounds.midX, y: control.bounds.midY), to: nil)
+        let centre = control.convert(point ?? NSPoint(x: control.bounds.midX, y: control.bounds.midY), to: nil)
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             let event = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: centre, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1), file: file, line: line)
             type == .leftMouseDown ? target.mouseDown(with: event) : target.mouseUp(with: event)
