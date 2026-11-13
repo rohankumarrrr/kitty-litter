@@ -247,7 +247,8 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    /// The kitten with an inbox finishes a run. Its report comes to what's asked for here once it's sorted.
+    /// A kitten finishes a run, the one with an inbox except for `asks`, which is one without that needs you to do
+    /// something. Its report comes to what's asked for here once it's sorted.
     func report(_ kind: String) {
         let replies = [
             "decision": ("demo-login", "Clawde: Fix login", "\(Prompts.decisionMarker) Ship the login fix? Tests pass, and it only touches the sign-in page."),
@@ -255,6 +256,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
             "note": ("demo-login", "Clawde: Fix login", "\(Prompts.noteMarker) The risk is low, since nothing else uses that page."),
             "long": ("demo-login", "Clawde: Fix login", "\(Prompts.decisionMarker) \(String(repeating: "Should the sign-in page keep its old layout for now? ", count: 12))"),
             "scheduled": ("demo-morning", "Clawde: Morning check", "\(Prompts.decisionMarker) Merge the package updates? The tests pass with both."),
+            "asks": ("demo-budget", "Pepper: Tidy the budget", "\(Prompts.shippedMarker) The budget page is tidied and merged.\n\(Prompts.decisionMarker) Run git pull in your checkout yourself, since the sandbox can't."),
         ]
         guard let (threadID, title, reply) = replies[kind] else { return }
         sortedReplies[title] = reply

@@ -142,6 +142,13 @@ final class PromptsTests: XCTestCase {
         }
     }
 
+    func testSomethingOnlyTheyCanDoNeedsThemAsMuchAsADecision() throws {
+        let prompt = Prompts.sortReport("Merged. Run git pull yourself.", title: "t")
+        let line = try XCTUnwrap(prompt.components(separatedBy: "\n").first { $0.hasPrefix(Prompts.decisionMarker) })
+        XCTAssertTrue(line.contains("decide or do themselves"))
+        XCTAssertTrue(line.contains("running a command"))
+    }
+
     func testSortingAndSummingUpShareOneLimit() {
         let long = String(repeating: "x", count: 13_000)
         let sort = Prompts.sortReport(long, title: "t").filter { $0 == "x" }.count

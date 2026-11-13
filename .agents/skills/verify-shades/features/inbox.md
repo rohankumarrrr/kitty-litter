@@ -8,6 +8,7 @@ A kitten with `inbox: true` keeps its reports in one place instead of a bubble e
 - `inbox-open` shows the rows in The Kitty Litter's Activity under Waiting on you, Shipped and Also.
 - `inbox-reply` opens that row's thread beside its channel, and sends your own words there, marking that row and no other.
 - `inbox-done` takes a row away without telling any agent.
+- `inbox-asks` files what a kitten without an inbox needs you to do, and leaves the rest of its report to the bubble.
 - `inbox-scheduled` opens a report from a run a schedule started with the kitten's words in it, and takes your reply.
 
 ## How to get to it (user POV)
@@ -31,9 +32,14 @@ Journey: `journeys/inbox.txt`.
 - **Scheduled.** `report scheduled`, `wait 7`, `inbox reply`, then `wait 1`. A schedule starts "Clawde: Morning check" and it files a decision. `channels.png` in `5-scheduled` shows #clawde with the "Morning check" thread in the pane beside it, Clawde's report, "Two packages have updates...", as its parent without the schedule's prompt, and "Replies in Morning check" over the box. Nobody else is in it.
 - **Reply to it.** `send Go ahead`, then `wait 2`. `[demo] forwarded to demo-morning with 0 attachments: Go ahead` shows only your words went to that thread. `channels.png` in `6-scheduled-sent` shows "Go ahead" under the report in the pane.
 
+Journey: `journeys/inbox-asks.txt`.
+
+- **Asks.** `report asks`, then `wait 7`. Pepper, who has no inbox, finishes "Tidy the budget" with a report that asks you to run a command. `[demo] started ... Below is the final report` is the sorting, with no summary after it. The output has one `[demo] notified:` line for Pepper needing you, and none saying it finished. `bubble.png` in `0-bubble` shows "Pepper: Tidy the budget" over the demo's report, "Moved the pricing page...", as it was written, since it's short.
+- **Open.** `inbox`, then `wait 1`. `channels.png` in `1-open` shows Activity with "Run git pull in your checkout yourself, since the sandbox can't." from "Pepper · Tidy the budget" under Waiting on you, and nothing under Shipped.
+
 ## Gotchas
 
 - A finished run is read 5 seconds after it ends (`reportDelay`), and the demo takes 0.8 seconds more to read it. Draw any sooner and Activity still says nothing needs you.
-- `report` also takes `shipped`, `note`, `long` and `scheduled`.
+- `report` also takes `shipped`, `note`, `long`, `scheduled` and `asks`.
 - `inbox reply` gives The Kitty Litter's box the keyboard without bringing the app to the front, the same as pressing Reply, so `active=true` shows until something else takes it. `front` still names your own app.
 - The demo has no words for "Fix login", so its thread says its messages are in T3.

@@ -208,6 +208,13 @@ public struct Inbox: Codable, Equatable, Sendable {
         return true
     }
 
+    /// A kitten without an inbox files only what needs you, since the rest of its report goes to the bubble. Its runs
+    /// are passed over for filing, so this doesn't look at them, and what it asks now replaces what it asked before.
+    public mutating func flag(_ decision: String, from thread: AgentThread, at: Date, id: String) {
+        entries.removeAll { $0.threadID == thread.id && $0.kind == .decision }
+        entries.append(InboxEntry(id: id, kind: .decision, text: decision, threadID: thread.id, threadTitle: thread.title, at: at))
+    }
+
     /// The row you asked on, or failing that the thread's open decision, or its latest row.
     private func rowForNote(from threadID: String) -> Int? {
         let own = entries.indices.filter { entries[$0].threadID == threadID }
