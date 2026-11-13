@@ -257,6 +257,46 @@ final class PressChromeTests: XCTestCase {
 
     // MARK: - The thread pane's edge
 
+    /// Takes hold of `edge` `grab` into it, or at its middle, drags it `dx` across in two steps, and lets go.
+    private func drag(_ edge: NSView, by dx: CGFloat, grabbing grab: CGFloat? = nil, in panel: NSWindow) throws {
+        let start = edge.convert(NSPoint(x: grab ?? edge.bounds.midX, y: edge.bounds.midY), to: nil)
+        let target = try Press.hit(edge)
+        for (type, x) in [(NSEvent.EventType.leftMouseDown, start.x), (.leftMouseDragged, start.x + dx / 2), (.leftMouseDragged, start.x + dx), (.leftMouseUp, start.x + dx)] {
+            let event = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: NSPoint(x: x, y: start.y), modifierFlags: [], timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+            switch type {
+            case .leftMouseDown: target.mouseDown(with: event)
+            case .leftMouseDragged: target.mouseDragged(with: event)
+            default: target.mouseUp(with: event)
+            }
+        }
+        panel.contentView?.layoutSubtreeIfNeeded()
+    }
+
+    func testDraggingTheSidebarsEdgeChangesItsWidthHidesItAndCommandBBringsItBack() throws {
+        let (panel, view, _) = messages(book())
+        view.select(.channel(.of(steve)))
+        view.layoutSubtreeIfNeeded()
+        let edge = view.sidebarEdge
+        XCTAssertTrue(try Press.hit(edge) === edge, "a press on the line beside the sidebar lands on its edge")
+        let before = view.sidebar.frame.width
+        for grab in [0.5, edge.bounds.midX, edge.bounds.maxX - 0.5] {
+            try drag(edge, by: 0, grabbing: grab, in: panel)
+            XCTAssertEqual(view.sidebar.frame.width, before, accuracy: 0.01, "taking hold of the line \(grab) into its edge doesn't move it")
+        }
+        try drag(edge, by: 40, grabbing: 0.5, in: panel)
+        XCTAssertEqual(view.sidebar.frame.width, before + 40, accuracy: 0.01, "dragged right, the sidebar widens as far as the pointer went")
+        XCTAssertEqual(view.pane.frame.minX, view.sidebar.frame.maxX)
+        try drag(edge, by: -2000, in: panel)
+        XCTAssertTrue(view.sidebar.isHidden, "dragged most of the way shut, it hides")
+
+        try key("b", keyCode: 11, modifiers: .command, in: panel)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertFalse(view.sidebar.isHidden, "⌘B brings it back")
+        try key("b", keyCode: 11, modifiers: .command, in: panel)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(view.sidebar.isHidden, "and hides it again")
+    }
+
     func testDraggingTheThreadPanesEdgeChangesItsWidthWithinItsLimits() throws {
         let (panel, view, _) = messages(book())
         view.select(.thread("s1", in: .channel(.of(steve))))
@@ -264,18 +304,7 @@ final class PressChromeTests: XCTestCase {
         XCTAssertTrue(try Press.hit(view.threadEdge) === view.threadEdge, "a press on the line between the panes lands on its edge")
 
         func drag(by dx: CGFloat, grabbing grab: CGFloat? = nil) throws {
-            let edge = view.threadEdge
-            let start = edge.convert(NSPoint(x: grab ?? edge.bounds.midX, y: edge.bounds.midY), to: nil)
-            let target = try Press.hit(edge)
-            for (type, x) in [(NSEvent.EventType.leftMouseDown, start.x), (.leftMouseDragged, start.x + dx / 2), (.leftMouseDragged, start.x + dx), (.leftMouseUp, start.x + dx)] {
-                let event = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: NSPoint(x: x, y: start.y), modifierFlags: [], timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
-                switch type {
-                case .leftMouseDown: target.mouseDown(with: event)
-                case .leftMouseDragged: target.mouseDragged(with: event)
-                default: target.mouseUp(with: event)
-                }
-            }
-            view.layoutSubtreeIfNeeded()
+            try self.drag(view.threadEdge, by: dx, grabbing: grab, in: panel)
         }
 
         let before = view.threadPane.frame.width
