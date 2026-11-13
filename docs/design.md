@@ -142,7 +142,7 @@ The face is the system's, SF Pro, unless you pick another in Settings, which eve
 | Sheet | 24 |
 | Button, chip, segmented control, count | Capsule |
 
-- **A main window:** the sidebar sits flush on the chrome. The content is one panel in `page`, inset 8 from the window on its three free sides, with 15 corners. Its toolbar is pinned to the panel's top: the title in the toolbar role, one line under it, and its actions on the right.
+- **A main window:** the sidebar sits flush on the chrome. The content is one panel in `page`, inset 8 from the window on its three free sides, with 15 corners and a `chromeBorder` hairline at its edge. Its toolbar is pinned to the panel's top: the title in the toolbar role, one line under it, and its actions on the right, as icons with their names as tooltips where Slack's are icons.
 - **Spacing:** 24 between containers and 24 inside a card on the Mac, 16 and 18 on a phone. Inside a list, 8 between rows' contents and 12 at the sides.
 - **Hit targets:** 26 tall for a Mac control, 44 on the phone.
 - **Hairlines** are 1 point, in `border` on content and `chromeBorder` on the chrome.
@@ -188,7 +188,7 @@ The limb of a planet at the foot of a main window's inset panel, lit in the rim'
 - The arc is stroked 1 point in the rim gradient, cyan at the left through violet to pink at the right, at 70%.
 - Above it, a glow in the same gradient rises 56 points, from 10% at the arc to clear.
 - Below it, the planet, in `#060508`.
-- It sits behind content and never takes a click. It's the only colour a main window has when nothing needs you.
+- It sits behind content and never takes a click. Content scrolls over it and comes to rest above it: a box, and a list's last row, end clear of its limb, so it never runs through words. It's the only colour a main window has when nothing needs you.
 - `Opal.horizon(in:)`.
 
 ### The Rimlight tile

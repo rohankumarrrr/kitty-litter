@@ -89,6 +89,10 @@ final class QuietControlsTests: XCTestCase {
         XCTAssertTrue(window.firstResponder === pair)
     }
 
+    func testAButtonUnderTheTitleBarIsPressedRatherThanDraggingTheWindow() {
+        XCTAssertFalse(QuietButton("Notifications", style: .text).mouseDownCanMoveWindow)
+    }
+
     func testSpacePressesAFocusedButtonOnceItsLetGo() {
         var presses = 0
         let button = QuietButton("Allow") { presses += 1 }

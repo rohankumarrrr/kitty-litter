@@ -172,7 +172,7 @@ final class ChannelsWindowTests: XCTestCase {
     }
 
     func testAChannelThatNeedsYouSaysSoOnce() throws {
-        func marks(badge: Int) throws -> (Int, String?) {
+        func marks(badge: Int) throws -> (onTile: Int, after: Int, words: String?) {
             let item = ChannelSidebarItem(place: .channel(.of(steve)), title: "steve", icon: .kitten(KittenStatus(kitten: steve, state: .needsYou)), badge: badge)
             let row = ChannelSidebarRow(item: item)
             let host = QuietView(frame: NSRect(x: 0, y: 0, width: 204, height: 30))
@@ -181,31 +181,38 @@ final class ChannelsWindowTests: XCTestCase {
             row.frame = host.bounds
             let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
             host.cacheDisplay(in: host.bounds, to: rep)
-            return (Self.redMarks(in: rep, rightOf: Int(34 * CGFloat(rep.pixelsWide) / host.bounds.width)), row.accessibilityLabel())
+            let scale = CGFloat(rep.pixelsWide) / host.bounds.width
+            // The cat sits on its tile up to 25 points in, and the tile ends at 28, where the name starts after it.
+            let catEnds = Int(26 * scale), tileEnds = Int(34 * scale)
+            return (Self.redMarks(in: rep, rightOf: catEnds, before: tileEnds), Self.redMarks(in: rep, rightOf: tileEnds), row.accessibilityLabel())
         }
         let counted = try marks(badge: 2)
-        XCTAssertEqual(counted.0, 1, "the count is the one mark, with no square beside it")
-        XCTAssertEqual(counted.1, "steve, Needs you, 2 waiting")
-        XCTAssertEqual(try marks(badge: 0).0, 1, "with nothing counted, the square still says it")
+        XCTAssertEqual(counted.after, 1, "the count is the one mark")
+        XCTAssertEqual(counted.onTile, 0, "with no dot beside it")
+        XCTAssertEqual(counted.words, "steve, Needs you, 2 waiting")
+        let dotted = try marks(badge: 0)
+        XCTAssertEqual(dotted.onTile, 1, "with nothing counted, a dot on the tile's corner still says it, as Slack marks who's around")
+        XCTAssertEqual(dotted.after, 0, "and leaves the name its room")
     }
 
     /// Separate patches of the needs-you red right of the cat, so a pill with its digits counts once.
-    private static func redMarks(in rep: NSBitmapImageRep, rightOf left: Int) -> Int {
+    private static func redMarks(in rep: NSBitmapImageRep, rightOf left: Int, before right: Int? = nil) -> Int {
         let red = Ink.hex(CatGlint.attention(bright: true).color!)
         func isRed(_ x: Int, _ y: Int) -> Bool {
             guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { return false }
             return abs(color.redComponent - red.redComponent) < 0.1 && abs(color.greenComponent - red.greenComponent) < 0.1 && abs(color.blueComponent - red.blueComponent) < 0.1
         }
+        let end = right ?? rep.pixelsWide
         var seen = Set<Int>()
         var patches = 0
         for y in 0..<rep.pixelsHigh {
-            for x in left..<rep.pixelsWide where isRed(x, y) && !seen.contains(y * rep.pixelsWide + x) {
+            for x in left..<end where isRed(x, y) && !seen.contains(y * rep.pixelsWide + x) {
                 patches += 1
                 var stack = [(x, y)]
                 seen.insert(y * rep.pixelsWide + x)
                 while let (px, py) = stack.popLast() {
                     for (nx, ny) in [(px + 1, py), (px - 1, py), (px, py + 1), (px, py - 1)]
-                    where nx >= left && nx < rep.pixelsWide && ny >= 0 && ny < rep.pixelsHigh && !seen.contains(ny * rep.pixelsWide + nx) && isRed(nx, ny) {
+                    where nx >= left && nx < end && ny >= 0 && ny < rep.pixelsHigh && !seen.contains(ny * rep.pixelsWide + nx) && isRed(nx, ny) {
                         seen.insert(ny * rep.pixelsWide + nx)
                         stack.append((nx, ny))
                     }
@@ -721,8 +728,9 @@ final class ChannelsWindowTests: XCTestCase {
         view.layoutSubtreeIfNeeded()
         XCTAssertGreaterThanOrEqual(view.pane.frame.width, 300, "the channel still reads")
         XCTAssertGreaterThanOrEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound)
+        XCTAssertEqual(view.pane.frame.width, ChannelsView.narrowestPlace)
         XCTAssertEqual(view.pane.frame.maxX, view.threadPane.frame.minX)
-        XCTAssertEqual(view.threadPane.frame.maxX, ChannelsWindow.minimumSize.width)
+        XCTAssertEqual(view.threadPane.frame.maxX, ChannelsWindow.minimumSize.width - Opal.Space.inset, "in the panel, inset from the window")
     }
 
     func testADraggedThreadPaneKeepsItsWidthWithinLimitsAndAcrossALaunch() throws {
@@ -748,7 +756,7 @@ final class ChannelsWindowTests: XCTestCase {
         let width = ChannelsWindow.size.width
         XCTAssertEqual(view.threadPane.frame.width, ChannelsView.threadWidth(in: width), "today's width until you drag it")
 
-        try drag(view, to: width - 440)
+        try drag(view, to: view.threadPane.frame.maxX - 440)
         XCTAssertEqual(view.threadPane.frame.width, 440)
         XCTAssertEqual(view.pane.frame.maxX, view.threadPane.frame.minX)
         view.closeThread()
@@ -761,12 +769,12 @@ final class ChannelsWindowTests: XCTestCase {
         try drag(view, to: width)
         XCTAssertEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound, "the thread still reads")
 
-        try drag(view, to: width - 440)
+        try drag(view, to: view.threadPane.frame.maxX - 440)
         window.panel.setContentSize(ChannelsWindow.minimumSize)
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(view.pane.frame.width, ChannelsView.narrowestPlace, "a narrower window takes from the thread only once the place can't give")
         XCTAssertGreaterThanOrEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound)
-        XCTAssertEqual(view.threadPane.frame.maxX, ChannelsWindow.minimumSize.width)
+        XCTAssertEqual(view.threadPane.frame.maxX, ChannelsWindow.minimumSize.width - Opal.Space.inset)
         window.panel.setContentSize(ChannelsWindow.size)
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(view.threadPane.frame.width, 440, "and gives it back")
@@ -1597,5 +1605,93 @@ extension ChannelsWindowTests {
         view.show(build(newer + older))
         let now = next.frame.minY - pane.scrollOffset
         XCTAssertEqual(now, onScreen, accuracy: 1, "what you were reading stays where it was")
+    }
+}
+
+// MARK: - Opal's main window
+
+extension ChannelsWindowTests {
+    private func color(_ rep: NSBitmapImageRep, at point: NSPoint, in view: NSView) throws -> NSColor {
+        let scale = CGFloat(rep.pixelsWide) / view.bounds.width
+        return try XCTUnwrap(rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.usingColorSpace(.sRGB))
+    }
+
+    /// Where the place and its thread sit: flush against the sidebar and 8 in from the window's other edges.
+    private func panel(of view: NSView) -> NSRect {
+        NSRect(x: ChannelSidebar.width, y: Opal.Space.inset, width: view.bounds.width - ChannelSidebar.width - Opal.Space.inset, height: view.bounds.height - Opal.Space.inset * 2)
+    }
+
+    private func isClose(_ color: NSColor, to hex: UInt32) -> Bool {
+        let want = Ink.hex(hex).usingColorSpace(.sRGB)!
+        return abs(color.redComponent - want.redComponent) < 0.02 && abs(color.greenComponent - want.greenComponent) < 0.02 && abs(color.blueComponent - want.blueComponent) < 0.02
+    }
+
+    func testTheSidebarSitsOnTheChromeAndThePlaceOnAnInsetPanelWithTheHorizonAtItsFoot() throws {
+        let view = view()
+        view.show(book())
+        view.select(.activity)
+        let rep = try XCTUnwrap(ChannelImages.bitmap(of: view, scale: 2))
+        let panel = panel(of: view)
+        XCTAssertEqual(view.pane.frame, panel, "the place fills the panel")
+
+        XCTAssertTrue(isClose(try color(rep, at: NSPoint(x: 110, y: view.bounds.height - 110), in: view), to: Opal.chrome), "the sidebar is flush on the chrome")
+        XCTAssertTrue(isClose(try color(rep, at: NSPoint(x: view.bounds.width - 3, y: view.bounds.midY), in: view), to: Opal.chrome), "with the chrome round the panel")
+        XCTAssertTrue(isClose(try color(rep, at: NSPoint(x: panel.midX, y: 3), in: view), to: Opal.chrome))
+        XCTAssertTrue(isClose(try color(rep, at: NSPoint(x: panel.minX + 1, y: panel.minY + 1), in: view), to: Opal.chrome), "the panel's corners are round")
+        XCTAssertTrue(isClose(try color(rep, at: NSPoint(x: panel.maxX - 30, y: panel.minY + ChannelHeader.height + 30), in: view), to: Opal.page), "the place is on the page")
+
+        XCTAssertTrue(isClose(try color(rep, at: NSPoint(x: panel.midX, y: panel.maxY - 6), in: view), to: Opal.planet), "the planet below the horizon")
+        let limb = try (20...34).map { try color(rep, at: NSPoint(x: panel.midX, y: panel.maxY - CGFloat($0)), in: view) }
+        XCTAssertTrue(limb.contains { $0.blueComponent > 0.4 }, "its limb is lit in the rim's light 28 points up")
+    }
+
+    func testTheBoxAndTheLastRowComeToRestAboveTheHorizon() throws {
+        let view = view()
+        view.show(book(threads: 30))
+        view.select(.thread("t0", in: .channel(.of(steve))))
+        view.layoutSubtreeIfNeeded()
+        for pane in [view.pane, view.threadPane] {
+            let box = view.convert(pane.composer.frame, from: pane)
+            XCTAssertGreaterThan(box.height, 0)
+            XCTAssertLessThanOrEqual(box.maxY, panel(of: view).maxY - 18, "with the box's own padding, its words end over the limb, 28 points up at its highest")
+        }
+
+        view.select(.threads)
+        view.layoutSubtreeIfNeeded()
+        view.pane.scrollOffset += view.pane.distanceFromBottom
+        let lowest = try XCTUnwrap(subviews(of: view.pane).compactMap { $0 as? ThreadDigestRowView }.map { view.convert($0.frame, from: $0.superview).maxY }.max())
+        XCTAssertLessThanOrEqual(lowest, panel(of: view).maxY - 28, "with no box, the last row comes to rest above it")
+    }
+
+    func testTheSidebarGrowsWithYourTextSize() throws {
+        defer { MessagesInk.textSize = .standard }
+        let view = view()
+        view.show(book())
+        let standard = try XCTUnwrap(view.sidebar.row(for: .activity)).frame.height
+        MessagesInk.textSize = .larger
+        view.restyle()
+        let larger = try XCTUnwrap(view.sidebar.row(for: .activity)).frame.height
+        XCTAssertEqual(larger - standard, 4, "a row grows as its name does")
+    }
+
+    func testTheToolbarsActionsAreIconsThatSayWhatTheyDo() throws {
+        let view = view()
+        var muted = book()
+        muted.waiting.notifications = [ChannelID.of(steve).settingsKey: ChannelNotifications(muted: true)]
+        view.show(muted)
+        let buttons = { self.subviews(of: view.pane).compactMap { $0 as? QuietButton } + self.subviews(of: view.threadPane).compactMap { $0 as? QuietButton } }
+        view.select(.channel(.of(steve)))
+        let bell = try XCTUnwrap(buttons().first { $0.accessibilityLabel() == CatWords.muted })
+        XCTAssertEqual(bell.symbol, "bell.slash", "struck through while it's muted")
+        XCTAssertEqual(bell.toolTip, CatWords.muted)
+        view.select(.channel(.of(pepper)))
+        XCTAssertEqual(buttons().first { $0.accessibilityLabel() == CatWords.notifications }?.symbol, "bell")
+
+        view.select(inThread)
+        for name in [CatWords.openInT3, CatWords.closeThread] {
+            let button = try XCTUnwrap(buttons().first { $0.accessibilityLabel() == name }, name)
+            XCTAssertNotNil(button.symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }, name)
+            XCTAssertEqual(button.toolTip, name)
+        }
     }
 }

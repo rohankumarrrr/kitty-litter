@@ -36,13 +36,14 @@ struct ChannelSidebarItem: Equatable {
     }
 }
 
-/// The left side of the window: Activity and Threads, then #general and a channel for each kitten, then the DM.
+/// The left side of the window, flush on its chrome: Activity and Threads, then #general and a channel for each kitten,
+/// then the DM.
 final class ChannelSidebar: QuietView {
     static let width: CGFloat = 220
     /// Leaves room for the window's buttons.
     private static let top: CGFloat = 38
-    private static let rowHeight: CGFloat = 30
-    private static let headingHeight: CGFloat = 32
+    private static var rowHeight: CGFloat { MessagesInk.body + 17 }
+    private static var headingHeight: CGFloat { MessagesInk.label + 21 }
     private static let footerHeight: CGFloat = 68
 
     var onSelect: ((ChannelPlace) -> Void)?
@@ -112,12 +113,13 @@ final class ChannelSidebar: QuietView {
         list.subviews.forEach { $0.removeFromSuperview() }
         rows = []
         var y: CGFloat = 0
+        let count = groups.reduce(0) { $0 + $1.items.count }
         for group in groups {
             if let heading = group.heading {
                 y += addHeading(heading, at: y)
             }
             for item in group.items {
-                let row = ChannelSidebarRow(item: item)
+                let row = ChannelSidebarRow(item: item, light: .drifting(rows.count, of: count))
                 row.onPress = { [weak self] in self?.onSelect?(item.place) }
                 row.update(tick: tick)
                 row.frame = NSRect(x: 8, y: y, width: Self.width - 16, height: Self.rowHeight)
@@ -130,11 +132,7 @@ final class ChannelSidebar: QuietView {
     }
 
     private func addHeading(_ text: String, at y: CGFloat) -> CGFloat {
-        let label = NSTextField(labelWithAttributedString: NSAttributedString(string: text.uppercased(), attributes: [
-            .font: MessagesInk.font(ofSize: 10, weight: .semibold),
-            .foregroundColor: MessagesInk.soft,
-            .kern: 0.5,
-        ]))
+        let label = NSTextField(labelWithAttributedString: MessagesInk.label(text))
         label.sizeToFit()
         label.frame.origin = NSPoint(x: 16, y: y + Self.headingHeight - label.frame.height - 5)
         list.addSubview(label)
@@ -154,16 +152,20 @@ final class ChannelSidebar: QuietView {
     override func draw(_ dirtyRect: NSRect) {
         MessagesInk.sidebar.setFill()
         bounds.fill(using: .sourceOver)
-        MessagesInk.line.setFill()
-        NSRect(x: bounds.width - 1, y: 0, width: 1, height: bounds.height).fill(using: .sourceOver)
     }
 }
 
+/// A place, with its Rimlight tile: a kitten's cat lit in its colour, the cat's in its own hue, and a glyph for the rest.
 final class ChannelSidebarRow: ChannelRowView {
-    private static let iconSide: CGFloat = 22
-    private static let iconInset: CGFloat = 6
+    private static let tileSide: CGFloat = 22
+    private static let tileInset: CGFloat = 6
+    /// The cat a point to each of its pixels, so it stays crisp.
+    private static let catSide: CGFloat = 16
+    private static let dotSide: CGFloat = 8
 
     let item: ChannelSidebarItem
+    /// A tile's light when it isn't a kitten's or the cat's, drifting down the list.
+    private let light: Opal.Light
     var onPress: (() -> Void)?
     var isSelected = false {
         didSet {
@@ -175,8 +177,9 @@ final class ChannelSidebarRow: ChannelRowView {
     }
     private var tick = 0
 
-    init(item: ChannelSidebarItem) {
+    init(item: ChannelSidebarItem, light: Opal.Light = .drifting(0, of: 1)) {
         self.item = item
+        self.light = light
         super.init(frame: .zero)
         setAccessibilityElement(true)
         // One place shows at a time, as with tabs, so VoiceOver says which is selected.
@@ -215,66 +218,97 @@ final class ChannelSidebarRow: ChannelRowView {
         if isLive { needsDisplay = true }
     }
 
+    /// What the row sits on, which the status dot's ring matches.
+    private var ground: NSColor { isSelected ? MessagesInk.press : hovering ? MessagesInk.hover : MessagesInk.sidebar }
+
     override func draw(_ dirtyRect: NSRect) {
         if isSelected || hovering {
-            (isSelected ? MessagesInk.press : MessagesInk.hover).setFill()
-            NSBezierPath(roundedRect: bounds, xRadius: 7, yRadius: 7).fill()
+            ground.setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: Opal.Corner.control, yRadius: Opal.Corner.control).fill()
         }
 
-        let side = Self.iconSide
-        let frame = NSRect(x: Self.iconInset, y: (bounds.height - side) / 2, width: side, height: side)
+        let side = Self.tileSide
+        let tile = NSRect(x: Self.tileInset, y: ((bounds.height - side) / 2).rounded(), width: side, height: side)
+        let cat = tile.insetBy(dx: (side - Self.catSide) / 2, dy: (side - Self.catSide) / 2)
         switch item.icon {
         case .kitten(let status):
-            CatStamp.draw(status.pose(tick: isLive ? tick : 0), jacket: ChannelSpeakerLook.color(of: status.kitten), in: frame, on: self, fraction: isFaded ? 0.4 : 1)
+            let color = ChannelSpeakerLook.color(of: status.kitten)
+            faded(isFaded) {
+                Opal.tile(in: tile, light: color.map(Opal.Light.of) ?? .shades)
+                CatStamp.draw(status.pose(tick: isLive ? tick : 0), jacket: color, in: cat, on: self)
+            }
+            // A count says it needs you in the same rose, so the dot shows only without one. The pose and the words
+            // VoiceOver hears carry the state, so the dot is decoration.
+            if item.badge == 0, let dot = status.state.dotColor { drawDot(dot, on: tile) }
         case .shades:
-            CatStamp.draw(CatPose(frame: .sit), jacket: nil, in: frame, on: self)
+            Opal.tile(in: tile, light: .shades)
+            CatStamp.draw(CatPose(frame: .sit), jacket: nil, in: cat, on: self)
         case .activity:
-            drawSymbol("bell", in: frame)
+            drawGlyph("bell.fill", on: tile)
         case .threads:
-            drawSymbol("bubble.left.and.bubble.right", in: frame)
+            drawGlyph("bubble.left.and.bubble.right.fill", on: tile)
         case .general:
-            drawSymbol("number", in: frame)
+            drawGlyph("number", on: tile)
         }
 
-        var right = bounds.width - 10
-        // A count says it needs you in the same red, so the square shows only without one. The pose and the words
-        // VoiceOver hears carry the state, so the square is decoration and keeps the glint's colour even where it's faint.
-        if item.badge == 0, case .kitten(let status) = item.icon, let dot = status.state.dotColor {
-            dot.setFill()
-            NSBezierPath(rect: NSRect(x: right - 8, y: bounds.midY - 4, width: 8, height: 8)).fill()
-            right -= 16
-        }
+        let lit = item.isUnread || item.badge > 0
+        var right = bounds.width - 8
         if item.badge > 0 {
-            let count = NSAttributedString(string: "\(item.badge)", attributes: [.font: MessagesInk.font(ofSize: 11, weight: .bold, tabular: true), .foregroundColor: MessagesInk.onBadge])
+            let count = NSAttributedString(string: "\(item.badge)", attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .semibold, tabular: true), .foregroundColor: MessagesInk.onBadge])
             let size = count.size()
-            let pill = NSRect(x: right - max(size.width + 10, 18), y: bounds.midY - 9, width: max(size.width + 10, 18), height: 18)
+            let width = max(ceil(size.width) + 10, 18)
+            let pill = NSRect(x: right - width, y: (bounds.midY - 9).rounded(), width: width, height: 18)
             MessagesInk.badge.setFill()
             NSBezierPath(roundedRect: pill, xRadius: 9, yRadius: 9).fill()
             count.draw(at: NSPoint(x: pill.midX - size.width / 2, y: pill.midY - size.height / 2))
             right = pill.minX - 6
         }
 
-        let left = Self.iconInset + side + 8
+        let left = tile.maxX + 9
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
-        NSAttributedString(string: item.title, attributes: [
-            .font: MessagesInk.font(ofSize: 13, weight: item.isUnread || item.badge > 0 ? .bold : .regular),
-            .foregroundColor: isFaded ? MessagesInk.soft : item.isUnread || item.badge > 0 || isSelected ? MessagesInk.text : MessagesInk.soft,
+        let name = NSAttributedString(string: item.title, attributes: [
+            .font: MessagesInk.font(ofSize: MessagesInk.body, weight: lit ? .semibold : isSelected ? .medium : .regular),
+            .foregroundColor: !isFaded && (lit || isSelected) ? MessagesInk.strong : MessagesInk.soft,
             .paragraphStyle: truncating,
-        ]).draw(in: NSRect(x: left, y: (bounds.height - 17) / 2, width: max(right - left, 0), height: 17))
+        ])
+        let height = ceil(name.size().height)
+        name.draw(in: NSRect(x: left, y: ((bounds.height - height) / 2).rounded(), width: max(right - left, 0), height: height))
     }
 
-    private func drawSymbol(_ name: String, in frame: NSRect) {
+    /// A kitten that isn't set up yet shows faintly, its tile and all.
+    private func faded(_ isFaded: Bool, _ draw: () -> Void) {
+        guard isFaded, let context = NSGraphicsContext.current?.cgContext else { return draw() }
+        context.saveGState()
+        context.setAlpha(0.4)
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        draw()
+        context.endTransparencyLayer()
+        context.restoreGState()
+    }
+
+    /// A status dot on the tile's corner, ringed in what the row sits on, as Slack marks who's around.
+    private func drawDot(_ color: NSColor, on tile: NSRect) {
+        let side = Self.dotSide
+        let dot = NSRect(x: tile.maxX - side + 2, y: tile.maxY - side + 2, width: side, height: side)
+        ground.setFill()
+        NSBezierPath(ovalIn: dot.insetBy(dx: -2, dy: -2)).fill()
+        color.setFill()
+        NSBezierPath(ovalIn: dot).fill()
+    }
+
+    private func drawGlyph(_ name: String, on tile: NSRect) {
+        Opal.tile(in: tile, light: light)
         guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .medium))
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold))
         else { return }
-        let tinted = NSImage(size: symbol.size, flipped: false) { rect in
+        let white = NSImage(size: symbol.size, flipped: false) { rect in
             symbol.draw(in: rect)
-            (self.item.isUnread || self.item.badge > 0 || self.isSelected ? MessagesInk.text : MessagesInk.soft).set()
+            MessagesInk.strong.set()
             rect.fill(using: .sourceAtop)
             return true
         }
         let size = symbol.size
-        tinted.draw(in: NSRect(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        white.draw(in: NSRect(x: tile.midX - size.width / 2, y: tile.midY - size.height / 2, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
     }
 }
