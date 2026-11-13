@@ -12,6 +12,8 @@ public enum Permissions {
         case screenRecording = "Privacy_ScreenCapture"
         case accessibility = "Privacy_Accessibility"
         case automation = "Privacy_Automation"
+        case microphone = "Privacy_Microphone"
+        case inputMonitoring = "Privacy_ListenEvent"
     }
 
     /// macOS only updates this answer for a running app after it restarts.

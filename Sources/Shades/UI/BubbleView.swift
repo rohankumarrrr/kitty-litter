@@ -1,38 +1,49 @@
 import AppKit
+import ShadesContext
 import ShadesCore
 
-/// What goes inside the speech bubble. It lays itself out and says how big it wants to be.
+/// What goes inside the speech bubble: a rimlit card like the widgets on your desktop, lit by whoever's speaking. It lays
+/// itself out and says how big it wants to be.
 final class BubbleView: BalloonView {
-    private static let padding: CGFloat = 14
+    /// The widget card's own padding.
+    private static let inset = NSEdgeInsets(top: 15, left: 18, bottom: 16, right: 18)
     private static let maxWidth: CGFloat = 340
     private static let minWidth: CGFloat = 96
     private static let maxTextHeight: CGFloat = 280
     private static let maxCodeHeight: CGFloat = 120
-    private static let rowGap: CGFloat = 10
+    private static let rowGap: CGFloat = 12
+    private static let buttonGap: CGFloat = 8
+    /// Around a command, as around a code block in Messages.
+    private static let codePadding: CGFloat = 8
 
     var onAction: ((BubbleAction) -> Void)?
     /// Whether Messages shows this thread, so Open goes there and T3 is only for what it doesn't.
     var opensInMessages: (String) -> Bool = { _ in false }
+    /// The colour of a thread's kitten, which lights the card while it speaks. Everything else is lit in Shades' hue.
+    var kittenColor: (String) -> UInt32? = { _ in nil }
 
     private let scroll = NSScrollView()
     let textView = BubbleTextView()
     private let scroller = BubbleScroller()
-    private let topFade = EdgeFade(top: true)
-    private let bottomFade = EdgeFade(top: false)
     private let caption = NSTextField(labelWithString: "")
     private let counter = NSTextField(labelWithString: "")
     private let heading = NSTextField(wrappingLabelWithString: "")
+    /// Left to right. The first `leadingButtons` sit at the left, apart, and the rest at the right, with the primary last,
+    /// as in a macOS alert.
     private var buttons: [QuietButton] = []
+    private var leadingButtons = 0
     /// Whether the buttons showing open their thread in Messages, so they change once Messages can show it.
     private var opensHere: Bool?
+    private var codeBlock: NSRect?
 
     private var content: BubbleContent?
     private var grownWidth: CGFloat = 0
-    private var followEnd = true
+    private var followEnd = false
     private var thinkingDots = 3
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        look = .card(.shades)
         scroll.drawsBackground = false
         scroll.verticalScroller = scroller
         scroller.controlSize = .small
@@ -42,8 +53,6 @@ final class BubbleView: BalloonView {
         scroll.documentView = textView
         scroll.contentView.postsBoundsChangedNotifications = true
         addSubview(scroll)
-        addSubview(topFade)
-        addSubview(bottomFade)
         NotificationCenter.default.addObserver(self, selector: #selector(textScrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
 
         textView.isEditable = false
@@ -63,17 +72,14 @@ final class BubbleView: BalloonView {
         textView.layoutManager?.delegate = self
 
         for label in [caption, counter] {
-            label.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
             label.lineBreakMode = .byTruncatingTail
             label.isHidden = true
+            label.textColor = MessagesInk.soft
             addSubview(label)
         }
-        heading.font = .systemFont(ofSize: 13, weight: .semibold)
         heading.isHidden = true
+        heading.textColor = MessagesInk.strong
         addSubview(heading)
-        caption.textColor = MessagesInk.soft
-        counter.textColor = MessagesInk.soft
-        heading.textColor = MessagesInk.text
     }
 
     @available(*, unavailable)
@@ -81,26 +87,39 @@ final class BubbleView: BalloonView {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard let codeBlock else { return }
+        MessagesInk.text.withAlphaComponent(0.08).setFill()
+        NSBezierPath(roundedRect: codeBlock, xRadius: Opal.Corner.control, yRadius: Opal.Corner.control).fill()
+    }
+
     /// Draws this content and returns the size the whole window should be.
     func update(_ content: BubbleContent, keepingWidth: Bool, limitHeight: CGFloat) -> NSSize {
         let sameKind = keepingWidth && self.content?.kind == content.kind
         if !sameKind {
             grownWidth = 0
-            followEnd = true
+            followEnd = content.followsEnd
         }
-        let rebuildButtons = !sameKind || self.content?.buttonKey != content.buttonKey || opensHere != content.threadID.map(opensInMessages)
+        let rebuild = !sameKind || self.content?.buttonKey != content.buttonKey || opensHere != content.threadID.map(opensInMessages)
         self.content = content
 
         let words = content.words(thinkingDots: thinkingDots)
         let body = words.body
         let code = words.isCode
 
+        caption.font = MessagesInk.font(ofSize: MessagesInk.meta, tabular: true)
+        counter.font = caption.font
+        heading.font = MessagesInk.font(ofSize: MessagesInk.title, weight: .semibold)
         setLabel(caption, words.caption)
         setLabel(counter, words.counter)
         setLabel(heading, words.heading)
-        if rebuildButtons { buildButtons(for: content) }
+        if rebuild {
+            look = .card(content.speaker.flatMap(kittenColor).map(Opal.Light.of) ?? .shades)
+            buildButtons(for: content)
+        }
 
-        let font = code ? NSFont.monospacedSystemFont(ofSize: 12, weight: .regular) : NSFont.systemFont(ofSize: 13)
+        let font = code ? NSFont.monospacedSystemFont(ofSize: MessagesInk.body - 1, weight: .regular) : MessagesInk.font(ofSize: MessagesInk.body)
         let style = NSMutableParagraphStyle()
         style.lineSpacing = 2
         let attributed = NSAttributedString(string: body, attributes: [
@@ -130,36 +149,42 @@ final class BubbleView: BalloonView {
     }
 
     private func layout(limitHeight: CGFloat, code: Bool) -> NSSize {
-        let padding = Self.padding
+        let inset = Self.inset
         let content = self.content!
-        let buttonsWidth = buttons.reduce(0) { $0 + $1.frame.width } + CGFloat(max(0, buttons.count - 1)) * 6
-        let inner = Self.maxWidth - padding * 2
+        let codeRoom = code ? Self.codePadding * 2 : 0
+        let groupGap = leadingButtons > 0 && leadingButtons < buttons.count ? Self.rowGap : 0
+        let buttonsWidth = buttons.reduce(0) { $0 + $1.frame.width } + CGFloat(max(0, buttons.count - 1)) * Self.buttonGap + groupGap
+        let inner = Self.maxWidth - inset.left - inset.right
 
-        // Measured by the text view's own layout, so what's reserved is exactly what it draws.
-        let container = textView.textContainer!
-        let manager = textView.layoutManager!
-        container.size = NSSize(width: inner, height: .greatestFiniteMagnitude)
-        manager.ensureLayout(for: container)
-        let natural = ceil(manager.usedRect(for: container).width)
+        // The widest line, from the words themselves. The layout manager's used rect comes back as wide as its
+        // container once it's laid the same words out before, which grew a bubble to full width a moment after it showed.
+        let natural = ceil(textView.attributedString().boundingRect(
+            with: NSSize(width: inner - codeRoom, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        ).width) + codeRoom
         var extras: CGFloat = 0
         if !caption.isHidden { extras = max(extras, ceil(caption.intrinsicContentSize.width)) }
         if !heading.isHidden { extras = max(extras, ceil(heading.attributedStringValue.size().width)) }
-        var innerWidth = min(inner, max(natural + 1, buttonsWidth, extras, Self.minWidth - padding * 2))
+        var innerWidth = min(inner, max(natural + 1, buttonsWidth, extras, Self.minWidth - inset.left - inset.right))
         if content.fixedWidth { innerWidth = inner }
         // While text streams the bubble only ever widens, so lines don't jump about.
         innerWidth = max(innerWidth, grownWidth)
         grownWidth = innerWidth
-        let width = innerWidth + padding * 2
+        let width = innerWidth + inset.left + inset.right
+        let textWidth = innerWidth - codeRoom
 
-        container.size = NSSize(width: innerWidth, height: .greatestFiniteMagnitude)
+        // Measured by the text view's own layout, so what's reserved is exactly what it draws.
+        let container = textView.textContainer!
+        let manager = textView.layoutManager!
+        container.size = NSSize(width: textWidth, height: .greatestFiniteMagnitude)
         manager.ensureLayout(for: container)
         let textHeight = ceil(manager.usedRect(for: container).height)
 
-        var chrome = padding * 2
+        var chrome = inset.top + inset.bottom + codeRoom
         var captionHeight: CGFloat = 0
         if !caption.isHidden || !counter.isHidden {
-            captionHeight = 14
-            chrome += captionHeight + 4
+            captionHeight = ceil(caption.intrinsicContentSize.height)
+            chrome += captionHeight + 6
         }
         var headingHeight: CGFloat = 0
         if !heading.isHidden {
@@ -167,7 +192,7 @@ final class BubbleView: BalloonView {
                 with: NSSize(width: innerWidth, height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading]
             ).height)
-            chrome += headingHeight + 4
+            chrome += headingHeight + 6
         }
         let buttonsHeight: CGFloat = buttons.isEmpty ? 0 : 26
         if !buttons.isEmpty { chrome += buttonsHeight + Self.rowGap }
@@ -181,43 +206,50 @@ final class BubbleView: BalloonView {
         setFrameSize(size)
 
         // Top down, inside the message part of the view.
-        var y = body.maxY - padding
+        var y = body.maxY - inset.top
         if !caption.isHidden || !counter.isHidden {
             y -= captionHeight
             // Labels carry 2 points of their own padding each side, so they sit that much further out.
             let counterWidth = counter.isHidden ? 0 : ceil(counter.intrinsicContentSize.width) + 4
             let captionWidth = counter.isHidden ? innerWidth + 4 : innerWidth - counterWidth - 2
-            caption.frame = NSRect(x: padding - 2, y: y, width: captionWidth, height: captionHeight)
-            counter.frame = NSRect(x: padding + innerWidth - counterWidth, y: y, width: counterWidth + 2, height: captionHeight)
-            y -= 4
+            caption.frame = NSRect(x: inset.left - 2, y: y, width: captionWidth, height: captionHeight)
+            counter.frame = NSRect(x: inset.left + innerWidth - counterWidth, y: y, width: counterWidth + 2, height: captionHeight)
+            y -= 6
         }
         if !heading.isHidden {
             y -= headingHeight
-            heading.frame = NSRect(x: padding - 2, y: y, width: innerWidth + 4, height: headingHeight)
-            y -= 4
+            heading.frame = NSRect(x: inset.left - 2, y: y, width: innerWidth + 4, height: headingHeight)
+            y -= 6
         }
-        y -= visibleText
-        // The scroll bar lives in the right padding, so it never covers the words.
-        let scrollWidth = innerWidth + padding - 3
-        scroll.frame = NSRect(x: padding, y: y, width: scrollWidth, height: visibleText)
-        // No bar flickering while text streams in. Once there's something to scroll it stays in sight, not just
-        // while scrolling, so a long answer always has a way back to its start.
-        scroll.scrollerStyle = .legacy
-        scroll.hasVerticalScroller = !content.isStreaming && textHeight > visibleText
-        let textWidth = scroll.contentSize.width
+        y -= visibleText + codeRoom
+        codeBlock = code ? NSRect(x: inset.left, y: y, width: innerWidth, height: visibleText + codeRoom) : nil
+        // The scroll bar lives in the card's right padding, so it never covers the words.
+        let textX = inset.left + codeRoom / 2
+        scroll.frame = NSRect(x: textX, y: y + codeRoom / 2, width: width - 4 - textX, height: visibleText)
+        let scrolls = !content.isStreaming && textHeight > visibleText
+        // No bar flickering while text streams in, and a flash of it once there's more to see than fits.
+        if scrolls && !scroll.hasVerticalScroller {
+            scroll.hasVerticalScroller = true
+            scroll.flashScrollers()
+        }
+        scroll.hasVerticalScroller = scrolls
         textView.minSize = NSSize(width: textWidth, height: 0)
-        textView.maxSize = NSSize(width: textWidth, height: .greatestFiniteMagnitude)
-        textView.frame = NSRect(x: 0, y: 0, width: textWidth, height: max(textHeight, visibleText))
+        textView.maxSize = NSSize(width: max(textWidth, scroll.contentSize.width), height: .greatestFiniteMagnitude)
+        textView.frame = NSRect(x: 0, y: 0, width: max(textWidth, scroll.contentSize.width), height: max(textHeight, visibleText))
         if followEnd { textView.scrollToEndOfDocument(nil) }
-        topFade.frame = NSRect(x: padding, y: scroll.frame.maxY - EdgeFade.height, width: innerWidth, height: EdgeFade.height)
-        bottomFade.frame = NSRect(x: padding, y: scroll.frame.minY, width: innerWidth, height: EdgeFade.height)
         textScrolled()
 
-        // A button with no background of its own lines its words up with the text above.
-        var x = padding - (buttons.first?.style == .text ? 6 : 0)
-        for button in buttons {
-            button.setFrameOrigin(NSPoint(x: x, y: body.minY + padding))
-            x += button.frame.width + 6
+        // A button with no background of its own lines its words up with the edge of the text.
+        var x = inset.left - (buttons.first?.style == .text ? 7 : 0)
+        for button in buttons.prefix(leadingButtons) {
+            button.setFrameOrigin(NSPoint(x: x, y: body.minY + inset.bottom))
+            x += button.frame.width + Self.buttonGap
+        }
+        x = width - inset.right + (buttons.last?.style == .text ? 7 : 0)
+        for button in buttons.dropFirst(leadingButtons).reversed() {
+            x -= button.frame.width
+            button.setFrameOrigin(NSPoint(x: x, y: body.minY + inset.bottom))
+            x -= Self.buttonGap
         }
         needsDisplay = true
         return size
@@ -226,13 +258,13 @@ final class BubbleView: BalloonView {
     /// Text hidden past an edge fades out there, so a cut line reads as more to come rather than a mistake.
     @objc private func textScrolled() {
         let shown = scroll.contentView.bounds
-        topFade.isHidden = shown.minY < 1
-        bottomFade.isHidden = shown.maxY > textView.frame.height - 1
+        textView.fades = (top: shown.minY >= 1, bottom: shown.maxY < textView.frame.height - 1)
     }
 
     private func buildButtons(for content: BubbleContent) {
         buttons.forEach { $0.removeFromSuperview() }
         buttons = []
+        leadingButtons = 0
 
         @discardableResult
         func add(_ title: String, _ style: QuietButton.Style, _ action: BubbleAction) -> QuietButton {
@@ -243,11 +275,11 @@ final class BubbleView: BalloonView {
         }
         // Messages first. T3 is only for a thread Messages doesn't show.
         opensHere = content.threadID.map(opensInMessages)
-        func open(_ threadID: String, primary: Bool = true) {
+        func open(_ threadID: String) {
             if opensInMessages(threadID) {
-                add("Open", primary ? .plain : .text, .show(threadID: threadID))
+                add("Open", .plain, .show(threadID: threadID))
             } else {
-                add(CatWords.openInT3, .text, .open(threadID: threadID))
+                add(CatWords.openInT3, .plain, .open(threadID: threadID))
             }
         }
 
@@ -256,8 +288,6 @@ final class BubbleView: BalloonView {
             break
         case .reply(let text, let done, let threadID, _, let canReplace):
             guard done else { break }
-            if canReplace { add("Replace", .plain, .replace(text)) }
-            if let threadID { open(threadID, primary: !canReplace) }
             let copy = add("Copy", .text, .copy(text))
             let copied = copy.onPress
             copy.onPress = { [weak copy] in
@@ -265,15 +295,21 @@ final class BubbleView: BalloonView {
                 copy?.flash("Copied")
                 BubbleController.announce("Copied")
             }
+            if let threadID { open(threadID) }
+            // A rewrite is asked for to go in place, so that's the one you most likely want.
+            if canReplace { add("Replace", .filled, .replace(text)) }
         case .line(_, let threadID), .notice(_, _, let threadID, _):
             if let threadID { open(threadID) }
+            // An error that needs a setting changed takes you there, as a macOS app's would.
+            if let pane = content.settingsPane { add(CatWords.openSystemSettings, .plain, .settings(pane)) }
         case .approval(let request, _, _):
-            // The same weight for both: nothing here should lean you toward yes.
-            add("Deny", .plain, .approval(request, .decline))
-            add("Allow", .plain, .approval(request, .accept))
+            // Allowing more than this one thing sits apart, so it's never pressed for Allow.
             if ApprovalPolicy.offersSessionAllow(request.kind) {
                 add("Allow for this session", .text, .approval(request, .acceptForSession))
+                leadingButtons = 1
             }
+            add("Deny", .plain, .approval(request, .decline))
+            add("Allow", .filled, .approval(request, .accept))
         case .inbox:
             add("Open", .plain, .openMessages)
         }
@@ -303,37 +339,37 @@ final class BubbleScroller: NSScroller {
     }
 }
 
-/// The bubble's paper fading in over the text at one edge.
-final class EdgeFade: NSView {
-    static let height: CGFloat = 28
-    private let top: Bool
-
-    init(top: Bool) {
-        self.top = top
-        super.init(frame: .zero)
-        isHidden = true
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let paper = MessagesInk.paper
-        let clear = paper.withAlphaComponent(0)
-        NSGradient(starting: top ? clear : paper, ending: top ? paper : clear)?.draw(in: bounds, angle: 90)
-    }
-
-    // Only paint, so clicks, selecting and scrolling reach the text under it.
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-}
-
 /// The reply text. Clicking it is the one thing that gives the bubble the keyboard,
 /// so you can select and copy, and only because you asked.
 final class BubbleTextView: NSTextView {
+    private static let fadeHeight: CGFloat = 28
+
     var onScrollByUser: (() -> Void)?
+    /// Which edges of what's showing fade out, since there's more past them.
+    var fades = (top: false, bottom: false) {
+        didSet { if fades != oldValue { needsDisplay = true } }
+    }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var needsPanelToBecomeKey: Bool { isSelectable }
+
+    /// The words themselves fade, so the card's light shows through just as it does everywhere else.
+    override func draw(_ dirtyRect: NSRect) {
+        guard fades.top || fades.bottom, let context = NSGraphicsContext.current?.cgContext else { return super.draw(dirtyRect) }
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        super.draw(dirtyRect)
+        context.setBlendMode(.destinationOut)
+        let shown = visibleRect
+        let solid = NSColor.black
+        let clear = NSColor.black.withAlphaComponent(0)
+        if fades.top {
+            NSGradient(starting: solid, ending: clear)?.draw(in: NSRect(x: shown.minX, y: shown.minY, width: shown.width, height: Self.fadeHeight), angle: 90)
+        }
+        if fades.bottom {
+            NSGradient(starting: clear, ending: solid)?.draw(in: NSRect(x: shown.minX, y: shown.maxY - Self.fadeHeight, width: shown.width, height: Self.fadeHeight), angle: 90)
+        }
+        context.endTransparencyLayer()
+    }
 
     override func scrollWheel(with event: NSEvent) {
         onScrollByUser?()
@@ -409,11 +445,23 @@ extension BubbleContent {
         }
     }
 
+    /// The page in System Settings a line asks you to visit.
+    fileprivate var settingsPane: Permissions.Pane? {
+        guard case .line(let text, nil) = self else { return nil }
+        let panes: [String: Permissions.Pane] = [
+            CatWords.needsScreenRecording: .screenRecording,
+            CatWords.needsMicrophone: .microphone,
+            CatWords.needsAccessibility: .accessibility,
+            CatWords.needsInputMonitoring: .inputMonitoring,
+        ]
+        return panes[text]
+    }
+
     fileprivate var buttonKey: String {
         switch self {
         case .thinking, .listening: return ""
         case .reply(let text, let done, let thread, _, let canReplace): return done ? "reply|\(thread ?? "")|\(canReplace)|\(text)" : ""
-        case .line(_, let thread): return "line|\(thread ?? "")"
+        case .line(_, let thread): return "line|\(thread ?? "")|\(settingsPane?.rawValue ?? "")"
         case .notice(_, _, let thread, _): return "notice|\(thread ?? "")"
         case .approval(let request, _, _): return "approval|\(request.id)"
         case .inbox: return "inbox"
@@ -432,6 +480,21 @@ extension BubbleContent {
         case .thinking, .listening, .inbox: return false
         case .reply, .line, .notice, .approval: return true
         }
+    }
+
+    /// The thread whose kitten is speaking, when it isn't Shades: one asking you something or telling you how it went.
+    fileprivate var speaker: String? {
+        switch self {
+        case .notice(_, _, let thread, _): return thread
+        case .approval(let request, _, _): return request.threadID
+        default: return nil
+        }
+    }
+
+    /// What you say keeps its newest words in sight. Anything else opens at its start, where you read from.
+    fileprivate var followsEnd: Bool {
+        if case .listening = self { return true }
+        return false
     }
 
     fileprivate var isStreaming: Bool {

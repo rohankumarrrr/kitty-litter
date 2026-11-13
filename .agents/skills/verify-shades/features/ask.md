@@ -4,8 +4,8 @@ You ask the cat something about what's on your screen. The router either answers
 
 ## Sub-features
 
-- `ask-answer` streams an answer into the bubble, with Open in T3 and Copy.
-- `ask-long` shows a long answer's end, with its top faded and a scroll bar that stays in sight, and the bottom fades instead once you scroll back to its start.
+- `ask-answer` streams an answer into the bubble, a black card lit along its foot in Shades' hue, with Copy and Open in T3 at its right.
+- `ask-long` opens a long answer at its start, with its last line fading out to show there's more, and the system's scroll bar. The top fades instead once you scroll to its end.
 - `ask-kitten` passes your words to a kitten, and the bubble says "<kitten> has this."
 - `ask-handoff` starts the frontier agent, and the bubble says "<model> has this."
 - `ask-session` passes a follow-up to the session it carries on from.
@@ -26,12 +26,13 @@ Preconditions:
 
 Journey: `journeys/ask.txt`.
 
-- **Answer.** Ask about the page. `ask What's on this page?`, then `wait 4`. `[demo] started demo-1` shows the router prompt, and `bubble.png` in `1-answered` shows the pricing answer with Open in T3 and Copy.
+- **Answer.** Ask about the page. `ask What's on this page?`, then `wait 4`. `[demo] started demo-1` shows the router prompt, and `bubble.png` in `1-answered` shows the pricing answer with Copy and Open in T3.
 - **To a kitten.** Ask about a resume. `ask I need help with my resume`, then `wait 3`. `[demo] carried on in demo-1` is the router's turn, then `[demo] started demo-2 ... I need help with my resume / --- / Shades, the user's desktop cat, gave you this` is Steve's new thread with your words first. `bubble.png` in `2-to-a-kitten` says "Steve Pawsniak has this."
-- **Long answer.** Journey: `journeys/long-answer.txt`. `ask Give me a long answer about this page`, then `wait 14`. `bubble.png` in `0-done` shows the answer's last lines, its top line fading out, and the scroll bar's knob at the right. There's no demo command to scroll it, so the faded bottom at its start is in `testALongAnswerShowsThereIsMoreAboveAndAWayBackToItsStart`.
+- **Long answer.** Journey: `journeys/long-answer.txt`. `ask Give me a long answer about this page`, then `wait 14`. `bubble.png` in `0-done` shows the answer's first lines and its last line fading out. There's no demo command to scroll it, so the faded top at its end is in `testALongAnswerOpensAtItsStartAndShowsThereIsMoreBelow`.
 - **Hand-off.** Ask for a fix. `ask Fix the buy button`, then `wait 3`. `[demo] started demo-3 ... You were started from the user's desktop cat` is the frontier agent. `bubble.png` in `3-handed-off` says "Opus has this."
-- **Rewrite.** Journey: `journeys/rewrite.txt`. `select <text>` stands for text you've selected, then `ask Tighten this`, then `wait 5`. `bubble.png` in `1-rewritten` shows the shorter text with Replace, Open in T3 and Copy. `replace` presses Replace, and `[demo] would replace the selection with: ...` is the write. Then a second rewrite, `select` alone to click somewhere else, and `replace` again: `[demo] the selection moved, so nothing was replaced`, and `bubble.png` in `3-copied` says it's copied instead.
+- **Rewrite.** Journey: `journeys/rewrite.txt`. `select <text>` stands for text you've selected, then `ask Tighten this`, then `wait 5`. `bubble.png` in `1-rewritten` shows the shorter text with Copy, Open in T3 and Replace, the one violet button, at the right. `replace` presses Replace, and `[demo] would replace the selection with: ...` is the write. Then a second rewrite, `select` alone to click somewhere else, and `replace` again: `[demo] the selection moved, so nothing was replaced`, and `bubble.png` in `3-copied` says it's copied instead.
 - **Point.** Journey: `journeys/pointing.txt`. `ask`, `wait 0.5`, then `submit Where's the free trial button?` and `wait 6`. `bubble.png` in `1-pointed` shows the answer with no `POINT:` line, and `windows` puts the cat on top of the demo's Start free trial button, which sits 62% across and 55% down the main display. `esc` sends it home. `submit Where's the logo?` points at an item the screen doesn't have, so `bubble.png` in `2-cant-point` says "I couldn't find it on screen to point at." and the cat stays home. `submit Where's the share button?` points at Safari's Share button, just under the menu bar, where there's no room above it, so `windows` puts the cat underneath it instead of on top.
+- **Every state of the cat's windows.** Journey: `journeys/cat-windows.txt`, about 90 seconds. It draws the bubble thinking, answering, with a long answer, a rewrite, a hand-off, an approval and two, a question, a report, the inbox and each error, the Ask box empty, typed into, talked into and with a dropped file, and the pill, each into its own folder in `.verify/shades/cat-windows/`. `journeys/fades.txt` prints each window's `alpha=` a few hundredths of a second after it comes and goes. Run it as it is, then with `--reduce-motion`, where every `alpha=` is 1.00 and the bubble's gone at once.
 - **Follow-up.** `ask What you said, can you follow up?`, then `wait 4`. `[demo] forwarded to demo-research ... What you said, can you follow up? / --- / Passed on` shows it went to the newest running session, Compare pixel fonts. This step isn't in the journey.
 
 ## Gotchas

@@ -66,7 +66,7 @@ extension AppController {
             dropIsOpen = true
             showBox(InputRequest(
                 placeholder: CatWords.askAboutDrop,
-                caption: CatWords.looking(at: dropped),
+                attachment: dropped.droppedNames.isEmpty ? nil : dropped.droppedNames.joined(separator: ", "),
                 allowsEmpty: true,
                 onSubmit: { [weak self] question in
                     self?.dropIsOpen = false

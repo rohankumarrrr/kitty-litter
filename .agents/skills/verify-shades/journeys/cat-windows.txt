@@ -1,0 +1,133 @@
+front
+wait 1
+ask What's on this page?
+wait 0.7
+draw .verify/shades/cat-windows/01-thinking
+wait 4
+draw .verify/shades/cat-windows/02-answer
+esc
+ask Give me a long answer about this page
+wait 14
+draw .verify/shades/cat-windows/03-long-answer
+esc
+select Our pricing page has three plans and the middle one, which most people pick, is highlighted in the colour of the brand.
+ask Tighten this
+wait 5
+draw .verify/shades/cat-windows/04-rewrite
+esc
+select
+ask I need help with my resume
+wait 3
+draw .verify/shades/cat-windows/05-to-a-kitten
+esc
+ask Fix the buy button
+wait 3
+draw .verify/shades/cat-windows/06-handed-off
+esc
+wait 1
+esc
+approval command npm test
+wait 4
+draw .verify/shades/cat-windows/07-approval
+approval command npm run build && npm test && npx playwright test --project=chromium --reporter=line --workers=4
+wait 1
+draw .verify/shades/cat-windows/08-approval-one-of-two
+allow
+wait 1
+draw .verify/shades/cat-windows/09-approval-long-command
+allow
+wait 2
+esc
+wait 1
+esc
+wait 1
+question
+wait 3
+draw .verify/shades/cat-windows/10-question
+esc
+wait 1
+esc
+wait 1
+finish demo-tidy
+wait 8
+draw .verify/shades/cat-windows/11-finished
+esc
+wait 1
+esc
+wait 1
+report decision
+wait 8
+draw .verify/shades/cat-windows/12-inbox
+esc
+wait 1
+esc
+wait 1
+t3 off
+ask hello
+wait 3
+draw .verify/shades/cat-windows/13-error-t3
+esc
+t3 on
+wait 1
+esc
+ask
+wait 0.5
+submit Where's the logo?
+wait 6
+draw .verify/shades/cat-windows/14-error-cant-point
+esc
+wait 1
+esc
+drop /nowhere/notes.zip
+wait 1
+draw .verify/shades/cat-windows/15-error-cant-read
+esc
+drop pdf
+wait 1
+draw .verify/shades/cat-windows/16-ask-dropped-file
+submit Clawde should keep this
+wait 3
+draw .verify/shades/cat-windows/17-error-cant-take-files
+esc
+wait 1
+esc
+ask
+wait 1
+draw .verify/shades/cat-windows/18-ask-empty
+type Compare the three plans on this page and tell me which one fits a team of four that mostly needs shared folders and a little bit of storage
+wait 7
+draw .verify/shades/cat-windows/19-ask-typed
+esc
+wait 0.5
+ask
+wait 1
+voiceover press Speak
+wait 1.6
+draw .verify/shades/cat-windows/20-ask-mic
+esc
+wait 1
+esc
+wait 1
+pet
+windows
+wait 0.4
+draw .verify/shades/cat-windows/21-pill
+windows
+wait 2
+talk
+wait 1.6
+draw .verify/shades/cat-windows/22-listening
+wait 4
+esc
+wait 1
+esc
+ears denied
+talk
+wait 1
+draw .verify/shades/cat-windows/23-error-needs-a-setting
+buttons
+ears on
+esc
+wait 1
+front
+windows

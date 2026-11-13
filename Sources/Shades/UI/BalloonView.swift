@@ -1,12 +1,21 @@
 import AppKit
 
-/// A floating panel of Opal's glass, with a small stepped tail that matches the pixels of the cat.
+/// A floating panel with a small stepped tail that matches the pixels of the cat: Opal's glass, or a rimlit card like the
+/// widgets on your desktop, lit by whoever's speaking.
 class BalloonView: NSView {
+    enum Look: Equatable {
+        case glass
+        case card(Opal.Light)
+    }
+
+    var look = Look.glass { didSet { if look != oldValue { needsDisplay = true } } }
     var tailX: CGFloat? { didSet { needsDisplay = true } }
     var tailOnTop = false { didSet { needsDisplay = true } }
 
+    /// Glass's corners, which a card floating on the desktop rounds a little more.
     static let radius = Opal.Corner.popover
     private static let step: CGFloat = 4
+    private var radius: CGFloat { look == .glass ? Self.radius : Opal.Corner.floatingCard }
 
     /// The part of the view that's message rather than tail.
     var body: NSRect {
@@ -17,12 +26,15 @@ class BalloonView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        Opal.glass(outline())
+        switch look {
+        case .glass: Opal.glass(outline())
+        case .card(let light): Opal.card(in: body, radius: radius, light: light, shape: outline())
+        }
     }
 
     private func outline() -> NSBezierPath {
         let rect = body
-        let r = Self.radius
+        let r = radius
         let step = Self.step
         let path = NSBezierPath()
         let tail = tailX.map { min(max($0, rect.minX + r + step), rect.maxX - r - step) }

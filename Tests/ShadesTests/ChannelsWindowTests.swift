@@ -1432,7 +1432,8 @@ extension ChannelsWindowTests {
         }
     }
 
-    /// The bubble, the Ask box, the kittens view and the pairing code float, so they're Opal's glass, and the pill a capsule.
+    /// The Ask box, the kittens view and the pairing code float, so they're Opal's glass, and the pill a capsule of it. The
+    /// bubble floats on the desktop beside its widgets, so it's their black card.
     func testTheCatsOwnWindowsAreOpalGlass() throws {
         let away = NSRect(x: -20_000, y: -20_000, width: 800, height: 600)
         let cat = NSRect(x: away.midX, y: away.minY, width: 64, height: 64)
@@ -1451,11 +1452,11 @@ extension ChannelsWindowTests {
         pill.say("Purr", over: cat, in: away, seconds: nil)
 
         let windows: [(String, QuietPanel, NSPoint, UInt32)] = [
-            ("bubble", bubble.panel, NSPoint(x: 6, y: bubble.view.bounds.midY), Opal.raised),
+            ("bubble", bubble.panel, NSPoint(x: bubble.view.bounds.midX, y: 4), Opal.cardTop),
             ("Ask box", input.panel, NSPoint(x: 6, y: 50), Opal.raised),
             ("kittens", kittens.panel, NSPoint(x: 4, y: kittens.frame.height / 2), Opal.raised),
             ("pairing", pairing.panel, NSPoint(x: 12, y: 12), Opal.raised),
-            ("pill", pill.panel, NSPoint(x: 4, y: pill.panel.frame.height / 2), Opal.control),
+            ("pill", pill.panel, NSPoint(x: 4, y: pill.panel.frame.height / 2), Opal.raised),
         ]
         for (window, panel, point, want) in windows {
             let root = try XCTUnwrap(panel.contentView)

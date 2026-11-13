@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ShadesContext
 import ShadesCore
 
 /// What's in the speech bubble. Only one thing shows at a time.
@@ -26,6 +27,8 @@ enum BubbleAction: Equatable {
     case approval(ApprovalRequest, ApprovalDecision)
     /// Messages, at what needs you.
     case openMessages
+    /// The page in System Settings that an error asks you to visit.
+    case settings(Permissions.Pane)
 }
 
 /// What Messages can do with a report. None of it says anything for you.
@@ -39,6 +42,8 @@ enum InboxAction: Equatable {
 struct InputRequest {
     var placeholder: String
     var caption: String?
+    /// The name of a file or link dropped on the cat, which the box shows it's asking about.
+    var attachment: String? = nil
     /// Pressing Return with nothing is fine for some questions.
     var allowsEmpty: Bool
     var onSubmit: (String) -> Void
@@ -122,6 +127,8 @@ protocol CatStage: AnyObject {
     /// The code a phone pairs with, or `nil` to take it away.
     func showPairing(_ card: PhonePairingCard?)
     func copyToPasteboard(_ text: String)
+    /// Opens the page in System Settings that an error asked you to visit.
+    func openSettings(_ pane: Permissions.Pane)
 }
 
 /// What Settings shows: everything in the settings file, and the channels that live elsewhere.

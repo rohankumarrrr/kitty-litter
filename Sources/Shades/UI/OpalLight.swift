@@ -28,9 +28,10 @@ extension Opal {
 
     static let rim = NSGradient(colors: [rimCyan, rimViolet, rimPink].map(Ink.hex))!
 
-    /// True black glass, lit only along its bottom edge.
-    static func card(in rect: NSRect, radius: CGFloat = Corner.card, light: Light) {
-        let shape = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
+    /// True black glass, lit only along its bottom edge. `shape` is its outline when that's more than `rect` rounded, such
+    /// as the cat's bubble with its tail, which the light carries on around.
+    static func card(in rect: NSRect, radius: CGFloat = Corner.card, light: Light, shape: NSBezierPath? = nil) {
+        let shape = shape ?? NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
         NSGraphicsContext.saveGraphicsState()
         shape.addClip()
         vertical(NSGradient(colors: [Ink.hex(cardTop).withAlphaComponent(cardTopAlpha), Ink.hex(cardBottom).withAlphaComponent(cardBottomAlpha)])!, in: rect)
@@ -39,14 +40,13 @@ extension Opal {
         glow(light.glow, alpha: 0.3, end: 0.72, center: NSPoint(x: rect.midX, y: bottom(of: rect) - up * glowHeight * 0.12), radii: NSSize(width: rect.width * 0.7, height: glowHeight * 0.9))
         NSGraphicsContext.restoreGraphicsState()
 
-        let hairline = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: radius - 0.5, yRadius: radius - 0.5)
-        NSColor(white: 1, alpha: 0.07).setStroke()
-        hairline.stroke()
-        ring(rect, radius: radius, width: 1.2, gradient: NSGradient(
+        let hairline = NSColor(white: 1, alpha: 0.07)
+        ring(shape, width: 1, gradient: NSGradient(starting: hairline, ending: hairline)!, over: rect)
+        ring(shape, width: 1.2, gradient: NSGradient(
             colors: [.clear, .clear, Ink.hex(light.rim).withAlphaComponent(0.55), Ink.hex(light.rim)],
             atLocations: [0, 0.58, 0.82, 1],
             colorSpace: .sRGB
-        )!)
+        )!, over: rect)
     }
 
     /// What floats over other windows: dense violet-black glass with a hairline. `path` is the panel's shape, a
@@ -101,11 +101,11 @@ extension Opal {
         vertical(NSGradient(colors: [Ink.hex(cardTop), Ink.hex(cardBottom)])!, in: rect)
         glow(light.glow, alpha: 0.45, end: 1, center: NSPoint(x: rect.midX, y: bottom(of: rect)), radii: NSSize(width: rect.width, height: rect.height * 0.6))
         NSGraphicsContext.restoreGraphicsState()
-        ring(rect, radius: radius, width: 1.5 * side / 40, gradient: NSGradient(
+        ring(shape, width: 1.5 * side / 40, gradient: NSGradient(
             colors: [NSColor(white: 1, alpha: 0.22), .clear, .clear, Ink.hex(light.rim)],
             atLocations: [0, 0.4, 0.6, 1],
             colorSpace: .sRGB
-        )!)
+        )!, over: rect)
     }
 
     /// A line of the rim's light, such as the open tab's underline or the unread line.
@@ -148,9 +148,9 @@ extension Opal {
     private static func bottom(of rect: NSRect) -> CGFloat { isFlipped ? rect.maxY : rect.minY }
     private static func top(of rect: NSRect) -> CGFloat { isFlipped ? rect.minY : rect.maxY }
 
-    /// From the top of `rect` to its bottom.
+    /// From the top of `rect` to its bottom, carrying on past either end in the colour there.
     private static func vertical(_ gradient: NSGradient, in rect: NSRect) {
-        gradient.draw(from: NSPoint(x: rect.midX, y: top(of: rect)), to: NSPoint(x: rect.midX, y: bottom(of: rect)), options: [])
+        gradient.draw(from: NSPoint(x: rect.midX, y: top(of: rect)), to: NSPoint(x: rect.midX, y: bottom(of: rect)), options: [.drawsBeforeStartingLocation, .drawsAfterEndingLocation])
     }
 
     /// An elliptical glow from `color` at `alpha` in the middle to clear at `end` of the way out.
@@ -166,13 +166,15 @@ extension Opal {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    /// A line `width` wide just inside `rect`'s rounded edge, shaded top to bottom.
-    private static func ring(_ rect: NSRect, radius: CGFloat, width: CGFloat, gradient: NSGradient) {
-        let ring = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
-        ring.append(NSBezierPath(roundedRect: rect.insetBy(dx: width, dy: width), xRadius: max(radius - width, 0), yRadius: max(radius - width, 0)))
-        ring.windingRule = .evenOdd
+    /// A line `width` wide just inside `shape`'s edge, shaded from the top of `rect` to its bottom.
+    private static func ring(_ shape: NSBezierPath, width: CGFloat, gradient: NSGradient, over rect: NSRect) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
         NSGraphicsContext.saveGraphicsState()
-        ring.addClip()
+        shape.addClip()
+        context.addPath(shape.cgPath)
+        context.setLineWidth(width * 2)
+        context.replacePathWithStrokedPath()
+        context.clip()
         vertical(gradient, in: rect)
         NSGraphicsContext.restoreGraphicsState()
     }

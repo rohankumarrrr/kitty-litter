@@ -418,25 +418,35 @@ final class LayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(caption.frame.width, try XCTUnwrap(caption.cell).cellSize.width, "its words and the padding either side")
     }
 
-    /// A long answer opened at its end with its first line cut in half above, and nothing to say there was more.
+    /// A long answer opened at its end, scrolled past the start you read from, as no card on the desktop does.
     @MainActor
-    func testALongAnswerShowsThereIsMoreAboveAndAWayBackToItsStart() throws {
+    func testALongAnswerOpensAtItsStartAndShowsThereIsMoreBelow() throws {
         let view = BubbleView(frame: .zero)
         let answer = String(repeating: "The pricing page has three plans, and the middle one is highlighted. ", count: 30)
         _ = view.update(.reply(text: answer, done: true, threadID: nil, note: nil), keepingWidth: false, limitHeight: 600)
         let scroll = try XCTUnwrap(view.textView.enclosingScrollView)
-        let fades = view.subviews.compactMap { $0 as? EdgeFade }
-        func fading() -> [Bool] { fades.map { !$0.isHidden } }
+        func fading() -> [Bool] { [view.textView.fades.top, view.textView.fades.bottom] }
 
-        XCTAssertEqual(fading(), [true, false], "it opens at its end, so the top fades and the bottom doesn't")
-        XCTAssertTrue(scroll.hasVerticalScroller && scroll.scrollerStyle == .legacy, "a bar that stays in sight, not only while scrolling")
+        XCTAssertEqual(scroll.contentView.bounds.minY, 0, "it opens at its first line")
+        XCTAssertEqual(fading(), [false, true], "so the bottom fades and the top doesn't")
+        XCTAssertTrue(scroll.hasVerticalScroller)
         XCTAssertGreaterThanOrEqual(scroll.contentSize.width, try XCTUnwrap(view.textView.textContainer).size.width, "beside the words, never over them")
-        view.textView.scrollToBeginningOfDocument(nil)
-        XCTAssertEqual(fading(), [false, true], "at its start, the rest is below")
+        view.textView.scrollToEndOfDocument(nil)
+        XCTAssertEqual(fading(), [true, false], "at its end, the rest is above")
 
         _ = view.update(.reply(text: "Three plans.", done: true, threadID: nil, note: nil), keepingWidth: false, limitHeight: 600)
         XCTAssertEqual(fading(), [false, false], "a short answer has nothing hidden")
         XCTAssertFalse(scroll.hasVerticalScroller)
+    }
+
+    /// What you say as you hold the talk key keeps its newest words in sight, as a caption does.
+    @MainActor
+    func testWhatYouSayKeepsItsNewestWordsInSight() throws {
+        let view = BubbleView(frame: .zero)
+        let heard = String(repeating: "and then the next thing I'd like is ", count: 40)
+        _ = view.update(.listening(heard), keepingWidth: false, limitHeight: 600)
+        XCTAssertEqual(view.textView.fades.top, true, "scrolled to its end")
+        XCTAssertEqual(view.textView.fades.bottom, false)
     }
 
     /// "--project=chromium --" ended one line and "reporter=line" started the next, splitting the flag.

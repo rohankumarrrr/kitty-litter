@@ -59,6 +59,11 @@ extension AppController {
         loadKittens().first { KittenBoard.belongs(thread, to: $0) }
     }
 
+    /// The colour of the kitten a thread belongs to, which lights the bubble while it speaks.
+    func kittenColor(ofThread id: String) -> UInt32? {
+        latestThreads.first { $0.id == id }.flatMap(kitten(of:)).flatMap(ChannelSpeakerLook.color(of:))
+    }
+
     /// All this thread did was start another one, so that's where the work is now.
     func passedOn(_ thread: AgentThread, to next: String) {
         dispatchers.insert(next)

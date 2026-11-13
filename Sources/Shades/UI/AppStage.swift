@@ -37,6 +37,7 @@ final class AppStage: CatStage {
         bubble.onVisibilityChange = { [weak self] in self?.updateEscape() }
         bubble.view.onAction = { [weak self] action in self?.controller?.bubbleAction(action) }
         bubble.view.opensInMessages = { [weak self] in self?.controller?.opensInMessages($0) == true }
+        bubble.view.kittenColor = { [weak self] in self?.controller?.kittenColor(ofThread: $0) }
 
         input.anchor = { [weak self] in
             guard let self else { return (.zero, .zero) }
@@ -329,6 +330,10 @@ final class AppStage: CatStage {
     func copyToPasteboard(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    func openSettings(_ pane: Permissions.Pane) {
+        Permissions.openSettings(pane)
     }
 
     // MARK: - Esc
