@@ -6430,3 +6430,26 @@ extension FlowTests {
         XCTAssertEqual(stage.listeningIn, .ask)
     }
 }
+
+extension FlowTests {
+    func testAMicTakeFinishesAtTheEnginesLimit() async throws {
+        controller.longestMicTake = 0.01
+        await controller.beginAsk()
+        controller.micPressed(in: .ask)
+        XCTAssertEqual(stage.listeningIn, .ask)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        await settle()
+        XCTAssertEqual(voice.ended, 1, "the engine has turned the mic off by then, so the take ends")
+        XCTAssertNil(stage.listeningIn, "and the mic stops showing it's hearing you")
+        XCTAssertTrue(backend.sent.contains { $0.prompt.text.contains("What is this?") }, "what you said still goes")
+    }
+
+    func testABoxThatReplacesAnotherShutsTheMicForTheOldOne() async {
+        await controller.beginAsk()
+        controller.micPressed(in: .ask)
+        controller.showBox(InputRequest(placeholder: "What's wrong?", caption: nil, allowsEmpty: true, onSubmit: { _ in }, onCancel: {}))
+        XCTAssertEqual(voice.cancelled, 1)
+        XCTAssertNil(stage.listeningIn)
+        XCTAssertNil(controller.voiceMode)
+    }
+}

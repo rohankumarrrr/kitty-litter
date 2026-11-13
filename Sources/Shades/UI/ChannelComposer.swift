@@ -249,6 +249,13 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         NSBezierPath(roundedRect: field, xRadius: 9, yRadius: 9).fill()
     }
 
+    /// A box that goes while its mic hears you, as when its thread's pane closes or you go somewhere with no box, forgets
+    /// what you said, since there'd be no mic left to finish it with.
+    override func viewDidHide() {
+        super.viewDidHide()
+        if mic.isLit { onStopListening?() }
+    }
+
     func textDidChange(_ notification: Notification) {
         showWhereWordsGo()
         onResize?()

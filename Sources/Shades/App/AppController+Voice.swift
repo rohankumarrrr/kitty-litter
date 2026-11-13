@@ -29,11 +29,24 @@ extension AppController {
         switch voiceMode {
         case nil:
             talkDown(into: box)
+            finishAtTheLimit(box)
         // Only a take for a box finishes here, so a mic can't send a look the talk key took to the router.
         case .talk where hearing && boxTakesVoiceNow:
             voiceTask = Task { await talkUp() }
         default:
             break
+        }
+    }
+
+    /// The engine turns the mic off once a take reaches its limit. With no key to let go of, the take finishes then, so
+    /// the mic doesn't go on showing it's hearing you.
+    private func finishAtTheLimit(_ box: VoiceBox) {
+        guard voiceMode == .talk else { return }
+        let take = takes
+        Task { [weak self, longestMicTake] in
+            try? await Task.sleep(nanoseconds: UInt64(longestMicTake * 1_000_000_000))
+            guard let self, self.takes == take else { return }
+            self.micPressed(in: box)
         }
     }
 
@@ -134,6 +147,8 @@ extension AppController {
     /// Every box over the cat goes up through here, numbered so words meant for one can't land in the next. What you're
     /// saying into it is forgotten when it closes, since there's nowhere left for it and no mic left to finish it with.
     func showBox(_ request: InputRequest) {
+        // One that was still up, such as an Ask box opened while you were pointing for a Fix, closes first.
+        if stage.isInputVisible { stage.hideInput() }
         boxesOpened += 1
         let box = boxesOpened
         var request = request

@@ -42,6 +42,37 @@ final class MicTests: XCTestCase {
         XCTAssertEqual(CatWords.speakTip(talkKey: .off), "Speak instead of typing")
     }
 
+    func testABoxThatGoesWhileItsMicHearsYouForgetsWhatYouSaid() {
+        let steve = Kitten(name: "Steve", role: "Professional", covers: "", folder: "/k/steve")
+        let at = Date(timeIntervalSince1970: 1_000_000)
+        let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: 820, height: 560))
+        view.show(ChannelBook.build(
+            kittens: [steve],
+            threads: [AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: steve.folder)],
+            transcripts: ["t": []],
+            isReading: false,
+            unreadable: 0,
+            cantReachT3: false
+        ))
+        var stopped = 0
+        view.onStopListening = { stopped += 1 }
+
+        view.select(.thread("t", in: .channel(.of(steve))))
+        view.showListening(in: view.threadPane)
+        view.closeThread()
+        XCTAssertEqual(stopped, 1, "its thread's pane closed")
+
+        view.select(.channel(.general))
+        view.showListening(in: view.pane)
+        view.select(.activity)
+        XCTAssertEqual(stopped, 2, "Activity has no box")
+
+        view.showListening(in: nil)
+        view.select(.thread("t", in: .channel(.of(steve))))
+        view.closeThread()
+        XCTAssertEqual(stopped, 2, "a box that wasn't hearing you has nothing to forget")
+    }
+
     func testTheMicsWordsDontRunUnderIt() {
         let composer = ChannelComposer(frame: NSRect(x: 0, y: 0, width: 600, height: 120))
         composer.show(.router, in: .general)

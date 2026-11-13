@@ -221,6 +221,8 @@ final class AppController {
     /// Moves on with every take and every cancel, so one worked out after it was cancelled or overtaken can't act for
     /// the take after it.
     var takes = 0
+    /// The voice engine's own limit on a take.
+    var longestMicTake: TimeInterval = 300
     var hearing = false
     var voiceProblem: Error?
     var talkLook: Task<Capture, Never>?
