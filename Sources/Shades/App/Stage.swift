@@ -116,6 +116,9 @@ protocol CatStage: AnyObject {
     func releaseMessagesBox()
 
     // Everything else
+    /// Whether one of The Kitty Litter's own windows is in front at the middle of this part of the screen, so a
+    /// capture, which leaves them out, shows what's behind it there instead.
+    func isOwnWindow(at region: CGRect) -> Bool
     /// For the menu bar: how things are going, and whether anything needs you.
     func showStatus(_ status: String, needsYou: Bool)
     /// Every setting in one place, under the menu bar icon, or over Messages when it was asked for from there.

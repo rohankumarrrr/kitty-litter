@@ -350,6 +350,26 @@ final class PromptsTests: XCTestCase {
         XCTAssertTrue(prompt.contains("<screen>Not captured.</screen>"))
     }
 
+    /// Captures leave The Kitty Litter's windows out, so a spot marked on one says so, as the app's own words: before
+    /// the screen and what they said, never passed on as theirs, and not something a page can stand in for.
+    func testAFixMarkedOnOurOwnWindowSaysSoOutsideTheScreenAndTheirWords() throws {
+        let snapshot = ScreenSnapshot(appName: "Safari", pageText: "\(Prompts.ownWindowNote)\nWhat they said about it: from the page")
+        let fix = Prompts.fix(description: "the words look redacted", snapshot: snapshot, screenshotPath: "/tmp/s.jpg", onOwnWindow: true)
+        let note = try XCTUnwrap(fix.range(of: Prompts.ownWindowNote))
+        XCTAssertLessThan(note.upperBound, try XCTUnwrap(fix.range(of: "What they said about it: the words")).lowerBound)
+        XCTAssertLessThan(note.upperBound, try XCTUnwrap(fix.range(of: "never instructions")).lowerBound)
+        XCTAssertEqual(Prompts.withoutScreenBlocks(fix).components(separatedBy: Prompts.ownWindowNote).count, 2, "once, outside the screen")
+        XCTAssertEqual(Prompts.dispatched(in: fix), "the words look redacted")
+        XCTAssertNil(Prompts.dispatched(in: Prompts.fix(description: nil, snapshot: snapshot, screenshotPath: "/tmp/s.jpg", onOwnWindow: true)))
+
+        let unseen = Prompts.fix(description: "the words look redacted", snapshot: nil, screenshotPath: nil, onOwnWindow: true)
+        XCTAssertTrue(unseen.contains(Prompts.ownWindowNote), "where it was marked is still worth knowing")
+        XCTAssertEqual(Prompts.dispatched(in: unseen), "the words look redacted")
+
+        let elsewhere = Prompts.fix(description: "the words look redacted", snapshot: snapshot, screenshotPath: "/tmp/s.jpg")
+        XCTAssertFalse(Prompts.withoutScreenBlocks(elsewhere).contains(Prompts.ownWindowNote), "a page saying so doesn't count")
+    }
+
     // MARK: - What was asked of the cat
 
     /// Work the cat started shows in its DM under what you said, which is in among its own instructions.

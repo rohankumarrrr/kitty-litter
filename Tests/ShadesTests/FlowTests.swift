@@ -3997,6 +3997,24 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.sent[0].prompt.title, "Fix: the logo is squashed")
     }
 
+    func testAFixMarkedOnOneOfOurOwnWindowsTellsTheAgentAndLooksNoFurther() async {
+        stage.ownWindowAt = context.region
+        await controller.beginFix()
+        stage.type("the words look redacted")
+        await settle()
+        XCTAssertTrue(backend.sent[0].prompt.text.contains(Prompts.ownWindowNote))
+        XCTAssertEqual(Prompts.dispatched(in: backend.sent[0].prompt.text), "the words look redacted")
+        XCTAssertEqual(log.all.filter { $0 == "snapshot" }.count, 1, "the same one look as any fix")
+    }
+
+    func testAFixMarkedAnywhereElseSaysNothingAboutOurWindows() async {
+        stage.ownWindowAt = CGRect(x: 1000, y: 1000, width: 400, height: 300)
+        await controller.beginFix()
+        stage.type("the logo is squashed")
+        await settle()
+        XCTAssertFalse(backend.sent[0].prompt.text.contains(Prompts.ownWindowNote))
+    }
+
     func testCancellingThePickDoesNothing() async {
         context.region = nil
         await controller.beginFix()

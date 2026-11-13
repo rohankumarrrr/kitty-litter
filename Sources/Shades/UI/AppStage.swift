@@ -196,6 +196,33 @@ final class AppStage: CatStage {
         bubble.reposition()
     }
 
+    /// Asks the window server which windows a click there would reach, which reads where windows are and nothing in
+    /// them. One of ours behind your work doesn't count.
+    func isOwnWindow(at region: CGRect) -> Bool {
+        let point = NSPoint(x: region.midX, y: region.midY)
+        let counting = Set(NSApp.windows.filter { $0.isVisible && $0 !== cat.panel && $0 !== pill.panel }.map(\.windowNumber))
+        let pid = ProcessInfo.processInfo.processIdentifier
+        return Self.isOwnWindow(counting: counting, isPassedOver: { number in
+            // A window the window list no longer has is on its way out, as the picker's overlay is.
+            guard let info = (CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(number)) as? [[String: Any]])?.first else { return true }
+            return info[kCGWindowOwnerPID as String] as? pid_t == pid
+        }, below: { NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: $0) })
+    }
+
+    /// Goes down through the windows at a spot, past ours that don't count and any already gone: the region picker's
+    /// overlay, which a click there still reaches for a moment after it's gone, and the cat and its word, which sit
+    /// over whatever you mean. The first window left decides.
+    static func isOwnWindow(counting: Set<Int>, isPassedOver: (Int) -> Bool, below: (Int) -> Int) -> Bool {
+        var seen: Set<Int> = []
+        var number = below(0)
+        while number > 0, seen.insert(number).inserted {
+            if counting.contains(number) { return true }
+            guard isPassedOver(number) else { return false }
+            number = below(number)
+        }
+        return false
+    }
+
     // MARK: - The bubble and input
 
     func showBubble(_ content: BubbleContent?) {

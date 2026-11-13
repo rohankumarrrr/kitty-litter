@@ -20,7 +20,7 @@ The recordings here come from demo mode, with made-up kittens and a pretend pric
 
 <img src="docs/images/drop.gif" width="372" alt="A dropped syllabus opening the Ask box, and the cat summarizing it">
 
-**Fix what I'm looking at.** Press ⌃⌥F and drag a box around whatever's wrong. Say what's wrong, or just press Return. A frontier agent works out which of your projects it is, and fixes it in its own worktree, so your checkout stays untouched.
+**Fix what I'm looking at.** Press ⌃⌥F and drag a box around whatever's wrong. Say what's wrong, or just press Return. A frontier agent works out which of your projects it is, and fixes it in its own worktree, so your checkout stays untouched. Box something in The Kitty Litter itself and the agent is told so, since screenshots never show its windows.
 
 **Talk and dictate.** Hold right Option to talk to the cat. Or press the mic in the Ask box, or in The Kitty Litter's box, then press it again when you've finished, and what you said goes where typing it would, with no look at your screen. Hold Fn to dictate into any app, and your rambling comes out as clean text: fillers gone, self-corrections applied. Speech recognition and cleanup both run on your Mac.
 
