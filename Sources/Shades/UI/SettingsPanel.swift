@@ -3,8 +3,8 @@ import ShadesCore
 
 /// Every setting in one place, a page at a time, from the menu or from Messages. A change takes as you make it, so
 /// there's nothing to save, and the file itself stays easy to edit by hand. Do Not Disturb and each channel's
-/// notifications go through the same switch and menus they do everywhere else. It's Opal's floating glass, and every
-/// choice from a menu is the same quiet button.
+/// notifications go through the same switch and menus they do everywhere else. It's Opal's floating glass, laid out as
+/// macOS's own Settings is, with underlined tabs, and every choice from a menu is the same quiet button.
 @MainActor
 final class SettingsPanel: NSObject, NSWindowDelegate {
     enum Page: Int, CaseIterable {
@@ -21,10 +21,11 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         }
     }
 
-    static let width: CGFloat = 440
-    private static let padding: CGFloat = 18
-    private static let labelWidth: CGFloat = 110
-    private static var controlWidth: CGFloat { width - padding * 2 - labelWidth - 8 }
+    static let width: CGFloat = 480
+    private static let padding: CGFloat = 24
+    private static var contentWidth: CGFloat { width - padding * 2 }
+    /// A box beside its setting's name.
+    private static let fieldWidth: CGFloat = 230
 
     let panel = QuietPanel(allowsKey: true)
     var onChange: ((Settings) -> Void)?
@@ -81,41 +82,63 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
 
     // MARK: - Pages
 
-    private func rows(for page: Page, _ form: SettingsForm) -> [NSView] {
+    /// Settings that go together, under small capitals if they need them.
+    private struct Group {
+        var label: String?
+        var rows: [NSView]
+    }
+
+    private func groups(for page: Page, _ form: SettingsForm) -> [Group] {
         let settings = form.settings
         switch page {
         case .agents:
+            let quick = modelField(settings.quickModel) { $0.quickModel = Self.model($1, fallback: $0.quickModel) }
+            let frontier = modelField(settings.frontierModel) { $0.frontierModel = Self.model($1, fallback: $0.frontierModel) }
+            let summary = modelField(settings.summaryModel) { $0.summaryModel = Self.model($1, fallback: $0.summaryModel) }
             return [
-                row("Front door model", modelField(settings.quickModel) { $0.quickModel = Self.model($1, fallback: $0.quickModel) }),
-                row("Front door mode", popup(Self.modes, settings.quickMode) { $0.quickMode = $1 }),
-                row("Frontier model", modelField(settings.frontierModel) { $0.frontierModel = Self.model($1, fallback: $0.frontierModel) }),
-                row("Frontier mode", popup(Self.modes, settings.frontierMode) { $0.frontierMode = $1 }),
-                row("Summary model", modelField(settings.summaryModel) { $0.summaryModel = Self.model($1, fallback: $0.summaryModel) }),
+                Group(label: "Front door", rows: [
+                    stacked("Model", note: "Answers you, and passes real work on. It has to be a Claude model.", quick, id: "Front door model"),
+                    row("Mode", popup(Self.modes, settings.quickMode) { $0.quickMode = $1 }, id: "Front door mode"),
+                ]),
+                Group(label: "Frontier", rows: [
+                    stacked("Model", note: "Does the real work you hand off.", frontier, id: "Frontier model"),
+                    row("Mode", popup(Self.modes, settings.frontierMode) { $0.frontierMode = $1 }, id: "Frontier mode"),
+                ]),
+                Group(label: "Summaries", rows: [
+                    stacked("Model", note: "Sums up each session's report when it ends.", summary, id: "Summary model"),
+                ]),
             ]
         case .voice:
-            return [
-                row("Hold to talk", popup(Self.keys, settings.talkKey) { $0.talkKey = $1 }),
-                row("Hold to dictate", popup(Self.keys, settings.dictateKey) { $0.dictateKey = $1 }),
-                row("Extra words", field(settings.vocabulary.joined(separator: ", "), "Words I should know") { $0.vocabulary = Self.list($1) }),
-            ]
+            let talk = popup(Self.keys, settings.talkKey) { $0.talkKey = $1 }
+            let dictate = popup(Self.keys, settings.dictateKey) { $0.dictateKey = $1 }
+            let words = field(settings.vocabulary.joined(separator: ", "), "Words I should know") { $0.vocabulary = Self.list($1) }
+            return [Group(rows: [
+                row("Hold to talk", note: "Talk to me while you hold it.", talk),
+                row("Hold to dictate", note: "Type by voice into any app while you hold it.", dictate),
+                row("Extra words", note: "Names to listen for, separated by commas.", words),
+            ])]
         case .notifications:
-            let quiet = checkbox(CatWords.doNotDisturb, settings.doNotDisturb) { [weak self] _ in self?.onDoNotDisturb?() }
-            let finished = checkbox("Also when a session finishes", settings.notifyFinished) { [weak self] on in
+            let quiet = toggle(CatWords.doNotDisturb, settings.doNotDisturb) { [weak self] _ in self?.onDoNotDisturb?() }
+            let finished = toggle(Self.finishedTitle, settings.notifyFinished) { [weak self] on in
                 self?.edit { $0.notifyFinished = on }
             }
-            var rows = [row(CatWords.notifications, quiet), row("", finished), heading(CatWords.channelsHeading)]
             // shortcut: a row a channel, so dozens of kittens would make it taller than the screen. Scroll them then.
-            for channel in form.channels {
+            let channels = form.channels.map { channel in
                 let current = settings.notifications(for: channel.id.settingsKey)
-                let summary = Self.summary(current, phone: settings.phone)
-                let button = menuButton(summary) { [weak self] anchor in
+                let button = menuButton(Self.summary(current, phone: settings.phone)) { [weak self] anchor in
                     self?.notificationsMenu.show(current, phone: settings.phone, under: anchor) { [weak self] picked in
                         self?.onNotifications?(channel.id, picked)
                     }
                 }
-                rows.append(row(channel.title, button))
+                return row(channel.title, button)
             }
-            return rows
+            return [
+                Group(rows: [
+                    row(CatWords.doNotDisturb, note: "Nothing pops up until you turn it off. What came in waits in Activity.", quiet),
+                    row(Self.finishedTitle, note: "Anything that needs you always notifies.", finished),
+                ]),
+                Group(label: CatWords.channelsHeading, rows: channels),
+            ]
         case .messages:
             let font = menuButton(settings.messagesFont ?? MessagesInk.systemFaces[0].name) { [weak self] anchor in
                 self?.fontMenu.show(current: settings.messagesFont, under: anchor) { [weak self] picked in
@@ -124,37 +147,40 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
                     self?.build()
                 }
             }
-            let phone = checkbox("\(CatWords.appName) on my phone, over Tailscale", settings.phone) { [weak self] on in
+            let phone = toggle(Self.phoneTitle, settings.phone) { [weak self] on in
                 self?.edit { $0.phone = on }
+                // Pairing a phone comes and goes with it.
+                self?.build()
             }
-            var rows = [
-                row("Font", font),
-                row("Text size", popup(Self.sizes, settings.textSize) { $0.textSize = $1 }),
-                row("Open threads", popup(Self.opens, settings.openInMessages) { $0.openInMessages = $1 }),
-                row("Phone", phone),
-            ]
+            var phoneRows = [row(Self.phoneTitle, note: "In your phone's browser, over Tailscale.", phone, id: "Phone")]
             if settings.phone {
-                rows.append(row("", plainButton("Pair a phone…", style: .text) { [weak self] in self?.onPairPhone?() }))
+                phoneRows.append(row("Pair a phone", note: "Scan a one-time code with its camera.", plainButton("Pair…", style: .plain) { [weak self] in self?.onPairPhone?() }))
             }
-            return rows
+            return [
+                Group(rows: [
+                    row("Font", font),
+                    row("Text size", segments(Self.sizes, settings.textSize) { $0.textSize = $1 }),
+                    row("Open threads in", note: "Threads it doesn't follow open in T3.", segments(Self.opens, settings.openInMessages) { $0.openInMessages = $1 }),
+                ]),
+                Group(label: "Phone", rows: phoneRows),
+            ]
         case .privacy:
             let apps = field(settings.privateApps.joined(separator: ", "), "Bundle IDs, comma separated", lines: 4) { $0.privateApps = Self.list($1) }
-            return [
-                row("Private apps", apps),
-                row("", note("Nothing is captured while one of these apps is in front.")),
-            ]
+            return [Group(rows: [stacked("Private apps", note: "Nothing is captured while one of these apps is in front.", apps)])]
         }
     }
 
+    private static let finishedTitle = "When a session finishes"
+    private static let phoneTitle = "\(CatWords.appName) on my phone"
     private static let modes: [(String, RuntimeMode)] = RuntimeMode.allCases.map { (modeName($0), $0) }
     private static let keys: [(String, HoldKey)] = HoldKey.allCases.map { (CatWords.keyName($0), $0) }
     private static let sizes: [(String, TextSize)] = [("Small", .small), ("Default", .standard), ("Large", .large), ("Larger", .larger)]
-    private static let opens: [(String, Bool)] = [("In \(CatWords.appName) first", true), ("In T3", false)]
+    private static let opens: [(String, Bool)] = [(CatWords.appName, true), ("T3", false)]
 
     // MARK: - Building
 
     private func build() {
-        // A menu Tab reached and Space opened still has the keyboard once its pick makes the page again.
+        // A control Tab reached still has the keyboard once its pick makes the page again.
         let focused = (panel.firstResponder as? NSView)?.accessibilityIdentifier() ?? ""
         // What's typed so far goes in before the page is made again from what's set.
         endEditing()
@@ -171,30 +197,37 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 10
-        stack.edgeInsets = NSEdgeInsets(top: Self.padding, left: Self.padding, bottom: Self.padding, right: Self.padding)
+        stack.spacing = 0
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: Self.padding, bottom: 20, right: Self.padding)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        let tabs = NSSegmentedControl(labels: Page.allCases.map(\.title), trackingMode: .selectOne, target: nil, action: nil)
-        tabs.selectedSegment = page.rawValue
-        tabs.segmentDistribution = .fillEqually
-        tabs.setAccessibilityLabel("Settings")
-        tabs.widthAnchor.constraint(equalToConstant: Self.width - Self.padding * 2).isActive = true
-        bind(tabs) { [weak self, weak tabs] in
-            guard let tabs, let page = Page(rawValue: tabs.selectedSegment) else { return }
-            self?.select(page)
+        stack.addArrangedSubview(tabs())
+        stack.addArrangedSubview(hairline())
+        for (index, group) in groups(for: page, form).enumerated() {
+            let top: CGFloat = index == 0 ? 6 : 14
+            if let label = group.label {
+                let words = NSTextField(labelWithAttributedString: MessagesInk.label(label))
+                stack.addArrangedSubview(words)
+                stack.setCustomSpacing(top + 8, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
+                stack.setCustomSpacing(0, after: words)
+            } else if let last = stack.arrangedSubviews.last {
+                stack.setCustomSpacing(top, after: last)
+            }
+            for (number, row) in group.rows.enumerated() {
+                if number > 0 { stack.addArrangedSubview(hairline()) }
+                stack.addArrangedSubview(row)
+            }
         }
-        stack.addArrangedSubview(tabs)
-        stack.setCustomSpacing(16, after: tabs)
 
-        rows(for: page, form).forEach(stack.addArrangedSubview)
-
-        let done = plainButton("Done", style: .filled) { [weak self] in self?.hide() }
+        // Done on the right, as macOS puts the button that finishes, and the folder on the left.
         let reveal = plainButton("Open settings folder", style: .text) { NSWorkspace.shared.open(Settings.directory) }
-        let buttons = NSStackView(views: [done, reveal])
-        buttons.spacing = 6
+        let done = plainButton("Done", style: .filled) { [weak self] in self?.hide() }
+        let gap = NSView()
+        gap.setContentHuggingPriority(.init(1), for: .horizontal)
+        let buttons = NSStackView(views: [reveal, gap, done])
+        buttons.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         stack.addArrangedSubview(buttons)
-        stack.setCustomSpacing(16, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
+        stack.setCustomSpacing(20, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
 
         root.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -216,6 +249,32 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         panel.makeFirstResponder(again ?? root)
     }
 
+    /// Each page's name, underlined while it's open.
+    private func tabs() -> NSView {
+        let tabs = Page.allCases.map { page in
+            let tab = SettingsTab(page.title)
+            tab.isOpen = page == self.page
+            tab.setAccessibilityIdentifier("tab \(page.title)")
+            tab.onPress = { [weak self] in self?.select(page) }
+            tab.widthAnchor.constraint(equalToConstant: tab.frame.width).isActive = true
+            tab.heightAnchor.constraint(equalToConstant: tab.frame.height).isActive = true
+            return tab
+        }
+        let row = NSStackView(views: tabs)
+        row.spacing = 20
+        row.setAccessibilityElement(true)
+        row.setAccessibilityRole(.tabGroup)
+        row.setAccessibilityLabel("Settings")
+        return row
+    }
+
+    private func hairline() -> NSView {
+        let line = SettingsHairline()
+        line.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
+        line.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        return line
+    }
+
     /// Hangs from its corner, kept on the screen.
     private func place() {
         let size = panel.frame.size
@@ -227,67 +286,79 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         panel.setFrameOrigin(origin)
     }
 
-    private func row(_ title: String, _ control: NSView) -> NSView {
-        let label = NSTextField(labelWithString: title)
-        label.font = .systemFont(ofSize: 12)
-        label.textColor = MessagesInk.soft
-        label.alignment = .right
-        label.widthAnchor.constraint(equalToConstant: Self.labelWidth).isActive = true
-        if !title.isEmpty {
-            // The demo finds a control by what its row is called, and VoiceOver says it before what's picked. A box
-            // says its own words.
-            control.setAccessibilityIdentifier(title)
-            if !(control is QuietCheckbox) { control.setAccessibilityLabel(title) }
-        }
-        let line = NSStackView(views: [label, control])
-        line.spacing = 8
-        // A box keeps room round it for its ring, so it's moved back to line up with the rest.
-        if control is QuietCheckbox { line.setCustomSpacing(8 - QuietCheckbox.inset, after: label) }
-        line.alignment = (control as? NSTextField)?.usesSingleLineMode == false ? .top : control is NSControl ? .firstBaseline : .centerY
+    /// One setting as macOS's own Settings lays it out: its name, and a line on what it does if it needs one, on the
+    /// left, and its control on the right. `id` is what the demo and VoiceOver call it, where its name needs its group.
+    private func row(_ title: String, note: String? = nil, _ control: NSView, id: String? = nil) -> NSView {
+        name(control, id ?? title)
+        let controlWidth = control.constraints.first { $0.firstAttribute == .width }?.constant ?? control.frame.width
+        let words = self.words(title, note, width: Self.contentWidth - controlWidth - 16)
+        let line = NSStackView(views: [words, control])
+        line.alignment = .centerY
+        line.spacing = 16
+        line.distribution = .fill
+        line.edgeInsets = NSEdgeInsets(top: 9, left: 0, bottom: 9, right: 0)
+        words.setContentHuggingPriority(.init(1), for: .horizontal)
+        line.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
+        line.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         return line
     }
 
-    private func heading(_ text: String) -> NSView {
-        let label = NSTextField(labelWithAttributedString: NSAttributedString(string: text.uppercased(), attributes: [
-            .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
-            .foregroundColor: MessagesInk.soft,
-            .kern: 0.5,
-        ]))
-        let line = NSStackView(views: [label])
-        line.edgeInsets = NSEdgeInsets(top: 6, left: Self.labelWidth + 8, bottom: 0, right: 0)
+    /// A setting whose control needs the whole width, such as a long list, under its name.
+    private func stacked(_ title: String, note: String?, _ control: NSView, id: String? = nil) -> NSView {
+        name(control, id ?? title)
+        let line = NSStackView(views: [words(title, note, width: Self.contentWidth), control])
+        line.orientation = .vertical
+        line.alignment = .leading
+        line.spacing = 10
+        line.edgeInsets = NSEdgeInsets(top: 9, left: 0, bottom: 9, right: 0)
         return line
     }
 
-    private func note(_ text: String) -> NSTextField {
-        let label = NSTextField(wrappingLabelWithString: text)
-        label.font = .systemFont(ofSize: 11)
-        label.textColor = MessagesInk.soft
-        label.widthAnchor.constraint(equalToConstant: Self.controlWidth).isActive = true
-        return label
+    /// The demo finds a control by what its row is called, and VoiceOver says it before what's picked. A switch says
+    /// its own words.
+    private func name(_ control: NSView, _ id: String) {
+        control.setAccessibilityIdentifier(id)
+        if !(control is QuietSwitch) { control.setAccessibilityLabel(id) }
+    }
+
+    /// A setting's name in the body's size and colour, with what it does under it in a quieter line.
+    private func words(_ title: String, _ note: String?, width: CGFloat) -> NSView {
+        let name = NSTextField(labelWithString: title)
+        name.font = MessagesInk.font(ofSize: MessagesInk.body)
+        name.textColor = MessagesInk.text
+        name.lineBreakMode = .byTruncatingTail
+        guard let note else { return name }
+        let line = NSTextField(wrappingLabelWithString: note)
+        line.font = MessagesInk.font(ofSize: MessagesInk.meta)
+        line.textColor = MessagesInk.soft
+        line.preferredMaxLayoutWidth = width
+        let words = NSStackView(views: [name, line])
+        words.orientation = .vertical
+        words.alignment = .leading
+        words.spacing = 2
+        return words
     }
 
     private func modelField(_ model: ModelChoice, onEnd: @escaping (inout Settings, String) -> Void) -> NSTextField {
-        field("\(model.provider) / \(model.model) / \(model.effort)", "provider / model / effort", onEnd: onEnd)
+        field("\(model.provider) / \(model.model) / \(model.effort)", "provider / model / effort", wide: true, onEnd: onEnd)
     }
 
-    /// Takes what's typed when you press Return or move on, and when Settings closes. One of more than one line grows
-    /// to fit what's in it, with a line spare for the next, so nothing in it hides past its edge.
-    private func field(_ value: String, _ placeholder: String, lines: Int = 1, onEnd: @escaping (inout Settings, String) -> Void) -> NSTextField {
-        let field = NSTextField(string: value)
-        field.placeholderString = placeholder
-        field.font = .systemFont(ofSize: 12)
-        field.textColor = MessagesInk.text
-        field.bezelStyle = .roundedBezel
-        field.widthAnchor.constraint(equalToConstant: Self.controlWidth).isActive = true
+    /// Takes what's typed when you press Return or move on, and when Settings closes. A wide one takes the whole width
+    /// under its name, and one of more than one line also grows to fit what's in it, with a line spare for the next, so
+    /// nothing in it hides past its edge.
+    private func field(_ value: String, _ placeholder: String, lines: Int = 1, wide: Bool = false, onEnd: @escaping (inout Settings, String) -> Void) -> NSTextField {
+        let field = OpalField(value, placeholder: placeholder)
+        let width = lines > 1 || wide ? Self.contentWidth : Self.fieldWidth
+        let font = field.font ?? MessagesInk.font(ofSize: MessagesInk.body)
+        field.widthAnchor.constraint(equalToConstant: width).isActive = true
         if lines > 1 {
-            field.bezelStyle = .squareBezel
             field.usesSingleLineMode = false
             field.lineBreakMode = .byWordWrapping
             field.cell?.wraps = true
             field.cell?.isScrollable = false
             // Its words laid out as a text view does, which wraps a little sooner than the box draws them, where the
             // cell's own measure of itself can come up a line short.
-            let edge = NSRect(x: 0, y: 0, width: Self.controlWidth, height: 1000)
+            let edge = NSRect(x: 0, y: 0, width: width, height: 1000)
             let inside = field.cell?.drawingRect(forBounds: edge) ?? edge
             let words = NSTextStorage(attributedString: field.attributedStringValue)
             let layout = NSLayoutManager()
@@ -295,12 +366,14 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             layout.addTextContainer(container)
             words.addLayoutManager(layout)
             layout.ensureLayout(for: container)
-            let spare = layout.defaultLineHeight(for: .systemFont(ofSize: 12))
+            let spare = layout.defaultLineHeight(for: font)
             let fits = ceil(layout.usedRect(for: container).height + spare) + edge.height - inside.height
-            field.heightAnchor.constraint(equalToConstant: max(CGFloat(lines) * 16 + 6, fits)).isActive = true
+            field.heightAnchor.constraint(equalToConstant: max(CGFloat(lines) * spare + edge.height - inside.height, fits)).isActive = true
         } else {
             field.usesSingleLineMode = true
             field.lineBreakMode = .byTruncatingTail
+            field.cell?.isScrollable = true
+            field.heightAnchor.constraint(equalToConstant: ceil(font.ascender - font.descender + font.leading) + 12).isActive = true
         }
         field.cell?.sendsActionOnEndEditing = true
         bind(field) { [weak self, weak field] in
@@ -333,22 +406,36 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         return button
     }
 
-    /// Messages' own box, ticked in Opal's violet where the system's would be in its own.
-    private func checkbox(_ title: String, _ on: Bool, onToggle: @escaping (Bool) -> Void) -> QuietCheckbox {
-        let box = QuietCheckbox()
-        box.words = (.systemFont(ofSize: 12), MessagesInk.text)
-        box.title = title
-        box.isOn = on
-        box.onChange = onToggle
-        box.sizeToFit()
-        box.widthAnchor.constraint(equalToConstant: min(box.frame.width, Self.controlWidth)).isActive = true
-        box.heightAnchor.constraint(equalToConstant: box.frame.height).isActive = true
-        return box
+    /// A few close choices side by side, the way Opal picks one of a handful.
+    private func segments<T: Equatable>(_ choices: [(String, T)], _ selected: T, onPick: @escaping (inout Settings, T) -> Void) -> QuietSegments {
+        let segments = QuietSegments(choices.map(\.0), selected: choices.firstIndex { $0.1 == selected } ?? 0)
+        segments.onPick = { [weak self] index in
+            self?.edit { onPick(&$0, choices[index].1) }
+            // A new text size reaches Settings' own words too.
+            self?.build()
+        }
+        segments.widthAnchor.constraint(equalToConstant: segments.frame.width).isActive = true
+        segments.heightAnchor.constraint(equalToConstant: segments.frame.height).isActive = true
+        return segments
     }
 
-    /// A button that opens a menu, the way Notifications does in Messages, saying what's picked.
+    /// On or off, for a whole row.
+    private func toggle(_ title: String, _ on: Bool, onToggle: @escaping (Bool) -> Void) -> QuietSwitch {
+        let toggle = QuietSwitch()
+        toggle.title = title
+        toggle.isOn = on
+        toggle.onChange = onToggle
+        toggle.widthAnchor.constraint(equalToConstant: toggle.frame.width).isActive = true
+        toggle.heightAnchor.constraint(equalToConstant: toggle.frame.height).isActive = true
+        return toggle
+    }
+
+    /// A button that opens a menu, saying what's picked, with a pop-up's chevrons.
     private func menuButton(_ title: String, onPress: @escaping (NSView) -> Void) -> QuietButton {
-        let button = plainButton("\(title) ▾", style: .plain) {}
+        let button = QuietButton(title, style: .plain)
+        button.showsChevrons = true
+        button.widthAnchor.constraint(equalToConstant: min(button.frame.width, Self.contentWidth - 150)).isActive = true
+        button.heightAnchor.constraint(equalToConstant: button.frame.height).isActive = true
         button.setAccessibilityRole(.popUpButton)
         button.setAccessibilityValue(title)
         button.onPress = { [weak button] in
@@ -360,7 +447,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
 
     private func plainButton(_ title: String, style: QuietButton.Style, onPress: @escaping () -> Void) -> QuietButton {
         let button = QuietButton(title, style: style, onPress: onPress)
-        button.widthAnchor.constraint(equalToConstant: min(button.frame.width, Self.controlWidth)).isActive = true
+        button.widthAnchor.constraint(equalToConstant: min(button.frame.width, Self.contentWidth)).isActive = true
         button.heightAnchor.constraint(equalToConstant: button.frame.height).isActive = true
         return button
     }
@@ -430,6 +517,14 @@ private final class SettingsRootView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override func cancelOperation(_ sender: Any?) { onCancel() }
+    /// ⌘W closes it, as it does any window on the Mac, from a box too. There's no menu of ours for it to come through.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command, event.charactersIgnoringModifiers == "w" else {
+            return super.performKeyEquivalent(with: event)
+        }
+        onCancel()
+        return true
+    }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var acceptsFirstResponder: Bool { true }
     /// Esc closes it, while no box has the keyboard too.
@@ -440,5 +535,13 @@ private final class SettingsRootView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         Opal.glass(NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: BalloonView.radius, yRadius: BalloonView.radius))
+    }
+}
+
+/// A 1-point line between settings, in Opal's border.
+private final class SettingsHairline: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        MessagesInk.line.setFill()
+        bounds.fill()
     }
 }

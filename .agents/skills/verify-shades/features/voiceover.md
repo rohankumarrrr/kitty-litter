@@ -6,7 +6,7 @@ What VoiceOver hears from the cat's windows, and what it can press: the bubble's
 
 - `voiceover-says` asks VoiceOver to say each new thing the bubble shows, in the bubble's own words. Approvals and questions go at high priority. A streaming answer waits until it's whole, nothing is said while you talk, and an answer that comes back after an approval isn't said again.
 - `voiceover-cat` names the cat Ask Shades. VoiceOver's press does what a click does, and its show menu opens the right-click menu.
-- `voiceover-kittens` presses a kitten, which opens its thread as a click does.
+- `voiceover-kittens` presses a kitten, which opens what it's on, or its channel, as a click does.
 - `voiceover-sidebar` has each place in The Kitty Litter's sidebar as a radio button, selected when it's showing, and Do Not Disturb as a checkbox.
 
 ## How to get to it (user POV)

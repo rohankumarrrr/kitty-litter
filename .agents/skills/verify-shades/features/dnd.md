@@ -23,7 +23,7 @@ Preconditions:
 
 Journey: `journeys/dnd.txt`.
 
-- **On.** `notify-finished on`, as if Also when a session finishes were ticked in Settings, then `menuitems`, `menupress Do Not Disturb`, then `menuitems` again. The second list says `menu ✓ Do Not Disturb`, and `dnd` prints `dnd on cat=sleep away=1`, the one being the launch line in the first gotcha, or `away=0` without it. `0-on/cat.png` shows the cat curled up, with no `bubble.png` beside it.
+- **On.** `notify-finished on`, as if When a session finishes were on in Settings, then `menuitems`, `menupress Do Not Disturb`, then `menuitems` again. The second list says `menu ✓ Do Not Disturb`, and `dnd` prints `dnd on cat=sleep away=1`, the one being the launch line in the first gotcha, or `away=0` without it. `0-on/cat.png` shows the cat curled up, with no `bubble.png` beside it.
 - **Held.** `finish demo-tidy`, `approval command npm test`, `report decision` and `question`, with their waits. No `[demo] notified:` line comes, not even "Steve Pawsniak finished", and the only `[demo] started` line is Clawde's report being sorted for its inbox, with no summary for Steve's report. `dnd` prints `away=5`, and `windows` has `window bubble ... visible=false` and `state sleep`. `1-held/cat.png` is still asleep.
 - **Switch in The Kitty Litter.** `channels`, then `channel general`. `2-switch/channels.png` shows "Do Not Disturb is on" above Shortcuts and Settings.
 - **Off.** `sidebar Do Not Disturb is on`. `dnd` prints `dnd off cat=sit`, `menuitems` has no check, and `buttons` prints `button Open`. `3-catch-up/bubble.png` says "While you were away: 2 replies, 1 approval, 1 question, 1 note from me." with Open.

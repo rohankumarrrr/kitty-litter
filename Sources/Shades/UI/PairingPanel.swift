@@ -15,7 +15,7 @@ struct PhonePairingCard: Equatable {
 @MainActor
 final class PairingPanel {
     private static let width: CGFloat = 320
-    private static let padding: CGFloat = 20
+    private static let padding: CGFloat = 24
     private static let pictureSide: CGFloat = 200
 
     let panel = QuietPanel(allowsKey: false)
@@ -32,13 +32,13 @@ final class PairingPanel {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .centerX
-        stack.spacing = 12
+        stack.spacing = 14
         stack.edgeInsets = NSEdgeInsets(top: Self.padding, left: Self.padding, bottom: Self.padding, right: Self.padding)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         let title = NSTextField(labelWithString: CatWords.pairTitle)
-        title.font = .systemFont(ofSize: 15, weight: .semibold)
-        title.textColor = MessagesInk.text
+        title.font = MessagesInk.font(ofSize: MessagesInk.toolbarTitle, weight: .semibold)
+        title.textColor = MessagesInk.strong
         stack.addArrangedSubview(title)
 
         if let link = card.link, let picture = Self.picture(of: link) {
@@ -47,31 +47,33 @@ final class PairingPanel {
             image.setAccessibilityLabel(CatWords.pairPicture)
             image.wantsLayer = true
             image.layer?.backgroundColor = NSColor.white.cgColor
-            image.layer?.cornerRadius = 8
+            image.layer?.cornerRadius = Opal.Corner.control
             image.widthAnchor.constraint(equalToConstant: Self.pictureSide + 16).isActive = true
             image.heightAnchor.constraint(equalToConstant: Self.pictureSide + 16).isActive = true
             stack.addArrangedSubview(image)
         }
 
-        let code = NSTextField(labelWithString: card.code)
-        code.font = .monospacedSystemFont(ofSize: 26, weight: .semibold)
-        code.textColor = MessagesInk.text
+        // A figure, light and tabular, spaced out a little so it's easy to read off and type.
+        let figure = MessagesInk.font(ofSize: 32 + MessagesInk.title - 14, weight: .light, tabular: true)
+        let code = NSTextField(labelWithAttributedString: NSAttributedString(string: card.code, attributes: [
+            .font: figure, .foregroundColor: MessagesInk.strong, .kern: 2,
+        ]))
+        code.setAccessibilityLabel(card.code.map(String.init).joined(separator: " "))
         stack.addArrangedSubview(code)
+        stack.setCustomSpacing(8, after: code)
 
         let words = NSTextField(wrappingLabelWithString: CatWords.pairHow(card.address))
-        words.font = .systemFont(ofSize: 12)
+        words.font = MessagesInk.font(ofSize: MessagesInk.body)
         words.textColor = MessagesInk.soft
         words.alignment = .center
         words.preferredMaxLayoutWidth = Self.width - Self.padding * 2
         stack.addArrangedSubview(words)
+        stack.setCustomSpacing(Self.padding, after: words)
 
-        let close = QuietButton("Close", style: .plain) { [weak self] in
-            self?.hide()
-            self?.onClose?()
-        }
-        close.widthAnchor.constraint(equalToConstant: close.frame.width).isActive = true
-        close.heightAnchor.constraint(equalToConstant: close.frame.height).isActive = true
-        stack.addArrangedSubview(close)
+        let cancel = QuietButton(CatWords.pairCancel, style: .plain) { [weak self] in self?.close() }
+        cancel.widthAnchor.constraint(equalToConstant: cancel.frame.width).isActive = true
+        cancel.heightAnchor.constraint(equalToConstant: cancel.frame.height).isActive = true
+        stack.addArrangedSubview(cancel)
 
         root.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -88,6 +90,12 @@ final class PairingPanel {
         panel.setFrameOrigin(NSPoint(x: (visible.midX - size.width / 2).rounded(), y: (visible.midY - size.height / 2).rounded()))
         panel.invalidateShadow()
         panel.orderFrontRegardless()
+    }
+
+    /// Cancel and Esc: the code stops working once it's gone.
+    func close() {
+        hide()
+        onClose?()
     }
 
     func hide() {

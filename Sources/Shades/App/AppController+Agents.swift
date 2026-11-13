@@ -80,6 +80,13 @@ extension AppController {
         }
     }
 
+    /// A kitten in the kittens view opens what most needs looking at, where Open goes, or its channel if it's had
+    /// nothing to do yet.
+    func kittenPressed(_ status: KittenStatus) {
+        guard let threadID = status.threadID else { return channelsPressed(selecting: .channel(.of(status.kitten))) }
+        showInMessages(threadID)
+    }
+
     /// Project names are the words speech recognition most often gets wrong.
     func updateVocabulary(_ threads: [AgentThread]) {
         let words = Array(Set(settings.vocabulary + projectNames + threads.compactMap(\.projectTitle))).sorted()

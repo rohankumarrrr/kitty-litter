@@ -226,6 +226,7 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 - **Danger** is a quiet button whose words are `errorText`. It never fills in rose.
 - **Disarmed:** the fill at 40% and words in `faint`.
 - **A symbol** in place of words is 13-point medium, in the style's words, and lilac while what it started is going (a mic that's listening).
+- **A pop-up**, a quiet button that picks one value from a menu, says what's picked with macOS's up and down chevrons after it (`showsChevrons`), never a ▾ typed into its words.
 - **The focus ring** is 2 points of violet just inside the capsule, shown only when the keyboard moved there. On the primary it sits 2 points inside, in white, since its fill is violet already.
 - Space presses a button that has the keyboard, and Return never does.
 
@@ -238,7 +239,7 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 - **Segmented control:** a `raised` capsule track with the chosen segment raised on it in `controlHover`, words body, the chosen one white.
 - **Tabs:** underlined text, never pills. The open tab is white with a 2-point rim-gradient underline. Others are secondary.
 - **Chips:** capsules on `control`, 22 tall, meta-size words in body.
-- **Checkboxes and switches:** the system's, which follow the dark appearance, with the accent in violet. A drawn one is ticked in violet with a white tick, and its empty box has a 1.2-point `dim` edge.
+- **Checkboxes and switches:** the system's, which follow the dark appearance, with the accent in violet. A drawn one is ticked in violet with a white tick, and its empty box has a 1.2-point `dim` edge. A drawn switch is a 32 by 18 capsule, violet with a white knob when it's on, and `control` with a 1.2-point `dim` edge and a body-coloured knob when it's off. A switch is for a whole row in Settings, a checkbox for an option beside other things, such as Also send to #channel.
 - **Lists and tables:** hairline rows in `border` under small-capital headers. A hovered row is `raised`, a selected one `selected`, each with corners 9 inset from the edges.
 - **Menus:** the system's menus, dark. A custom popover is floating glass.
 - **Scrollers:** the system's overlay scrollers.
@@ -255,7 +256,7 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 | Surface | Gets |
 |---|---|
 | The Kitty Litter (the Messages window) | Chrome with the sidebar flush on it; the inset page panel with its toolbar; the horizon at the panel's foot; kittens on Rimlight tiles in their colours; message rows on the page, your own on `selected`; the box as a field |
-| Settings | Floating glass, with segmented controls, fields, underlined tabs and quiet buttons. Done is the one primary |
+| Settings | Floating glass, laid out as macOS's own Settings is: each setting's name on the left in body, a line on what it does under it in meta and secondary, and its control on the right, with hairlines between rows and small capitals over a group. Underlined tabs for its pages, switches, segmented controls, fields and pop-ups. Done is the one primary, at the bottom right |
 | The cat's bubble | A rimlit card in Shades' hue 245, at 20 corners, like an Opal desktop widget, since both float on the desktop. An answer from a kitten is lit in that kitten's colour |
 | The Ask box | Floating glass, a field inside it, its mic a text button |
 | The pill over the cat | A capsule of floating glass with body words |
@@ -273,7 +274,9 @@ Where an app you use every day has a settled way of doing something, do it that 
 - **A count** of what needs you is a rose capsule after the name, like a badge in the Dock or Slack.
 - **The open place in a sidebar** is a `selected` row, not a coloured bar.
 - **Return sends** in a box, and Shift-Return is a new line, as in Slack.
-- **Escape closes** what floats: the Ask box, a popover, the kittens view.
+- **Escape closes** what floats: the Ask box, a popover, the kittens view, the pairing code. ⌘W closes Settings too, as it does any window.
+- **A menu** ends with Settings… and Quit in a group of their own, as every Mac app's does. Its items are in Title Case, with … only where more is asked before it happens.
+- **A notification** names who in its title and says what in its body, as Messages and Slack do, and Notification Center groups it with the rest of its thread.
 - **Times** go after the name in meta, never on their own line.
 - **Destructive actions** say what they do ("Delete", not "OK") and are never the primary.
 - **Empty places** say what will appear there and how, in one secondary line, never a big illustration.
@@ -297,6 +300,7 @@ Where an app you use every day has a settled way of doing something, do it that 
 - `Sources/Shades/UI/OpalLight.swift`: the drawing helpers: `card`, `glass`, `horizon`, `tile`, `rim` and `rimLine`, `meter`, `field`.
 - `Sources/Shades/UI/MessagesInk.swift`: the roles views draw with, such as `paper`, `text`, `soft` and `link`, mapped onto Opal's tokens, and the type roles at your text size and font.
 - `Sources/Shades/UI/QuietButton.swift` and `QuietPanel.swift`: the buttons, the focus ring, and the floating panels.
+- `Sources/Shades/UI/SettingsControls.swift`: Settings' underlined tab, segmented control, switch and field.
 - `Sources/Shades/UI/Motion.swift`: the curve, the durations, and Reduce Motion.
 - `Tests/ShadesTests/SelectionTests.swift`: fails on selected words under 4.5:1 or hard to see on any surface, and on a selection drawn differently without the keyboard.
 - `Tests/ShadesTests/DesignTests.swift`: fails on any orange in `Sources/`, on any word role under 4.5:1 on a surface it sits on, on a kitten colour that's too loud, too pale, too close to another or to a status, and on a token that drifts from Opal's value.

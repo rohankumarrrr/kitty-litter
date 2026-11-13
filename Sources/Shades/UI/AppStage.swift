@@ -80,7 +80,7 @@ final class AppStage: CatStage {
             guard let self else { return (.zero, .zero) }
             return (self.cat.destinationFrame, self.cat.visibleFrame)
         }
-        kittens.onOpen = { [weak self] id in self?.controller?.openThread(id) }
+        kittens.onOpen = { [weak self] status in self?.controller?.kittenPressed(status) }
         kittens.onChange = { [weak self] in
             self?.bubble.reposition()
             self?.updateEscape()
@@ -111,7 +111,10 @@ final class AppStage: CatStage {
         menuBar.onPairPhone = { [weak self] in self?.controller?.pairPhone() }
         menuBar.isDoNotDisturb = { [weak self] in self?.controller?.settings.doNotDisturb == true }
         menuBar.onDoNotDisturb = { [weak self] in self?.controller?.doNotDisturbPressed() }
-        pairing.onClose = { [weak self] in self?.controller?.pairingClosed() }
+        pairing.onClose = { [weak self] in
+            self?.controller?.pairingClosed()
+            self?.updateEscape()
+        }
 
         channels.view.sidebar.onSettings = { [weak self] in self?.controller?.settingsPressed(overMessages: true) }
         channels.view.onSettings = { [weak self] in self?.controller?.settingsPressed(overMessages: true) }
@@ -318,6 +321,7 @@ final class AppStage: CatStage {
     }
 
     func showPairing(_ card: PhonePairingCard?) {
+        defer { updateEscape() }
         guard let card else { return pairing.hide() }
         pairing.show(card, centeredIn: cat.visibleFrame)
     }
@@ -331,7 +335,7 @@ final class AppStage: CatStage {
 
     /// Esc is only taken from other apps while there's something up for it to dismiss.
     private func updateEscape() {
-        let wanted = bubble.isVisible || kittens.isVisible
+        let wanted = bubble.isVisible || kittens.isVisible || pairing.isVisible
         if wanted, escape == nil {
             escape = Hotkeys.shared.register(keyCode: kVK_Escape, modifiers: 0) { [weak self] in self?.escapePressed() }
         } else if !wanted, let id = escape {
@@ -340,11 +344,13 @@ final class AppStage: CatStage {
         }
     }
 
-    private func escapePressed() {
+    func escapePressed() {
         if input.isVisible {
             input.cancel()
         } else if kittens.isVisible {
             kittens.hide()
+        } else if pairing.isVisible, !bubble.isVisible {
+            pairing.close()
         } else {
             controller?.bubbleDismissed(byClick: false)
         }

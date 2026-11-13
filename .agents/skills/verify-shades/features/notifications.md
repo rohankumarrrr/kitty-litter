@@ -1,6 +1,6 @@
 # Notifications
 
-Each new approval, question or decision in Activity posts one macOS notification that says only who and what kind, such as "Steve Pawsniak needs an approval". With **Also when a session finishes** on in Settings, a finished session posts one too, such as "Steve Pawsniak finished". Clicking one opens its thread beside where it lives in The Kitty Litter, and answering takes it back. Each channel's **Notifications**, in its header, says what it tells you on the Mac and on the phone, or mutes it.
+Each new approval, question or decision in Activity posts one macOS notification that says only who and what kind: who in its title, such as "Steve Pawsniak", and what in its body, such as "Needs an approval", grouped by thread in Notification Center. The demo prints them as one line, such as "Steve Pawsniak needs an approval". With **When a session finishes** on in Settings, a finished session posts one too, such as "Steve Pawsniak finished". Clicking one opens its thread beside where it lives in The Kitty Litter, and answering takes it back. Each channel's **Notifications**, in its header, says what it tells you on the Mac and on the phone, or mutes it.
 
 ## Sub-features
 
@@ -13,7 +13,7 @@ Each new approval, question or decision in Activity posts one macOS notification
 
 ## How to get to it (user POV)
 
-- A notification comes by itself when an agent asks for something, and once **Also when a session finishes** is on in Settings, when a session finishes.
+- A notification comes by itself when an agent asks for something, and once **When a session finishes** is on in Settings, when a session finishes.
 - Click it.
 
 ## Driving it with the demo
@@ -35,7 +35,7 @@ Journey: `journeys/notify-finished.txt`, which also covers the phone.
 - **On.** `notify-finished on`, then `finish demo-tidy`. The output says `[demo] notified: Steve Pawsniak finished, which opens demo-tidy`, then `[demo] pushed to web.push.apple.com: {"title":"Steve Pawsniak finished","tag":"demo-tidy","key":"t:demo-tidy@c:%2Fdemo%2Fsteve"}`, with nothing from the report. `report shipped` says `[demo] notified: Clawde finished, which opens demo-icon`.
 - **Click.** `notification demo-tidy` from #general. `1-clicked/channels.png` shows "Tidy up the pricing page" open beside #steve-pawsniak.
 - **Tap.** `phone open t:demo-tidy@c:%2Fdemo%2Fsteve` opens the page the push names, as tapping it does. `phone text` and `2-tapped` show the thread's own page, with Steve at the top and its conversation.
-- **Settings.** `settings`, `settings notifications`, then `draw`. `3-settings/settings.png` shows Settings' Notifications page with Also when a session finishes ticked, since `notify-finished on` ticked it, and each channel with what it tells you.
+- **Settings.** `settings`, `settings notifications`, then `draw`. `3-settings/settings.png` shows Settings' Notifications page with When a session finishes switched on, since `notify-finished on` turned it on, and each channel with what it tells you.
 
 Journey: `journeys/channel-notifications.txt`. `notifications <channel> [mute | mac <level> | phone <level>]` stands in for picking from a channel's Notifications menu, and prints the menu after, with `*` beside what's ticked. The channel is named as `channel` names it, and a level is `everything`, `needsYou` or `nothing`.
 
@@ -48,7 +48,7 @@ Journey: `journeys/channel-notifications.txt`. `notifications <channel> [mute | 
 
 ## Gotchas
 
-- A real notification needs the bundled app, so a demo never posts one, and `swift run` without `--demo` doesn't either.
+- A real notification needs the bundled app, so a demo never posts one, and `swift run` without `--demo` doesn't either. `testANotificationSaysWhoInItsTitleAndWhatInItsBody` in `PanelsTests` checks its title, body and thread.
 - `report decision` takes about 6 seconds to be filed, the same as in the inbox journey.
 - The question is from a thread no kitten owns, which is why it says "An agent".
 - What's "already waiting" goes by when T3 says it was asked, not when it was listed, so it can't be shown with the demo's threads. `FlowTests` covers it, along with a restart and an answer that doesn't go through.

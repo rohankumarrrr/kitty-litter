@@ -6,10 +6,15 @@ settings messages
 wait 1
 draw .verify/shades/keyboard/0-settings
 tab
+tab
+tab
+tab
+tab
+tab
 draw .verify/shades/keyboard/1-font
 tab
-space
 setting Text size Large
+tab
 tab
 tab
 tab

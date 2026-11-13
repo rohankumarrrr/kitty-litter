@@ -235,9 +235,9 @@ final class DemoDriver {
     /// `setting Extra words Pawsniak` types that and presses Return, and a box or a button is pressed, such as
     /// `setting Do Not Disturb` or `setting #general`. Prints what each control on the page says afterwards.
     private func setting(_ words: String) {
-        let controls = allSubviews(of: stage.settingsPanel.panel.contentView).filter { $0 is NSControl || $0 is QuietButton || $0 is QuietCheckbox }
+        let controls = allSubviews(of: stage.settingsPanel.panel.contentView).filter { $0 is NSControl || $0 is QuietButton || $0 is SettingsControl }
         func names(_ view: NSView) -> [String] {
-            [view.accessibilityIdentifier(), (view as? QuietButton)?.accessibilityLabel() ?? "", (view as? QuietCheckbox)?.title ?? ""].filter { !$0.isEmpty }
+            [view.accessibilityIdentifier(), (view as? QuietButton)?.accessibilityLabel() ?? "", (view as? QuietSwitch)?.title ?? ""].filter { !$0.isEmpty }
         }
         let found = controls.flatMap { view in names(view).map { (view, $0) } }
             .filter { words.lowercased().hasPrefix($0.1.lowercased()) }
@@ -245,8 +245,13 @@ final class DemoDriver {
         guard let (control, label) = found else { return print("no setting [\(words)]") }
         let choice = String(words.dropFirst(label.count)).trimmingCharacters(in: .whitespaces)
         switch control {
-        case let box as QuietCheckbox:
-            box.toggle()
+        case let toggle as QuietSwitch:
+            toggle.toggle()
+        case let segments as QuietSegments:
+            guard segments.titles.contains(choice) else { return print("no choice [\(choice)] in \(label)") }
+            segments.pick(choice)
+        case let tab as SettingsTab:
+            tab.onPress?()
         case let field as NSTextField:
             stage.settingsPanel.panel.makeFirstResponder(field)
             field.stringValue = choice
@@ -296,7 +301,8 @@ final class DemoDriver {
             let id = view.accessibilityIdentifier()
             switch view {
             case let field as NSTextField where field.isEditable: print("  \(id): \(field.stringValue)")
-            case let box as QuietCheckbox: print("  [\(box.isOn ? "x" : " ")] \(box.title)")
+            case let toggle as QuietSwitch: print("  [\(toggle.isOn ? "x" : " ")] \(toggle.title)")
+            case let segments as QuietSegments: print("  \(id): \(segments.titles[segments.selected])")
             case let button as QuietButton where !id.isEmpty: print("  \(id): \(button.accessibilityValue() as? String ?? "")")
             default: break
             }
@@ -470,11 +476,7 @@ final class DemoDriver {
         case "submit":
             stage.input.submit(rest)
         case "esc":
-            if stage.input.isVisible {
-                stage.input.cancel()
-            } else {
-                controller.bubbleDismissed(byClick: false)
-            }
+            stage.escapePressed()
         case "clickaway":
             controller.bubbleDismissed(byClick: true)
         case "talk":
@@ -838,7 +840,11 @@ final class DemoDriver {
             stage.menuBar.closeMenu()
         case "menuitems":
             // What the cat's menu and the menu bar show, with a check by what's on, and each one's shortcut, badge and tip.
-            for item in stage.menuBar.shownItems where !item.isSeparatorItem {
+            for item in stage.menuBar.shownItems {
+                guard !item.isSeparatorItem else {
+                    print("menu ---")
+                    continue
+                }
                 let key = [Shortcut.ask, .fix, .messages].first { $0.key == item.keyEquivalent && $0.keyModifiers == item.keyEquivalentModifierMask }
                 let extras = [key.map { "key=\($0.label)" }, item.badge?.stringValue.map { "badge=[\($0)]" }, item.toolTip.map { "tip=[\($0)]" }]
                 print((["menu \(item.state == .on ? "✓" : "-") \(item.title)"] + extras.compactMap { $0 }).joined(separator: "  "))

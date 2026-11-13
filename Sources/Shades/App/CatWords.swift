@@ -81,14 +81,18 @@ enum CatWords {
     static func failedCaption(_ thread: AgentThread) -> String { "Hit a snag: \(thread.title)" }
     static func questionCaption(_ question: AgentQuestion) -> String { "Asking: \(question.threadTitle)" }
     static func notification(_ alert: NeedsYouAlert) -> String {
-        let who = alert.who ?? "An agent"
-        switch alert.kind {
-        case .approval: return "\(who) needs an approval"
-        case .question: return "\(who) has a question"
-        case .decision: return "\(who) needs a decision"
-        case .finished: return "\(who) finished"
+        "\(alert.who ?? "An agent") \(notificationWhat(alert.kind))"
+    }
+    /// What a notification says happened, after who.
+    static func notificationWhat(_ kind: NeedsYouAlert.Kind) -> String {
+        switch kind {
+        case .approval: "needs an approval"
+        case .question: "has a question"
+        case .decision: "needs a decision"
+        case .finished: "finished"
         }
     }
+    static let kittensTitle = "Kittens"
     static func kittenState(_ state: KittenStatus.State) -> String {
         switch state {
         case .working(let sessions): return sessions == 1 ? "Working" : "Working on \(sessions) things"
@@ -105,6 +109,7 @@ enum CatWords {
         return open + " It works once, for the next 10 minutes. Your phone needs Tailscale on, and your Mac awake with me running."
     }
     static let pairItem = "Pair Phone…"
+    static let pairCancel = "Cancel"
     static let pairingRanOut = "That pairing code ran out after 10 minutes. Choose \(pairItem) from my menu for a new one."
     static let phonePaired = "Your phone's paired. \(appName) is there now."
     static func phoneProblem(_ error: Error) -> String { "\(appName) on your phone isn't working. \(error.localizedDescription)" }
@@ -176,7 +181,7 @@ enum CatWords {
     static let directMessages = "Direct messages"
     static let shortcutsButton = "⌘/ Shortcuts"
     static let settingsButton = "Settings"
-    static let allFonts = "All fonts"
+    static let allFonts = "All Fonts"
     static let shortcutsTitle = "Keyboard shortcuts"
     static let jumpTitle = "Jump to"
     static let jumpPlaceholder = "Jump to a place or thread"
