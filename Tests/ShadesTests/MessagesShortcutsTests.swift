@@ -57,6 +57,7 @@ final class MessagesShortcutsTests: XCTestCase {
         XCTAssertEqual(key(17, "T", [.command, .shift]), .threads)
         XCTAssertEqual(key(46, "M", [.command, .shift]), .activity)
         XCTAssertEqual(key(45, "n", .command), .compose)
+        XCTAssertEqual(key(11, "b", .command), .toggleSidebar)
         XCTAssertEqual(key(13, "w", .command), .close)
         XCTAssertEqual(key(44, "/", .command), .cheatsheet)
         XCTAssertEqual(key(43, ",", .command), .settings)
@@ -66,6 +67,7 @@ final class MessagesShortcutsTests: XCTestCase {
         XCTAssertNil(key(11, "b", [.control, .command]), "⌃⌘B, which opens and closes Messages, is left alone")
         XCTAssertTrue(MessagesShortcut.previousPlace.movesInText, "a box with words keeps ⌥ and the arrows")
         XCTAssertFalse(MessagesShortcut.nextThread.movesInText, "a thread key still works with words in the box, which stay in their own thread's")
+        XCTAssertFalse(MessagesShortcut.toggleSidebar.movesInText, "⌘B hides the sidebar from a box with words in it too, which never makes anything bold")
     }
 
     func testNoShortcutDoesAnythingWhileMessagesDoesntHaveTheKeyboard() {
@@ -73,7 +75,7 @@ final class MessagesShortcutsTests: XCTestCase {
         window.update(book())
         window.view.select(.channel(.of(steve)))
         XCTAssertFalse(window.panel.isKeyWindow)
-        let all: [MessagesShortcut] = [.previousThread, .nextThread, .previousPlace, .nextPlace, .previousUnread, .nextUnread, .back, .forward, .place(1), .jump, .search, .escape, .threads, .activity, .compose, .close, .cheatsheet]
+        let all: [MessagesShortcut] = [.previousThread, .nextThread, .previousPlace, .nextPlace, .previousUnread, .nextUnread, .back, .forward, .place(1), .jump, .search, .escape, .threads, .activity, .compose, .toggleSidebar, .close, .cheatsheet]
         var closed = false
         window.view.onCloseWindow = { closed = true }
         for shortcut in all {
@@ -82,6 +84,7 @@ final class MessagesShortcutsTests: XCTestCase {
         XCTAssertEqual(window.view.selection, .channel(.of(steve)), "nothing moved")
         XCTAssertTrue(window.view.jumpBox.isHidden)
         XCTAssertTrue(window.view.cheatsheet.isHidden)
+        XCTAssertFalse(window.view.isSidebarHidden)
         XCTAssertFalse(closed)
     }
 
@@ -313,11 +316,24 @@ final class MessagesShortcutsTests: XCTestCase {
         XCTAssertTrue(view.sidebar.shortcutsButton.accessibilityPerformPress())
         XCTAssertFalse(view.cheatsheet.isHidden)
         let listed = view.cheatsheet.accessibilityLabel() ?? ""
-        for keys in ["⌘⇧[", "⌥↑", "⌥⇧↑", "⌘[", "⌘1", "⌘K", "Esc", "⌘⇧T", "⌘⇧M", "⌘N", "⌘W", "⌘/"] {
+        for keys in ["⌘⇧[", "⌥↑", "⌥⇧↑", "⌘[", "⌘1", "⌘K", "Esc", "⌘⇧T", "⌘⇧M", "⌘B", "⌘N", "⌘W", "⌘/"] {
             XCTAssertTrue(listed.contains(keys), keys)
         }
         view.perform(.cheatsheet)
         XCTAssertTrue(view.cheatsheet.isHidden, "⌘/ again closes it")
+    }
+
+    func testEveryShortcutInTheListShowsAtEverySizeTheWindowCanBe() {
+        for size in [ChannelsWindow.minimumSize, NSSize(width: 908, height: 560), ChannelsWindow.size] {
+            let view = ChannelsView(frame: NSRect(origin: .zero, size: size))
+            view.show(book())
+            view.perform(.cheatsheet)
+            view.layoutSubtreeIfNeeded()
+            XCTAssertTrue(view.cheatsheet.bounds.contains(view.cheatsheet.card), "every row inside a window \(size)")
+        }
+        let roomy = ChannelsView(frame: NSRect(origin: .zero, size: ChannelsWindow.size))
+        roomy.layoutSubtreeIfNeeded()
+        XCTAssertLessThan(roomy.cheatsheet.card.width, ChannelsWindow.size.width / 2, "one column where it fits, as Slack's list is")
     }
 
     func testClickingIntoMessagesGivesItTheKeyboardWithoutActivatingShades() {
