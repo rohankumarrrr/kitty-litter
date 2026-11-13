@@ -264,7 +264,7 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 | Approvals and questions | In the bubble's card. Allow is the primary, the rest quiet |
 | The kittens view and the pairing code | Floating glass. Kittens on Rimlight tiles, with labels in small capitals and status in lilac, rose or mint |
 | Menus and popovers | The system's dark menus, or floating glass |
-| The phone page | The phone's pure black (`#000000`) with SF Pro, white text at set opacities, a 32-point bold large title on each page, rimlit cards, kittens on Rimlight tiles, the horizon at the foot, 24-point sheets |
+| The phone page | The phone's pure black (`#000000`) with SF Pro, white text at 100, 80 and 62% as on its widgets, a 32-point bold large title on each page, rimlit cards, kittens on Rimlight tiles, its bar and box on floating glass, 24-point sheets |
 
 ## Conventions
 
@@ -284,6 +284,7 @@ Where an app you use every day has a settled way of doing something, do it that 
 - **An error that needs a setting changed** says which, and **Open System Settings** goes to that page.
 - **A long answer** opens at its start, its last line fading to say there's more.
 - **Empty places** say what will appear there and how, in one secondary line, never a big illustration.
+- **On the phone**, an iPhone's ways: a large title the bar takes as you scroll, Search in the bar with Cancel beside its field, a message's reactions in a sheet from the foot, + and an arrow in the box, and Return making a new line.
 
 ## Don't
 

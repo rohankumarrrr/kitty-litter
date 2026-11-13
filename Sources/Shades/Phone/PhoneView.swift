@@ -242,12 +242,6 @@ struct PhoneView: Encodable, Equatable {
         var several = false
     }
 
-    /// A bubble's colour, and its words' colour, where `nil` is the page's own.
-    struct Paint: Encodable, Equatable {
-        var color: String
-        var ink: String?
-    }
-
     /// One row, by `kind`, with only the fields that kind uses.
     struct Row: Encodable, Equatable {
         var kind: String
@@ -258,10 +252,11 @@ struct PhoneView: Encodable, Equatable {
         var text: String?
         var answer: String?
         var footer: String?
+        /// Your bubble's colour, or someone's square where they have no cat. Anyone else's bubble takes its light from
+        /// their cat's jacket.
         var color: String?
-        var ink: String?
-        /// A message that's still coming or on its way, paler as the window draws it, on a `light` page and a `dark` one.
-        var faded: [String: Paint]?
+        /// A message that's still coming or on its way, drawn at 55% as the window draws it.
+        var faded: Bool?
         /// Whoever it's from, or what a heading's kitten is doing, as `PhoneCat.key` writes it. Yours have none.
         var cat: String?
         /// The colour of an issue's dot. `nil` is the soft grey.
@@ -451,8 +446,7 @@ struct PhoneView: Encodable, Equatable {
             detail: message.earlierNotes > 0 ? CatWords.earlierNotes(message.earlierNotes) : nil,
             text: text,
             color: look.bubble.map(hex),
-            ink: look.words.map(hex),
-            faded: message.isStillGoing || message.isSending ? faded(look) : nil,
+            faded: message.isStillGoing || message.isSending ? true : nil,
             cat: cat(of: look),
             mine: look.isYou,
             going: message.isStillGoing,
@@ -471,13 +465,6 @@ struct PhoneView: Encodable, Equatable {
             markup: text.map { Markup($0, pulls: book.pulls).blocks },
             reactions: message.reactions?.map { Choice(label: $0.emoji, value: $0.rawValue) }
         )
-    }
-
-    /// As one solid colour, rather than see-through, so its words can be picked to read on it. The page is dark in either.
-    private static func faded(_ look: ChannelSpeakerLook) -> [String: Paint] {
-        let fill = ChannelSpeakerLook.faded(look.bubble, to: MessageRowView.stillGoingAlpha)
-        let paint = Paint(color: hex(fill), ink: look.bubble == nil ? nil : hex(ChannelSpeakerLook.blackOrWhite(on: fill)))
-        return ["light": paint, "dark": paint]
     }
 
     private static func row(_ row: ChannelRow, at place: ChannelPlace, in book: ChannelBook, now: Date) -> Row {

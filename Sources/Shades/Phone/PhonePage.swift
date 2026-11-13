@@ -1,3 +1,4 @@
+import Foundation
 import ShadesCore
 
 /// The page a phone opens. It only draws what the Mac sends and says what you did, and every word on it is put there
@@ -9,8 +10,10 @@ enum PhonePage {
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-        <meta name="color-scheme" content="light dark">
+        <meta name="color-scheme" content="dark">
+        <meta name="theme-color" content="#000000">
         <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <meta name="apple-mobile-web-app-title" content="Kitty Litter">
         <title>The Kitty Litter</title>
         <link rel="manifest" href="/manifest.json">
@@ -20,26 +23,33 @@ enum PhonePage {
         </head>
         <body>
         <header id="top">
-          <button id="back" type="button" hidden></button>
-          <div id="head">
-            <span id="headcat" hidden></span>
-            <div id="names">
-              <h1 id="title">The Kitty Litter</h1>
-              <p id="subtitle"></p>
+          <nav id="bar">
+            <button id="back" type="button" hidden><svg class="symbol" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l-8 8 8 8"/></svg><span id="backtitle"></span></button>
+            <p id="bartitle" aria-hidden="true"></p>
+            <div id="actions">
+              <button id="unread" class="symbolic" type="button" hidden><svg class="symbol" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7"/><path d="M3 7l9 6 3-2"/><circle class="fill" cx="19" cy="5" r="3"/></svg><span class="unseen">Mark unread</span></button>
+              <button id="find" class="symbolic" type="button" hidden><svg class="symbol" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg><span class="unseen">Search</span></button>
             </div>
-            <button id="link" type="button" hidden></button>
-            <button id="unread" type="button" hidden>Mark unread</button>
-            <button id="find" type="button" hidden>Search</button>
-          </div>
-          <button id="jumpnew" type="button" hidden></button>
+          </nav>
           <form id="search" hidden>
+            <svg class="symbol" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
             <input id="query" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search messages" aria-label="Search messages">
+            <button id="searchcancel" type="button">Cancel</button>
           </form>
+          <button id="jumpnew" type="button" hidden></button>
           <div id="banner" role="status"></div>
         </header>
-        <div id="notify" hidden>
+        <div id="head" hidden>
+          <span id="headcat" class="tile" hidden></span>
+          <div id="names">
+            <h1 id="title">The Kitty Litter</h1>
+            <p id="subtitle"></p>
+            <button id="link" type="button" hidden></button>
+          </div>
+        </div>
+        <div id="notify" class="lit" hidden>
           <p id="notifytext"></p>
-          <button id="notifybutton" type="button" hidden>Turn on</button>
+          <button id="notifybutton" class="go" type="button" hidden>Turn on</button>
         </div>
         <main id="rows"></main>
         <main id="found" hidden></main>
@@ -47,16 +57,16 @@ enum PhonePage {
           <label id="label" for="words"></label>
           <div id="attached" hidden></div>
           <div class="field">
-            <button id="attach" class="tool" type="button" aria-label="Attach a photo or file">📎</button>
-            <button id="camera" class="tool" type="button" aria-label="Take a photo">📷</button>
-            <textarea id="words" rows="1" enterkeyhint="send"></textarea>
-            <button id="send" type="submit">Send</button>
+            <button id="attach" class="symbolic" type="button" aria-label="Add a photo or file"><svg class="symbol" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+            <div class="entry">
+              <textarea id="words" rows="1"></textarea>
+              <button id="send" type="submit"><span class="disc"><svg class="symbol" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span><span class="unseen">Send</span></button>
+            </div>
           </div>
           <input id="pick" type="file" accept="image/*,application/pdf" multiple hidden>
-          <input id="snap" type="file" accept="image/*" capture="environment" hidden>
           <label id="alsolabel" hidden><input type="checkbox" id="also"> <span id="alsotext"></span></label>
         </form>
-        <dialog id="linksheet" aria-labelledby="linktitle">
+        <dialog id="linksheet" class="sheet" aria-labelledby="linktitle">
           <p id="linktitle"></p>
           <p id="linkaddress"></p>
           <div class="buttons">
@@ -65,12 +75,15 @@ enum PhonePage {
             <button id="linkshow" class="go" type="button" hidden>Show</button>
           </div>
         </dialog>
+        <dialog id="reactsheet" class="sheet" aria-label="React">
+          <div id="marks"></div>
+        </dialog>
         <section id="pair" hidden>
           <h1>Pair this phone</h1>
           <p>Turn on The Kitty Litter on my phone in Settings on your Mac, and it shows a code. Scan it with your camera, or type it here.</p>
           <form id="pairform">
             <input id="code" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="ABCD-EFGH" aria-label="Code">
-            <button type="submit">Pair</button>
+            <button type="submit" class="go">Pair</button>
           </form>
           <p id="pairnote" role="status"></p>
         </section>
@@ -78,10 +91,10 @@ enum PhonePage {
         </html>
         """
 
+    /// Opal on an iPhone, as its Home Screen and widgets are: pure black, SF Pro, and white words at 100, 80 and 62%.
+    /// Colour comes in only as light along an edge, and every colour is a token in `colors`.
     static let style = """
         :root {
-          --paper: #f9f9f9; --text: #1d1d1f; --soft: #6e6e73; --line: #d2d2d7; --grey: #e9e9eb;
-          --you: #0071e3; --on-you: #ffffff; --link: #0070e1; --card: #ffffff; --warn: #c9341c; --badge: #ff3b5c; --alert: #d6324d; --cats: light;
           /* The phone's own text size, 17px where it's left alone. Every size the page writes is in em, as the pixels it
              comes to at 17, so it grows with it, and with the Mac's, which /app.css sets in --size. */
           font: 106.25%/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
@@ -91,73 +104,100 @@ enum PhonePage {
         @supports (-webkit-touch-callout: none) {
           :root { font: -apple-system-body; line-height: 1.35; }
         }
-        @media (prefers-color-scheme: dark) {
-          :root { --paper: #1d1d1f; --text: #f5f5f7; --soft: #98989d; --line: #3a3a3c; --grey: #3a3a3c; --link: #2586e7; --card: #2c2c2e; --warn: #ff6b55; --alert: #ff3b5c; --cats: dark; }
-        }
-        * { box-sizing: border-box; }
-        html, body { margin: 0; background: var(--paper); color: var(--text); }
-        body { min-height: 100dvh; display: flex; flex-direction: column; font-size: var(--size, 100%); }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html { background: var(--page); color: var(--body); }
+        body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; font-size: var(--size, 100%); }
         /* Big enough to tap, as Apple's 44 points. Where a row is tighter than that, a button reaches past it with
            negative margins, so it can be tapped where it is without spreading the page out. */
         button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; min-width: 44px; min-height: 44px; }
         [hidden] { display: none !important; }
+        .unseen { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+        .symbol { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .symbol .fill { fill: currentColor; stroke: none; }
+        .symbolic { display: inline-grid; place-items: center; color: var(--lilac); border-radius: 999px; }
+        .symbolic:active { background: var(--control); }
 
-        #top { position: sticky; top: 0; z-index: 2; background: var(--paper); border-bottom: 1px solid var(--line);
-          padding: calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 16px) 10px calc(env(safe-area-inset-left) + 16px); }
-        #back { color: var(--link); font-size: calc(15em / 17); margin: -12px 0 -8px; display: block; max-width: 100%;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
-        /* The buttons go under the names once the names would be narrower than 9em, as at a large text size. */
-        #head { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px; }
-        #names { flex: 1 1 min(9em, 70%); min-width: 0; }
-        #link, #unread, #find { color: var(--link); font-size: calc(15em / 17); flex: none; margin: -8px 0; }
-        #jumpnew { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap;
-          background: var(--you); color: var(--on-you); border-radius: 999px; padding: 0 16px; font-size: calc(14em / 17); font-weight: 600;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, .2); }
-        #search { margin-top: 10px; }
+        /* An iPhone's bar: the page's black over the large title, and glass with a hairline once the title goes under it. */
+        #top { position: sticky; top: 0; z-index: 2; background: var(--page);
+          padding: env(safe-area-inset-top) calc(env(safe-area-inset-right) + 8px) 0 calc(env(safe-area-inset-left) + 8px); }
+        #top.collapsed { background: var(--glass); box-shadow: 0 1px var(--glass-edge); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+        #bar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; min-height: 44px; }
+        #back { grid-column: 1; justify-self: start; display: flex; align-items: center; gap: 2px; max-width: 100%; padding-right: 8px;
+          color: var(--lilac); white-space: nowrap; overflow: hidden; }
+        #back .symbol { stroke-width: 2.2; }
+        #backtitle { overflow: hidden; text-overflow: ellipsis; }
+        #bartitle { grid-column: 2; margin: 0; max-width: calc(100vw - 200px); color: var(--white); font-weight: 600; white-space: nowrap; overflow: hidden;
+          text-overflow: ellipsis; visibility: hidden; }
+        #top.collapsed #bartitle { visibility: visible; }
+        #actions { grid-column: 3; justify-self: end; display: flex; }
+        /* While Search is open it has the bar, with Cancel beside it, as on an iPhone. */
+        #search { position: relative; display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 4px 0 4px 8px; }
+        #search .symbol { position: absolute; left: 18px; width: 18px; height: 18px; color: var(--secondary); pointer-events: none; }
         /* Never under 16px, or an iPhone zooms in on it as you type. */
-        #query { width: 100%; font: inherit; font-size: max(16px, 1em); color: inherit; background: var(--grey); border: 0; border-radius: 10px;
-          padding: 8px 12px; min-height: 44px; }
-        .hit { display: block; width: 100%; text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
-        .hit:active { background: var(--grey); }
-        .hit small { color: var(--soft); font-size: calc(13em / 17); }
-        .hit p { margin: 4px 0 0; color: var(--soft); overflow-wrap: anywhere; }
-        .hit b { color: var(--text); }
-        .msg.landed .bubble { box-shadow: 0 0 0 3px var(--you); }
-        #title { font-size: calc(20em / 17); margin: 0; font-weight: 600; overflow-wrap: anywhere; }
-        #subtitle { margin: 2px 0 0; color: var(--soft); font-size: calc(13em / 17); }
-        #subtitle:empty { display: none; }
+        #query { flex: 1; min-width: 0; font: inherit; font-size: max(16px, 1em); color: var(--white); caret-color: var(--lilac); background: var(--raised);
+          border: 1px solid var(--field-edge); border-radius: 12px; padding: 8px 12px 8px 36px; min-height: 44px; }
+        #query::placeholder, #words::placeholder, #code::placeholder, .card input::placeholder { color: var(--secondary); }
+        #searchcancel { color: var(--lilac); padding: 0 8px; }
+        #jumpnew { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap; padding: 0 16px;
+          color: var(--lilac); background: var(--glass); box-shadow: inset 0 0 0 1px var(--glass-edge), 0 4px 16px rgba(0, 0, 0, .5);
+          border-radius: 999px; font-size: calc(15em / 17); font-weight: 600; }
         /* Across the bottom of the header, so it's in sight however far down you are. Always there, empty, so what it
            says is read out. */
-        #banner { background: var(--warn); color: var(--paper); font-size: calc(14em / 17);
-          margin: 10px calc(-16px - env(safe-area-inset-right)) -10px calc(-16px - env(safe-area-inset-left));
-          padding: 8px calc(env(safe-area-inset-right) + 16px) 8px calc(env(safe-area-inset-left) + 16px); }
-        #banner:empty { margin: 0; padding: 0; }
-        #notify { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 14px;
-          margin: 12px calc(env(safe-area-inset-right) + 12px) 0 calc(env(safe-area-inset-left) + 12px); background: var(--card); border: 1px solid var(--line); }
-        #notifytext { flex: 1; margin: 0; color: var(--soft); font-size: calc(14em / 17); }
-        #notifybutton { background: var(--you); color: var(--on-you); border-radius: 999px; padding: 0 16px; font-size: calc(15em / 17); }
+        #banner { color: var(--error-text); background: var(--error-surface); font-size: calc(15em / 17);
+          margin: 0 calc(-8px - env(safe-area-inset-right)) 0 calc(-8px - env(safe-area-inset-left));
+          padding: 10px calc(env(safe-area-inset-right) + 16px) 10px calc(env(safe-area-inset-left) + 16px); }
+        #banner:empty { padding: 0; }
 
-        main { flex: 1; padding: 8px calc(env(safe-area-inset-right) + 12px) 16px calc(env(safe-area-inset-left) + 12px); }
-        .group { color: var(--soft); font-size: calc(12em / 17); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 22px 4px 6px; }
-        .place { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 8px; border-radius: 12px; text-align: left; }
-        .place:active, .issue:active { background: var(--grey); }
-        .place .name { flex: 1; }
-        .place.unread .name { font-weight: 600; }
+        /* The large title, which scrolls up under the bar. */
+        #head { display: flex; align-items: center; gap: 12px; padding: 2px calc(env(safe-area-inset-right) + 16px) 10px calc(env(safe-area-inset-left) + 16px); }
+        #names { flex: 1; min-width: 0; }
+        #title { margin: 0; color: var(--white); font-size: calc(32em / 17); font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+        #subtitle { margin: 2px 0 0; color: var(--secondary); font-size: calc(15em / 17); }
+        #subtitle:empty { display: none; }
+        #link { display: block; color: var(--lilac); font-size: calc(15em / 17); text-align: left; margin: -8px 0 -12px; }
+
+        /* The Home Screen's widget card: black glass lit only along its bottom edge, in its own light. */
+        .card, .lit { --light: var(--shades); position: relative;
+          background: radial-gradient(70% 64.8% at 50% 108.64%, color-mix(in srgb, var(--rim, var(--light)) 30%, transparent), transparent 72%),
+            linear-gradient(var(--card-top), var(--card-bottom));
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
+        .card::after, .lit::after { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1.2px; pointer-events: none;
+          background: linear-gradient(transparent 58%, color-mix(in srgb, var(--rim, var(--light)) 55%, transparent) 82%, var(--rim, var(--light)));
+          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+        /* An Opal Dock icon: a black tile lit from below, for a kitten's cat or a place's glyph. */
+        .tile { --light: var(--shades); position: relative; flex: none; width: 40px; height: 40px; border-radius: 22.5%; display: grid; place-items: center;
+          color: var(--white);
+          background: radial-gradient(100% 60% at 50% 100%, color-mix(in srgb, var(--light) 45%, transparent), transparent),
+            linear-gradient(var(--card-top-solid), var(--card-bottom-solid)); }
+        .tile::after { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none;
+          background: linear-gradient(rgba(255, 255, 255, .22), transparent 40%, transparent 60%, var(--light));
+          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+
+        #notify { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 18px;
+          margin: 8px calc(env(safe-area-inset-right) + 16px) 12px calc(env(safe-area-inset-left) + 16px); }
+        #notifytext { flex: 1; margin: 0; color: var(--body); font-size: calc(15em / 17); }
+
+        main { flex: 1; padding: 4px calc(env(safe-area-inset-right) + 16px) 24px calc(env(safe-area-inset-left) + 16px); }
+        .group, .section span { color: var(--label); font-size: calc(12em / 17); font-weight: 500; letter-spacing: .09em; text-transform: uppercase; }
+        .group { margin: 24px 0 6px; }
+        .place { display: flex; align-items: center; gap: 12px; width: calc(100% + 16px); margin: 0 -8px; padding: 6px 8px; border-radius: 14px; text-align: left; }
+        .place:active, .issue:active, .hit:active, .digest:active, .replybar:active { background: var(--raised); }
+        .place .name { flex: 1; color: var(--body); }
+        .place.unread .name { color: var(--white); font-weight: 600; }
+        .place.asleep .tile { --light: var(--dim); }
         .place.asleep .cat { opacity: .45; }
-        .place.asleep .name { color: var(--soft); }
-        .count { background: var(--badge); color: #000; border-radius: 999px; padding: 1px 8px; font-size: calc(13em / 17); font-weight: 700; font-variant-numeric: tabular-nums; }
-        .icon { width: 32px; height: 32px; flex: none; display: grid; place-items: center; color: var(--soft); }
-        .icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-        .place.unread .icon { color: var(--text); }
-        .dot { width: 8px; height: 8px; flex: none; background: var(--soft); }
+        .place.asleep .name { color: var(--secondary); }
+        .count { background: var(--error); color: var(--page); border-radius: 999px; padding: 1px 8px; font-size: calc(13em / 17); font-weight: 700; font-variant-numeric: tabular-nums; }
+        .dot { width: 8px; height: 8px; flex: none; background: var(--secondary); }
         /* The window's pixel art, kept crisp: each of its pixels is a whole number of the phone's at 16 and 32. */
         .cat { width: 32px; height: 32px; flex: none; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
         .cat.small { width: 16px; height: 16px; }
-        .face { width: 16px; height: 16px; flex: none; border-radius: 4px; background: var(--you); }
-        .you { width: 32px; height: 32px; flex: none; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 .5px var(--line); }
+        /* Your colour is close to the page's black, so your square has an edge, at the 3:1 a shape needs, as in the window. */
+        .face { width: 16px; height: 16px; flex: none; border-radius: 4px; background: var(--selected); box-shadow: inset 0 0 0 1px var(--dim); }
+        .you { width: 32px; height: 32px; flex: none; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 .5px var(--border); }
         .you.small { width: 16px; height: 16px; }
 
-        .day { text-align: center; color: var(--soft); font-size: calc(12em / 17); margin: 18px 0 6px; }
+        .day { text-align: center; color: var(--secondary); font-size: calc(13em / 17); font-weight: 600; margin: 20px 0 6px; }
         .msg { margin: 6px 0; display: flex; flex-direction: column; align-items: flex-start; }
         .msg.mine { align-items: flex-end; }
         .msg.withcat { padding-left: 40px; }
@@ -166,146 +206,187 @@ enum PhonePage {
         .said .cat { margin-left: -40px; }
         .msg.withyou { padding-right: 40px; }
         .said .you { margin-right: -40px; }
-        .meta { color: var(--soft); font-size: calc(12em / 17); margin: 4px 12px 3px; }
-        .bubble { max-width: 86%; padding: 9px 14px; border-radius: 18px; background: var(--grey); color: var(--text);
+        .meta { color: var(--secondary); font-size: calc(13em / 17); margin: 4px 12px 3px; }
+        /* A speaker's bubble is drawn here alone, from what the page puts on it: yours filled in your colour, and
+           anyone else's lit at its edge in theirs, as the window draws them. Still coming, either is at 55%. */
+        .bubble { position: relative; max-width: 86%; padding: 9px 14px; border-radius: 18px; color: var(--body);
           white-space: pre-wrap; overflow-wrap: anywhere; }
+        .mine .bubble { --under: var(--fill, var(--selected)); background: var(--under); }
+        .mine .bubble.faded { --under: color-mix(in srgb, var(--fill, var(--selected)) 55%, var(--page)); color: var(--secondary); }
+        .bubble.lit { --under: var(--card-bottom-solid); }
+        .bubble.lit.faded { --rim: color-mix(in srgb, var(--light) 55%, transparent); color: var(--secondary); }
+        .msg.landed .bubble { outline: 2px solid var(--violet); outline-offset: 2px; }
         .bubble code { font: .9em ui-monospace, Menlo, monospace; }
-        .bubble a, .bubble .link { color: inherit; }
-        .bubble .link { text-decoration: underline; cursor: pointer; }
+        .bubble a, .bubble .link { color: var(--lilac); }
+        .bubble .link { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--lilac) 50%, transparent); cursor: pointer; }
         .bubble p, .bubble h4, .bubble blockquote { margin: 0; }
         .bubble > * + * { margin-top: .5em; }
         .bubble > .item + .item { margin-top: .15em; }
-        .bubble h4 { font-size: 1em; }
-        .bubble blockquote { padding-left: 10px; border-left: 3px solid color-mix(in srgb, currentColor 35%, transparent); }
+        .bubble h4 { font-size: 1em; color: var(--white); }
+        .bubble strong { color: var(--white); }
+        .bubble blockquote { padding-left: 10px; border-left: 3px solid var(--field-edge); }
         .bubble .item { display: flex; gap: .4em; }
         .bubble .marker { flex: none; min-width: .8em; }
-        .bubble .code { border-radius: 10px; background: color-mix(in srgb, currentColor 9%, transparent); }
+        .bubble .code { border-radius: 10px; background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
         .bubble pre { margin: 0; padding: 8px 10px; font: calc(14em / 17)/1.4 ui-monospace, Menlo, monospace; white-space: pre; overflow-x: auto; }
         /* On top of the code's first line, so all of it can be tapped. */
-        .bubble .copy { position: relative; display: block; margin: -8px 0 -18px auto; padding: 0 10px; font-size: calc(13em / 17); }
+        .bubble .copy { position: relative; display: block; margin: -8px 0 -18px auto; padding: 0 10px; color: var(--lilac); font-size: calc(13em / 17); }
         .bubble .table { overflow-x: auto; }
         .bubble table { border-collapse: collapse; font-size: calc(15em / 17); white-space: normal; }
-        .bubble th, .bubble td { overflow-wrap: normal; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); padding: 3px 8px; text-align: left; vertical-align: top; }
-        .bubble th { background: color-mix(in srgb, currentColor 6%, transparent); }
-        .bubble hr { border: 0; border-top: 1px solid color-mix(in srgb, currentColor 25%, transparent); margin: .6em 0; }
-        /* GitHub's own colours for a pull request's state, as the window draws them. */
-        .chip { display: inline-block; border-radius: 999px; padding: 0 8px; font-size: calc(14em / 17); font-weight: 600; color: #fff; background: #6e7781; white-space: nowrap; }
-        .chip[data-state=open] { background: #1f883d; }
-        .chip[data-state=merged] { background: #8250df; }
-        .chip[data-state=closed] { background: #cf222e; }
-        /* However long the address, the sheet stays on screen and the address scrolls inside it. Only while it's open,
-           since a closed dialog is hidden by the browser's own rule. */
-        #linksheet[open] { position: fixed; margin: 0; width: auto; max-width: none;
-          inset: auto calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 12px);
-          max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); display: flex; flex-direction: column;
-          color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
-        #linksheet::backdrop { background: rgba(0, 0, 0, .4); }
-        #linktitle { margin: 0; color: var(--soft); font-size: calc(13em / 17); font-weight: 600; overflow-wrap: anywhere; }
-        #linkaddress { margin: 6px 0 0; font: calc(14em / 17)/1.4 ui-monospace, Menlo, monospace; overflow-wrap: anywhere; overflow-y: auto; min-height: 0; }
-        #linksheet .buttons { justify-content: flex-end; }
-        #linksheet .buttons .go { display: inline-flex; align-items: center; min-height: 44px; background: var(--you); color: var(--on-you); border-radius: 999px;
-          padding: 0 16px; font-size: calc(15em / 17); text-decoration: none; }
-        /* Thirty lines of 1.35em and the bubble's padding, as many as a long message shows on the Mac. */
-        .bubble.cut { max-height: calc(40.5em + 18px); overflow: hidden; -webkit-mask-image: linear-gradient(#000 calc(100% - 4em), transparent); }
-        .more { color: var(--soft); font-size: calc(14em / 17); margin: -8px 12px -12px; }
-        .failure { color: var(--warn); font-size: calc(13em / 17); margin: 3px 12px 0; }
-        .retry { color: var(--link); font-size: calc(14em / 17); font-weight: 600; margin: -8px 12px -12px; }
+        .bubble th, .bubble td { overflow-wrap: normal; border: 1px solid var(--field-edge); padding: 3px 8px; text-align: left; vertical-align: top; }
+        .bubble th { color: var(--white); background: rgba(255, 255, 255, .04); }
+        .bubble hr { border: 0; border-top: 1px solid var(--field-edge); margin: .6em 0; }
+        /* A pull request's state says itself in Opal's status colours, never a fill of its own. */
+        .chip { display: inline-block; border-radius: 999px; padding: 0 8px; font-size: calc(14em / 17); font-weight: 600; color: var(--body);
+          background: var(--control); box-shadow: inset 0 0 0 1px var(--field-edge); white-space: nowrap; }
+        .chip[data-state=open] { color: var(--good); }
+        .chip[data-state=merged] { color: var(--lilac); }
+        .chip[data-state=closed] { color: var(--error-text); }
+        /* Thirty lines of 1.35em and the bubble's padding, as many as a long message shows on the Mac. What's cut fades
+           into the bubble's own colour, under its lit edge. */
+        .bubble.cut { max-height: calc(40.5em + 18px); overflow: hidden; }
+        .bubble.cut::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4em; pointer-events: none;
+          background: linear-gradient(transparent, var(--under)); }
+        .more { color: var(--secondary); font-size: calc(14em / 17); margin: -8px 12px -12px; }
+        .failure { color: var(--error-text); font-size: calc(13em / 17); margin: 3px 12px 0; }
+        .retry { color: var(--lilac); font-size: calc(14em / 17); font-weight: 600; margin: -8px 12px -12px; }
         /* Tapping a message offers its reactions. This is the same for a keyboard and VoiceOver, and shows only while
            it has the keyboard. */
-        .react { color: var(--link); font-size: calc(14em / 17); font-weight: 600; margin: -8px 12px -12px; }
+        .react { color: var(--lilac); font-size: calc(14em / 17); font-weight: 600; margin: -8px 12px -12px; }
         .react:not(:focus) { position: absolute; width: 1px; min-width: 0; height: 1px; min-height: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
         .reactions { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 8px 0; }
-        .reactions button { position: relative; min-height: 32px; background: var(--grey); border-radius: 999px; padding: 0 9px; font-size: calc(15em / 17); }
+        .reactions button { position: relative; min-height: 32px; background: var(--control); box-shadow: inset 0 0 0 1px var(--field-edge);
+          border-radius: 999px; padding: 0 10px; font-size: calc(15em / 17); }
         .reactions button::after { content: ''; position: absolute; inset: -6px 0; }
-        .reactbar { display: flex; gap: 2px; margin: 6px 4px 0; padding: 4px 6px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; }
-        .reactbar button { font-size: calc(24em / 17); border-radius: 999px; }
-        .reactbar button.on { background: var(--grey); }
-        .context { color: var(--soft); font-size: calc(12em / 17); margin: 0 12px -6px; text-align: left; }
-        .replybar { display: flex; align-items: center; gap: 6px; margin: 0 6px -4px; padding: 4px 8px; border-radius: 10px; font-size: calc(13em / 17); }
-        .replybar:active { background: var(--grey); }
-        .replybar b { color: var(--link); }
-        .replybar .waiting { color: var(--alert); font-weight: 600; }
-        .replybar span { color: var(--soft); }
-        .replies { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: calc(13em / 17); margin: 12px 4px 4px; }
-        .replies::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
-        /* Slack's New line, over what's new to you. */
-        .new { display: flex; align-items: center; gap: 10px; color: var(--alert); font-size: calc(12em / 17); font-weight: 600; margin: 12px 4px 4px; }
-        .new::before { content: ''; flex: 1; border-top: 1px solid var(--badge); }
-        .digest { display: block; width: 100%; text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--line); }
-        .digest:active { background: var(--grey); }
-        .digest h3 { margin: 0 0 6px; font-size: calc(14em / 17); }
-        .digest.unread h3::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--badge); margin-right: 6px; }
+        .context { color: var(--secondary); font-size: calc(13em / 17); margin: 0 12px -6px; text-align: left; }
+        .replybar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin: 0 6px -4px; padding: 4px 8px; border-radius: 10px; font-size: calc(13em / 17);
+          white-space: nowrap; text-align: left; }
+        .replybar b { color: var(--lilac); }
+        .replybar .waiting { color: var(--error-text); font-weight: 600; }
+        .replybar span { color: var(--secondary); }
+        .replies { display: flex; align-items: center; gap: 10px; color: var(--secondary); font-size: calc(13em / 17); margin: 14px 4px 4px; }
+        .replies::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
+        /* Slack's New line, over what's new to you, in the rim's light. */
+        .new { display: flex; align-items: center; gap: 10px; color: var(--error-text); font-size: calc(13em / 17); font-weight: 600; margin: 14px 4px 4px; }
+        .new::before { content: ''; flex: 1; height: 1px; background: var(--rim-line); }
+        .digest { display: block; width: 100%; text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--border); }
+        .digest h3 { margin: 0 0 6px; color: var(--white); font-size: calc(15em / 17); font-weight: 600; }
+        .digest.unread h3::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--error); margin-right: 6px; }
         .digest p { margin: 2px 0 6px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-        .digest small { color: var(--soft); }
+        .digest small { color: var(--secondary); font-size: calc(13em / 17); }
         .digest .who { display: flex; align-items: center; gap: 6px; }
-        .digest .more { color: var(--link); font-weight: 600; margin: 0; }
-        #alsolabel { display: flex; align-items: center; gap: 6px; min-height: 44px; color: var(--soft); font-size: calc(13em / 17); margin: 0 4px -8px; }
-        .section { display: flex; justify-content: space-between; align-items: baseline; margin: 22px 4px 6px; }
-        .section span { color: var(--soft); font-size: calc(12em / 17); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-        .section button { color: var(--link); font-size: calc(14em / 17); margin: -12px 0; }
-        .heading { display: flex; align-items: center; gap: 10px; margin: 16px 4px 4px; }
-        .heading p { margin: 0; color: var(--soft); font-size: calc(13em / 17); }
-        .issue { display: block; width: 100%; text-align: left; padding: 8px 4px 8px 46px; border-radius: 10px; }
-        .issue .line { display: flex; align-items: center; gap: 8px; }
-        .issue small { display: block; color: var(--soft); font-size: calc(13em / 17); margin-left: 16px; }
-        .note { color: var(--soft); text-align: center; font-size: calc(15em / 17); margin: 24px 16px; }
-        .older { display: block; width: calc(100% - 32px); background: none; border: 0; font: inherit; margin-block: 12px; }
+        .digest .more { color: var(--lilac); font-weight: 600; margin: 0; }
+        #alsolabel { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--secondary); font-size: calc(14em / 17); margin: 0 4px -8px; }
+        #also { accent-color: var(--violet); width: 18px; height: 18px; margin: 0; }
+        .section { display: flex; justify-content: space-between; align-items: baseline; margin: 24px 0 6px; }
+        .section button { color: var(--lilac); font-size: calc(15em / 17); margin: -12px 0; }
+        .heading { display: flex; align-items: center; gap: 12px; margin: 18px 0 4px; }
+        .heading b { color: var(--white); font-weight: 600; }
+        .heading p { margin: 0; color: var(--secondary); font-size: calc(14em / 17); }
+        .issue { display: block; width: 100%; text-align: left; padding: 8px 4px 8px 52px; border-radius: 12px; }
+        .issue .line { display: flex; align-items: center; gap: 8px; color: var(--body); }
+        .issue small { display: block; color: var(--secondary); font-size: calc(14em / 17); margin-left: 16px; }
+        .note { color: var(--secondary); text-align: center; font-size: calc(15em / 17); margin: 28px 16px; }
+        .older { display: block; width: calc(100% - 32px); color: var(--lilac); background: none; border: 0; font: inherit; margin-block: 12px; }
+        .older:disabled { color: var(--secondary); }
+        .hit { display: block; width: 100%; text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--border); }
+        .hit small { color: var(--secondary); font-size: calc(13em / 17); }
+        .hit p { margin: 4px 0 0; color: var(--body); overflow-wrap: anywhere; }
+        .hit b { color: var(--white); }
 
-        .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 10px 0; }
-        .card header { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: calc(13em / 17); }
-        .card header .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 600; font-size: calc(15em / 13); }
-        .card .text { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .card { border-radius: 18px; padding: 14px 16px 16px; margin: 10px 0; }
+        .card header { display: flex; align-items: center; gap: 10px; color: var(--secondary); font-size: calc(13em / 17); }
+        .card header .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--white); font-weight: 600; font-size: calc(15em / 13); }
+        .card .text { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--body); }
         .card.approval .text { font: calc(14em / 17)/1.4 ui-monospace, Menlo, monospace; }
-        .card .answer { margin: 8px 0 0; padding-left: 10px; border-left: 3px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
-        .card .footer { margin: 8px 0 0; color: var(--soft); font-size: calc(13em / 17); }
-        .card .part { margin: 12px 0 0; }
+        .card .answer { margin: 8px 0 0; padding-left: 10px; border-left: 3px solid var(--field-edge); white-space: pre-wrap; overflow-wrap: anywhere; }
+        .card .footer { margin: 8px 0 0; color: var(--secondary); font-size: calc(13em / 17); }
+        .card .part { margin: 14px 0 0; }
         .card header + .part { margin: 0; }
-        .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-        .buttons button, #pairform button { background: var(--grey); border-radius: 999px; padding: 0 16px; font-size: calc(15em / 17); }
-        .buttons button.picked { background: var(--you); color: var(--on-you); }
-        .buttons button.go { background: var(--you); color: var(--on-you); }
-        .buttons button:disabled, #send:disabled { opacity: .4; }
-        .card input, #pairform input { width: 100%; font: inherit; font-size: max(16px, 1em); color: inherit; background: var(--paper); border: 1px solid var(--line);
-          border-radius: 10px; padding: 8px 10px; min-height: 44px; margin-top: 8px; }
+        /* Quiet capsules, with one violet primary for what you most likely want, as everywhere in Opal. */
+        .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+        .buttons button { color: var(--body); background: var(--control); box-shadow: inset 0 0 0 1px var(--field-edge); border-radius: 999px; padding: 0 18px; font-size: calc(15em / 17); }
+        .buttons button:active { background: var(--control-hover); }
+        .buttons button.picked { color: var(--white); background: var(--selected); box-shadow: inset 0 0 0 1.5px var(--violet); }
+        .buttons button.go, .buttons a.go, #notifybutton, #pairform button { color: var(--white); background: var(--primary); box-shadow: none;
+          border-radius: 999px; padding: 0 18px; font-size: calc(15em / 17); font-weight: 600; }
+        .buttons button.go:active, .buttons a.go:active, #notifybutton:active, #pairform button:active { background: var(--primary-pressed); }
+        .buttons button:disabled, #send:disabled .disc { opacity: .4; }
+        .card input, #pairform input { width: 100%; font: inherit; font-size: max(16px, 1em); color: var(--white); caret-color: var(--lilac); background: var(--raised);
+          border: 1px solid var(--field-edge); border-radius: 12px; padding: 8px 12px; min-height: 44px; margin-top: 8px; }
 
-        #box { position: sticky; bottom: 0; background: var(--paper); border-top: 1px solid var(--line);
-          padding: 8px calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 12px); }
-        #label { display: block; color: var(--soft); font-size: calc(12em / 17); margin: 0 4px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* The box at the foot, on the Dock's glass, as iMessage's: + for a photo or file, and the arrow inside the field. */
+        #box { position: sticky; bottom: 0; background: var(--glass); box-shadow: 0 -1px var(--glass-edge); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+          padding: 8px calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px); }
+        #label { display: block; color: var(--secondary); font-size: calc(13em / 17); margin: 0 4px 6px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .field { display: flex; align-items: flex-end; gap: 4px; }
-        #words { flex: 1; resize: none; font: inherit; font-size: max(16px, 1em); color: inherit; background: var(--grey); border: 0; border-radius: 22px;
-          padding: 10px 14px; min-height: 44px; max-height: 40vh; margin-left: 4px; }
-        #send { background: var(--you); color: var(--on-you); border-radius: 22px; padding: 0 14px; margin-left: 4px; font-weight: 600; }
-        .tool { font-size: calc(20em / 17); line-height: 1; }
-        .tool:disabled { opacity: .4; }
-        #attached { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
-        .attachment { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 8px; border-radius: 12px; background: var(--grey); max-width: 100%; min-width: 0; }
+        #attach { color: var(--body); }
+        .entry { flex: 1; min-width: 0; display: flex; align-items: flex-end; background: var(--raised); box-shadow: inset 0 0 0 1px var(--field-edge); border-radius: 22px; }
+        #words { flex: 1; min-width: 0; resize: none; font: inherit; font-size: max(16px, 1em); color: var(--white); caret-color: var(--lilac); background: none; border: 0;
+          outline: none; padding: 11px 4px 11px 15px; min-height: 44px; max-height: 40vh; }
+        #words::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #send { display: grid; place-items: center; }
+        #send .disc { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--white); background: var(--primary); }
+        #send .symbol { width: 18px; height: 18px; stroke-width: 2.4; }
+        #attached { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px 8px; }
+        .attachment { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 8px; border-radius: 12px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--field-edge); max-width: 100%; min-width: 0; }
         .attachment img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex: none; }
         .attachment span { font-size: calc(14em / 17); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
-        .attachment button { color: var(--soft); }
+        .attachment button { color: var(--secondary); }
         .pictures { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; max-width: 86%; }
         .mine .pictures { margin-left: auto; justify-content: flex-end; }
         .picture { max-width: 66%; max-height: 240px; border-radius: 14px; display: block; }
         .pictures.several .picture { width: 31%; max-width: 120px; height: 96px; object-fit: cover; }
-        .web { color: var(--text); text-align: left; }
-        .file { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 8px 12px; border-radius: 12px;
-          background: var(--card); border: 1px solid var(--line); font-size: calc(14em / 17); max-width: 86%; overflow-wrap: anywhere; }
+        .web { color: var(--body); text-align: left; }
+        .file { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 8px 12px; border-radius: 12px; color: var(--body);
+          background: var(--raised); box-shadow: inset 0 0 0 1px var(--field-edge); font-size: calc(14em / 17); max-width: 86%; overflow-wrap: anywhere; }
 
-        #pair { padding: calc(env(safe-area-inset-top) + 40px) calc(env(safe-area-inset-right) + 24px) 24px calc(env(safe-area-inset-left) + 24px); }
-        #pair h1 { font-size: calc(24em / 17); margin: 0 0 8px; }
-        #pair p { color: var(--soft); }
+        /* A sheet floats over a dimmed page, on glass with 24-point corners. However long a link's address, the sheet
+           stays on screen and the address scrolls inside it. Only while it's open, since a closed dialog is hidden by
+           the browser's own rule. */
+        .sheet[open] { position: fixed; margin: 0; width: auto; max-width: none; display: flex; flex-direction: column;
+          inset: auto calc(env(safe-area-inset-right) + 8px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px);
+          max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);
+          color: var(--body); background: var(--glass); border: 0; box-shadow: inset 0 0 0 1px var(--glass-edge), 0 12px 40px rgba(0, 0, 0, .6);
+          border-radius: 24px; padding: 18px 18px 16px; }
+        dialog::backdrop { background: rgba(0, 0, 0, .55); }
+        #linktitle { margin: 0; color: var(--white); font-size: calc(15em / 17); font-weight: 600; overflow-wrap: anywhere; }
+        #linkaddress { margin: 8px 0 0; color: var(--body); font: calc(14em / 17)/1.4 ui-monospace, Menlo, monospace; overflow-wrap: anywhere; overflow-y: auto; min-height: 0; }
+        #linksheet .buttons { justify-content: flex-end; }
+        #linksheet .buttons .go { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
+        #marks { display: flex; justify-content: space-between; }
+        #marks button { font-size: calc(26em / 17); min-width: 50px; min-height: 50px; border-radius: 999px; }
+        #marks button:active { background: var(--control); }
+        #marks button.on { background: var(--selected); box-shadow: inset 0 0 0 1.5px var(--violet); }
+
+        #pair { padding: calc(env(safe-area-inset-top) + 56px) calc(env(safe-area-inset-right) + 20px) 24px calc(env(safe-area-inset-left) + 20px); }
+        #pair h1 { color: var(--white); font-size: calc(32em / 17); font-weight: 700; line-height: 1.15; margin: 0 0 10px; }
+        #pair p { color: var(--secondary); }
+        #pairnote { color: var(--error-text) !important; }
         #pairform { display: flex; gap: 8px; align-items: center; }
         #pairform input { margin: 0; font-size: calc(22em / 17); letter-spacing: .1em; text-transform: uppercase; }
+
         """
 
-    /// Opal's colours, over the page's own in light and dark alike, on a phone's pure black.
+    /// Opal's tokens, on a phone's pure black, with words in white at the opacities the Home Screen's widgets use.
     static let colors: String = {
         let hex = Opal.hex
+        let rgba = { (color: UInt32, alpha: CGFloat) in
+            "rgba(\(color >> 16 & 0xff), \(color >> 8 & 0xff), \(color & 0xff), \(alpha))"
+        }
         return """
 
-            :root { color-scheme: dark; --cats: dark;
-              --paper: #000000; --text: \(hex(Opal.body)); --soft: \(hex(Opal.secondary)); --line: \(hex(Opal.border));
-              --grey: \(hex(Opal.control)); --card: \(hex(Opal.raised)); --you: \(hex(Opal.primary)); --on-you: \(hex(Opal.white));
-              --link: \(hex(Opal.lilac)); --warn: \(hex(Opal.errorText)); --badge: \(hex(Opal.error)); --alert: \(hex(Opal.errorText)); }
+            :root { color-scheme: dark;
+              --page: #000000; --white: #ffffff; --body: rgba(255, 255, 255, 0.8); --secondary: rgba(255, 255, 255, 0.62); --label: rgba(255, 255, 255, 0.62);
+              --dim: \(hex(Opal.dim)); --raised: \(hex(Opal.raised)); --control: \(hex(Opal.control)); --control-hover: \(hex(Opal.controlHover));
+              --selected: \(hex(Opal.selected)); --border: \(hex(Opal.border)); --field-edge: \(hex(Opal.fieldEdge));
+              --violet: \(hex(Opal.violet)); --primary: \(hex(Opal.primary)); --primary-pressed: \(hex(Opal.primaryPressed)); --lilac: \(hex(Opal.lilac));
+              --good: \(hex(Opal.good)); --error: \(hex(Opal.error)); --error-text: \(hex(Opal.errorText)); --error-surface: \(hex(Opal.errorSurface));
+              --glass: \(rgba(Opal.raised, 0.94)); --glass-edge: rgba(255, 255, 255, 0.08);
+              --card-top: \(rgba(Opal.cardTop, Opal.cardTopAlpha)); --card-bottom: \(rgba(Opal.cardBottom, Opal.cardBottomAlpha));
+              --card-top-solid: \(hex(Opal.cardTop)); --card-bottom-solid: \(hex(Opal.cardBottom));
+              --shades: \(hex(Opal.hue(Opal.shadesHue, lightness: 0.68)));
+              --rim-line: linear-gradient(90deg, \(hex(Opal.rimCyan)), \(hex(Opal.rimViolet)), \(hex(Opal.rimPink))); }
 
             """
     }()
@@ -335,7 +416,6 @@ enum PhonePage {
           cantRead: 'The Kitty Litter can only read photos and PDFs.',
           tooBig: "That's too big to send. Try something under 10 MB.",
           homeScreen: 'For notifications on an iPhone, add this page to your Home Screen with Share, then pair it there.',
-          search: 'Search', cancel: 'Cancel',
           searchHint: 'Type a word or two from the message.',
           searchNothing: 'No messages with those words.',
           searchMore: (count) => 'The newest ' + count + '. Add a word to narrow it down.',
@@ -351,6 +431,10 @@ enum PhonePage {
         let keptUnread = null;
         // Jumped up to the New line, so what comes in doesn't take the page back down until you scroll there yourself.
         let jumped = false;
+        // At the foot of a conversation, so a picture that comes in after it's drawn keeps it there, as iMessage does.
+        // Only scrolling up leaves it, since the page growing under you moves nothing.
+        let atFoot = false;
+        let footY = 0;
         const expanded = new Set();
         const answers = new Map();
         // The message a search led to, until its page shows and scrolls to it.
@@ -411,7 +495,7 @@ enum PhonePage {
           $('pair').hidden = true;
           $('top').hidden = false;
           if (!hello || !hello.ok) { banner(words.unreachable); retry = setTimeout(start, 5000); return; }
-          for (const id of ['rows', 'find']) $(id).hidden = false;
+          for (const id of ['head', 'rows', 'find']) $(id).hidden = false;
           listen();
           notifications().catch(() => {});
         }
@@ -484,9 +568,9 @@ enum PhonePage {
           localStorage.removeItem('shades.key');
           // What Search found is what kittens said, so it goes with everything else.
           $('found').replaceChildren();
-          $('find').textContent = words.search;
+          $('bar').hidden = false;
           banner('');
-          for (const id of ['top', 'rows', 'box', 'search', 'found']) $(id).hidden = true;
+          for (const id of ['top', 'head', 'rows', 'box', 'search', 'found']) $(id).hidden = true;
           $('pair').hidden = false;
         }
 
@@ -535,8 +619,13 @@ enum PhonePage {
 
         function go(next, push = true) {
           if (!next || next === key) return;
+          // Going anywhere, Back included, puts Search away, as an iPhone does.
+          if (!$('search').hidden) searching(false);
           key = next;
           banner('');
+          // Nothing of the page you left stays over the one you're going to while it comes.
+          for (const id of ['back', 'headcat', 'link', 'unread']) $(id).hidden = true;
+          for (const id of ['title', 'subtitle', 'bartitle']) $(id).textContent = '';
           keptUnread = null;
           jumped = false;
           view = null;
@@ -579,13 +668,15 @@ enum PhonePage {
           }
           view = next;
           $('title').textContent = next.title;
+          $('bartitle').textContent = next.title;
           $('subtitle').textContent = next.subtitle || '';
           $('headcat').replaceChildren(...(next.cat ? [cat(next.cat)] : []));
+          lit($('headcat'), next.cat);
           $('headcat').hidden = !next.cat;
           $('link').hidden = !next.link;
           $('link').textContent = next.link ? next.link.label : '';
           $('back').hidden = !next.back;
-          $('back').textContent = next.back ? '‹ ' + next.backTitle : '';
+          $('backtitle').textContent = next.back ? next.backTitle : '';
           $('unread').hidden = !next.unread;
           $('box').hidden = !next.box || !$('search').hidden;
           // A file is for where you attached it, so it never follows you anywhere else.
@@ -593,8 +684,8 @@ enum PhonePage {
           if (next.box) {
             label();
             $('words').placeholder = next.box.placeholder;
-            $('send').disabled = !next.box.ready || uploading;
-            for (const id of ['attach', 'camera']) $(id).hidden = !next.box.files;
+            sendable();
+            $('attach').hidden = !next.box.files;
             $('alsolabel').hidden = !next.box.also;
             $('alsotext').textContent = next.box.also || '';
             if (fresh) $('also').checked = false;
@@ -615,6 +706,7 @@ enum PhonePage {
             const node = [...$('rows').children].find(child => child.dataset.id === kept.id);
             if (node) window.scrollBy(0, node.getBoundingClientRect().top - kept.top);
           }
+          foot();
           if (landing && landing.key !== next.key) landing = null;
           const landed = landing && [...$('rows').children].find(child => child.dataset.id === landing.id);
           if (landed) {
@@ -624,6 +716,7 @@ enum PhonePage {
             setTimeout(() => landed.classList.remove('landed'), 2500);
           }
           showJump();
+          collapse();
           seen();
         }
 
@@ -658,9 +751,26 @@ enum PhonePage {
           $('jumpnew').hidden = !line || line.getBoundingClientRect().bottom > $('top').getBoundingClientRect().bottom;
           $('jumpnew').textContent = line ? line.dataset.jump : '';
         }
+
+        function foot() {
+          const bottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 60;
+          if (bottom || window.scrollY < footY) atFoot = bottom && conversation(key);
+          footY = window.scrollY;
+        }
+
+        function settle() {
+          if (atFoot && !jumped && $('search').hidden) window.scrollTo(0, document.body.scrollHeight);
+        }
+
+        // As an iPhone's large title: once it's scrolled up under the bar, the bar takes it, small, on its glass.
+        function collapse() {
+          $('top').classList.toggle('collapsed', $('head').hidden || $('title').getBoundingClientRect().top < $('bar').getBoundingClientRect().bottom);
+        }
         window.addEventListener('scroll', () => {
           if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 2) jumped = false;
+          foot();
           showJump();
+          collapse();
         }, { passive: true });
         $('jumpnew').onclick = () => {
           const line = $('rows').querySelector('.new');
@@ -675,22 +785,23 @@ enum PhonePage {
         };
 
         // Search, over what Messages on your Mac has read and this phone can open. Nothing typed or found is kept.
+        // While it's open its field has the bar, with Cancel beside it, and covers the page, as on an iPhone.
         let finding = null;
         function searching(open) {
           for (const id of ['search', 'found']) $(id).hidden = !open;
-          $('rows').hidden = open;
+          for (const id of ['bar', 'head', 'rows']) $(id).hidden = open;
           $('box').hidden = open || !(view && view.box);
-          $('find').textContent = open ? words.cancel : words.search;
           clearTimeout(finding);
           $('query').value = '';
           $('found').replaceChildren(el('p', 'note', words.searchHint));
           if (open) { window.scrollTo(0, 0); $('query').focus(); }
           else window.scrollTo(0, conversation(key) ? document.body.scrollHeight : 0);
+          collapse();
         }
-        $('find').addEventListener('click', () => {
-          const open = $('search').hidden;
-          searching(open);
-          if (!open) seen();
+        $('find').addEventListener('click', () => searching(true));
+        $('searchcancel').addEventListener('click', () => {
+          searching(false);
+          seen();
         });
         $('search').addEventListener('submit', (event) => { event.preventDefault(); $('query').blur(); });
         $('query').addEventListener('input', () => { clearTimeout(finding); finding = setTimeout(find, 250); });
@@ -733,15 +844,33 @@ enum PhonePage {
           return node;
         }
 
-        // The window's own cats, drawn on the Mac. The outline is light on a dark page, so it follows the page.
-        const scheme = () => getComputedStyle(document.documentElement).getPropertyValue('--cats').trim() === 'dark' ? 'dark' : 'light';
+        // The window's own cats, drawn on the Mac, with the light outline it draws on a dark page.
         function cat(key, small) {
           const node = el('img', small ? 'cat small' : 'cat');
           node.alt = '';
-          node.src = '/cat/' + scheme() + '/' + key + '.png';
+          node.src = '/cat/dark/' + key + '.png';
           return node;
         }
-        matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (view) show(view); });
+
+        // A kitten's light is its jacket's colour, which its cat's address carries, as `sit/56afb3`. The cat's own black
+        // jacket has none, so what it's on keeps Shades' light.
+        function lit(node, key) {
+          const jacket = (key || '').split('/')[1];
+          if (jacket && jacket !== 'shades') node.style.setProperty('--light', '#' + jacket);
+          else node.style.removeProperty('--light');
+          return node;
+        }
+
+        // A tile that isn't a kitten's takes a hue drifting teal to pink down the list, as in the window's sidebar.
+        function drift(index, count) {
+          return 'hsl(' + (172 + 172 * index / Math.max(count - 1, 1)) + ' 100% 68%)';
+        }
+
+        function tile(child) {
+          const node = el('span', 'tile');
+          node.append(child);
+          return node;
+        }
 
         // You, where the window draws your picture, or a square in your colour.
         function you(small) {
@@ -768,14 +897,13 @@ enum PhonePage {
           const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
           svg.setAttribute('viewBox', '0 0 24 24');
           svg.setAttribute('aria-hidden', 'true');
+          svg.setAttribute('class', 'symbol');
           for (const d of icons[name] || icons.channel) {
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', d);
             svg.append(path);
           }
-          const node = el('span', 'icon');
-          node.append(svg);
-          return node;
+          return svg;
         }
 
         function dot(color) {
@@ -786,13 +914,18 @@ enum PhonePage {
 
         function places(list) {
           const nodes = [];
+          const glyphs = list.filter((place) => place.icon);
           let group;
           for (const place of list) {
             if (place.group && place.group !== group) nodes.push(el('h2', 'group', place.group));
             group = place.group;
             const button = el('button', 'place' + (place.unread || place.count ? ' unread' : '') + (place.asleep ? ' asleep' : ''));
             button.type = 'button';
-            button.append(place.icon ? icon(place.icon) : cat(place.cat));
+            // Each on a tile, as the Home Screen's icons are: a kitten's in its own light, and the rest drifting.
+            const art = place.icon ? icon(place.icon) : cat(place.cat);
+            const lights = place.icon ? tile(art) : lit(tile(art), place.cat);
+            if (place.icon) lights.style.setProperty('--light', drift(glyphs.indexOf(place), glyphs.length));
+            button.append(lights);
             button.append(el('span', 'name', place.title));
             if (place.count) button.append(el('span', 'count', String(place.count)));
             if (place.dot) button.append(dot(place.dot));
@@ -869,7 +1002,7 @@ enum PhonePage {
               const node = el('div', 'heading');
               const name = el('div');
               name.append(el('b', null, item.name), el('p', null, item.detail));
-              node.append(cat(item.cat), name);
+              node.append(lit(tile(cat(item.cat)), item.cat), name);
               return node;
             }
             case 'issue': {
@@ -908,11 +1041,12 @@ enum PhonePage {
           if (item.cat) said.append(cat(item.cat));
           if (said.childElementCount || item.text || yours) node.append(said);
           if (item.text) {
-            const bubble = el('div', 'bubble');
+            // Yours is filled in your colour, and anyone else's lit at its edge in their jacket's. The stylesheet alone
+            // says how each looks, still coming included.
+            const bubble = el('div', 'bubble' + (item.mine ? '' : ' lit') + (item.faded ? ' faded' : ''));
             bubble.append(...(item.markup ? markup(item.markup) : [item.text]));
-            // Still coming, it's paler, in a colour the Mac worked out for a light page and a dark one with words that read on it.
-            const paint = item.faded ? item.faded[scheme()] : item.color ? { color: item.color, ink: item.ink } : null;
-            if (paint) { bubble.style.background = paint.color; if (paint.ink) bubble.style.color = paint.ink; }
+            if (item.mine && item.color) bubble.style.setProperty('--fill', item.color);
+            if (!item.mine) lit(bubble, item.cat);
             said.append(bubble);
           }
           if (yours) said.append(you());
@@ -921,6 +1055,7 @@ enum PhonePage {
             item.files.forEach((file) => {
               if (file.picture) {
                 const picture = el('img', 'picture');
+                picture.onload = settle;
                 picture.src = file.picture;
                 picture.alt = file.name;
                 pictures.append(picture);
@@ -952,27 +1087,24 @@ enum PhonePage {
           if (item.reactions && bubble && item.kind !== 'parent') {
             bubble.addEventListener('click', (event) => {
               if (selecting() || event.target.closest('[role=link], button')) return;
-              react(node, item);
+              react(item);
             });
-            node.append(button(words.react, () => react(node, item), 'react'));
+            node.append(button(words.react, () => react(item), 'react'));
           }
           return node;
         }
 
-        // A reaction is only a mark, kept on the Mac, and never goes to an agent.
-        function react(node, item) {
-          const open = node.querySelector('.reactbar');
-          document.querySelectorAll('.reactbar').forEach((bar) => bar.remove());
-          if (open) return;
-          const bar = el('div', 'reactbar');
-          for (const mark of view.marks) {
+        // A reaction is only a mark, kept on the Mac, and never goes to an agent. The marks come up in a sheet from the
+        // foot, as Slack's do, so nothing on the page moves and nothing sits over the message.
+        function react(item) {
+          $('marks').replaceChildren(...view.marks.map((mark) => {
             const on = item.reactions.some((reaction) => reaction.value === mark.value);
-            const pick = button(mark.label, () => { bar.remove(); act({ act: 'react', id: item.id, value: mark.value }); }, on ? 'on' : null);
+            const pick = button(mark.label, () => { $('reactsheet').close(); act({ act: 'react', id: item.id, value: mark.value }); }, on ? 'on' : null);
             pick.setAttribute('aria-pressed', String(on));
-            bar.append(pick);
-          }
-          node.append(bar);
-          bar.firstChild.focus();
+            return pick;
+          }));
+          if (!$('reactsheet').open) $('reactsheet').showModal();
+          $('marks').firstChild.focus();
         }
 
         // A kitten's markdown as the Mac read it, built as nodes and never markup. Only web addresses are links, and
@@ -1067,7 +1199,8 @@ enum PhonePage {
         }
 
         function card(item) {
-          const node = el('article', 'card ' + item.kind);
+          // Lit in the light of the kitten it's from.
+          const node = lit(el('article', 'card ' + item.kind), item.cat);
           const header = el('header');
           header.append(cat(item.cat), el('span', 'title', item.title));
           if (item.at) header.append(el('time', null, time(item.at)));
@@ -1079,10 +1212,11 @@ enum PhonePage {
           const buttons = el('div', 'buttons');
           if (item.kind === 'approval') {
             for (const choice of item.choices) {
+              // Allow is the one primary, as on the cat's own card.
               buttons.append(button(choice.label, (event) => {
                 buttons.querySelectorAll('button').forEach((b) => { b.disabled = true; });
                 act({ act: 'approval', id: item.id, value: choice.value });
-              }));
+              }, choice.value === 'accept' ? 'go' : null));
             }
           }
           if (item.kind === 'report') {
@@ -1166,11 +1300,13 @@ enum PhonePage {
         $('linkcancel').onclick = () => $('linksheet').close();
         $('linkopen').onclick = () => $('linksheet').close();
         // A tap on the dimmed page lands on the sheet itself, outside its box, and puts it away as Cancel does.
-        $('linksheet').onclick = (event) => {
-          const box = $('linksheet').getBoundingClientRect();
-          const outside = event.clientY < box.top || event.clientY > box.bottom || event.clientX < box.left || event.clientX > box.right;
-          if (event.target === $('linksheet') && outside) $('linksheet').close();
-        };
+        for (const sheet of document.querySelectorAll('dialog')) {
+          sheet.onclick = (event) => {
+            const box = sheet.getBoundingClientRect();
+            const outside = event.clientY < box.top || event.clientY > box.bottom || event.clientX < box.left || event.clientX > box.right;
+            if (event.target === sheet && outside) sheet.close();
+          };
+        }
         $('linkshow').onclick = () => {
           $('linksheet').close();
           if (showing) showing();
@@ -1183,8 +1319,7 @@ enum PhonePage {
           if ((!text && !attached.length) || uploading) return;
           $('send').disabled = true;
           const done = await act({ act: 'send', key, text, also: !$('alsolabel').hidden && $('also').checked, files: attached.map((file) => file.id) });
-          $('send').disabled = false;
-          if (!done) return;
+          if (!done) return sendable();
           $('words').value = '';
           $('also').checked = false;
           // The Mac used them up in sending, so there's nothing to forget.
@@ -1199,15 +1334,13 @@ enum PhonePage {
         // smaller here, since the Mac only ever sends a picture the size of a screenshot.
         let attached = [];
         let uploading = false;
+        // One + for a photo or a file, as in iMessage. An iPhone offers the camera from it too.
         $('attach').onclick = () => $('pick').click();
-        $('camera').onclick = () => $('snap').click();
-        for (const id of ['pick', 'snap']) {
-          $(id).onchange = () => {
-            const files = [...$(id).files];
-            $(id).value = '';
-            attach(files);
-          };
-        }
+        $('pick').onchange = () => {
+          const files = [...$('pick').files];
+          $('pick').value = '';
+          attach(files);
+        };
         $('words').addEventListener('paste', (event) => {
           const files = [...(event.clipboardData ? event.clipboardData.files : [])];
           if (!files.length || !view || !view.box || !view.box.files) return;
@@ -1240,7 +1373,7 @@ enum PhonePage {
             banner(words.unreachable);
           } finally {
             uploading = false;
-            $('send').disabled = !(view && view.box && view.box.ready);
+            sendable();
           }
         }
 
@@ -1265,6 +1398,12 @@ enum PhonePage {
             return chip;
           }));
           $('attached').hidden = !attached.length;
+          sendable();
+        }
+
+        // Send is armed only once there's something to send, as iMessage's arrow is.
+        function sendable() {
+          $('send').disabled = !(view && view.box && view.box.ready) || uploading || (!$('words').value.trim() && !attached.length);
         }
 
         function preview(blob) {
@@ -1304,6 +1443,7 @@ enum PhonePage {
         }
         $('words').addEventListener('input', fit);
         $('words').addEventListener('input', label);
+        $('words').addEventListener('input', sendable);
 
         // Words that @ a kitten in #general go straight to it, and the line says so as you type.
         function label() {
@@ -1335,7 +1475,7 @@ enum PhonePage {
 
     static let manifest = """
         {"name": "The Kitty Litter", "short_name": "Kitty Litter", "start_url": "/?key=home", "scope": "/", "display": "standalone",
-         "background_color": "#1d1d1f", "theme_color": "#1d1d1f", "icons": [{"src": "/icon.png", "sizes": "180x180", "type": "image/png"}]}
+         "background_color": "#000000", "theme_color": "#000000", "icons": [{"src": "/icon.png", "sizes": "180x180", "type": "image/png"}]}
         """
 
     /// Runs on the phone even with the page closed. Each push says only who and what kind, and tapping it opens
