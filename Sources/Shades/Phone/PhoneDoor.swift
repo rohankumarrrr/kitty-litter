@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import Security
+import ShadesT3
 
 /// Who may use Messages from a phone. What the server takes reaches T3 as your own words, and anything on this Mac can
 /// reach it on loopback, kittens' shells included, so a key is the only way in. A phone gets one by typing or
@@ -110,9 +111,9 @@ final class MemoryPhoneKeys: PhoneKeyStoring {
     func save(_ name: String, _ lines: [String]) { saved[name] = lines }
 }
 
-/// In the login Keychain rather than a file a kitten could rewrite to let itself in, or read to send as you. A build
-/// signed with the same certificate reads what an earlier one saved, but changing or deleting another build's item
-/// shows a dialog and waits on it, on the main thread here, so each save is an item of its own, the newest that can be
+/// In the login Keychain rather than a file a kitten could rewrite to let itself in, or read to send as you. Without a
+/// Team ID a build can't read what an earlier one saved, as docs/t3-integration.md says, and changing or deleting
+/// another build's item shows a dialog and waits on it, on the main thread here, so each save is an item of its own, the newest that can be
 /// read is the one that counts, and only items this run saved are ever deleted. Saving what's already there touches
 /// nothing.
 final class KeychainPhoneKeys: PhoneKeyStoring {
@@ -158,7 +159,7 @@ struct LoginPhoneKeychain: PhoneKeychain {
     private static let service = "dev.shades.phone"
 
     func items() -> [(account: String, data: Data?)] {
-        withoutPrompts {
+        KeychainPrompts.off {
             var result: CFTypeRef?
             let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
@@ -175,7 +176,7 @@ struct LoginPhoneKeychain: PhoneKeychain {
     }
 
     func add(account: String, data: Data, label: String) -> Bool {
-        withoutPrompts {
+        KeychainPrompts.off {
             var attributes = Self.item(account)
             attributes[kSecValueData as String] = data
             attributes[kSecAttrLabel as String] = label
@@ -185,7 +186,7 @@ struct LoginPhoneKeychain: PhoneKeychain {
     }
 
     func delete(account: String) {
-        _ = withoutPrompts { SecItemDelete(Self.item(account) as CFDictionary) }
+        _ = KeychainPrompts.off { SecItemDelete(Self.item(account) as CFDictionary) }
     }
 
     private func read(_ account: String) -> Data? {
@@ -203,11 +204,5 @@ struct LoginPhoneKeychain: PhoneKeychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-    }
-
-    private func withoutPrompts<Result>(_ body: () -> Result) -> Result {
-        SecKeychainSetUserInteractionAllowed(false)
-        defer { SecKeychainSetUserInteractionAllowed(true) }
-        return body()
     }
 }

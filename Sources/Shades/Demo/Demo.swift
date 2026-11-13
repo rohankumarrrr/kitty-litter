@@ -24,7 +24,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     /// When each canned thread last moved, which a reply into it does.
     private var moved: [String: Date] = [:]
     var connectFails = false
-    /// T3 never answers, as when signing in waits on a Keychain dialog.
+    /// T3 doesn't answer until `t3 on`, as when signing in again takes a while, or waits on a Keychain dialog.
     var stuck = false
     var onOpen: ((String) -> Void)?
 
@@ -116,7 +116,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     }
 
     func projectID(atPath path: String) async -> String? {
-        if stuck { try? await Task.sleep(nanoseconds: 3_600_000_000_000) }
+        while stuck { try? await Task.sleep(nanoseconds: 100_000_000) }
         return "demo-project"
     }
 
@@ -616,6 +616,11 @@ enum Demo {
             saveSettings: { _ in print("[demo] settings aren't saved in demo mode") },
             kittens: { Demo.kittens },
             routerFolder: { DemoChannels.routerFolder },
+            // Nothing's written, so a journey can see each report the real app would write to health.json.
+            reportHealth: { findings in
+                let problems = findings.filter { !$0.ok }.map { "\($0.check): \($0.problem ?? "")" }
+                print("[demo] health.json would say \(problems.isEmpty ? "ok" : problems.joined(separator: " | "))")
+            },
             notify: { print("[demo] notified: \(CatWords.notification($0)), which opens \($0.threadID)") },
             withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") },
             // The page stays on loopback, on a free port, so it's never on your tailnet or in the real app's way.

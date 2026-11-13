@@ -9,7 +9,10 @@ check
 wait 3
 draw .verify/shades/check-myself/2-waiting
 wait 9
-draw .verify/shades/check-myself/3-stuck
+draw .verify/shades/check-myself/3-connecting
 buttons
+t3 on
+wait 2
+draw .verify/shades/check-myself/4-answered
 front
 windows

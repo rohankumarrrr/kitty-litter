@@ -2601,7 +2601,7 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(reportedHealth, [findings], "what health.json is written from")
         let t3 = findings.first { $0.check == "T3 Code" }
         XCTAssertEqual(t3?.ok, false)
-        XCTAssertEqual(t3?.fix, "If macOS is showing a Keychain dialog, answer it, then choose Check Myself from my menu.")
+        XCTAssertEqual(t3?.problem, "I'm still connecting to T3 Code, so my agents can't run yet.")
     }
 
     /// T3 had answered once, so Check Myself, which the finding says to press, waited on each kitten's project for good.
@@ -2617,8 +2617,68 @@ final class FlowTests: XCTestCase {
             reported.fulfill()
         }
         await fulfillment(of: [reported], timeout: 5)
-        XCTAssertEqual(findings.first { $0.check == "T3 Code" }?.fix, "If macOS is showing a Keychain dialog, answer it, then choose Check Myself from my menu.")
+        XCTAssertEqual(findings.first { $0.check == "T3 Code" }?.problem, "I'm still connecting to T3 Code, so my agents can't run yet.")
         XCTAssertNil(findings.first { $0.check == "kitten: Steve Pawsniak" && !$0.ok }, "and no kitten is called missing from T3 for it")
+    }
+
+    /// What two installs reported: a new build signing in again took T3 longer than the check waited, so health.json said
+    /// to answer a Keychain dialog that most likely wasn't there, and kept saying it after T3 answered.
+    func testASlowSignInIsStillConnectingAndThenFineWithoutCheckingAgain() async {
+        backend.whileFindingAProject = { [unowned self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            self.controller.threadsChanged([])
+        }
+        controller.t3Wait = 0.1
+        let first = await controller.runHealthCheck().first { $0.check == "T3 Code" }
+        XCTAssertEqual(first?.ok, false)
+        XCTAssertEqual(first?.problem, "I'm still connecting to T3 Code, so my agents can't run yet.")
+        XCTAssertFalse(first?.fix?.contains("Keychain") ?? true, "no dialog is named while it's only slow")
+
+        let deadline = Date().addingTimeInterval(5)
+        while reportedHealth.count < 2, Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+        XCTAssertEqual(reportedHealth.count, 2, "reported again once T3 answered")
+        XCTAssertEqual(reportedHealth.last?.first { $0.check == "T3 Code" }?.ok, true)
+    }
+
+    /// You asked, so once T3 answers you hear how it went, rather than being left with "still connecting".
+    func testCheckMyselfSaysAgainOnceT3Answers() async {
+        backend.whileFindingAProject = { [unowned self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            self.controller.threadsChanged([])
+        }
+        controller.t3Wait = 0.1
+        controller.checkMyselfPressed()
+        await controller.healthTask?.value
+        guard case .notice(_, let waiting, _, _)? = stage.bubble else { return XCTFail("nothing said") }
+        XCTAssertTrue(waiting.contains("I'm still connecting to T3 Code"))
+        await controller.t3Recheck?.value
+        XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
+    }
+
+    /// Only a Keychain call can hold signing in for good, so a dialog is named once T3's been quiet past every other limit.
+    func testT3ThatNeverAnswersIsCalledStuckAfterAWhile() async {
+        backend.neverAnswers = true
+        controller.t3Wait = 0.1
+        controller.t3StuckAfter = 0.2
+        await controller.runHealthCheck()
+        let deadline = Date().addingTimeInterval(5)
+        while reportedHealth.count < 2, Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+        let stuck = reportedHealth.last?.first { $0.check == "T3 Code" }
+        XCTAssertEqual(stuck?.problem, "T3 Code still hasn't answered me, so my agents can't run.")
+        XCTAssertEqual(stuck?.fix, "If macOS is showing a Keychain dialog, answer it. If not, quit and reopen T3 Code.")
+    }
+
+    /// A check that went out without T3 mustn't report over a newer one once T3 answers.
+    func testANewerCheckTakesOverFromOneStillWaitingOnT3() async {
+        backend.whileFindingAProject = { try? await Task.sleep(nanoseconds: 300_000_000) }
+        controller.t3Wait = 0.1
+        await controller.runHealthCheck()
+        let first = controller.t3Recheck
+        controller.threadListArrived = true
+        await controller.runHealthCheck()
+        await first?.value
+        XCTAssertEqual(reportedHealth.count, 2, "the first check's late answer isn't reported")
+        XCTAssertEqual(reportedHealth.last?.first { $0.check == "T3 Code" }?.ok, true)
     }
 
     func testAFrontDoorWithoutItsFolderIsFound() async {

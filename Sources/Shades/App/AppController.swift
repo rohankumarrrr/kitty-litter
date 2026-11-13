@@ -197,8 +197,12 @@ final class AppController {
     var lineSeconds: TimeInterval = 5
     /// How long a question waits for the first list of sessions, so one asked right after launch can still be routed.
     var threadListWait: TimeInterval = 2
-    /// How long the self-check gives T3 to answer before reporting without it.
+    /// How long the self-check gives T3 to answer before reporting it's still connecting.
     var t3Wait: TimeInterval = 10
+    /// How much longer before it reports T3 stuck: past two tries at signing in, each cut off at 30 seconds.
+    var t3StuckAfter: TimeInterval = 120
+    /// Reports again once T3 answers a self-check that went out without it.
+    var t3Recheck: Task<Void, Never>?
     /// How long after T3's first list Messages reads ahead, so it never competes with everything else a launch asks T3.
     var warmDelay: Duration = .seconds(15)
     /// Whether the quick thread is on its first turn, with no conversation worth keeping yet.

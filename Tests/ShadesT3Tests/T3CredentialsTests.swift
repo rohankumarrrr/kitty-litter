@@ -1,3 +1,4 @@
+import Security
 @testable import ShadesT3
 import XCTest
 
@@ -31,6 +32,27 @@ final class T3CredentialsTests: XCTestCase {
         try store.delete(sessionID: credential.sessionID)
         XCTAssertNil(try store.load())
         XCTAssertNoThrow(try store.delete(sessionID: credential.sessionID), "Deleting nothing is fine")
+    }
+
+    /// The switch is process-wide, and at launch the phone's keys load on the main thread while signing in reads T3's off
+    /// it. Without taking turns, the first to finish turned prompts back on in the middle of the other's call.
+    func testPromptsStayOffForAWholeCallWhileSomethingElseUsesTheSwitch() {
+        let inside = DispatchSemaphore(value: 0)
+        let otherDone = DispatchGroup()
+        otherDone.enter()
+        Thread {
+            inside.wait()
+            KeychainPrompts.off {}
+            otherDone.leave()
+        }.start()
+        var allowed: DarwinBoolean = true
+        KeychainPrompts.off {
+            inside.signal()
+            _ = otherDone.wait(timeout: .now() + 0.5)
+            SecKeychainGetUserInteractionAllowed(&allowed)
+        }
+        otherDone.wait()
+        XCTAssertFalse(allowed.boolValue)
     }
 
     func testErrorsSpeakPlainly() {

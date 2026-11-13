@@ -34,8 +34,8 @@ struct HealthFacts: Equatable {
     var microphoneDenied = false
     var skillsInstalled = true
     var reachedT3 = true
-    /// T3 didn't answer the self-check in time, as when signing in waits on a Keychain dialog.
-    var t3DidntAnswer = false
+    /// Whether T3 hasn't answered the self-check yet, and if so how long it's been.
+    var t3Silence: T3Silence?
     /// Kittens taking work whose folders aren't T3 projects, or have no instructions.
     var kittensNotInT3: [Kitten] = []
     var kittensWithoutInstructions: [String] = []
@@ -52,6 +52,15 @@ struct HealthFacts: Equatable {
     var shortcutsTaken: [String] = []
     /// Other copies of Shades running, by process ID, such as one built from source and left running.
     var otherCopies: [Int32] = []
+}
+
+/// T3 not answering the self-check. Every step of connecting gives up after a while except a Keychain call, which
+/// waits on its dialog, and T3 sending its first list, so a dialog is only named once it's been longer than the rest.
+enum T3Silence: Equatable {
+    /// Still within what connecting can take, as when a new build can't read the last one's sign-in and signs in again.
+    case connecting
+    /// Long past that.
+    case stuck
 }
 
 enum HealthCheck {
@@ -99,14 +108,22 @@ enum HealthCheck {
             ))
         }
 
-        if facts.t3DidntAnswer {
+        switch facts.t3Silence {
+        case .connecting?:
             results.append(HealthFinding(
                 check: "T3 Code",
                 ok: false,
-                problem: "Signing in to T3 Code didn't finish, so my agents can't run.",
-                fix: "If macOS is showing a Keychain dialog, answer it, then choose Check Myself from my menu."
+                problem: "I'm still connecting to T3 Code, so my agents can't run yet.",
+                fix: "Give it a minute. I'll check again by myself once it answers."
             ))
-        } else {
+        case .stuck?:
+            results.append(HealthFinding(
+                check: "T3 Code",
+                ok: false,
+                problem: "T3 Code still hasn't answered me, so my agents can't run.",
+                fix: "If macOS is showing a Keychain dialog, answer it. If not, quit and reopen T3 Code."
+            ))
+        case nil:
             results.append(facts.reachedT3 ? .good("T3 Code") : HealthFinding(
                 check: "T3 Code",
                 ok: false,
