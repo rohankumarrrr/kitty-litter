@@ -430,7 +430,7 @@ final class AppController {
             if !missed.isEmpty { return .inbox(CatWords.whileAway(missed)) }
         }
         if inboxNudge {
-            let words = CatWords.inboxBubble(inboxEntries)
+            let words = inboxBubbleWords
             if !words.isEmpty { return .inbox(words) }
         }
         return nil

@@ -22,6 +22,8 @@ final class PhoneServerTests: XCTestCase {
     private var pushAnswer = 201
     private var controller: AppController!
     private var port: UInt16 = 0
+    /// How far ahead of the real time the controller's clock is.
+    private var ahead: TimeInterval = 0
     private let penny = Kitten(name: "Penny", role: "Finance", covers: "their money", folder: "/k/penny")
     private let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
@@ -61,7 +63,8 @@ final class PhoneServerTests: XCTestCase {
                     return self.pushAnswer
                 }
             ),
-            stage: stage
+            stage: stage,
+            now: { [unowned self] in Date().addingTimeInterval(self.ahead) }
         )
         backend.projects[penny.folder] = "project-penny"
         controller.phoneGrace = 0.5
@@ -130,6 +133,14 @@ final class PhoneServerTests: XCTestCase {
 
     private func until(_ condition: () -> Bool) async {
         for _ in 0..<2000 where !condition() { try? await Task.sleep(nanoseconds: 2_000_000) }
+    }
+
+    /// It used to close without a word, and it's open for ten minutes, so you may well have looked away.
+    func testACodeThatRunsOutSaysSoAndHowToGetANewOne() async {
+        stage.onPairing = { [unowned self] card in if card != nil { self.ahead = 601 } }
+        controller.pairPhone()
+        await until { self.stage.pairings.last == .some(nil) }
+        XCTAssertEqual(stage.bubble, .line("That pairing code ran out after 10 minutes. Choose Pair Phone… from my menu for a new one.", threadID: nil))
     }
 
     /// Your face is yours, so unlike a cat it has no address of its own, and only comes in what a paired phone is sent.

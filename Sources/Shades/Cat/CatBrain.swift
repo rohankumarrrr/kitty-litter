@@ -24,7 +24,7 @@ struct CatBrain {
         case sit, sleep, run, celebrate, held
     }
 
-    static let pettingWords = ["mrrp", "mrow", "...", "prrr"]
+    static let pettingWords = ["mrrp", "mrow", "…", "prrr"]
 
     // 15px a tick on the site at 3x, which is 20 at 4x.
     private static let speed: CGFloat = 20

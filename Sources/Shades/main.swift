@@ -110,8 +110,8 @@ MainActor.assumeIsolated {
         }
         stage.menuBar.extras = [
             MenuBar.Extra(title: "Check Myself") { real.checkMyselfPressed() },
-            MenuBar.Extra(title: "Permissions...", action: Setup.openSettingsForWhatsMissing),
-            MenuBar.Extra(title: "Keyboard Settings...", action: KeyHoldMonitor.openKeyboardSettings),
+            MenuBar.Extra(title: "Permissions…", action: Setup.openSettingsForWhatsMissing),
+            MenuBar.Extra(title: "Keyboard Settings…", action: KeyHoldMonitor.openKeyboardSettings),
             MenuBar.Extra(title: "Restart", action: Setup.restart),
         ]
     }

@@ -132,7 +132,11 @@ final class FakeStage: CatStage {
         fonts.append(font)
     }
     var pairings: [PhonePairingCard?] = []
-    func showPairing(_ card: PhonePairingCard?) { pairings.append(card) }
+    var onPairing: ((PhonePairingCard?) -> Void)?
+    func showPairing(_ card: PhonePairingCard?) {
+        pairings.append(card)
+        onPairing?(card)
+    }
     func copyToPasteboard(_ text: String) { copied = text }
 
     /// What a person does: types into the panel and presses Return.

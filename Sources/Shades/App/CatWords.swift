@@ -55,7 +55,7 @@ enum CatWords {
     }
 
     static func fixCaption(modelName: String) -> String { "\(modelName) will take a look." }
-    static func handingOff(modelName: String) -> String { "Passing it to \(modelName)..." }
+    static func handingOff(modelName: String) -> String { "Passing it to \(modelName)…" }
     static func onIt(modelName: String) -> String { "\(modelName) has this." }
     static func finishedCaption(_ thread: AgentThread, kitten: Kitten? = nil) -> String {
         guard let kitten else { return "Done: \(thread.title)" }
@@ -88,6 +88,8 @@ enum CatWords {
         let open = address.map { "Scan this with your phone's camera, or open \($0) and type the code." } ?? "Open the page on your phone and type the code."
         return open + " It works once, for the next 10 minutes. Your phone needs Tailscale on, and your Mac awake with me running."
     }
+    static let pairItem = "Pair Phone…"
+    static let pairingRanOut = "That pairing code ran out after 10 minutes. Choose \(pairItem) from my menu for a new one."
     static let phonePaired = "Your phone's paired. \(appName) is there now."
     static func phoneProblem(_ error: Error) -> String { "\(appName) on your phone isn't working. \(error.localizedDescription)" }
 
@@ -153,7 +155,7 @@ enum CatWords {
     static func alsoSendTo(_ channel: String) -> String { "Also send to \(channel)" }
     static let answerInWords = "Type an answer"
     static let didntStart = "That didn't start. Try again?"
-    static let sending = "Sending..."
+    static let sending = "Sending…"
     static let answerInT3 = "This one's answered in T3."
     static let picksSeveral = "Pick as many as you like."
     static let sendPicked = "Send"
@@ -173,7 +175,7 @@ enum CatWords {
     static let searchPlaceholder = "Search messages"
     static let searchHint = "Type a word or two from the message."
     static let searchNothing = "No messages with those words."
-    static let searchingT3 = "Looking through older threads in T3..."
+    static let searchingT3 = "Looking through older threads in T3…"
     static func searchMore(_ count: Int) -> String { "The newest \(count). Add a word to narrow it down." }
     /// What ⌘/ lists, grouped as Slack's list is. The keys are T3 Code's, the Claude app's and Slack's own.
     static let shortcutGroups: [(title: String, rows: [(keys: String, does: String)])] = [
@@ -200,19 +202,22 @@ enum CatWords {
     ]
     static let you = "You"
     static let someoneElse = "Someone else"
-    static let readingMessages = "Reading their messages..."
+    static let readingMessages = "Reading their messages…"
     static let nothingOpen = "Nothing open."
     static let loadOlder = "Load older messages"
-    static let loadingOlder = "Loading older messages..."
+    static let loadingOlder = "Loading older messages…"
     static let olderReplies = "Older replies are in T3."
     /// What T3Error.notRunning says, so the bubble and Messages name it the same way.
     static let cantReachT3Yet = "I can't reach T3 Code. Open it and try again."
-    static let stillGoing = "Still working on it..."
+    static let stillGoing = "Still working on it…"
     static func noThreadsYet(_ name: String) -> String { "You and \(name) haven't started a thread yet." }
-    static func notSetUpYet(_ kitten: Kitten) -> String { "\(kitten.name) isn't set up yet." }
+    static func notSetUpYet(_ kitten: Kitten) -> String {
+        "\(kitten.name) isn't set up yet. Once it's ready for work, take planned: true out of its kitten.json."
+    }
     static func couldntRead(_ count: Int) -> String { "Couldn't read \(count) \(count == 1 ? "thread" : "threads"). I'll try again." }
     static func earlierNotes(_ count: Int) -> String { "\(count) earlier \(count == 1 ? "note" : "notes")" }
-    static func issues(_ count: Int) -> String { "\(count) open" }
+    /// Its threads still going, which is what Activity lists under In progress.
+    static func issues(_ count: Int) -> String { "\(count) in progress" }
     static func reportsTitle(_ kind: InboxEntry.Kind) -> String { kind == .shipped ? "Shipped" : "Also" }
 
     /// The line over the box, saying where what you type goes.
@@ -221,7 +226,7 @@ enum CatWords {
         case .router: return channel == .shades ? "To me, without looking at your screen" : "To whoever it's for"
         case .newThread(let kitten): return "Starts a new thread with \(kitten.name)"
         case .thread(_, let title, _): return title.isEmpty ? "Replies in this thread" : "Replies in \(title)"
-        case .starting(let kitten): return "Starting a new thread with \(kitten.name)..."
+        case .starting(let kitten): return "Starting a new thread with \(kitten.name)…"
         case .question(let question): return answering(question.text)
         }
     }
@@ -236,7 +241,7 @@ enum CatWords {
         switch target {
         case .router: return channel == .shades ? "Message Shades" : "Message #\(name ?? general)"
         case .newThread(let kitten): return "Message #\(name ?? kitten.name)"
-        case .thread, .starting: return "Reply..."
+        case .thread, .starting: return "Reply…"
         case .question: return "Your answer"
         }
     }
@@ -350,22 +355,27 @@ enum CatWords {
         return "\(whileAwayTitle): \(parts.compactMap { $0 }.joined(separator: ", "))."
     }
 
-    static func inboxHeadline(_ entries: [InboxEntry]) -> String {
-        let decisions = entries.filter(\.needsYou).count
-        let shipped = entries.filter { $0.kind == .shipped }.count
-        var parts: [String] = []
-        if decisions > 0 { parts.append(decisions == 1 ? "1 decision" : "\(decisions) decisions") }
-        if shipped > 0 { parts.append("\(shipped) shipped") }
-        return parts.joined(separator: ", ")
+    /// Who needs what, as their notification says it, and what about when there's one. Notes don't count, so this
+    /// only says one's there when it's brought up the bubble by itself, which takes it being the answer to something
+    /// you asked.
+    static func inboxBubble(_ entries: [InboxEntry], who: (InboxEntry) -> String?) -> String {
+        let decisions = entries.filter(\.needsYou)
+        let shipped = entries.filter { $0.kind == .shipped }
+        let notes = decisions.isEmpty && shipped.isEmpty ? entries.filter { $0.kind == .note } : []
+        return [
+            inboxLine(decisions, who: who, one: "needs a decision on", many: "decisions from"),
+            inboxLine(shipped, who: who, one: "shipped", many: "shipped by"),
+            inboxLine(notes, who: who, one: "left a note on", many: "notes from"),
+        ].compactMap { $0 }.joined(separator: " ")
     }
 
-    /// Notes don't count toward the headline, so this only says one's there when it's brought up the bubble
-    /// by itself, which takes it being the answer to something you asked.
-    static func inboxBubble(_ entries: [InboxEntry]) -> String {
-        let headline = inboxHeadline(entries)
-        if !headline.isEmpty { return headline }
-        let notes = entries.filter { $0.kind == .note }.count
-        return notes == 0 ? "" : notes == 1 ? "1 note" : "\(notes) notes"
+    /// "Clawde needs a decision on “Fix login”." for one, and "2 decisions from Clawde and Pepper." for more.
+    private static func inboxLine(_ entries: [InboxEntry], who: (InboxEntry) -> String?, one: String, many: String) -> String? {
+        let names = entries.map { who($0) ?? "an agent" }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        guard let name = names.first else { return nil }
+        guard entries.count == 1 else { return "\(entries.count) \(many) \(names.formatted(.list(type: .and)))." }
+        let title = entries[0].threadTitle.hasPrefix("\(name): ") ? String(entries[0].threadTitle.dropFirst(name.count + 2)) : entries[0].threadTitle
+        return "\(name.prefix(1).uppercased())\(name.dropFirst()) \(one) “\(title.isEmpty ? newThread : title)”."
     }
 
     static func inboxSummary(_ entries: [InboxEntry]) -> String? {

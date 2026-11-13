@@ -355,7 +355,7 @@ extension BubbleContent {
         case .thinking(let note):
             return BubbleWords(caption: note, body: "Thinking" + String(repeating: ".", count: thinkingDots), isSoft: true)
         case .listening(let text):
-            return BubbleWords(body: text.isEmpty ? "Listening..." : text, isSoft: text.isEmpty)
+            return BubbleWords(body: text.isEmpty ? "Listening…" : text, isSoft: text.isEmpty)
         case .reply(let text, _, _, let note, _):
             return BubbleWords(caption: note, body: text)
         case .line(let text, _):

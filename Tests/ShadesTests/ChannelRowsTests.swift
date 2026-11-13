@@ -211,12 +211,12 @@ final class ChannelRowsTests: XCTestCase {
 
     func testAnEmptyChannelSaysSo() {
         XCTAssertEqual(notes(channel(steve, in: book())), ["You and Steve Pawsniak haven't started a thread yet."])
-        XCTAssertEqual(notes(channel(cali, in: book())), ["Cali isn't set up yet."])
+        XCTAssertEqual(notes(channel(cali, in: book())), ["Cali isn't set up yet. Once it's ready for work, take planned: true out of its kitten.json."])
     }
 
     func testAnEmptyChannelWhileReadingSaysSo() {
-        XCTAssertEqual(notes(channel(steve, in: book(isReading: true))), ["Reading their messages..."])
-        XCTAssertEqual(notes(channel(cali, in: book(isReading: true))), ["Cali isn't set up yet."])
+        XCTAssertEqual(notes(channel(steve, in: book(isReading: true))), ["Reading their messages…"])
+        XCTAssertEqual(notes(channel(cali, in: book(isReading: true))), ["Cali isn't set up yet. Once it's ready for work, take planned: true out of its kitten.json."])
     }
 
     func testAnEmptyChannelWhenT3IsAwaySaysSo() {
@@ -255,9 +255,9 @@ final class ChannelRowsTests: XCTestCase {
     }
 
     func testActivityWhileReadingWithNothingYetSaysReading() {
-        XCTAssertEqual(ChannelRows.rows(.activity, in: book(isReading: true)).last, .note("Reading their messages..."))
+        XCTAssertEqual(ChannelRows.rows(.activity, in: book(isReading: true)).last, .note("Reading their messages…"))
         let known = ChannelRows.rows(.activity, in: book(threads: [thread("a", status: .running)], isReading: true))
-        XCTAssertFalse(known.contains(.note("Reading their messages...")), "threads are known before any words are")
+        XCTAssertFalse(known.contains(.note("Reading their messages…")), "threads are known before any words are")
     }
 
     func testActivityWithNothingKnownAndNoT3SaysSoOnce() {
@@ -298,7 +298,7 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(digest.more, 2)
         XCTAssertEqual(CatWords.moreReplies(2), "2 more replies")
         XCTAssertEqual(ChannelRows.rows(.threads, in: book()), [.note(CatWords.threadsEmpty)])
-        XCTAssertEqual(ChannelRows.rows(.threads, in: book(isReading: true)), [.note("Reading their messages...")])
+        XCTAssertEqual(ChannelRows.rows(.threads, in: book(isReading: true)), [.note("Reading their messages…")])
     }
 
     func testAReplyAlsoSentToAChannelSaysWhichThreadItsIn() throws {

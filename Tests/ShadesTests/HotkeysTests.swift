@@ -24,6 +24,6 @@ final class HotkeysTests: XCTestCase {
         XCTAssertEqual(Shortcut.messages.modifiers, controlKey | cmdKey)
         XCTAssertNotEqual(Shortcut.messages.keyCode, kVK_ANSI_M, "often Messages")
         XCTAssertNotEqual(Shortcut.messages.keyCode, kVK_ANSI_Q, "Lock Screen in macOS")
-        XCTAssertEqual(Shortcut.messagesLabel, "⌃⌘B")
+        XCTAssertEqual(Shortcut.messages.label, "⌃⌘B")
     }
 }

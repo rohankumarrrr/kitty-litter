@@ -305,7 +305,7 @@ enum PhonePage {
           showPicture: (host) => 'Show a picture from ' + host + '?', pictureFrom: (host) => '🖼 Picture from ' + host,
           couldntShow: "Couldn't show it.", tooMany: 'One message takes up to 10 files.',
           several: 'Pick as many as you like.',
-          sending: 'Sending...', retry: 'Try again',
+          sending: 'Sending…', retry: 'Try again',
           notifyAsk: 'Get a notification when something needs you.',
           cantRead: 'The Kitty Litter can only read photos and PDFs.',
           tooBig: "That's too big to send. Try something under 10 MB.",

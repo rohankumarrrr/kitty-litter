@@ -75,7 +75,7 @@ final class QuietControlsTests: XCTestCase {
     }
 
     func testTabStepsFromOneQuietControlToTheNext() {
-        let pair = QuietButton("Pair a phone...", style: .text)
+        let pair = QuietButton("Pair a phone…", style: .text)
         let done = QuietButton("Done", style: .filled)
         let window = window(with: pair, done)
         QuietFocus.fullKeyboardAccess = { true }

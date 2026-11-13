@@ -303,7 +303,7 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(sent.prompt.text.contains("Fix the bug"))
         XCTAssertTrue(sent.prompt.text.contains("please fix it"))
         XCTAssertEqual(sent.prompt.attachments.count, 1)
-        XCTAssertTrue(stage.bubbles.contains(.line("Passing it to Fable...", threadID: nil)))
+        XCTAssertTrue(stage.bubbles.contains(.line("Passing it to Fable…", threadID: nil)))
         XCTAssertEqual(stage.bubble, .line("Fable has this.", threadID: "thread-2"))
     }
 
@@ -558,7 +558,7 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(given.prompt.text.hasPrefix("I need a tailored resume for this job\n"))
         XCTAssertTrue(given.prompt.text.contains("<screen>"))
         XCTAssertEqual(given.prompt.attachments.count, 1)
-        XCTAssertTrue(stage.bubbles.contains(.line("Passing it to Steve Pawsniak...", threadID: nil)))
+        XCTAssertTrue(stage.bubbles.contains(.line("Passing it to Steve Pawsniak…", threadID: nil)))
         XCTAssertEqual(stage.bubble, .line("Steve Pawsniak has this.", threadID: "thread-2"))
         for bubble in stage.bubbles {
             if case .reply? = bubble { XCTFail("the routing decision was shown as an answer") }
@@ -3292,7 +3292,7 @@ final class FlowTests: XCTestCase {
         asking.pendingQuestion = AgentQuestion(id: "q", threadID: "sub", threadTitle: "Clawde: Fix login", text: "Which one?", options: ["A", "B"])
         controller.threadsChanged([asking])
 
-        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+        XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”."))
         XCTAssertTrue(controller.notices.isEmpty, "it doesn't take a turn in the bubble as well")
         XCTAssertEqual(stage.status, .attention)
         let row = try XCTUnwrap(controller.inboxEntries.first)
@@ -3345,7 +3345,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(savedInbox?.entries, rows, "so a restart can't lose it")
         XCTAssertTrue(controller.notices.isEmpty)
         XCTAssertNil(stage.bubble, "it doesn't count as shipped, so there's nothing to say")
-        XCTAssertEqual(CatWords.inboxHeadline(rows), "")
         XCTAssertNil(CatWords.inboxSummary(rows))
 
         controller.channelsPressed(selecting: .activity)
@@ -3355,7 +3354,7 @@ final class FlowTests: XCTestCase {
     func testANoteDoesntBringBackABubbleYouDismissed() async {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")
-        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+        XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”."))
         controller.bubbleDismissed(byClick: false)
         await finish(work("o", title: "Clawde: Other"), sorted: "NOTE: Nothing else to say.")
         XCTAssertNil(stage.bubble)
@@ -3371,7 +3370,7 @@ final class FlowTests: XCTestCase {
         controller.line = nil
         await finish(work(run: "run-2"), sorted: "NOTE: Yes, it rolled back cleanly.")
         XCTAssertEqual(rows[0].answer, "Yes, it rolled back cleanly.")
-        XCTAssertEqual(stage.bubble, .inbox("1 shipped"))
+        XCTAssertEqual(stage.bubble, .inbox("Clawde shipped “Fix login”."))
     }
 
     func testAnAnswerOnAnAlsoRowStillSaysSo() async throws {
@@ -3383,7 +3382,7 @@ final class FlowTests: XCTestCase {
         await finish(work(run: "run-2"), sorted: "NOTE: Only the rollback check.")
         XCTAssertEqual(rows.map(\.kind), [.note], "it's still not something that shipped")
         XCTAssertEqual(rows[0].answer, "Only the rollback check.")
-        XCTAssertEqual(stage.bubble, .inbox("1 note"))
+        XCTAssertEqual(stage.bubble, .inbox("Clawde left a note on “Fix login”."))
     }
 
     func testARestartWithOnlyNotesWaitingStaysQuiet() async {
@@ -3715,7 +3714,7 @@ final class FlowTests: XCTestCase {
         for _ in 0..<20 { await Task.yield() }
         XCTAssertEqual(stage.bubble, .notice(caption: "Steve Pawsniak: Tailor resume", text: "Your resume is ready.", threadID: "s"))
         controller.bubbleDismissed(byClick: true)
-        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+        XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”."))
     }
 
     func testTheEndOfALongReportStillGetsSorted() async {
@@ -3841,27 +3840,48 @@ final class FlowTests: XCTestCase {
         backend.reports = ["a": "One.", "b": "Two."]
         controller.threadsChanged([work("a", title: "Clawde: One"), work("b", title: "Clawde: Two")])
         await settleFiling()
-        XCTAssertEqual(stage.bubble, .inbox("1 decision, 1 shipped"))
+        // The two reports are filed at once, so either can land first.
+        XCTAssertTrue([
+            .inbox("Clawde needs a decision on “One”. Clawde shipped “Two”."),
+            .inbox("Clawde needs a decision on “Two”. Clawde shipped “One”."),
+        ].contains(stage.bubble))
         XCTAssertTrue(controller.notices.isEmpty)
         XCTAssertEqual(stage.status, .attention)
         XCTAssertEqual(controller.messagesMenuLine, "1 needs you")
-        // The two reports are filed at once, so either can land first.
         let decision = try XCTUnwrap(rows.first { $0.kind == .decision })
         XCTAssertEqual(CatWords.inboxSummary([decision, decision]), "2 need you")
+    }
+
+    /// It used to say "1 decision", where the notification for the same thing says whose.
+    func testTheInboxBubbleSaysWhoAndWhatAbout() {
+        func entry(_ kind: InboxEntry.Kind, _ title: String) -> InboxEntry {
+            InboxEntry(id: title, kind: kind, text: "", threadID: title, threadTitle: title, at: Date())
+        }
+        let who = { (entry: InboxEntry) in entry.threadTitle.hasPrefix("Pepper") ? "Pepper" : entry.threadTitle.hasPrefix("Clawde") ? "Clawde" : nil }
+        let words = { CatWords.inboxBubble($0, who: who) }
+        XCTAssertEqual(words([entry(.decision, "Clawde: Fix login")]), "Clawde needs a decision on “Fix login”.")
+        XCTAssertEqual(words([entry(.shipped, "Clawde: New icon")]), "Clawde shipped “New icon”.")
+        XCTAssertEqual(words([entry(.decision, "Clawde: A"), entry(.decision, "Pepper: B"), entry(.decision, "Clawde: C")]), "3 decisions from Clawde and Pepper.")
+        XCTAssertEqual(words([entry(.shipped, "Clawde: A"), entry(.shipped, "Clawde: B")]), "2 shipped by Clawde.")
+        XCTAssertEqual(words([entry(.note, "Clawde: Fix login")]), "Clawde left a note on “Fix login”.")
+        XCTAssertEqual(words([entry(.decision, "Clawde: A"), entry(.note, "Clawde: B")]), "Clawde needs a decision on “A”.", "a note doesn't count beside news")
+        XCTAssertEqual(words([entry(.decision, "Tidy up")]), "An agent needs a decision on “Tidy up”.", "as its notification says")
+        XCTAssertEqual(words([entry(.decision, "")]), "An agent needs a decision on “New thread”.")
+        XCTAssertEqual(words([]), "")
     }
 
     func testTheBubbleOnlyGoesWhenItSafelyCan() async {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")
         controller.bubbleDismissed(byClick: true)
-        XCTAssertEqual(stage.bubble, .inbox("1 decision"), "a stray click doesn't lose what needs you")
+        XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”."), "a stray click doesn't lose what needs you")
         controller.bubbleDismissed(byClick: false)
         XCTAssertNil(stage.bubble)
         XCTAssertEqual(rows.count, 1, "and it's still in there")
         XCTAssertEqual(stage.status, .attention, "the cat keeps glinting")
 
         await finish(work("o", title: "Clawde: Other"), sorted: "SHIPPED: The icon is live.")
-        XCTAssertEqual(stage.bubble, .inbox("1 decision, 1 shipped"))
+        XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”. Clawde shipped “Other”."))
         controller.bubbleAction(.openMessages)
         XCTAssertNil(stage.bubble, "opening Messages clears the bubble")
         XCTAssertTrue(stage.isChannelsVisible)
@@ -3872,7 +3892,7 @@ final class FlowTests: XCTestCase {
     func testAClickElsewhereClearsTheBubbleWhenNothingNeedsYou() async {
         kittens = [inboxKitten]
         await finish(work(), sorted: "SHIPPED: The icon is live.")
-        XCTAssertEqual(stage.bubble, .inbox("1 shipped"))
+        XCTAssertEqual(stage.bubble, .inbox("Clawde shipped “Fix login”."))
         XCTAssertEqual(stage.status, .none)
         controller.bubbleDismissed(byClick: true)
         XCTAssertNil(stage.bubble)
@@ -3892,7 +3912,7 @@ final class FlowTests: XCTestCase {
         await finish(work(), sorted: "DECISION: Ship the fix?")
         controller = makeController(inbox: savedInbox!)
         controller.start()
-        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+        XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”."))
         XCTAssertEqual(rows.map(\.text), ["Ship the fix?"])
     }
 
@@ -5673,7 +5693,7 @@ extension FlowTests {
     func testMessagesCoversWhatTheCatWasNudgingAbout() async {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")
-        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+        XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”."))
         controller.messagesHotkeyPressed()
         XCTAssertNil(stage.bubble, "you're looking at it")
         await finish(work("o", title: "Clawde: Other"), sorted: "SHIPPED: The icon is live.")
@@ -5779,7 +5799,7 @@ extension FlowTests {
         XCTAssertNil(stage.bubble, "nothing interrupts while it's open")
         controller.messagesHotkeyPressed()
         controller.channelsClosed()
-        XCTAssertEqual(stage.bubble, .inbox("1 decision"), "open isn't the same as looked at")
+        XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”."), "open isn't the same as looked at")
     }
 }
 
@@ -6004,7 +6024,7 @@ extension FlowTests {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")
         XCTAssertEqual(notified.map(\.kind), [.decision])
-        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+        XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”."))
         controller.showInMessages("w")
         XCTAssertEqual(stage.selections.last ?? nil, .thread("w", in: .channel(.of(inboxKitten))))
         controller.messagesHotkeyPressed()
@@ -6024,7 +6044,7 @@ extension FlowTests {
         XCTAssertEqual(stage.selections.last ?? nil, .thread("w", in: .channel(.of(inboxKitten))))
         controller.messagesHotkeyPressed()
         controller.channelsClosed()
-        XCTAssertEqual(stage.bubble, .inbox("1 decision"))
+        XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”."))
     }
 
     /// One notification is one thread, so the others that came in while Messages sat open still get the bubble.

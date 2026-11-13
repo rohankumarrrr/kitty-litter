@@ -140,6 +140,17 @@ extension AppController {
         }
     }
 
+    /// Whose each row is goes by its thread, or by its title where the thread isn't listed, such as the one a question
+    /// was asked in.
+    var inboxBubbleWords: String {
+        let kittens = loadKittens()
+        let owners = KittenBoard.Owners(kittens)
+        return CatWords.inboxBubble(inboxEntries) { entry in
+            let thread = latestThreads.first { $0.id == entry.threadID }
+            return (thread.flatMap(owners.of) ?? kittens.first { KittenBoard.belongs(title: entry.threadTitle, projectPath: nil, to: $0) })?.name
+        }
+    }
+
     /// What the menu says next to Messages. What needs you comes first, since that's what it's for.
     var messagesMenuLine: String? {
         CatWords.inboxSummary(inboxEntries)

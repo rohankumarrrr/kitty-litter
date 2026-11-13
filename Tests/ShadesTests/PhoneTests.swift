@@ -591,7 +591,7 @@ extension PhoneTests {
         let book = ChannelBook.build(kittens: [steve, pepper], threads: [open], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
         let channel = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon)
         XCTAssertEqual(channel.cat, cat(.sit, steve))
-        XCTAssertEqual(channel.link, PhoneView.Link(label: "1 open", open: "activity"), "as the window's header goes to Activity")
+        XCTAssertEqual(channel.link, PhoneView.Link(label: "1 in progress", open: "activity"), "as the window's header goes to Activity")
         XCTAssertNil(PhoneView(PhonePlace(PhonePlace.key(.channel(.of(pepper))), in: book), in: book, now: noon).link, "nothing open, no link")
         let general = PhoneView(PhonePlace("general", in: book), in: book, now: noon)
         XCTAssertNil(general.cat)
