@@ -123,7 +123,7 @@ The cat says what went wrong in one line, with what to do about it, and the line
 
 Choose **Check Myself** from the cat's menu, and it goes through its signature, permissions, T3 Code, kittens and your phone's pairing, and tells you what's wrong and what to do. If another copy of The Kitty Litter has its shortcuts, it says which one to quit. The running app also writes that to `~/Library/Application Support/shades/health.json`, for agents to read.
 
-`scripts/install.sh` only replaces the running app with a properly signed build, and once your team has signed it, only with a build your team signed too. It keeps the old copy, and puts it back if the new one doesn't come up. To go back by hand, run `scripts/install.sh --rollback`.
+`scripts/install.sh` only replaces the running app with a properly signed build, and once your team has signed it, only with a build your team signed too. It keeps the old copy, and puts it back if the new one doesn't come up. To go back by hand, run `scripts/install.sh --rollback`. Only one install or rollback runs at a time. One started while another is going stops straight away without changing anything, and says which one is running and since when.
 
 ## How it's built
 

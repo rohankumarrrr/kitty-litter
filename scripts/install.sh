@@ -1,7 +1,8 @@
 #!/bin/zsh
 # Builds Shades.app and swaps it into /Applications, then restarts it. The running copy is only
 # touched once the new one is built and properly signed. The old copy is kept, and if the new one
-# doesn't come up and report in, the old one goes back.
+# doesn't come up and report in, the old one goes back. Only one install or rollback runs at a time:
+# one started while another is going stops straight away, changes nothing and says which one is.
 #
 #   scripts/install.sh                # build and install
 #   scripts/install.sh --ad-hoc       # allow a build with no stable signature, losing permissions
@@ -25,7 +26,39 @@ app=/Applications/Shades.app
 data="$HOME/Library/Application Support/shades"
 keep="$data/last-good/Shades.app"
 health="$data/health.json"
+lock="$data/install.lock"
+holder="$data/install.holder"
 wait_seconds="${SHADES_HEALTH_SECONDS:-30}"
+
+# Two at once would swap the same app and read each other's health.json. The lock is the kernel's, so it goes
+# when this process does, however it ends, and it's kept through the exec after --pull. This shell never opens
+# the lock file itself: closing any handle it has on it, even the one print -u makes, lets go of the lock.
+take_lock() {
+  local taken=0 pid="" since=""
+  mkdir -p "$data"
+  touch "$lock"
+  zmodload zsh/system
+  zsystem flock -e -t 0 -f lock_fd "$lock" 2>/dev/null && taken=1
+  if [[ -f "$holder" ]]; then
+    read -r pid since < "$holder" || true
+  fi
+  if (( ! taken )); then
+    if [[ -n "$pid" ]]; then
+      echo "Another install, process $pid, has been running since $since, so nothing was installed."
+    else
+      echo "Another install is running, so nothing was installed."
+    fi
+    exit 1
+  fi
+  # Already ours, from before the exec after --pull.
+  if [[ "$pid" == "$$" ]]; then
+    return
+  fi
+  if [[ -n "$pid" ]]; then
+    echo "The install that started $since, process $pid, stopped without finishing, so this one is taking over."
+  fi
+  print -r -- "$$ $(date '+%a %b %-d at %-I:%M:%S %p')" > "$holder"
+}
 
 stop_running() {
   pkill -x Shades 2>/dev/null || true
@@ -53,6 +86,10 @@ restore() {
   open "$app"
 }
 
+take_lock
+# Set out here, since a function's EXIT trap goes off when the function returns.
+trap 'rm -f "$holder"' EXIT
+
 # Flags go in any order, and --pull passes the rest on.
 if [[ " $* " == *" --rollback "* ]]; then
   restore
@@ -71,7 +108,7 @@ if [[ " $* " == *" --pull "* ]]; then
 fi
 
 next="$(mktemp -d)"
-trap 'rm -rf "$next"' EXIT
+trap 'rm -rf "$next" "$holder"' EXIT
 
 "$root/scripts/bundle.sh" "$next"
 codesign --verify --deep --strict "$next/Shades.app"
