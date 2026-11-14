@@ -7,9 +7,11 @@
 #   scripts/triage.sh logs --start "2026-01-31 09:00:00" --end "2026-01-31 10:00:00" [--process codesign]...
 #   scripts/triage.sh processes
 #
-# `-f` skips your zsh startup files, and the fixed PATH skips your own tools, since this runs outside the sandbox.
+# `-f` skips your zsh startup files, and the fixed PATH skips your own tools, since this runs outside the sandbox. In
+# the C locale, a byte that isn't UTF-8 can't make awk stop and quote the word it's in.
 set -euo pipefail
 PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export LC_ALL=C
 
 allowed=(codesign trustd securityd SecurityAgent syspolicyd amfid tccd runningboardd launchservicesd lsd Shades)
 build_steps=(install.sh bundle.sh codesign swift-build swift-frontend)
@@ -67,7 +69,7 @@ processes() {
         for (i in list) wanted[list[i]] = 1
         shell["zsh"] = shell["bash"] = shell["sh"] = 1
       }
-      function base(path) { sub(/.*\//, "", path); return path }
+      function base(path, parts) { return parts[split(path, parts, "/")] }
       $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^([0-9]+-)?([0-9]+:)?[0-9]+:[0-9]+$/ {
         name = base($4)
         if (name in shell) {

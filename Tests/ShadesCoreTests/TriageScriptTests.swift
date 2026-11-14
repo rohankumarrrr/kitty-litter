@@ -37,7 +37,7 @@ final class TriageScriptTests: XCTestCase {
             """#, to: root.appendingPathComponent("log"))
         try write(#"""
             #!/bin/zsh -f
-            touch "$STANDIN/ps-ran"
+            print -rl -- "$@" > "$STANDIN/ps-ran"
             [[ -f "$STANDIN/ps-table" ]] && cat "$STANDIN/ps-table"
             """#, to: root.appendingPathComponent("ps"))
 
@@ -66,7 +66,8 @@ final class TriageScriptTests: XCTestCase {
         process.standardError = try FileHandle(forWritingTo: err)
         try process.run()
         process.waitUntilExit()
-        return (process.terminationStatus, try String(contentsOf: out, encoding: .utf8), try String(contentsOf: err, encoding: .utf8))
+        func read(_ file: URL) throws -> String { String(decoding: try Data(contentsOf: file), as: UTF8.self) }
+        return (process.terminationStatus, try read(out), try read(err))
     }
 
     /// What the stand-in `log` was asked, as flag and value, after `show`.
@@ -226,6 +227,7 @@ final class TriageScriptTests: XCTestCase {
               209   150      00:10 /bin/zsh -f /tmp/other.sh install.sh
               210   150      00:10 /usr/bin/vim notes.txt
             something private 00:10 codesign
+            private-words   150      00:10 codesign
               215 private-words 00:10 codesign
               216   150 private-words codesign
               211   203      00:20 /usr/bin/swift-frontend -frontend -c a.swift
@@ -248,6 +250,28 @@ final class TriageScriptTests: XCTestCase {
             214 150 00:50 install.sh
 
             """)
+        XCTAssertEqual(try String(contentsOf: psRan, encoding: .utf8), "-axww\n-o\npid=,ppid=,etime=,args=\n", "ps is asked for nothing more")
         XCTAssertFalse(logRan)
+    }
+
+    /// In a UTF-8 locale, awk stops at a byte that isn't UTF-8 and quotes the word it's in.
+    func testABrokenCharacterInAnArgumentNeitherShowsNorStopsTheList() throws {
+        var table = Data("  101   150      00:10 /bin/zsh -c ".utf8) + [0xFF] + Data("private-words\n".utf8)
+        table += Data("  102     1      00:10 note:".utf8) + [0xFF] + Data("private-words\n".utf8)
+        table += Data("  103   150      00:10 codesign --force\n".utf8)
+        try table.write(to: root.appendingPathComponent("ps-table"))
+        let result = try run("processes", environment: ["LC_ALL": "en_US.UTF-8"])
+        XCTAssertEqual(result.errors, "")
+        XCTAssertEqual(result.status, 0)
+        XCTAssertEqual(result.output, "PID PPID ELAPSED NAME\n103 150 00:10 codesign\n")
+    }
+
+    func testALongArgumentDoesntHoldUpTheList() throws {
+        let long = String(repeating: "a", count: 80_000)
+        try given("ps-table", "  101   150      00:10 /bin/zsh \(long)\n  102     1      00:10 \(long)\n  103   150      00:10 codesign --force\n")
+        let started = Date()
+        let result = try run("processes")
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
+        XCTAssertEqual(result.output, "PID PPID ELAPSED NAME\n103 150 00:10 codesign\n")
     }
 }
