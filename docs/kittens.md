@@ -342,7 +342,7 @@ Deny rules don't do it alone. With `Read` denied on T3's folder, `grep` in the s
 
 Copy `.claude/hooks/thread-read-filter.py` from this repo too. The hook keeps what a kitten needs to check that a correction really came from you, your own words above the `---` line, and leaves out everything an agent wrote.
 
-This repo has a block of its own, since a kitten's code changes happen here. It lets `swift build`, `swift test`, `swift run` and `scripts/install.sh` out of the sandbox, because they can't work inside one. Only the plain form counts, so `swift build | tail` stays in and fails. `gh` and `git` stay in, with only GitHub reachable. To install from another thread's checkout, use `~/shades/scripts/install.sh --pull`.
+This repo has a block of its own, since a kitten's code changes happen here. It lets `swift build`, `swift test`, `swift run` and `scripts/install.sh` out of the sandbox, because they can't work inside one. Only the plain form counts, so `swift build | tail` stays in and fails. `gh` and `git` stay in, with only GitHub reachable. To install from another thread's checkout, use `~/shades/scripts/install.sh --pull`. If another thread's install or rollback is already going, it stops before pulling, changes nothing and says which one is, so try again once that one's done.
 
 ### What isn't
 
