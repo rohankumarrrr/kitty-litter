@@ -793,5 +793,123 @@ extension PressChromeTests {
             XCTAssertEqual(calls.actions.first, .notifications(.of(steve), ChannelNotifications(muted: true)), "\(name): Mute mutes it")
         }
     }
-}
 
+    // MARK: - Focus and backlogs
+
+    private func priorities(focus: String? = "Focus: the garden show, until Sat 9 AM") -> Priorities {
+        Priorities(focus: focus, backlogs: [
+            steve.id: Backlog(items: [
+                Backlog.Item(level: .doing, date: "2026-01-02", what: "Paint the fence", words: "the blue one", thread: "t-1"),
+                Backlog.Item(level: .next, date: "2026-01-03", what: "Plant the bulbs", words: "before it freezes", thread: "t-2"),
+                Backlog.Item(level: .later, what: "Sweep the porch"),
+            ]),
+            pepper.id: Backlog(),
+        ])
+    }
+
+    func testAKittensBacklogOpensFromItsHeaderByMouseAndClosesEveryWay() throws {
+        let (_, view, _) = messages(book())
+        view.readPriorities = { [unowned self] _ in self.priorities() }
+        view.refreshPriorities()
+        view.select(.channel(.of(steve)))
+        let sheet = view.backlogSheet
+        XCTAssertTrue(sheet.isHidden)
+
+        try click(try button(CatWords.backlog(3), in: view.pane), "3 in backlog")
+        XCTAssertFalse(sheet.isHidden, "the count opens the backlog")
+        XCTAssertEqual(sheet.kitten, steve.id)
+        let spoken = try XCTUnwrap(sheet.accessibilityLabel())
+        for what in ["Paint the fence", "Plant the bulbs", "Sweep the porch", "before it freezes", "Steve Pawsniak"] {
+            XCTAssertTrue(spoken.contains(what), "it shows \(what)")
+        }
+        XCTAssertGreaterThan(sheet.list.frame.height, 0, "its items are laid out")
+
+        try click(sheet.close, "the sheet's close")
+        XCTAssertTrue(sheet.isHidden, "Close closes it")
+
+        try click(try button(CatWords.backlog(3), in: view.pane), "3 in backlog")
+        let outside = try Press.click(sheet, at: NSPoint(x: sheet.card.minX - 10, y: sheet.card.midY))
+        XCTAssertTrue(outside === sheet, "a click beside the card lands on the sheet, not the window under it")
+        XCTAssertTrue(sheet.isHidden, "a click beside it closes it")
+
+        try click(try button(CatWords.backlog(3), in: view.pane), "3 in backlog")
+        view.select(.channel(.of(pepper)))
+        XCTAssertTrue(sheet.isHidden, "it goes with its channel")
+        XCTAssertFalse(subviews(of: view.pane).compactMap { $0.accessibilityLabel() }.contains { $0.hasSuffix(" in backlog") }, "an empty backlog has no count")
+        view.select(.channel(.shades))
+        XCTAssertFalse(subviews(of: view.pane).compactMap { $0.accessibilityLabel() }.contains { $0.hasSuffix(" in backlog") }, "the cat has no backlog")
+    }
+
+    func testAKittensBacklogOpensByKeyboardAndEscClosesIt() throws {
+        QuietFocus.fullKeyboardAccess = { true }
+        let (panel, view, _) = messages(book())
+        view.readPriorities = { [unowned self] _ in self.priorities() }
+        view.refreshPriorities()
+        view.select(.channel(.of(steve)))
+        try tabAndSpace(try button(CatWords.backlog(3), in: view.pane), in: panel)
+        XCTAssertFalse(view.backlogSheet.isHidden, "Space on the count opens it")
+        try escape(in: panel)
+        XCTAssertTrue(view.backlogSheet.isHidden, "Esc closes it")
+        XCTAssertEqual(view.selection, .channel(.of(steve)), "and leaves you where you were")
+
+        try tabAndSpace(try button(CatWords.backlog(3), in: view.pane), in: panel)
+        try tabAndSpace(view.backlogSheet.close, in: panel)
+        XCTAssertTrue(view.backlogSheet.isHidden, "Tab reaches its Close, and Space closes it")
+    }
+
+    func testTheFilesAreReadWhenABacklogOpensAndNotForEachUpdate() throws {
+        let (_, view, _) = messages(book())
+        var reads = 0
+        var current = priorities()
+        view.readPriorities = { _ in
+            reads += 1
+            return current
+        }
+        view.refreshPriorities()
+        XCTAssertEqual(reads, 1)
+        for _ in 0..<5 { view.show(book()) }
+        view.select(.channel(.of(steve)))
+        XCTAssertEqual(reads, 1, "a message or a new place reads nothing")
+
+        current.backlogs[steve.id]?.items.removeLast()
+        try click(try button(CatWords.backlog(3), in: view.pane), "3 in backlog")
+        XCTAssertEqual(reads, 2, "opening it reads it again")
+        XCTAssertFalse(try XCTUnwrap(view.backlogSheet.accessibilityLabel()).contains("Sweep the porch"), "so it shows the file as it is now")
+        XCTAssertNoThrow(try button(CatWords.backlog(2), in: view.pane), "and the count follows")
+    }
+
+    func testTheFocusShowsAtTheTopOfTheSidebarAndNeverInATooltip() throws {
+        let (_, view, _) = messages(book())
+        let sidebar = view.sidebar
+        let firstRow = { () throws -> NSRect in
+            let row = try XCTUnwrap(sidebar.rows.first)
+            return row.convert(row.bounds, to: sidebar)
+        }
+        XCTAssertTrue(sidebar.focusLine.isHidden, "no focus shows nothing")
+        let topWithout = try firstRow().minY
+
+        view.readPriorities = { [unowned self] _ in self.priorities() }
+        view.refreshPriorities()
+        view.layoutSubtreeIfNeeded()
+        XCTAssertFalse(sidebar.focusLine.isHidden)
+        XCTAssertEqual(sidebar.focusLine.accessibilityLabel(), "Focus: the garden show, until Sat 9 AM", "as written")
+        XCTAssertGreaterThan(sidebar.focusLine.frame.height, 0)
+        XCTAssertGreaterThanOrEqual(try firstRow().minY, sidebar.focusLine.frame.maxY, "the places start under it")
+        XCTAssertGreaterThan(try firstRow().minY, topWithout)
+
+        // A tooltip is a window of its own, which a screen share would show, unlike this one.
+        view.select(.channel(.of(steve)))
+        view.showBacklog(of: steve.id)
+        let secrets = ["garden show", "Paint the fence", "the blue one", "Sweep the porch"]
+        for shown in subviews(of: view) {
+            let tip = shown.toolTip ?? ""
+            XCTAssertFalse(secrets.contains { tip.contains($0) }, "\(type(of: shown)) has no tooltip of it")
+        }
+
+        view.readPriorities = { [unowned self] _ in self.priorities(focus: nil) }
+        view.refreshPriorities()
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(sidebar.focusLine.isHidden, "a focus that ends goes")
+        XCTAssertEqual(try firstRow().minY, topWithout)
+    }
+}

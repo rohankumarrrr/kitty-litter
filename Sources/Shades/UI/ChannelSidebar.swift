@@ -57,6 +57,16 @@ final class ChannelSidebar: QuietView {
     let quietButton = QuietButton(CatWords.doNotDisturb, style: .text)
     let quietOnButton = QuietButton(CatWords.doNotDisturbOn, style: .plain)
 
+    /// What comes first right now, from `FOCUS.md`, over the places, or `nil` with no focus.
+    var focus: String? {
+        didSet {
+            guard focus != oldValue else { return }
+            focusLine.text = focus
+            needsLayout = true
+        }
+    }
+    let focusLine = FocusLine()
+
     private let scroll = QuietScrollView()
     private let list = QuietView()
     private var shownGroups: [[ChannelSidebarItem]] = []
@@ -65,6 +75,7 @@ final class ChannelSidebar: QuietView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         scroll.documentView = list
+        addSubview(focusLine)
         addSubview(scroll)
         addSubview(shortcutsButton)
         addSubview(settingsButton)
@@ -100,6 +111,8 @@ final class ChannelSidebar: QuietView {
     /// The next `show` makes every row again, in the colours there are now.
     func restyle() {
         shownGroups = []
+        focusLine.needsDisplay = true
+        needsLayout = true
         needsDisplay = true
     }
 
@@ -141,7 +154,12 @@ final class ChannelSidebar: QuietView {
 
     override func layout() {
         super.layout()
-        scroll.frame = NSRect(x: 0, y: Self.top, width: bounds.width - 1, height: max(bounds.height - Self.top - Self.footerHeight, 0))
+        let focusWidth = max(bounds.width - 32, 0)
+        let focusHeight = focus == nil ? 0 : focusLine.height(for: focusWidth)
+        focusLine.isHidden = focus == nil
+        focusLine.frame = NSRect(x: 16, y: Self.top, width: focusWidth, height: focusHeight)
+        let listTop = Self.top + (focusHeight > 0 ? focusHeight + 10 : 0)
+        scroll.frame = NSRect(x: 0, y: listTop, width: bounds.width - 1, height: max(bounds.height - listTop - Self.footerHeight, 0))
         // You can drag it wider or narrower, and the rows follow.
         list.frame.size.width = bounds.width
         rows.forEach { $0.frame.size.width = bounds.width - 16 }
@@ -155,6 +173,44 @@ final class ChannelSidebar: QuietView {
     override func draw(_ dirtyRect: NSRect) {
         MessagesInk.sidebar.setFill()
         bounds.fill(using: .sourceOver)
+    }
+}
+
+/// The focus as written, quiet and in lilac, Opal's colour for what's now, on up to three lines. It has no tooltip,
+/// since a tooltip is a window of its own, and screen shares leave out only this one.
+final class FocusLine: QuietView {
+    private static let mostLines = 3
+
+    var text: String? {
+        didSet {
+            setAccessibilityElement(text != nil)
+            setAccessibilityRole(.staticText)
+            setAccessibilityLabel(text)
+            needsDisplay = true
+        }
+    }
+
+    private var words: NSAttributedString {
+        let wrapping = NSMutableParagraphStyle()
+        wrapping.lineBreakMode = .byWordWrapping
+        return NSAttributedString(string: text ?? "", attributes: [
+            .font: MessagesInk.font(ofSize: MessagesInk.meta + 1, weight: .medium),
+            .foregroundColor: MessagesInk.link,
+            .paragraphStyle: wrapping,
+        ])
+    }
+
+    func height(for width: CGFloat) -> CGFloat {
+        let font = MessagesInk.font(ofSize: MessagesInk.meta + 1, weight: .medium)
+        let most = ceil(NSLayoutManager().defaultLineHeight(for: font) * CGFloat(Self.mostLines))
+        let needed = words.boundingRect(with: NSSize(width: width, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading]).height
+        return min(ceil(needed), most)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        words.draw(with: bounds, options: [.usesLineFragmentOrigin, .usesFontLeading, .truncatesLastVisibleLine])
     }
 }
 

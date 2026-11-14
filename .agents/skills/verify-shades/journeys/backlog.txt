@@ -1,0 +1,20 @@
+front
+channels
+wait 2
+channel steve
+wait 1
+draw .verify/shades/backlog/0-channel
+header 3 in backlog
+wait 1
+draw .verify/shades/backlog/1-open
+key esc
+wait 1
+draw .verify/shades/backlog/2-closed
+channel clawde
+header 2 in backlog
+wait 1
+draw .verify/shades/backlog/3-other-form
+channel pepper
+header 3 in backlog
+front
+windows

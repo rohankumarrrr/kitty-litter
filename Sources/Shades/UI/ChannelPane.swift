@@ -12,6 +12,8 @@ final class ChannelHeader: QuietView {
     var onClose: (() -> Void)?
     var onOpen: (() -> Void)?
     var onNotifications: ((ChannelID, ChannelNotifications) -> Void)?
+    /// A kitten's backlog, by its ID.
+    var onBacklog: ((String) -> Void)?
     private let notificationsMenu = NotificationsMenu()
     var onPhone: (() -> Void)?
     private var title = ""
@@ -45,7 +47,8 @@ final class ChannelHeader: QuietView {
         return (CatWords.threadTitle, [home, about].filter { !$0.isEmpty }.joined(separator: "  ·  "))
     }
 
-    func show(_ place: ChannelPlace, in book: ChannelBook) {
+    /// `backlogs` are only ever this window's, never the book's, so a phone can't show them.
+    func show(_ place: ChannelPlace, in book: ChannelBook, backlogs: [String: Backlog] = [:]) {
         (title, subtitle) = Self.words(for: place, in: book)
         cat = nil
         var right: [Action] = []
@@ -56,6 +59,9 @@ final class ChannelHeader: QuietView {
             cat = ChannelSpeakerLook(.kitten(kitten), in: book)
             if let count = book.issues.first(where: { $0.kitten.id == kitten })?.threads.count, count > 0 {
                 right = [Action(CatWords.issues(count)) { [weak self] in self?.onIssues?() }]
+            }
+            if let count = backlogs[kitten]?.items.count, count > 0 {
+                right.append(Action(CatWords.backlog(count)) { [weak self] in self?.onBacklog?(kitten) })
             }
         case .activity, .threads:
             break
@@ -299,6 +305,15 @@ final class ChannelPane: QuietView {
     var onShowOnPhone: ((String) -> Void)?
     /// Attach in the box, which offers recent files.
     var onAttach: ((ChannelComposer, NSView) -> Void)?
+    /// A kitten's backlog, by its ID, from its channel's header.
+    var onBacklog: ((String) -> Void)?
+    /// What each kitten has waiting, by its ID, which only the window reads.
+    var backlogs: [String: Backlog] = [:] {
+        didSet {
+            guard backlogs != oldValue, role == .place, let book else { return }
+            header.show(selection.place, in: book, backlogs: backlogs)
+        }
+    }
     var parts = PartAnswers()
 
     private let now: () -> Date = Date.init
@@ -383,6 +398,7 @@ final class ChannelPane: QuietView {
         header.onIssues = { [weak self] in self?.onSelect?(.activity) }
         header.onClose = { [weak self] in self?.onClose?() }
         header.onNotifications = { [weak self] in self?.onAction?(.notifications($0, $1)) }
+        header.onBacklog = { [weak self] in self?.onBacklog?($0) }
         header.onOpen = { [weak self] in
             guard let self, let id = self.selection.thread else { return }
             self.onOpenThread?(id)
@@ -493,7 +509,7 @@ final class ChannelPane: QuietView {
         let rows: [ChannelRow]
         switch role {
         case .place:
-            header.show(selection.place, in: book)
+            header.show(selection.place, in: book, backlogs: backlogs)
             rows = ChannelRows.rows(selection.place, in: book, newFrom: newFrom)
         case .thread:
             guard let thread = selection.thread else { return }

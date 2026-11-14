@@ -902,8 +902,10 @@ final class DemoDriver {
             print(item == nil ? "no menu item [\(rest)]" : "chose \(rest)")
             if let item, let action = item.action { NSApp.sendAction(action, to: item.target, from: item) }
         case "header":
-            // The same as pressing a button at the top of the open thread's pane, such as Show on phone.
-            let header = stage.channels.view.threadPane.subviews.compactMap { $0 as? ChannelHeader }.first
+            // The same as pressing a button at the top of the open thread's pane, such as Show on phone, or the place's
+            // with no thread open, such as a kitten's backlog.
+            let view = stage.channels.view
+            let header = (view.threadPane.isHidden ? view.pane : view.threadPane).subviews.compactMap { $0 as? ChannelHeader }.first
             let button = header?.subviews.compactMap { $0 as? QuietButton }.first { $0.accessibilityLabel() == rest }
             print(button == nil ? "no header button [\(rest)]" : "pressed \(rest)")
             button?.onPress?()
