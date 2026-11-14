@@ -24,7 +24,8 @@ struct AppDependencies {
     /// can't be done, and then the router doesn't run.
     var routerFolder: () -> String? = { nil }
     /// Where each self-check's findings go.
-    var reportHealth: ([HealthFinding]) -> Void = { _ in }
+    /// What the self-check found, and the kitten Lockdown is on for, if it is.
+    var reportHealth: ([HealthFinding], String?) -> Void = { _, _ in }
     /// What was in the inbox when the app last stopped.
     var inbox = Inbox(since: .distantPast)
     var saveInbox: (Inbox) throws -> Void = { _ in }

@@ -50,12 +50,14 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(old.openInMessages)
         XCTAssertNil(old.messagesFont, "the system's font")
         XCTAssertEqual(old.followUpBehavior, .steer, "as T3 Code's composer does")
+        XCTAssertNil(old.lockdown)
 
         var changed = Settings()
         changed.textSize = .larger
         changed.openInMessages = false
         changed.messagesFont = "Georgia"
         changed.followUpBehavior = .queue
+        changed.lockdown = Lockdown(kitten: "/k/steve", thread: "t")
         let read = try JSONDecoder().decode(Settings.self, from: JSONEncoder().encode(changed))
         XCTAssertEqual(read, changed)
     }
@@ -76,6 +78,7 @@ final class SettingsTests: XCTestCase {
 
         controller.messagesAction(.notifications(.of(steve), ChannelNotifications(muted: true)))
         controller.doNotDisturbPressed()
+        controller.lockdownPicked(steve)
         XCTAssertEqual(stage.settingsForms.last?.settings.notifications(for: "kitten:/k/steve"), ChannelNotifications(muted: true))
         XCTAssertEqual(stage.settingsForms.last?.settings.doNotDisturb, true)
 
@@ -85,6 +88,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(controller.settings.vocabulary, ["Pawsniak"])
         XCTAssertEqual(controller.settings.notifications(for: "kitten:/k/steve"), ChannelNotifications(muted: true), "still muted")
         XCTAssertTrue(controller.settings.doNotDisturb)
+        XCTAssertEqual(controller.settings.lockdown?.kitten, steve.id, "still on")
         XCTAssertEqual(savedSettings?.vocabulary, ["Pawsniak"])
     }
 

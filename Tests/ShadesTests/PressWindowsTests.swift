@@ -710,6 +710,11 @@ final class PressWindowsTests: XCTestCase {
         bar.onSettings = { [unowned controller] in controller!.settingsPressed() }
         bar.isDoNotDisturb = { [unowned controller] in controller!.settings.doNotDisturb }
         bar.onDoNotDisturb = { [unowned controller] in controller!.doNotDisturbPressed() }
+        bar.lockdownKittens = { [unowned controller] in controller!.loadKittens().filter { !$0.planned } }
+        bar.lockedDownKitten = { [unowned controller] in controller!.settings.lockdown?.kitten }
+        bar.onLockdown = { [unowned controller] in controller!.lockdownPicked($0) }
+        bar.onLockdownNewThread = { [unowned controller] in controller!.lockdownNewThread() }
+        bar.onLockdownOff = { [unowned controller] in controller!.lockdownOff() }
         bar.held = [.ask, .fix, .messages]
         return bar
     }
@@ -749,6 +754,50 @@ final class PressWindowsTests: XCTestCase {
         bar.extras = [MenuBar.Extra(title: "Set Up Permissions…") { ran += 1 }]
         try await choose("Set Up Permissions…", in: bar)
         XCTAssertEqual(ran, 1)
+    }
+
+    /// Picked from Lockdown's submenu, the way a person moves into it and clicks.
+    private func choose(_ title: String, under parent: String, in bar: MenuBar) async throws {
+        let row = try XCTUnwrap(bar.shownItems.first { $0.title == parent }, "no item [\(parent)]")
+        let submenu = try XCTUnwrap(row.submenu, "[\(parent)] has no submenu")
+        let item = try XCTUnwrap(submenu.items.first { $0.title == title }, "no item [\(title)] under [\(parent)]")
+        XCTAssertTrue(item.isEnabled, title)
+        submenu.performActionForItem(at: submenu.index(of: item))
+        await drain()
+    }
+
+    func testLockdownIsPickedAndTurnedOffFromTheMenuWithItsKittenTicked() async throws {
+        let planned = Kitten(name: "Later", role: "Later", covers: "later", folder: "/k/later", planned: true)
+        kittens = [steve, planned]
+        let bar = menuBar()
+        let off = try XCTUnwrap(bar.shownItems.first { $0.title == CatWords.lockdown })
+        XCTAssertEqual(off.state, .off)
+        XCTAssertEqual(off.submenu?.items.map(\.title), ["Steve Pawsniak"], "only a kitten that's set up")
+
+        try await choose("Steve Pawsniak", under: CatWords.lockdown, in: bar)
+        XCTAssertEqual(controller.settings.lockdown, Lockdown(kitten: steve.id))
+        let on = try XCTUnwrap(bar.shownItems.first { $0.title == CatWords.lockdownOn("Steve Pawsniak") }, "its name shows in the menu")
+        XCTAssertEqual(on.state, .on)
+        XCTAssertEqual(on.submenu?.items.first?.state, .on, "its kitten is ticked")
+
+        var started = controller.settings
+        started.lockdown?.thread = "t"
+        controller.apply(started)
+        try await choose(CatWords.lockdownNewThread, under: CatWords.lockdownOn("Steve Pawsniak"), in: bar)
+        XCTAssertEqual(controller.settings.lockdown, Lockdown(kitten: steve.id), "still on, with no thread to carry on in")
+
+        try await choose("Steve Pawsniak", under: CatWords.lockdownOn("Steve Pawsniak"), in: bar)
+        XCTAssertNil(controller.settings.lockdown)
+    }
+
+    func testLockdownOnAKittenThatsGoneCanStillBeTurnedOff() async throws {
+        kittens = [steve]
+        let bar = menuBar()
+        try await choose("Steve Pawsniak", under: CatWords.lockdown, in: bar)
+        kittens = []
+        XCTAssertEqual(bar.shownItems.first { $0.title == CatWords.lockdown }?.state, .on)
+        try await choose(CatWords.lockdownOff, under: CatWords.lockdown, in: bar)
+        XCTAssertNil(controller.settings.lockdown)
     }
 
     func testPairPhoneInTheMenuShowsANewCode() async throws {

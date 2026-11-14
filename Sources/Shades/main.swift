@@ -43,6 +43,9 @@ MainActor.assumeIsolated {
         var settings = Settings.load()
         MessagesInk.picture = YourPicture.load()
         if keepsToItself { settings.phone = false }
+        if let name = DevFlags.lockdownKitten, let kitten = Kittens.load().first(where: { $0.name == name }) {
+            settings.lockdown = Lockdown(kitten: kitten.id)
+        }
         let tailscale = keepsToItself ? nil : TailscaleServe(port: PhoneLink.port)
         let real = AppController(
             dependencies: AppDependencies(
@@ -52,7 +55,8 @@ MainActor.assumeIsolated {
                 inserter: TextInserter(),
                 keys: keys,
                 settings: settings,
-                saveSettings: { try? $0.save() },
+                // A copy trying a flow out can be set up for it, as with --lockdown, and that's never kept.
+                saveSettings: { if !DevFlags.wantsFlow { try? $0.save() } },
                 screenTip: { context.takeJavaScriptTip() },
                 kittens: { Kittens.load() },
                 systemFacts: { SystemHealth.facts() },
@@ -60,10 +64,10 @@ MainActor.assumeIsolated {
                 screenBlockGaps: { ScreenBlock.gaps(in: FileManager.default.contents(atPath: $0 + "/.claude/settings.json")) },
                 routerFolder: { try? RouterBlock.prepare(Settings.directory.appendingPathComponent("router", isDirectory: true)) },
                 // The installed app's report is what the install waits for, so no other copy writes one.
-                reportHealth: { findings in
+                reportHealth: { findings, lockdown in
                     guard !keepsToItself else { return }
                     let version = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
-                    let report = HealthCheck.report(findings, pid: getpid(), version: version, at: Date())
+                    let report = HealthCheck.report(findings, pid: getpid(), version: version, at: Date(), lockdown: lockdown)
                     SystemHealth.write(report, to: Settings.directory.appendingPathComponent("health.json"))
                 },
                 // It has no business filing anything, or touching the real file.

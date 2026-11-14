@@ -630,9 +630,9 @@ enum Demo {
             systemFacts: { facts.found },
             routerFolder: { DemoChannels.routerFolder },
             // Nothing's written, so a journey can see each report the real app would write to health.json.
-            reportHealth: { findings in
+            reportHealth: { findings, lockdown in
                 let problems = findings.filter { !$0.ok }.map { "\($0.check): \($0.problem ?? "")" }
-                print("[demo] health.json would say \(problems.isEmpty ? "ok" : problems.joined(separator: " | "))")
+                print("[demo] health.json would say \(problems.isEmpty ? "ok" : problems.joined(separator: " | "))\(lockdown.map { ", lockdown: \($0)" } ?? "")")
             },
             notify: { print("[demo] notified: \(CatWords.notification($0)), which opens \($0.threadID)") },
             withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") },

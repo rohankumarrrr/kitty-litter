@@ -234,6 +234,9 @@ extension AppController {
             channels.sent(message, in: channel, startsThread: startsThread, alsoSent: alsoSent && !threadID.isEmpty, isReply: isReply, target: target)
         }
         switch target {
+        case .router where settings.lockdown != nil:
+            echo()
+            sendLockedDown(words, echoID: echoID, file: snapshot)
         case .router:
             echo()
             // One at a time, so each goes where it's meant to before the next is read.
@@ -401,6 +404,26 @@ extension AppController {
         } else {
             Task { [backend] in try? await backend.settle(threadID: threadID) }
         }
+    }
+
+    /// Lockdown's way for what you say to the cat: straight to its kitten, saying so as the router's pick would, with
+    /// your words beside the thread they start.
+    private func sendLockedDown(_ words: String, echoID: String, file: ScreenSnapshot?) {
+        let sentAt = now()
+        sendLockedDown(words, snapshot: file, youPicked: true, sent: { [weak self] id, starting in
+            guard let self else { return }
+            guard let id else { return self.channels.failed(echoID, because: CatWords.didntStart) }
+            self.channels.delivered(echoID)
+            if starting, let kitten = self.lockedDownKitten {
+                self.messagesThreads[id] = self.messagesThreads[id] ?? sentAt
+                self.channels.sent(ChannelMessage(exchangeID: "started-\(echoID)", kind: .ask, speaker: .you, text: words, at: sentAt, threadID: id, threadTitle: ""), in: .of(kitten))
+            }
+            self.catSays(starting ? CatWords.passedOnToKitten : CatWords.passedOnToSession)
+        }, refused: { [weak self] in
+            self?.channels.failed(echoID, because: CatWords.cantTakeFiles(self?.lockedDownKitten?.name ?? CatWords.shades))
+        }, unheard: { [weak self] in
+            self?.channels.failed(echoID, because: $0)
+        })
     }
 
     /// `nil` if the turn didn't work out. The thread is the one it ran in, since a turn that waited on an approval

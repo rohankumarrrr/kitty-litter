@@ -24,7 +24,7 @@ extension AppController {
     /// The cat was clicked. It always gets a word, and then you get to ask.
     func catClicked() {
         stage.catPet()
-        if !approvals.isEmpty && approvalsHidden {
+        if !askable.isEmpty && approvalsHidden {
             approvalsHidden = false
             renderBubble()
             return
@@ -127,6 +127,15 @@ extension AppController {
     }
 
     func runQuickTurn(_ question: String, snapshot: ScreenSnapshot?, generation: Int) async {
+        // Lockdown has no router to wait for.
+        if settings.lockdown != nil {
+            guard !takenBack.contains(generation) else { return }
+            if generation == replyGeneration {
+                reply = nil
+                renderBubble()
+            }
+            return sendLockedDown(question, snapshot: snapshot)
+        }
         await waitForThreadList()
         // One that's been overtaken still goes to the router, because there could be a correction in it.
         guard !takenBack.contains(generation) else { return }

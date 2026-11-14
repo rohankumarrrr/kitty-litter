@@ -36,7 +36,7 @@ extension AppController {
         } else if !canSee {
             caption = screenBlockedBy ?? CatWords.needsScreenRecording
         } else {
-            caption = CatWords.fixCaption(modelName: frontierName)
+            caption = CatWords.fixCaption(modelName: lockedDownKitten?.name ?? frontierName)
         }
         fixIsOpen = true
         showBox(InputRequest(
@@ -55,6 +55,8 @@ extension AppController {
     }
 
     func sendFix(_ description: String, snapshot: ScreenSnapshot, onOwnWindow: Bool = false) {
+        defer { catGoesHomeSoon() }
+        guard settings.lockdown == nil else { return sendLockedDown(description.isEmpty ? CatWords.fixThis : description, snapshot: snapshot) }
         let said = description.isEmpty ? nil : description
         // An agent with full access can do anything, so text from a page doesn't get to reach it.
         let shared = settings.frontierMode == .fullAccess ? nil : snapshot
@@ -65,7 +67,10 @@ extension AppController {
             text: Prompts.fix(description: said, snapshot: shared, screenshotPath: path, onOwnWindow: onOwnWindow),
             snapshot: shared
         )
-        // A moment at the spot to say it's on it, then back home, unless it's needed elsewhere.
+    }
+
+    /// A moment at the spot to say it's on it, then back home, unless it's needed elsewhere.
+    private func catGoesHomeSoon() {
         Task {
             try? await Task.sleep(nanoseconds: UInt64(Self.settleSeconds * 1_000_000_000))
             if !catIsAway { stage.catGoHome() }

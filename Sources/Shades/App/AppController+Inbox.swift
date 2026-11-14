@@ -157,7 +157,8 @@ extension AppController {
     var inboxBubbleWords: String {
         let kittens = loadKittens()
         let owners = KittenBoard.Owners(kittens)
-        return CatWords.inboxBubble(inboxEntries) { entry in
+        // Lockdown leaves out everyone else's rows, which wait for its catch-up.
+        return CatWords.inboxBubble(inboxEntries.filter { !lockdownHolds(.thread($0.threadID)) }) { entry in
             let thread = latestThreads.first { $0.id == entry.threadID }
             return (thread.flatMap(owners.of) ?? kittens.first { KittenBoard.belongs(title: entry.threadTitle, projectPath: nil, to: $0) })?.name
         }

@@ -98,6 +98,7 @@ extension AppController {
         facts.t3Silence = t3.silence
         facts.reachedT3 = t3.reached
         facts.kittensNotInT3 = t3.kittensNotInT3
+        facts.lockdownKittenGone = settings.lockdown != nil && lockedDownKitten == nil
         facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
         switch t3.frontDoorError {
         case let problem as FrontDoorProblem:
@@ -120,7 +121,7 @@ extension AppController {
         // A newer check has started, so what this one found is already out of date.
         guard check == healthChecks else { return findings }
         health = findings
-        reportHealth(findings)
+        reportHealth(findings, settings.lockdown.map { lockedDownKitten?.name ?? $0.kitten })
         each?(findings)
         return findings
     }

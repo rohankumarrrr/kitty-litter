@@ -30,7 +30,7 @@ final class AppController {
     let routerFolder: () -> String?
     let systemFacts: () -> HealthFacts
     let fileExists: (String) -> Bool
-    let reportHealth: ([HealthFinding]) -> Void
+    let reportHealth: ([HealthFinding], String?) -> Void
     let saveInbox: (Inbox) throws -> Void
     let hidesTestThreads: Bool
     let notify: (NeedsYouAlert) -> Void
@@ -89,6 +89,8 @@ final class AppController {
     var heard: String?
     var approvalsOnShow = false
     var approvalsHidden = false
+    /// Whether the bubble had an approval it may ask about when they last changed.
+    var hadAskable = false
     var catIsAway = false
     var reply: Reply? {
         didSet {
@@ -144,6 +146,10 @@ final class AppController {
     var answeredQuestions: Set<String> = []
     /// The router's turn for what you said in Messages, so each waits for the one before.
     var messagesTurn: Task<Void, Never>?
+    /// Lockdown's last ask, so each waits for the one before.
+    var lockdownTurn: Task<Void, Never>?
+    /// The thread Lockdown last started, which T3 may not have listed yet.
+    var lockdownStarted: String?
     /// Messages' own conversation with the router, apart from the Ask box's, which can hold your screen.
     var messagesQuick = QuickSession()
     /// Sessions the router started for what you wrote in Messages, and threads no kitten owns that it passed your words
@@ -326,7 +332,7 @@ final class AppController {
         stage.showText(size: settings.textSize, font: settings.messagesFont)
         stage.catDoNotDisturb(settings.doNotDisturb)
         // Turned off before you caught up, it still has that to say.
-        catchingUp = !settings.doNotDisturb && !away.isEmpty
+        catchingUp = !isHolding && !away.isEmpty
         startKeys()
         startInbox()
         // Anything from before may have been answered since, and the cat says again whatever's still waiting.
@@ -419,8 +425,8 @@ final class AppController {
 
     var currentBubble: BubbleContent? {
         if let heard { return .listening(heard) }
-        if approvalsOnShow, !approvalsHidden, let request = approvals.first {
-            return .approval(request, position: approvals.position, total: approvals.total)
+        if approvalsOnShow, !approvalsHidden, let request = askable.first {
+            return .approval(request, position: approvals.position, total: approvals.position - 1 + askable.count)
         }
         if let reply {
             if reply.text.isEmpty { return .thinking(note: reply.note) }
@@ -503,11 +509,12 @@ final class AppController {
         return SettingsForm(settings: settings, channels: channels)
     }
 
-    /// A change made in Settings. Do Not Disturb and each channel's notifications have their own way in, there and
+    /// A change made in Settings. Do Not Disturb, Lockdown and each channel's notifications have their own way in, there and
     /// elsewhere, so an edit there never sets them back to what they were when it opened.
     func settingsEdited(_ updated: Settings) {
         var updated = updated
         updated.doNotDisturb = settings.doNotDisturb
+        updated.lockdown = settings.lockdown
         updated.channelNotifications = settings.channelNotifications
         apply(updated)
     }
@@ -516,6 +523,7 @@ final class AppController {
         let keysChanged = updated.talkKey != settings.talkKey || updated.dictateKey != settings.dictateKey
         let phoneChanged = updated.phone != settings.phone
         let quietChanged = updated.doNotDisturb != settings.doNotDisturb
+        let lockdownChanged = updated.lockdown?.kitten != settings.lockdown?.kitten
         let textChanged = updated.textSize != settings.textSize || updated.messagesFont != settings.messagesFont
         let openChanged = updated.openInMessages != settings.openInMessages
         settings = updated
@@ -530,6 +538,7 @@ final class AppController {
             channels.refresh()
         }
         if quietChanged { doNotDisturbChanged() }
+        if lockdownChanged { self.lockdownChanged() }
         if textChanged {
             stage.showText(size: updated.textSize, font: updated.messagesFont)
             phone?.textSize = updated.textSize

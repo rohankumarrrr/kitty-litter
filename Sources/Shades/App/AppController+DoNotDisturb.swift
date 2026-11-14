@@ -6,10 +6,11 @@ import ShadesCore
 /// start yourself, such as asking the cat, still answers as usual, since you're there.
 extension AppController {
     /// The one place everything that comes in by itself asks before it pops up, on the Mac or, for a notification, on
-    /// your phone. Its channel can say no for good, which isn't kept. Do Not Disturb keeps what it holds for the catch-up.
+    /// your phone. Its channel can say no for good, which isn't kept. Do Not Disturb, and Lockdown for anything but its
+    /// kitten's, keep what they hold for the catch-up.
     func mayPopUp(_ missed: Missed, on device: NotifyDevice = .mac) -> Bool {
         guard channelAllows(missed, on: device) else { return false }
-        guard settings.doNotDisturb else { return true }
+        guard settings.doNotDisturb || lockdownHolds(missed) else { return true }
         keepForLater(missed)
         return false
     }
@@ -35,7 +36,7 @@ extension AppController {
             putAway()
             catchingUp = false
         } else {
-            catchingUp = !awayNow.isEmpty
+            catchingUp = settings.lockdown == nil && !awayNow.isEmpty
         }
         channels.refresh()
         renderBubble()
@@ -55,7 +56,7 @@ extension AppController {
 
     /// What came by itself and is up or waiting to be read when it's turned on goes too, so nothing pops up after.
     /// Approvals wait in Messages, as if you'd pressed Esc, and clicking the cat still brings them up.
-    private func putAway() {
+    func putAway() {
         for notice in notices { keepForLater(missed(question: notice.questionID, thread: notice.threadID, text: notice.text)) }
         notices = []
         if let line, line.unasked {

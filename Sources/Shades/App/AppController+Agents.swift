@@ -106,6 +106,9 @@ extension AppController {
         notifyNeedsYou()
         // Every one asks, so Do Not Disturb keeps them all, however many came at once.
         let comes = approvals.pending.map { mayPopUp(.approval($0.id)) }.contains(true)
+        // Lockdown's kitten's first comes up even behind others it's holding, as if it were the only one.
+        let hadApprovals = hadApprovals && (hadAskable || askable.isEmpty)
+        hadAskable = !askable.isEmpty
         if approvals.isEmpty {
             approvalsOnShow = false
             approvalsHidden = false
