@@ -187,7 +187,7 @@ extension AppController {
     /// The report you replied to, if you picked one, stops asking and gets the answer. Otherwise that thread's report
     /// waiting on you does, or failing that its latest one. `echoID` is what Messages shows of your words meanwhile.
     /// Messages shows them going into the thread you picked, so the cat only speaks up if they don't get there.
-    func reply(_ words: String, toThread threadID: String, marking report: String? = nil, echoID: String) {
+    func reply(_ words: String, toThread threadID: String, marking report: String? = nil, echoID: String, behavior: FollowUpBehavior) {
         let text = Prompts.forwarded(words: words, snapshot: nil, screenshotPath: nil, screenLeftOut: false)
         let own = inbox.entries.filter { $0.threadID == threadID }
         let entryID = (own.first { $0.id == report } ?? own.last(where: \.needsYou) ?? own.last)?.id
@@ -199,7 +199,7 @@ extension AppController {
         forwardTask = Task {
             var heardBack = false
             do {
-                for try await event in backend.forward(threadID: threadID, text: text, attachments: []) {
+                for try await event in backend.forward(threadID: threadID, text: text, attachments: [], behavior: behavior) {
                     if case .started = event { continue }
                     heardBack = true
                 }

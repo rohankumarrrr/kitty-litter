@@ -21,6 +21,7 @@ import ShadesT3
 //   probe-t3 restart    runs its own throwaway T3 server, restarts it mid-turn, and checks recovery
 //   probe-t3 timing     how much time this client adds to a turn
 //   probe-t3 settle     settles a finished thread, then checks a follow-up still works
+//   probe-t3 steer      steers a turn that's going, on Codex and Claude, then steers one that hasn't started yet
 //   probe-t3 report <thread>   how fast a thread's last report can be read, and how long it is
 //   probe-t3 router     what the router decides for made-up kittens and sessions, and nothing past that
 //   probe-t3 search <words>   how many threads T3's search names for those words, and how fast, and nothing they say
@@ -692,6 +693,95 @@ func probeSettle() async throws {
     await backend.disconnect()
 }
 
+/// A steer joins the run that's going and is answered there, and the forward hears that run end. One sent before the
+/// run has a turn going can't be steered, so it waits its turn instead.
+func probeSteer() async throws {
+    let backend = makeBackend()
+    try await backend.connect()
+    struct Turn { var text = ""; var failed: String?; var threw: String?; var ended: Duration? }
+    /// `onStarted` hears the thread.
+    func follow(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>, from began: ContinuousClock.Instant, onStarted: ((String) -> Void)? = nil) async -> Turn {
+        var turn = Turn()
+        do {
+            for try await event in stream {
+                switch event {
+                case let .started(id): onStarted?(id)
+                case let .text(delta): turn.text += delta
+                case let .finished(full): turn.text = full
+                case let .failed(message): turn.failed = message
+                case .needsApproval: break
+                }
+            }
+        } catch {
+            turn.threw = error.localizedDescription
+        }
+        turn.ended = clock.now - began
+        return turn
+    }
+    func show(_ name: String, _ turn: Turn) {
+        let words = turn.text.split(whereSeparator: \.isWhitespace)
+        say("  \(name): ended after \(milliseconds(turn.ended ?? .zero)), \(words.count) words, last \(words.suffix(3).joined(separator: " ")), failed \(turn.failed ?? "no"), threw \(turn.threw ?? "no")")
+    }
+    func transcript(_ id: String) async {
+        for exchange in await backend.exchanges(threadID: id) ?? [] {
+            say("  asked \(exchange.ask.map { String($0.prefix(50)) } ?? "-") | replied \(exchange.reply.map { String($0.suffix(40)) } ?? "-")")
+        }
+    }
+    let claude = ModelChoice(provider: "claudeAgent", model: "claude-haiku-5-5", effort: "medium")
+    var threads: [String] = []
+    for model in [sol, claude] {
+        say("steer into a turn that's going, on \(model.provider)")
+        let began = clock.now
+        let started = AsyncStream<String>.makeStream()
+        let counting = AgentPrompt(title: "Shades test: steer", text: "Count from 1 to 1500 in words, one number per line, and say nothing else.", model: model, runtimeMode: .auto)
+        let first = Task {
+            let turn = await follow(backend.start(counting), from: began, onStarted: { started.continuation.yield($0) })
+            started.continuation.finish()
+            return turn
+        }
+        var threadID: String?
+        for await id in started.stream { threadID = id; break }
+        guard let threadID else {
+            show("first turn never started", await first.value)
+            continue
+        }
+        threads.append(threadID)
+        // Steered once T3 lists it as running and it's been at it a moment, as when you reply to a kitten mid-task.
+        while await backend.allThreads()?.first(where: { $0.id == threadID })?.status != .running, clock.now - began < .seconds(60) {
+            try await Task.sleep(for: .milliseconds(500))
+        }
+        try await Task.sleep(for: .seconds(4))
+        say("  steering after \(milliseconds(clock.now - began))")
+        let steer = await follow(backend.forward(threadID: threadID, text: "Stop counting now. Reply with only the word meow.", attachments: [], behavior: .steer), from: began)
+        show("first turn", await first.value)
+        show("steer", steer)
+        await transcript(threadID)
+    }
+
+    say("steer before the run has a turn going, on \(sol.provider)")
+    let began = clock.now
+    let prompt = AgentPrompt(title: "Shades test: steer early", text: "Reply with only the word one.", model: sol, runtimeMode: .auto)
+    let started = AsyncStream<String>.makeStream()
+    let first = Task {
+        let turn = await follow(backend.start(prompt), from: began, onStarted: { started.continuation.yield($0) })
+        started.continuation.finish()
+        return turn
+    }
+    var early: String?
+    for await id in started.stream { early = id; break }
+    if let early {
+        threads.append(early)
+        let steer = await follow(backend.forward(threadID: early, text: "Reply with only the word two.", attachments: [], behavior: .steer), from: began)
+        show("first turn", await first.value)
+        show("early steer", steer)
+        await transcript(early)
+    }
+    for id in threads { try? await backend.archive(threadID: id) }
+    say("archived \(threads.count) threads")
+    await backend.signOut()
+    await backend.disconnect()
+}
+
 func probeReport() async throws {
     guard CommandLine.arguments.count > 2 else { throw NSError(domain: "usage: report <thread>", code: 2) }
     let backend = makeBackend()
@@ -902,6 +992,7 @@ let probes: [String: () async throws -> Void] = [
     "restart": probeRestart,
     "timing": probeTiming,
     "settle": probeSettle,
+    "steer": probeSteer,
     "report": probeReport,
     "origin": probeOrigin,
     "router": probeRouter,

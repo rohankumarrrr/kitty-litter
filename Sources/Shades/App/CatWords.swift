@@ -207,6 +207,7 @@ enum CatWords {
         ]),
         ("Threads", [
             ("⌘⇧[  ⌘⇧]", "Thread above or below"),
+            ("⌘↩", "Steer or queue, the other way from Settings"),
             ("Esc", "Close the thread"),
         ]),
         (appName, [

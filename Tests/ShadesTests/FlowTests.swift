@@ -4516,6 +4516,46 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(log.all.contains("snapshot"), "and nothing looked at the screen")
     }
 
+    /// A reply into a working thread queued behind its run, where T3 Code's own composer steers it.
+    func testWhatYouSendIntoAThreadSteersItUnlessSettingsOrCommandReturnSaysQueue() async throws {
+        kittens = [steve]
+        let thread = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .running, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/k/steve")
+        backend.origins["s"] = ThreadOrigin(title: thread.title, projectPath: thread.projectPath, startedBy: .person)
+        controller.threadsChanged([thread])
+        controller.channelsPressed()
+        func send(_ words: String, files: [Drop] = [], alternate: Bool = false) async -> FollowUpBehavior? {
+            controller.messagesAction(.send(words, to: .thread(id: "s", title: thread.title), shownIn: .of(steve), files: files, alternate: alternate))
+            await settle()
+            let sent = backend.sent.last { $0.mode == .forward }
+            return sent?.prompt.text.hasPrefix(words) == true ? sent?.behavior : nil
+        }
+        var behavior = await send("Make it blue")
+        XCTAssertEqual(behavior, .steer, "by default")
+        behavior = await send("Like this?", files: [picture])
+        XCTAssertEqual(behavior, .steer, "with a picture too")
+        behavior = await send("Then the footer", alternate: true)
+        XCTAssertEqual(behavior, .queue, "⌘Return does the other")
+
+        var settings = controller.settings
+        settings.followUpBehavior = .queue
+        controller.apply(settings)
+        behavior = await send("Then the header")
+        XCTAssertEqual(behavior, .queue)
+        behavior = await send("Actually, stop", alternate: true)
+        XCTAssertEqual(behavior, .steer)
+    }
+
+    /// Only a thread you picked is steered. The router's pick waits its turn, as the cat's own does.
+    func testWordsTheRouterPassesToABusySessionStillWaitTheirTurn() async throws {
+        let busy = AgentThread(id: "f", title: "Work", projectTitle: nil, status: .running, model: "m", updatedAt: clock, runtimeMode: .auto, lastRunID: "run-1")
+        controller.threadsChanged([busy])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")], [.text(delta: "Queued.")]]
+        await ask("and that part?")
+        let sent = try XCTUnwrap(backend.sent.last { $0.mode == .forward })
+        XCTAssertEqual(sent.threadID, "f")
+        XCTAssertEqual(sent.behavior, .queue)
+    }
+
     /// Messages took one file a message.
     func testSeveralFilesGoTogetherInOneMessage() async throws {
         kittens = [steve]
@@ -5031,7 +5071,7 @@ final class FlowTests: XCTestCase {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")
         backend.streamError = URLError(.notConnectedToInternet)
-        controller.reply("Yes, ship it", toThread: rows[0].threadID, marking: rows[0].id, echoID: "sent-1")
+        controller.reply("Yes, ship it", toThread: rows[0].threadID, marking: rows[0].id, echoID: "sent-1", behavior: .steer)
         await controller.forwardTask?.value
         XCTAssertTrue(rows[0].needsYou, "it's back")
         XCTAssertEqual(notified.count, 1)
@@ -5097,7 +5137,7 @@ final class FlowTests: XCTestCase {
         kittens = [inboxKitten]
         notifyingWhenFinished()
         await finish(work(), sorted: "DECISION: Ship the fix?")
-        controller.reply("Yes, ship it", toThread: rows[0].threadID, marking: rows[0].id, echoID: "sent-1")
+        controller.reply("Yes, ship it", toThread: rows[0].threadID, marking: rows[0].id, echoID: "sent-1", behavior: .steer)
         await controller.forwardTask?.value
         XCTAssertEqual(withdrawn, [rows[0].id])
         XCTAssertEqual(notified.count, 1)

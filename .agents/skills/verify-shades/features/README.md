@@ -24,7 +24,7 @@ Each starts with a title and a paragraph on what a person sees, then four sectio
 
 - [Ask](./ask.md) covers asking the cat, its answer, pointing at things, passing to a kitten and handing off, and drawing every state of the bubble, the Ask box and the pill.
 - [Drop](./drop.md) covers dropping a PDF, picture or link onto the cat, and where it may go.
-- [The Kitty Litter](./messages.md) covers Activity, Threads, the one list under Kittens, Shades and a kitten's channel, a thread in the pane beside it, Also send to, search, formatting and links, selecting and copying, and Opal Horizon, its one look.
+- [The Kitty Litter](./messages.md) covers Activity, Threads, the one list under Kittens, Shades and a kitten's channel, a thread in the pane beside it, Also send to, steering or queueing a reply, search, formatting and links, selecting and copying, and Opal Horizon, its one look.
 - [Inbox](./inbox.md) covers a kitten's report arriving, its row in The Kitty Litter, replying to it and clearing it.
 - [Approvals](./approvals.md) covers an agent asking to run something, and allowing it.
 - [Phone](./phone.md) covers The Kitty Litter on your phone: turning it on, pairing, reading and answering from the page, its colours, and its text size and tap targets.

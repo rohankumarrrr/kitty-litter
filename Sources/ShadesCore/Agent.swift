@@ -346,8 +346,9 @@ public protocol AgentBackend: AnyObject, Sendable {
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error>
     /// Sends another message to an existing thread and streams that turn.
     func followUp(threadID: String, _ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error>
-    /// Sends a message into a thread that's someone else's, leaving its model and permissions as they are.
-    func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error>
+    /// Sends a message into a thread that's someone else's, leaving its model and permissions as they are. `behavior`
+    /// is what it does while that thread is working, and the stream follows the run it joins or the one it gets.
+    func forward(threadID: String, text: String, attachments: [AgentAttachment], behavior: FollowUpBehavior) -> AsyncThrowingStream<AgentReplyEvent, Error>
     /// The current threads, sent again whenever anything changes.
     func watchThreads() -> AsyncStream<[AgentThread]>
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws
@@ -383,7 +384,7 @@ public protocol AgentBackend: AnyObject, Sendable {
 }
 
 public extension AgentBackend {
-    func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+    func forward(threadID: String, text: String, attachments: [AgentAttachment], behavior: FollowUpBehavior) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         AsyncThrowingStream { $0.finish() }
     }
     func projectID(atPath path: String) async -> String? { nil }

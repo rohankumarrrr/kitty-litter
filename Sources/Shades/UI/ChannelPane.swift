@@ -391,7 +391,7 @@ final class ChannelPane: QuietView {
             guard let self, let id = self.selection.thread else { return }
             self.onShowOnPhone?(id)
         }
-        composer.onSend = { [weak self] words, target, files in
+        composer.onSend = { [weak self] words, target, files, alternate in
             guard let self else { return }
             // Words to the cat that @ a kitten go straight to it instead, in a new thread that opens here, the way the box
             // in the kitten's own channel starts one.
@@ -414,7 +414,7 @@ final class ChannelPane: QuietView {
                 let alsoSent = self.composer.alsoSends
                 self.composer.alsoSends = false
                 // A thread Messages doesn't place still shows what you sent in its pane.
-                self.onAction?(.send(words, to: target, shownIn: self.book?.home(ofThread: id) ?? .shades, alsoSent: alsoSent, files: files))
+                self.onAction?(.send(words, to: target, shownIn: self.book?.home(ofThread: id) ?? .shades, alsoSent: alsoSent, files: files, alternate: alternate))
                 self.updateComposer()
                 self.arrange(force: true)
             default:
@@ -731,7 +731,7 @@ final class ChannelPane: QuietView {
             return
         }
         composer.textView.string = ""
-        composer.onSend?(words, spot.target, composer.takeAttachments())
+        composer.onSend?(words, spot.target, composer.takeAttachments(), false)
         arrange(force: true)
     }
 

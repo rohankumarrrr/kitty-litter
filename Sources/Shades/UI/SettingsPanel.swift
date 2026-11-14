@@ -170,6 +170,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
                     row("Font", font),
                     row("Text size", segments(Self.sizes, settings.textSize) { $0.textSize = $1 }),
                     row("Open threads in", note: "Threads it doesn't follow open in T3.", segments(Self.opens, settings.openInMessages) { $0.openInMessages = $1 }),
+                    row("Replies while it works", note: "Steer joins its run, Queue waits for it. ⌘Return does the other.", segments(Self.followUps, settings.followUpBehavior) { $0.followUpBehavior = $1 }),
                 ]),
                 Group(label: "Phone", rows: phoneRows),
             ]
@@ -185,6 +186,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     private static let keys: [(String, HoldKey)] = HoldKey.allCases.map { (CatWords.keyName($0), $0) }
     private static let sizes: [(String, TextSize)] = [("Small", .small), ("Default", .standard), ("Large", .large), ("Larger", .larger)]
     private static let opens: [(String, Bool)] = [(CatWords.appName, true), ("T3", false)]
+    private static let followUps: [(String, FollowUpBehavior)] = [("Steer", .steer), ("Queue", .queue)]
 
     // MARK: - Building
 

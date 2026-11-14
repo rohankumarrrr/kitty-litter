@@ -330,18 +330,20 @@ enum T3Wire {
     }
 
     /// `start_immediately` without a delivery intent gives this message its own run: it starts now
-    /// on an idle thread and queues behind an active one, and never steers a run already going.
+    /// on an idle thread and queues behind an active one. `deliveryIntent` `steer` joins the run that's
+    /// going instead, as T3's own composer does, and on an idle thread starts one as before.
     struct DispatchMessage: Encodable {
         struct Mode: Encodable { var type = "start_immediately" }
 
         var type = "message.dispatch"
-        let commandId: String
+        var commandId: String
         let threadId: String
         let messageId: String
         let text: String
         let attachments: [ImageAttachment]
         /// Left out, the thread carries on with the model it already has.
         let modelSelection: ModelSelection?
+        var deliveryIntent: String?
         var dispatchMode = Mode()
         var createdBy = "user"
         var creationSource = "web"

@@ -167,7 +167,7 @@ final class AttachmentsTests: XCTestCase {
         func ask(_ files: [String]) -> MessagesAction? {
             PhoneAsk(act: "send", key: key, text: "Look", files: files).action(in: book, newTopic: { "new" }, file: { uploads[$0] })?.action
         }
-        guard case .send(_, _, _, _, let files) = ask(["a", "b"]) else { return XCTFail("both go") }
+        guard case .send(_, _, _, _, let files, _) = ask(["a", "b"]) else { return XCTFail("both go") }
         XCTAssertEqual(files.map(\.name), ["a.jpg", "b.jpg"])
         XCTAssertNil(ask(["a", "made-up"]), "one it never sent stops the message")
         XCTAssertNil(ask(["a", "a"]), "nor the same one twice")

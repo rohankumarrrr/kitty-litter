@@ -27,10 +27,10 @@ Journey: `journeys/inbox.txt`.
 - **Arrive.** `report decision`, then `wait 7`. `[demo] started demo-1 ... Below is the final report` is the sorting. `bubble.png` in `0-bubble` says "The Kitty Litter" over "Clawde needs a decision on “Fix login”.", with Open drawn as a button, the same as Open after a hand-off.
 - **Open.** `inbox`, then `wait 1`. `channels.png` in `1-open` shows The Kitty Litter at Activity, with "Ship the login fix?" from "Clawde · Fix login", and Reply, Done and Open in T3.
 - **Reply.** `inbox reply`, then `wait 1`. `channels.png` in `2-reply` shows the "Fix login" thread in the pane beside #clawde, with Open in T3 and ✕ at the top and "Replies in Fix login" over the box.
-- **Send.** `send Go ahead`, then `wait 2`. `[demo] forwarded to demo-login with 0 attachments: Go ahead / --- / Passed on` shows only your words went to that thread. `channels.png` in `3-sent` shows "Go ahead" as your bubble in the pane, and Activity has no count left.
+- **Send.** `send Go ahead`, then `wait 2`. `[demo] forwarded to demo-login with 0 attachments, to steer: Go ahead / --- / Passed on` shows only your words went to that thread. `channels.png` in `3-sent` shows "Go ahead" as your bubble in the pane, and Activity has no count left.
 - **Done.** `channel activity`, `inbox done`, then `wait 1`. `channels.png` in `4-done` shows Activity with the row gone.
 - **Scheduled.** `report scheduled`, `wait 7`, `inbox reply`, then `wait 1`. A schedule starts "Clawde: Morning check" and it files a decision. `channels.png` in `5-scheduled` shows #clawde with the "Morning check" thread in the pane beside it, Clawde's report, "Two packages have updates...", as its parent without the schedule's prompt, and "Replies in Morning check" over the box. Nobody else is in it.
-- **Reply to it.** `send Go ahead`, then `wait 2`. `[demo] forwarded to demo-morning with 0 attachments: Go ahead` shows only your words went to that thread. `channels.png` in `6-scheduled-sent` shows "Go ahead" under the report in the pane.
+- **Reply to it.** `send Go ahead`, then `wait 2`. `[demo] forwarded to demo-morning with 0 attachments, to steer: Go ahead` shows only your words went to that thread. `channels.png` in `6-scheduled-sent` shows "Go ahead" under the report in the pane.
 
 Journey: `journeys/inbox-asks.txt`.
 

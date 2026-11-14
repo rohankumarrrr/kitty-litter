@@ -15,7 +15,8 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     private static let chipWidth: CGFloat = 220
     private static let narrowestChip: CGFloat = 130
 
-    var onSend: ((String, MessageTarget, [Drop]) -> Void)?
+    /// The last part is ⌘Return, which steers or queues the other way from Settings, as in T3 Code.
+    var onSend: ((String, MessageTarget, [Drop], Bool) -> Void)?
     /// Attach, which offers recent files in a menu under it.
     var onAttach: ((NSView) -> Void)?
     var onResize: (() -> Void)?
@@ -82,6 +83,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         mic.onPress = { [weak self] in self?.onMic?() }
         addSubview(mic)
         textView.onAttach = { [weak self] in self?.attach($0) ?? false }
+        textView.onCommandReturn = { [weak self] in self?.send(alternate: true) }
         textView.onFocus = { [weak self] in self?.needsDisplay = true }
         registerForDraggedTypes(Drop.types)
         restyle()
@@ -293,7 +295,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         needsLayout = true
     }
 
-    private func send() {
+    private func send(alternate: Bool = false) {
         let words = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let target, !words.isEmpty || !attachments.isEmpty, target.isReady, !isHeld else {
             NSSound.beep()
@@ -303,7 +305,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         showWhereWordsGo()
         let files = takeAttachments()
         onResize?()
-        onSend?(words, target, files)
+        onSend?(words, target, files, alternate)
     }
 }
 
@@ -312,7 +314,15 @@ final class ComposerTextView: PlaceholderTextView {
     var onAttach: (([Drop]) -> Bool)?
     /// It took the keyboard or gave it up, or its window did, which shows or hides the field's ring.
     var onFocus: (() -> Void)?
+    /// ⌘Return, which AppKit's key bindings don't name.
+    var onCommandReturn: (() -> Void)?
     private var keyObservers: [NSObjectProtocol] = []
+
+    override func keyDown(with event: NSEvent) {
+        let held = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        guard held == .command, [36, 76].contains(event.keyCode), !hasMarkedText() else { return super.keyDown(with: event) }
+        onCommandReturn?()
+    }
 
     override func becomeFirstResponder() -> Bool {
         defer { onFocus?() }

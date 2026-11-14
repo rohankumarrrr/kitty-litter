@@ -30,7 +30,7 @@ struct T3TurnTracker {
             let runs = projection.runs.compactMap(\.value)
             if let run = runs.first(where: { $0.userMessageId == messageID }) { runID = run.id }
             for turnItem in projection.turnItems.compactMap(\.value) { events += apply(turnItem) }
-            if let run = runs.first(where: { $0.userMessageId == messageID }) { events += apply(run) }
+            if let run = runs.first(where: { $0.id == runID }) { events += apply(run) }
             return events
         case let .event(.run(run), _):
             return apply(run)
@@ -45,7 +45,7 @@ struct T3TurnTracker {
     }
 
     private mutating func apply(_ run: T3Wire.Run) -> [AgentReplyEvent] {
-        guard run.userMessageId == messageID else { return [] }
+        guard run.userMessageId == messageID || run.id == runID else { return [] }
         runID = run.id
         switch run.outcome {
         case .completed:
@@ -63,6 +63,11 @@ struct T3TurnTracker {
     }
 
     private mutating func apply(_ item: T3Wire.TurnItem) -> [AgentReplyEvent] {
+        // A steer joins a run another message started, and only its own words say which.
+        if runID == nil, item.isUserMessage, item.messageId == messageID, let run = item.runId {
+            runID = run
+            return []
+        }
         guard let runID, item.runId == runID else { return [] }
 
         if item.isAssistantMessage, item.parentItemId == nil, let id = item.messageId, let text = item.text {

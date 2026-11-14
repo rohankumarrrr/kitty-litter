@@ -168,6 +168,45 @@ final class T3TurnTrackerTests: XCTestCase {
         XCTAssertEqual(tracker.runID, "run-1")
     }
 
+    /// A steer joins a run another message started, so following only the run its own message started never ended.
+    func testASteerFollowsTheRunItJoinedToItsEnd() throws {
+        var tracker = newTracker()
+        func update(_ status: String) throws -> T3Wire.ThreadItem {
+            try event("run.updated", #"{"id":"run-0","userMessageId":"message-0","status":"\#(status)"}"#)
+        }
+        var events = tracker.apply(try update("running"))
+        events += tracker.apply(try event("turn-item.updated", #"{"id":"a0","type":"assistant_message","status":"completed","runId":"run-0","parentItemId":null,"messageId":"m0","text":"Drawing a logo.","streaming":false}"#))
+        XCTAssertEqual(events, [], "the run's own words before the steer aren't its answer")
+        events += tracker.apply(try event("turn-item.updated", #"{"id":"u1","type":"user_message","status":"completed","runId":"run-0","messageId":"message-1","text":"Make it blue"}"#))
+        events += tracker.apply(try event("turn-item.updated", #"{"id":"a1","type":"assistant_message","status":"completed","runId":"run-0","parentItemId":null,"messageId":"m1","text":"A blue logo.","streaming":false}"#))
+        events += tracker.apply(try update("completed"))
+        XCTAssertEqual(events, [.text(delta: "A blue logo."), .finished(fullText: "A blue logo.")])
+        XCTAssertEqual(tracker.runID, "run-0")
+    }
+
+    func testASnapshotPicksUpARunAlreadySteered() throws {
+        let json = #"""
+        {"kind":"snapshot","snapshotSequence":9,"projection":{"thread":{"title":"Logo"},
+        "runs":[{"id":"run-0","userMessageId":"message-0","status":"completed"}],
+        "turnItems":[{"id":"u1","type":"user_message","status":"completed","runId":"run-0","messageId":"message-1","text":"Make it blue"},
+        {"id":"a1","type":"assistant_message","status":"completed","runId":"run-0","parentItemId":null,"messageId":"m1","text":"A blue logo.","streaming":false}]}}
+        """#
+        var tracker = newTracker()
+        let events = tracker.apply(try T3Wire.decoder().decode(T3Wire.ThreadItem.self, from: Data(json.utf8)))
+        XCTAssertEqual(events, [.text(delta: "A blue logo."), .finished(fullText: "A blue logo.")])
+    }
+
+    /// Queued words have no run until theirs starts, so they never take the one going for theirs.
+    func testQueuedWordsWaitForTheirOwnRun() throws {
+        var tracker = newTracker()
+        var events = tracker.apply(try event("run.updated", #"{"id":"run-0","userMessageId":"message-0","status":"running"}"#))
+        events += tracker.apply(try event("turn-item.updated", #"{"id":"u1","type":"user_message","status":"completed","runId":null,"messageId":"message-1","text":"Next, the footer"}"#))
+        events += tracker.apply(try event("run.updated", #"{"id":"run-0","userMessageId":"message-0","status":"completed"}"#))
+        XCTAssertEqual(events, [])
+        XCTAssertFalse(tracker.isFinished)
+        XCTAssertNil(tracker.runID)
+    }
+
     func testARenameIsPickedUp() throws {
         var tracker = newTracker()
         _ = tracker.apply(try event("thread.metadata-updated", #"{"title":"A better title"}"#))

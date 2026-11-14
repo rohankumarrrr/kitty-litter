@@ -101,7 +101,7 @@ private final class FeedBackend: AgentBackend, @unchecked Sendable {
     func connect() async throws { fatalError("Channels never connects by itself") }
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> { fatalError("Channels never sends") }
     func followUp(threadID: String, _ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> { fatalError("Channels never sends") }
-    func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> { fatalError("Channels never sends") }
+    func forward(threadID: String, text: String, attachments: [AgentAttachment], behavior: FollowUpBehavior) -> AsyncThrowingStream<AgentReplyEvent, Error> { fatalError("Channels never sends") }
     func watchThreads() -> AsyncStream<[AgentThread]> { fatalError("Channels is told about changes") }
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws { fatalError("Channels never answers") }
     func archive(threadID: String) async throws { fatalError("Channels never archives") }

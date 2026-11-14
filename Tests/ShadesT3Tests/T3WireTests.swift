@@ -80,6 +80,15 @@ final class T3WireTests: XCTestCase {
         XCTAssertNil(json["deliveryIntent"], "A delivery intent could steer a run already going")
     }
 
+    /// As T3 Code's composer sends a steer, which starts a run of its own on an idle thread.
+    func testASteerJoinsTheRunThatsGoing() throws {
+        let message = T3Wire.DispatchMessage(commandId: "c", threadId: "t", messageId: "m", text: "hi", attachments: [], modelSelection: nil, deliveryIntent: "steer")
+        let json = try decoded(T3Wire.encode(message))
+        XCTAssertEqual(json["deliveryIntent"] as? String, "steer")
+        XCTAssertEqual((json["dispatchMode"] as? [String: String])?["type"], "start_immediately")
+        XCTAssertNil(json["modelSelection"], "the thread keeps its own model")
+    }
+
     // Kittens only believe a correction T3 shows as the user's.
     func testMessagesGoOutAsTheUser() throws {
         let message = T3Wire.DispatchMessage(commandId: "c", threadId: "t", messageId: "m", text: "hi", attachments: [], modelSelection: nil)

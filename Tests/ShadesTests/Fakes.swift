@@ -157,6 +157,8 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         var mode: Mode
         var threadID: String?
         var prompt: AgentPrompt
+        /// What a forward does while its thread is working.
+        var behavior: FollowUpBehavior?
     }
 
     private let lock = NSLock()
@@ -325,12 +327,12 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+    func forward(threadID: String, text: String, attachments: [AgentAttachment], behavior: FollowUpBehavior) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         if let forwardError {
             return AsyncThrowingStream { $0.finish(throwing: forwardError) }
         }
         let prompt = AgentPrompt(text: text, attachments: attachments, model: .quick, runtimeMode: .auto)
-        lock.withLock { _sent.append(Sent(mode: .forward, threadID: threadID, prompt: prompt)) }
+        lock.withLock { _sent.append(Sent(mode: .forward, threadID: threadID, prompt: prompt, behavior: behavior)) }
         if let holdTurn, text.hasPrefix(holdTurn) { return heldTurn(threadID: threadID) }
         return play(threadID: threadID, prompt: prompt)
     }

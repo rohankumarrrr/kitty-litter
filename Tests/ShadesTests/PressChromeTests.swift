@@ -583,7 +583,7 @@ extension PressChromeTests {
             panel.makeFirstResponder(composer.textView)
             composer.textView.insertText("Looks good", replacementRange: composer.textView.selectedRange())
             try returnKey(in: panel)
-            guard case .send(let words, let target, let shownIn, let alsoSent, _)? = calls.actions.last else { return XCTFail("\(name): Return sent nothing, \(calls.actions)") }
+            guard case .send(let words, let target, let shownIn, let alsoSent, _, _)? = calls.actions.last else { return XCTFail("\(name): Return sent nothing, \(calls.actions)") }
             XCTAssertEqual(words, "Looks good", name)
             XCTAssertEqual(target, .thread(id: "s1", title: "Resume"), name)
             XCTAssertEqual(shownIn, .of(steve), name)
