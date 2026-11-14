@@ -112,6 +112,11 @@ final class AppStage: CatStage {
         menuBar.onPairPhone = { [weak self] in self?.controller?.pairPhone() }
         menuBar.isDoNotDisturb = { [weak self] in self?.controller?.settings.doNotDisturb == true }
         menuBar.onDoNotDisturb = { [weak self] in self?.controller?.doNotDisturbPressed() }
+        menuBar.lockdownKittens = { [weak self] in self?.controller?.loadKittens().filter { !$0.planned } ?? [] }
+        menuBar.lockedDownKitten = { [weak self] in self?.controller?.settings.lockdown?.kitten }
+        menuBar.onLockdown = { [weak self] in self?.controller?.lockdownPicked($0) }
+        menuBar.onLockdownNewThread = { [weak self] in self?.controller?.lockdownNewThread() }
+        menuBar.onLockdownOff = { [weak self] in self?.controller?.lockdownOff() }
         pairing.onClose = { [weak self] in
             self?.controller?.pairingClosed()
             self?.updateEscape()

@@ -26,6 +26,12 @@ final class MenuBar: NSObject, NSMenuDelegate {
     var onPairPhone: (() -> Void)?
     var isDoNotDisturb: (() -> Bool)?
     var onDoNotDisturb: (() -> Void)?
+    /// The kittens Lockdown can pin every ask to, and the one it's on for, if it's on.
+    var lockdownKittens: (() -> [Kitten])?
+    var lockedDownKitten: (() -> String?)?
+    var onLockdown: ((Kitten) -> Void)?
+    var onLockdownNewThread: (() -> Void)?
+    var onLockdownOff: (() -> Void)?
     /// Extra items, such as setting up permissions or demo mode's controls.
     var extras: [Extra] = []
     /// The shortcuts the app holds, which are the only ones the menu shows.
@@ -101,10 +107,42 @@ final class MenuBar: NSObject, NSMenuDelegate {
         quiet.state = isDoNotDisturb?() == true ? .on : .off
         bind(quiet) { [weak self] in self?.onDoNotDisturb?() }
         menu.addItem(quiet)
+        addLockdown()
         // Settings… and Quit end the menu on their own, as they do in every Mac app's.
         menu.addItem(.separator())
         addAction("Settings…") { [weak self] in self?.onSettings?() }
         addAction("Quit \(CatWords.appName)") { NSApp.terminate(nil) }
+    }
+
+    /// Ticked, with its kitten's name, while it's on. Picking that kitten again turns it off.
+    private func addLockdown() {
+        let kittens = lockdownKittens?() ?? []
+        let on = lockedDownKitten?()
+        guard !kittens.isEmpty || on != nil else { return }
+        let pinned = kittens.first { $0.id == on }
+        let row = NSMenuItem(title: pinned.map { CatWords.lockdownOn($0.name) } ?? CatWords.lockdown, action: nil, keyEquivalent: "")
+        row.state = on == nil ? .off : .on
+        let choices = NSMenu()
+        for kitten in kittens {
+            let choice = NSMenuItem(title: kitten.name, action: nil, keyEquivalent: "")
+            choice.state = kitten.id == on ? .on : .off
+            bind(choice) { [weak self] in self?.onLockdown?(kitten) }
+            choices.addItem(choice)
+        }
+        if on != nil {
+            if !kittens.isEmpty { choices.addItem(.separator()) }
+            let fresh = NSMenuItem(title: CatWords.lockdownNewThread, action: nil, keyEquivalent: "")
+            bind(fresh) { [weak self] in self?.onLockdownNewThread?() }
+            choices.addItem(fresh)
+        }
+        // A kitten that's gone can't be picked again, so this is the way out.
+        if on != nil, pinned == nil {
+            let off = NSMenuItem(title: CatWords.lockdownOff, action: nil, keyEquivalent: "")
+            bind(off) { [weak self] in self?.onLockdownOff?() }
+            choices.addItem(off)
+        }
+        row.submenu = choices
+        menu.addItem(row)
     }
 
     @discardableResult

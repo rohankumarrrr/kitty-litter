@@ -127,6 +127,14 @@ extension AppController {
     }
 
     func runQuickTurn(_ question: String, snapshot: ScreenSnapshot?, generation: Int) async {
+        // Lockdown has no router to wait for.
+        if settings.lockdown != nil {
+            if generation == replyGeneration {
+                reply = nil
+                renderBubble()
+            }
+            return sendLockedDown(question, snapshot: snapshot)
+        }
         await waitForThreadList()
         // One that's been overtaken still goes to the router, because there could be a correction in it.
         guard !takenBack.contains(generation) else { return }

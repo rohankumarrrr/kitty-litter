@@ -15,7 +15,10 @@ import ShadesT3
 ///     shades --ask "Research this" --then "And that part?" --image page.jpg   # waits for the agents first
 ///     shades --ask "Make this friendlier" --selection "Send it by Friday." --image page.jpg   # as if that were selected
 ///
-/// `--ask` prints where the cat pointed once the answer's in, or that it didn't.
+/// `--ask` prints where the cat pointed once the answer's in, or that it didn't, and how long until work it handed on
+/// had a thread. `--lockdown` pins it to a kitten by name, as Lockdown does, for that run only:
+///
+///     shades --ask "Add a total to the invoice page" --image page.jpg --lockdown "Kitten Name"
 ///
 /// And for the Channels window, none of which sends anything:
 ///
@@ -56,6 +59,7 @@ enum DevFlags {
     static var commandsFile: String? { value(after: "--commands") }
     static var pictureFile: String? { value(after: "--picture") }
     static var reducesMotion: Bool { CommandLine.arguments.contains("--reduce-motion") }
+    static var lockdownKitten: String? { value(after: "--lockdown") }
 
     static func savePicture(from path: String) -> Never {
         do {
@@ -70,7 +74,13 @@ enum DevFlags {
 
     static func run(on controller: AppController) {
         if let question = value(after: "--ask") {
+            let asked = Date()
             controller.ask(question, capture: look(controller))
+            Task {
+                while controller.dispatchers.isEmpty { try? await Task.sleep(nanoseconds: 5_000_000) }
+                print("in a thread after \(Int(Date().timeIntervalSince(asked) * 1000)) ms")
+                fflush(stdout)
+            }
             Task {
                 while controller.reply?.done == false { try? await Task.sleep(nanoseconds: 200_000_000) }
                 // Where the cat went and nothing of what was said, so a run can check an answer pointed right.

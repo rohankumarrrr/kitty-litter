@@ -889,10 +889,16 @@ final class DemoDriver {
                 let key = [Shortcut.ask, .fix, .messages].first { $0.key == item.keyEquivalent && $0.keyModifiers == item.keyEquivalentModifierMask }
                 let extras = [key.map { "key=\($0.label)" }, item.badge?.stringValue.map { "badge=[\($0)]" }, item.toolTip.map { "tip=[\($0)]" }]
                 print((["menu \(item.state == .on ? "✓" : "-") \(item.title)"] + extras.compactMap { $0 }).joined(separator: "  "))
+                for sub in item.submenu?.items ?? [] {
+                    print(sub.isSeparatorItem ? "menu   ---" : "menu   \(sub.state == .on ? "✓" : "-") \(sub.title)")
+                }
             }
         case "menupress":
-            // The same as choosing that item from the menu.
-            let item = stage.menuBar.shownItems.first { $0.title == rest }
+            // The same as choosing that item from the menu, or from a submenu as "Lockdown > Pepper".
+            let path = rest.components(separatedBy: " > ")
+            let item = path.dropFirst().reduce(stage.menuBar.shownItems.first { $0.title == path[0] }) { parent, title in
+                parent?.submenu?.items.first { $0.title == title }
+            }
             print(item == nil ? "no menu item [\(rest)]" : "chose \(rest)")
             if let item, let action = item.action { NSApp.sendAction(action, to: item.target, from: item) }
         case "header":

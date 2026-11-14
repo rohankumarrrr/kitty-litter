@@ -21,6 +21,8 @@ struct HealthReport: Codable, Equatable {
     var checkedAt: Date
     var ok: Bool
     var findings: [HealthFinding]
+    /// The kitten Lockdown pins every ask to, by name, while it's on.
+    var lockdown: String?
 }
 
 /// What the cat can find out about its own situation. Gathered elsewhere, so what it means can be tested.
@@ -56,6 +58,8 @@ struct HealthFacts: Equatable {
     var otherCopies: [Int32] = []
     /// The phone page is on, but the phone paired with it can't get in, since this build can't read its pairing.
     var phoneNeedsPairingAgain = false
+    /// Lockdown is on for a kitten that isn't set up any more, so nothing you ask goes anywhere.
+    var lockdownKittenGone = false
 }
 
 /// T3 not answering the self-check. Every step of connecting gives up after a while except a Keychain call, which
@@ -168,6 +172,14 @@ enum HealthCheck {
                 fix: "Put the screen block from docs/kittens.md in their folder, and run them on a Claude model."
             ))
         }
+        if facts.lockdownKittenGone {
+            results.append(HealthFinding(
+                check: "lockdown",
+                ok: false,
+                problem: "Lockdown is on for a kitten that isn't set up any more, so I'm holding on to everything you ask.",
+                fix: "Turn Lockdown off in my menu, or pick another kitten there."
+            ))
+        }
         switch (facts.frontDoorProblem, facts.frontDoorProjectTrouble) {
         case (.noFolder?, _):
             results.append(HealthFinding(
@@ -248,7 +260,7 @@ enum HealthCheck {
         )
     }
 
-    static func report(_ findings: [HealthFinding], pid: Int32, version: String, at date: Date) -> HealthReport {
-        HealthReport(pid: pid, version: version, checkedAt: date, ok: findings.allSatisfy(\.ok), findings: findings)
+    static func report(_ findings: [HealthFinding], pid: Int32, version: String, at date: Date, lockdown: String? = nil) -> HealthReport {
+        HealthReport(pid: pid, version: version, checkedAt: date, ok: findings.allSatisfy(\.ok), findings: findings, lockdown: lockdown)
     }
 }

@@ -68,7 +68,7 @@ final class FlowTests: XCTestCase {
                 fileExists: { [unowned self] in !self.missingFiles.contains($0) },
                 screenBlockGaps: { [unowned self] in self.screenBlockGaps[$0] ?? [] },
                 routerFolder: { [unowned self] in self.routerFolder },
-                reportHealth: { [unowned self] in self.reportedHealth.append($0) },
+                reportHealth: { [unowned self] findings, _ in self.reportedHealth.append(findings) },
                 inbox: inbox,
                 saveInbox: { [unowned self] in
                     if let error = self.inboxSaveError { throw error }

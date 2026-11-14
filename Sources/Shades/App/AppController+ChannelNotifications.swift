@@ -7,7 +7,7 @@ extension AppController {
     /// Something from no channel, such as the cat's own line or a thread Messages doesn't show, is only Do Not
     /// Disturb's to hold.
     func channelAllows(_ missed: Missed, on device: NotifyDevice) -> Bool {
-        guard let thread = thread(of: missed), let home = messagesHome(ofThread: thread) else { return true }
+        guard let thread = listedThread(of: missed), let home = messagesHome(ofThread: thread) else { return true }
         return settings.notifications(for: home.settingsKey).allows(needsYou: needsYou(missed), on: device)
     }
 
@@ -19,7 +19,7 @@ extension AppController {
     }
 
     /// The listed thread it's about, as Activity lists it, since a subagent's own thread lives nowhere in Messages.
-    private func thread(of missed: Missed) -> String? {
+    func listedThread(of missed: Missed) -> String? {
         switch missed {
         case .thread(let id):
             id

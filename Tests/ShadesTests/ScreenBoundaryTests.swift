@@ -231,6 +231,18 @@ private enum Give: CaseIterable {
     case mentionKitten
     /// A file attached in the cat's box, with an @ naming the kitten.
     case attachMention
+    /// Ask with Lockdown on the kitten, which skips the router.
+    case lockdownAsk
+    /// Ask again with Lockdown, carrying on in the thread it started before T3 lists it.
+    case lockdownAskAgain
+    /// The cat's box in Messages with Lockdown on the kitten.
+    case lockdownShades
+    /// A file attached in the cat's box with Lockdown on the kitten.
+    case lockdownAttach
+    /// A file dropped onto the cat with Lockdown on the kitten.
+    case lockdownDrop
+    /// Point at something broken with Lockdown on the kitten.
+    case lockdownFix
 
     var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff, .shadesHandOff, .attachHandOff].contains(self) }
 }
@@ -255,6 +267,12 @@ private enum Pass: CaseIterable {
     case attachThread
     /// A file attached in the cat's box, and the router says it carries on from that thread.
     case attachShadesThread
+    /// Ask with Lockdown carrying on in that thread.
+    case lockdownThread
+    /// The cat's box in Messages with Lockdown carrying on in that thread.
+    case lockdownShadesThread
+    /// A file dropped onto the cat with Lockdown carrying on in that thread.
+    case lockdownDropThread
 }
 
 /// A thread your words can be passed to, described by what decides whose it is.
@@ -422,6 +440,27 @@ private final class World {
             await mention("@\(ChannelBook.slug(target)) this one")
         case .attachMention:
             await mention("@\(ChannelBook.slug(target)) this one", files: ScreenBoundaryTests.attachedFiles)
+        case .lockdownAsk:
+            controller.lockdownPicked(kittens[number - 1])
+            await ask("this one", routerSays: "It's Page-5ad1.")
+        case .lockdownAskAgain:
+            controller.lockdownPicked(kittens[number - 1])
+            await ask("this one", routerSays: "It's Page-5ad1.")
+            await ask("and that part?", routerSays: "It's Page-5ad1.")
+        case .lockdownShades:
+            await ask("what's this?", routerSays: "It's Page-5ad1.")
+            controller.lockdownPicked(kittens[number - 1])
+            await messages("this one", to: .router, routerSays: "It's Page-5ad1.")
+        case .lockdownAttach:
+            controller.lockdownPicked(kittens[number - 1])
+            await messages("this one", to: .router, routerSays: "It's Page-5ad1.", files: ScreenBoundaryTests.attachedFiles)
+        case .lockdownDrop:
+            controller.lockdownPicked(kittens[number - 1])
+            await drop("this one", routerSays: "It's Page-5ad1.")
+        case .lockdownFix:
+            controller.lockdownPicked(kittens[number - 1])
+            controller.sendFix("the total is wrong", snapshot: ScreenBoundaryTests.screen)
+            await settle()
         }
     }
 
@@ -451,7 +490,24 @@ private final class World {
             await messages("and that part?", to: .thread(id: "w", title: "Fix routing"), files: ScreenBoundaryTests.attachedFiles)
         case .attachShadesThread:
             await messages("and that part?", to: .router, routerSays: "SEND TO: 1", files: ScreenBoundaryTests.attachedFiles)
+        case .lockdownThread:
+            lockDown(carryingOnIn: "w")
+            await ask("and that part?", routerSays: "It's Page-5ad1.")
+        case .lockdownShadesThread:
+            await ask("what's this?", routerSays: "It's Page-5ad1.")
+            lockDown(carryingOnIn: "w")
+            await messages("and that part?", to: .router, routerSays: "It's Page-5ad1.")
+        case .lockdownDropThread:
+            lockDown(carryingOnIn: "w")
+            await drop("and that part?", routerSays: "It's Page-5ad1.")
         }
+    }
+
+    /// Lockdown on the first kitten, as if its asks had been carrying on in `thread`.
+    private func lockDown(carryingOnIn thread: String) {
+        var settings = controller.settings
+        settings.lockdown = Lockdown(kitten: kittens[0].id, thread: thread)
+        controller.apply(settings)
     }
 
     func finish(_ thread: AgentThread, report: String) async {
@@ -503,6 +559,7 @@ private final class World {
             await controller.flow?.value
             await controller.replyTask?.value
             await controller.messagesTurn?.value
+            await controller.lockdownTurn?.value
             await controller.frontierTask?.value
             await controller.forwardTask?.value
             await controller.reportTask?.value

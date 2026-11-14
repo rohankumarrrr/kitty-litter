@@ -1,0 +1,31 @@
+front
+menuitems
+menupress Lockdown > Steve Pawsniak
+wait 1
+menuitems
+ask Add subscriptions to the invoice page
+wait 4
+ask And a total under it
+wait 4
+finish demo-login
+wait 6
+dnd
+finish demo-tidy
+wait 8
+approval command npm test
+wait 4
+dnd
+windows
+draw .verify/shades/lockdown/0-on
+menupress Lockdown: Steve Pawsniak > Start a New Thread
+wait 1
+ask Start over on the header
+wait 4
+menupress Lockdown: Steve Pawsniak > Steve Pawsniak
+wait 1
+menuitems
+dnd
+buttons
+draw .verify/shades/lockdown/1-off
+front
+windows

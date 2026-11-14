@@ -336,6 +336,13 @@ enum CatWords {
     static let doNotDisturb = "Do Not Disturb"
     static let doNotDisturbOn = "Do Not Disturb is on"
     static let whileAwayTitle = "While you were away"
+    static let lockdown = "Lockdown"
+    static func lockdownOn(_ name: String) -> String { "Lockdown: \(name)" }
+    static let lockdownNewThread = "Start a New Thread"
+    static let lockdownOff = "Turn Off"
+    static let lockdownKittenGone = "Lockdown's kitten isn't set up any more, so I held on to that. Turn Lockdown off in my menu, or pick another kitten."
+    /// What a Fix with nothing said asks Lockdown's kitten, which only gets your words and the picture.
+    static let fixThis = "Fix what I pointed at. It's marked in red in the screenshot."
 
     static let notifications = "Notifications"
     static let muted = "Muted"

@@ -13,6 +13,18 @@ public enum FollowUpBehavior: String, Codable, Sendable, CaseIterable {
     public var other: FollowUpBehavior { self == .steer ? .queue : .steer }
 }
 
+/// Every ask goes straight to one kitten, by its `Kitten.id`, and nothing else pops up until it's off, for a session
+/// shared on screen. `thread` is the kitten's thread those asks carry on in, once there is one.
+public struct Lockdown: Codable, Sendable, Equatable {
+    public var kitten: String
+    public var thread: String?
+
+    public init(kitten: String, thread: String? = nil) {
+        self.kitten = kitten
+        self.thread = thread
+    }
+}
+
 /// Stored as JSON in Application Support, so it's easy to edit by hand.
 public struct Settings: Codable, Sendable, Equatable {
     public var quickModel: ModelChoice
@@ -47,6 +59,8 @@ public struct Settings: Codable, Sendable, Equatable {
     public var messagesFont: String?
     /// What a message you send to a thread from Messages or your phone does while it's working.
     public var followUpBehavior: FollowUpBehavior
+    /// Off until you pick a kitten for it from the cat's menu.
+    public var lockdown: Lockdown?
 
     public init(
         quickModel: ModelChoice = .quick,
@@ -65,7 +79,8 @@ public struct Settings: Codable, Sendable, Equatable {
         textSize: TextSize = .standard,
         openInMessages: Bool = true,
         messagesFont: String? = nil,
-        followUpBehavior: FollowUpBehavior = .steer
+        followUpBehavior: FollowUpBehavior = .steer,
+        lockdown: Lockdown? = nil
     ) {
         self.quickModel = quickModel
         self.frontierModel = frontierModel
@@ -84,10 +99,11 @@ public struct Settings: Codable, Sendable, Equatable {
         self.openInMessages = openInMessages
         self.messagesFont = messagesFont
         self.followUpBehavior = followUpBehavior
+        self.lockdown = lockdown
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb, channelNotifications, textSize, openInMessages, messagesFont, followUpBehavior
+        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb, channelNotifications, textSize, openInMessages, messagesFont, followUpBehavior, lockdown
     }
 
     /// Anything missing takes its default, so a settings file from an older version keeps working.
@@ -111,6 +127,7 @@ public struct Settings: Codable, Sendable, Equatable {
         openInMessages = try saved.decodeIfPresent(Bool.self, forKey: .openInMessages) ?? defaults.openInMessages
         messagesFont = try saved.decodeIfPresent(String.self, forKey: .messagesFont)
         followUpBehavior = try saved.decodeIfPresent(FollowUpBehavior.self, forKey: .followUpBehavior) ?? defaults.followUpBehavior
+        lockdown = try saved.decodeIfPresent(Lockdown.self, forKey: .lockdown)
     }
 
     /// A channel you've never changed tells you everything.
