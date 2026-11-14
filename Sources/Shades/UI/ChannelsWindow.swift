@@ -99,8 +99,12 @@ final class ChannelsView: QuietView {
     private let panelEdge = PanelEdge()
     let jumpBox = JumpBoxView()
     let cheatsheet = CheatsheetView()
+    let backlogSheet = BacklogSheet()
     private(set) var selection: ChannelSelection = .activity
     private(set) var book: ChannelBook?
+    /// Reads the focus and the listed kittens' backlogs. Only this window calls it, and what it reads stays here.
+    var readPriorities: ([Kitten]) -> Priorities = { _ in Priorities() }
+    private(set) var priorities = Priorities()
     /// The places and threads you've looked at, oldest first, for ⌘[ and ⌘].
     var history: [ChannelSelection] = [.activity]
     var historyIndex = 0
@@ -175,6 +179,10 @@ final class ChannelsView: QuietView {
         cheatsheet.isHidden = true
         addSubview(jumpBox)
         addSubview(cheatsheet)
+        backlogSheet.isHidden = true
+        addSubview(backlogSheet)
+        backlogSheet.onClose = { [weak self] in self?.backlogSheet.isHidden = true }
+        pane.onBacklog = { [weak self] in self?.showBacklog(of: $0) }
         jumpBox.onOpen = { [weak self] in self?.jumped(to: $0) }
         jumpBox.onClose = { [weak self] in self?.closeJump() }
         jumpBox.onFind = { [weak self] in self?.onAction?(.find($0)) }
@@ -261,6 +269,7 @@ final class ChannelsView: QuietView {
         panelEdge.frame = panel
         jumpBox.frame = bounds
         cheatsheet.frame = bounds
+        backlogSheet.frame = bounds
     }
 
     /// Everything shows again from what's in memory, in the same turn.
@@ -278,11 +287,36 @@ final class ChannelsView: QuietView {
         onSeen?(selection)
     }
 
+    /// Reads the files again, which happens when the window opens, once a minute while it shows and when a backlog
+    /// opens, never for a message or a frame, and shows only what changed.
+    func refreshPriorities() {
+        guard let book else { return }
+        let read = readPriorities(book.statuses.map(\.kitten))
+        guard read != priorities else { return }
+        priorities = read
+        sidebar.focus = read.focus
+        pane.backlogs = read.backlogs
+        if !backlogSheet.isHidden, let kitten = backlogSheet.kitten {
+            backlogSheet.show(read.backlogs[kitten] ?? Backlog(), of: kitten, named: book.name(of: ChannelID.kitten(kitten)))
+        }
+    }
+
+    func showBacklog(of kitten: String) {
+        refreshPriorities()
+        guard let book else { return }
+        closeJump()
+        cheatsheet.isHidden = true
+        backlogSheet.show(priorities.backlogs[kitten] ?? Backlog(), of: kitten, named: book.name(of: ChannelID.kitten(kitten)))
+        backlogSheet.isHidden = false
+    }
+
     func select(_ selection: ChannelSelection) {
         let old = self.selection
         self.selection = selection
         if selection.thread != old.thread { threadPane.leaveThread() }
         if selection != old { keptUnread = [] }
+        // A backlog is its channel's, so it goes with it.
+        if selection.place != old.place { backlogSheet.isHidden = true }
         if !isTravelling, selection != history[historyIndex] {
             history = Array(history[...historyIndex].suffix(Self.historyKept - 1)) + [selection]
             historyIndex = history.count - 1
@@ -330,6 +364,9 @@ final class ChannelsView: QuietView {
         panes.forEach { $0.restyle() }
         jumpBox.needsDisplay = true
         cheatsheet.needsDisplay = true
+        backlogSheet.needsLayout = true
+        backlogSheet.needsDisplay = true
+        backlogSheet.list.needsDisplay = true
         if let book { sidebar.show(book, selection: selection.place) }
         needsDisplay = true
     }
@@ -449,6 +486,7 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     /// Opens it on the cat's screen the first time and where you left it after that, or brings it to the front.
     func show(_ book: ChannelBook, centeredIn visible: NSRect) {
         update(book)
+        view.refreshPriorities()
         if !isPlaced {
             isPlaced = true
             if !panel.setFrameUsingName(Self.frameName) { panel.setFrame(Self.centered(in: visible), display: false) }
@@ -525,6 +563,7 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         if tick % Self.ticksPerTimeRefresh == 0 {
             view.pane.refreshTimes()
             view.threadPane.refreshTimes()
+            view.refreshPriorities()
         }
     }
 }

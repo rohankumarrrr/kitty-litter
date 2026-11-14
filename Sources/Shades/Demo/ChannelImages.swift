@@ -21,6 +21,8 @@ enum ChannelImages {
         /// How wide you've dragged the sidebar, and whether ⌘B has hidden it.
         var sidebarWidth: CGFloat?
         var hidesSidebar = false
+        /// The channel's backlog open over the window, from its header.
+        var opensBacklog = false
     }
 
     static func draw(to folder: String) {
@@ -115,6 +117,9 @@ enum ChannelImages {
             Shot(name: "crowded-thread", selection: .thread(longNamed.id, in: .channel(.of(longNamed))), book: crowded(), width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
             Shot(name: "narrow-channel", selection: .channel(steve), book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
             Shot(name: "narrow-activity", selection: .activity, book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height),
+            Shot(name: "backlog", selection: .channel(steve), book: full, opensBacklog: true),
+            Shot(name: "backlog-other-form", selection: .channel(.of(Demo.kittens[2])), book: full, opensBacklog: true),
+            Shot(name: "narrow-backlog", selection: .channel(steve), book: full, width: ChannelsWindow.minimumSize.width, height: ChannelsWindow.minimumSize.height, opensBacklog: true),
             Shot(name: "reading", selection: .channel(steve), book: book(threads: [], transcripts: [:], isReading: true)),
             Shot(name: "reading-activity", selection: .activity, book: book(threads: [], transcripts: [:], isReading: true)),
             Shot(name: "cant-reach", selection: .channel(steve), book: book(threads: [], transcripts: [:], isReading: true, cantReachT3: true)),
@@ -138,8 +143,11 @@ enum ChannelImages {
         view.chosenThreadWidth = shot.threadWidth
         view.chosenSidebarWidth = shot.sidebarWidth
         view.isSidebarHidden = shot.hidesSidebar
+        view.readPriorities = DemoChannels.priorities
         view.show(shot.book)
+        view.refreshPriorities()
         view.select(shot.selection)
+        if shot.opensBacklog, case .channel(.kitten(let kitten)) = shot.selection.place { view.showBacklog(of: kitten) }
         if shot.expandsLongMessage { (view.threadPane.longMessageRow ?? view.pane.longMessageRow)?.pressShowMore() }
         if shot.hoversLastMessage { view.pane.shownMessageRows.last?.hovering = true }
         if shot.hoversLastReply { view.threadPane.shownMessageRows.last { !$0.isYours }?.hovering = true }

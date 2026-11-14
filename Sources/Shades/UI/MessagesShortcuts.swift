@@ -514,6 +514,8 @@ extension ChannelsView {
                 closeJump()
             } else if !cheatsheet.isHidden {
                 cheatsheet.isHidden = true
+            } else if !backlogSheet.isHidden {
+                backlogSheet.isHidden = true
             } else if selection.thread != nil {
                 closeThread()
             } else {
@@ -539,6 +541,7 @@ extension ChannelsView {
             return true
         case .cheatsheet:
             closeJump()
+            backlogSheet.isHidden = true
             cheatsheet.isHidden.toggle()
             return true
         case .settings:
@@ -622,6 +625,7 @@ extension ChannelsView {
 
     private func openJump(_ book: ChannelBook, mode: JumpBoxView.Mode) {
         cheatsheet.isHidden = true
+        backlogSheet.isHidden = true
         jumpBox.field.stringValue = ""
         jumpBox.show(book, mode: mode)
         jumpBox.isHidden = false
@@ -650,5 +654,6 @@ extension ChannelsView {
     private func hideOverlays() {
         closeJump()
         cheatsheet.isHidden = true
+        backlogSheet.isHidden = true
     }
 }

@@ -53,6 +53,38 @@ enum DemoChannels {
 
     static var talks: Set<String> { Set(threads.filter { $0.projectPath == routerFolder }.map(\.id)) }
 
+    /// A focus, and two kittens' backlogs, written as their files would be and read the way real ones are. Clawde's has
+    /// a line in another form, which still shows.
+    static func priorities(for kittens: [Kitten]) -> Priorities {
+        let files = [
+            Demo.kittens[0].id: """
+            # Backlog
+
+            ## Doing
+
+            ## Next
+            - 2026-11-10 · Lighter heading font · "the headings feel heavy, try something lighter when there's time" · thread demo-steve-fonts
+            - 2026-11-11 · A dark pricing page · "could the pricing page have a dark version too" · thread demo-steve-dark
+
+            ## Later
+            - 2026-11-12 · Lift the plan cards on hover · "nice to have, not urgent" · thread demo-steve-cards
+            """,
+            Demo.kittens[2].id: """
+            ## Doing
+            - 2026-11-12 · Tidy the settings panel · "the settings panel is getting long" · thread demo-clawde-main
+
+            ## Next
+            Only lines starting with a dash are items.
+            - Sort out the menu items
+            """,
+        ]
+        let listed = Set(kittens.map(\.id))
+        return Priorities(
+            focus: Priorities.focus(in: "## Right now\n\n**Focus: the pricing page launch, until Friday, 3 PM**\n"),
+            backlogs: files.filter { listed.contains($0.key) }.mapValues(Backlog.init(reading:))
+        )
+    }
+
     /// What's waiting on you in the pictures: one of each kind, all made up.
     static let waiting = Waiting(
         approvals: [ApprovalRequest(id: "demo-approve", threadID: "demo-clawde-menu", threadTitle: "Clawde: Add a menu item for the new window", kind: .command, summary: "Run: swift test", createdAt: ago(minutes: 3))],

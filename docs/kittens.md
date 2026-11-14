@@ -194,6 +194,15 @@ While it's on, the router doesn't run. The Ask box, talking to the cat, a drop o
 
 Only that kitten comes through. Its bubbles, notifications and phone pushes, its approvals and questions included, come as usual. Everything else, the cat's own lines too, is held at the same gate Do Not Disturb holds it at, and caught up the same way once Lockdown is off. Another kitten's approval waits in Activity, and the bubble only ever asks about the kitten's own, counts only those, and brings the first up by itself even with others waiting. The inbox's bubble names only the kitten's rows too. The Kitty Litter's window stays out of screen sharing as always, so what it shows there is still yours alone. `health.json` has `lockdown` with the kitten's name while it's on, and the self-check's `lockdown` finding says when its kitten has gone.
 
+## What comes first
+
+Your kittens can share a focus, and each can keep a backlog of what waits on it, in plain files in your kittens folder. The Kitty Litter only reads them, so to change one, ask the kitten that keeps it.
+
+- **The focus** is the first line under `## Right now` in `~/kittens/FOCUS.md`, such as `**Focus: the launch, until Friday, 3 PM**`. The sidebar shows it as written, bold taken off, in a quiet line over its places. With no focus, write `No focus. Work as usual.` there, and the line goes.
+- **A backlog** is `backlog.md` in a kitten's own folder, beside its `kitten.json`, with three headings, `## Doing`, `## Next` and `## Later`. Each item is one line under its heading: `- date · what, in a few words · "your exact words" · thread <id>`. A count in the kitten's channel header, such as **3 in backlog**, opens it over the window, as Slack opens a channel's pins: what's under way, then what's next and what can wait, each with when you asked and your words. Esc, ✕ or a click beside it closes it. A line in another form shows as it's written, and a missing file or empty heading just shows less.
+
+The Kitty Litter reads them when its window opens, once a minute while you can see it, and when you open a backlog, never for each message. They show only in its window, which screen shares leave out, and never on the cat, in its bubble, on your phone, or in anything sent to the router, the cat or a kitten. A popover, menu or tooltip would be a window of its own that a share could show, so they're drawn inside The Kitty Litter's window instead.
+
 ## The inbox
 
 A kitten that reports a lot, especially while you're away, can leave you working through a run of messages with no idea which matters. With `inbox: true`, its reports wait in [The Kitty Litter](#the-kitty-litter), in Activity, instead. The cat keeps one bubble up to date, saying whose and what about, such as `Clawde needs a decision on “Fix login”.` or `3 decisions from Clawde and Pepper.`, while The Kitty Litter is closed, and its Open button takes you there. A report that comes in while The Kitty Litter is open doesn't interrupt, but it brings the bubble up once you close it, since an open window can be sitting behind your work:

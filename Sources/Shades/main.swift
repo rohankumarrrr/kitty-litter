@@ -26,6 +26,7 @@ MainActor.assumeIsolated {
         let parts = Demo.make()
         controller = AppController(dependencies: parts.dependencies, stage: stage)
         driver = DemoDriver(parts: parts, controller: controller, stage: stage)
+        stage.channels.view.readPriorities = DemoChannels.priorities
     } else {
         // Any copy but the installed app, built from source, bundled elsewhere or trying a flow out, keeps to itself:
         // its own sign-in, and none of the app's inbox, notifications, phone keys or phone page.
@@ -95,6 +96,7 @@ MainActor.assumeIsolated {
             stage: stage
         )
         controller = real
+        stage.channels.view.readPriorities = { Priorities.read(for: $0) }
         notifications?.onClick = { [weak real] in real?.showInMessages($0) }
         keys.onCancel = { [weak real] _ in
             MainActor.assumeIsolated { real?.cancelListening() }

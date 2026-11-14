@@ -237,6 +237,11 @@ enum CatWords {
     static let seeEarlierNotes = "Open in T3 to see them"
     /// Its threads still going, which is what Activity lists under In progress.
     static func issues(_ count: Int) -> String { "\(count) in progress" }
+    /// What a kitten has filed in its `backlog.md`, from the channel's header.
+    static func backlog(_ count: Int) -> String { "\(count) in backlog" }
+    static let backlogTitle = "Backlog"
+    static func backlogKeeper(_ name: String) -> String { "\(name) keeps this. To change it, ask \(name)." }
+    static let backlogEmpty = "Nothing waiting."
     static func reportsTitle(_ kind: InboxEntry.Kind) -> String { kind == .shipped ? "Shipped" : "Also" }
 
     /// The line over the box, saying where what you type goes.
