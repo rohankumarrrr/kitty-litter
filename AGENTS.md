@@ -26,6 +26,8 @@ swift scripts/make-icon.swift assets   # redraws the app icon from the cat's art
 swift run shades --demo   # everything faked: no T3, permissions, microphone or shortcuts
 swift run shades --demo --no-script --commands steps.txt   # plays demo commands from a file, one a line
 swift test --filter ScreenBoundaryTests   # every route your screen could take to a kitten
+~/shades/scripts/triage.sh logs --start "2026-01-31 09:00:00" --end "2026-01-31 10:00:00"   # signing's and the app's system log, once you're let out to run it
+~/shades/scripts/triage.sh processes   # those processes and an install's build steps
 ```
 
 To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-off` or `--fix` with `--image`, or `--ask` with `--drop` for a file or link dropped onto the cat, as described in `Sources/Shades/App/DevFlags.swift`. The `probe-t3`, `probe-context` and `probe-voice` tools try one module at a time.
