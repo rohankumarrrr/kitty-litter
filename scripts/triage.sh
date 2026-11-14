@@ -47,13 +47,16 @@ logs() {
   for name in "${chosen[@]}"; do
     predicate+="${predicate:+ OR }process == \"$name\""
   done
-  /usr/bin/log show --info --style compact --start "$start" --end "$end" --predicate "$predicate" |
+  # With nothing of the caller's, such as a HOME whose .logrc could add options or predicate aliases.
+  env -i HOME=/var/empty /usr/bin/log show --info --style compact --start "$start" --end "$end" --predicate "$predicate" |
     awk -v max="$max_lines" 'NR <= max { print } END { if (NR > max) printf "Cut %d more lines. Narrow the window or name fewer processes.\n", NR - max }'
 }
 
 # Each one's ID, its parent's, how long it's run and which name on the lists it is. Never its arguments, since
 # those can carry text, such as a question passed to a test copy of The Kitty Litter. Each field is checked, so an
 # argument with a line break in it can't pass for a line of its own.
+# shortcut: a name is the first argument's last part, which a program can set, so one can pass for a name on the lists,
+# though only its numbers show. Match the executable too once a real ps is checked for how it shows a running script.
 processes() {
   (( $# == 0 )) || refuse "processes takes nothing after it."
   print "PID PPID ELAPSED NAME"

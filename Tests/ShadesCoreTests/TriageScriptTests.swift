@@ -2,11 +2,13 @@ import Foundation
 import XCTest
 
 /// Runs a copy of scripts/triage.sh whose `log` and `ps` are stand-ins, to check it only ever reads the processes on
-/// its list. The stand-in `log` writes down what it was asked and prints made-up lines, and `ps` prints a made-up table.
+/// its list. The stand-in `log` writes down what it was asked and what it was given, and prints made-up lines, and `ps`
+/// prints a made-up table. `log` gets no environment, so it works from the files beside it.
 final class TriageScriptTests: XCTestCase {
     private var root: URL!
     private var script: URL { root.appendingPathComponent("triage.sh") }
     private var logArguments: URL { root.appendingPathComponent("log-arguments") }
+    private var logEnvironment: URL { root.appendingPathComponent("log-environment") }
     private var psRan: URL { root.appendingPathComponent("ps-ran") }
 
     private static let start = "2026-01-31 09:00:00", end = "2026-01-31 10:00:00"
@@ -25,9 +27,13 @@ final class TriageScriptTests: XCTestCase {
         }
         try write(#"""
             #!/bin/zsh -f
-            print -rl -- "$@" > "$STANDIN/log-arguments"
-            if [[ -n "${LOG_REFUSES:-}" ]]; then print -r -- "$LOG_REFUSES" >&2; exit 64; fi
-            for (( i = 1; i <= ${LOG_LINES:-0}; i++ )); do print "line $i"; done
+            here=${0:h}
+            print -rl -- "$@" > "$here/log-arguments"
+            print -r -- "HOME=${HOME-} LOG_STYLE=${LOG_STYLE-} STANDIN=${STANDIN-}" > "$here/log-environment"
+            if [[ -f "$here/log-refuses" ]]; then cat "$here/log-refuses" >&2; exit 64; fi
+            lines=0
+            [[ -f "$here/log-lines" ]] && lines=$(<"$here/log-lines")
+            for (( i = 1; i <= lines; i++ )); do print "line $i"; done
             """#, to: root.appendingPathComponent("log"))
         try write(#"""
             #!/bin/zsh -f
@@ -73,6 +79,10 @@ final class TriageScriptTests: XCTestCase {
             asked[flag] = flag == "--info" ? "" : rest.popFirst() ?? "missing"
         }
         return asked
+    }
+
+    private func given(_ name: String, _ text: String) throws {
+        try text.write(to: root.appendingPathComponent(name), atomically: true, encoding: .utf8)
     }
 
     private func predicate(_ names: [String]) -> String {
@@ -147,7 +157,8 @@ final class TriageScriptTests: XCTestCase {
     }
 
     func testOutputStopsAtThreeThousandLinesAndSaysHowManyWereCut() throws {
-        let result = try run("logs", "--start", Self.start, "--end", Self.end, environment: ["LOG_LINES": "3005"])
+        try given("log-lines", "3005")
+        let result = try run("logs", "--start", Self.start, "--end", Self.end)
         XCTAssertEqual(result.status, 0, result.errors)
         let lines = result.output.split(separator: "\n").map(String.init)
         XCTAssertEqual(lines.count, 3001)
@@ -156,17 +167,48 @@ final class TriageScriptTests: XCTestCase {
     }
 
     func testOutputUnderTheCapIsLeftWhole() throws {
-        let result = try run("logs", "--start", Self.start, "--end", Self.end, environment: ["LOG_LINES": "3000"])
+        try given("log-lines", "3000")
+        let result = try run("logs", "--start", Self.start, "--end", Self.end)
         XCTAssertEqual(result.status, 0, result.errors)
         XCTAssertEqual(result.output.split(separator: "\n").map(String.init), (1...3000).map { "line \($0)" })
     }
 
     /// So an agent can tell `log` refusing to run from the script refusing what it was asked.
     func testWhatLogRefusesComesThroughAsLogSaidIt() throws {
-        let result = try run("logs", "--start", Self.start, "--end", Self.end, environment: ["LOG_REFUSES": "log: Cannot run while sandboxed"])
+        try given("log-refuses", "log: Cannot run while sandboxed\n")
+        let result = try run("logs", "--start", Self.start, "--end", Self.end)
         XCTAssertEqual(result.status, 64)
         XCTAssertEqual(result.errors, "log: Cannot run while sandboxed\n")
         XCTAssertEqual(result.output, "")
+    }
+
+    /// A `.logrc` can add options such as `--archive` or `--pager`, and predicate aliases, and `log` finds it from HOME.
+    func testLogGetsNothingFromTheCallersEnvironment() throws {
+        try given(".logrc", "show:\n    --debug\n")
+        let result = try run("logs", "--start", Self.start, "--end", Self.end, environment: ["LOG_STYLE": "json"])
+        XCTAssertEqual(result.status, 0, result.errors)
+        XCTAssertEqual(try String(contentsOf: logEnvironment, encoding: .utf8), "HOME=/var/empty LOG_STYLE= STANDIN=\n")
+    }
+
+    /// It runs outside the sandbox, so tools earlier on the caller's PATH, or zsh startup files, could stand in for it.
+    func testItIgnoresTheCallersToolsAndStartupFiles() throws {
+        let tools = root.appendingPathComponent("tools")
+        try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+        for tool in ["awk", "env"] {
+            try given("tools/\(tool)", "#!/bin/zsh -f\nprint -r -- planted \(tool) ran\n")
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tools.appendingPathComponent(tool).path)
+        }
+        try given(".zshenv", "print -r -- startup file ran; exit 9\n")
+        try given("ps-table", "  101     1   01:02:03 /usr/libexec/trustd\n")
+        try given("log-lines", "1")
+        let environment = ["PATH": tools.path + ":/usr/bin:/bin", "ZDOTDIR": root.path]
+
+        let listed = try run("processes", environment: environment)
+        XCTAssertEqual(listed.status, 0, listed.errors)
+        XCTAssertEqual(listed.output, "PID PPID ELAPSED NAME\n101 1 01:02:03 trustd\n")
+        let logged = try run("logs", "--start", Self.start, "--end", Self.end, environment: environment)
+        XCTAssertEqual(logged.status, 0, logged.errors)
+        XCTAssertEqual(logged.output, "line 1\n")
     }
 
     // MARK: processes
@@ -184,6 +226,8 @@ final class TriageScriptTests: XCTestCase {
               209   150      00:10 /bin/zsh -f /tmp/other.sh install.sh
               210   150      00:10 /usr/bin/vim notes.txt
             something private 00:10 codesign
+              215 private-words 00:10 codesign
+              216   150 private-words codesign
               211   203      00:20 /usr/bin/swift-frontend -frontend -c a.swift
               212     1      00:30 /usr/libexec/lsd
               213   150      00:40 shades --demo
