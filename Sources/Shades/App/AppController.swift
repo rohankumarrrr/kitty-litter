@@ -89,6 +89,8 @@ final class AppController {
     var heard: String?
     var approvalsOnShow = false
     var approvalsHidden = false
+    /// Whether the bubble had an approval it may ask about when they last changed.
+    var hadAskable = false
     var catIsAway = false
     var reply: Reply? {
         didSet {
@@ -146,8 +148,8 @@ final class AppController {
     var messagesTurn: Task<Void, Never>?
     /// Lockdown's last ask, so each waits for the one before.
     var lockdownTurn: Task<Void, Never>?
-    /// The thread Lockdown last started, until T3 lists it.
-    var lockdownStarted: AgentThread?
+    /// The thread Lockdown last started, which T3 may not have listed yet.
+    var lockdownStarted: String?
     /// Messages' own conversation with the router, apart from the Ask box's, which can hold your screen.
     var messagesQuick = QuickSession()
     /// Sessions the router started for what you wrote in Messages, and threads no kitten owns that it passed your words
@@ -423,9 +425,8 @@ final class AppController {
 
     var currentBubble: BubbleContent? {
         if let heard { return .listening(heard) }
-        // Lockdown leaves out everyone else's, which wait in Messages.
-        if approvalsOnShow, !approvalsHidden, let request = approvals.pending.first(where: { !lockdownHolds(.approval($0.id)) }) {
-            return .approval(request, position: approvals.position, total: approvals.total)
+        if approvalsOnShow, !approvalsHidden, let request = askable.first {
+            return .approval(request, position: approvals.position, total: approvals.position - 1 + askable.count)
         }
         if let reply {
             if reply.text.isEmpty { return .thinking(note: reply.note) }

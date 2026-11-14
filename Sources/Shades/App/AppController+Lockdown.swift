@@ -48,6 +48,11 @@ extension AppController {
         healthTask = Task { await runHealthCheck() }
     }
 
+    /// The approvals the bubble may ask about: all of them, or with Lockdown only its kitten's.
+    var askable: [ApprovalRequest] {
+        approvals.pending.filter { !lockdownHolds(.approval($0.id)) }
+    }
+
     /// Whether Lockdown keeps this for later: anything but its kitten's own, including the cat's own lines.
     func lockdownHolds(_ missed: Missed) -> Bool {
         guard let lockdown = settings.lockdown else { return false }
@@ -80,7 +85,7 @@ extension AppController {
                 return say(CatWords.lockdownKittenGone)
             }
             await waitForThreadList()
-            if let id = settings.lockdown?.thread, let thread = latestThreads.first(where: { $0.id == id }) ?? (lockdownStarted?.id == id ? lockdownStarted : nil) {
+            if let id = settings.lockdown?.thread, let thread = pinnedThread(id, of: kitten) {
                 forward(words, to: thread, snapshot: snapshot, youPicked: youPicked, behavior: settings.followUpBehavior, asked: asked, refused: refused, unheard: unheard)
                 sent?(id, false)
                 return
@@ -104,11 +109,18 @@ extension AppController {
         }
     }
 
-    /// T3 can take a moment to list a new thread, so the next ask carries on in it meanwhile. Its own checks on the
-    /// screen then go by where it was started, as `give`'s did.
+    /// Where the next ask carries on: the listed thread, or, while T3 hasn't listed it, such as just after it started
+    /// or just after a restart, the same thread with no mode known, which `forward` gives no screen. `nil` once T3's
+    /// list is in and it isn't there, since it's gone.
+    private func pinnedThread(_ id: String, of kitten: Kitten) -> AgentThread? {
+        if let listed = latestThreads.first(where: { $0.id == id }) { return listed }
+        guard lockdownStarted == id || !threadListArrived else { return nil }
+        return AgentThread(id: id, title: kitten.name, projectTitle: kitten.name, status: .running, model: settings.frontierModel.model, updatedAt: now(), projectPath: kitten.workspace)
+    }
+
     private func keepLockdownThread(_ id: String, of kitten: Kitten) {
         guard settings.lockdown?.kitten == kitten.id else { return }
-        lockdownStarted = AgentThread(id: id, title: kitten.name, projectTitle: kitten.name, status: .running, model: settings.frontierModel.model, updatedAt: now(), runtimeMode: settings.frontierMode, projectPath: kitten.workspace)
+        lockdownStarted = id
         var updated = settings
         updated.lockdown?.thread = id
         apply(updated)

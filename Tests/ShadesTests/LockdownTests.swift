@@ -119,13 +119,13 @@ final class LockdownTests: XCTestCase {
         XCTAssertEqual(backend.sent.filter { $0.mode == .start }.count, 1)
     }
 
-    func testTheNextAskCarriesOnInANewThreadBeforeT3ListsIt() async {
+    func testTheNextAskCarriesOnInANewThreadBeforeT3ListsItWithoutTheScreenUntilItsModeIsKnown() async {
         controller.lockdownPicked(builder)
         await ask("Start the page")
         await ask("Now the total")
         XCTAssertEqual(backend.sent.map(\.mode), [.start, .forward])
         XCTAssertEqual(backend.sent[1].threadID, "thread-1")
-        XCTAssertTrue(backend.sent[1].prompt.text.contains("<screen>"))
+        XCTAssertFalse(backend.sent[1].prompt.text.contains("let total = 0"), "its mode could have changed since it started")
         XCTAssertTrue(stage.bubbles.contains(.line(CatWords.sentTo("Builder"), threadID: "thread-1")), "it says where, by the kitten's name")
     }
 
