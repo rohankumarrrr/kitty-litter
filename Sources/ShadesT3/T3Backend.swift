@@ -114,12 +114,12 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    public func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+    public func forward(threadID: String, text: String, attachments: [AgentAttachment], behavior: FollowUpBehavior) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         stream { [self] continuation in
             try await connect()
             let uploaded = try await upload(attachments)
             continuation.yield(.started(threadID: threadID))
-            await send(text, attachments: uploaded, model: nil, title: "", to: threadID, continuation: continuation)
+            await send(text, attachments: uploaded, model: nil, title: "", to: threadID, steers: behavior == .steer, continuation: continuation)
         }
     }
 
@@ -129,6 +129,7 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         model: T3Wire.ModelSelection?,
         title: String,
         to threadID: String,
+        steers: Bool = false,
         continuation: AsyncThrowingStream<AgentReplyEvent, Error>.Continuation
     ) async {
         let messageID = Self.newID()
@@ -138,14 +139,23 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
             messageId: messageID,
             text: text,
             attachments: attachments,
-            modelSelection: model
+            modelSelection: model,
+            deliveryIntent: steers ? "steer" : nil
         )
+        var queued = message
+        queued.commandId = Self.newID()
+        queued.deliveryIntent = nil
         let tracker = TurnProgress(T3TurnTracker(threadID: threadID, messageID: messageID, threadTitle: title))
 
         // Listen first: the snapshot this asks for and the events after it can't miss the new run.
         // Nothing waits for that snapshot, so sending the message isn't held up.
-        await follow(threadID: threadID, afterSequence: nil, tracker: tracker, continuation: continuation) { [socket] in
-            let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, message)
+        await follow(threadID: threadID, afterSequence: nil, tracker: tracker, continuation: continuation) { [socket, queued] in
+            do {
+                let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, message)
+            } catch T3Error.rejected where steers {
+                // T3 won't steer a run that's still starting or already stopping, so then it waits for it instead.
+                let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, queued)
+            }
         }
     }
 

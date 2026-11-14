@@ -613,6 +613,13 @@ final class PressWindowsTests: XCTestCase {
         let opens = try segments("Open threads in")
         try Press.click(opens, at: point(1, of: opens))
         XCTAssertFalse(controller.settings.openInMessages, "T3")
+        let replies = try segments("Replies while it works")
+        XCTAssertTrue(try Press.hit(replies, at: point(1, of: replies)) === replies)
+        try Press.click(replies, at: point(1, of: replies))
+        XCTAssertEqual(controller.settings.followUpBehavior, .queue)
+        try tab(to: "Replies while it works", in: panel)
+        try Press.key(String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!)), keyCode: 123, on: try XCTUnwrap(panel.firstResponder as? NSView))
+        XCTAssertEqual(controller.settings.followUpBehavior, .steer, "back to Steer")
 
         try tab(to: "Open threads in", in: panel)
         try Press.key(String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!)), keyCode: 123, on: try XCTUnwrap(panel.firstResponder as? NSView))

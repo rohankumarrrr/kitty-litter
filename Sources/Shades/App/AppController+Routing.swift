@@ -203,12 +203,14 @@ extension AppController {
     /// back the usual way, as a notice when it finishes.
     /// `refused` hears if it couldn't take what you dropped, so nothing went, and `unheard` why T3 never heard your words.
     /// `youPicked` is for a thread you picked yourself, where you can see your words land, so the cat doesn't say where.
+    /// `behavior` is what your words do while it's working.
     func forward(
         _ words: String,
         to thread: AgentThread,
         snapshot: ScreenSnapshot?,
         correction: Bool = false,
         youPicked: Bool = false,
+        behavior: FollowUpBehavior = .queue,
         asked: Int? = nil,
         refused: (() -> Void)? = nil,
         unheard: ((String) -> Void)? = nil
@@ -247,7 +249,7 @@ extension AppController {
             var heardBack = false
             var reached = true
             do {
-                for try await event in backend.forward(threadID: thread.id, text: text, attachments: attachments(for: shared)) {
+                for try await event in backend.forward(threadID: thread.id, text: text, attachments: attachments(for: shared), behavior: behavior) {
                     if case .started = event {
                         if missesScreen {
                             warning = sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: true, asked: asked, followUp: true)

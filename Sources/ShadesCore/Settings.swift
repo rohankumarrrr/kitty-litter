@@ -4,6 +4,15 @@ public enum TextSize: String, Codable, Sendable, CaseIterable {
     case small, standard, large, larger
 }
 
+/// What words you send into a thread do while its agent is still working, as T3 Code's own composer offers: join the
+/// run that's going, or wait for it to finish and get a run of their own.
+public enum FollowUpBehavior: String, Codable, Sendable, CaseIterable {
+    case steer, queue
+
+    /// What ⌘Return sends, as in T3 Code.
+    public var other: FollowUpBehavior { self == .steer ? .queue : .steer }
+}
+
 /// Stored as JSON in Application Support, so it's easy to edit by hand.
 public struct Settings: Codable, Sendable, Equatable {
     public var quickModel: ModelChoice
@@ -36,6 +45,8 @@ public struct Settings: Codable, Sendable, Equatable {
     /// The font Messages draws its words in, by family name, or `nil` for the system's. "New York", "SF Pro Rounded"
     /// and "SF Mono" are the system's own serif, rounded and monospaced faces.
     public var messagesFont: String?
+    /// What a message you send to a thread from Messages or your phone does while it's working.
+    public var followUpBehavior: FollowUpBehavior
 
     public init(
         quickModel: ModelChoice = .quick,
@@ -53,7 +64,8 @@ public struct Settings: Codable, Sendable, Equatable {
         channelNotifications: [String: ChannelNotifications] = [:],
         textSize: TextSize = .standard,
         openInMessages: Bool = true,
-        messagesFont: String? = nil
+        messagesFont: String? = nil,
+        followUpBehavior: FollowUpBehavior = .steer
     ) {
         self.quickModel = quickModel
         self.frontierModel = frontierModel
@@ -71,10 +83,11 @@ public struct Settings: Codable, Sendable, Equatable {
         self.textSize = textSize
         self.openInMessages = openInMessages
         self.messagesFont = messagesFont
+        self.followUpBehavior = followUpBehavior
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb, channelNotifications, textSize, openInMessages, messagesFont
+        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb, channelNotifications, textSize, openInMessages, messagesFont, followUpBehavior
     }
 
     /// Anything missing takes its default, so a settings file from an older version keeps working.
@@ -97,6 +110,7 @@ public struct Settings: Codable, Sendable, Equatable {
         textSize = try saved.decodeIfPresent(TextSize.self, forKey: .textSize) ?? defaults.textSize
         openInMessages = try saved.decodeIfPresent(Bool.self, forKey: .openInMessages) ?? defaults.openInMessages
         messagesFont = try saved.decodeIfPresent(String.self, forKey: .messagesFont)
+        followUpBehavior = try saved.decodeIfPresent(FollowUpBehavior.self, forKey: .followUpBehavior) ?? defaults.followUpBehavior
     }
 
     /// A channel you've never changed tells you everything.

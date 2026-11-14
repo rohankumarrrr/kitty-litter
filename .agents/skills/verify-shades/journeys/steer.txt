@@ -1,0 +1,26 @@
+front
+channels
+wait 2
+channel steve
+wait 1
+thread pricing copy
+wait 1
+send Keep the pricing table as it is
+wait 2
+draw .verify/shades/steer/1-steered
+settings
+wait 1
+settings messages
+setting Replies while it works Queue
+wait 1
+draw .verify/shades/steer/2-settings
+setting Done
+send And the FAQ too
+wait 2
+draw .verify/shades/steer/3-queued
+key shortcuts
+wait 0.5
+draw .verify/shades/steer/4-shortcuts
+key esc
+front
+windows

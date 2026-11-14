@@ -65,11 +65,11 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         return quickTurn(threadID: threadID, prompt: prompt)
     }
 
-    func forward(threadID: String, text: String, attachments: [AgentAttachment]) -> AsyncThrowingStream<AgentReplyEvent, Error> {
+    func forward(threadID: String, text: String, attachments: [AgentAttachment], behavior: FollowUpBehavior) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         if connectFails {
             return AsyncThrowingStream { $0.finish(throwing: DemoError(errorDescription: CatWords.cantReachT3Yet)) }
         }
-        print("[demo] forwarded to \(threadID) with \(attachments.count) attachments: \(Self.oneLine(text))")
+        print("[demo] forwarded to \(threadID) with \(attachments.count) attachments, to \(behavior.rawValue): \(Self.oneLine(text))")
         // Kept as T3 keeps it, so Messages reads your words back from the thread once it's moved.
         // T3 keeps what was attached by name, as a real echo does.
         let asked = Exchange(id: UUID().uuidString, asker: .you, askedAt: Date(), ask: Prompts.ownWords(in: text), files: Prompts.droppedNames(in: text).map { ExchangeFile(name: $0) })

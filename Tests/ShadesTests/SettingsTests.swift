@@ -49,11 +49,13 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(old.textSize, .standard)
         XCTAssertTrue(old.openInMessages)
         XCTAssertNil(old.messagesFont, "the system's font")
+        XCTAssertEqual(old.followUpBehavior, .steer, "as T3 Code's composer does")
 
         var changed = Settings()
         changed.textSize = .larger
         changed.openInMessages = false
         changed.messagesFont = "Georgia"
+        changed.followUpBehavior = .queue
         let read = try JSONDecoder().decode(Settings.self, from: JSONEncoder().encode(changed))
         XCTAssertEqual(read, changed)
     }
@@ -145,6 +147,11 @@ final class SettingsTests: XCTestCase {
         let opens: QuietSegments = try XCTUnwrap(control("Open threads in", in: panel))
         opens.pick("T3")
         XCTAssertEqual(changes().last?.openInMessages, false)
+
+        let replies: QuietSegments = try XCTUnwrap(control("Replies while it works", in: panel))
+        XCTAssertEqual(replies.titles, ["Steer", "Queue"])
+        replies.pick("Queue")
+        XCTAssertEqual(changes().last?.followUpBehavior, .queue)
     }
 
     func testTurningThePhoneOnOffersToPairOneAtOnce() throws {

@@ -321,7 +321,7 @@ final class PressPhoneTests: XCTestCase {
         try await phone.tap("#words")
         try await phone.type("Ship it")
         try await phone.tap("#send")
-        guard case .send(let words, _, _, let also, let files)? = try await did("send") else { return XCTFail("not a reply") }
+        guard case .send(let words, _, _, let also, let files, _)? = try await did("send") else { return XCTFail("not a reply") }
         XCTAssertEqual(words, "Ship it")
         XCTAssertFalse(also)
         XCTAssertEqual(files, [])
@@ -337,7 +337,7 @@ final class PressPhoneTests: XCTestCase {
         try await expect("$('words').value", "One\nTwo")
         XCTAssertEqual(asked("send"), 0, "Return didn't send")
         try await phone.press(.returnKey, on: "#send")
-        guard case .send(let words, _, _, _, _)? = try await did("send") else { return XCTFail("not a reply") }
+        guard case .send(let words, _, _, _, _, _)? = try await did("send") else { return XCTFail("not a reply") }
         XCTAssertEqual(words, "One\nTwo")
     }
 
@@ -349,7 +349,7 @@ final class PressPhoneTests: XCTestCase {
         try await phone.tap("#words")
         try await phone.type("For everyone")
         try await phone.tap("#send")
-        guard case .send(_, _, _, let also, _)? = try await did("send") else { return XCTFail("not a reply") }
+        guard case .send(_, _, _, let also, _, _)? = try await did("send") else { return XCTFail("not a reply") }
         XCTAssertTrue(also)
         try await expect("$('also').checked", false, "it's for one message")
         try await phone.press(.space, on: "#also")
@@ -375,7 +375,7 @@ final class PressPhoneTests: XCTestCase {
         try await phone.tap("#attach")
         try await phone.until("and on again") { try await phone.read("document.querySelectorAll('.attachment').length") as? Int == 1 }
         try await phone.tap("#send")
-        guard case .send(_, _, _, _, let files)? = try await did("send") else { return XCTFail("not a reply") }
+        guard case .send(_, _, _, _, let files, _)? = try await did("send") else { return XCTFail("not a reply") }
         XCTAssertEqual(files.count, 1)
     }
 

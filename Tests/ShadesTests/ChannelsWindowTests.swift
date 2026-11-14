@@ -731,6 +731,28 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.pane.composer.target, .newThread(steve), "and the channel's own box still starts something new")
     }
 
+    /// ⌘Return steers or queues the other way from Settings, as in T3 Code, and Return the way Settings says.
+    func testCommandReturnInAThreadsBoxSendsItTheOtherWay() throws {
+        let view = view()
+        let window = keyWindow(showing: view)
+        var sent: [MessagesAction] = []
+        view.onAction = { sent.append($0) }
+        view.show(book())
+        view.select(inThread)
+        view.layoutSubtreeIfNeeded()
+        let box = view.threadPane.composer.textView
+        XCTAssertTrue(window.makeFirstResponder(box))
+        box.insertText("Make it blue", replacementRange: NSRange(location: NSNotFound, length: 0))
+        try Press.key("\r", keyCode: 36, on: box)
+        box.insertText("Then the footer", replacementRange: NSRange(location: NSNotFound, length: 0))
+        try Press.key("\r", keyCode: 36, modifiers: .command, on: box)
+        XCTAssertEqual(sent, [
+            .send("Make it blue", to: .thread(id: "t", title: "Work"), shownIn: .of(steve)),
+            .send("Then the footer", to: .thread(id: "t", title: "Work"), shownIn: .of(steve), alternate: true),
+        ])
+        XCTAssertEqual(box.string, "")
+    }
+
     func testAlsoSendToTheChannelGoesWithTheReplyAndThenUnticks() {
         let view = view()
         var sent: [MessagesAction] = []
