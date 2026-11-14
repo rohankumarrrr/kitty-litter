@@ -64,6 +64,8 @@ public final class ParakeetVoiceEngine: VoiceEngine {
     private var current: Take?
     /// The mic stays on briefly after a release, and a new take has to wait for it to close.
     private var isCapturing = false
+    private var pendingVocabulary: [String]?
+    private var vocabularyTask: Task<Void, Never>?
     private let captureQueue = DispatchQueue(label: "shades.voice.begin", qos: .userInteractive)
 
     public init(
@@ -124,13 +126,42 @@ public final class ParakeetVoiceEngine: VoiceEngine {
     }
 
     public func setVocabulary(_ words: [String]) {
-        Task { await applyVocabulary(words) }
+        _ = queueVocabulary(words)
     }
 
     /// The same, for when you need it in place before going on.
     public func applyVocabulary(_ words: [String]) async {
-        cleanup.setVocabulary(words)
-        await recognizer.setVocabulary(words)
+        await queueVocabulary(words).value
+    }
+
+    /// The recognizer loads its model on the first set and isn't safe to call twice at once,
+    /// so sets go in one at a time and only the newest waiting set is applied.
+    private func queueVocabulary(_ words: [String]) -> Task<Void, Never> {
+        lock.withLock {
+            pendingVocabulary = words
+            if let vocabularyTask { return vocabularyTask }
+            let task = Task { await drainVocabulary() }
+            vocabularyTask = task
+            return task
+        }
+    }
+
+    private func drainVocabulary() async {
+        while let words = nextVocabulary() {
+            cleanup.setVocabulary(words)
+            await recognizer.setVocabulary(words)
+        }
+    }
+
+    private func nextVocabulary() -> [String]? {
+        lock.withLock {
+            guard let words = pendingVocabulary else {
+                vocabularyTask = nil
+                return nil
+            }
+            pendingVocabulary = nil
+            return words
+        }
     }
 
     // MARK: - One take

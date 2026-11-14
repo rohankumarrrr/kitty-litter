@@ -109,6 +109,8 @@ Listed words get three treatments:
 
 That table uses a 15-word list, and its timings include clips over 15 s. Higher boosts gain nothing on that list, and boost 3 turned "code" into "Codex" in 7 of 294 clips when Codex was on the list, so 1.5 ships. With a list of 15 other names, only one of them actually spoken, boost 1.5 changed one word in 294 clips: "Rowan" to "Rohan", which was right.
 
+The list changes whenever a new project shows up, so `setVocabulary` can be called often. Lists are applied one at a time, and a list replaced while it waits is skipped, so the CTC model loads once and the newest list wins. Two lists applied at once used to crash the app.
+
 Words that are also everyday English (Pepper, Swift, Opus) never get their case forced, or "salt and pepper" would gain a capital. The recognizer and S1-mini usually capitalize them from context, but not always.
 
 ## The whole pipeline
