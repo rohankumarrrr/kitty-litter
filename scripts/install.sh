@@ -34,20 +34,32 @@ wait_seconds="${SHADES_HEALTH_SECONDS:-30}"
 # when this process does, however it ends, and it's kept through the exec after --pull. This shell never opens
 # the lock file itself: closing any handle it has on it, even the one print -u makes, lets go of the lock.
 take_lock() {
-  local taken=0 pid="" since=""
+  local taken=0 i pid="" since=""
   mkdir -p "$data"
   touch "$lock"
+  if [[ ! -w "$lock" ]]; then
+    echo "$lock can't be written, so nothing was installed."
+    exit 1
+  fi
   zmodload zsh/system
   zsystem flock -e -t 0 -f lock_fd "$lock" 2>/dev/null && taken=1
-  if [[ -f "$holder" ]]; then
-    read -r pid since < "$holder" || true
-  fi
-  if (( ! taken )); then
-    if [[ -n "$pid" ]]; then
-      echo "Another install, process $pid, has been running since $since, so nothing was installed."
-    else
-      echo "Another install is running, so nothing was installed."
+  # The holder writes its line just after taking the lock, so until then the line is missing or the last install's.
+  for i in {1..20}; do
+    pid="" since=""
+    if [[ -f "$holder" ]]; then
+      read -r pid since < "$holder" || true
     fi
+    if (( taken )); then
+      break
+    fi
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "Another install, process $pid, has been running since $since, so nothing was installed."
+      exit 1
+    fi
+    sleep 0.1
+  done
+  if (( ! taken )); then
+    echo "Another install is running, so nothing was installed."
     exit 1
   fi
   # Already ours, from before the exec after --pull.

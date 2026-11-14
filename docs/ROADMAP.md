@@ -54,6 +54,7 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - A light version of Opal Horizon, for Macs in light mode. The Kitty Litter is dark only today.
 - A layered app icon made with Icon Composer, which needs Xcode 26, so it stays crisp in macOS's Tinted and Clear icon styles.
 - Rename `Shades.app` itself, and its folder in Application Support and its Keychain items, to The Kitty Litter, once there's a way to prove macOS keeps its permissions and `install.sh`'s rollback handles the old name.
+- Have `install.sh` stop what it started when it's killed. Its lock goes with its own process, so a build or copy it had running carries on, and the next install takes over alongside it. Only a copy of the app it was making could clash, and only with a rollback started within a second or so of the kill, since an install builds for minutes first.
 - Remember project nicknames, so the frontier agent can skip the search next time.
 - Replace a rewrite in place in apps that only take paste, such as browsers, Slack and VS Code. Today the rewrite is copied there, since a paste can't be read back to prove it landed.
 - Windows and Linux. Version one is macOS only because capture, the non-activating window and on-device speech are all native.
