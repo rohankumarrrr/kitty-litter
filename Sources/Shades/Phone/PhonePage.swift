@@ -423,6 +423,8 @@ enum PhonePage {
         // Kept for this address and port only, and sent only by this page. A cookie would go to every port on the name.
         let pass = localStorage.getItem('shades.key');
         let stream = null;
+        // What the Mac last sent on this stream. A row that's just as it was comes again as only its ID.
+        let received = null;
         // When the stream last said anything, pings included. The Mac says something every 10 seconds.
         let heard = 0;
         // A new one each time the page loads, so the Mac can end the stream this page left behind when it starts another.
@@ -618,6 +620,7 @@ enum PhonePage {
           if (stream) stream.abort();
           const mine = new AbortController();
           stream = mine;
+          received = null;
           heard = began = Date.now();
           try {
             const response = await fetch('/events?key=' + encodeURIComponent(key) + '&page=' + page, { headers: headers(), cache: 'no-store', signal: mine.signal });
@@ -635,7 +638,7 @@ enum PhonePage {
                 const event = buffer.slice(0, end);
                 buffer = buffer.slice(end + 2);
                 for (const line of event.split('\n')) {
-                  if (line.startsWith('data: ')) { reached(); show(JSON.parse(line.slice(6))); shownAt = Date.now(); waiting.splice(0).forEach((resolve) => resolve()); }
+                  if (line.startsWith('data: ')) { reached(); show(whole(JSON.parse(line.slice(6)))); shownAt = Date.now(); waiting.splice(0).forEach((resolve) => resolve()); }
                 }
               }
             }
@@ -653,6 +656,13 @@ enum PhonePage {
         function revive(quiet) { if (stream && Date.now() - heard > quiet) listen(); }
         window.addEventListener('pageshow', (event) => { if (event.persisted) revive(0); });
         window.addEventListener('online', () => revive(0));
+
+        function whole(next) {
+          const before = new Map((received ? received.rows : []).map((row) => [row.id, row]));
+          next.rows = next.rows.map((row) => (row.kind === 'same' ? before.get(row.id) : row));
+          received = next;
+          return next;
+        }
 
         function go(next, push = true) {
           if (!next || next === key) return;

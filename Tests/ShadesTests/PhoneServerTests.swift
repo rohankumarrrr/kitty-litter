@@ -463,6 +463,36 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(changed, 409, "what's no longer there is still told apart")
     }
 
+    /// Every change used to send every row of the place again, about 240 KB for a thread of 300 messages, so on a
+    /// phone's link a reply waited seconds behind its own thread.
+    func testAChangeSendsOnlyTheRowsThatChanged() async throws {
+        let key = try await pair()
+        let budget = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: Date(), projectPath: penny.folder)
+        backend.listed = [budget]
+        backend.said["w"] = (0..<40).map { Exchange(id: "turn-\($0)", asker: .you, askedAt: Date(), ask: "Check the budget for month \($0)", reply: "Groceries went over in month \($0).", repliedAt: Date()) }
+        controller.threadsChanged([budget])
+        let place = PhonePlace.key(.thread("w", in: .channel(.of(penny))))
+        var request = URLRequest(url: URL(string: "/events?key=\(place.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)", relativeTo: base)!)
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let (bytes, _) = try await session.bytes(for: request)
+        var lines = bytes.lines.makeAsyncIterator()
+        func next() async throws -> String {
+            while let line = try await lines.next() { if line.hasPrefix("data: ") { return String(line.dropFirst(6)) } }
+            return ""
+        }
+        var whole = try await next()
+        while !whole.contains("month 39") { whole = try await next() }
+
+        let (status, _) = try await page(#"{"act":"send","key":"\#(place)","text":"And December?"}"#, key: key)
+        XCTAssertEqual(status, 200)
+        var change = try await next()
+        while !change.contains("And December?") { change = try await next() }
+        let rows = try XCTUnwrap((try JSONSerialization.jsonObject(with: Data(change.utf8)) as? [String: Any])?["rows"] as? [[String: Any]])
+        XCTAssertGreaterThan(rows.filter { $0["kind"] as? String == "same" }.count, 70, "the messages that didn't change go as their IDs")
+        XCTAssertTrue(rows.filter { $0["kind"] as? String == "same" }.allSatisfy { $0.count == 2 && $0["id"] != nil }, "and nothing else")
+        XCTAssertLessThan(change.utf8.count, whole.utf8.count / 3, "\(change.utf8.count) bytes for the change, \(whole.utf8.count) for the whole thread")
+    }
+
     /// Pages whose streams the Mac has ended.
     private var ended: Set<String> = []
 
