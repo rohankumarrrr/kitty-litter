@@ -14,9 +14,14 @@ final class PhoneServer {
         var headers: [String: String]
         var body: Data
 
-        /// Whether the browser takes gzip, as every phone's does.
+        /// Whether the browser takes gzip, as every phone's does. Anyone who can reach the page writes this header, so
+        /// whatever it says is read without assuming anything about it.
         var takesGzip: Bool {
-            headers["accept-encoding"]?.split(separator: ",").contains { $0.split(separator: ";")[0].trimmingCharacters(in: .whitespaces) == "gzip" } == true
+            headers["accept-encoding"]?.split(separator: ",").contains { coding in
+                let parts = coding.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                // `q=0` says it isn't wanted.
+                return parts.first == "gzip" && !parts.dropFirst().contains { $0.hasPrefix("q=") && Double($0.dropFirst(2)) == 0 }
+            } == true
         }
     }
 

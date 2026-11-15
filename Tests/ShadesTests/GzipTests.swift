@@ -65,6 +65,19 @@ final class GzipTests: XCTestCase {
         XCTAssertEqual(Gzip().padded(right).count, Gzip().padded(wrong).count, "padded, the two look the same")
     }
 
+    /// Swift drops the empty pieces when it splits, and indexing into nothing used to stop the app, from a header any
+    /// browser or script that reached the page could send, before its key was ever looked at.
+    func testAnyAcceptEncodingIsReadWithoutStoppingTheApp() {
+        func takes(_ value: String) -> Bool {
+            PhoneServer.Request(method: "GET", path: "/", query: [:], headers: ["accept-encoding": value], body: Data()).takesGzip
+        }
+        for odd in [";", ";;", " ; ", ",", ""] { XCTAssertFalse(takes(odd), odd) }
+        XCTAssertTrue(takes("gzip, deflate, br"))
+        XCTAssertTrue(takes("br;q=1.0, GZIP;q=0.5"))
+        XCTAssertTrue(takes("gzip, ;"))
+        for refused in ["gzip;q=0", "gzip; q=0", "identity, gzip;q=0.000"] { XCTAssertFalse(takes(refused), "q=0 says it isn't wanted: \(refused)") }
+    }
+
     func testThePagesOwnFilesPackWholeAndReadBack() {
         let page = Data(PhonePage.script.utf8)
         let packed = Gzip.whole(page)
