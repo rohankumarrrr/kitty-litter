@@ -110,7 +110,7 @@ Only send `thread.runtime-mode.set` when the mode really changes. For providers 
 
 `message.dispatch` sends `createdBy: "user"`. A launch sends none, and T3 records the user, which we measured on real threads The Kitty Litter started. Agents using T3's tools show `createdBy: "agent"`.
 
-Kittens rely on this to believe a correction, as [kittens.md](kittens.md#corrections) describes. It has a limit: it stops an agent using T3's tools from speaking as the user, but not a process holding the user's T3 credentials.
+Kittens rely on this to believe a correction, as [kittens.md](kittens.md#corrections) describes. So the one note The Kitty Litter sends in its own words, telling a kitten you allowed or denied a [settings change](kittens.md#asking-for-a-change), goes all under the `---` line, with nothing above it to pass for yours. It has a limit: it stops an agent using T3's tools from speaking as the user, but not a process holding the user's T3 credentials.
 
 ### Following a turn
 

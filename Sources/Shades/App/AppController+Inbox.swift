@@ -56,17 +56,21 @@ extension AppController {
             keepInbox()
             return
         }
-        let sorted = await sort(report, of: thread, failed: failed)
-        if let next, !failed, onlyPassedOn(sorted, report: report, of: thread) {
+        async let asked = failed ? [] : changeRequests(in: report, of: thread)
+        let readable = readable(report)
+        let sorted = await sort(readable, of: thread, failed: failed)
+        let changes = await asked
+        if let next, !failed, changes.isEmpty, onlyPassedOn(sorted, report: readable, of: thread) {
             passedOn(thread, to: next)
             inbox.skip(thread)
             keepInbox()
             return
         }
         // A reply can say it passed work on and name nowhere it went, and that doesn't get to lose a report.
-        let lines = sorted.flatMap { $0.hasLines ? $0 : nil } ?? unsorted(report)
+        let lines = sorted.flatMap { $0.hasLines ? $0 : nil } ?? unsorted(readable)
         let owed = inbox.owes(thread)
         if inbox.file(lines, from: thread, at: now(), id: { UUID().uuidString }) { nudgeInbox(about: [.thread(thread.id)]) }
+        changes.forEach { inbox.ask($0) }
         keepInbox()
         inboxChanged()
         if owed, lines.decision == nil { notifyFinished(thread, by: kitten(of: thread)) }
@@ -181,6 +185,10 @@ extension AppController {
             inbox.clear(kind)
             keepInbox()
             inboxChanged()
+        case .allow(let id):
+            allowChange(id)
+        case .deny(let id):
+            denyChange(id)
         }
     }
 
@@ -190,7 +198,8 @@ extension AppController {
     /// Messages shows them going into the thread you picked, so the cat only speaks up if they don't get there.
     func reply(_ words: String, toThread threadID: String, marking report: String? = nil, echoID: String, behavior: FollowUpBehavior) {
         let text = Prompts.forwarded(words: words, snapshot: nil, screenshotPath: nil, screenLeftOut: false)
-        let own = inbox.entries.filter { $0.threadID == threadID }
+        // A change it asked for only takes Allow or Deny, so your words don't answer it.
+        let own = inbox.entries.filter { $0.threadID == threadID && $0.change == nil }
         let entryID = (own.first { $0.id == report } ?? own.last(where: \.needsYou) ?? own.last)?.id
         if let entryID {
             inbox.markReplied(entryID, at: now())
@@ -239,7 +248,7 @@ extension AppController {
         }
     }
 
-    private func inboxChanged() {
+    func inboxChanged() {
         channels.refresh()
         notifyNeedsYou()
         renderBubble()

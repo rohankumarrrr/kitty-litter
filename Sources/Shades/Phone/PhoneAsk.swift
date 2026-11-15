@@ -56,7 +56,7 @@ struct PhoneAsk: Decodable {
             else { return nil }
             return (.answer(question, answers), nil)
         case "done":
-            guard let entry = book.waiting.reports.first(where: { $0.id == id }), entry.kind == .decision else { return nil }
+            guard let entry = book.waiting.reports.first(where: { $0.id == id }), entry.kind == .decision, entry.change == nil else { return nil }
             return (.inbox(.done(id: entry.id)), nil)
         case "clear":
             guard let kind = self.kind.flatMap(InboxEntry.Kind.init(rawValue:)), kind != .decision else { return nil }

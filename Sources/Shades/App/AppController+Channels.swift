@@ -81,8 +81,13 @@ extension AppController {
         }
     }
 
-    /// Only the Ask box and Messages start threads in the router's folder, so each one there is a talk with the cat.
+    /// Only the Ask box and Messages start threads in the router's folder, so each one there is a talk with the cat,
+    /// except Shades' own look at a settings change, which is only read for its card.
     func isWithShades(_ thread: AgentThread) -> Bool {
+        inRouterFolder(thread) && !thread.title.hasPrefix(Self.reviewTitle)
+    }
+
+    func inRouterFolder(_ thread: AgentThread) -> Bool {
         if knownRouterFolder == nil { knownRouterFolder = routerFolder().map(Self.standardized) }
         guard let folder = knownRouterFolder, let path = thread.projectPath else { return false }
         return Self.standardized(path) == folder

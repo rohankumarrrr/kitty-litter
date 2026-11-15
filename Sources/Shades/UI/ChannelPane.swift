@@ -971,6 +971,7 @@ final class ChannelPane: QuietView {
 
     private func card(for entry: InboxEntry, in book: ChannelBook) -> CardRowView {
         let kitten = book.kitten(of: entry.id)
+        if let change = entry.change { return card(for: change, of: entry, by: kitten, in: book) }
         let reply = CardRowView.Button(title: entry.kind == .decision ? "Reply" : "Ask") { [weak self] in self?.reply(to: entry) }
         var buttons = [reply]
         if entry.kind == .decision {
@@ -984,6 +985,24 @@ final class ChannelPane: QuietView {
             text: entry.text,
             answer: entry.answer,
             footer: entry.repliedAt == nil ? nil : CatWords.inboxSent,
+            buttons: buttons
+        )
+    }
+
+    /// Deny comes first and nothing is pressed by Return, as on an approval. A change that can't be made as asked only
+    /// takes Deny, which tells the kitten why.
+    private func card(for change: ChangeRequest, of entry: InboxEntry, by kitten: Kitten?, in book: ChannelBook) -> CardRowView {
+        var buttons = [CardRowView.Button(title: "Deny") { [weak self] in self?.onAction?(.inbox(.deny(id: entry.id))) }]
+        if change.problem == nil {
+            buttons.append(CardRowView.Button(title: "Allow") { [weak self] in self?.onAction?(.inbox(.allow(id: entry.id))) })
+        }
+        buttons.append(openButton(entry.threadID, in: book))
+        return CardRowView(
+            look: look(kitten, in: book),
+            heading: heading(kitten, title: entry.threadTitle),
+            at: entry.at,
+            text: CatWords.changeCard(change, by: kitten?.name ?? "The kitten"),
+            answer: CatWords.changeReview(change),
             buttons: buttons
         )
     }
