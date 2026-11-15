@@ -1599,6 +1599,12 @@ enum PhonePage {
           if (await pair($('code').value)) start();
         };
 
+        // A new code scanned while the page is already open in Safari's tab only changes what's after the #, which
+        // doesn't load the page again.
+        window.addEventListener('hashchange', () => {
+          if (new URLSearchParams(location.hash.slice(1)).get('pair')) start();
+        });
+
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState !== 'visible') return;
           seen();
