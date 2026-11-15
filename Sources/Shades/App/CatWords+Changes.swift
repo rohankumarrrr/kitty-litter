@@ -48,6 +48,29 @@ extension CatWords {
         return change.review.map { "I looked into it. \(literal($0))" } ?? notReviewed
     }
 
+    /// One plain paragraph about an ask a kitten wrote, for your phone and the cat's bubble.
+    static func askRow(_ ask: AskRequest) -> String {
+        ["Asks for your yes to: \(ask.ask)", ask.why.map { "Its reason: \($0)" }].compactMap { $0 }.joined(separator: " ")
+    }
+
+    /// What Allow says yes to, in the kitten's name, as plain words for your phone.
+    static func ifYouAllow(_ ask: AskRequest, by kitten: String) -> String {
+        "If you allow it, \(kitten) will: \(ask.ask)"
+    }
+
+    /// The card in Activity. A decision Shades read an ask from keeps its words, with exactly what Allow says yes to under
+    /// them. What the kitten or Shades wrote shows as written, so none of it can pass for The Kitty Litter's own words.
+    static func askCard(_ ask: AskRequest, decision: String?, by kitten: String) -> String {
+        let will = "\(literal(kitten)) will: \(literal(ask.ask))"
+        if let decision { return "\(decision)\n\n**If you allow it**, \(will)" }
+        let reason = ask.why.map { "\n\n\(literal(kitten))'s reason: \(literal($0))" } ?? ""
+        return "**\(literal(kitten)) asks for your yes.** If you allow it, \(will)\(reason)"
+    }
+
+    static func askReview(_ ask: AskRequest) -> String? {
+        ask.review.map { "I looked into it. \(literal($0))" } ?? (ask.readFromWords ? nil : notReviewed)
+    }
+
     static func changeFailed(_ reason: String) -> String {
         "I couldn't make that change. \(reason)"
     }

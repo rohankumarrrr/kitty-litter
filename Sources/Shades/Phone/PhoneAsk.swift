@@ -56,8 +56,14 @@ struct PhoneAsk: Decodable {
             else { return nil }
             return (.answer(question, answers), nil)
         case "done":
-            guard let entry = book.waiting.reports.first(where: { $0.id == id }), entry.kind == .decision, entry.change == nil else { return nil }
+            guard let entry = book.waiting.reports.first(where: { $0.id == id }), entry.kind == .decision, entry.change == nil, entry.ask == nil else { return nil }
             return (.inbox(.done(id: entry.id)), nil)
+        case "ask":
+            // Never a settings change, which only the Mac's own buttons answer.
+            guard let entry = book.waiting.reports.first(where: { $0.id == id }), entry.change == nil, entry.ask != nil,
+                  let decision = value.flatMap(ApprovalDecision.init(rawValue:)), [.accept, .decline].contains(decision)
+            else { return nil }
+            return (.inbox(decision == .accept ? .allow(id: entry.id) : .deny(id: entry.id)), nil)
         case "clear":
             guard let kind = self.kind.flatMap(InboxEntry.Kind.init(rawValue:)), kind != .decision else { return nil }
             return (.inbox(.clear(kind)), nil)

@@ -361,9 +361,18 @@ extension PressChromeTests {
         return InboxEntry(id: "u", kind: .decision, text: "Can't.", threadID: "s1", threadTitle: "Resume", at: at, change: change)
     }
 
+    /// Something a kitten asked for your yes to do itself, in the form, and one Shades read from a decision.
+    private var writtenAsk: InboxEntry {
+        InboxEntry(id: "a1", kind: .decision, text: "Asks.", threadID: "s1", threadTitle: "Resume", at: at, ask: AskRequest(ask: "Send the resume to the recruiter.", why: "It's ready.", review: "Fine to send.", readFromWords: false))
+    }
+
+    private var readAsk: InboxEntry {
+        InboxEntry(id: "a2", kind: .decision, text: "Merge pull request 12?", threadID: "s1", threadTitle: "Resume", at: at, ask: AskRequest(ask: "Merge pull request 12.", review: "Safe to merge.", readFromWords: true))
+    }
+
     /// An approval, a question with one answer, one you pick several for, a decision and something shipped.
     private func activityBook() -> ChannelBook {
-        book(waiting: Waiting(approvals: [approval], questions: [question, months], owners: ["ap": steve.id, "q": steve.id, "q2": pepper.id], reports: [decision, shipped, change, unusableChange]))
+        book(waiting: Waiting(approvals: [approval], questions: [question, months], owners: ["ap": steve.id, "q": steve.id, "q2": pepper.id], reports: [decision, shipped, change, unusableChange, writtenAsk, readAsk]))
     }
 
     private func rows(in pane: ChannelPane) -> [ChannelRowView] {
@@ -492,6 +501,31 @@ extension PressChromeTests {
         try pressEveryWay("Deny", on: "Mine too.") { _, calls, name in
             XCTAssertEqual(calls.actions, [.inbox(.deny(id: "u"))], name)
         }
+    }
+
+    /// Allow and Deny answer only the ask, and an ask Shades read from a decision can still take your own words.
+    func testAnAsksAllowDenyReplyAndWayToItsThreadWork() throws {
+        for (text, id) in [("Fine to send", "a1"), ("Safe to merge", "a2")] {
+            try pressEveryWay("Allow", on: text) { _, calls, name in
+                XCTAssertEqual(calls.actions, [.inbox(.allow(id: id))], name)
+            }
+            try pressEveryWay("Deny", on: text) { _, calls, name in
+                XCTAssertEqual(calls.actions, [.inbox(.deny(id: id))], name)
+            }
+            try pressEveryWay(CatWords.viewThread, on: text) { view, calls, name in
+                XCTAssertEqual(view.selection, .thread("s1", in: .channel(.of(steve))), name)
+                XCTAssertEqual(calls.actions, [], name)
+            }
+        }
+        try pressEveryWay("Reply", on: "Safe to merge") { view, calls, name in
+            XCTAssertEqual(view.selection, .thread("s1", in: .channel(.of(steve))), name)
+            XCTAssertTrue(view.window?.firstResponder === view.threadPane.composer.textView, "\(name): ready to type")
+            XCTAssertEqual(calls.actions, [], name)
+        }
+        let (_, view, _) = messages(activityBook())
+        XCTAssertEqual(try card("Fine to send", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", "Allow", CatWords.viewThread])
+        XCTAssertEqual(try card("Safe to merge", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", "Allow", "Reply", CatWords.viewThread])
+        XCTAssertTrue(try card("Safe to merge", in: view).accessibilityLabel()?.contains("If you allow it, Steve Pawsniak will: Merge pull request 12.") == true)
     }
 
     func testClearingASectionOfActivityByMouseAndKeyboard() throws {

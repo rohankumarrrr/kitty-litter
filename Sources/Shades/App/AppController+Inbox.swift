@@ -74,6 +74,11 @@ extension AppController {
         keepInbox()
         inboxChanged()
         if owed, lines.decision == nil { notifyFinished(thread, by: kitten(of: thread)) }
+        // Only a decision the sorter wrote, since a report it couldn't sort is the kitten's own words, and never beside a
+        // request in the form, which has its card already.
+        if !failed, changes.isEmpty, sorted?.decision != nil, let decision = inbox.entries.last(where: { $0.threadID == thread.id && $0.kind == .decision && !$0.isStanding }) {
+            readDecision(decision.id, of: thread)
+        }
     }
 
     /// Never for a thread given a correction. Otherwise the model's call, and with no answer from it, a thread the cat started whose report is one sentence and a link,
@@ -103,10 +108,13 @@ extension AppController {
     }
 
     /// What a kitten without an inbox needs from you still waits in Activity and comes as a notification.
-    func flag(_ decision: String, of thread: AgentThread) {
-        inbox.flag(decision, from: thread, at: now(), id: UUID().uuidString)
+    /// A report that asked for something in the form already has its card, so its decision isn't read for another.
+    func flag(_ decision: String, of thread: AgentThread, report: String?) {
+        let id = UUID().uuidString
+        inbox.flag(decision, from: thread, at: now(), id: id)
         keepInbox()
         inboxChanged()
+        if ChangeRequests.all(in: report ?? "").isEmpty { readDecision(id, of: thread) }
     }
 
     /// It's a decision, because a false alarm beats a lost report.
@@ -186,9 +194,9 @@ extension AppController {
             keepInbox()
             inboxChanged()
         case .allow(let id):
-            allowChange(id)
+            allow(id)
         case .deny(let id):
-            denyChange(id)
+            deny(id)
         }
     }
 
@@ -198,8 +206,8 @@ extension AppController {
     /// Messages shows them going into the thread you picked, so the cat only speaks up if they don't get there.
     func reply(_ words: String, toThread threadID: String, marking report: String? = nil, echoID: String, behavior: FollowUpBehavior) {
         let text = Prompts.forwarded(words: words, snapshot: nil, screenshotPath: nil, screenLeftOut: false)
-        // A change it asked for only takes Allow or Deny, so your words don't answer it.
-        let own = inbox.entries.filter { $0.threadID == threadID && $0.change == nil }
+        // A request it wrote only takes Allow or Deny, so your words don't answer it.
+        let own = inbox.entries.filter { $0.threadID == threadID && !$0.isStanding }
         let entryID = (own.first { $0.id == report } ?? own.last(where: \.needsYou) ?? own.last)?.id
         if let entryID {
             inbox.markReplied(entryID, at: now())

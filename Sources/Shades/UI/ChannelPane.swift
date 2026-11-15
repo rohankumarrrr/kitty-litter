@@ -972,6 +972,7 @@ final class ChannelPane: QuietView {
     private func card(for entry: InboxEntry, in book: ChannelBook) -> CardRowView {
         let kitten = book.kitten(of: entry.id)
         if let change = entry.change { return card(for: change, of: entry, by: kitten, in: book) }
+        if let ask = entry.ask { return card(for: ask, of: entry, by: kitten, in: book) }
         let reply = CardRowView.Button(title: entry.kind == .decision ? "Reply" : "Ask") { [weak self] in self?.reply(to: entry) }
         var buttons = [reply]
         if entry.kind == .decision {
@@ -1003,6 +1004,25 @@ final class ChannelPane: QuietView {
             at: entry.at,
             text: CatWords.changeCard(change, by: kitten?.name ?? "The kitten"),
             answer: CatWords.changeReview(change),
+            buttons: buttons
+        )
+    }
+
+    /// Deny comes first and nothing is pressed by Return. An ask Shades read from a decision can still take your own words.
+    private func card(for ask: AskRequest, of entry: InboxEntry, by kitten: Kitten?, in book: ChannelBook) -> CardRowView {
+        var buttons = [
+            CardRowView.Button(title: "Deny") { [weak self] in self?.onAction?(.inbox(.deny(id: entry.id))) },
+            CardRowView.Button(title: "Allow") { [weak self] in self?.onAction?(.inbox(.allow(id: entry.id))) },
+        ]
+        if ask.readFromWords { buttons.append(CardRowView.Button(title: "Reply") { [weak self] in self?.reply(to: entry) }) }
+        buttons.append(openButton(entry.threadID, in: book))
+        return CardRowView(
+            look: look(kitten, in: book),
+            heading: heading(kitten, title: entry.threadTitle),
+            at: entry.at,
+            text: CatWords.askCard(ask, decision: ask.readFromWords ? entry.text : nil, by: kitten?.name ?? "The kitten"),
+            answer: entry.answer ?? CatWords.askReview(ask),
+            footer: entry.repliedAt == nil ? nil : CatWords.inboxSent,
             buttons: buttons
         )
     }

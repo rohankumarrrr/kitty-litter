@@ -40,10 +40,20 @@ public enum ChangeRequests {
     public static let fence = "shades-request"
     static let longest = 64_000
     static let whyLimit = 300
+    static let askLimit = 500
+
+    /// What one block asks for.
+    public enum Request: Equatable, Sendable {
+        case change(ChangeRequest)
+        case ask(AskRequest)
+
+        public var change: ChangeRequest? { if case .change(let change) = self { change } else { nil } }
+        public var ask: AskRequest? { if case .ask(let ask) = self { ask } else { nil } }
+    }
 
     /// Each request in a reply, as the kitten wrote it, or why it can't be read. Only fenced blocks count, so a
     /// reply that quotes the format inside another code block, or talks about it, asks for nothing.
-    public static func all(in reply: String) -> [Result<ChangeRequest, Problem>] {
+    public static func all(in reply: String) -> [Result<Request, Problem>] {
         blocks(in: reply).map(read)
     }
 
@@ -76,14 +86,15 @@ public enum ChangeRequests {
     }
 
     private struct Written: Decodable {
-        var file: String
+        var file: String?
         var replace: String?
         var with: String?
         var create: String?
+        var ask: String?
         var why: String?
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case file, replace, with, create, why
+            case file, replace, with, create, ask, why
         }
 
         /// A key it doesn't know means the kitten thinks it asked for something that would be left out.
@@ -93,10 +104,11 @@ public enum ChangeRequests {
                 throw Problem("It has a key The Kitty Litter doesn't know, `\(unknown)`.")
             }
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            file = try container.decode(String.self, forKey: .file)
+            file = try container.decodeIfPresent(String.self, forKey: .file)
             replace = try container.decodeIfPresent(String.self, forKey: .replace)
             with = try container.decodeIfPresent(String.self, forKey: .with)
             create = try container.decodeIfPresent(String.self, forKey: .create)
+            ask = try container.decodeIfPresent(String.self, forKey: .ask)
             why = try container.decodeIfPresent(String.self, forKey: .why)
         }
     }
@@ -108,35 +120,55 @@ public enum ChangeRequests {
         init?(intValue: Int) { nil }
     }
 
-    private static func read(_ block: String) -> Result<ChangeRequest, Problem> {
+    private static func read(_ block: String) -> Result<Request, Problem> {
         let written: Written
         do {
             written = try JSONDecoder().decode(Written.self, from: Data(block.utf8))
         } catch let problem as Problem {
             return .failure(problem)
         } catch {
-            return .failure(Problem("It isn't JSON with a `file`, The Kitty Litter's request form."))
+            return .failure(Problem("It isn't JSON in The Kitty Litter's request form, with a `file` or an `ask`."))
         }
-        let why = written.why.map { $0.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces) }
+        let why = written.why.map(oneLine)
         let shortWhy = why.map { $0.count > whyLimit ? String($0.prefix(whyLimit - 1)) + "…" : $0 }.flatMap { $0.isEmpty ? nil : $0 }
+        guard !(why ?? "").unicodeScalars.contains(where: hides) else { return .failure(hidden) }
+        if let ask = written.ask.map(oneLine) {
+            guard written.file == nil, written.replace == nil, written.with == nil, written.create == nil else {
+                return .failure(Problem("An `ask` goes alone, with only a `why`. A settings change is a block of its own."))
+            }
+            guard !ask.isEmpty else { return .failure(Problem("Its `ask` is empty, so there's nothing to say yes to.")) }
+            guard ask.count <= askLimit else { return .failure(Problem("Its `ask` is longer than one plain sentence needs to be.")) }
+            guard !ask.unicodeScalars.contains(where: hides) else { return .failure(hidden) }
+            return .success(.ask(AskRequest(ask: ask, why: shortWhy, readFromWords: false)))
+        }
+        guard let file = written.file else { return .failure(Problem("It needs a `file` to change, or an `ask`.")) }
         let request: ChangeRequest
         switch (written.replace, written.with, written.create) {
         case (let replace?, let with?, nil):
             guard !replace.isEmpty else { return .failure(Problem("Its `replace` is empty, so there's nothing to find.")) }
-            request = ChangeRequest(file: written.file, replace: replace, with: with, why: shortWhy)
+            request = ChangeRequest(file: file, replace: replace, with: with, why: shortWhy)
         case (nil, nil, let create?):
-            request = ChangeRequest(file: written.file, replace: nil, with: create, why: shortWhy)
+            request = ChangeRequest(file: file, replace: nil, with: create, why: shortWhy)
         default:
             return .failure(Problem("It needs `replace` and `with`, or `create` alone."))
         }
-        for text in [request.replace, request.with].compactMap({ $0 }) + [why ?? ""] {
+        for text in [request.replace, request.with].compactMap({ $0 }) {
             guard text.count <= longest else { return .failure(Problem("It's longer than a settings change needs to be.")) }
-            // Text that draws as nothing, or reverses what's around it, could make the change look like another.
-            guard !text.unicodeScalars.contains(where: hides) else {
-                return .failure(Problem("It has characters that don't show, so you couldn't see exactly what it does."))
-            }
+            guard !text.unicodeScalars.contains(where: hides) else { return .failure(hidden) }
         }
-        return .success(request)
+        return .success(.change(request))
+    }
+
+    /// Text that draws as nothing, or reverses what's around it, could make one request look like another.
+    private static let hidden = Problem("It has characters that don't show, so you couldn't see exactly what it asks.")
+
+    static func oneLine(_ text: String) -> String {
+        text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Whether this would hide what's around it, or show as nothing.
+    static func hides(text: String) -> Bool {
+        text.unicodeScalars.contains(where: hides)
     }
 
     private static func hides(_ scalar: Unicode.Scalar) -> Bool {

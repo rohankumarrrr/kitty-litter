@@ -625,6 +625,18 @@ struct PhoneView: Encodable, Equatable {
                 $0.parts = parts
                 $0.footer = question.form == nil ? CatWords.answerInT3 : nil
             }
+        case .report(let entry) where entry.change == nil && entry.ask != nil:
+            // A yes to something the kitten does itself is no more than your own words could already say from here.
+            let kitten = book.kitten(of: entry.id)
+            let ask = entry.ask!
+            let text = ask.readFromWords ? "\(entry.text)\n\n\(CatWords.ifYouAllow(ask, by: kitten?.name ?? "it"))" : entry.text
+            return card("ask", id: entry.id, kitten: kitten, title: entry.threadTitle, text: text, at: entry.at, in: book) {
+                $0.answer = entry.answer ?? ask.review
+                $0.footer = entry.repliedAt == nil ? nil : CatWords.inboxSent
+                $0.open = ask.readFromWords ? PhonePlace.reply(to: entry) : nil
+                $0.choices = [Choice(label: "Deny", value: ApprovalDecision.decline.rawValue), Choice(label: "Allow", value: ApprovalDecision.accept.rawValue)]
+                    + (ask.readFromWords ? [Choice(label: "Reply", value: "reply")] : [])
+            }
         case .report(let entry) where entry.change != nil:
             // Changing a settings file is new reach, which a phone that's lost could hand anyone, so it's only to read here.
             return card("report", id: entry.id, kitten: book.kitten(of: entry.id), title: entry.threadTitle, text: entry.text, at: entry.at, in: book) {

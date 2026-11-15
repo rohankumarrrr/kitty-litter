@@ -37,36 +37,36 @@ extension AppController {
         let files = settingsFiles
         var entries: [InboxEntry] = []
         for found in asked {
-            var change: ChangeRequest
-            switch found {
-            case .success(let request):
-                change = files.check(request)
-            case .failure(let problem):
-                change = ChangeRequest(file: "", replace: nil, with: "", why: nil)
-                change.problem = problem.reason
+            let entry = { (text: String, change: ChangeRequest?, ask: AskRequest?) in
+                InboxEntry(id: "change-\(UUID().uuidString)", kind: .decision, text: text, threadID: thread.id, threadTitle: thread.title, at: self.now(), change: change, ask: ask)
             }
-            if change.problem == nil { change.review = await review(change, by: kitten.name) }
-            entries.append(InboxEntry(
-                id: "change-\(UUID().uuidString)",
-                kind: .decision,
-                text: CatWords.changeRow(change),
-                threadID: thread.id,
-                threadTitle: thread.title,
-                at: now(),
-                change: change
-            ))
+            switch found {
+            case .success(.change(let request)):
+                var change = files.check(request)
+                if change.problem == nil {
+                    change.review = await lookInto(Prompts.reviewChange(change, by: kitten.name, now: files.current(change)), about: change.file)
+                }
+                entries.append(entry(CatWords.changeRow(change), change, nil))
+            case .success(.ask(var ask)):
+                ask.review = await lookInto(Prompts.reviewAsk(ask, by: kitten.name, task: thread.title), about: thread.title)
+                entries.append(entry(CatWords.askRow(ask), nil, ask))
+            case .failure(let problem):
+                var change = ChangeRequest(file: "", replace: nil, with: "", why: nil)
+                change.problem = problem.reason
+                entries.append(entry(CatWords.changeRow(change), change, nil))
+            }
         }
         return entries
     }
 
     /// Something that can only reply looks into it, in the router's folder, where no tool that acts, sends or reads a
-    /// file works. It only ever sees the request and the file, never your screen.
-    private func review(_ change: ChangeRequest, by kitten: String) async -> String? {
+    /// file works. It only ever sees what's in `prompt`, never your screen.
+    func lookInto(_ prompt: String, about subject: String) async -> String? {
         let model = settings.quickModel
         guard let projectID = try? await routerProjectID(for: model) else { return nil }
         let prompt = AgentPrompt(
-            title: "\(Self.reviewTitle) \(change.file)",
-            text: Prompts.reviewChange(change, by: kitten, now: settingsFiles.current(change)),
+            title: String("\(Self.reviewTitle) \(subject)".prefix(80)),
+            text: prompt,
             model: model,
             runtimeMode: .approvalRequired,
             projectID: projectID
@@ -75,8 +75,18 @@ extension AppController {
         return said ?? nil
     }
 
-    func allowChange(_ id: String) {
-        guard let entry = inbox.entries.first(where: { $0.id == id }), let change = entry.change, change.problem == nil else { return }
+    func allow(_ id: String) {
+        guard let entry = inbox.entries.first(where: { $0.id == id }) else { return }
+        if entry.change != nil { allowChange(entry) } else if entry.ask != nil { answerAsk(entry, .allowed) }
+    }
+
+    func deny(_ id: String) {
+        guard let entry = inbox.entries.first(where: { $0.id == id }) else { return }
+        if entry.change != nil { answer(entry, .denied) } else if entry.ask != nil { answerAsk(entry, .denied) }
+    }
+
+    private func allowChange(_ entry: InboxEntry) {
+        guard let change = entry.change, change.problem == nil else { return }
         do {
             try settingsFiles.apply(change)
             answer(entry, .made)
@@ -85,11 +95,6 @@ extension AppController {
             say(CatWords.changeFailed(reason))
             answer(entry, .failed(reason))
         }
-    }
-
-    func denyChange(_ id: String) {
-        guard let entry = inbox.entries.first(where: { $0.id == id }), entry.change != nil else { return }
-        answer(entry, .denied)
     }
 
     /// The card goes, and each thread that asked hears what happened, queued behind whatever it's doing.

@@ -42,7 +42,7 @@ final class ChangeRequestAttackTests: XCTestCase {
 
     private func asked(_ object: [String: String]) throws -> ChangeRequest {
         let json = String(decoding: try JSONSerialization.data(withJSONObject: object, options: .sortedKeys), as: UTF8.self)
-        return try XCTUnwrap(ChangeRequests.all(in: "```shades-request\n\(json)\n```").first).get()
+        return try XCTUnwrap(XCTUnwrap(ChangeRequests.all(in: "```shades-request\n\(json)\n```").first).get().change)
     }
 
     /// A deny moved under a dotted top-level key reads as the same facts, so its removal goes unreported.
