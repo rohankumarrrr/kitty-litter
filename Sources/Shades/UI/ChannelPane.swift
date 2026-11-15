@@ -47,7 +47,7 @@ final class ChannelHeader: QuietView {
         return (CatWords.threadTitle, [home, about].filter { !$0.isEmpty }.joined(separator: "  ·  "))
     }
 
-    /// `backlogs` are only ever this window's, never the book's, so a phone can't show them.
+    /// `backlogs` are never the book's, so nothing that reads the book has them. A paired phone reads its own.
     func show(_ place: ChannelPlace, in book: ChannelBook, backlogs: [String: Backlog] = [:]) {
         (title, subtitle) = Self.words(for: place, in: book)
         cat = nil

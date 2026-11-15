@@ -40,6 +40,7 @@ extension AppController {
             self?.say(CatWords.phonePaired, fades: true)
         }
         link.textSize = settings.textSize
+        link.readPriorities = { [weak self] in self?.readPriorities($0) ?? Priorities() }
         phone = link
         Task { [weak self, backend] in
             let environment = await backend.environmentID()

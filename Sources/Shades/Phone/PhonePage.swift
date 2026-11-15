@@ -46,6 +46,7 @@ enum PhonePage {
             <p id="subtitle"></p>
             <button id="link" type="button" hidden></button>
             <button id="t3" type="button" hidden>Open in T3</button>
+            <button id="backlog" type="button" hidden></button>
           </div>
         </div>
         <div id="notify" class="lit" hidden>
@@ -155,7 +156,7 @@ enum PhonePage {
         #title { margin: 0; color: var(--white); font-size: calc(32em / 17); font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
         #subtitle { margin: 2px 0 0; color: var(--secondary); font-size: calc(15em / 17); }
         #subtitle:empty { display: none; }
-        #link, #t3 { display: block; color: var(--lilac); font-size: calc(15em / 17); text-align: left; margin: -8px 0 -12px; }
+        #link, #t3, #backlog { display: block; color: var(--lilac); font-size: calc(15em / 17); text-align: left; margin: -8px 0 -12px; }
 
         /* The Home Screen's widget card: black glass lit only along its bottom edge, in its own light. */
         .card, .lit { --light: var(--shades); position: relative;
@@ -286,6 +287,9 @@ enum PhonePage {
         .issue .line { display: flex; align-items: center; gap: 8px; color: var(--body); }
         .issue small { display: block; color: var(--secondary); font-size: calc(14em / 17); margin-left: 16px; }
         .note { color: var(--secondary); text-align: center; font-size: calc(15em / 17); margin: 28px 16px; }
+        .backlog { padding: 10px 4px; }
+        .backlog p { margin: 0; color: var(--white); overflow-wrap: anywhere; }
+        .backlog small { display: block; margin-top: 3px; color: var(--secondary); font-size: calc(14em / 17); overflow-wrap: anywhere; }
         .older { display: block; width: calc(100% - 32px); color: var(--lilac); background: none; border: 0; font: inherit; margin-block: 12px; }
         .older:disabled { color: var(--secondary); }
         .hit { display: block; width: 100%; text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--border); }
@@ -674,7 +678,7 @@ enum PhonePage {
           key = next;
           banner('');
           // Nothing of the page you left stays over the one you're going to while it comes.
-          for (const id of ['back', 'headcat', 'link', 't3', 'unread']) $(id).hidden = true;
+          for (const id of ['back', 'headcat', 'link', 't3', 'backlog', 'unread']) $(id).hidden = true;
           for (const id of ['title', 'subtitle', 'bartitle']) $(id).textContent = '';
           keptUnread = null;
           jumped = false;
@@ -726,6 +730,8 @@ enum PhonePage {
           $('link').hidden = !next.link;
           $('link').textContent = next.link ? next.link.label : '';
           $('t3').hidden = !next.t3;
+          $('backlog').hidden = !next.backlog;
+          $('backlog').textContent = next.backlog ? next.backlog.label : '';
           $('back').hidden = !next.back;
           $('backtitle').textContent = next.back ? next.backTitle : '';
           $('unread').hidden = !next.unread;
@@ -1007,6 +1013,13 @@ enum PhonePage {
           switch (item.kind) {
             case 'day': return el('div', 'day', item.text);
             case 'note': return el('p', 'note', item.text);
+            // A kitten keeps its backlog, so on the phone, as in the window, it's only to read.
+            case 'backlog': {
+              const node = el('div', 'backlog');
+              node.append(el('p', null, item.title));
+              if (item.detail) node.append(el('small', null, item.detail));
+              return node;
+            }
             case 'older': {
               const node = el('button', 'note older', item.text);
               node.type = 'button';
@@ -1353,6 +1366,7 @@ enum PhonePage {
         $('back').onclick = () => { if (view && view.back) go(view.back); };
         $('link').onclick = () => { if (view && view.link) go(view.link.open); };
         $('t3').onclick = () => { if (view && view.t3) openInT3(view.t3); };
+        $('backlog').onclick = () => { if (view && view.backlog) go(view.backlog.open); };
 
         // T3 Code's own page on your tailnet, at this page's address on the usual port, where it asks you to sign in
         // itself. Nothing of this page goes with it.
