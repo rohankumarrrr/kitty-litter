@@ -176,6 +176,16 @@ final class PressPhoneTests: XCTestCase {
         try await expect("$('pairnote').textContent", "That code didn't work. Turn pairing on again in The Kitty Litter on your Mac for a new one.")
     }
 
+    /// The Home Screen app said to scan the code, but the camera opens its link in Safari, which keeps its own storage,
+    /// so the app has to have the code typed.
+    func testTheHomeScreenAppSaysToTypeTheCode() async throws {
+        try await open(paired: false)
+        try await phone.until("the page asks for a code") { try await phone.read("!window.stale && !$('pair').hidden") as? Bool == true }
+        try await expect("$('pairhow').textContent.includes('Scan it with your camera')", true, "in Safari, scanning works")
+        try await phone.run("Object.defineProperty(navigator, 'standalone', { configurable: true, value: true }); pairing()")
+        try await expect("$('pairhow').textContent", "Turn on The Kitty Litter on my phone in Settings on your Mac, and it shows a code. Type it here, since scanning it opens Safari rather than this app.")
+    }
+
     func testPairTakesATap() async throws {
         try await open(paired: false)
         try await phone.until("the page asks for a code") { try await phone.read("!$('pair').hidden") as? Bool == true }
