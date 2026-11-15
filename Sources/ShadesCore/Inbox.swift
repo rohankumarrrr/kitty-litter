@@ -219,12 +219,18 @@ public struct Inbox: Codable, Equatable, Sendable {
         entries.append(InboxEntry(id: id, kind: .decision, text: decision, threadID: thread.id, threadTitle: thread.title, at: at))
     }
 
-    /// A settings change it asked for waits on its own, until you press Allow or Deny. One that's already waiting, from
-    /// any thread, isn't asked twice.
+    /// A settings change it asked for waits on its own, until you press Allow or Deny. One that's already waiting isn't
+    /// asked twice, and another thread asking for it too is kept with it, so it hears what you decided.
     public mutating func ask(_ entry: InboxEntry) {
-        guard let change = entry.change else { return }
-        let same = entries.contains { $0.id == entry.id || $0.change.map { ($0.file, $0.replace, $0.with) == (change.file, change.replace, change.with) } ?? false }
-        if !same { entries.append(entry) }
+        guard let change = entry.change, !entries.contains(where: { $0.id == entry.id }) else { return }
+        let same = entries.firstIndex { other in
+            guard let asked = other.change, asked.problem == nil, change.problem == nil else { return false }
+            return (asked.file, asked.replace, asked.with) == (change.file, change.replace, change.with)
+        }
+        guard let same else { return entries.append(entry) }
+        if entries[same].threadID != entry.threadID, entries[same].change?.alsoAskedIn.contains(entry.threadID) == false {
+            entries[same].change?.alsoAskedIn.append(entry.threadID)
+        }
     }
 
     /// The row you asked on, or failing that the thread's open decision, or its latest row. A change it asked for only

@@ -22,6 +22,8 @@ public struct ChangeRequest: Codable, Equatable, Sendable {
     public var review: String?
     /// Why it can't be done as asked, which leaves only Deny.
     public var problem: String?
+    /// Other threads that asked for exactly this, which hear what you decided too.
+    public var alsoAskedIn: [String] = []
 
     public init(file: String, replace: String?, with: String, why: String?) {
         self.file = file

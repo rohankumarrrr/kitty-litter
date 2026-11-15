@@ -92,7 +92,7 @@ extension AppController {
         answer(entry, .denied)
     }
 
-    /// The card goes, and the kitten's thread hears what happened, queued behind whatever it's doing.
+    /// The card goes, and each thread that asked hears what happened, queued behind whatever it's doing.
     private func answer(_ entry: InboxEntry, _ outcome: Prompts.ChangeOutcome) {
         guard let change = entry.change else { return }
         inbox.remove(entry.id)
@@ -100,10 +100,12 @@ extension AppController {
         inboxChanged()
         let text = Prompts.changeAnswered(change, outcome)
         forwardTask = Task {
-            do {
-                for try await _ in backend.forward(threadID: entry.threadID, text: text, attachments: [], behavior: .queue) {}
-            } catch {
-                say(CatWords.problem(error, while: .agents))
+            for thread in [entry.threadID] + change.alsoAskedIn {
+                do {
+                    for try await _ in backend.forward(threadID: thread, text: text, attachments: [], behavior: .queue) {}
+                } catch {
+                    say(CatWords.problem(error, while: .agents))
+                }
             }
         }
     }

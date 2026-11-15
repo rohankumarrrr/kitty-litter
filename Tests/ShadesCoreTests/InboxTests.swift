@@ -40,15 +40,19 @@ final class InboxTests: XCTestCase {
         inbox.ask(entry)
         inbox.ask(InboxEntry(id: "c2", kind: .decision, text: "Again.", threadID: "u", threadTitle: "Clawde: Other", at: start, change: change))
         XCTAssertEqual(inbox.entries.map(\.id), ["c"], "the same change isn't asked twice, from any thread")
+        XCTAssertEqual(inbox.entries.first?.change?.alsoAskedIn, ["u"], "but the other thread that asked hears what you decided")
+        inbox.ask(InboxEntry(id: "c3", kind: .decision, text: "Again.", threadID: "u", threadTitle: "Clawde: Other", at: start, change: change))
+        XCTAssertEqual(inbox.entries.first?.change?.alsoAskedIn, ["u"], "once")
 
         inbox.flag("Merge it?", from: thread(), at: start, id: "f")
         inbox.file(SortedReport(decision: "Ship it?"), from: thread(), at: start, id: counter())
         inbox.file(SortedReport(note: "By the way."), from: thread(run: "run-2"), at: start, id: counter())
-        XCTAssertEqual(inbox.entries.first { $0.id == "c" }, entry, "still there, with nothing under it")
+        XCTAssertEqual(inbox.entries.first { $0.id == "c" }?.text, entry.text, "still there, with nothing under it")
+        XCTAssertNil(inbox.entries.first { $0.id == "c" }?.answer)
         XCTAssertEqual(inbox.entries.filter { $0.change == nil }.map(\.text), ["Ship it?"])
         XCTAssertEqual(inbox.entries.first { $0.change == nil }?.answer, "By the way.")
         let saved = try JSONDecoder().decode(Inbox.self, from: JSONEncoder().encode(inbox))
-        XCTAssertEqual(saved.entries.first { $0.id == "c" }?.change, change)
+        XCTAssertEqual(saved.entries.first { $0.id == "c" }?.change, inbox.entries.first { $0.id == "c" }?.change)
     }
 
     // MARK: - What's owed

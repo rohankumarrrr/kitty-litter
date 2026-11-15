@@ -78,7 +78,7 @@ final class ChangeRequestFlowTests: XCTestCase {
     }
 
     private func thread(_ id: String, of kitten: Kitten, status: AgentStatus = .completed) -> AgentThread {
-        AgentThread(id: id, title: "\(kitten.name): Fix the install", projectTitle: nil, status: status, model: "m", updatedAt: clock, projectPath: kitten.folder, lastRunID: "run-1", lastRunEndedAt: clock)
+        AgentThread(id: id, title: "\(kitten.name): Fix the install", projectTitle: nil, status: status, model: "m", updatedAt: clock, projectPath: kitten.folder, lastRunID: "run-\(id)", lastRunEndedAt: clock)
     }
 
     /// An inbox kitten's run is filed by itself, with its requests saved alongside.
@@ -205,6 +205,30 @@ final class ChangeRequestFlowTests: XCTestCase {
         await settle()
         XCTAssertEqual(try String(contentsOfFile: steveFile, encoding: .utf8), asks[1])
         XCTAssertEqual(controller.inbox.entries.filter { $0.change != nil }.map(\.id), [cards[0].id])
+    }
+
+    /// Two kittens can ask for the same change. It's one card, and both hear what you decided.
+    func testEveryThreadThatAskedForTheSameChangeHearsWhatYouDecided() async throws {
+        var asking = thread("s", of: steve, status: .running)
+        controller.threadsChanged([asking])
+        backend.reports["s"] = reply(asking: commaFix)
+        asking.status = .completed
+        controller.threadsChanged([asking])
+        await controller.reportTask?.value
+        for _ in 0..<200 where !controller.inbox.entries.contains(where: { $0.change != nil }) { await Task.yield() }
+        backend.reports["w"] = reply(asking: commaFix)
+        controller.threadsChanged([asking, thread("w", of: clawde)])
+        for _ in 0..<50 where !controller.filing.isEmpty {
+            await controller.reportTask?.value
+            await Task.yield()
+        }
+        let cards = controller.inbox.entries.filter { $0.change != nil }
+        XCTAssertEqual(cards.count, 1)
+        XCTAssertEqual(cards.first?.change?.alsoAskedIn, ["w"])
+        controller.inboxAction(.deny(id: try XCTUnwrap(cards.first).id))
+        await settle()
+        XCTAssertEqual(backend.sent.filter { $0.mode == .forward }.map(\.threadID), ["s", "w"])
+        XCTAssertTrue(backend.sent.filter { $0.mode == .forward }.allSatisfy { Prompts.ownWords(in: $0.prompt.text) == nil })
     }
 
     /// It runs in the router's folder, where every other thread is a talk with the cat, and the app could stop before it ends.
