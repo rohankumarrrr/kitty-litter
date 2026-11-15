@@ -245,16 +245,17 @@ public struct Inbox: Codable, Equatable, Sendable {
     /// Puts what Shades read from a decision on that decision, if it's still waiting on you. Says whether it did.
     @discardableResult
     public mutating func attach(_ ask: AskRequest, to id: String) -> Bool {
+        // Your reply, or anything the thread said since, means it's moved on from what was read.
         guard let index = entries.firstIndex(where: { $0.id == id }), entries[index].kind == .decision, !entries[index].isStanding,
-              entries[index].ask == nil, entries[index].repliedAt == nil else { return false }
+              entries[index].ask == nil, entries[index].repliedAt == nil, entries[index].answer == nil else { return false }
         entries[index].ask = ask
         return true
     }
 
-    /// The row you asked on, or failing that the thread's open decision, or its latest row. A change it asked for only
-    /// takes Allow or Deny, so nothing else goes under it.
+    /// The row you asked on, or failing that the thread's open decision, or its latest row. Nothing goes under a row
+    /// with something to allow, so what a thread says later can't stand where Shades' look at it does.
     private func rowForNote(from threadID: String) -> Int? {
-        let own = entries.indices.filter { entries[$0].threadID == threadID && !entries[$0].isStanding }
+        let own = entries.indices.filter { entries[$0].threadID == threadID && !entries[$0].isStanding && entries[$0].ask == nil }
         return own.filter { entries[$0].repliedAt != nil }.max { entries[$0].repliedAt! < entries[$1].repliedAt! }
             ?? own.last { entries[$0].kind == .decision }
             ?? own.last
@@ -345,10 +346,11 @@ public struct Inbox: Codable, Equatable, Sendable {
         if let run = thread.lastRunID { handled[thread.id] = run }
     }
 
-    /// `nil` puts it back, for when the send failed.
+    /// `nil` puts it back, for when the send failed. Your own words answer it, so an ask Shades read from it goes.
     public mutating func markReplied(_ id: String, at date: Date?) {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].repliedAt = date
+        if date != nil, entries[index].ask?.readFromWords == true { entries[index].ask = nil }
     }
 
     public mutating func remove(_ id: String) {

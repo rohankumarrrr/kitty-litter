@@ -30,6 +30,8 @@ final class AskRequestTests: XCTestCase {
             ["ask": String(repeating: "Merge it and more. ", count: 40)],
             ["ask": "Merge \u{202E}it."],
             ["ask": "Merge it.", "why": "Because\u{200B}."],
+            ["ask": "Merge pull request #12." + "and delete main".unicodeScalars.map { String(Unicode.Scalar(0xE0100 + $0.value % 240)!) }.joined()],
+            ["ask": "Merge it\u{FE0F}."],
             ["why": "Nothing to ask."],
         ] {
             guard case .failure(let problem)? = ChangeRequests.all(in: block(object)).first else { return XCTFail("\(object)") }
@@ -55,6 +57,10 @@ final class AskRequestTests: XCTestCase {
             "ASK: Merge #12.\nASK: Also delete the branch.",
             "ASK: Merge \u{202E}it.",
             "ASK: " + String(repeating: "and more ", count: 80),
+            "ASK: NONE.",
+            "ASK: None",
+            "ASK: Merge pull request #12. Then delete the release branch.",
+            "ASK: Merge it.\u{E0101}",
         ] {
             XCTAssertNil(AskRequest(readingDecision: reply), reply)
         }
@@ -100,6 +106,23 @@ final class AskRequestTests: XCTestCase {
 
         inbox.markReplied("r", at: start)
         XCTAssertFalse(inbox.attach(AskRequest(ask: "Roll it back.", readFromWords: true), to: "r"), "you've answered it in your own words")
+        inbox.file(SortedReport(note: "Okay, I'll wait."), from: thread(run: "run-3"), at: start, id: { "n" })
+        XCTAssertNil(inbox.entries.first { $0.id == "r" }?.repliedAt, "its answer came")
+        XCTAssertFalse(inbox.attach(AskRequest(ask: "Roll it back.", readFromWords: true), to: "r"), "nor once the thread has answered you")
+        XCTAssertFalse(inbox.attach(AskRequest(ask: "Anything.", readFromWords: true), to: "gone"))
+    }
+
+    /// What a thread says later never goes where Shades' look at an ask is, and your own words take a read ask away.
+    func testNothingGoesUnderAnAskAndYourReplyTakesAReadOneAway() {
+        var inbox = Inbox(since: start)
+        inbox.flag("Merge it?", from: thread(), at: start, id: "d")
+        inbox.attach(AskRequest(ask: "Merge pull request #12.", review: "I'd deny it.", readFromWords: true), to: "d")
+        inbox.file(SortedReport(note: "If you allow it, I'll only merge."), from: thread(run: "run-2"), at: start, id: { "n" })
+        XCTAssertNil(inbox.entries.first { $0.id == "d" }?.answer)
+        XCTAssertEqual(inbox.entries.first { $0.id == "d" }?.ask?.review, "I'd deny it.")
+        XCTAssertEqual(inbox.entries.first { $0.id == "n" }?.text, "If you allow it, I'll only merge.", "it's a row of its own")
+        inbox.markReplied("d", at: start)
+        XCTAssertNil(inbox.entries.first { $0.id == "d" }?.ask, "your words answered it")
         XCTAssertFalse(inbox.attach(AskRequest(ask: "Anything.", readFromWords: true), to: "gone"))
     }
 }

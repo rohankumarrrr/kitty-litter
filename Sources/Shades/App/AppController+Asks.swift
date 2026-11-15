@@ -5,11 +5,12 @@ import ShadesCore
 /// yes to only that, in The Kitty Litter's own note, never in your words.
 extension AppController {
     /// Shades reads what a kitten's decision would have it do on a yes. If that's something exact, the decision's card
-    /// offers Allow and Deny for it. All it reads is the decision, never the report or your screen.
-    func readDecision(_ id: String, of thread: AgentThread) {
-        guard let entry = inbox.entries.first(where: { $0.id == id }), let kitten = kitten(of: thread) else { return }
+    /// offers Allow and Deny for it. All it reads is the sorter's decision line, never the note filed beside it, the
+    /// report or your screen.
+    func readDecision(_ id: String, decision: String, of thread: AgentThread) {
+        guard let kitten = kitten(of: thread) else { return }
         Task {
-            guard let reply = await lookInto(Prompts.readDecision(entry.text, by: kitten.name, task: thread.title), about: thread.title),
+            guard let reply = await lookInto(Prompts.readDecision(decision, by: kitten.name, task: thread.title), about: thread.title),
                   let ask = AskRequest(readingDecision: reply), inbox.attach(ask, to: id)
             else { return }
             keepInbox()

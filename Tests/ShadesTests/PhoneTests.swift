@@ -262,7 +262,7 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(writtenCard.answer, "Fine.")
         let readCard = try XCTUnwrap(rows.first { $0.id == "a2" })
         XCTAssertEqual(readCard.choices?.map(\.label), ["Deny", "Allow", "Reply"])
-        XCTAssertEqual(readCard.text, "Merge it?\n\nIf you allow it, Steve Pawsniak will: Merge pull request 12.")
+        XCTAssertEqual(readCard.text, "If you allow it, Steve Pawsniak will:\nMerge pull request 12.\n\nIts report said: “Merge it?”", "what Allow says yes to comes first, on lines of its own")
 
         XCTAssertEqual(ask("ask", id: "a1", value: "accept").action(in: book) { "x" }?.action, .inbox(.allow(id: "a1")))
         XCTAssertEqual(ask("ask", id: "a2", value: "decline").action(in: book) { "x" }?.action, .inbox(.deny(id: "a2")))

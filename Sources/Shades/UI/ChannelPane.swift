@@ -1021,7 +1021,7 @@ final class ChannelPane: QuietView {
             heading: heading(kitten, title: entry.threadTitle),
             at: entry.at,
             text: CatWords.askCard(ask, decision: ask.readFromWords ? entry.text : nil, by: kitten?.name ?? "The kitten"),
-            answer: entry.answer ?? CatWords.askReview(ask),
+            answer: CatWords.askReview(ask),
             footer: entry.repliedAt == nil ? nil : CatWords.inboxSent,
             buttons: buttons
         )

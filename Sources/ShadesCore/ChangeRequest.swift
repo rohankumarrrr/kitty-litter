@@ -171,8 +171,10 @@ public enum ChangeRequests {
         text.unicodeScalars.contains(where: hides)
     }
 
+    /// Unicode's own list of what draws as nothing, variation selectors included, as well as the usual ones.
     private static func hides(_ scalar: Unicode.Scalar) -> Bool {
         if scalar == "\n" || scalar == "\t" || scalar == "\r" { return false }
+        if scalar.properties.isDefaultIgnorableCodePoint || scalar.properties.isNoncharacterCodePoint { return true }
         switch scalar.properties.generalCategory {
         case .control, .format, .lineSeparator, .paragraphSeparator, .privateUse, .unassigned, .surrogate: return true
         default: return false

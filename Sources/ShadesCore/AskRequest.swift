@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 /// Something a kitten needs your yes for and then does itself, such as merging or sending something. It writes one in
 /// a `shades-request` block, or Shades reads one from what it said in plain words. Either way the card shows exactly
@@ -27,9 +28,18 @@ public struct AskRequest: Codable, Equatable, Sendable {
         let asks = lines.filter { $0.hasPrefix(Prompts.askMarker) }
         guard asks.count == 1 else { return nil }
         let ask = asks[0].dropFirst(Prompts.askMarker.count).trimmingCharacters(in: .whitespaces)
-        guard !ask.isEmpty, ask.uppercased() != "NONE", ask.count <= ChangeRequests.askLimit, !ChangeRequests.hides(text: ask) else { return nil }
+        // As the sorter reads "none", whatever its case or the full stop after it.
+        let none = ask.trimmingCharacters(in: CharacterSet(charactersIn: " .")).lowercased() == "none"
+        guard !ask.isEmpty, !none, ask.count <= ChangeRequests.askLimit, !ChangeRequests.hides(text: ask), Self.sentences(in: ask) == 1 else { return nil }
         let recommends = lines.drop { !$0.hasPrefix(Prompts.recommendMarker) }
         let review = recommends.joined(separator: " ").dropFirst(Prompts.recommendMarker.count).trimmingCharacters(in: .whitespaces)
         self.init(ask: ask, review: review.isEmpty ? nil : review, readFromWords: true)
+    }
+
+    /// Two sentences can be two things to say yes to, so a reading has to be one.
+    static func sentences(in text: String) -> Int {
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = text
+        return tokenizer.tokens(for: text.startIndex..<text.endIndex).count
     }
 }

@@ -49,7 +49,7 @@ extension AppController {
                 entries.append(entry(CatWords.changeRow(change), change, nil))
             case .success(.ask(var ask)):
                 ask.review = await lookInto(Prompts.reviewAsk(ask, by: kitten.name, task: thread.title), about: thread.title)
-                entries.append(entry(CatWords.askRow(ask), nil, ask))
+                entries.append(entry(CatWords.askRow(ask, by: kitten.name), nil, ask))
             case .failure(let problem):
                 var change = ChangeRequest(file: "", replace: nil, with: "", why: nil)
                 change.problem = problem.reason

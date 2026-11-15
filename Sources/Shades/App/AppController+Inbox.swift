@@ -76,8 +76,9 @@ extension AppController {
         if owed, lines.decision == nil { notifyFinished(thread, by: kitten(of: thread)) }
         // Only a decision the sorter wrote, since a report it couldn't sort is the kitten's own words, and never beside a
         // request in the form, which has its card already.
-        if !failed, changes.isEmpty, readable?.contains(where: { !$0.isWhitespace }) == true, sorted?.decision != nil, let decision = inbox.entries.last(where: { $0.threadID == thread.id && $0.kind == .decision && !$0.isStanding }) {
-            readDecision(decision.id, of: thread)
+        if !failed, changes.isEmpty, readable?.contains(where: { !$0.isWhitespace }) == true, let decision = sorted?.decision,
+           let row = inbox.entries.last(where: { $0.threadID == thread.id && $0.kind == .decision && !$0.isStanding }) {
+            readDecision(row.id, decision: decision, of: thread)
         }
     }
 
@@ -114,7 +115,7 @@ extension AppController {
         inbox.flag(decision, from: thread, at: now(), id: id)
         keepInbox()
         inboxChanged()
-        if ChangeRequests.all(in: report ?? "").isEmpty { readDecision(id, of: thread) }
+        if ChangeRequests.all(in: report ?? "").isEmpty { readDecision(id, decision: decision, of: thread) }
     }
 
     /// It's a decision, because a false alarm beats a lost report.
