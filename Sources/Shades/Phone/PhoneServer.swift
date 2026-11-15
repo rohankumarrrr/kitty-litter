@@ -288,10 +288,10 @@ final class PhoneStream {
     }
 
     private func write(_ parts: [Data]) {
-        write(gzip.map { $0.padded(parts) } ?? parts.reduce(Data(), +))
+        write(gzip.map { $0.packed(parts) } ?? parts.reduce(Data(), +))
     }
 
-    /// A ping says nothing, so it isn't padded, and packed on its own it's the same size whatever came before it.
+    /// Packed on its own, a ping is the same size whatever came before it.
     private func ping() {
         let ping = Data(": ping\n\n".utf8)
         write(gzip.map { $0.flushed(ping) } ?? ping)

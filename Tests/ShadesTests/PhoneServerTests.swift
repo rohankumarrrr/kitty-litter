@@ -534,7 +534,7 @@ final class PhoneServerTests: XCTestCase {
     }
 
     /// What's said, and the key pairing sends, could be guessed at from how well it packs, so only the page's own files
-    /// and its padded stream are.
+    /// and its stream, a row at a time, are.
     func testWhatsSaidNeverGoesPackedOutsideTheStream() async throws {
         let key = try await pair()
         let budget = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: Date(), projectPath: penny.folder)
@@ -555,7 +555,7 @@ final class PhoneServerTests: XCTestCase {
 
     /// A kitten's words that repeated words of yours packed smaller, so someone who could get words into a reply, and
     /// see how big each event was on the way to your phone, could guess at yours a letter at a time. Padding didn't stop
-    /// it, so each row now packs on its own. What goes over the wire, padding taken off, is the same either way.
+    /// it, so each row packs on its own, and what goes over the wire is the same size either way.
     func testAKittensWordsDontPackAgainstYoursOnTheStream() async throws {
         let key = try await pair()
         let day = Date(timeIntervalSince1970: 1_767_268_800)
@@ -571,9 +571,9 @@ final class PhoneServerTests: XCTestCase {
             let place = PhonePlace.key(.thread(id, in: .channel(.of(penny)))).addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
             let raw = try await rawStream("/events?key=\(place)", key: key, until: guess)
             let event = try XCTUnwrap(raw.first { $0.text.contains(guess) }, "the view with both rows")
-            // The padding is a comment kept as it is, 10 bytes more than its own length, and the first has gzip's 10.
-            let comment = event.text.components(separatedBy: "\n\n").filter { $0.hasPrefix(":") }.reduce(0) { $0 + $1.utf8.count + 2 }
-            return event.size - comment - 10 - (event.first ? 10 : 0)
+            XCTAssertFalse(event.text.contains("\n\n:"), "with nothing padding it out")
+            // The first chunk has gzip's 10 bytes in front.
+            return event.size - (event.first ? 10 : 0)
         }
         // The same letters backwards, so the two only differ in whether they repeat your words.
         let right = try await packed("4F7QPL2K9X", in: "bank-ab")
