@@ -475,9 +475,27 @@ enum PhonePage {
           }
         }
 
+        // The Mac only takes what a page asks while one of its streams holds The Kitty Litter open, and it can have let
+        // go of one the page still thinks it has. Then the page asks once more as soon as a stream has brought it
+        // something, starting one unless one's already on its way.
+        let began = 0;
+        let shownAt = 0;
+        const waiting = [];
+        async function request(path, body) {
+          const sent = Date.now();
+          const response = await post(path, body);
+          if (!response || response.status !== 503) return response;
+          if (shownAt < sent) {
+            const shown = new Promise((resolve) => { waiting.push(resolve); setTimeout(resolve, 10000); });
+            if (began < sent) listen();
+            await shown;
+          }
+          return post(path, body);
+        }
+
         async function act(body, quiet) {
           const asked = Date.now();
-          const response = await post('/act', body);
+          const response = await request('/act', body);
           if (response && response.ok) {
             if (quiet) reached(); else banner('');
             // What you do shows on the Mac at once, so a stream that says nothing about it is one that's gone.
@@ -600,7 +618,7 @@ enum PhonePage {
           if (stream) stream.abort();
           const mine = new AbortController();
           stream = mine;
-          heard = Date.now();
+          heard = began = Date.now();
           try {
             const response = await fetch('/events?key=' + encodeURIComponent(key) + '&page=' + page, { headers: headers(), cache: 'no-store', signal: mine.signal });
             if (response.status === 401) return pairing();
@@ -617,7 +635,7 @@ enum PhonePage {
                 const event = buffer.slice(0, end);
                 buffer = buffer.slice(end + 2);
                 for (const line of event.split('\n')) {
-                  if (line.startsWith('data: ')) { reached(); show(JSON.parse(line.slice(6))); }
+                  if (line.startsWith('data: ')) { reached(); show(JSON.parse(line.slice(6))); shownAt = Date.now(); waiting.splice(0).forEach((resolve) => resolve()); }
                 }
               }
             }
@@ -828,7 +846,7 @@ enum PhonePage {
         async function find() {
           const asked = $('query').value;
           if (asked.trim().length < 2) return $('found').replaceChildren(el('p', 'note', words.searchHint));
-          const response = await post('/search', { words: asked });
+          const response = await request('/search', { words: asked });
           if (asked !== $('query').value || $('search').hidden) return;
           if (response && response.status === 401) return pairing();
           if (!response || !response.ok) return banner(response && response.status === 409 ? words.gone : words.unreachable);

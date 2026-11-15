@@ -5,7 +5,8 @@
 //
 // Listens on 127.0.0.1:<port> and passes everything to the page on <page-port>, each way after the delay, sharing the
 // bandwidth between connections as one phone's link does. The defaults are 0.15 seconds and 125000 bytes a second,
-// about 1 Mbps. It prints each connection as it closes, with what it asked for and how much went each way.
+// about 1 Mbps. It prints each connection as it closes, with what it asked for, how long the Mac took to answer, and
+// how much went each way.
 //
 // Write a word to the control file to change what the link does. Only a new line is read, so add a number after it.
 //   cut   every open connection goes silent without closing, as an iPhone leaves a stream after the lock screen
@@ -39,6 +40,8 @@ final class Link {
     var sent = ["up": 0, "down": 0]
     var ended = 0
     var silent = false
+    /// How long the Mac took to answer.
+    var answered: TimeInterval?
 
     init(_ number: Int, phone: NWConnection, mac: NWConnection) {
         self.number = number
@@ -64,6 +67,7 @@ func pass(_ link: Link, from: NWConnection, to: NWConnection, way: String) {
         if let data, !data.isEmpty {
             if link.asked.isEmpty, way == "up" { link.asked = String(decoding: data.prefix(80), as: UTF8.self).components(separatedBy: "\r\n")[0] }
             link.sent[way, default: 0] += data.count
+            if way == "down", link.answered == nil { link.answered = Date().timeIntervalSince(link.opened) }
             free[way] = max(Date(), free[way]!).addingTimeInterval(Double(data.count) / rate)
             queue.asyncAfter(wallDeadline: .now() + free[way]!.timeIntervalSinceNow + delay) {
                 if !link.silent { to.send(content: data, completion: .idempotent) }
@@ -76,7 +80,7 @@ func pass(_ link: Link, from: NWConnection, to: NWConnection, way: String) {
             to.send(content: nil, contentContext: .finalMessage, isComplete: true, completion: .idempotent)
             link.ended += 1
             guard link.ended == 2 || error != nil, links.removeValue(forKey: link.number) != nil else { return }
-            say(String(format: "%@ closed after %.2fs, up %d, down %d", link.name, Date().timeIntervalSince(link.opened), link.sent["up"]!, link.sent["down"]!))
+            say(String(format: "%@ closed after %.2fs, answered after %.2fs, up %d, down %d", link.name, Date().timeIntervalSince(link.opened), link.answered ?? -1, link.sent["up"]!, link.sent["down"]!))
             queue.asyncAfter(deadline: .now() + 2) {
                 link.phone.cancel()
                 link.mac.cancel()
@@ -118,7 +122,7 @@ watching.setEventHandler {
         open.forEach { $0.silent = true; $0.mac.cancel() }
         say("silent, the Mac's side closed: " + open.map(\.name).joined(separator: "; "))
     case "open":
-        say("\(open.count) open: " + open.map(\.name).joined(separator: "; "))
+        say("\(open.count) open: " + open.map { $0.name + String(format: ", answered after %.2fs, down %d", $0.answered ?? -1, $0.sent["down"]!) }.joined(separator: "; "))
     default:
         break
     }
