@@ -476,6 +476,42 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(changed, 409, "what's no longer there is still told apart")
     }
 
+    /// The simulator kept running the page in the background, and the demo's book always has its threads, so neither
+    /// showed whether a reply right after coming back past the grace is told it changed since. On the real path,
+    /// `ChannelFeed.open` after `close` gives back what it had read, so the reply goes.
+    func testAReplyRightAfterComingBackPastTheGraceGoesToItsThread() async throws {
+        let thread = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: Date(), runtimeMode: .auto, projectPath: penny.folder)
+        backend.listed = [thread]
+        backend.said["w"] = [Exchange(id: "e1", asker: .you, askedAt: Date(), ask: "How's the budget?", reply: "On track.", repliedAt: Date())]
+        controller.threadsChanged([thread])
+        let key = try await pair()
+        let place = PhonePlace.key(.thread("w", in: .channel(.of(penny))))
+        let reply = #"{"act":"send","key":"\#(place)","text":"Keep it under 400"}"#
+        let (_, first) = try await watch(place, key: key)
+        // The first time, Messages reads T3 before it knows the thread, as it does once at start.
+        for _ in 0..<100 {
+            if try await page(#"{"act":"seen","key":"\#(place)"}"#, key: key).status == 200 { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        let (before, _) = try await page(#"{"act":"send","key":"\#(place)","text":"First"}"#, key: key)
+        XCTAssertEqual(before, 200, "where a reply goes once it's read")
+        first.cancel()
+        await until { controller.phone?.isWatched == false }
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        XCTAssertFalse(controller.channels.isOpen, "past the grace, Messages has let go")
+        let (unlooked, _) = try await page(reply, key: key)
+        XCTAssertEqual(unlooked, 503, "and with nobody looking, the page is told to look again")
+
+        let (view, again) = try await watch(place, key: key)
+        defer { again.cancel() }
+        XCTAssertTrue(controller.channels.isOpen, "looking again opens it again")
+        XCTAssertEqual(view["key"] as? String, place)
+        let (status, _) = try await page(reply, key: key)
+        XCTAssertEqual(status, 200, "not changed since")
+        await until { backend.sent.contains { $0.threadID == "w" && $0.prompt.text.hasPrefix("Keep it under 400") } }
+        XCTAssertTrue(backend.sent.contains { $0.threadID == "w" && $0.prompt.text.hasPrefix("Keep it under 400") }, "and it reached its thread")
+    }
+
     /// Every change used to send every row of the place again, about 240 KB for a thread of 300 messages, so on a
     /// phone's link a reply waited seconds behind its own thread.
     func testAChangeSendsOnlyTheRowsThatChanged() async throws {
