@@ -9,11 +9,23 @@ struct PhonePlace: Equatable {
     var selection: ChannelSelection?
     var target: MessageTarget?
     var key: String
+    /// A kitten's backlog, by the kitten's ID, which is a page of its own, read only.
+    var backlog: String?
 
     static let home = "home"
 
     /// An unknown key is the list of places, and a key for an inbox row that's gone is Activity.
     init(_ key: String, in book: ChannelBook) {
+        if key.hasPrefix("b:") {
+            // As with the list of places, a kitten that's only planned isn't there.
+            guard let kitten = Self.unescape(key.dropFirst(2)), book.kitten(kitten)?.planned == false else {
+                self.init(selection: nil, in: book)
+                return
+            }
+            self.init(selection: nil, target: nil, key: Self.backlog(of: kitten))
+            backlog = kitten
+            return
+        }
         if key.hasPrefix("r:") {
             guard let id = Self.unescape(key.dropFirst(2)), let entry = book.waiting.reports.first(where: { $0.id == id }), !book.talks.contains(entry.threadID) else {
                 self.init(selection: .activity, in: book)
@@ -119,6 +131,10 @@ struct PhonePlace: Equatable {
 
     static func reply(to entry: InboxEntry) -> String {
         "r:\(escape(entry.id))"
+    }
+
+    static func backlog(of kitten: String) -> String {
+        "b:\(escape(kitten))"
     }
 
     private static func key(_ place: ChannelPlace) -> String {
@@ -314,10 +330,12 @@ struct PhoneView: Encodable, Equatable {
     var marks = Reaction.allCases.map { Choice(label: $0.emoji, value: $0.rawValue) }
     /// Where T3 Code's own page has this thread, for Open in T3, as a path the page puts after its own host.
     var t3: String?
+    /// A kitten's channel's "3 in backlog", which opens its backlog.
+    var backlog: Link?
 
     /// `newFrom` is where each thread's New line was when this phone came here, as the window keeps it. `t3` is what
     /// T3 Code's page calls this Mac, when it's known.
-    init(_ place: PhonePlace, in book: ChannelBook, now: Date, newFrom: [String: String] = [:], t3 environment: String? = nil) {
+    init(_ place: PhonePlace, in book: ChannelBook, now: Date, newFrom: [String: String] = [:], t3 environment: String? = nil, priorities: Priorities = Priorities()) {
         key = place.key
         places = Self.places(in: book)
         cantReachT3 = book.cantReachT3
@@ -330,8 +348,20 @@ struct PhoneView: Encodable, Equatable {
             }
             return Box(label: label, placeholder: CatWords.placeholder(target), ready: target.isReady, also: also, files: target.takesFiles)
         }
+        if let kitten = place.backlog {
+            let name = book.name(of: ChannelID.kitten(kitten))
+            title = CatWords.backlogTitle
+            subtitle = CatWords.backlogKeeper(name)
+            cat = Self.cat(of: .kitten(kitten), in: book)
+            back = PhonePlace.key(.channel(.kitten(kitten)))
+            backTitle = name
+            rows = Self.rows(of: priorities.backlogs[kitten] ?? Backlog())
+            return
+        }
         guard let selection = place.selection else {
             title = CatWords.appName
+            // The focus, in a quiet line over the places, as the window's sidebar has it.
+            subtitle = priorities.focus
             rows = []
             return
         }
@@ -353,10 +383,26 @@ struct PhoneView: Encodable, Equatable {
             if case .channel(.kitten(let kitten)) = selection.place, let count = book.issues.first(where: { $0.kitten.id == kitten })?.threads.count, count > 0 {
                 link = Link(label: CatWords.issues(count), open: PhonePlace.key(.activity))
             }
+            if case .channel(.kitten(let kitten)) = selection.place, let count = priorities.backlogs[kitten]?.items.count, count > 0 {
+                backlog = Link(label: CatWords.backlog(count), open: PhonePlace.backlog(of: kitten))
+            }
             back = PhonePlace.home
             backTitle = CatWords.appName
             if selection.place == .channel(.shades) { subtitle = CatWords.shadesOnPhone }
             rows = Self.rows(selection, in: book, now: now, newFrom: newFrom, t3: environment)
+        }
+    }
+
+    /// What's under way, then what's next and what can wait, as the window's sheet has them, each with when you asked
+    /// and your words.
+    private static func rows(of backlog: Backlog) -> [Row] {
+        Backlog.Level.allCases.flatMap { level -> [Row] in
+            let items = backlog.items.filter { $0.level == level }
+            guard !items.isEmpty else { return [Row(kind: "section", title: level.rawValue), Row(kind: "note", text: CatWords.backlogEmpty)] }
+            return [Row(kind: "section", title: level.rawValue)] + items.map { item in
+                let about = [item.date, item.words.map { "\u{201C}\($0)\u{201D}" }].compactMap { $0 }.joined(separator: " · ")
+                return Row(kind: "backlog", title: item.what, detail: about.isEmpty ? nil : about)
+            }
         }
     }
 

@@ -1,8 +1,8 @@
 import Foundation
 
 /// What comes first right now, and what each kitten has waiting, from the plain files the kittens keep: the focus in
-/// `FOCUS.md` and each kitten's `backlog.md`. Only The Kitty Litter's window reads them, since they're for you to see,
-/// so nothing here ever reaches a prompt, the phone or the cat. See docs/kittens.md.
+/// `FOCUS.md` and each kitten's `backlog.md`. Only The Kitty Litter's window and a paired phone get them, since they're
+/// for you to see, so nothing here ever reaches a prompt, an agent or the cat. See docs/kittens.md.
 public struct Priorities: Equatable, Sendable {
     /// The first line under "## Right now", bold taken off, or `nil` with no focus.
     public var focus: String?

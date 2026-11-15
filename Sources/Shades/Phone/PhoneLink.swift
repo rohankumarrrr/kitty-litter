@@ -36,6 +36,10 @@ final class PhoneLink {
     var textSize = TextSize.standard
     /// What T3 Code's own page calls this Mac, for Open in T3, once T3 has said.
     var t3: String?
+    /// Reads the focus and the kittens' backlogs, which go only into what a paired phone is sent.
+    var readPriorities: ([Kitten]) -> Priorities = { _ in Priorities() }
+    private var priorities = Priorities()
+    private var prioritiesRead: Date?
     private let server = PhoneServer()
     /// Holds Messages open, and returns what it shows.
     private let hold: () -> ChannelBook?
@@ -105,7 +109,7 @@ final class PhoneLink {
     private func show(_ book: ChannelBook, to watcher: Watcher) {
         let place = PhonePlace(watcher.key, in: book)
         watcher.newFrom.merge(book.newFrom) { _, now in now }
-        let view = PhoneView(place, in: book, now: now(), newFrom: watcher.newFrom, t3: t3)
+        let view = PhoneView(place, in: book, now: now(), newFrom: watcher.newFrom, t3: t3, priorities: priorities(for: book))
         if place.selection?.thread != nil { watcher.opening = false }
         if !watcher.opening { watcher.key = view.key }
         guard view != watcher.shown else { return }
@@ -113,6 +117,15 @@ final class PhoneLink {
         guard !parts.isEmpty else { return }
         watcher.shown = view
         watcher.stream.send(parts)
+    }
+
+    /// As the window does, read again at most once a minute, and kept only in memory.
+    private func priorities(for book: ChannelBook) -> Priorities {
+        if prioritiesRead.map({ now().timeIntervalSince($0) >= 60 }) ?? true {
+            priorities = readPriorities(book.statuses.map(\.kitten).filter { !$0.planned })
+            prioritiesRead = now()
+        }
+        return priorities
     }
 
     func respond(to request: PhoneServer.Request) -> PhoneServer.Response {
@@ -207,6 +220,8 @@ final class PhoneLink {
         guard book != nil else { return }
         book = nil
         plainWords = PlainWords()
+        priorities = Priorities()
+        prioritiesRead = nil
         release()
     }
 

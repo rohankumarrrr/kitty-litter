@@ -663,6 +663,28 @@ final class PhoneServerTests: XCTestCase {
         return chunks
     }
 
+    /// The focus and backlogs go only into what a paired phone is sent, read from the files at most once a minute, as
+    /// the window reads them, and kept nowhere but in memory.
+    func testAPairedPhonesViewsHaveTheFocusReadAtMostOnceAMinute() async throws {
+        var reads = 0
+        controller.readPriorities = { _ in
+            reads += 1
+            return Priorities(focus: "Focus: the launch", backlogs: [self.penny.id: Backlog(reading: "## Next\n- Check the budget\n")])
+        }
+        let key = try await pair()
+        let (home, first) = try await watch("home", key: key)
+        defer { first.cancel() }
+        XCTAssertEqual(home["subtitle"] as? String, "Focus: the launch")
+        let (channel, second) = try await watch(PhonePlace.key(.channel(.of(penny))), key: key)
+        defer { second.cancel() }
+        XCTAssertEqual((channel["backlog"] as? [String: Any])?["label"] as? String, "1 in backlog")
+        XCTAssertEqual(reads, 1, "once, for both")
+        ahead = 61
+        let (_, third) = try await watch(PhonePlace.backlog(of: penny.id), key: key)
+        defer { third.cancel() }
+        XCTAssertEqual(reads, 2, "and again a minute later")
+    }
+
     /// Pages whose streams the Mac has ended.
     private var ended: Set<String> = []
 

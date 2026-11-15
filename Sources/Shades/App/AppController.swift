@@ -196,6 +196,8 @@ final class AppController {
     var phoneTailscale: Task<Void, Never>?
     /// How long Messages stays open after a phone stops looking, so going from place to place on it doesn't close it.
     var phoneGrace: TimeInterval = 20
+    /// Reads the focus and the kittens' backlogs, for the window and a paired phone, and nothing else.
+    var readPriorities: ([Kitten]) -> Priorities = { _ in Priorities() }
     /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
     /// Waiting a little before saying it's finished means that doesn't read as done.
     var reportDelay: TimeInterval = 5
