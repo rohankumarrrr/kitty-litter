@@ -145,6 +145,20 @@ final class PressPhoneTests: XCTestCase {
         try await expect("location.hash", "", "the code doesn't stay in the address")
     }
 
+    /// Safari only moves within the page when the address it already shows comes again with a new `#pair=`, as it does
+    /// when you scan a new code after one didn't work.
+    func testScanningANewCodeIntoThePageAlreadyOpenPairsIt() async throws {
+        try await open(paired: false)
+        phone.open(PhonePlace.home, hash: "#pair=WXYZ-1234")
+        try await phone.until("a wrong code says so") { try await phone.read("!window.stale && $('pairnote').textContent.length > 0") as? Bool == true }
+        try await phone.run("window.stillHere = true; location.hash = '#pair=\(Phone.code)'")
+        try await shows(PhonePlace.home)
+        try await expect("window.stillHere", true, "the page wasn't loaded again")
+        try await expect("$('pair').hidden", true)
+        try await expect("$('pairnote').textContent", "")
+        try await expect("location.hash", "", "the code doesn't stay in the address")
+    }
+
     func testPairTakesATap() async throws {
         try await open(paired: false)
         try await phone.until("the page asks for a code") { try await phone.read("!$('pair').hidden") as? Bool == true }
@@ -180,6 +194,17 @@ final class PressPhoneTests: XCTestCase {
             try await phone.until("\(place) opens") { try await phone.read("$('title').textContent") as? String != CatWords.appName }
             try await phone.tap("#back")
             try await shows(PhonePlace.home)
+        }
+    }
+
+    /// An iPhone's browser left Back blank on Activity and Threads, since it's shown after the bar is first drawn, and
+    /// WebKit doesn't always draw what changes in a sticky bar. The Mac draws it either way, so what's checked is that
+    /// each part of the bar is on a layer of its own, which the iPhone does draw.
+    func testWhatChangesInTheBarIsOnItsOwnLayerSoAnIPhoneDrawsIt() async throws {
+        try await open(at: "activity")
+        try await expect("$('back').hidden", false)
+        for part in ["back", "bartitle", "actions"] {
+            try await expect("getComputedStyle($('\(part)')).willChange", "transform", part)
         }
     }
 

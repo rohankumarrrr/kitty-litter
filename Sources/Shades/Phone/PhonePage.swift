@@ -124,6 +124,9 @@ enum PhonePage {
           padding: env(safe-area-inset-top) calc(env(safe-area-inset-right) + 8px) 0 calc(env(safe-area-inset-left) + 8px); }
         #top.collapsed { background: var(--glass); box-shadow: 0 1px var(--glass-edge); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
         #bar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; min-height: 44px; }
+        /* Once the sticky bar is drawn, an iPhone's browser doesn't always draw what changes in it (WebKit bug 244139),
+           which left Back blank on Activity and Threads. Each part is drawn on a layer of its own, which it does draw. */
+        #bar > * { will-change: transform; }
         #back { grid-column: 1; justify-self: start; display: flex; align-items: center; gap: 2px; max-width: 100%; padding-right: 8px;
           color: var(--lilac); white-space: nowrap; overflow: hidden; }
         #back .symbol { stroke-width: 2.2; }
@@ -1609,6 +1612,12 @@ enum PhonePage {
           event.preventDefault();
           if (await pair($('code').value)) start();
         };
+
+        // A new code scanned while the page is already open in Safari's tab only changes what's after the #, which
+        // doesn't load the page again.
+        window.addEventListener('hashchange', () => {
+          if (new URLSearchParams(location.hash.slice(1)).get('pair')) start();
+        });
 
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState !== 'visible') return;
