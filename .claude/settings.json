@@ -26,7 +26,8 @@
       "swift scripts/*",
       "scripts/bundle.sh*",
       "scripts/install.sh*",
-      "~/shades/scripts/install.sh*"
+      "~/shades/scripts/install.sh*",
+      "~/shades/scripts/triage.sh*"
     ],
     "network": {
       "allowedDomains": [
