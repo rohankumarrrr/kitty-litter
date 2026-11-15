@@ -183,6 +183,17 @@ final class PressPhoneTests: XCTestCase {
         }
     }
 
+    /// An iPhone's browser left Back blank on Activity and Threads, since it's shown after the bar is first drawn, and
+    /// WebKit doesn't always draw what changes in a sticky bar. The Mac draws it either way, so what's checked is that
+    /// each part of the bar is on a layer of its own, which the iPhone does draw.
+    func testWhatChangesInTheBarIsOnItsOwnLayerSoAnIPhoneDrawsIt() async throws {
+        try await open(at: "activity")
+        try await expect("$('back').hidden", false)
+        for part in ["back", "bartitle", "actions"] {
+            try await expect("getComputedStyle($('\(part)')).willChange", "transform", part)
+        }
+    }
+
     func testTheBarTakesTheTitleOnceItsScrolledUnder() async throws {
         try await open(at: PhonePlace.key(.thread("p", in: .channel(.of(pepper)))))
         try await phone.run("window.scrollTo(0, 0)")
