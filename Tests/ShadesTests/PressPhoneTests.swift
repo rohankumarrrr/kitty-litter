@@ -38,7 +38,8 @@ final class PressPhoneTests: XCTestCase {
         let twoParts = AgentQuestion(id: "q2", threadID: "p", threadTitle: "Work", text: "Which pages?", form: pages)
         let decision = InboxEntry(id: "r1", kind: .decision, text: "Ship it?", threadID: "p", threadTitle: "Work", at: noon)
         let shipped = InboxEntry(id: "s1", kind: .shipped, text: "Live.", threadID: "a", threadTitle: "Work", at: noon)
-        var waiting = Waiting(approvals: [command], questions: [question, twoParts], reports: [decision, shipped])
+        let ask = InboxEntry(id: "k1", kind: .decision, text: "Asks for your yes to: Send it.", threadID: "a", threadTitle: "Work", at: noon, ask: AskRequest(ask: "Send it.", readFromWords: false))
+        var waiting = Waiting(approvals: [command], questions: [question, twoParts], reports: [decision, shipped, ask])
         waiting.owners = ["ap": steve.id, "q": pepper.id, "q2": pepper.id, "r1": pepper.id, "s1": steve.id]
         var failed = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "And then?", at: noon, threadID: "a", threadTitle: "Work")
         failed.failure = "I can't reach T3 Code. Open it and try again."
@@ -445,6 +446,19 @@ final class PressPhoneTests: XCTestCase {
         try await phone.press(.space, on: ".card.approval button", "Allow for this session")
         try await phone.until("Space allows it for the session") { asked("approval") == 3 }
         guard case .approval(_, .acceptForSession)? = phone.acts.last?.action else { return XCTFail("not for the session") }
+    }
+
+    func testAnAsksButtonsAnswerIt() async throws {
+        try await open(at: "activity")
+        try await phone.tap(".card.ask button", "Allow")
+        try await did("ask", .inbox(.allow(id: "k1")))
+        try await expect("[...document.querySelectorAll('.card.ask button')].every((b) => b.disabled)", true)
+
+        phone.open("activity")
+        try await shows("activity")
+        try await phone.press(.returnKey, on: ".card.ask button", "Deny")
+        try await phone.until("Return denies it") { asked("ask") == 2 }
+        XCTAssertEqual(phone.acts.last?.action, .inbox(.deny(id: "k1")))
     }
 
     func testAQuestionsChoiceAnswersItOnTheTap() async throws {

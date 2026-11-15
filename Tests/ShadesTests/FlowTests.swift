@@ -3418,7 +3418,8 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(typed.mode, .forward)
         XCTAssertTrue(typed.prompt.attachments.isEmpty)
         XCTAssertFalse(typed.prompt.text.contains("<screen>"))
-        XCTAssertEqual(backend.sent.filter { $0.mode != .forward }.count, 1, "only the sort, and nothing to the router")
+        XCTAssertEqual(backend.sentApartFromLooks.filter { $0.mode != .forward }.count, 1, "only the sort, and nothing to the router")
+        XCTAssertFalse(backend.sent.contains { $0.prompt.text.contains("<screen>") }, "nor anything else with a screen in it")
     }
 
     func testNoButtonSendsAnything() async throws {

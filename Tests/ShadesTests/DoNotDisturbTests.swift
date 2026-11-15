@@ -97,7 +97,7 @@ final class DoNotDisturbTests: XCTestCase {
         await finish(work("s", title: "Steve: Resume", folder: steve.folder), report: String(repeating: "Your resume is ready. ", count: 40), sorted: "DECISION: Send it?")
         XCTAssertNil(stage.bubble)
         XCTAssertTrue(notified.isEmpty)
-        XCTAssertEqual(backend.sent.count, 1, "sorted for what needs you, and nothing summed up for a bubble that won't show")
+        XCTAssertEqual(backend.sentApartFromLooks.count, 1, "sorted for what needs you, and nothing summed up for a bubble that won't show")
         XCTAssertEqual(controller.inbox.entries.map(\.text), ["Send it?"])
         XCTAssertEqual(controller.away, [.thread("s")])
     }

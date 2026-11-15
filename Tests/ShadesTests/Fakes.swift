@@ -207,6 +207,8 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     private var count = 0
 
     var sent: [Sent] { lock.withLock { _sent } }
+    /// What was sent apart from Shades' looks at what kittens ask for, which run beside every decision.
+    var sentApartFromLooks: [Sent] { sent.filter { $0.prompt.title?.hasPrefix(AppController.reviewTitle) != true } }
     var responses: [(String, ApprovalDecision)] { lock.withLock { _responses } }
     var opened: [String] { lock.withLock { _opened } }
 
@@ -278,7 +280,9 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     private func play(threadID: String, prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         let routed = routerSays.first { prompt.text.contains("Their question: \($0.key)") }?.value
         let chosen = routed.map { [AgentReplyEvent.finished(fullText: $0)] } ?? replyTo?(prompt)
-        let events = chosen ?? lock.withLock { replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst() }
+        // A look finds nothing to ask about unless a test says otherwise, and never takes a reply queued for something else.
+        let looks = prompt.title?.hasPrefix(AppController.reviewTitle) == true
+        let events = chosen ?? (looks ? [.finished(fullText: "NONE")] : lock.withLock { replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst() })
         if let holdQuestion, prompt.text.contains("Their question: \(holdQuestion)") {
             return AsyncThrowingStream { continuation in
                 continuation.yield(.started(threadID: threadID))

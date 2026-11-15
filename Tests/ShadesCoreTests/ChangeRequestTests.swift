@@ -50,7 +50,7 @@ final class ChangeRequestTests: XCTestCase {
     }
 
     private func asked(_ json: String) throws -> ChangeRequest {
-        try XCTUnwrap(ChangeRequests.all(in: request(json)).first).get()
+        try XCTUnwrap(XCTUnwrap(ChangeRequests.all(in: request(json)).first).get().change)
     }
 
     private func encoded(_ object: [String: String]) -> String {
@@ -62,7 +62,7 @@ final class ChangeRequestTests: XCTestCase {
     func testAReplyAsksForExactlyWhatItsBlockSays() throws {
         let found = ChangeRequests.all(in: request(encoded(["file": "~/shades/.claude/settings.json", "replace": "a,\n]", "with": "a\n]", "why": "The comma\nbreaks the install."])))
         XCTAssertEqual(found.count, 1)
-        let request = try XCTUnwrap(found.first).get()
+        let request = try XCTUnwrap(XCTUnwrap(found.first).get().change)
         XCTAssertEqual(request.file, "~/shades/.claude/settings.json")
         XCTAssertEqual(request.replace, "a,\n]")
         XCTAssertEqual(request.with, "a\n]")
@@ -71,7 +71,7 @@ final class ChangeRequestTests: XCTestCase {
 
     func testANewFileAndATildeFenceWork() throws {
         let found = ChangeRequests.all(in: request(encoded(["file": "/x/.claude/settings.local.json", "create": "{}"]), fence: "~~~~"))
-        let request = try XCTUnwrap(found.first).get()
+        let request = try XCTUnwrap(XCTUnwrap(found.first).get().change)
         XCTAssertNil(request.replace)
         XCTAssertEqual(request.with, "{}")
     }

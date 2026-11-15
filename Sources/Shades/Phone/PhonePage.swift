@@ -1308,6 +1308,15 @@ enum PhonePage {
               }, choice.value === 'accept' ? 'go' : null));
             }
           }
+          if (item.kind === 'ask') {
+            for (const choice of item.choices) {
+              if (choice.value === 'reply') { buttons.append(button(choice.label, () => go(item.open))); continue; }
+              buttons.append(button(choice.label, () => {
+                buttons.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+                act({ act: 'ask', id: item.id, value: choice.value });
+              }, choice.value === 'accept' ? 'go' : null));
+            }
+          }
           if (item.kind === 'report') {
             buttons.append(button(item.choices[0].label, () => go(item.open)));
             if (item.done) buttons.append(button(words.done, () => act({ act: 'done', id: item.id })));

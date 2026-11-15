@@ -48,6 +48,25 @@ extension CatWords {
         return change.review.map { "I looked into it. \(literal($0))" } ?? notReviewed
     }
 
+    /// An ask, for your phone and the cat's bubble: what Allow says yes to first, on lines of its own, then what the
+    /// kitten wrote. Everything a kitten writes is one line, so it can't make the line breaks that set them apart.
+    static func askRow(_ ask: AskRequest, decision: String? = nil, by kitten: String) -> String {
+        let said = decision.map { "Its report said: “\($0)”" } ?? ask.why.map { "Its reason: “\($0)”" }
+        return ["If you allow it, \(kitten) will:\n\(ask.ask)", said].compactMap { $0 }.joined(separator: "\n\n")
+    }
+
+    /// The card in Activity: what Allow says yes to first, in the app's own bold words, then what the kitten wrote, as
+    /// written, so none of it can pass for The Kitty Litter's own words or come before them.
+    static func askCard(_ ask: AskRequest, decision: String?, by kitten: String) -> String {
+        let will = "**If you allow it, \(literal(kitten)) will:** \(literal(ask.ask))"
+        let said = decision.map { "Its report said: “\(literal($0))”" } ?? ask.why.map { "\(literal(kitten))'s reason: “\(literal($0))”" }
+        return [will, said].compactMap { $0 }.joined(separator: "\n\n")
+    }
+
+    static func askReview(_ ask: AskRequest) -> String? {
+        ask.review.map { "I looked into it. \(literal($0))" } ?? (ask.readFromWords ? nil : notReviewed)
+    }
+
     static func changeFailed(_ reason: String) -> String {
         "I couldn't make that change. \(reason)"
     }

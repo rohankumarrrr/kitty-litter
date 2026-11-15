@@ -247,6 +247,31 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(ask("send", key: PhonePlace.reply(to: change), text: "yes").action(in: book) { "x" }, "nor a reply that would stand in for it")
     }
 
+    /// A yes to something a kitten does itself is no more than your words could already say from a phone, so the phone
+    /// answers an ask, and never a settings change.
+    func testAnAskIsAnsweredFromAPhoneAndASettingsChangeIsnt() throws {
+        let written = InboxEntry(id: "a1", kind: .decision, text: "Asks for your yes to: Send it.", threadID: "a", threadTitle: "Work", at: noon, ask: AskRequest(ask: "Send it.", review: "Fine.", readFromWords: false))
+        let read = InboxEntry(id: "a2", kind: .decision, text: "Merge it?", threadID: "a", threadTitle: "Work", at: noon, ask: AskRequest(ask: "Merge pull request 12.", readFromWords: true))
+        let change = InboxEntry(id: "c", kind: .decision, text: "Asks to change it.", threadID: "a", threadTitle: "Work", at: noon, change: ChangeRequest(file: "/k/steve/.claude/settings.json", replace: "a", with: "b", why: nil))
+        let plain = InboxEntry(id: "d", kind: .decision, text: "Ship it?", threadID: "a", threadTitle: "Work", at: noon)
+        let book = book(waiting: Waiting(reports: [written, read, change, plain]))
+        let rows = PhoneView(PhonePlace("activity", in: book), in: book, now: noon).rows
+        let writtenCard = try XCTUnwrap(rows.first { $0.id == "a1" })
+        XCTAssertEqual(writtenCard.kind, "ask")
+        XCTAssertEqual(writtenCard.choices?.map(\.label), ["Deny", "Allow"])
+        XCTAssertEqual(writtenCard.answer, "Fine.")
+        let readCard = try XCTUnwrap(rows.first { $0.id == "a2" })
+        XCTAssertEqual(readCard.choices?.map(\.label), ["Deny", "Allow", "Reply"])
+        XCTAssertEqual(readCard.text, "If you allow it, Steve Pawsniak will:\nMerge pull request 12.\n\nIts report said: “Merge it?”", "what Allow says yes to comes first, on lines of its own")
+
+        XCTAssertEqual(ask("ask", id: "a1", value: "accept").action(in: book) { "x" }?.action, .inbox(.allow(id: "a1")))
+        XCTAssertEqual(ask("ask", id: "a2", value: "decline").action(in: book) { "x" }?.action, .inbox(.deny(id: "a2")))
+        XCTAssertNil(ask("ask", id: "a1", value: "acceptForSession").action(in: book) { "x" })
+        XCTAssertNil(ask("ask", id: "c", value: "accept").action(in: book) { "x" }, "a settings change is only answered on the Mac")
+        XCTAssertNil(ask("ask", id: "d", value: "accept").action(in: book) { "x" }, "a decision with nothing to say yes to")
+        XCTAssertNil(ask("done", id: "a2").action(in: book) { "x" }, "Deny is how you say no to one")
+    }
+
     func testTheInboxOnlyTakesWhatItsButtonsDo() {
         let decision = InboxEntry(id: "d", kind: .decision, text: "Ship it?", threadID: "a", threadTitle: "Work", at: noon)
         let shipped = InboxEntry(id: "s", kind: .shipped, text: "Live.", threadID: "a", threadTitle: "Work", at: noon)

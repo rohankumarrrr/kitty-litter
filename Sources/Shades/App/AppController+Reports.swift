@@ -49,7 +49,7 @@ extension AppController {
             if !failed, kitten != nil, let readable, readable.contains(where: { !$0.isWhitespace }) {
                 sorted = await self.sorted(readable, of: thread)
             }
-            if let decision = sorted?.decision { flag(decision, of: current) }
+            if let decision = sorted?.decision { flag(decision, of: current, report: report) }
             // Held by Do Not Disturb, it's read again from the thread, so there's nothing to sum up.
             guard mayPopUp(.thread(thread.id)) else { return }
             let words = await words(for: readable, of: thread, failed: failed, sorted: sorted)

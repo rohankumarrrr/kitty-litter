@@ -21,6 +21,8 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
     public var questionID: String?
     /// A settings change it asked for, which only Allow or Deny answers.
     public var change: ChangeRequest?
+    /// Something it needs your yes for and then does itself, which Allow says yes to, exactly as shown.
+    public var ask: AskRequest?
 
     public init(
         id: String,
@@ -32,7 +34,8 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
         repliedAt: Date? = nil,
         answer: String? = nil,
         questionID: String? = nil,
-        change: ChangeRequest? = nil
+        change: ChangeRequest? = nil,
+        ask: AskRequest? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -44,9 +47,14 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
         self.answer = answer
         self.questionID = questionID
         self.change = change
+        self.ask = ask
     }
 
     public var needsYou: Bool { kind == .decision && repliedAt == nil }
+
+    /// A request it wrote in the form, which waits for Allow or Deny whatever the thread says next. An ask Shades read
+    /// from its words is part of that decision, and goes the way a decision does.
+    public var isStanding: Bool { change != nil || ask?.readFromWords == false }
 }
 
 /// What's waiting for you, and which runs have been dealt with. Saved as one file, so a report
@@ -202,7 +210,7 @@ public struct Inbox: Codable, Equatable, Sendable {
             return asked
         }
 
-        entries.removeAll { $0.threadID == thread.id && $0.kind == .decision && $0.change == nil }
+        entries.removeAll { $0.threadID == thread.id && $0.kind == .decision && !$0.isStanding }
         for index in entries.indices where entries[index].threadID == thread.id {
             entries[index].repliedAt = nil
         }
@@ -215,14 +223,15 @@ public struct Inbox: Codable, Equatable, Sendable {
     /// A kitten without an inbox files only what needs you, since the rest of its report goes to the bubble. Its runs
     /// are passed over for filing, so this doesn't look at them, and what it asks now replaces what it asked before.
     public mutating func flag(_ decision: String, from thread: AgentThread, at: Date, id: String) {
-        entries.removeAll { $0.threadID == thread.id && $0.kind == .decision && $0.change == nil }
+        entries.removeAll { $0.threadID == thread.id && $0.kind == .decision && !$0.isStanding }
         entries.append(InboxEntry(id: id, kind: .decision, text: decision, threadID: thread.id, threadTitle: thread.title, at: at))
     }
 
     /// A settings change it asked for waits on its own, until you press Allow or Deny. One that's already waiting isn't
     /// asked twice, and another thread asking for it too is kept with it, so it hears what you decided.
     public mutating func ask(_ entry: InboxEntry) {
-        guard let change = entry.change, !entries.contains(where: { $0.id == entry.id }) else { return }
+        guard entry.isStanding, !entries.contains(where: { $0.id == entry.id }) else { return }
+        guard let change = entry.change else { return entries.append(entry) }
         let same = entries.firstIndex { other in
             guard let asked = other.change, asked.problem == nil, change.problem == nil else { return false }
             return (asked.file, asked.replace, asked.with) == (change.file, change.replace, change.with)
@@ -233,10 +242,20 @@ public struct Inbox: Codable, Equatable, Sendable {
         }
     }
 
-    /// The row you asked on, or failing that the thread's open decision, or its latest row. A change it asked for only
-    /// takes Allow or Deny, so nothing else goes under it.
+    /// Puts what Shades read from a decision on that decision, if it's still waiting on you. Says whether it did.
+    @discardableResult
+    public mutating func attach(_ ask: AskRequest, to id: String) -> Bool {
+        // Your reply, or anything the thread said since, means it's moved on from what was read.
+        guard let index = entries.firstIndex(where: { $0.id == id }), entries[index].kind == .decision, !entries[index].isStanding,
+              entries[index].ask == nil, entries[index].repliedAt == nil, entries[index].answer == nil else { return false }
+        entries[index].ask = ask
+        return true
+    }
+
+    /// The row you asked on, or failing that the thread's open decision, or its latest row. Nothing goes under a row
+    /// with something to allow, so what a thread says later can't stand where Shades' look at it does.
     private func rowForNote(from threadID: String) -> Int? {
-        let own = entries.indices.filter { entries[$0].threadID == threadID && entries[$0].change == nil }
+        let own = entries.indices.filter { entries[$0].threadID == threadID && !entries[$0].isStanding && entries[$0].ask == nil }
         return own.filter { entries[$0].repliedAt != nil }.max { entries[$0].repliedAt! < entries[$1].repliedAt! }
             ?? own.last { entries[$0].kind == .decision }
             ?? own.last
@@ -327,10 +346,11 @@ public struct Inbox: Codable, Equatable, Sendable {
         if let run = thread.lastRunID { handled[thread.id] = run }
     }
 
-    /// `nil` puts it back, for when the send failed.
+    /// `nil` puts it back, for when the send failed. Your own words answer it, so an ask Shades read from it goes.
     public mutating func markReplied(_ id: String, at date: Date?) {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].repliedAt = date
+        if date != nil, entries[index].ask?.readFromWords == true { entries[index].ask = nil }
     }
 
     public mutating func remove(_ id: String) {

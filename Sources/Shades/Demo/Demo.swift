@@ -48,6 +48,21 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         let id = nextID()
         print("[demo] started \(id) with \(prompt.attachments.count) attachments: \(Self.oneLine(prompt.text))")
         if prompt.text.contains(Prompts.ownWindowNote) { print("[demo] told \(id) the marked spot is on The Kitty Litter's own window") }
+        if prompt.text.contains("<ask>") {
+            let reply: String
+            if prompt.text.contains("What it would do on a yes:") {
+                reply = "I'd allow it. It sends one email to the address you gave, and nothing else, though an email can't be taken back."
+            } else if prompt.text.contains("tidies the docs") {
+                reply = "\(Prompts.askMarker) Merge pull request #12 in the site's repo, which tidies the docs.\n\(Prompts.recommendMarker) I'd allow it. Its tests pass, and a merge can be undone."
+            } else {
+                reply = "NONE"
+            }
+            return AsyncThrowingStream { continuation in
+                continuation.yield(.started(threadID: id))
+                continuation.yield(.finished(fullText: reply))
+                continuation.finish()
+            }
+        }
         if prompt.text.contains("<request>") {
             let review = prompt.text.contains("settings.local.json")
                 ? "I'd allow it if you're testing on the simulator. It lets agents in that one worktree drive it without asking, and leaves the screen block alone."
@@ -275,10 +290,15 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
             "scheduled": ("demo-morning", "Clawde: Morning check", "\(Prompts.decisionMarker) Merge the package updates? The tests pass with both."),
             "asks": ("demo-budget", "Pepper: Tidy the budget", "\(Prompts.shippedMarker) The budget page is tidied and merged.\n\(Prompts.decisionMarker) Run git pull in your checkout yourself, since the sandbox can't."),
         ]
-        if kind == "change" {
-            lock.withLock { reports["demo-settings"] = Demo.changeReport }
+        let asks = [
+            "change": ("demo-settings", "Clawde: Fix the install", "\(Prompts.noteMarker) The install's fixed, apart from two settings it can't change itself.", Demo.changeReport),
+            "ask": ("demo-invite", "Clawde: Invite the tester", "\(Prompts.noteMarker) The tester's invite is written.", Demo.askReport),
+            "plain": ("demo-docs", "Clawde: Tidy the docs", "\(Prompts.decisionMarker) Merge pull request #12, which tidies the docs? Its tests pass.", "The docs are tidied in pull request #12, and its tests pass. Should I merge it?"),
+        ]
+        if let (threadID, _, _, report) = asks[kind] {
+            lock.withLock { reports[threadID] = report }
         }
-        guard let (threadID, title, reply) = (kind == "change" ? ("demo-settings", "Clawde: Fix the install", "\(Prompts.noteMarker) The install's fixed, apart from two settings it can't change itself.") : replies[kind]) else { return }
+        guard let (threadID, title, reply) = asks[kind].map({ ($0.0, $0.1, $0.2) }) ?? replies[kind] else { return }
         sortedReplies[title] = reply
         // A schedule starts a thread of its own each time it runs, so it isn't listed until then.
         update { threads in
@@ -642,6 +662,12 @@ enum Demo {
         try? Data(settings.utf8).write(to: home.appendingPathComponent("shades/.claude/settings.json"))
         return home.path
     }()
+
+    /// What Clawde says once the tester's invite is written, asking for your yes to send it.
+    static var askReport: String {
+        let json = (try? JSONSerialization.data(withJSONObject: ["ask": "Email the invite to tester@example.com.", "why": "They asked to try the app this week."], options: [.prettyPrinted, .sortedKeys])).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+        return "The tester's invite is written.\n\n```\(ChangeRequests.fence)\n\(json)\n```"
+    }
 
     /// What Clawde says once the install's fixed, asking for the two settings changes its sandbox won't let it make.
     static var changeReport: String {

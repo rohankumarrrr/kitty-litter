@@ -118,7 +118,7 @@ final class ChannelNotificationsTests: XCTestCase {
         let report = "Merged the pull request. The sandbox can't write settings, so you need to run `git pull` in your checkout yourself."
         await finish(work("p", of: pepper), report: report, sorted: "SHIPPED: The pull request is merged.\nDECISION: Run git pull in your checkout yourself.")
 
-        XCTAssertTrue(backend.sent.last?.prompt.text.contains("decide or do themselves") == true, "it was sorted, not summed up")
+        XCTAssertTrue(backend.sentApartFromLooks.last?.prompt.text.contains("decide or do themselves") == true, "it was sorted, not summed up")
         XCTAssertEqual(controller.inboxEntries.filter(\.needsYou).map(\.text), ["Run git pull in your checkout yourself."])
         XCTAssertEqual(notified.map(\.kind), [.decision], "the decision's notification, and no second one for finishing")
         XCTAssertEqual(notified.map(\.who), ["Pepper"])
