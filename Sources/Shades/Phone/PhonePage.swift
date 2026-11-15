@@ -337,7 +337,10 @@ enum PhonePage {
         #attached { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px 8px; }
         .attachment { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 8px; border-radius: 12px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--field-edge); max-width: 100%; min-width: 0; }
         .attachment img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex: none; }
-        .attachment span { font-size: calc(14em / 17); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
+        .attachment span { font-size: calc(14em / 17); white-space: nowrap; }
+        /* The name gives way, so how far it's got always reads whole. */
+        .attachment .name { overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 40vw; }
+        .attachment .state { flex: none; }
         .attachment button { color: var(--secondary); }
         .attachment.going img { filter: brightness(.55); }
         .attachment.going span { color: var(--secondary); }
@@ -1567,10 +1570,10 @@ enum PhonePage {
               picture.alt = '';
               chip.append(picture);
             }
+            chip.append(el('span', 'name', file.name));
             // A browser counts what it's handed to the network, which can be all of it long before the Mac has it, so
             // a share shows only while it's moving.
-            const going = file.sent > 0 && file.sent < 1 ? Math.round(file.sent * 100) + '%' : words.sending;
-            chip.append(el('span', null, file.sent === undefined ? file.name : file.name + ' · ' + going));
+            if (file.sent !== undefined) chip.append(el('span', 'state', file.sent > 0 && file.sent < 1 ? Math.round(file.sent * 100) + '%' : words.sending));
             const remove = button('✕', () => {
               drop(file);
               forget([file]);
@@ -1612,14 +1615,16 @@ enum PhonePage {
           }
         }
 
+        // A model reads a picture at about 1.15 megapixels, and no more than 1568 pixels a side, scaling a bigger one
+        // down first, so anything more only takes longer to go up a phone's link.
         async function shrink(file) {
           const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-          const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
+          const scale = Math.min(1, 1568 / Math.max(bitmap.width, bitmap.height), Math.sqrt(1150000 / (bitmap.width * bitmap.height)));
           const canvas = document.createElement('canvas');
-          canvas.width = Math.round(bitmap.width * scale);
-          canvas.height = Math.round(bitmap.height * scale);
+          canvas.width = Math.floor(bitmap.width * scale);
+          canvas.height = Math.floor(bitmap.height * scale);
           canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-          return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('no picture')), 'image/jpeg', 0.85));
+          return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('no picture')), 'image/jpeg', 0.8));
         }
 
         function fit() {

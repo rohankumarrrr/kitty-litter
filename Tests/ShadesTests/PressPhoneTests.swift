@@ -464,12 +464,49 @@ final class PressPhoneTests: XCTestCase {
         phone.picks = [try picture()]
         try await phone.tap("#attach")
         try await phone.until("its chip shows while it's still going up") { try await phone.read("document.querySelectorAll('.attachment.going img').length") as? Int == 1 }
-        try await expect("/ · (\\d+%|Sending…)$/.test(document.querySelector('.attachment.going span').textContent)", true, "saying how far it's got")
+        try await expect("/^(\\d+%|Sending…)$/.test(document.querySelector('.attachment.going .state').textContent)", true, "saying how far it's got")
         try await expect("$('send').disabled", true, "with nothing to send until it's up")
         phone.letUploadsGo()
         try await phone.until("then it's attached") { try await phone.read("document.querySelectorAll('.attachment:not(.going)').length") as? Int == 1 }
         try await expect("document.querySelector('.attachment span').textContent", phone.uploads.last?.name)
+        try await expect("document.querySelectorAll('.attachment .state').length", 0, "and only its name once it's up")
         try await expect("$('send').disabled", false)
+    }
+
+    /// "IMG_0005.jpg · Sendi…" cut off how far it had got, which was the part that said anything.
+    func testAPhotosLongNameGivesWaySoHowFarItsGotReadsWhole() async throws {
+        try await open(at: threadKey)
+        phone.holdingUploads = true
+        phone.picks = [try picture(named: "A photo with a very long name from a camera roll somewhere.png")]
+        try await phone.tap("#attach")
+        try await phone.until("its chip shows while it's going up") { try await phone.read("document.querySelectorAll('.attachment.going .state').length") as? Int == 1 }
+        try await expect("(() => { const state = document.querySelector('.attachment .state'); return state.scrollWidth <= state.clientWidth })()", true, "how far it's got reads whole")
+        try await expect("(() => { const name = document.querySelector('.attachment .name'); return name.scrollWidth > name.clientWidth })()", true, "and the name is what's cut")
+        try await expect("document.querySelector('.attachment').getBoundingClientRect().right <= $('box').getBoundingClientRect().right", true, "inside the box")
+        phone.letUploadsGo()
+    }
+
+    /// An iPhone's photo is 12 megapixels. A model reads about 1.15, so the rest only took longer to go up: 0.9 to
+    /// 1.6 MB at 2048 pixels, 8 to 14 seconds on a slow link. The stand-in Mac never sees what an upload holds, so
+    /// what the page makes of a photo is read straight from the page.
+    func testAPhotoGoesUpNoBiggerThanAModelReadsIt() async throws {
+        try await open(at: threadKey)
+        for (width, height) in [(4032, 3024), (3024, 4032), (4032, 2268), (8000, 2000), (800, 600)] {
+            let made = try await phone.run("""
+                const canvas = document.createElement('canvas');
+                canvas.width = width; canvas.height = height;
+                canvas.getContext('2d').fillRect(0, 0, width, height);
+                const photo = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+                const shrunk = await shrink(new File([photo], 'photo.png', { type: 'image/png' }));
+                const bitmap = await createImageBitmap(shrunk);
+                return [bitmap.width, bitmap.height, shrunk.type];
+                """, ["width": width, "height": height]) as? [Any]
+            let size = try XCTUnwrap(made?.prefix(2).compactMap { ($0 as? NSNumber)?.intValue }, "\(width)×\(height)")
+            XCTAssertEqual(made?.last as? String, "image/jpeg")
+            XCTAssertLessThanOrEqual(size.max() ?? .max, 1568, "\(width)×\(height) went up as \(size)")
+            XCTAssertLessThanOrEqual(size.reduce(1, *), 1_150_000, "\(width)×\(height) went up as \(size)")
+            if width * height <= 1_150_000 { XCTAssertEqual(size, [width, height], "a small one stays as it is") }
+        }
     }
 
     func testTakingOffAPhotoWhileItGoesUpStopsIt() async throws {
@@ -488,16 +525,20 @@ final class PressPhoneTests: XCTestCase {
         XCTAssertEqual(asked("unattach"), 0, "there was nothing on the Mac to forget")
     }
 
-    private func picture() throws -> URL {
-        let image = NSImage(size: NSSize(width: 40, height: 30), flipped: false) { rect in
-            NSColor.systemTeal.setFill()
-            rect.fill()
-            return true
-        }
-        let png = try XCTUnwrap(image.tiffRepresentation.flatMap { NSBitmapImageRep(data: $0) }?.representation(using: .png, properties: [:]))
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("PressPhoneTests-\(UUID().uuidString).png")
+    /// A picture of exactly that many pixels, whatever the screen's scale.
+    private func picture(width: Int = 40, height: Int = 30, named name: String? = nil) throws -> URL {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        NSColor.systemTeal.setFill()
+        NSRect(x: 0, y: 0, width: width, height: height).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("PressPhoneTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent(name ?? "picture.png")
         try png.write(to: file)
-        addTeardownBlock { try? FileManager.default.removeItem(at: file) }
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
         return file
     }
 
@@ -956,7 +997,7 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
     private(set) var searches: [String] = []
     /// How many more times to say nobody's looking, as the Mac does once it's let go of every stream.
     var refusing = 0
-    private(set) var uploads: [(name: String, type: String)] = []
+    private(set) var uploads: [(name: String, type: String, body: Data)] = []
     /// Answers to photos and files the stand-in holds back until `letUploadsGo`, as a slow link would.
     var holdingUploads = false
     /// What the Mac says to a phone's push subscription.
@@ -1162,7 +1203,7 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
         case ("POST", "/file"):
             guard admitted else { return answer(task, 401) }
             let name = request.value(forHTTPHeaderField: "X-Name")?.removingPercentEncoding ?? ""
-            uploads.append((name, request.value(forHTTPHeaderField: "Content-Type") ?? ""))
+            uploads.append((name, request.value(forHTTPHeaderField: "Content-Type") ?? "", body))
             let id = "file-\(uploads.count)"
             files[id] = .bytes(body, name: name)
             if holdingUploads { return heldUploads.append((task, { [weak self] in self?.json(task, ["id": id]) })) }
