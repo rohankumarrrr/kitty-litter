@@ -413,6 +413,7 @@ enum PhonePage {
           unreachable: "Can't reach your Mac. The Kitty Litter has to be running, and your Mac awake.",
           gone: "That's changed since. Have another look.",
           wrongCode: "That code didn't work. Turn pairing on again in The Kitty Litter on your Mac for a new one.",
+          stillPaired: "That code didn't work, but this phone is still paired.",
           answer: 'Send answer', openInT3: 'Open in T3', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied', react: 'React', openThread: 'Open thread',
           waiting: (count) => count + ' waiting', unread: 'unread',
           openLink: (host) => 'Open a link to ' + host + '?',
@@ -524,12 +525,17 @@ enum PhonePage {
           const code = new URLSearchParams(location.hash.slice(1)).get('pair');
           if (code) {
             history.replaceState(history.state, '', location.pathname + location.search);
-            if (!(await pair(code))) return;
+            if (!(await pair(code)) && !pass) return;
           }
           if (!pass) return pairing();
           let hello = null;
           try { hello = await fetch('/hello', { headers: headers(), cache: 'no-store' }); } catch (error) {}
-          if (hello && hello.status === 401) return pairing();
+          if (hello && hello.status === 401) {
+            pairing();
+            // The code didn't work either.
+            if (code) $('pairnote').textContent = words.wrongCode;
+            return;
+          }
           $('pair').hidden = true;
           $('top').hidden = false;
           if (!hello || !hello.ok) { banner(words.unreachable); retry = setTimeout(start, 5000); return; }
@@ -619,6 +625,11 @@ enum PhonePage {
             localStorage.setItem('shades.key', pass);
             $('pairnote').textContent = '';
             return true;
+          }
+          // An old link with a code that's been used already leaves a phone that's paired as it was.
+          if (pass) {
+            banner(response ? words.stillPaired : words.unreachable);
+            return false;
           }
           pairing();
           $('pairnote').textContent = response ? words.wrongCode : words.unreachable;
