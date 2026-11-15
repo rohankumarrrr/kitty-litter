@@ -423,6 +423,10 @@ enum PhonePage {
         // Kept for this address and port only, and sent only by this page. A cookie would go to every port on the name.
         let pass = localStorage.getItem('shades.key');
         let stream = null;
+        // When the stream last said anything, pings included. The Mac says something every 10 seconds.
+        let heard = 0;
+        // A new one each time the page loads, so the Mac can end the stream this page left behind when it starts another.
+        const page = Math.random().toString(36).slice(2);
         let view = null;
         let retry = null;
         // A page where you've marked something unread stops saying it's seen it, until you go somewhere else.
@@ -472,8 +476,14 @@ enum PhonePage {
         }
 
         async function act(body, quiet) {
+          const asked = Date.now();
           const response = await post('/act', body);
-          if (response && response.ok) { if (quiet) reached(); else banner(''); return response.json(); }
+          if (response && response.ok) {
+            if (quiet) reached(); else banner('');
+            // What you do shows on the Mac at once, so a stream that says nothing about it is one that's gone.
+            if (!quiet) setTimeout(() => { if (stream && heard < asked) listen(); }, 3000);
+            return response.json();
+          }
           if (response && response.status === 401) { pairing(); return null; }
           if (!quiet) banner(response && response.status === 409 ? words.gone : words.unreachable);
           return null;
@@ -590,8 +600,9 @@ enum PhonePage {
           if (stream) stream.abort();
           const mine = new AbortController();
           stream = mine;
+          heard = Date.now();
           try {
-            const response = await fetch('/events?key=' + encodeURIComponent(key), { headers: headers(), cache: 'no-store', signal: mine.signal });
+            const response = await fetch('/events?key=' + encodeURIComponent(key) + '&page=' + page, { headers: headers(), cache: 'no-store', signal: mine.signal });
             if (response.status === 401) return pairing();
             if (!response.ok || !response.body) throw new Error(String(response.status));
             const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -599,6 +610,7 @@ enum PhonePage {
             for (;;) {
               const { value, done } = await reader.read();
               if (done) break;
+              heard = Date.now();
               buffer += value;
               let end;
               while ((end = buffer.indexOf('\n\n')) >= 0) {
@@ -611,9 +623,18 @@ enum PhonePage {
             }
           } catch (error) {}
           if (mine.signal.aborted || stream !== mine) return;
+          stream = null;
           banner(words.unreachable);
           retry = setTimeout(start, 3000);
         }
+
+        // An iPhone can leave a stream open that never says anything again, after the lock screen, another app or a
+        // change of network, and nothing tells the page. So one that's been quiet for longer than a few pings is
+        // given up on, as is one that was quiet before the page went away and came back, and a new one takes its place.
+        setInterval(() => { if (stream && Date.now() - heard > 25000) listen(); }, 5000);
+        function revive(quiet) { if (stream && Date.now() - heard > quiet) listen(); }
+        window.addEventListener('pageshow', (event) => { if (event.persisted) revive(0); });
+        window.addEventListener('online', () => revive(0));
 
         function go(next, push = true) {
           if (!next || next === key) return;
@@ -1450,7 +1471,9 @@ enum PhonePage {
         };
 
         document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') seen();
+          if (document.visibilityState !== 'visible') return;
+          seen();
+          revive(15000);
         });
 
         start();

@@ -69,11 +69,15 @@ Journey: `journeys/phone-size.txt`, in light mode, then Opal.
 - **React.** `phone press React` opens the sheet of marks from the foot and puts the keyboard on 👍, the first of 6, and 🎉 then shows under the message in `4-reacted`.
 - **Size.** Small makes the body 15.69px and leaves the box at 16px, so an iPhone doesn't zoom in on it, and Larger makes it 22.23px, from 17px. `7-opal-larger-thread` has Mark unread and Search in the bar over the title, as at every size. `phone js document.documentElement.style.fontSize = '130%'` stands in for the phone's own size, and everything grows from it.
 
+A phone away from home: `swift scripts/slowlink.swift <port> <page-port> 0.15 125000 <control-file>` puts a link of 150 ms each way and about 1 Mbps in front of the demo's page, and prints each connection as it closes, with what it asked for and how much went each way. A page's storage is kept for each port, so pair with `phone open`, read its key with `phone js localStorage.getItem('shades.key')`, then `phone js location.href = 'http://127.0.0.1:<port>/?key=home'` and `phone js localStorage.setItem('shades.key', '<key>'); location.reload()`. Writing `cut 1` to the control file leaves every open connection silent without closing it, as an iPhone leaves its stream after the lock screen, and `half 2` closes the Mac's side of them too, as happens once Tailscale gives up on the phone. Each new word needs a new number. After `cut`, a `phone send` still shows within about 3 seconds, and the link prints `closed by the Mac` for the stream the page left behind.
+
 End every journey with `front` and `windows`. The app in front stays whatever it was, and `active=false`.
 
 ## Gotchas
 
 - Each place is a stream of its own, so moving between them reconnects. Give `phone go` and `phone send` two or three seconds before drawing.
+- The page gives up on a stream that's said nothing for 25 seconds, or for 15 when it's shown again, or nothing within 3 of something you did, and starts another, which ends the one it left behind on the Mac. The demo's web view always says it's hidden, so it's never shown again by itself. `phone js Object.defineProperty(document, 'visibilityState', { get: () => 'visible' }); heard = 0; document.dispatchEvent(new Event('visibilitychange'))` stands in for coming back to the page.
+- `phone close` before another `phone open`, since loading the same address with a new `#pair=` code only moves within the page, which doesn't pair it again.
 - `header` presses a button at the top of the open thread's pane, by its words. It prints `no header button [...]` when there's none, such as **Show on phone** in a kitten's thread, or while The Kitty Litter isn't on your phone.
 - `phone go` takes a key as it is, so `phone go t:demo-steve-copy@c:%2Fdemo%2Fsteve` opens Steve's "Rewrite the pricing copy" thread with its replies, and `t:demo-tidy@c:%2Fdemo%2Fsteve` opens the one an `approval` waits in.
 - `phone text` doesn't show the cats, since they're pictures. `swift test --filter PhoneServerTests` checks their address gives the window's art pixel for pixel, and nothing for any other address.

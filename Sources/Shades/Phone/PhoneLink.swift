@@ -11,6 +11,8 @@ final class PhoneLink {
 
     private final class Watcher {
         let stream: PhoneStream
+        /// The page it's for, which is a different one each time the page loads.
+        let page: String?
         var key: String
         var shown: PhoneView?
         /// A notification can open a thread Messages hasn't read yet, so a stream asks for the thread it opened with
@@ -19,8 +21,9 @@ final class PhoneLink {
         /// Where each thread's New line was when this page opened, so it stays put once it's all been seen.
         var newFrom: [String: String] = [:]
 
-        init(stream: PhoneStream, key: String) {
+        init(stream: PhoneStream, page: String?, key: String) {
             self.stream = stream
+            self.page = page
             self.key = key
             opening = PhonePlace.thread(in: key) != nil
         }
@@ -131,7 +134,7 @@ final class PhoneLink {
         case ("POST", "/pair"):
             return pair(request)
         case ("GET", "/events"):
-            return door.admits(request) ? watch(request.query["key"] ?? PhonePlace.home) : .status(401)
+            return door.admits(request) ? watch(request.query["key"] ?? PhonePlace.home, page: request.query["page"]) : .status(401)
         case ("POST", "/act"):
             return door.admits(request) ? perform(request) : .status(401)
         case ("POST", "/file"):
@@ -170,9 +173,12 @@ final class PhoneLink {
         return .json(Paired(key: key))
     }
 
-    private func watch(_ key: String) -> PhoneServer.Response {
+    private func watch(_ key: String, page: String?) -> PhoneServer.Response {
+        // A page only starts a stream once it's stopped reading the last one. One a phone left behind on the lock
+        // screen still takes what's sent to it, so nothing else would end it, and enough of them fill the server.
+        if let page { watchers.filter { $0.page == page }.forEach { $0.stream.close() } }
         let stream = PhoneStream()
-        let watcher = Watcher(stream: stream, key: key)
+        let watcher = Watcher(stream: stream, page: page, key: key)
         letting?.cancel()
         letting = nil
         book = hold()

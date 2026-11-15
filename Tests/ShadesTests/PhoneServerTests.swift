@@ -110,8 +110,8 @@ final class PhoneServerTests: XCTestCase {
     }
 
     /// The first view a stream sends, and the task holding the stream open.
-    private func watch(_ place: String, key: String) async throws -> (view: [String: Any], stream: Task<Void, Never>) {
-        var request = URLRequest(url: URL(string: "/events?key=\(place.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)", relativeTo: base)!)
+    private func watch(_ place: String, key: String, page: String? = nil) async throws -> (view: [String: Any], stream: Task<Void, Never>) {
+        var request = URLRequest(url: URL(string: "/events?key=\(place.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)\(page.map { "&page=\($0)" } ?? "")", relativeTo: base)!)
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         let (bytes, response) = try await session.bytes(for: request)
         XCTAssertEqual((response as! HTTPURLResponse).value(forHTTPHeaderField: "Content-Type"), "text/event-stream")
@@ -443,6 +443,26 @@ final class PhoneServerTests: XCTestCase {
         defer { next.cancel() }
         let said = (topic["rows"] as? [[String: Any]])?.compactMap { $0["text"] as? String } ?? []
         XCTAssertTrue(said.contains("How's December looking?"), "each place is its own stream, and moving between them mustn't forget what you sent: \(said)")
+    }
+
+    /// Pages whose streams the Mac has ended.
+    private var ended: Set<String> = []
+
+    /// A page starts a new stream once it's stopped reading its last one, which an iPhone back from the lock screen can
+    /// leave open behind Tailscale, still taking what's sent. Enough of those used up the server's connections, and
+    /// then no phone could reach it.
+    func testAPagesNewStreamEndsTheOneItLeftBehind() async throws {
+        let key = try await pair()
+        let (_, left) = try await watch("home", key: key, page: "one")
+        let (_, other) = try await watch("activity", key: key, page: "two")
+        Task { await left.value; self.ended.insert("one") }
+        Task { await other.value; self.ended.insert("two") }
+        let (_, next) = try await watch("activity", key: key, page: "one")
+        defer { other.cancel(); next.cancel() }
+        await until { ended.contains("one") }
+        XCTAssertTrue(ended.contains("one"), "the stream the page left behind is ended")
+        XCTAssertFalse(ended.contains("two"), "another page's stream stays")
+        XCTAssertTrue(controller.phone?.isWatched == true)
     }
 
     func testAPhoneKeepsMessagesOpenUntilItStopsLookingToo() async throws {

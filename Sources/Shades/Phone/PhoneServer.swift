@@ -218,7 +218,8 @@ final class PhoneServer {
 /// Server-sent events to one phone, for as long as it's looking. What's sent before the connection is ready waits.
 @MainActor
 final class PhoneStream {
-    private static let pingSeconds: UInt64 = 25
+    /// Often enough that a page which hears nothing for a few of these knows its stream is gone.
+    private static let pingSeconds: UInt64 = 10
 
     var onClose: (() -> Void)?
     private var connection: NWConnection?
