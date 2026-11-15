@@ -41,6 +41,12 @@ extension AppController {
         }
         link.textSize = settings.textSize
         phone = link
+        Task { [weak self, backend] in
+            let environment = await backend.environmentID()
+            guard let self, self.phone === link, let environment else { return }
+            link.t3 = environment
+            self.channels.refresh()
+        }
         phoneTask = Task { [weak self] in
             do {
                 // A free port, so the page only ever points at one Shades holds.

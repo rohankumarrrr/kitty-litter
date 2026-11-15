@@ -216,6 +216,10 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
+    func environmentID() async -> String? {
+        connectFails ? nil : "demo-environment"
+    }
+
     func open(threadID: String) async throws {
         // As the real one can't, with no word from T3 of which environment it is.
         if connectFails { throw T3Error.noEnvironment }

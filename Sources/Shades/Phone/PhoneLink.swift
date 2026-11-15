@@ -34,6 +34,8 @@ final class PhoneLink {
     var onPaired: (() -> Void)?
     /// Messages' text size, which the page takes the next time it opens.
     var textSize = TextSize.standard
+    /// What T3 Code's own page calls this Mac, for Open in T3, once T3 has said.
+    var t3: String?
     private let server = PhoneServer()
     /// Holds Messages open, and returns what it shows.
     private let hold: () -> ChannelBook?
@@ -103,7 +105,7 @@ final class PhoneLink {
     private func show(_ book: ChannelBook, to watcher: Watcher) {
         let place = PhonePlace(watcher.key, in: book)
         watcher.newFrom.merge(book.newFrom) { _, now in now }
-        let view = PhoneView(place, in: book, now: now(), newFrom: watcher.newFrom)
+        let view = PhoneView(place, in: book, now: now(), newFrom: watcher.newFrom, t3: t3)
         if place.selection?.thread != nil { watcher.opening = false }
         if !watcher.opening { watcher.key = view.key }
         guard view != watcher.shown else { return }

@@ -45,6 +45,7 @@ enum PhonePage {
             <h1 id="title">The Kitty Litter</h1>
             <p id="subtitle"></p>
             <button id="link" type="button" hidden></button>
+            <button id="t3" type="button" hidden>Open in T3</button>
           </div>
         </div>
         <div id="notify" class="lit" hidden>
@@ -154,7 +155,7 @@ enum PhonePage {
         #title { margin: 0; color: var(--white); font-size: calc(32em / 17); font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
         #subtitle { margin: 2px 0 0; color: var(--secondary); font-size: calc(15em / 17); }
         #subtitle:empty { display: none; }
-        #link { display: block; color: var(--lilac); font-size: calc(15em / 17); text-align: left; margin: -8px 0 -12px; }
+        #link, #t3 { display: block; color: var(--lilac); font-size: calc(15em / 17); text-align: left; margin: -8px 0 -12px; }
 
         /* The Home Screen's widget card: black glass lit only along its bottom edge, in its own light. */
         .card, .lit { --light: var(--shades); position: relative;
@@ -403,7 +404,7 @@ enum PhonePage {
           unreachable: "Can't reach your Mac. The Kitty Litter has to be running, and your Mac awake.",
           gone: "That's changed since. Have another look.",
           wrongCode: "That code didn't work. Turn pairing on again in The Kitty Litter on your Mac for a new one.",
-          answer: 'Send answer', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied', react: 'React', openThread: 'Open thread',
+          answer: 'Send answer', openInT3: 'Open in T3', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied', react: 'React', openThread: 'Open thread',
           waiting: (count) => count + ' waiting', unread: 'unread',
           openLink: (host) => 'Open a link to ' + host + '?',
           showPicture: (host) => 'Show a picture from ' + host + '?', pictureFrom: (host) => '🖼 Picture from ' + host,
@@ -671,7 +672,7 @@ enum PhonePage {
           key = next;
           banner('');
           // Nothing of the page you left stays over the one you're going to while it comes.
-          for (const id of ['back', 'headcat', 'link', 'unread']) $(id).hidden = true;
+          for (const id of ['back', 'headcat', 'link', 't3', 'unread']) $(id).hidden = true;
           for (const id of ['title', 'subtitle', 'bartitle']) $(id).textContent = '';
           keptUnread = null;
           jumped = false;
@@ -722,6 +723,7 @@ enum PhonePage {
           $('headcat').hidden = !next.cat;
           $('link').hidden = !next.link;
           $('link').textContent = next.link ? next.link.label : '';
+          $('t3').hidden = !next.t3;
           $('back').hidden = !next.back;
           $('backtitle').textContent = next.back ? next.backTitle : '';
           $('unread').hidden = !next.unread;
@@ -1061,7 +1063,7 @@ enum PhonePage {
               const line = el('span', 'line');
               line.append(dot(item.dot), el('span', null, item.title));
               node.append(line, el('small', null, item.detail));
-              node.onclick = () => go(item.open);
+              node.onclick = () => { if (item.open) go(item.open); else if (item.t3) openInT3(item.t3); };
               return node;
             }
             default: return card(item);
@@ -1273,6 +1275,7 @@ enum PhonePage {
             buttons.append(button(item.choices[0].label, () => go(item.open)));
             if (item.done) buttons.append(button(words.done, () => act({ act: 'done', id: item.id })));
           }
+          if (item.t3) buttons.append(button(words.openInT3, () => openInT3(item.t3)));
           if (buttons.childElementCount) node.append(buttons);
           if (item.footer) node.append(el('p', 'footer', item.footer));
           return node;
@@ -1347,6 +1350,13 @@ enum PhonePage {
 
         $('back').onclick = () => { if (view && view.back) go(view.back); };
         $('link').onclick = () => { if (view && view.link) go(view.link.open); };
+        $('t3').onclick = () => { if (view && view.t3) openInT3(view.t3); };
+
+        // T3 Code's own page on your tailnet, at this page's address on the usual port, where it asks you to sign in
+        // itself. Nothing of this page goes with it.
+        function openInT3(path) {
+          window.open('https://' + location.hostname + path, '_blank', 'noopener,noreferrer');
+        }
         $('linkcancel').onclick = () => $('linksheet').close();
         $('linkopen').onclick = () => $('linksheet').close();
         // A tap on the dimmed page lands on the sheet itself, outside its box, and puts it away as Cancel does.
