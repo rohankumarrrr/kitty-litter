@@ -64,8 +64,9 @@ final class PressPhoneTests: XCTestCase {
     private var steveKey: String { PhonePlace.key(.channel(.of(steve))) }
     private var threadKey: String { PhonePlace.key(.thread("a", in: .channel(.of(steve)))) }
 
-    private func open(at key: String = PhonePlace.home, paired: Bool = true) async throws {
+    private func open(at key: String = PhonePlace.home, paired: Bool = true, priorities: Priorities = Priorities()) async throws {
         phone = Phone(book: book(), now: noon, paired: paired)
+        phone.priorities = priorities
         phone.open(key)
         if paired { try await shows(key) }
     }
@@ -625,6 +626,31 @@ final class PressPhoneTests: XCTestCase {
         XCTAssertEqual(phone.followed, [], "the page never goes there itself")
     }
 
+    // MARK: - Focus and backlogs
+
+    private var priorities: Priorities {
+        Priorities(focus: "Focus: the launch, until Friday", backlogs: [steve.id: Backlog(reading: "## Doing\n- 2026-11-12 · Tidy the footer · \"the footer is a mess\"\n## Next\n- A dark pricing page\n")])
+    }
+
+    func testTheFocusShowsOverThePlaces() async throws {
+        try await open(priorities: priorities)
+        try await expect("$('subtitle').textContent", "Focus: the launch, until Friday")
+    }
+
+    func testABacklogOpensFromItsChannelToReadAndBackGoesToTheChannel() async throws {
+        try await open(at: steveKey, priorities: priorities)
+        try await expect("$('backlog').textContent", "2 in backlog")
+        try await phone.tap("#backlog")
+        try await shows(PhonePlace.backlog(of: steve.id))
+        try await expect("[...document.querySelectorAll('.backlog p')].map((p) => p.textContent).join(' | ')", "Tidy the footer | A dark pricing page")
+        try await expect("$('box').hidden", true, "only to read")
+        try await expect("$('backlog').hidden", true)
+        try await phone.tap("#back")
+        try await shows(steveKey)
+        try await phone.press(.returnKey, on: "#backlog")
+        try await shows(PhonePlace.backlog(of: steve.id))
+    }
+
     // MARK: - T3
 
     func testOpenInT3OpensAKittensThreadInT3sOwnPage() async throws {
@@ -751,6 +777,7 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     var book: ChannelBook
+    var priorities = Priorities()
     let view: WKWebView
     /// What the page asked the Mac to do, and what the Mac would do about it, which is `nil` where it turned it away.
     private(set) var acts: [(ask: PhoneAsk, action: MessagesAction?)] = []
@@ -970,7 +997,7 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     /// As the Mac does, each stream gets its first view whole, and then only the rows that changed.
     private func send(_ task: WKURLSchemeTask, key: String) {
-        let view = PhoneView(PhonePlace(key, in: book), in: book, now: now, newFrom: book.newFrom, t3: "env 1")
+        let view = PhoneView(PhonePlace(key, in: book), in: book, now: now, newFrom: book.newFrom, t3: "env 1", priorities: priorities)
         guard let json = try? JSONEncoder().encode(view.since(shown[ObjectIdentifier(task)])) else { return }
         shown[ObjectIdentifier(task)] = view
         lastSent = String(decoding: json, as: UTF8.self)

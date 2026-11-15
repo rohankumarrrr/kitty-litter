@@ -569,6 +569,35 @@ extension PhoneTests {
         XCTAssertEqual(PhoneView(PhonePlace("home", in: idle), in: idle, now: noon).places.last?.cat, cat(.sleep, steve), "an idle kitten sleeps")
     }
 
+    /// Asked for on the phone as well as in the window: the focus over the places, and each kitten's backlog from its
+    /// channel's header, to read only.
+    func testThePhoneHasTheFocusAndEachKittensBacklogToRead() {
+        let book = book()
+        let steves = Backlog(reading: "## Doing\n- 2026-11-12 · Tidy the footer · \"the footer is a mess\" · thread a\n## Next\n- A dark pricing page\n")
+        let priorities = Priorities(focus: "Focus: the launch, until Friday", backlogs: [steve.id: steves, pepper.id: Backlog()])
+        func view(_ key: String, _ priorities: Priorities = Priorities()) -> PhoneView {
+            PhoneView(PhonePlace(key, in: book), in: book, now: noon, priorities: priorities)
+        }
+        XCTAssertEqual(view("home", priorities).subtitle, "Focus: the launch, until Friday", "as the window's sidebar has it")
+        XCTAssertNil(view("home").subtitle, "with no focus, no line")
+        let channel = view(PhonePlace.key(.channel(.of(steve))), priorities)
+        XCTAssertEqual(channel.backlog, PhoneView.Link(label: "2 in backlog", open: PhonePlace.backlog(of: steve.id)))
+        XCTAssertNil(view(PhonePlace.key(.channel(.of(pepper))), priorities).backlog, "nothing waiting, no count")
+
+        let page = view(PhonePlace.backlog(of: steve.id), priorities)
+        XCTAssertEqual(page.key, PhonePlace.backlog(of: steve.id))
+        XCTAssertEqual(page.title, "Backlog")
+        XCTAssertEqual(page.subtitle, "Steve Pawsniak keeps this. To change it, ask Steve Pawsniak.")
+        XCTAssertEqual(page.back, PhonePlace.key(.channel(.of(steve))))
+        XCTAssertEqual(page.rows.map(\.kind), ["section", "backlog", "section", "backlog", "section", "note"])
+        XCTAssertEqual(page.rows.map(\.title), ["Doing", "Tidy the footer", "Next", "A dark pricing page", "Later", nil])
+        XCTAssertEqual(page.rows[1].detail, "2026-11-12 · \u{201C}the footer is a mess\u{201D}", "when you asked, and your words")
+        XCTAssertNil(page.rows[3].detail)
+        XCTAssertNil(page.box, "only to read, since its kitten keeps it")
+        XCTAssertNil(PhonePlace("b:nobody", in: book).backlog, "an unknown kitten's is the list of places")
+        XCTAssertNil(PhonePlace(PhonePlace.backlog(of: steve.id), in: book).selection)
+    }
+
     /// T3 Code's own page shows a thread whole, so the phone offers it only where a kitten's thread is, never for the
     /// cat's own work, which can hold what was on your screen.
     func testOpenInT3IsOnlyForAKittensThreadAndItsCards() {
