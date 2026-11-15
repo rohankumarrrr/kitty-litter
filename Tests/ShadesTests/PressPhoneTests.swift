@@ -145,6 +145,20 @@ final class PressPhoneTests: XCTestCase {
         try await expect("location.hash", "", "the code doesn't stay in the address")
     }
 
+    /// Safari only moves within the page when the address it already shows comes again with a new `#pair=`, as it does
+    /// when you scan a new code after one didn't work.
+    func testScanningANewCodeIntoThePageAlreadyOpenPairsIt() async throws {
+        try await open(paired: false)
+        phone.open(PhonePlace.home, hash: "#pair=WXYZ-1234")
+        try await phone.until("a wrong code says so") { try await phone.read("!window.stale && $('pairnote').textContent.length > 0") as? Bool == true }
+        try await phone.run("window.stillHere = true; location.hash = '#pair=\(Phone.code)'")
+        try await shows(PhonePlace.home)
+        try await expect("window.stillHere", true, "the page wasn't loaded again")
+        try await expect("$('pair').hidden", true)
+        try await expect("$('pairnote').textContent", "")
+        try await expect("location.hash", "", "the code doesn't stay in the address")
+    }
+
     func testPairTakesATap() async throws {
         try await open(paired: false)
         try await phone.until("the page asks for a code") { try await phone.read("!$('pair').hidden") as? Bool == true }
