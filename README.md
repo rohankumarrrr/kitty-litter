@@ -107,7 +107,7 @@ To see it without T3, permissions or a microphone, run `swift run shades --demo`
 - **Do Not Disturb:** what came in while it was on is saved with the inbox only as IDs, such as a thread's or an approval's, and read again from T3 when you catch up. The cat's own lines aren't saved at all.
 - **Focus and backlogs:** read from `~/kittens/FOCUS.md` and each kitten's `backlog.md` only to show in The Kitty Litter's window, which screen shares leave out, and on your paired phone, where you asked for them too, read when it starts looking and at most once a minute while it is. They're never written anywhere, and never reach the cat or an agent.
 - **Unread:** what you've seen in The Kitty Litter, where each thread's New line goes and what you marked unread are saved with the inbox only as IDs, never what was said.
-- **Settings changes:** a kitten can ask for a change to a short list of settings files, and only your Allow, pressed on your Mac, makes it, exactly as its card shows. Shades reads the request and the file to say what it does, in a thread that can't act, send anything or read a file, and never sees your screen.
+- **Settings changes:** a kitten can ask for a change to a short list of settings files, and only your Allow, pressed on your Mac, makes it, exactly as its card shows. Shades reads the request and the file to say what it does, in a thread that can't act, send anything or read a file, and never sees your screen. For anything else a kitten needs your yes for, Allow only sends that kitten The Kitty Litter's note that you said yes to exactly what its card showed, never words in your name.
 - **The inbox:** what's in it is saved only on your Mac, in `~/Library/Application Support/shades/inbox.json`, which only you can read. A reply is your words and nothing else. It never looks at your screen.
 
 ## Kittens
@@ -116,7 +116,7 @@ A kitten is a specialist with a folder of its own: its instructions and what it 
 
 ## Changing The Kitty Litter by asking Shades
 
-You can set up a kitten called Clawde whose area is the system itself, so "Steve should stop doing that" or "the bubble's too wide" goes through Shades like anything else. Changes to a kitten's instructions apply straight away, and changes to the app come back as a pull request with its proof, which merges once it's proven and installs when you say "ship it". A change to a kitten's settings, which its sandbox won't let it make, comes as a card in The Kitty Litter: Shades says what it would open up, and only your Allow makes it. See [Asking for a change](docs/kittens.md#asking-for-a-change). See [docs/kittens.md](docs/kittens.md#a-kitten-for-the-system-itself).
+You can set up a kitten called Clawde whose area is the system itself, so "Steve should stop doing that" or "the bubble's too wide" goes through Shades like anything else. Changes to a kitten's instructions apply straight away, and changes to the app come back as a pull request with its proof, which merges once it's proven and installs when you say "ship it". A change to a kitten's settings, which its sandbox won't let it make, comes as a card in The Kitty Litter: Shades says what it would open up, and only your Allow makes it. So does anything else a kitten needs your yes for, in its own form or in plain words, which Shades reads into exactly what the kitten would do, and Allow says yes to only that. See [Asking for a change](docs/kittens.md#asking-for-a-change). See [docs/kittens.md](docs/kittens.md#a-kitten-for-the-system-itself).
 
 ## When something goes wrong
 
