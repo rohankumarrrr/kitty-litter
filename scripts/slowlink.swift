@@ -4,7 +4,7 @@
 //   swift scripts/slowlink.swift <port> <page-port> [seconds-each-way] [bytes-a-second] [control-file]
 //
 // Listens on 127.0.0.1:<port> and passes everything to the page on <page-port>, each way after the delay, sharing the
-// bandwidth between connections as one phone's link does. The defaults are 0.15 seconds and 125000 bytes a second,
+// bandwidth between connections as one phone's link does, and reading no faster than the link sends. The defaults are 0.15 seconds and 125000 bytes a second,
 // about 1 Mbps. It prints each connection as it closes, with what it asked for, how long the Mac took to answer, and
 // how much went each way.
 //
@@ -73,7 +73,11 @@ func pass(_ link: Link, from: NWConnection, to: NWConnection, way: String) {
                 if !link.silent { to.send(content: data, completion: .idempotent) }
             }
         }
-        guard done || error != nil else { return pass(link, from: from, to: to, way: way) }
+        // Nothing more is read until the link has room, so a sender's own buffers fill and its progress is the link's,
+        // as on a phone, rather than all of it at once.
+        guard done || error != nil else {
+            return queue.asyncAfter(wallDeadline: .now() + max(free[way]!.timeIntervalSinceNow, 0)) { pass(link, from: from, to: to, way: way) }
+        }
         // Just after the last of what it sent, which the same deadline wouldn't promise.
         queue.asyncAfter(wallDeadline: .now() + max(free[way]!.timeIntervalSinceNow, 0) + delay + 0.005) {
             guard !link.silent else { return }
