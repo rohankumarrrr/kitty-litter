@@ -1,23 +1,32 @@
 import Foundation
 
-/// JSON exactly as RFC 8259 has it, which is all Claude Code's parser takes. Foundation's own reader lets a trailing
-/// comma through, and a settings file Claude Code can't read loses every rule in it, screen block and all.
+/// JSON exactly as RFC 8259 has it, read the way Claude Code's parser reads it: the last of a repeated key wins.
+/// Foundation's own reader lets a trailing comma through and keeps the first of a repeated key, so what it read could
+/// differ from what Claude Code uses, and a settings file Claude Code can't read loses every rule in it.
 enum StrictJSON {
     enum Failure: Error, Equatable {
         case invalid
-        /// One object names a key twice. Claude Code keeps the last, so what's read here could differ from what it uses.
+        /// One object names a key twice.
         case repeatedKey
     }
 
-    static func validate(_ data: Data) throws {
-        var reader = Reader(bytes: [UInt8](data))
-        try reader.value(depth: 0)
+    /// Objects come back as `[String: Any]`, lists as `[Any]`, and the rest as Foundation's JSON values.
+    static func parse(_ data: Data, allowingRepeats: Bool = true) throws -> Any {
+        var reader = Reader(bytes: [UInt8](data), allowingRepeats: allowingRepeats)
+        let value = try reader.value(depth: 0)
         reader.skipSpace()
         guard reader.at == reader.bytes.count else { throw Failure.invalid }
+        return value
+    }
+
+    /// For a file about to be written, where a repeated key is refused rather than read.
+    static func validate(_ data: Data) throws {
+        _ = try parse(data, allowingRepeats: false)
     }
 
     private struct Reader {
         let bytes: [UInt8]
+        let allowingRepeats: Bool
         var at = 0
 
         private var next: UInt8? { at < bytes.count ? bytes[at] : nil }
@@ -32,49 +41,51 @@ enum StrictJSON {
             return true
         }
 
-        mutating func value(depth: Int) throws {
+        mutating func value(depth: Int) throws -> Any {
             guard depth < 100 else { throw Failure.invalid }
             skipSpace()
             switch next {
-            case UInt8(ascii: "{"): try object(depth: depth)
-            case UInt8(ascii: "["): try array(depth: depth)
-            case UInt8(ascii: "\""): _ = try string()
-            case UInt8(ascii: "t"): try word("true")
-            case UInt8(ascii: "f"): try word("false")
-            case UInt8(ascii: "n"): try word("null")
-            default: try number()
+            case UInt8(ascii: "{"): return try object(depth: depth)
+            case UInt8(ascii: "["): return try array(depth: depth)
+            case UInt8(ascii: "\""): return try string()
+            case UInt8(ascii: "t"): return try word("true", is: true)
+            case UInt8(ascii: "f"): return try word("false", is: false)
+            case UInt8(ascii: "n"): return try word("null", is: NSNull())
+            default: return try number()
             }
         }
 
-        private mutating func object(depth: Int) throws {
+        private mutating func object(depth: Int) throws -> [String: Any] {
             at += 1
             skipSpace()
-            if take("}") { return }
-            var keys: Set<String> = []
+            var object: [String: Any] = [:]
+            if take("}") { return object }
             while true {
                 skipSpace()
                 guard next == UInt8(ascii: "\"") else { throw Failure.invalid }
-                guard keys.insert(try string()).inserted else { throw Failure.repeatedKey }
+                let key = try string()
+                guard allowingRepeats || object[key] == nil else { throw Failure.repeatedKey }
                 skipSpace()
                 guard take(":") else { throw Failure.invalid }
-                try value(depth: depth + 1)
+                object[key] = try value(depth: depth + 1)
                 skipSpace()
                 if take(",") { continue }
                 guard take("}") else { throw Failure.invalid }
-                return
+                return object
             }
         }
 
-        private mutating func array(depth: Int) throws {
+        private mutating func array(depth: Int) throws -> [Any] {
             at += 1
             skipSpace()
-            if take("]") { return }
+            var list: [Any] = []
+            if take("]") { return list }
             while true {
-                try value(depth: depth + 1)
+                list.append(try value(depth: depth + 1))
                 skipSpace()
                 if take(",") { continue }
                 guard take("]") else { throw Failure.invalid }
-                return
+                return list
             }
         }
 
@@ -102,13 +113,15 @@ enum StrictJSON {
             return text
         }
 
-        private mutating func word(_ word: String) throws {
+        private mutating func word(_ word: String, is value: Any) throws -> Any {
             let expected = Array(word.utf8)
             guard bytes.count - at >= expected.count, Array(bytes[at..<at + expected.count]) == expected else { throw Failure.invalid }
             at += expected.count
+            return value
         }
 
-        private mutating func number() throws {
+        private mutating func number() throws -> Any {
+            let start = at
             _ = take("-")
             if !take("0") {
                 guard digits() > 0 else { throw Failure.invalid }
@@ -118,6 +131,10 @@ enum StrictJSON {
                 if !take("+") { _ = take("-") }
                 guard digits() > 0 else { throw Failure.invalid }
             }
+            let text = String(decoding: bytes[start..<at], as: UTF8.self)
+            if let whole = Int(text) { return whole }
+            guard let number = Double(text) else { throw Failure.invalid }
+            return number
         }
 
         private mutating func digits() -> Int {

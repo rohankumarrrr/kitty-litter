@@ -36,7 +36,7 @@ extension AppController {
         guard !asked.isEmpty else { return [] }
         let files = settingsFiles
         var entries: [InboxEntry] = []
-        for (index, found) in asked.enumerated() {
+        for found in asked {
             var change: ChangeRequest
             switch found {
             case .success(let request):
@@ -47,7 +47,7 @@ extension AppController {
             }
             if change.problem == nil { change.review = await review(change, by: kitten.name) }
             entries.append(InboxEntry(
-                id: "change-\(thread.id)-\(thread.lastRunID ?? "")-\(index)",
+                id: "change-\(UUID().uuidString)",
                 kind: .decision,
                 text: CatWords.changeRow(change),
                 threadID: thread.id,

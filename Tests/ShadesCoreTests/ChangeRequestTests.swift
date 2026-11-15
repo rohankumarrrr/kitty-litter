@@ -138,36 +138,43 @@ final class ChangeRequestTests: XCTestCase {
         let manager = FileManager.default
         try manager.createDirectory(at: home.appendingPathComponent(".claude"), withIntermediateDirectories: true)
         let mine = home.appendingPathComponent(".claude").path
+        try Data("{}".utf8).write(to: URL(fileURLWithPath: "\(mine)/settings.json"))
+        func refused(_ file: String, by checker: SettingsFiles? = nil, _ why: String) throws {
+            let checked = (checker ?? files).check(try asked(encoded(["file": file, "replace": "{}", "with": "{\"model\": \"x\"}"])))
+            XCTAssertNotNil(checked.problem, why)
+            XCTAssertThrowsError(try (checker ?? files).apply(checked), why)
+        }
 
         let claude = home.appendingPathComponent("shades/.claude")
         try manager.removeItem(at: claude)
         try manager.createSymbolicLink(atPath: claude.path, withDestinationPath: mine)
-        XCTAssertThrowsError(try files.allowed("~/shades/.claude/settings.json"), "its .claude")
+        try refused("~/shades/.claude/settings.json", "its .claude")
 
         try manager.removeItem(at: kittenSettings)
         try manager.createSymbolicLink(atPath: kittenSettings.path, withDestinationPath: "\(mine)/settings.json")
-        XCTAssertThrowsError(try files.allowed(kittenSettings.path), "the file")
+        try refused(kittenSettings.path, "the file")
 
         let project = home.appendingPathComponent(".t3/worktrees/linked")
         try manager.createSymbolicLink(atPath: project.path, withDestinationPath: home.path)
-        XCTAssertThrowsError(try files.allowed("\(project.path)/shades/.claude/settings.local.json"), "a project folder")
+        try refused("\(project.path)/shades/.claude/settings.local.json", "a project folder")
 
         let folder = home.appendingPathComponent("kittens/linked")
         try manager.createSymbolicLink(atPath: folder.path, withDestinationPath: home.path)
-        let listed = SettingsFiles(home: home.path, kittenFolders: [folder.path])
-        XCTAssertThrowsError(try listed.allowed("\(folder.path)/.claude/settings.json"), "a kitten's folder")
+        try refused("\(folder.path)/.claude/settings.json", by: SettingsFiles(home: home.path, kittenFolders: [folder.path]), "a kitten's folder")
+        XCTAssertEqual(try String(contentsOfFile: "\(mine)/settings.json", encoding: .utf8), "{}", "your own settings are untouched")
     }
 
     // MARK: - Checking and making the change
 
-    func testFixingATrailingCommaChangesNothingAgentsCanDo() throws {
+    /// Claude Code reads nothing from a file it can't parse, so fixing one brings back everything in it, and the card says so.
+    func testFixingATrailingCommaBringsBackWhatTheFileAllows() throws {
         let comma = block.replacingOccurrences(of: "\"Bash(swift test)\"\n", with: "\"Bash(swift test)\",\n")
         try Data(comma.utf8).write(to: kittenSettings)
         let checked = files.check(try asked(encoded(["file": kittenSettings.path, "replace": "\"Bash(swift test)\",\n", "with": "\"Bash(swift test)\"\n"])))
         XCTAssertNil(checked.problem)
-        XCTAssertEqual(checked.widens, [])
-        XCTAssertEqual(checked.opensScreenBlock, [])
-        XCTAssertFalse(checked.isLoosening)
+        XCTAssertTrue(checked.widens.contains("Adds `Bash(swift test)` to `permissions.allow`."), "\(checked.widens)")
+        XCTAssertFalse(checked.widens.contains { $0.contains("permissions.deny") }, "a deny coming back only narrows")
+        XCTAssertEqual(checked.opensScreenBlock, [], "it brings the block back, if anything")
         try files.apply(checked)
         XCTAssertNotNil(try JSONSerialization.jsonObject(with: Data(contentsOf: kittenSettings)))
         XCTAssertEqual(try String(contentsOf: kittenSettings, encoding: .utf8), block)

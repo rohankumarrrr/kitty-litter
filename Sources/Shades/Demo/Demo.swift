@@ -49,10 +49,9 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         print("[demo] started \(id) with \(prompt.attachments.count) attachments: \(Self.oneLine(prompt.text))")
         if prompt.text.contains(Prompts.ownWindowNote) { print("[demo] told \(id) the marked spot is on The Kitty Litter's own window") }
         if prompt.text.contains("<request>") {
-            let nothing = prompt.text.contains("own check of what it widens: nothing.")
-            let review = nothing
-                ? "I'd allow it. It only takes out a stray comma, so the file is valid JSON again and agents can do nothing new."
-                : "I'd allow it if you're testing on the simulator. It lets agents in that one worktree drive it without asking, and leaves the screen block alone."
+            let review = prompt.text.contains("settings.local.json")
+                ? "I'd allow it if you're testing on the simulator. It lets agents in that one worktree drive it without asking, and leaves the screen block alone."
+                : "I'd allow it. Claude Code can't read the file with that comma, so fixing it brings back the one command it lets out, and the install can run again."
             return AsyncThrowingStream { continuation in
                 continuation.yield(.started(threadID: id))
                 continuation.yield(.finished(fullText: review))

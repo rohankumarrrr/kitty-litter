@@ -15,17 +15,31 @@ public struct SettingsFiles: Sendable {
 
     public typealias Problem = ChangeRequests.Problem
 
+    /// Where a listed file is: a folder you keep, which can be reached through links of your own, then the folders
+    /// under it, ending with `.claude`, none of which is followed if it's a link, then the file.
+    struct Place: Equatable {
+        var anchor: String
+        var folders: [String]
+        var name: String
+
+        var path: String { ([anchor] + folders + [name]).joined(separator: "/") }
+        /// The file Claude Code reads alongside this one in the same folder.
+        var other: String { name == "settings.json" ? "settings.local.json" : "settings.json" }
+    }
+
     /// The request with its file worked out, what it does, and the file's hash as it is now. If it can't be done as
     /// asked, `problem` says why, which leaves only Deny.
     public func check(_ request: ChangeRequest) -> ChangeRequest {
         var checked = request
         do {
-            let file = try allowed(request.file)
-            checked.file = shown(file.path)
-            let current = try contents(of: file)
+            let place = try allowed(request.file)
+            checked.file = shown(place.path)
+            let (current, other) = try inFolder(place, creating: false) { claude in
+                (try read(place.name, in: claude), try? read(place.other, in: claude))
+            }
             let after = try result(of: request, on: current)
             checked.before = current.map(Self.hash)
-            (checked.opensScreenBlock, checked.widens) = assess(file, before: current, after: after)
+            (checked.opensScreenBlock, checked.widens) = SettingsFacts.assess(local: place.name == "settings.local.json", before: current, after: after, other: other ?? nil)
         } catch let problem as Problem {
             checked.problem = problem.reason
         } catch {
@@ -36,32 +50,33 @@ public struct SettingsFiles: Sendable {
 
     /// Makes the change, only if the file is still exactly as it was when you were shown it.
     public func apply(_ request: ChangeRequest) throws {
-        let file = try allowed(request.file)
-        let current = try contents(of: file)
-        guard current.map(Self.hash) == request.before else {
-            throw Problem("The file changed after you were asked, so nothing was changed.")
+        let place = try allowed(request.file)
+        try inFolder(place, creating: request.replace == nil) { claude in
+            guard let claude else { throw Problem("There's no file there to change yet.") }
+            let current = try read(place.name, in: claude)
+            guard current.map(Self.hash) == request.before else {
+                throw Problem("The file changed after you were asked, so nothing was changed.")
+            }
+            let after = try result(of: request, on: current)
+            var found = stat()
+            let mode = fstatat(claude, place.name, &found, AT_SYMLINK_NOFOLLOW) == 0 ? found.st_mode & 0o777 : 0o644
+            // A new file renamed into place replaces whatever was there rather than writing through it.
+            let temp = ".\(place.name).\(UUID().uuidString)"
+            let descriptor = openat(claude, temp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, mode)
+            guard descriptor >= 0 else { throw Problem("The Kitty Litter couldn't write next to the file.") }
+            defer { unlinkat(claude, temp, 0) }
+            let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+            try handle.write(contentsOf: after)
+            try handle.close()
+            guard renameat(claude, temp, claude, place.name) == 0 else { throw Problem("The Kitty Litter couldn't put the new file in place.") }
+            guard try read(place.name, in: claude) == after else { throw Problem("The file didn't read back as it was written.") }
         }
-        let after = try result(of: request, on: current)
-        let claude = file.deletingLastPathComponent()
-        if current == nil, Self.kind(of: claude.path) == nil {
-            try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: false)
-        }
-        let mode = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.posixPermissions] as? Int ?? 0o644
-        // A new file renamed into place replaces a link rather than writing through one.
-        let temp = claude.appendingPathComponent(".\(file.lastPathComponent).\(UUID().uuidString)")
-        let descriptor = open(temp.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, mode_t(mode))
-        guard descriptor >= 0 else { throw Problem("The Kitty Litter couldn't write next to the file.") }
-        defer { try? FileManager.default.removeItem(at: temp) }
-        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
-        try handle.write(contentsOf: after)
-        try handle.close()
-        guard rename(temp.path, file.path) == 0 else { throw Problem("The Kitty Litter couldn't put the new file in place.") }
-        guard try contents(of: file) == after else { throw Problem("The file didn't read back as it was written.") }
     }
 
     /// The file as it is now, for Shades to read when it looks into the request.
     public func current(_ request: ChangeRequest) -> String? {
-        (try? allowed(request.file)).flatMap { try? contents(of: $0) }.flatMap { String(data: $0, encoding: .utf8) }
+        guard let place = try? allowed(request.file), let data = try? inFolder(place, creating: false, { try read(place.name, in: $0) }) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     /// `~` for your home folder, so a card says where in a way you'd write it.
@@ -71,45 +86,72 @@ public struct SettingsFiles: Sendable {
 
     // MARK: - Which files
 
-    /// The path it's written as, if it's on the list. A link at the folder, its `.claude` or the file itself could
-    /// send the write somewhere else, such as your own Claude settings, so none is followed.
-    func allowed(_ written: String) throws -> URL {
+    /// Where the path it's written as is, if it's on the list.
+    func allowed(_ written: String) throws -> Place {
         let expanded = written == "~" || written.hasPrefix("~/") ? home + written.dropFirst() : written
         guard expanded.hasPrefix("/") else { throw Problem("`\(written)` isn't a full path.") }
         let file = URL(fileURLWithPath: Self.standardized(expanded))
         let claude = file.deletingLastPathComponent()
         let folder = claude.deletingLastPathComponent()
+        let project = folder.deletingLastPathComponent()
         let name = file.lastPathComponent
         guard claude.lastPathComponent == ".claude" else { throw notListed(written) }
-
-        let listed: Bool
         switch name {
-        case "settings.json":
-            listed = kittenFolders.contains(folder.path) || folder.path == home + "/shades"
-        case "settings.local.json":
-            let project = folder.deletingLastPathComponent()
-            listed = project.deletingLastPathComponent().path == home + "/.t3/worktrees" && Self.kind(of: project.path) == .typeDirectory
+        case "settings.json" where kittenFolders.contains(folder.path):
+            return Place(anchor: project.path, folders: [folder.lastPathComponent, ".claude"], name: name)
+        case "settings.json" where folder.path == home + "/shades":
+            return Place(anchor: home, folders: ["shades", ".claude"], name: name)
+        case "settings.local.json" where project.deletingLastPathComponent().path == home + "/.t3/worktrees":
+            return Place(anchor: home + "/.t3/worktrees", folders: [project.lastPathComponent, folder.lastPathComponent, ".claude"], name: name)
         default:
-            listed = false
+            throw notListed(written)
         }
-        guard listed else { throw notListed(written) }
-        guard Self.kind(of: folder.path) == .typeDirectory else { throw Problem("`\(shown(folder.path))` isn't a folder.") }
-        guard [nil, .typeDirectory].contains(Self.kind(of: claude.path)) else { throw Problem("`\(shown(claude.path))` isn't a folder.") }
-        guard [nil, .typeRegular].contains(Self.kind(of: file.path)) else { throw Problem("`\(shown(file.path))` isn't a plain file.") }
-        return file
     }
 
     private func notListed(_ written: String) -> Problem {
         Problem("`\(written)` isn't one of the settings files The Kitty Litter changes.")
     }
 
-    // MARK: - The change
-
-    private func contents(of file: URL) throws -> Data? {
-        guard Self.kind(of: file.path) != nil else { return nil }
-        guard let data = FileManager.default.contents(atPath: file.path) else { throw Problem("The Kitty Litter can't read `\(shown(file.path))`.") }
-        return data
+    /// Hands `body` the open `.claude` folder, or `nil` if it isn't there and isn't to be made. Each folder under the
+    /// anchor is opened from the one before without following a link, so a link that sends the write elsewhere, such
+    /// as to your own Claude settings, is refused, even one put in place while this runs.
+    private func inFolder<Result>(_ place: Place, creating: Bool, _ body: (Int32?) throws -> Result) throws -> Result {
+        var folder = open(place.anchor, O_RDONLY | O_DIRECTORY)
+        guard folder >= 0 else { throw Problem("`\(shown(place.anchor))` isn't a folder.") }
+        defer { close(folder) }
+        for (index, name) in place.folders.enumerated() {
+            let isLast = index == place.folders.count - 1
+            var next = openat(folder, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+            if next < 0, errno == ENOENT, isLast {
+                guard creating else { return try body(nil) }
+                guard mkdirat(folder, name, 0o755) == 0 || errno == EEXIST else { throw Problem("The Kitty Litter couldn't make the `.claude` folder.") }
+                next = openat(folder, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+            }
+            guard next >= 0 else {
+                let path = ([place.anchor] + place.folders.prefix(index + 1)).joined(separator: "/")
+                throw Problem("`\(shown(path))` isn't a folder of its own.")
+            }
+            close(folder)
+            folder = next
+        }
+        return try body(folder)
     }
+
+    /// `nil` if there's no such file. Anything but a plain file, such as a link, is refused.
+    private func read(_ name: String, in folder: Int32?) throws -> Data? {
+        guard let folder else { return nil }
+        let descriptor = openat(folder, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+        guard descriptor >= 0 else {
+            if errno == ENOENT { return nil }
+            throw Problem("`\(name)` there isn't a plain file.")
+        }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        var found = stat()
+        guard fstat(descriptor, &found) == 0, found.st_mode & S_IFMT == S_IFREG else { throw Problem("`\(name)` there isn't a plain file.") }
+        return try handle.readToEnd() ?? Data()
+    }
+
+    // MARK: - The change
 
     private func result(of request: ChangeRequest, on current: Data?) throws -> Data {
         let after: String
@@ -127,48 +169,13 @@ public struct SettingsFiles: Sendable {
         }
         let data = Data(after.utf8)
         do {
-            try StrictJSON.validate(data)
+            guard try StrictJSON.parse(data, allowingRepeats: false) is [String: Any] else { throw Problem("The file wouldn't be a JSON object afterwards.") }
         } catch StrictJSON.Failure.repeatedKey {
             throw Problem("The file would have the same key twice in one place.")
-        } catch {
+        } catch StrictJSON.Failure.invalid {
             throw Problem("The file wouldn't be valid JSON afterwards.")
         }
-        guard (try? JSONSerialization.jsonObject(with: data)) is [String: Any] else { throw Problem("The file wouldn't be a JSON object afterwards.") }
         return data
-    }
-
-    // MARK: - What it does
-
-    /// What it opens of the screen block, and what it lets agents do that they couldn't, going by what Claude Code
-    /// reads in that folder: `settings.json`, with `settings.local.json` over it.
-    func assess(_ file: URL, before: Data?, after: Data) -> (opens: [String], widens: [String]) {
-        let claude = file.deletingLastPathComponent()
-        let isLocal = file.lastPathComponent == "settings.local.json"
-        let other = Self.object(FileManager.default.contents(atPath: claude.appendingPathComponent(isLocal ? "settings.json" : "settings.local.json").path)) ?? [:]
-        let old = before == nil ? [:] : Self.object(before)
-        guard let old, let new = Self.object(after) else {
-            return ([], ["There's no telling what it changes, since the file isn't JSON now."])
-        }
-        let was = isLocal ? Self.merged(other, old) : Self.merged(old, other)
-        let will = isLocal ? Self.merged(other, new) : Self.merged(new, other)
-        let gapsBefore = ScreenBlock.gaps(in: try? JSONSerialization.data(withJSONObject: was))
-        let opens = ScreenBlock.gaps(in: try? JSONSerialization.data(withJSONObject: will)).filter { !gapsBefore.contains($0) }
-        return (opens, SettingsFacts.widening(from: was, to: will))
-    }
-
-    /// JSON5 is let through, since a stray trailing comma is exactly what a request may be fixing.
-    private static func object(_ data: Data?) -> [String: Any]? {
-        guard let data else { return nil }
-        return (try? JSONSerialization.jsonObject(with: data, options: .json5Allowed)) as? [String: Any]
-    }
-
-    /// As Claude Code layers them: lists add up, and anything else in `over` wins.
-    static func merged(_ base: [String: Any], _ over: [String: Any]) -> [String: Any] {
-        base.merging(over) { old, new in
-            if let old = old as? [String: Any], let new = new as? [String: Any] { return merged(old, new) }
-            if let old = old as? [Any], let new = new as? [Any] { return old + new }
-            return new
-        }
     }
 
     static func hash(_ data: Data) -> String {
@@ -177,68 +184,5 @@ public struct SettingsFiles: Sendable {
 
     private static func standardized(_ path: String) -> String {
         URL(fileURLWithPath: path).standardizedFileURL.path
-    }
-
-    private static func kind(of path: String) -> FileAttributeType? {
-        (try? FileManager.default.attributesOfItem(atPath: path))?[.type] as? FileAttributeType
-    }
-}
-
-/// A settings file as a set of facts, each a value at a path, so two versions can be compared without caring how
-/// they're laid out.
-enum SettingsFacts {
-    struct Fact: Hashable {
-        var path: String
-        var value: String
-        var inList: Bool
-    }
-
-    static let mostShown = 8
-
-    /// Adding a deny or an ask, or taking an allow away, only narrows what agents may do. Anything else that changes
-    /// is listed, since there's no telling it's harmless.
-    static func widening(from was: [String: Any], to will: [String: Any]) -> [String] {
-        let before = facts(was), after = facts(will)
-        let added = after.subtracting(before).filter { !["permissions.deny", "permissions.ask"].contains($0.path) }
-        let removed = before.subtracting(after).filter { $0.path != "permissions.allow" }
-        var lines: [String] = []
-        for path in Set((added.union(removed)).map(\.path)).sorted() {
-            let adds = added.filter { $0.path == path }.map(\.value).sorted()
-            let takes = removed.filter { $0.path == path }.map(\.value).sorted()
-            let inList = (added.union(removed)).first { $0.path == path }?.inList ?? false
-            if !inList, adds.count == 1, takes.count == 1 {
-                lines.append("Changes \(shown(path)) from \(shown(takes[0])) to \(shown(adds[0])).")
-                continue
-            }
-            lines += adds.map { inList ? "Adds \(shown($0)) to \(shown(path))." : "Sets \(shown(path)) to \(shown($0))." }
-            lines += takes.map { inList ? "Takes \(shown($0)) out of \(shown(path))." : "Takes out \(shown(path)), which was \(shown($0))." }
-        }
-        guard lines.count > mostShown else { return lines }
-        return Array(lines.prefix(mostShown - 1)) + ["And \(lines.count - mostShown + 1) more changes."]
-    }
-
-    static func facts(_ object: [String: Any]) -> Set<Fact> {
-        var found: Set<Fact> = []
-        func walk(_ value: Any, at path: String, inList: Bool) {
-            if let object = value as? [String: Any], !inList {
-                for (key, inner) in object { walk(inner, at: path.isEmpty ? key : "\(path).\(key)", inList: false) }
-            } else if let list = value as? [Any], !inList {
-                for item in list { walk(item, at: path, inList: true) }
-            } else {
-                found.insert(Fact(path: path, value: written(value), inList: inList))
-            }
-        }
-        walk(object, at: "", inList: false)
-        return found
-    }
-
-    private static func written(_ value: Any) -> String {
-        if let text = value as? String { return text }
-        guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .fragmentsAllowed, .withoutEscapingSlashes]) else { return "\(value)" }
-        return String(decoding: data, as: UTF8.self)
-    }
-
-    private static func shown(_ value: String) -> String {
-        ChangeRequests.code(value.count > 100 ? String(value.prefix(99)) + "…" : value)
     }
 }

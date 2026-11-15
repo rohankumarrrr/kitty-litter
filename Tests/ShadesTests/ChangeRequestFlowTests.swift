@@ -103,7 +103,7 @@ final class ChangeRequestFlowTests: XCTestCase {
         let entry = try await finishClawde(reply(asking: commaFix))
         let change = try XCTUnwrap(entry.change)
         XCTAssertNil(change.problem)
-        XCTAssertFalse(change.isLoosening)
+        XCTAssertEqual(change.widens, ["Adds `Bash(swift test)` to `permissions.allow`."], "Claude Code can't read the file with its comma, so fixing it brings that back")
         XCTAssertEqual(change.review, review)
         XCTAssertTrue(entry.needsYou)
         XCTAssertEqual(savedInbox?.entries.first { $0.id == entry.id }, entry, "saved with the run, so a restart keeps it")
@@ -183,6 +183,28 @@ final class ChangeRequestFlowTests: XCTestCase {
         XCTAssertEqual(change.widens, ["Adds `Bash(rm:*)` to `permissions.allow`."])
         XCTAssertTrue(CatWords.changeCard(change, by: "Steve").hasPrefix("**This widens what agents can do.**"), "said first")
         XCTAssertFalse(stage.bubbles.contains { "\($0)".contains(ChangeRequests.fence) })
+    }
+
+    /// T3 can leave out run IDs, and two cards from one thread still each make only their own change.
+    func testAllowMakesThePressedCardsChangeEvenWithoutRunIDs() async throws {
+        let steveFile = "\(steve.folder)/.claude/settings.json"
+        let asks = ["{\"permissions\": {\"allow\": [\"Bash(rm:*)\"]}}", "{\"permissions\": {\"deny\": [\"WebFetch\"]}}"]
+        for (index, with) in asks.enumerated() {
+            var work = AgentThread(id: "s", title: "Steve: Work", projectTitle: nil, status: .running, model: "m", updatedAt: clock, projectPath: steve.folder)
+            controller.threadsChanged([work])
+            backend.reports["s"] = reply(asking: ["file": steveFile, "replace": "{}", "with": with])
+            work.status = .completed
+            controller.threadsChanged([work])
+            await controller.reportTask?.value
+            for _ in 0..<200 where controller.inbox.entries.filter({ $0.change != nil }).count <= index { await Task.yield() }
+        }
+        let cards = controller.inbox.entries.filter { $0.change != nil }
+        XCTAssertEqual(cards.map(\.change?.with), asks)
+        XCTAssertEqual(Set(cards.map(\.id)).count, 2, "each card is its own")
+        controller.inboxAction(.allow(id: cards[1].id))
+        await settle()
+        XCTAssertEqual(try String(contentsOfFile: steveFile, encoding: .utf8), asks[1])
+        XCTAssertEqual(controller.inbox.entries.filter { $0.change != nil }.map(\.id), [cards[0].id])
     }
 
     /// It runs in the router's folder, where every other thread is a talk with the cat, and the app could stop before it ends.

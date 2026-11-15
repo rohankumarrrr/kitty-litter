@@ -223,7 +223,7 @@ public struct Inbox: Codable, Equatable, Sendable {
     /// any thread, isn't asked twice.
     public mutating func ask(_ entry: InboxEntry) {
         guard let change = entry.change else { return }
-        let same = entries.contains { $0.change.map { ($0.file, $0.replace, $0.with) == (change.file, change.replace, change.with) } ?? false }
+        let same = entries.contains { $0.id == entry.id || $0.change.map { ($0.file, $0.replace, $0.with) == (change.file, change.replace, change.with) } ?? false }
         if !same { entries.append(entry) }
     }
 
