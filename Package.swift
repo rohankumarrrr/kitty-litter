@@ -34,10 +34,12 @@ let package = Package(
             url: "https://github.com/ggml-org/llama.cpp/releases/download/b12121/llama-b12121-xcframework.zip",
             checksum: "00bc6fec00beba802a3912a6afb81e1678da5248a6a92548a9ce66724a3e7638"
         ),
+        // macOS's own zlib, for gzipping the phone page and its stream.
+        .systemLibrary(name: "CZlib"),
         // The cat itself, and the app that wires everything together.
         .executableTarget(
             name: "Shades",
-            dependencies: ["ShadesCore", "ShadesT3", "ShadesContext", "ShadesVoice"],
+            dependencies: ["ShadesCore", "ShadesT3", "ShadesContext", "ShadesVoice", "CZlib"],
             swiftSettings: settings
         ),
 

@@ -6,6 +6,17 @@ import ShadesContext
 import ShadesCore
 import XCTest
 
+/// How many bytes of a response came over the wire, before anything unpacked them.
+private final class Received: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var counted: Int64 = 0
+    var bytes: Int64 { lock.withLock { counted } }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        lock.withLock { counted = metrics.transactionMetrics.last?.countOfResponseBodyBytesReceived ?? 0 }
+    }
+}
+
 /// The phone page for real: the server on a free loopback port, spoken to over HTTP the way the page does.
 @MainActor
 final class PhoneServerTests: XCTestCase {
@@ -491,6 +502,53 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertGreaterThan(rows.filter { $0["kind"] as? String == "same" }.count, 70, "the messages that didn't change go as their IDs")
         XCTAssertTrue(rows.filter { $0["kind"] as? String == "same" }.allSatisfy { $0.count == 2 && $0["id"] != nil }, "and nothing else")
         XCTAssertLessThan(change.utf8.count, whole.utf8.count / 3, "\(change.utf8.count) bytes for the change, \(whole.utf8.count) for the whole thread")
+    }
+
+    /// On a phone's link away from home, a long thread took seconds just to arrive, since nothing was packed.
+    func testWordsGoGzippedToABrowserThatTakesItAndPicturesDont() async throws {
+        let key = try await pair()
+        let counted = Received()
+        let (script, packed) = try await session.data(from: URL(string: "/app.js", relativeTo: base)!, delegate: counted)
+        XCTAssertEqual((packed as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Encoding"), "gzip")
+        XCTAssertEqual(String(decoding: script, as: UTF8.self), PhonePage.script, "and comes out as it went in")
+        await until { counted.bytes > 0 }
+        XCTAssertLessThan(counted.bytes, Int64(script.count / 2), "\(counted.bytes) bytes for \(script.count)")
+
+        let (unpacked, plain) = try await send("GET", "/app.js", headers: ["Accept-Encoding": "identity"])
+        XCTAssertNil(unpacked.value(forHTTPHeaderField: "Content-Encoding"), "only for a browser that takes it")
+        XCTAssertEqual(plain, script)
+        let (cat, _) = try await send("GET", "/cat/dark/sit/7458e8.png")
+        XCTAssertNil(cat.value(forHTTPHeaderField: "Content-Encoding"), "a picture is packed already")
+
+        // Each view has to come out of the stream as soon as it's sent, not when the stream ends.
+        var request = URLRequest(url: URL(string: "/events?key=activity", relativeTo: base)!)
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let (bytes, response) = try await session.bytes(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Encoding"), "gzip")
+        var lines = bytes.lines.makeAsyncIterator()
+        var first = ""
+        while first.isEmpty, let line = try await lines.next() { if line.hasPrefix("data: ") { first = line } }
+        XCTAssertTrue(first.contains(#""key":"activity""#), "the first view, while the stream's still open")
+    }
+
+    /// What's said, and the key pairing sends, could be guessed at from how well it packs, so only the page's own files
+    /// and its padded stream are.
+    func testWhatsSaidNeverGoesPackedOutsideTheStream() async throws {
+        let key = try await pair()
+        let budget = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: Date(), projectPath: penny.folder)
+        backend.listed = [budget]
+        backend.said["w"] = (0..<40).map { Exchange(id: "turn-\($0)", asker: .you, askedAt: Date(), ask: "Check month \($0)", reply: "Groceries went over in month \($0), by more than the month before.", repliedAt: Date()) }
+        controller.threadsChanged([budget])
+        let (_, stream) = try await watch(PhonePlace.key(.channel(.of(penny))), key: key)
+        defer { stream.cancel() }
+        var found: (response: HTTPURLResponse, body: Data)?
+        for _ in 0..<200 {
+            found = try await send("POST", "/search", json: #"{"words":"groceries"}"#, key: key, headers: ["X-Shades": "1"])
+            if found?.body.count ?? 0 > 2048 { break }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertGreaterThan(found?.body.count ?? 0, 2048, "enough found to be worth packing")
+        XCTAssertNil(found?.response.value(forHTTPHeaderField: "Content-Encoding"))
     }
 
     /// Pages whose streams the Mac has ended.
