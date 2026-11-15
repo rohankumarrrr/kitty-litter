@@ -39,24 +39,21 @@ final class GzipTests: XCTestCase {
         return "data: " + String(letters) + "\n\n"
     }
 
-    func testEachEventComesToOneOfAFewSizesAndReadsBackAsItWas() {
+    func testEachEventReadsBackAsItWasWithNothingAdded() {
         let gzip = Gzip()
         var packed = Data()
         var said = ""
         for count in [1, 40, 300, 900, 1_000, 2_500, 9_000, 20_000, 60_000, 150_000] {
             let event = event(count, seed: UInt64(count))
-            let sent = gzip.padded([Data(event.utf8)])
-            XCTAssertEqual(Gzip.size(sent.count), sent.count, "\(count) characters went as \(sent.count) bytes")
-            packed += sent
+            packed += gzip.packed([Data(event.utf8)])
             said += event
         }
         packed += gzip.finished()
-        let read = unpacked(packed).components(separatedBy: "\n\n").filter { !$0.isEmpty && !$0.hasPrefix(":") }
-        XCTAssertEqual(read.joined(separator: "\n\n") + "\n\n", said, "the page reads every event as it was, and skips what pads it")
+        XCTAssertEqual(unpacked(packed), said, "the page reads every event as it was, with nothing padding it out")
     }
 
-    /// Padding alone didn't help: words tuned to sit at the edge of a size told a right guess from a wrong one every
-    /// time. What stops it is that a row is never packed against another row, or anything sent before.
+    /// Padding to a few sizes didn't help: words tuned to sit at the edge of a size told a right guess from a wrong one
+    /// every time. What stops it is that a row is never packed against another row, or anything sent before.
     func testAGuessInOneRowDoesntPackAgainstWordsInAnother() {
         let yours = Data(#"{"rows":[{"text":"Your code for the bank is 4F7QPL2K9X, and nobody else should see it."}"#.utf8)
         func kittens(_ guess: String) -> Data { Data(#",{"text":"A page said your code for the bank is \#(guess)."}]}"#.utf8) }
@@ -80,7 +77,7 @@ final class GzipTests: XCTestCase {
         let ping = Data(": ping\n\n".utf8)
         let after = ["pin", "PIN", "ping ping ping", ""].map { before -> Int in
             let gzip = Gzip()
-            _ = gzip.padded([Data("data: {\"text\":\"my \(before)\"}\n\n".utf8)])
+            _ = gzip.packed([Data("data: {\"text\":\"my \(before)\"}\n\n".utf8)])
             return gzip.flushed(ping).count
         }
         XCTAssertEqual(Set(after).count, 1, "\(after)")

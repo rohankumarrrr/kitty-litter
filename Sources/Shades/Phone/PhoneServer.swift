@@ -244,6 +244,7 @@ final class PhoneStream {
     private var waiting: [[Data]] = []
     private var isClosed = false
     private var pings: Task<Void, Never>?
+    private var nudge: Task<Void, Never>?
 
     fileprivate func attach(_ connection: NWConnection, gzip: Bool) {
         guard !isClosed else { return connection.cancel() }
@@ -281,6 +282,7 @@ final class PhoneStream {
         guard !isClosed else { return }
         isClosed = true
         pings?.cancel()
+        nudge?.cancel()
         let last = gzip.map { Self.chunk($0.finished()) } ?? Data()
         connection?.send(content: last + Data("0\r\n\r\n".utf8), completion: .contentProcessed { [connection] _ in connection?.cancel() })
         onClose?()
@@ -288,10 +290,19 @@ final class PhoneStream {
     }
 
     private func write(_ parts: [Data]) {
-        write(gzip.map { $0.padded(parts) } ?? parts.reduce(Data(), +))
+        write(gzip.map { $0.packed(parts) } ?? parts.reduce(Data(), +))
+        // WebKit can hold back the end of a long packed event until more of the stream comes, so a ping follows soon
+        // after rather than in up to 10 seconds.
+        guard gzip != nil else { return }
+        nudge?.cancel()
+        nudge = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.ping()
+        }
     }
 
-    /// A ping says nothing, so it isn't padded, and packed on its own it's the same size whatever came before it.
+    /// Packed on its own, a ping is the same size whatever came before it.
     private func ping() {
         let ping = Data(": ping\n\n".utf8)
         write(gzip.map { $0.flushed(ping) } ?? ping)
