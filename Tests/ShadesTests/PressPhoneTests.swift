@@ -218,6 +218,30 @@ final class PressPhoneTests: XCTestCase {
         try await expect("$('bartitle').textContent", "Thread")
     }
 
+    /// With the keyboard up, an iPhone slides what you see 300 points down the page and makes it 400 shorter, rather
+    /// than making the page shorter, so the page has to keep the bar and the box with what you see itself.
+    func testTheBarAndTheBoxStayInSightWithTheKeyboardUp() async throws {
+        try await open(at: PhonePlace.key(.thread("p", in: .channel(.of(pepper)))))
+        try await phone.run("window.scrollTo(0, document.body.scrollHeight)")
+        let box = "Math.round(document.documentElement.clientHeight - $('box').getBoundingClientRect().bottom)"
+        try await expect("Math.round($('top').getBoundingClientRect().top)", 0)
+        try await expect(box, 0)
+        try await phone.run("""
+            Object.defineProperty(visualViewport, 'offsetTop', { get: () => 300, configurable: true });
+            Object.defineProperty(visualViewport, 'height', { get: () => document.documentElement.clientHeight - 400, configurable: true });
+            visualViewport.dispatchEvent(new Event('resize'))
+            """)
+        try await phone.until("the bar comes down to the top of what you see") { try await phone.read("Math.round($('top').getBoundingClientRect().top)") as? Int == 300 }
+        try await expect(box, 100, "the box sits on the keyboard")
+        try await phone.run("""
+            Object.defineProperty(visualViewport, 'offsetTop', { get: () => 0, configurable: true });
+            Object.defineProperty(visualViewport, 'height', { get: () => document.documentElement.clientHeight, configurable: true });
+            visualViewport.dispatchEvent(new Event('resize'))
+            """)
+        try await phone.until("the bar goes back once the keyboard does") { try await phone.read("Math.round($('top').getBoundingClientRect().top)") as? Int == 0 }
+        try await expect(box, 0)
+    }
+
     // MARK: - A channel
 
     func testAChannelsInProgressOpensActivity() async throws {
