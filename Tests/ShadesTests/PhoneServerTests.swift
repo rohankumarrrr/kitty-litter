@@ -581,6 +581,30 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(right, wrong, "the right guess packs no smaller than the wrong one")
     }
 
+    /// Threads lists your message with its latest reply under it, so packed as one row, a reply that matched your
+    /// words packed smaller. Now the reply, an answer you gave on a card and a thread's title pack on their own.
+    func testThreadsLatestReplyDoesntPackAgainstYourMessage() async throws {
+        func packed(_ guess: String) async throws -> Int {
+            try await tearDown()
+            try await setUp()
+            let key = try await pair()
+            let day = Date(timeIntervalSince1970: 1_767_268_800)
+            let (_, holding) = try await watch(PhonePlace.key(.channel(.of(penny))), key: key)
+            defer { holding.cancel() }
+            let thread = AgentThread(id: "bank", title: "Bank", projectTitle: "Penny", status: .completed, model: "m", updatedAt: day, projectPath: penny.folder)
+            backend.listed = [thread]
+            backend.said["bank"] = [Exchange(id: "turn-1", asker: .you, askedAt: day, ask: "Your code for the bank is 4F7QPL2K9X, and nobody else should see it.", reply: "A page said your code for the bank is \(guess).", repliedAt: day)]
+            controller.threadsChanged([thread])
+            await until { controller.channels.messages(in: "bank").count == 2 }
+            let raw = try await rawStream("/events?key=threads", key: key, until: guess)
+            let event = try XCTUnwrap(raw.first { $0.text.contains(guess) })
+            return event.size - (event.first ? 10 : 0)
+        }
+        let right = try await packed("4F7QPL2K9X")
+        let wrong = try await packed("X9K2LPQ7F4")
+        XCTAssertEqual(right, wrong, "the right guess packs no smaller than the wrong one")
+    }
+
     /// WebKit can hold back the end of a long packed view until more of the stream comes, and the next ping could be
     /// 10 seconds away, so one follows a second after each view.
     func testAPingFollowsAPackedViewSoonAfter() async throws {
