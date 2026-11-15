@@ -35,6 +35,7 @@ extension AppController {
                 await file(report, of: current, failed: current.status == .failed, startedAnother: link)
                 return
             }
+            if !failed, let report { fileChangeRequests(in: report, of: current) }
             // A thread given a correction says how it went, even if it was passed work before that.
             if !failed, dispatchers.contains(thread.id), !inbox.wasCorrected(thread.id), let link {
                 passedOn(thread, to: link)
@@ -43,14 +44,15 @@ extension AppController {
             // A kitten's report is sorted rather than summed up, so what it needs from you reaches you even when the
             // bubble won't show, the same as one with an inbox.
             let kitten = kitten(of: thread)
+            let readable = readable(report)
             var sorted: SortedReport?
-            if !failed, kitten != nil, let report, report.contains(where: { !$0.isWhitespace }) {
-                sorted = await self.sorted(report, of: thread)
+            if !failed, kitten != nil, let readable, readable.contains(where: { !$0.isWhitespace }) {
+                sorted = await self.sorted(readable, of: thread)
             }
             if let decision = sorted?.decision { flag(decision, of: current) }
             // Held by Do Not Disturb, it's read again from the thread, so there's nothing to sum up.
             guard mayPopUp(.thread(thread.id)) else { return }
-            let words = await words(for: report, of: thread, failed: failed, sorted: sorted)
+            let words = await words(for: readable, of: thread, failed: failed, sorted: sorted)
             post(
                 caption: failed ? CatWords.failedCaption(thread) : CatWords.finishedCaption(thread, kitten: kitten),
                 text: words,
@@ -123,11 +125,16 @@ extension AppController {
         )
     }
 
-    /// A summary still running when the app last stopped carries on without it, and it's reading
-    /// a report just the same. So nothing it says or asks for gets through, and it's tidied up as usual.
+    /// A summary, or a look at a settings change, still running when the app last stopped carries on without it, and
+    /// it's reading a kitten's words just the same. So nothing it says or asks for gets through, and it's tidied up as usual.
     func tidyLeftoverSummaries(_ threads: [AgentThread]) {
-        // They're never in a project, which keeps a thread of yours in one with a title like that out of this.
-        for thread in threads where thread.title.hasPrefix(Self.summaryTitle) && thread.projectPath == nil {
+        // They're never in a project, which keeps a thread of yours in one with a title like that out of this. A look at a
+        // settings change only ever runs in the router's folder.
+        let leftover = { (thread: AgentThread) in
+            thread.title.hasPrefix(Self.summaryTitle) && thread.projectPath == nil
+                || thread.title.hasPrefix(Self.reviewTitle) && self.inRouterFolder(thread)
+        }
+        for thread in threads where leftover(thread) {
             if hiddenThreads.insert(thread.id).inserted {
                 watch.markQuick(thread.id)
                 leftoverSummaries.insert(thread.id)

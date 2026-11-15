@@ -36,6 +36,9 @@ enum InboxAction: Equatable {
     case open(threadID: String)
     case done(id: String)
     case clear(InboxEntry.Kind)
+    /// A settings change a kitten asked for. Only the window's own buttons send these, never a phone.
+    case allow(id: String)
+    case deny(id: String)
 }
 
 /// One question for the user, typed into the small panel over the cat.

@@ -20,6 +20,8 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     private var counter = 0
     /// What sorting a thread's report comes to, by the thread's title.
     private var sortedReplies: [String: String] = [:]
+    /// A thread's whole report, for one that says more than the usual canned one.
+    private var reports: [String: String] = [:]
     /// What was said in the threads it started, and in any you replied in, as T3 keeps it.
     private var said: [String: [Exchange]] = [:]
     /// When each canned thread last moved, which a reply into it does.
@@ -46,6 +48,17 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         let id = nextID()
         print("[demo] started \(id) with \(prompt.attachments.count) attachments: \(Self.oneLine(prompt.text))")
         if prompt.text.contains(Prompts.ownWindowNote) { print("[demo] told \(id) the marked spot is on The Kitty Litter's own window") }
+        if prompt.text.contains("<request>") {
+            let nothing = prompt.text.contains("own check of what it widens: nothing.")
+            let review = nothing
+                ? "I'd allow it. It only takes out a stray comma, so the file is valid JSON again and agents can do nothing new."
+                : "I'd allow it if you're testing on the simulator. It lets agents in that one worktree drive it without asking, and leaves the screen block alone."
+            return AsyncThrowingStream { continuation in
+                continuation.yield(.started(threadID: id))
+                continuation.yield(.finished(fullText: review))
+                continuation.finish()
+            }
+        }
         if prompt.text.contains("<report>") {
             let reply = sortedReplies.first { prompt.text.contains("Task: \($0.key)") }?.value ?? ""
             return AsyncThrowingStream { continuation in
@@ -123,6 +136,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
     func report(threadID: String, run: String?) async throws -> String? {
         try? await Task.sleep(nanoseconds: 800_000_000)
+        if let report = lock.withLock({ reports[threadID] }) { return report }
         return """
         Moved the pricing page to the new grid and fixed the checkout button on small screens. \
         It's in a pull request, and the tests pass. It needs your review before it can go out.
@@ -262,7 +276,10 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
             "scheduled": ("demo-morning", "Clawde: Morning check", "\(Prompts.decisionMarker) Merge the package updates? The tests pass with both."),
             "asks": ("demo-budget", "Pepper: Tidy the budget", "\(Prompts.shippedMarker) The budget page is tidied and merged.\n\(Prompts.decisionMarker) Run git pull in your checkout yourself, since the sandbox can't."),
         ]
-        guard let (threadID, title, reply) = replies[kind] else { return }
+        if kind == "change" {
+            lock.withLock { reports["demo-settings"] = Demo.changeReport }
+        }
+        guard let (threadID, title, reply) = (kind == "change" ? ("demo-settings", "Clawde: Fix the install", "\(Prompts.noteMarker) The install's fixed, apart from two settings it can't change itself.") : replies[kind]) else { return }
         sortedReplies[title] = reply
         // A schedule starts a thread of its own each time it runs, so it isn't listed until then.
         update { threads in
@@ -615,6 +632,33 @@ enum Demo {
         Kitten(name: "Furbit", role: "Health", covers: "Their health.", folder: "/demo/furbit", planned: true, color: Opal.kittens[7]),
     ]
 
+    /// A made-up home folder, fresh each run, so pressing Allow on a demo's change never touches a real settings file.
+    static let home: String = {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("shades-demo-home", isDirectory: true)
+        try? FileManager.default.removeItem(at: home)
+        let worktree = home.appendingPathComponent(".t3/worktrees/app/t3-demo/.claude")
+        try? FileManager.default.createDirectory(at: worktree, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: home.appendingPathComponent("shades/.claude"), withIntermediateDirectories: true)
+        let settings = "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(swift build)\",\n    ]\n  }\n}\n"
+        try? Data(settings.utf8).write(to: home.appendingPathComponent("shades/.claude/settings.json"))
+        return home.path
+    }()
+
+    /// What Clawde says once the install's fixed, asking for the two settings changes its sandbox won't let it make.
+    static var changeReport: String {
+        func block(_ request: [String: String]) -> String {
+            let json = (try? JSONSerialization.data(withJSONObject: request, options: [.prettyPrinted, .sortedKeys])).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+            return "```\(ChangeRequests.fence)\n\(json)\n```"
+        }
+        return """
+        The install's fixed, apart from two settings my sandbox won't let me change.
+
+        \(block(["file": "~/shades/.claude/settings.json", "replace": "\"Bash(swift build)\",\n", "with": "\"Bash(swift build)\"\n", "why": "The trailing comma makes the install stop."]))
+
+        \(block(["file": "~/.t3/worktrees/app/t3-demo/.claude/settings.local.json", "create": "{\n  \"permissions\": {\n    \"allow\": [\"mcp__t3-code__device_open\", \"mcp__t3-code__device_screenshot\"]\n  }\n}\n", "why": "So the tester can drive the simulator in its worktree."]))
+        """
+    }
+
     static func make() -> Parts {
         let backend = DemoBackend()
         let context = DemoContext()
@@ -632,6 +676,7 @@ enum Demo {
             saveSettings: { _ in print("[demo] settings aren't saved in demo mode") },
             kittens: { Demo.kittens },
             systemFacts: { facts.found },
+            home: Demo.home,
             routerFolder: { DemoChannels.routerFolder },
             // Nothing's written, so a journey can see each report the real app would write to health.json.
             reportHealth: { findings, lockdown in

@@ -27,7 +27,7 @@ struct PhonePlace: Equatable {
             return
         }
         if key.hasPrefix("r:") {
-            guard let id = Self.unescape(key.dropFirst(2)), let entry = book.waiting.reports.first(where: { $0.id == id }), !book.talks.contains(entry.threadID) else {
+            guard let id = Self.unescape(key.dropFirst(2)), let entry = book.waiting.reports.first(where: { $0.id == id && $0.change == nil }), !book.talks.contains(entry.threadID) else {
                 self.init(selection: .activity, in: book)
                 return
             }
@@ -624,6 +624,12 @@ struct PhoneView: Encodable, Equatable {
             return card("question", id: question.id, kitten: kitten, title: title, text: text, at: nil, in: book) {
                 $0.parts = parts
                 $0.footer = question.form == nil ? CatWords.answerInT3 : nil
+            }
+        case .report(let entry) where entry.change != nil:
+            // Changing a settings file is new reach, which a phone that's lost could hand anyone, so it's only to read here.
+            return card("report", id: entry.id, kitten: book.kitten(of: entry.id), title: entry.threadTitle, text: entry.text, at: entry.at, in: book) {
+                $0.answer = entry.change?.review
+                $0.footer = CatWords.allowChangeOnMac
             }
         case .report(let entry):
             let kitten = book.kitten(of: entry.id)

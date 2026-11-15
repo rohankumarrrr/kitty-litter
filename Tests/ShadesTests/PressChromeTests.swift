@@ -348,9 +348,22 @@ extension PressChromeTests {
         InboxEntry(id: "sh", kind: .shipped, text: "Shipped the old work.", threadID: "gone", threadTitle: "Old work", at: at)
     }
 
+    /// A settings change a kitten asked for, and one that can't be made as asked.
+    private var change: InboxEntry {
+        var change = ChangeRequest(file: "/k/steve/.claude/settings.json", replace: "\"a\",", with: "\"a\"", why: "Stray comma.")
+        change.review = "Only a comma."
+        return InboxEntry(id: "c", kind: .decision, text: "Asks to change it.", threadID: "s1", threadTitle: "Resume", at: at, change: change)
+    }
+
+    private var unusableChange: InboxEntry {
+        var change = ChangeRequest(file: "~/.claude/settings.json", replace: nil, with: "{}", why: "Mine too.")
+        change.problem = "It isn't one of the settings files."
+        return InboxEntry(id: "u", kind: .decision, text: "Can't.", threadID: "s1", threadTitle: "Resume", at: at, change: change)
+    }
+
     /// An approval, a question with one answer, one you pick several for, a decision and something shipped.
     private func activityBook() -> ChannelBook {
-        book(waiting: Waiting(approvals: [approval], questions: [question, months], owners: ["ap": steve.id, "q": steve.id, "q2": pepper.id], reports: [decision, shipped]))
+        book(waiting: Waiting(approvals: [approval], questions: [question, months], owners: ["ap": steve.id, "q": steve.id, "q2": pepper.id], reports: [decision, shipped, change, unusableChange]))
     }
 
     private func rows(in pane: ChannelPane) -> [ChannelRowView] {
@@ -458,6 +471,26 @@ extension PressChromeTests {
         }
         try pressEveryWay(CatWords.openInT3, on: "Shipped the old work.") { _, calls, name in
             XCTAssertEqual(calls.openedInT3, ["gone"], name)
+        }
+    }
+
+    /// Allow and Deny only answer the change, and nothing else on its card does.
+    func testAChangesAllowDenyAndWayToItsThreadWork() throws {
+        try pressEveryWay("Allow", on: "Only a comma.") { _, calls, name in
+            XCTAssertEqual(calls.actions, [.inbox(.allow(id: "c"))], name)
+        }
+        try pressEveryWay("Deny", on: "Only a comma.") { _, calls, name in
+            XCTAssertEqual(calls.actions, [.inbox(.deny(id: "c"))], name)
+        }
+        try pressEveryWay(CatWords.viewThread, on: "Only a comma.") { view, calls, name in
+            XCTAssertEqual(view.selection, .thread("s1", in: .channel(.of(steve))), name)
+            XCTAssertEqual(calls.actions, [], name)
+        }
+        let (_, view, _) = messages(activityBook())
+        XCTAssertEqual(try card("Only a comma.", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", "Allow", CatWords.viewThread], "Deny comes first, and there's no Reply or Done")
+        XCTAssertEqual(try card("Mine too.", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", CatWords.viewThread], "one that can't be made only takes Deny")
+        try pressEveryWay("Deny", on: "Mine too.") { _, calls, name in
+            XCTAssertEqual(calls.actions, [.inbox(.deny(id: "u"))], name)
         }
     }
 

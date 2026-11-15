@@ -1,0 +1,14 @@
+front
+report change
+wait 8
+inbox
+wait 1
+draw .verify/shades/inbox-change/0-cards
+card Allow
+wait 2
+draw .verify/shades/inbox-change/1-allowed
+card Deny
+wait 2
+draw .verify/shades/inbox-change/2-denied
+front
+windows

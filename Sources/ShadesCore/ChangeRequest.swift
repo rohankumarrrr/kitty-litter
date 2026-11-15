@@ -4,7 +4,7 @@ import Foundation
 /// reply as a fenced `shades-request` block of JSON, and the app shows you exactly that change, and makes only that
 /// change, once you press Allow.
 public struct ChangeRequest: Codable, Equatable, Sendable {
-    /// The file as checked: absolute, with `~` and links worked out.
+    /// The file as checked: a full path, starting `~` for one in your home folder, with nothing left to work out.
     public var file: String
     /// The text that comes out, which was in the file exactly once. `nil` makes a new file.
     public var replace: String?
@@ -57,6 +57,15 @@ public enum ChangeRequests {
         }
         kept += lines[next...]
         return kept.joined(separator: "\n")
+    }
+
+    /// Inline code that nothing in it can close or break out of, on one line, for a card's Markdown.
+    public static func code(_ text: String) -> String {
+        let line = text.split(whereSeparator: \.isNewline).joined(separator: " ")
+        let longest = line.split(omittingEmptySubsequences: true) { $0 != "`" }.map(\.count).max() ?? 0
+        guard longest > 0 else { return "`\(line)`" }
+        let ticks = String(repeating: "`", count: longest + 1)
+        return "\(ticks) \(line) \(ticks)"
     }
 
     public struct Problem: Error, Equatable, Sendable {

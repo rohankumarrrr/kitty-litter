@@ -1513,8 +1513,10 @@ final class CardRowView: ChannelRowView {
         self.look = look
         self.heading = heading
         self.at = at
-        words = ChannelTextBlock(ChannelMarkdown.attributed(text, color: MessagesInk.text))
-        self.answer = answer.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: MessagesInk.text)) }
+        let drawn = ChannelMarkdown.attributed(text, color: MessagesInk.text)
+        let answered = answer.map { ChannelMarkdown.attributed($0, color: MessagesInk.text) }
+        words = ChannelTextBlock(drawn)
+        self.answer = answered.map(ChannelTextBlock.init)
         self.footer = footer
         self.buttons = buttons.map { button in
             let view = QuietButton(button.title, style: button.isWayOut ? .text : button.isPicked == true ? .filled : .plain, onPress: button.action)
@@ -1529,7 +1531,8 @@ final class CardRowView: ChannelRowView {
         self.buttons.forEach(addSubview)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
-        setAccessibilityLabel([heading, text, answer, footer].compactMap { $0 }.joined(separator: ", "))
+        // What it says as drawn, so VoiceOver never reads out Markdown's marks.
+        setAccessibilityLabel([heading, drawn.string, answered?.string, footer].compactMap { $0 }.joined(separator: ", "))
     }
 
     @available(*, unavailable)

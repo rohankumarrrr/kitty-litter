@@ -21,7 +21,7 @@ public struct SettingsFiles: Sendable {
         var checked = request
         do {
             let file = try allowed(request.file)
-            checked.file = file.path
+            checked.file = shown(file.path)
             let current = try contents(of: file)
             let after = try result(of: request, on: current)
             checked.before = current.map(Self.hash)
@@ -37,7 +37,6 @@ public struct SettingsFiles: Sendable {
     /// Makes the change, only if the file is still exactly as it was when you were shown it.
     public func apply(_ request: ChangeRequest) throws {
         let file = try allowed(request.file)
-        guard file.path == request.file else { throw Problem("The file it names isn't where it was.") }
         let current = try contents(of: file)
         guard current.map(Self.hash) == request.before else {
             throw Problem("The file changed after you were asked, so nothing was changed.")
@@ -58,6 +57,11 @@ public struct SettingsFiles: Sendable {
         try handle.close()
         guard rename(temp.path, file.path) == 0 else { throw Problem("The Kitty Litter couldn't put the new file in place.") }
         guard try contents(of: file) == after else { throw Problem("The file didn't read back as it was written.") }
+    }
+
+    /// The file as it is now, for Shades to read when it looks into the request.
+    public func current(_ request: ChangeRequest) -> String? {
+        (try? allowed(request.file)).flatMap { try? contents(of: $0) }.flatMap { String(data: $0, encoding: .utf8) }
     }
 
     /// `~` for your home folder, so a card says where in a way you'd write it.
@@ -203,11 +207,11 @@ enum SettingsFacts {
             let takes = removed.filter { $0.path == path }.map(\.value).sorted()
             let inList = (added.union(removed)).first { $0.path == path }?.inList ?? false
             if !inList, adds.count == 1, takes.count == 1 {
-                lines.append("Changes `\(path)` from \(shown(takes[0])) to \(shown(adds[0])).")
+                lines.append("Changes \(shown(path)) from \(shown(takes[0])) to \(shown(adds[0])).")
                 continue
             }
-            lines += adds.map { inList ? "Adds \(shown($0)) to `\(path)`." : "Sets `\(path)` to \(shown($0))." }
-            lines += takes.map { inList ? "Takes \(shown($0)) out of `\(path)`." : "Takes out `\(path)`, which was \(shown($0))." }
+            lines += adds.map { inList ? "Adds \(shown($0)) to \(shown(path))." : "Sets \(shown(path)) to \(shown($0))." }
+            lines += takes.map { inList ? "Takes \(shown($0)) out of \(shown(path))." : "Takes out \(shown(path)), which was \(shown($0))." }
         }
         guard lines.count > mostShown else { return lines }
         return Array(lines.prefix(mostShown - 1)) + ["And \(lines.count - mostShown + 1) more changes."]
@@ -234,12 +238,7 @@ enum SettingsFacts {
         return String(decoding: data, as: UTF8.self)
     }
 
-    /// In backticks long enough that nothing in it can close them, and cut short.
     private static func shown(_ value: String) -> String {
-        let short = value.count > 100 ? String(value.prefix(99)) + "…" : value
-        let longest = short.split(omittingEmptySubsequences: true) { $0 != "`" }.map(\.count).max() ?? 0
-        guard longest > 0 else { return "`\(short)`" }
-        let ticks = String(repeating: "`", count: longest + 1)
-        return "\(ticks) \(short) \(ticks)"
+        ChangeRequests.code(value.count > 100 ? String(value.prefix(99)) + "…" : value)
     }
 }

@@ -30,6 +30,7 @@ final class AppController {
     let routerFolder: () -> String?
     let systemFacts: () -> HealthFacts
     let fileExists: (String) -> Bool
+    let home: String
     let reportHealth: ([HealthFinding], String?) -> Void
     let saveInbox: (Inbox) throws -> Void
     let hidesTestThreads: Bool
@@ -270,6 +271,7 @@ final class AppController {
         routerFolder = dependencies.routerFolder
         systemFacts = dependencies.systemFacts
         fileExists = dependencies.fileExists
+        home = dependencies.home
         reportHealth = dependencies.reportHealth
         inbox = dependencies.inbox
         away = dependencies.inbox.away

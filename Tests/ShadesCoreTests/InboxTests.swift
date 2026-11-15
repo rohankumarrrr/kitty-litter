@@ -30,6 +30,27 @@ final class InboxTests: XCTestCase {
         }
     }
 
+    // MARK: - A change it asked for
+
+    /// Only Allow or Deny answers it, so a later report, decision or note from the same thread leaves it as it is.
+    func testAChangeItAskedForWaitsWhateverTheThreadSaysNext() throws {
+        var inbox = Inbox(since: start)
+        let change = ChangeRequest(file: "/k/c/.claude/settings.json", replace: "a", with: "b", why: nil)
+        let entry = InboxEntry(id: "c", kind: .decision, text: "Asks to change it.", threadID: "t", threadTitle: "Clawde: Work", at: start, change: change)
+        inbox.ask(entry)
+        inbox.ask(InboxEntry(id: "c2", kind: .decision, text: "Again.", threadID: "u", threadTitle: "Clawde: Other", at: start, change: change))
+        XCTAssertEqual(inbox.entries.map(\.id), ["c"], "the same change isn't asked twice, from any thread")
+
+        inbox.flag("Merge it?", from: thread(), at: start, id: "f")
+        inbox.file(SortedReport(decision: "Ship it?"), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(note: "By the way."), from: thread(run: "run-2"), at: start, id: counter())
+        XCTAssertEqual(inbox.entries.first { $0.id == "c" }, entry, "still there, with nothing under it")
+        XCTAssertEqual(inbox.entries.filter { $0.change == nil }.map(\.text), ["Ship it?"])
+        XCTAssertEqual(inbox.entries.first { $0.change == nil }?.answer, "By the way.")
+        let saved = try JSONDecoder().decode(Inbox.self, from: JSONEncoder().encode(inbox))
+        XCTAssertEqual(saved.entries.first { $0.id == "c" }?.change, change)
+    }
+
     // MARK: - What's owed
 
     func testAFinishedRunIsOwedOnceWhetherItWorkedOrNot() {

@@ -19,6 +19,8 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
     public var answer: String?
     /// Set only on the live question rows, which are never saved.
     public var questionID: String?
+    /// A settings change it asked for, which only Allow or Deny answers.
+    public var change: ChangeRequest?
 
     public init(
         id: String,
@@ -29,7 +31,8 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
         at: Date,
         repliedAt: Date? = nil,
         answer: String? = nil,
-        questionID: String? = nil
+        questionID: String? = nil,
+        change: ChangeRequest? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -40,6 +43,7 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
         self.repliedAt = repliedAt
         self.answer = answer
         self.questionID = questionID
+        self.change = change
     }
 
     public var needsYou: Bool { kind == .decision && repliedAt == nil }
@@ -198,7 +202,7 @@ public struct Inbox: Codable, Equatable, Sendable {
             return asked
         }
 
-        entries.removeAll { $0.threadID == thread.id && $0.kind == .decision }
+        entries.removeAll { $0.threadID == thread.id && $0.kind == .decision && $0.change == nil }
         for index in entries.indices where entries[index].threadID == thread.id {
             entries[index].repliedAt = nil
         }
@@ -211,13 +215,22 @@ public struct Inbox: Codable, Equatable, Sendable {
     /// A kitten without an inbox files only what needs you, since the rest of its report goes to the bubble. Its runs
     /// are passed over for filing, so this doesn't look at them, and what it asks now replaces what it asked before.
     public mutating func flag(_ decision: String, from thread: AgentThread, at: Date, id: String) {
-        entries.removeAll { $0.threadID == thread.id && $0.kind == .decision }
+        entries.removeAll { $0.threadID == thread.id && $0.kind == .decision && $0.change == nil }
         entries.append(InboxEntry(id: id, kind: .decision, text: decision, threadID: thread.id, threadTitle: thread.title, at: at))
     }
 
-    /// The row you asked on, or failing that the thread's open decision, or its latest row.
+    /// A settings change it asked for waits on its own, until you press Allow or Deny. One that's already waiting, from
+    /// any thread, isn't asked twice.
+    public mutating func ask(_ entry: InboxEntry) {
+        guard let change = entry.change else { return }
+        let same = entries.contains { $0.change.map { ($0.file, $0.replace, $0.with) == (change.file, change.replace, change.with) } ?? false }
+        if !same { entries.append(entry) }
+    }
+
+    /// The row you asked on, or failing that the thread's open decision, or its latest row. A change it asked for only
+    /// takes Allow or Deny, so nothing else goes under it.
     private func rowForNote(from threadID: String) -> Int? {
-        let own = entries.indices.filter { entries[$0].threadID == threadID }
+        let own = entries.indices.filter { entries[$0].threadID == threadID && entries[$0].change == nil }
         return own.filter { entries[$0].repliedAt != nil }.max { entries[$0].repliedAt! < entries[$1].repliedAt! }
             ?? own.last { entries[$0].kind == .decision }
             ?? own.last

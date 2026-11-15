@@ -10,6 +10,7 @@ A kitten with `inbox: true` keeps its reports in one place instead of a bubble e
 - `inbox-done` takes a row away without telling any agent.
 - `inbox-asks` files what a kitten without an inbox needs you to do, and leaves the rest of its report to the bubble.
 - `inbox-scheduled` opens a report from a run a schedule started with the kitten's words in it, and takes your reply.
+- `inbox-change` shows a settings change a kitten asked for as a card with Shades' look at it, and Allow and Deny.
 
 ## How to get to it (user POV)
 
@@ -36,6 +37,13 @@ Journey: `journeys/inbox-asks.txt`.
 
 - **Asks.** `report asks`, then `wait 7`. Pepper, who has no inbox, finishes "Tidy the budget" with a report that asks you to run a command. `[demo] started ... Below is the final report` is the sorting, with no summary after it. The output has one `[demo] notified:` line for Pepper needing you, and none saying it finished. `bubble.png` in `0-bubble` shows "Pepper: Tidy the budget" over the demo's report, "Moved the pricing page...", as it was written, since it's short.
 - **Open.** `inbox`, then `wait 1`. `channels.png` in `1-open` shows Activity with "Run git pull in your checkout yourself, since the sandbox can't." from "Pepper · Tidy the budget" under Waiting on you, and nothing under Shipped.
+
+Journey: `journeys/inbox-change.txt`.
+
+- **Asks.** `report change`, then `wait 8`. Clawde finishes "Fix the install" with two `shades-request` blocks. The output has the sorting, then two `[demo] started ... A kitten, one of the user's AI agents, asked for a change` lines, one look at each request, then two `[demo] notified: Clawde needs a decision` lines. The demo's home folder is a throwaway one in the temporary folder, made fresh each run, so nothing real is changed.
+- **Cards.** `inbox`, then `wait 1`. `channels.png` in `0-cards` shows Activity with a count of 2. The first card, "Clawde · Fix the install", starts with **This widens what agents can do.** and two lines adding device tools to `permissions.allow`, then "Makes `~/.t3/worktrees/app/t3-demo/.claude/settings.local.json`:" over the new file with `+` on each line, "Clawde's reason: ...", "I looked into it. ..." in the reply's place, and Deny, Allow and Open in T3. Under it, the second card says "This doesn't widen what agents can do." over a `-` and a `+` line for the comma.
+- **Allow.** `card Allow`, then `wait 2`. It presses the first card's Allow. The output has `[demo] took back 1 notification` and `[demo] forwarded to demo-settings with 0 attachments, to queue: --- / The Kitty Litter wrote this, not the user`. `channels.png` in `1-allowed` shows only the comma's card left, with a count of 1, and the new file is in the demo's home folder.
+- **Deny.** `card Deny`, then `wait 2`. The output has another forward to queue, saying they pressed Deny, and `channels.png` in `2-denied` shows no card left under Waiting on you. The comma is still in the demo's `shades/.claude/settings.json`.
 
 ## Gotchas
 

@@ -268,8 +268,13 @@ final class ChangeRequestTests: XCTestCase {
         XCTAssertNoThrow(try StrictJSON.validate(Data("{\"a\": {\"a\": 1}, \"b\": [{\"a\": 1}, {\"a\": 2}]}".utf8)), "the same key in different objects is fine")
     }
 
-    func testACardShowsHomeAsATilde() {
-        XCTAssertEqual(files.shown("\(home.path)/shades/.claude/settings.json"), "~/shades/.claude/settings.json")
+    /// It's kept as you'd write it, and Allow finds the same file again from that.
+    func testTheFileIsKeptWithATildeForHome() throws {
+        let checked = files.check(try asked(encoded(["file": kittenSettings.path, "replace": "\"Bash(swift test)\"", "with": "\"Bash(ls)\""])))
+        XCTAssertEqual(checked.file, "~/kittens/clawde/.claude/settings.json")
+        XCTAssertEqual(files.current(checked), block)
+        try files.apply(checked)
+        XCTAssertTrue(try String(contentsOf: kittenSettings, encoding: .utf8).contains("Bash(ls)"))
         XCTAssertEqual(files.shown("/etc/hosts"), "/etc/hosts")
     }
 }

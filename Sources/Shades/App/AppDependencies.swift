@@ -18,6 +18,8 @@ struct AppDependencies {
     /// What the cat can find out about its own situation, for its self-check.
     var systemFacts: () -> HealthFacts = { HealthFacts() }
     var fileExists: (String) -> Bool = { _ in true }
+    /// Your home folder, where the settings files a kitten can ask to change are found.
+    var home = FileManager.default.homeDirectoryForCurrentUser.path
     /// What's missing from what keeps a kitten in this folder off your screen.
     var screenBlockGaps: (String) -> [String] = { _ in [] }
     /// The folder the router runs in, once what keeps it from passing your screen on is in place. `nil` if that
