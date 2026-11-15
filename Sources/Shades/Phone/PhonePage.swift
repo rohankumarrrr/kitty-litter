@@ -705,10 +705,24 @@ enum PhonePage {
           return seen ? { id: seen.dataset.id, top: seen.getBoundingClientRect().top } : null;
         }
 
+        // A row that didn't change comes from the stream as the same object it did before, so it keeps what was drawn
+        // for it, and only what changed is drawn and put in.
+        let drawn = new WeakMap();
+        function place(nodes) {
+          const rows = $('rows');
+          let at = rows.firstChild;
+          for (const node of nodes) {
+            if (node === at) { at = at.nextSibling; continue; }
+            rows.insertBefore(node, at);
+          }
+          while (at) { const next = at.nextSibling; at.remove(); at = next; }
+        }
+
         function show(next) {
           if (view && view.key === next.key && selecting()) { held = next; return; }
           held = null;
           const fresh = !view || view.key !== next.key;
+          const before = view;
           const nearBottom = !jumped && window.innerHeight + window.scrollY >= document.body.scrollHeight - 60;
           if (next.key !== key) {
             key = next.key;
@@ -742,11 +756,17 @@ enum PhonePage {
           // Older posts come in where each thread started, which can be among what you're reading, so the lowest
           // message on the screen stays where it was.
           const kept = fresh || nearBottom || !conversation(key) ? null : lowestInSight();
-          $('rows').replaceChildren(...(key === 'home' ? places(next.places) : next.rows.map(item => {
-            const node = row(item);
-            if (item.id) node.dataset.id = item.id;
+          // Your picture is in your rows, so a new one draws them all again.
+          if (fresh || !before || before.you !== next.you) drawn = new WeakMap();
+          place(key === 'home' ? places(next.places) : next.rows.map(item => {
+            let node = drawn.get(item);
+            if (!node) {
+              node = row(item);
+              if (item.id) node.dataset.id = item.id;
+              drawn.set(item, node);
+            }
             return node;
-          })));
+          }));
           cutLong();
           $('notify').hidden = key !== 'home' || !$('notifytext').textContent;
           if (conversation(key) && (fresh || nearBottom)) window.scrollTo(0, document.body.scrollHeight);
@@ -771,9 +791,11 @@ enum PhonePage {
 
         // As on the Mac, a message is cut to 30 lines only once it's over 40, by how tall it really is, since a Show
         // more that hides only a few lines is no help. Every height is read before any is cut, so it's laid out once.
+        // Only what's newly drawn is measured, since what was drawn before has its Show more already.
         function cutLong() {
-          const long = [...$('rows').querySelectorAll('.msg > .said > .bubble')]
-            .filter((bubble) => bubble.scrollHeight > 40 * parseFloat(getComputedStyle(bubble).lineHeight));
+          const fresh = [...$('rows').querySelectorAll('.msg > .said > .bubble:not(.measured)')];
+          fresh.forEach((bubble) => bubble.classList.add('measured'));
+          const long = fresh.filter((bubble) => bubble.scrollHeight > 40 * parseFloat(getComputedStyle(bubble).lineHeight));
           for (const bubble of long) {
             const id = bubble.closest('.msg').dataset.id;
             const open = expanded.has(id);
