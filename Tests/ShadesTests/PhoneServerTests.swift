@@ -534,7 +534,7 @@ final class PhoneServerTests: XCTestCase {
     }
 
     /// What's said, and the key pairing sends, could be guessed at from how well it packs, so only the page's own files
-    /// and its padded stream are.
+    /// and its stream, a row at a time, are.
     func testWhatsSaidNeverGoesPackedOutsideTheStream() async throws {
         let key = try await pair()
         let budget = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: Date(), projectPath: penny.folder)
@@ -555,7 +555,7 @@ final class PhoneServerTests: XCTestCase {
 
     /// A kitten's words that repeated words of yours packed smaller, so someone who could get words into a reply, and
     /// see how big each event was on the way to your phone, could guess at yours a letter at a time. Padding didn't stop
-    /// it, so each row now packs on its own. What goes over the wire, padding taken off, is the same either way.
+    /// it, so each row packs on its own, and what goes over the wire is the same size either way.
     func testAKittensWordsDontPackAgainstYoursOnTheStream() async throws {
         let key = try await pair()
         let day = Date(timeIntervalSince1970: 1_767_268_800)
@@ -571,14 +571,49 @@ final class PhoneServerTests: XCTestCase {
             let place = PhonePlace.key(.thread(id, in: .channel(.of(penny)))).addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
             let raw = try await rawStream("/events?key=\(place)", key: key, until: guess)
             let event = try XCTUnwrap(raw.first { $0.text.contains(guess) }, "the view with both rows")
-            // The padding is a comment kept as it is, 10 bytes more than its own length, and the first has gzip's 10.
-            let comment = event.text.components(separatedBy: "\n\n").filter { $0.hasPrefix(":") }.reduce(0) { $0 + $1.utf8.count + 2 }
-            return event.size - comment - 10 - (event.first ? 10 : 0)
+            XCTAssertFalse(event.text.contains("\n\n:"), "with nothing padding it out")
+            // The first chunk has gzip's 10 bytes in front.
+            return event.size - (event.first ? 10 : 0)
         }
         // The same letters backwards, so the two only differ in whether they repeat your words.
         let right = try await packed("4F7QPL2K9X", in: "bank-ab")
         let wrong = try await packed("X9K2LPQ7F4", in: "bank-ba")
         XCTAssertEqual(right, wrong, "the right guess packs no smaller than the wrong one")
+    }
+
+    /// Threads lists your message with its latest reply under it, so packed as one row, a reply that matched your
+    /// words packed smaller. Now the reply, an answer you gave on a card and a thread's title pack on their own.
+    func testThreadsLatestReplyDoesntPackAgainstYourMessage() async throws {
+        func packed(_ guess: String) async throws -> Int {
+            try await tearDown()
+            try await setUp()
+            let key = try await pair()
+            let day = Date(timeIntervalSince1970: 1_767_268_800)
+            let (_, holding) = try await watch(PhonePlace.key(.channel(.of(penny))), key: key)
+            defer { holding.cancel() }
+            let thread = AgentThread(id: "bank", title: "Bank", projectTitle: "Penny", status: .completed, model: "m", updatedAt: day, projectPath: penny.folder)
+            backend.listed = [thread]
+            backend.said["bank"] = [Exchange(id: "turn-1", asker: .you, askedAt: day, ask: "Your code for the bank is 4F7QPL2K9X, and nobody else should see it.", reply: "A page said your code for the bank is \(guess).", repliedAt: day)]
+            controller.threadsChanged([thread])
+            await until { controller.channels.messages(in: "bank").count == 2 }
+            let raw = try await rawStream("/events?key=threads", key: key, until: guess)
+            let event = try XCTUnwrap(raw.first { $0.text.contains(guess) })
+            return event.size - (event.first ? 10 : 0)
+        }
+        let right = try await packed("4F7QPL2K9X")
+        let wrong = try await packed("X9K2LPQ7F4")
+        XCTAssertEqual(right, wrong, "the right guess packs no smaller than the wrong one")
+    }
+
+    /// WebKit can hold back the end of a long packed view until more of the stream comes, and the next ping could be
+    /// 10 seconds away, so one follows a second after each view.
+    func testAPingFollowsAPackedViewSoonAfter() async throws {
+        let key = try await pair()
+        let started = Date()
+        let chunks = try await rawStream("/events?key=activity", key: key, until: ": ping")
+        XCTAssertTrue(chunks.first?.text.hasPrefix("data: ") == true, "the view first")
+        XCTAssertTrue(chunks.last?.text.contains(": ping") == true)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5, "then a ping within seconds")
     }
 
     /// Each chunk of a raw gzip stream, unpacked as it comes, as a browser does, until one says `until`.
@@ -626,6 +661,28 @@ final class PhoneServerTests: XCTestCase {
             }
         }
         return chunks
+    }
+
+    /// The focus and backlogs go only into what a paired phone is sent, read from the files at most once a minute, as
+    /// the window reads them, and kept nowhere but in memory.
+    func testAPairedPhonesViewsHaveTheFocusReadAtMostOnceAMinute() async throws {
+        var reads = 0
+        controller.readPriorities = { _ in
+            reads += 1
+            return Priorities(focus: "Focus: the launch", backlogs: [self.penny.id: Backlog(reading: "## Next\n- Check the budget\n")])
+        }
+        let key = try await pair()
+        let (home, first) = try await watch("home", key: key)
+        defer { first.cancel() }
+        XCTAssertEqual(home["subtitle"] as? String, "Focus: the launch")
+        let (channel, second) = try await watch(PhonePlace.key(.channel(.of(penny))), key: key)
+        defer { second.cancel() }
+        XCTAssertEqual((channel["backlog"] as? [String: Any])?["label"] as? String, "1 in backlog")
+        XCTAssertEqual(reads, 1, "once, for both")
+        ahead = 61
+        let (_, third) = try await watch(PhonePlace.backlog(of: penny.id), key: key)
+        defer { third.cancel() }
+        XCTAssertEqual(reads, 2, "and again a minute later")
     }
 
     /// Pages whose streams the Mac has ended.

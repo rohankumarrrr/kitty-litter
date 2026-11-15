@@ -9,11 +9,23 @@ struct PhonePlace: Equatable {
     var selection: ChannelSelection?
     var target: MessageTarget?
     var key: String
+    /// A kitten's backlog, by the kitten's ID, which is a page of its own, read only.
+    var backlog: String?
 
     static let home = "home"
 
     /// An unknown key is the list of places, and a key for an inbox row that's gone is Activity.
     init(_ key: String, in book: ChannelBook) {
+        if key.hasPrefix("b:") {
+            // As with the list of places, a kitten that's only planned isn't there.
+            guard let kitten = Self.unescape(key.dropFirst(2)), book.kitten(kitten)?.planned == false else {
+                self.init(selection: nil, in: book)
+                return
+            }
+            self.init(selection: nil, target: nil, key: Self.backlog(of: kitten))
+            backlog = kitten
+            return
+        }
         if key.hasPrefix("r:") {
             guard let id = Self.unescape(key.dropFirst(2)), let entry = book.waiting.reports.first(where: { $0.id == id }), !book.talks.contains(entry.threadID) else {
                 self.init(selection: .activity, in: book)
@@ -119,6 +131,10 @@ struct PhonePlace: Equatable {
 
     static func reply(to entry: InboxEntry) -> String {
         "r:\(escape(entry.id))"
+    }
+
+    static func backlog(of kitten: String) -> String {
+        "b:\(escape(kitten))"
     }
 
     private static func key(_ place: ChannelPlace) -> String {
@@ -314,10 +330,12 @@ struct PhoneView: Encodable, Equatable {
     var marks = Reaction.allCases.map { Choice(label: $0.emoji, value: $0.rawValue) }
     /// Where T3 Code's own page has this thread, for Open in T3, as a path the page puts after its own host.
     var t3: String?
+    /// A kitten's channel's "3 in backlog", which opens its backlog.
+    var backlog: Link?
 
     /// `newFrom` is where each thread's New line was when this phone came here, as the window keeps it. `t3` is what
     /// T3 Code's page calls this Mac, when it's known.
-    init(_ place: PhonePlace, in book: ChannelBook, now: Date, newFrom: [String: String] = [:], t3 environment: String? = nil) {
+    init(_ place: PhonePlace, in book: ChannelBook, now: Date, newFrom: [String: String] = [:], t3 environment: String? = nil, priorities: Priorities = Priorities()) {
         key = place.key
         places = Self.places(in: book)
         cantReachT3 = book.cantReachT3
@@ -330,8 +348,20 @@ struct PhoneView: Encodable, Equatable {
             }
             return Box(label: label, placeholder: CatWords.placeholder(target), ready: target.isReady, also: also, files: target.takesFiles)
         }
+        if let kitten = place.backlog {
+            let name = book.name(of: ChannelID.kitten(kitten))
+            title = CatWords.backlogTitle
+            subtitle = CatWords.backlogKeeper(name)
+            cat = Self.cat(of: .kitten(kitten), in: book)
+            back = PhonePlace.key(.channel(.kitten(kitten)))
+            backTitle = name
+            rows = Self.rows(of: priorities.backlogs[kitten] ?? Backlog())
+            return
+        }
         guard let selection = place.selection else {
             title = CatWords.appName
+            // The focus, in a quiet line over the places, as the window's sidebar has it.
+            subtitle = priorities.focus
             rows = []
             return
         }
@@ -353,10 +383,26 @@ struct PhoneView: Encodable, Equatable {
             if case .channel(.kitten(let kitten)) = selection.place, let count = book.issues.first(where: { $0.kitten.id == kitten })?.threads.count, count > 0 {
                 link = Link(label: CatWords.issues(count), open: PhonePlace.key(.activity))
             }
+            if case .channel(.kitten(let kitten)) = selection.place, let count = priorities.backlogs[kitten]?.items.count, count > 0 {
+                backlog = Link(label: CatWords.backlog(count), open: PhonePlace.backlog(of: kitten))
+            }
             back = PhonePlace.home
             backTitle = CatWords.appName
             if selection.place == .channel(.shades) { subtitle = CatWords.shadesOnPhone }
             rows = Self.rows(selection, in: book, now: now, newFrom: newFrom, t3: environment)
+        }
+    }
+
+    /// What's under way, then what's next and what can wait, as the window's sheet has them, each with when you asked
+    /// and your words.
+    private static func rows(of backlog: Backlog) -> [Row] {
+        Backlog.Level.allCases.flatMap { level -> [Row] in
+            let items = backlog.items.filter { $0.level == level }
+            guard !items.isEmpty else { return [Row(kind: "section", title: level.rawValue), Row(kind: "note", text: CatWords.backlogEmpty)] }
+            return [Row(kind: "section", title: level.rawValue)] + items.map { item in
+                let about = [item.date, item.words.map { "\u{201C}\($0)\u{201D}" }].compactMap { $0 }.joined(separator: " · ")
+                return Row(kind: "backlog", title: item.what, detail: about.isEmpty ? nil : about)
+            }
         }
     }
 
@@ -648,7 +694,7 @@ extension PhoneView {
     }
 
     /// Its JSON, cut into what's around the rows and then each row, so each can be packed on its own. Put back
-    /// together, it's exactly the JSON of the whole. Nothing but the key itself can read `"rows":[]` unescaped.
+    /// together, it's the JSON of the whole. Nothing but the key itself can read `"rows":[]` unescaped.
     func parts() -> [Data] {
         let encoder = JSONEncoder()
         // In the same order each time, so two views that say the same thing pack the same.
@@ -656,9 +702,35 @@ extension PhoneView {
         var bare = self
         bare.rows = []
         guard let whole = try? encoder.encode(bare), let at = whole.range(of: Data(#""rows":[]"#.utf8)) else { return [] }
-        let rows = rows.compactMap { try? encoder.encode($0) }
-        guard rows.count == self.rows.count else { return [] }
-        let cut = at.upperBound - 1
-        return [whole[..<cut]] + rows.enumerated().map { index, row in index == 0 ? row : Data(",".utf8) + row } + [whole[cut...]]
+        var parts = [Data(whole[..<(at.upperBound - 1)])]
+        for (index, row) in rows.enumerated() {
+            guard var pieces = Self.pieces(of: row, encoder) else { return [] }
+            if index > 0 { pieces[0] = Data(",".utf8) + pieces[0] }
+            parts += pieces
+        }
+        return parts + [Data(whole[(at.upperBound - 1)...])]
+    }
+
+    /// A row in pieces: one person's words, and each field that can hold someone else's beside them on its own, such
+    /// as Threads' latest reply under your message, an answer you gave on a kitten's card, or a thread's title, which
+    /// can be your words, over a kitten's reply.
+    private static func pieces(of row: Row, _ encoder: JSONEncoder) -> [Data]? {
+        var rest = row
+        (rest.title, rest.answer, rest.reply, rest.context) = (nil, nil, nil, nil)
+        guard var body = try? encoder.encode(rest) else { return nil }
+        var apart: [Data] = []
+        for (key, value) in [("title", row.title), ("answer", row.answer), ("context", row.context)] {
+            guard let value else { continue }
+            guard let json = try? encoder.encode(value) else { return nil }
+            apart.append(Data(",\"\(key)\":".utf8) + json)
+        }
+        if let reply = row.reply {
+            guard let json = try? encoder.encode(reply) else { return nil }
+            apart.append(Data(",\"reply\":".utf8) + json)
+        }
+        guard !apart.isEmpty else { return [body] }
+        body.removeLast()
+        apart[apart.count - 1] += Data("}".utf8)
+        return [body] + apart
     }
 }

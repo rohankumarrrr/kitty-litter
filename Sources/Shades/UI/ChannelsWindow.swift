@@ -102,7 +102,7 @@ final class ChannelsView: QuietView {
     let backlogSheet = BacklogSheet()
     private(set) var selection: ChannelSelection = .activity
     private(set) var book: ChannelBook?
-    /// Reads the focus and the listed kittens' backlogs. Only this window calls it, and what it reads stays here.
+    /// Reads the focus and the listed kittens' backlogs, and what it reads stays here. A paired phone reads its own.
     var readPriorities: ([Kitten]) -> Priorities = { _ in Priorities() }
     private(set) var priorities = Priorities()
     /// The places and threads you've looked at, oldest first, for ⌘[ and ⌘].

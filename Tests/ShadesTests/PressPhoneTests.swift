@@ -64,8 +64,9 @@ final class PressPhoneTests: XCTestCase {
     private var steveKey: String { PhonePlace.key(.channel(.of(steve))) }
     private var threadKey: String { PhonePlace.key(.thread("a", in: .channel(.of(steve)))) }
 
-    private func open(at key: String = PhonePlace.home, paired: Bool = true) async throws {
+    private func open(at key: String = PhonePlace.home, paired: Bool = true, priorities: Priorities = Priorities()) async throws {
         phone = Phone(book: book(), now: noon, paired: paired)
+        phone.priorities = priorities
         phone.open(key)
         if paired { try await shows(key) }
     }
@@ -361,7 +362,7 @@ final class PressPhoneTests: XCTestCase {
         try await open(at: threadKey)
         phone.picks = [try picture()]
         try await phone.tap("#attach")
-        try await phone.until("the photo is attached") { try await phone.read("document.querySelectorAll('.attachment').length") as? Int == 1 }
+        try await phone.until("the photo is attached") { try await phone.read("document.querySelectorAll('.attachment:not(.going)').length") as? Int == 1 }
         XCTAssertEqual(phone.panels, 1)
         XCTAssertEqual(phone.uploads.map(\.type), ["image/jpeg"], "made smaller here first")
         try await expect("$('send').disabled", false, "a photo alone can go")
@@ -369,15 +370,45 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("✕ takes it off") { try await phone.read("document.querySelectorAll('.attachment').length") as? Int == 0 }
 
         try await phone.press(.returnKey, on: "#attach")
-        try await phone.until("Return attaches one too") { try await phone.read("document.querySelectorAll('.attachment').length") as? Int == 1 }
+        try await phone.until("Return attaches one too") { try await phone.read("document.querySelectorAll('.attachment:not(.going)').length") as? Int == 1 }
         XCTAssertEqual(phone.panels, 2)
         try await phone.press(.returnKey, on: ".attachment button")
         try await phone.until("Return on ✕ takes it off") { try await phone.read("document.querySelectorAll('.attachment').length") as? Int == 0 }
         try await phone.tap("#attach")
-        try await phone.until("and on again") { try await phone.read("document.querySelectorAll('.attachment').length") as? Int == 1 }
+        try await phone.until("and on again") { try await phone.read("document.querySelectorAll('.attachment:not(.going)').length") as? Int == 1 }
         try await phone.tap("#send")
         guard case .send(_, _, _, _, let files, _)? = try await did("send") else { return XCTFail("not a reply") }
         XCTAssertEqual(files.count, 1)
+    }
+
+    func testAPhotoShowsAtOnceAndSaysHowFarItsGotUntilItsUp() async throws {
+        try await open(at: threadKey)
+        phone.holdingUploads = true
+        phone.picks = [try picture()]
+        try await phone.tap("#attach")
+        try await phone.until("its chip shows while it's still going up") { try await phone.read("document.querySelectorAll('.attachment.going img').length") as? Int == 1 }
+        try await expect("/ · (\\d+%|Sending…)$/.test(document.querySelector('.attachment.going span').textContent)", true, "saying how far it's got")
+        try await expect("$('send').disabled", true, "with nothing to send until it's up")
+        phone.letUploadsGo()
+        try await phone.until("then it's attached") { try await phone.read("document.querySelectorAll('.attachment:not(.going)').length") as? Int == 1 }
+        try await expect("document.querySelector('.attachment span').textContent", phone.uploads.last?.name)
+        try await expect("$('send').disabled", false)
+    }
+
+    func testTakingOffAPhotoWhileItGoesUpStopsIt() async throws {
+        try await open(at: threadKey)
+        phone.holdingUploads = true
+        phone.picks = [try picture()]
+        try await phone.tap("#attach")
+        try await phone.until("its chip shows") { try await phone.read("document.querySelectorAll('.attachment.going').length") as? Int == 1 }
+        try await phone.until("it's going up") { phone.uploads.count == 1 }
+        try await phone.tap(".attachment.going button")
+        try await phone.until("✕ takes it off") { try await phone.read("document.querySelectorAll('.attachment').length") as? Int == 0 }
+        try await phone.until("and stops it going up") { phone.stoppedUploads == 1 }
+        phone.letUploadsGo()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        try await expect("document.querySelectorAll('.attachment').length", 0, "it doesn't come back once the Mac answers")
+        XCTAssertEqual(asked("unattach"), 0, "there was nothing on the Mac to forget")
     }
 
     private func picture() throws -> URL {
@@ -625,6 +656,31 @@ final class PressPhoneTests: XCTestCase {
         XCTAssertEqual(phone.followed, [], "the page never goes there itself")
     }
 
+    // MARK: - Focus and backlogs
+
+    private var priorities: Priorities {
+        Priorities(focus: "Focus: the launch, until Friday", backlogs: [steve.id: Backlog(reading: "## Doing\n- 2026-11-12 · Tidy the footer · \"the footer is a mess\"\n## Next\n- A dark pricing page\n")])
+    }
+
+    func testTheFocusShowsOverThePlaces() async throws {
+        try await open(priorities: priorities)
+        try await expect("$('subtitle').textContent", "Focus: the launch, until Friday")
+    }
+
+    func testABacklogOpensFromItsChannelToReadAndBackGoesToTheChannel() async throws {
+        try await open(at: steveKey, priorities: priorities)
+        try await expect("$('backlog').textContent", "2 in backlog")
+        try await phone.tap("#backlog")
+        try await shows(PhonePlace.backlog(of: steve.id))
+        try await expect("[...document.querySelectorAll('.backlog p')].map((p) => p.textContent).join(' | ')", "Tidy the footer | A dark pricing page")
+        try await expect("$('box').hidden", true, "only to read")
+        try await expect("$('backlog').hidden", true)
+        try await phone.tap("#back")
+        try await shows(steveKey)
+        try await phone.press(.returnKey, on: "#backlog")
+        try await shows(PhonePlace.backlog(of: steve.id))
+    }
+
     // MARK: - T3
 
     func testOpenInT3OpensAKittensThreadInT3sOwnPage() async throws {
@@ -774,6 +830,7 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     var book: ChannelBook
+    var priorities = Priorities()
     let view: WKWebView
     /// What the page asked the Mac to do, and what the Mac would do about it, which is `nil` where it turned it away.
     private(set) var acts: [(ask: PhoneAsk, action: MessagesAction?)] = []
@@ -781,6 +838,11 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// How many more times to say nobody's looking, as the Mac does once it's let go of every stream.
     var refusing = 0
     private(set) var uploads: [(name: String, type: String)] = []
+    /// Answers to photos and files the stand-in holds back until `letUploadsGo`, as a slow link would.
+    var holdingUploads = false
+    private var heldUploads: [(task: WKURLSchemeTask, answer: () -> Void)] = []
+    /// Uploads the page called off before they were answered.
+    private(set) var stoppedUploads = 0
     /// Each place the page asked to be shown, in order.
     private(set) var watched: [String] = []
     /// Addresses the page tried to go to, which are never gone to.
@@ -980,20 +1042,29 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
             uploads.append((name, request.value(forHTTPHeaderField: "Content-Type") ?? ""))
             let id = "file-\(uploads.count)"
             files[id] = .bytes(body, name: name)
+            if holdingUploads { return heldUploads.append((task, { [weak self] in self?.json(task, ["id": id]) })) }
             json(task, ["id": id])
         default:
             answer(task, 404)
         }
     }
 
+    func letUploadsGo() {
+        holdingUploads = false
+        heldUploads.forEach { $0.answer() }
+        heldUploads = []
+    }
+
     fileprivate func stop(_ task: WKURLSchemeTask) {
+        if heldUploads.contains(where: { $0.task === task }) { stoppedUploads += 1 }
+        heldUploads.removeAll { $0.task === task }
         streams.removeAll { $0.task === task }
         shown[ObjectIdentifier(task)] = nil
     }
 
     /// As the Mac does, each stream gets its first view whole, and then only the rows that changed.
     private func send(_ task: WKURLSchemeTask, key: String) {
-        let view = PhoneView(PhonePlace(key, in: book), in: book, now: now, newFrom: book.newFrom, t3: "env 1")
+        let view = PhoneView(PhonePlace(key, in: book), in: book, now: now, newFrom: book.newFrom, t3: "env 1", priorities: priorities)
         guard let json = try? JSONEncoder().encode(view.since(shown[ObjectIdentifier(task)])) else { return }
         shown[ObjectIdentifier(task)] = view
         lastSent = String(decoding: json, as: UTF8.self)
