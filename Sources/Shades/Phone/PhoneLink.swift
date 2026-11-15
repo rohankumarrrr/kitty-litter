@@ -106,9 +106,11 @@ final class PhoneLink {
         let view = PhoneView(place, in: book, now: now(), newFrom: watcher.newFrom)
         if place.selection?.thread != nil { watcher.opening = false }
         if !watcher.opening { watcher.key = view.key }
-        guard view != watcher.shown, let json = try? JSONEncoder().encode(view.since(watcher.shown)) else { return }
+        guard view != watcher.shown else { return }
+        let parts = view.since(watcher.shown).parts()
+        guard !parts.isEmpty else { return }
         watcher.shown = view
-        watcher.stream.send(json)
+        watcher.stream.send(parts)
     }
 
     func respond(to request: PhoneServer.Request) -> PhoneServer.Response {

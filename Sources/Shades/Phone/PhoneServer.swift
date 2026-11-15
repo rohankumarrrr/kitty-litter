@@ -13,6 +13,16 @@ final class PhoneServer {
         /// By lowercased name.
         var headers: [String: String]
         var body: Data
+
+        /// Whether the browser takes gzip, as every phone's does. Anyone who can reach the page writes this header, so
+        /// whatever it says is read without assuming anything about it.
+        var takesGzip: Bool {
+            headers["accept-encoding"]?.split(separator: ",").contains { coding in
+                let parts = coding.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                // `q=0` says it isn't wanted.
+                return parts.first == "gzip" && !parts.dropFirst().contains { $0.hasPrefix("q=") && Double($0.dropFirst(2)) == 0 }
+            } == true
+        }
     }
 
     enum Response {
@@ -154,15 +164,21 @@ final class PhoneServer {
         switch respond(request) {
         case .stream(let stream):
             streaming.insert(ObjectIdentifier(connection))
-            stream.attach(connection)
+            stream.attach(connection, gzip: request.takesGzip)
         case let response:
-            send(response, on: connection)
+            send(response, on: connection, gzip: request.takesGzip)
         }
     }
 
-    private func send(_ response: Response, on connection: NWConnection) {
-        guard case .full(let status, let type, let body) = response else { return }
+    private func send(_ response: Response, on connection: NWConnection, gzip: Bool = false) {
+        guard case .full(let status, let type, var body) = response else { return }
         var head = "HTTP/1.1 \(status) \(Self.reason(status))\r\n"
+        // On a phone's link away from home, the page's own files are worth packing. Nothing else that answers it is,
+        // since what's said in it, or the key pairing sends, could be guessed from how well it packs.
+        if gzip, body.count > 1024, type.hasPrefix("text/") {
+            body = Gzip.whole(body)
+            head += "Content-Encoding: gzip\r\n"
+        }
         head += "Content-Type: \(type)\r\nContent-Length: \(body.count)\r\n"
         head += Self.commonHeaders + "Connection: close\r\n\r\n"
         connection.send(content: Data(head.utf8) + body, completion: .contentProcessed { _ in connection.cancel() })
@@ -224,14 +240,17 @@ final class PhoneStream {
 
     var onClose: (() -> Void)?
     private var connection: NWConnection?
-    private var waiting: [Data] = []
+    private var gzip: Gzip?
+    private var waiting: [[Data]] = []
     private var isClosed = false
     private var pings: Task<Void, Never>?
 
-    fileprivate func attach(_ connection: NWConnection) {
+    fileprivate func attach(_ connection: NWConnection, gzip: Bool) {
         guard !isClosed else { return connection.cancel() }
         self.connection = connection
-        let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n" + PhoneServer.commonHeaders + "\r\n"
+        self.gzip = gzip ? Gzip() : nil
+        let packed = gzip ? "Content-Encoding: gzip\r\n" : ""
+        let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\(packed)Transfer-Encoding: chunked\r\n" + PhoneServer.commonHeaders + "\r\n"
         connection.send(content: Data(head.utf8), completion: .idempotent)
         waiting.forEach(write)
         waiting = []
@@ -243,15 +262,18 @@ final class PhoneStream {
         pings = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: Self.pingSeconds * 1_000_000_000)
-                self?.write(Data(": ping\n\n".utf8))
+                self?.ping()
             }
         }
     }
 
-    /// One event. JSON has no line breaks of its own, so it fits on one `data:` line.
-    func send(_ json: Data) {
-        guard !isClosed else { return }
-        let event = Data("data: ".utf8) + json + Data("\n\n".utf8)
+    /// One event, in the parts its JSON was cut into, which are packed each on its own. JSON has no line breaks of its
+    /// own, so it fits on one `data:` line.
+    func send(_ parts: [Data]) {
+        guard !isClosed, !parts.isEmpty else { return }
+        var event = parts
+        event[0] = Data("data: ".utf8) + event[0]
+        event[event.count - 1] += Data("\n\n".utf8)
         if connection == nil { waiting.append(event) } else { write(event) }
     }
 
@@ -259,17 +281,32 @@ final class PhoneStream {
         guard !isClosed else { return }
         isClosed = true
         pings?.cancel()
-        connection?.send(content: Data("0\r\n\r\n".utf8), completion: .contentProcessed { [connection] _ in connection?.cancel() })
+        let last = gzip.map { Self.chunk($0.finished()) } ?? Data()
+        connection?.send(content: last + Data("0\r\n\r\n".utf8), completion: .contentProcessed { [connection] _ in connection?.cancel() })
         onClose?()
         onClose = nil
     }
 
-    private func write(_ data: Data) {
+    private func write(_ parts: [Data]) {
+        write(gzip.map { $0.padded(parts) } ?? parts.reduce(Data(), +))
+    }
+
+    /// A ping says nothing, so it isn't padded, and packed on its own it's the same size whatever came before it.
+    private func ping() {
+        let ping = Data(": ping\n\n".utf8)
+        write(gzip.map { $0.flushed(ping) } ?? ping)
+    }
+
+    private func write(_ bytes: Data) {
         guard let connection, !isClosed else { return }
-        let chunk = Data("\(String(data.count, radix: 16))\r\n".utf8) + data + Data("\r\n".utf8)
+        let chunk = Self.chunk(bytes)
         connection.send(content: chunk, completion: .contentProcessed { [weak self] error in
             guard error != nil else { return }
             MainActor.assumeIsolated { self?.close() }
         })
+    }
+
+    private static func chunk(_ data: Data) -> Data {
+        Data("\(String(data.count, radix: 16))\r\n".utf8) + data + Data("\r\n".utf8)
     }
 }

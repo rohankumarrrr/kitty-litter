@@ -1,10 +1,23 @@
 import Darwin
 import AppKit
 import CryptoKit
+import CZlib
+import Network
 @testable import Shades
 import ShadesContext
 import ShadesCore
 import XCTest
+
+/// How many bytes of a response came over the wire, before anything unpacked them.
+private final class Received: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var counted: Int64 = 0
+    var bytes: Int64 { lock.withLock { counted } }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        lock.withLock { counted = metrics.transactionMetrics.last?.countOfResponseBodyBytesReceived ?? 0 }
+    }
+}
 
 /// The phone page for real: the server on a free loopback port, spoken to over HTTP the way the page does.
 @MainActor
@@ -491,6 +504,128 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertGreaterThan(rows.filter { $0["kind"] as? String == "same" }.count, 70, "the messages that didn't change go as their IDs")
         XCTAssertTrue(rows.filter { $0["kind"] as? String == "same" }.allSatisfy { $0.count == 2 && $0["id"] != nil }, "and nothing else")
         XCTAssertLessThan(change.utf8.count, whole.utf8.count / 3, "\(change.utf8.count) bytes for the change, \(whole.utf8.count) for the whole thread")
+    }
+
+    /// On a phone's link away from home, a long thread took seconds just to arrive, since nothing was packed.
+    func testWordsGoGzippedToABrowserThatTakesItAndPicturesDont() async throws {
+        let key = try await pair()
+        let counted = Received()
+        let (script, packed) = try await session.data(from: URL(string: "/app.js", relativeTo: base)!, delegate: counted)
+        XCTAssertEqual((packed as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Encoding"), "gzip")
+        XCTAssertEqual(String(decoding: script, as: UTF8.self), PhonePage.script, "and comes out as it went in")
+        await until { counted.bytes > 0 }
+        XCTAssertLessThan(counted.bytes, Int64(script.count / 2), "\(counted.bytes) bytes for \(script.count)")
+
+        let (unpacked, plain) = try await send("GET", "/app.js", headers: ["Accept-Encoding": "identity"])
+        XCTAssertNil(unpacked.value(forHTTPHeaderField: "Content-Encoding"), "only for a browser that takes it")
+        XCTAssertEqual(plain, script)
+        let (cat, _) = try await send("GET", "/cat/dark/sit/7458e8.png")
+        XCTAssertNil(cat.value(forHTTPHeaderField: "Content-Encoding"), "a picture is packed already")
+
+        // Each view has to come out of the stream as soon as it's sent, not when the stream ends.
+        var request = URLRequest(url: URL(string: "/events?key=activity", relativeTo: base)!)
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let (bytes, response) = try await session.bytes(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Encoding"), "gzip")
+        var lines = bytes.lines.makeAsyncIterator()
+        var first = ""
+        while first.isEmpty, let line = try await lines.next() { if line.hasPrefix("data: ") { first = line } }
+        XCTAssertTrue(first.contains(#""key":"activity""#), "the first view, while the stream's still open")
+    }
+
+    /// What's said, and the key pairing sends, could be guessed at from how well it packs, so only the page's own files
+    /// and its padded stream are.
+    func testWhatsSaidNeverGoesPackedOutsideTheStream() async throws {
+        let key = try await pair()
+        let budget = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: Date(), projectPath: penny.folder)
+        backend.listed = [budget]
+        backend.said["w"] = (0..<40).map { Exchange(id: "turn-\($0)", asker: .you, askedAt: Date(), ask: "Check month \($0)", reply: "Groceries went over in month \($0), by more than the month before.", repliedAt: Date()) }
+        controller.threadsChanged([budget])
+        let (_, stream) = try await watch(PhonePlace.key(.channel(.of(penny))), key: key)
+        defer { stream.cancel() }
+        var found: (response: HTTPURLResponse, body: Data)?
+        for _ in 0..<200 {
+            found = try await send("POST", "/search", json: #"{"words":"groceries"}"#, key: key, headers: ["X-Shades": "1"])
+            if found?.body.count ?? 0 > 2048 { break }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertGreaterThan(found?.body.count ?? 0, 2048, "enough found to be worth packing")
+        XCTAssertNil(found?.response.value(forHTTPHeaderField: "Content-Encoding"))
+    }
+
+    /// A kitten's words that repeated words of yours packed smaller, so someone who could get words into a reply, and
+    /// see how big each event was on the way to your phone, could guess at yours a letter at a time. Padding didn't stop
+    /// it, so each row now packs on its own. What goes over the wire, padding taken off, is the same either way.
+    func testAKittensWordsDontPackAgainstYoursOnTheStream() async throws {
+        let key = try await pair()
+        let day = Date(timeIntervalSince1970: 1_767_268_800)
+        // Held open, so each thread is read before its own stream starts, and comes whole in the first view.
+        let (_, holding) = try await watch(PhonePlace.key(.channel(.of(penny))), key: key)
+        defer { holding.cancel() }
+        func packed(_ guess: String, in id: String) async throws -> Int {
+            let thread = AgentThread(id: id, title: "Bank", projectTitle: "Penny", status: .completed, model: "m", updatedAt: day, projectPath: penny.folder)
+            backend.listed = [thread]
+            backend.said[id] = [Exchange(id: "turn-1", asker: .you, askedAt: day, ask: "Your code for the bank is 4F7QPL2K9X, and nobody else should see it.", reply: "A page said your code for the bank is \(guess).", repliedAt: day)]
+            controller.threadsChanged([thread])
+            await until { controller.channels.messages(in: id).count == 2 }
+            let place = PhonePlace.key(.thread(id, in: .channel(.of(penny)))).addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+            let raw = try await rawStream("/events?key=\(place)", key: key, until: guess)
+            let event = try XCTUnwrap(raw.first { $0.text.contains(guess) }, "the view with both rows")
+            // The padding is a comment kept as it is, 10 bytes more than its own length, and the first has gzip's 10.
+            let comment = event.text.components(separatedBy: "\n\n").filter { $0.hasPrefix(":") }.reduce(0) { $0 + $1.utf8.count + 2 }
+            return event.size - comment - 10 - (event.first ? 10 : 0)
+        }
+        // The same letters backwards, so the two only differ in whether they repeat your words.
+        let right = try await packed("4F7QPL2K9X", in: "bank-ab")
+        let wrong = try await packed("X9K2LPQ7F4", in: "bank-ba")
+        XCTAssertEqual(right, wrong, "the right guess packs no smaller than the wrong one")
+    }
+
+    /// Each chunk of a raw gzip stream, unpacked as it comes, as a browser does, until one says `until`.
+    private func rawStream(_ path: String, key: String, until: String) async throws -> [(size: Int, first: Bool, text: String)] {
+        let connection = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
+        connection.start(queue: .main)
+        connection.send(content: Data("GET \(path) HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer \(key)\r\nAccept-Encoding: gzip\r\n\r\n".utf8), completion: .idempotent)
+        defer { connection.cancel() }
+        var bytes = Data()
+        var chunks: [(size: Int, first: Bool, text: String)] = []
+        var stream = z_stream()
+        inflateInit2_(&stream, 15 + 32, zlibVersion(), Int32(MemoryLayout<z_stream>.size))
+        defer { inflateEnd(&stream) }
+        var room = [Bytef](repeating: 0, count: 256 * 1024)
+        for _ in 0..<100 where !chunks.contains(where: { $0.text.contains(until) }) {
+            let more: Data? = await withCheckedContinuation { done in
+                connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, _, _ in done.resume(returning: data) }
+            }
+            guard let more else { break }
+            bytes += more
+            guard let head = bytes.range(of: Data("\r\n\r\n".utf8)) else { continue }
+            var body = bytes[head.upperBound...]
+            for _ in 0..<chunks.count {
+                guard let line = body.range(of: Data("\r\n".utf8)), let size = Int(String(decoding: body[..<line.lowerBound], as: UTF8.self), radix: 16) else { break }
+                body = body[(line.upperBound + size + 2)...]
+            }
+            while let line = body.range(of: Data("\r\n".utf8)), let size = Int(String(decoding: body[..<line.lowerBound], as: UTF8.self), radix: 16), size > 0,
+                  body.endIndex - line.upperBound >= size + 2 {
+                var chunk = Data(body[line.upperBound..<(line.upperBound + size)])
+                var text = Data()
+                chunk.withUnsafeMutableBytes { input in
+                    stream.next_in = input.bindMemory(to: Bytef.self).baseAddress
+                    stream.avail_in = uInt(input.count)
+                    repeat {
+                        room.withUnsafeMutableBufferPointer { room in
+                            stream.next_out = room.baseAddress
+                            stream.avail_out = uInt(room.count)
+                            inflate(&stream, Z_SYNC_FLUSH)
+                            text.append(room.baseAddress!, count: room.count - Int(stream.avail_out))
+                        }
+                    } while stream.avail_in > 0
+                }
+                chunks.append((size, chunks.isEmpty, String(decoding: text, as: UTF8.self)))
+                body = body[(line.upperBound + size + 2)...]
+            }
+        }
+        return chunks
     }
 
     /// Pages whose streams the Mac has ended.
