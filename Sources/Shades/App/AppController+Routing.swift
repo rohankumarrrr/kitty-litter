@@ -153,12 +153,7 @@ extension AppController {
     /// `refused` is for where you sent it to say why a file couldn't go, which otherwise only the cat says.
     /// `youPicked` is for a kitten you picked yourself, where you can see its thread start, so the cat doesn't say who has it.
     func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, as errand: Errand = .work, youPicked: Bool = false, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil, refused: (() -> Void)? = nil) {
-        // As with a session, a kitten with full access doesn't get to see text from a page. Nor does
-        // one whose thread would count as a kitten's that isn't meant to see it, in a project they share.
-        let sharesWithScreenless = loadKittens().contains {
-            !$0.seesScreen && KittenBoard.belongs(title: "", projectPath: kitten.workspace, to: $0)
-        }
-        let seesScreen = kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
+        let seesScreen = mayHaveScreen(kitten)
         // Your words alone would only make sense with the file, so nothing goes, except a correction in them,
         // which the owner gets on its own.
         if !seesScreen, snapshot?.isDropped == true {
@@ -199,6 +194,43 @@ extension AppController {
         }
     }
 
+    /// As with a session, a kitten with full access doesn't get to see text from a page. Nor does one whose thread
+    /// would count as a kitten's that isn't meant to see it, in a project they share.
+    func mayHaveScreen(_ kitten: Kitten) -> Bool {
+        let sharesWithScreenless = loadKittens().contains {
+            !$0.seesScreen && KittenBoard.belongs(title: "", projectPath: kitten.workspace, to: $0)
+        }
+        return kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
+    }
+
+    /// A session with full access can do anything, and one that won't say what it has could too.
+    static func mayHaveScreen(_ mode: RuntimeMode?) -> Bool {
+        mode != nil && mode != .fullAccess
+    }
+
+    /// Whether a file you attach could go to `target`, by the checks sending it makes, so a phone only offers + where
+    /// one would. Who started a thread is only followed back when you send, since that asks T3, and can still refuse.
+    func takesFiles(_ target: MessageTarget) -> Bool {
+        guard target.takesFiles else { return false }
+        switch target {
+        case .router:
+            guard settings.lockdown != nil else { return settings.quickMode != .fullAccess }
+            guard let kitten = lockedDownKitten else { return false }
+            if let id = settings.lockdown?.thread { return latestThreads.first { $0.id == id }.map(takesFiles) ?? false }
+            return mayHaveScreen(kitten)
+        case .newThread(let kitten):
+            return mayHaveScreen(kitten)
+        case .thread(let id, _, _):
+            return (latestThreads.first { $0.id == id } ?? channels.listed(id)).map(takesFiles) ?? false
+        case .starting, .question:
+            return false
+        }
+    }
+
+    private func takesFiles(_ thread: AgentThread) -> Bool {
+        Self.mayHaveScreen(thread.runtimeMode) && !loadKittens().contains { !$0.seesScreen && KittenBoard.belongs(thread, to: $0) }
+    }
+
     /// Passes your words to a session that already has the context. The session's reply comes
     /// back the usual way, as a notice when it finishes.
     /// `refused` hears if it couldn't take what you dropped, so nothing went, and `unheard` why T3 never heard your words.
@@ -221,7 +253,7 @@ extension AppController {
         forwardTask = Task {
             // A session with full access can do anything, so text from a page doesn't get to reach it.
             // Neither does one working for a kitten that isn't meant to see it, or one that won't say.
-            var seesScreen = thread.runtimeMode != nil && thread.runtimeMode != .fullAccess
+            var seesScreen = Self.mayHaveScreen(thread.runtimeMode)
             if seesScreen, snapshot != nil { seesScreen = await isClearOfScreenlessKittens(thread) }
             guard seesScreen || snapshot?.isDropped != true else {
                 say(CatWords.cantTakeFiles(thread.title))

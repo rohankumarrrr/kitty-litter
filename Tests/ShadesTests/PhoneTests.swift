@@ -512,6 +512,18 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(thread.backTitle, "Steve Pawsniak")
     }
 
+    /// The Mac says where a file could go, by what sending would decide, so + only shows where a photo would go
+    /// rather than going up first and only then failing.
+    func testTheBoxTakesAFileOnlyWhereTheMacSaysOneWouldGo() {
+        let book = book()
+        let thread = PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book)
+        XCTAssertEqual(PhoneView(thread, in: book, now: noon, takesFiles: { _ in true }).box?.files, true)
+        XCTAssertEqual(PhoneView(thread, in: book, now: noon, takesFiles: { _ in false }).box?.files, false)
+        var asked: [MessageTarget] = []
+        _ = PhoneView(thread, in: book, now: noon, takesFiles: { asked.append($0); return true })
+        XCTAssertEqual(asked, [thread.target!], "about where the box sends")
+    }
+
     func testThreadsOnThePhoneListsWhatYouWroteInAndOpensEachOnItsOwnPage() throws {
         let book = book(sentBetween: true)
         let threads = PhoneView(PhonePlace("threads", in: book), in: book, now: noon)
