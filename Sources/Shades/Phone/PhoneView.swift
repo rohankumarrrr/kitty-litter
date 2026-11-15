@@ -694,7 +694,7 @@ extension PhoneView {
     }
 
     /// Its JSON, cut into what's around the rows and then each row, so each can be packed on its own. Put back
-    /// together, it's exactly the JSON of the whole. Nothing but the key itself can read `"rows":[]` unescaped.
+    /// together, it's the JSON of the whole. Nothing but the key itself can read `"rows":[]` unescaped.
     func parts() -> [Data] {
         let encoder = JSONEncoder()
         // In the same order each time, so two views that say the same thing pack the same.
@@ -702,9 +702,35 @@ extension PhoneView {
         var bare = self
         bare.rows = []
         guard let whole = try? encoder.encode(bare), let at = whole.range(of: Data(#""rows":[]"#.utf8)) else { return [] }
-        let rows = rows.compactMap { try? encoder.encode($0) }
-        guard rows.count == self.rows.count else { return [] }
-        let cut = at.upperBound - 1
-        return [whole[..<cut]] + rows.enumerated().map { index, row in index == 0 ? row : Data(",".utf8) + row } + [whole[cut...]]
+        var parts = [Data(whole[..<(at.upperBound - 1)])]
+        for (index, row) in rows.enumerated() {
+            guard var pieces = Self.pieces(of: row, encoder) else { return [] }
+            if index > 0 { pieces[0] = Data(",".utf8) + pieces[0] }
+            parts += pieces
+        }
+        return parts + [Data(whole[(at.upperBound - 1)...])]
+    }
+
+    /// A row in pieces: one person's words, and each field that can hold someone else's beside them on its own, such
+    /// as Threads' latest reply under your message, an answer you gave on a kitten's card, or a thread's title, which
+    /// can be your words, over a kitten's reply.
+    private static func pieces(of row: Row, _ encoder: JSONEncoder) -> [Data]? {
+        var rest = row
+        (rest.title, rest.answer, rest.reply, rest.context) = (nil, nil, nil, nil)
+        guard var body = try? encoder.encode(rest) else { return nil }
+        var apart: [Data] = []
+        for (key, value) in [("title", row.title), ("answer", row.answer), ("context", row.context)] {
+            guard let value else { continue }
+            guard let json = try? encoder.encode(value) else { return nil }
+            apart.append(Data(",\"\(key)\":".utf8) + json)
+        }
+        if let reply = row.reply {
+            guard let json = try? encoder.encode(reply) else { return nil }
+            apart.append(Data(",\"reply\":".utf8) + json)
+        }
+        guard !apart.isEmpty else { return [body] }
+        body.removeLast()
+        apart[apart.count - 1] += Data("}".utf8)
+        return [body] + apart
     }
 }

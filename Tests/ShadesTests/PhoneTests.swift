@@ -601,6 +601,22 @@ extension PhoneTests {
         XCTAssertNil(PhonePlace(PhonePlace.backlog(of: steve.id), in: book).selection)
     }
 
+    /// What the stream packs a part at a time is, put back together, the whole view, with each field that can hold
+    /// someone else's words beside yours in a part of its own.
+    func testAViewsPartsPutTogetherAreTheWholeViewWithTheLatestReplyApart() throws {
+        let book = book()
+        let view = PhoneView(PhonePlace("threads", in: book), in: book, now: noon)
+        XCTAssertNotNil(view.rows.first { $0.reply != nil }, "Threads has your message with its latest reply")
+        let parts = view.parts()
+        let joined = try XCTUnwrap(try JSONSerialization.jsonObject(with: parts.reduce(Data(), +)) as? NSDictionary)
+        let whole = try XCTUnwrap(try JSONSerialization.jsonObject(with: JSONEncoder().encode(view)) as? NSDictionary)
+        XCTAssertEqual(joined, whole)
+        let texts = parts.map { String(decoding: $0, as: UTF8.self) }
+        XCTAssertTrue(texts.contains { $0.hasPrefix(#","reply":"#) }, "the latest reply is a part of its own")
+        XCTAssertTrue(texts.contains { $0.hasPrefix(#","title":"#) }, "and so is the thread's title")
+        XCTAssertFalse(texts.contains { $0.contains("How's it going?") && $0.contains("Fine.") }, "never in the same part as your words")
+    }
+
     /// T3 Code's own page shows a thread whole, so the phone offers it only where a kitten's thread is, never for the
     /// cat's own work, which can hold what was on your screen.
     func testOpenInT3IsOnlyForAKittensThreadAndItsCards() {
