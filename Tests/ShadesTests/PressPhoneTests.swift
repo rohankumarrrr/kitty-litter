@@ -27,7 +27,7 @@ final class PressPhoneTests: XCTestCase {
 
     /// Steve's thread `a`, working, with your ask and a reply with a link, a web picture and code, and `n`, which
     /// nobody has answered. Pepper's `p`, which Steve started, has a long reply. Activity has one of everything.
-    private func book() -> ChannelBook {
+    private func book(reactions: [String: [Reaction]] = ["e1:reply": [.eyes]]) -> ChannelBook {
         let command = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
         let font = AnswerForm(parts: [AnswerForm.Part(key: "font", text: "Which font?", options: ["Silkscreen", "System"], values: ["s", "y"], takesOwnWords: false)])
         let question = AgentQuestion(id: "q", threadID: "p", threadTitle: "Work", text: "Which font?", form: font)
@@ -54,7 +54,7 @@ final class PressPhoneTests: XCTestCase {
             isReading: false, unreadable: 0, cantReachT3: false,
             waiting: waiting,
             sent: [SentMessage(channel: .of(steve), message: failed, isReply: true), SentMessage(channel: .of(steve), message: forEveryone, alsoSent: true, isReply: true)],
-            reactions: ["e1:reply": [.eyes]]
+            reactions: reactions
         )
         if let steves = book.channels.firstIndex(where: { $0.id == .of(steve) }) { book.channels[steves].isCut = true }
         book.newFrom["p"] = "e2:reply"
@@ -678,6 +678,21 @@ final class PressPhoneTests: XCTestCase {
         try await expect("$('banner').textContent", "", "with nothing saying it changed")
     }
 
+    func testAChangeSendsOnlyTheRowThatChangedAndThePageKeepsTheRest() async throws {
+        try await open(at: threadKey)
+        let rows = try await phone.read("view.rows.length") as? Int
+        phone.book = book(reactions: ["e1:reply": [.eyes, .heart]])
+        phone.push()
+        try await phone.until("the page shows the new reaction") {
+            try await phone.read("view.rows.find((row) => row.id === 'e1:reply').reactions.filter((mark) => mark.label === '❤️').length") as? Int == 1
+        }
+        XCTAssertTrue(phone.lastSent.contains(#"{"id":"e1:ask","kind":"same"}"#) || phone.lastSent.contains(#"{"kind":"same","id":"e1:ask"}"#), "your ask, which didn't change, went as its ID: \(phone.lastSent.prefix(300))")
+        XCTAssertTrue(phone.lastSent.contains("❤️"), "the reply that changed went whole")
+        try await expect("view.rows.length", rows, "every row is still there")
+        try await expect("view.rows.every((row) => row && row.kind !== 'same')", true, "each one filled in")
+        try await expect("[...$('rows').querySelectorAll('.bubble')].some((bubble) => bubble.textContent.includes(\"How's it going?\"))", true, "and drawn")
+    }
+
     func testAStreamQuietForLongerThanAFewPingsIsReplacedWhileYouLook() async throws {
         try await open(at: steveKey)
         try await phone.run("heard = Date.now() - 60000")
@@ -733,6 +748,9 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
     private let now: Date
     private let panel: NSPanel
     private var streams: [(task: WKURLSchemeTask, key: String)] = []
+    private var shown: [ObjectIdentifier: PhoneView] = [:]
+    /// The last view sent, as it went.
+    private(set) var lastSent = ""
     private var files: [String: Drop] = [:]
 
     init(book: ChannelBook, now: Date, paired: Bool) {
@@ -927,11 +945,15 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     fileprivate func stop(_ task: WKURLSchemeTask) {
         streams.removeAll { $0.task === task }
+        shown[ObjectIdentifier(task)] = nil
     }
 
+    /// As the Mac does, each stream gets its first view whole, and then only the rows that changed.
     private func send(_ task: WKURLSchemeTask, key: String) {
-        let shown = PhoneView(PhonePlace(key, in: book), in: book, now: now, newFrom: book.newFrom)
-        guard let json = try? JSONEncoder().encode(shown) else { return }
+        let view = PhoneView(PhonePlace(key, in: book), in: book, now: now, newFrom: book.newFrom)
+        guard let json = try? JSONEncoder().encode(view.since(shown[ObjectIdentifier(task)])) else { return }
+        shown[ObjectIdentifier(task)] = view
+        lastSent = String(decoding: json, as: UTF8.self)
         task.didReceive(Data("data: ".utf8) + json + Data("\n\n".utf8))
     }
 

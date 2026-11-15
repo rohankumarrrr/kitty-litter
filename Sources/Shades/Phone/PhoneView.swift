@@ -594,3 +594,23 @@ struct PhoneView: Encodable, Equatable {
         Opal.hex(color)
     }
 }
+
+extension PhoneView {
+    /// What goes to a page that was last sent `shown` on the same stream: a row that's just as it was goes as its ID,
+    /// which the page fills in from what it has, so a change in a long thread doesn't send the whole thread again.
+    func since(_ shown: PhoneView?) -> PhoneView {
+        guard let shown else { return self }
+        var before: [String: Row] = [:]
+        var twice: Set<String> = []
+        for row in shown.rows {
+            guard let id = row.id else { continue }
+            if before.updateValue(row, forKey: id) != nil { twice.insert(id) }
+        }
+        var sent = self
+        sent.rows = rows.map { row in
+            guard let id = row.id, !twice.contains(id), before[id] == row else { return row }
+            return Row(kind: "same", id: id)
+        }
+        return sent
+    }
+}

@@ -106,7 +106,7 @@ final class PhoneLink {
         let view = PhoneView(place, in: book, now: now(), newFrom: watcher.newFrom)
         if place.selection?.thread != nil { watcher.opening = false }
         if !watcher.opening { watcher.key = view.key }
-        guard view != watcher.shown, let json = try? JSONEncoder().encode(view) else { return }
+        guard view != watcher.shown, let json = try? JSONEncoder().encode(view.since(watcher.shown)) else { return }
         watcher.shown = view
         watcher.stream.send(json)
     }
