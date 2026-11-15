@@ -581,6 +581,17 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(right, wrong, "the right guess packs no smaller than the wrong one")
     }
 
+    /// WebKit can hold back the end of a long packed view until more of the stream comes, and the next ping could be
+    /// 10 seconds away, so one follows a second after each view.
+    func testAPingFollowsAPackedViewSoonAfter() async throws {
+        let key = try await pair()
+        let started = Date()
+        let chunks = try await rawStream("/events?key=activity", key: key, until: ": ping")
+        XCTAssertTrue(chunks.first?.text.hasPrefix("data: ") == true, "the view first")
+        XCTAssertTrue(chunks.last?.text.contains(": ping") == true)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5, "then a ping within seconds")
+    }
+
     /// Each chunk of a raw gzip stream, unpacked as it comes, as a browser does, until one says `until`.
     private func rawStream(_ path: String, key: String, until: String) async throws -> [(size: Int, first: Bool, text: String)] {
         let connection = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
