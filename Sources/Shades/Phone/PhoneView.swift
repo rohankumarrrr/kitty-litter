@@ -334,8 +334,8 @@ struct PhoneView: Encodable, Equatable {
     var backlog: Link?
 
     /// `newFrom` is where each thread's New line was when this phone came here, as the window keeps it. `t3` is what
-    /// T3 Code's page calls this Mac, when it's known.
-    init(_ place: PhonePlace, in book: ChannelBook, now: Date, newFrom: [String: String] = [:], t3 environment: String? = nil, priorities: Priorities = Priorities()) {
+    /// T3 Code's page calls this Mac, when it's known. `takesFiles` is whether a file could go where the box sends.
+    init(_ place: PhonePlace, in book: ChannelBook, now: Date, newFrom: [String: String] = [:], t3 environment: String? = nil, priorities: Priorities = Priorities(), takesFiles: (MessageTarget) -> Bool = { $0.takesFiles }) {
         key = place.key
         places = Self.places(in: book)
         cantReachT3 = book.cantReachT3
@@ -346,7 +346,7 @@ struct PhoneView: Encodable, Equatable {
             if case .thread(let id, _, let report) = target, book.home(ofThread: id) == .shades {
                 label = CatWords.target(.thread(id: id, title: "", report: report))
             }
-            return Box(label: label, placeholder: CatWords.placeholder(target), ready: target.isReady, also: also, files: target.takesFiles)
+            return Box(label: label, placeholder: CatWords.placeholder(target), ready: target.isReady, also: also, files: takesFiles(target))
         }
         if let kitten = place.backlog {
             let name = book.name(of: ChannelID.kitten(kitten))

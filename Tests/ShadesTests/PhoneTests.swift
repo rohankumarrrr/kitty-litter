@@ -512,6 +512,18 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(thread.backTitle, "Steve Pawsniak")
     }
 
+    /// The Mac says where a file could go, by what sending would decide, so + only shows where a photo would go
+    /// rather than going up first and only then failing.
+    func testTheBoxTakesAFileOnlyWhereTheMacSaysOneWouldGo() {
+        let book = book()
+        let thread = PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book)
+        XCTAssertEqual(PhoneView(thread, in: book, now: noon, takesFiles: { _ in true }).box?.files, true)
+        XCTAssertEqual(PhoneView(thread, in: book, now: noon, takesFiles: { _ in false }).box?.files, false)
+        var asked: [MessageTarget] = []
+        _ = PhoneView(thread, in: book, now: noon, takesFiles: { asked.append($0); return true })
+        XCTAssertEqual(asked, [thread.target!], "about where the box sends")
+    }
+
     func testThreadsOnThePhoneListsWhatYouWroteInAndOpensEachOnItsOwnPage() throws {
         let book = book(sentBetween: true)
         let threads = PhoneView(PhonePlace("threads", in: book), in: book, now: noon)
@@ -860,7 +872,7 @@ extension PhoneTests {
         let start = try XCTUnwrap(html.range(of: #"<header id="top">"#))
         let end = try XCTUnwrap(html.range(of: "</header>", range: start.upperBound..<html.endIndex))
         XCTAssertTrue(html[start.lowerBound..<end.upperBound].contains(#"<div id="banner" role="status"></div>"#), "always there, empty, so VoiceOver reads what it comes to say")
-        XCTAssertTrue(PhonePage.style.contains("#top { position: sticky; top: 0;"))
+        XCTAssertTrue(PhonePage.style.contains("#top { position: sticky; top: var(--above, 0px);"), "at the top of what you see, keyboard or not")
         XCTAssertFalse(PhonePage.script.contains("$('banner').hidden"), "never hidden, which would leave nothing to read out")
         XCTAssertFalse(PhonePage.script.contains("'banner', "), "nor with what pairing hides")
     }

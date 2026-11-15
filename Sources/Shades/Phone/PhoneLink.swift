@@ -38,6 +38,8 @@ final class PhoneLink {
     var t3: String?
     /// Reads the focus and the kittens' backlogs, which go only into what a paired phone is sent.
     var readPriorities: ([Kitten]) -> Priorities = { _ in Priorities() }
+    /// Whether a file could go where a place's box sends, as sending would decide, so + shows only where one would.
+    var takesFiles: (MessageTarget) -> Bool = { $0.takesFiles }
     private var priorities = Priorities()
     private var prioritiesRead: Date?
     private let server = PhoneServer()
@@ -109,7 +111,7 @@ final class PhoneLink {
     private func show(_ book: ChannelBook, to watcher: Watcher) {
         let place = PhonePlace(watcher.key, in: book)
         watcher.newFrom.merge(book.newFrom) { _, now in now }
-        let view = PhoneView(place, in: book, now: now(), newFrom: watcher.newFrom, t3: t3, priorities: priorities(for: book))
+        let view = PhoneView(place, in: book, now: now(), newFrom: watcher.newFrom, t3: t3, priorities: priorities(for: book), takesFiles: takesFiles)
         if place.selection?.thread != nil { watcher.opening = false }
         if !watcher.opening { watcher.key = view.key }
         guard view != watcher.shown else { return }

@@ -159,6 +159,23 @@ final class PressPhoneTests: XCTestCase {
         try await expect("location.hash", "", "the code doesn't stay in the address")
     }
 
+    /// An old link, or a second tap on one, brings a code that's been used already. That used to forget the phone's
+    /// key, which still worked, and leave it asking to pair again.
+    func testACodeUsedAlreadyLeavesAPairedPhonePaired() async throws {
+        try await open()
+        try await phone.run("location.hash = '#pair=WXYZ-1234'")
+        try await phone.until("it says the code didn't work") { try await phone.read("$('banner').textContent") as? String == "That code didn't work, but this phone is still paired." }
+        try await expect("$('pair').hidden", true, "still paired")
+        try await expect("localStorage.getItem('shades.key')", Phone.pass, "with its key")
+        try await expect("location.hash", "")
+        try await phone.tap(".place", "Steve Pawsniak")
+        try await shows(steveKey)
+
+        try await phone.run("pass = 'gone'; localStorage.setItem('shades.key', 'gone'); location.hash = '#pair=WXYZ-1234'")
+        try await phone.until("a key that's gone and a code that didn't work ask to pair") { try await phone.read("!$('pair').hidden") as? Bool == true }
+        try await expect("$('pairnote').textContent", "That code didn't work. Turn pairing on again in The Kitty Litter on your Mac for a new one.")
+    }
+
     func testPairTakesATap() async throws {
         try await open(paired: false)
         try await phone.until("the page asks for a code") { try await phone.read("!$('pair').hidden") as? Bool == true }
@@ -216,6 +233,30 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("the bar takes the title") { try await phone.read("$('top').classList.contains('collapsed')") as? Bool == true }
         try await expect("getComputedStyle($('bartitle')).visibility", "visible")
         try await expect("$('bartitle').textContent", "Thread")
+    }
+
+    /// With the keyboard up, an iPhone slides what you see 300 points down the page and makes it 400 shorter, rather
+    /// than making the page shorter, so the page has to keep the bar and the box with what you see itself.
+    func testTheBarAndTheBoxStayInSightWithTheKeyboardUp() async throws {
+        try await open(at: PhonePlace.key(.thread("p", in: .channel(.of(pepper)))))
+        try await phone.run("window.scrollTo(0, document.body.scrollHeight)")
+        let box = "Math.round(document.documentElement.clientHeight - $('box').getBoundingClientRect().bottom)"
+        try await expect("Math.round($('top').getBoundingClientRect().top)", 0)
+        try await expect(box, 0)
+        try await phone.run("""
+            Object.defineProperty(visualViewport, 'offsetTop', { get: () => 300, configurable: true });
+            Object.defineProperty(visualViewport, 'height', { get: () => document.documentElement.clientHeight - 400, configurable: true });
+            visualViewport.dispatchEvent(new Event('resize'))
+            """)
+        try await phone.until("the bar comes down to the top of what you see") { try await phone.read("Math.round($('top').getBoundingClientRect().top)") as? Int == 300 }
+        try await expect(box, 100, "the box sits on the keyboard")
+        try await phone.run("""
+            Object.defineProperty(visualViewport, 'offsetTop', { get: () => 0, configurable: true });
+            Object.defineProperty(visualViewport, 'height', { get: () => document.documentElement.clientHeight, configurable: true });
+            visualViewport.dispatchEvent(new Event('resize'))
+            """)
+        try await phone.until("the bar goes back once the keyboard does") { try await phone.read("Math.round($('top').getBoundingClientRect().top)") as? Int == 0 }
+        try await expect(box, 0)
     }
 
     // MARK: - A channel
