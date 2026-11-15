@@ -355,6 +355,20 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("the box empties") { try await phone.read("$('words').value") as? String == "" }
     }
 
+    /// Sent from halfway up, after Search landed on a message, the page stayed put, so what you sent, and anything wrong
+    /// with it, was out of sight below.
+    func testSendingFromHigherUpTakesYouToWhatYouSent() async throws {
+        try await open(at: PhonePlace.key(.thread("p", in: .channel(.of(pepper)))))
+        try await phone.run("window.scrollTo(0, 0)")
+        try await phone.until("it's at the top") { try await phone.read("window.scrollY") as? Int == 0 }
+        try await expect("window.innerHeight + window.scrollY < document.body.scrollHeight - 200", true, "a long way from the foot")
+        try await phone.tap("#words")
+        try await phone.type("Ship it")
+        try await phone.tap("#send")
+        _ = try await did("send")
+        try await phone.until("it goes to the foot, where what you sent is") { try await phone.read("window.innerHeight + window.scrollY >= document.body.scrollHeight - 2") as? Bool == true }
+    }
+
     func testReturnMakesANewLineAndTheArrowTakesTheKeyboard() async throws {
         try await open(at: threadKey)
         try await phone.tap("#words")

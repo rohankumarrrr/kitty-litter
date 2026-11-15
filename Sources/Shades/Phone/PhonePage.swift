@@ -1436,7 +1436,12 @@ enum PhonePage {
           attached = [];
           chips();
           fit();
-          if (done.open) go(done.open);
+          if (done.open) return go(done.open);
+          // What you sent goes at the foot, and so does anything wrong with it, so the page goes there wherever you'd
+          // scrolled to, as iMessage does.
+          jumped = false;
+          window.scrollTo(0, document.body.scrollHeight);
+          foot();
         };
 
         // Photos and files go to the Mac first, one at a time, so the message itself stays small. A photo is made
