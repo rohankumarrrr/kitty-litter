@@ -82,7 +82,7 @@ enum PhonePage {
         </dialog>
         <section id="pair" hidden>
           <h1>Pair this phone</h1>
-          <p>Turn on The Kitty Litter on my phone in Settings on your Mac, and it shows a code. Scan it with your camera, or type it here.</p>
+          <p id="pairhow">Turn on The Kitty Litter on my phone in Settings on your Mac, and it shows a code. Scan it with your camera, or type it here.</p>
           <form id="pairform">
             <input id="code" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="ABCD-EFGH" aria-label="Code">
             <button type="submit" class="go">Pair</button>
@@ -413,6 +413,7 @@ enum PhonePage {
           unreachable: "Can't reach your Mac. The Kitty Litter has to be running, and your Mac awake.",
           gone: "That's changed since. Have another look.",
           wrongCode: "That code didn't work. Turn pairing on again in The Kitty Litter on your Mac for a new one.",
+          pairHomeScreen: "Turn on The Kitty Litter on my phone in Settings on your Mac, and it shows a code. Type it here, since scanning it opens Safari rather than this app.",
           stillPaired: "That code didn't work, but this phone is still paired.",
           answer: 'Send answer', openInT3: 'Open in T3', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied', react: 'React', openThread: 'Open thread',
           waiting: (count) => count + ' waiting', unread: 'unread',
@@ -615,6 +616,8 @@ enum PhonePage {
           $('bar').hidden = false;
           banner('');
           for (const id of ['top', 'head', 'rows', 'box', 'search', 'found']) $(id).hidden = true;
+          // A Home Screen app keeps its own storage, and the camera opens a code's link in Safari, so here it's typed.
+          if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) $('pairhow').textContent = words.pairHomeScreen;
           $('pair').hidden = false;
         }
 
