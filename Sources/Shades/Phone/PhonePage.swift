@@ -425,6 +425,7 @@ enum PhonePage {
           several: 'Pick as many as you like.',
           sending: 'Sending…', retry: 'Try again',
           notifyAsk: 'Get a notification when something needs you.',
+          notifyRefused: "Notifications didn't turn on, since your Mac couldn't use this phone's push service.",
           cantRead: 'The Kitty Litter can only read photos and PDFs.',
           tooBig: "That's too big to send. Try something under 10 MB.",
           homeScreen: 'For notifications on an iPhone, add this page to your Home Screen with Share, then pair it there.',
@@ -567,8 +568,10 @@ enum PhonePage {
             subscription = null;
           }
           if (subscription && Notification.permission === 'granted') {
-            await keep(subscription);
-            return offer(null);
+            const kept = await keep(subscription);
+            if (!kept || kept.ok) return offer(null);
+            // The Mac turns it away, so nothing would come, and Turn on is back.
+            await subscription.unsubscribe().catch(() => {});
           }
           offer(words.notifyAsk, true);
         }
@@ -585,7 +588,12 @@ enum PhonePage {
             if (await Notification.requestPermission() !== 'granted') return offer(null);
             const registration = await navigator.serviceWorker.ready;
             const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decode(pushKey) });
-            await keep(subscription);
+            const kept = await keep(subscription);
+            // Nothing would come, so it says so, and Turn on stays to try again.
+            if (!kept || !kept.ok) {
+              await subscription.unsubscribe().catch(() => {});
+              return banner(kept ? words.notifyRefused : words.unreachable);
+            }
             offer(null);
           } catch (error) {
             banner(words.unreachable);
