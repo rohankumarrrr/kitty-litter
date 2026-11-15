@@ -332,6 +332,8 @@ enum PhonePage {
         .attachment img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex: none; }
         .attachment span { font-size: calc(14em / 17); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
         .attachment button { color: var(--secondary); }
+        .attachment.going img { filter: brightness(.55); }
+        .attachment.going span { color: var(--secondary); }
         .pictures { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; max-width: 86%; }
         .mine .pictures { margin-left: auto; justify-content: flex-end; }
         .picture { max-width: 66%; max-height: 240px; border-radius: 14px; display: block; }
@@ -1416,16 +1418,23 @@ enum PhonePage {
             for (const file of files.slice(0, 10 - attached.length)) {
               const isPicture = file.type.startsWith('image/');
               if (!isPicture && file.type !== 'application/pdf') { banner(words.cantRead); continue; }
-              const blob = isPicture ? await shrink(file) : file;
               const name = isPicture ? (file.name || 'photo').replace(/\.[^.]*$/, '') + '.jpg' : file.name;
-              if (blob.size > 10 * 1024 * 1024) { banner(words.tooBig); continue; }
-              const response = await fetch('/file', {
-                method: 'POST', cache: 'no-store', body: blob,
-                headers: headers({ 'Content-Type': blob.type || 'application/octet-stream', 'X-Shades': '1', 'X-Name': encodeURIComponent(name) }),
-              });
+              // It shows at once, faded as a message on its way is, and says how far it's got, so a photo going up a
+              // slow link doesn't look like nothing happened.
+              const going = { name, picture: null, sent: 0 };
+              attached.push(going);
+              chips();
+              const blob = isPicture ? await shrink(file) : file;
+              if (isPicture) { going.picture = await preview(blob); chips(); }
+              if (!attached.includes(going)) continue;
+              if (blob.size > 10 * 1024 * 1024) { drop(going); banner(words.tooBig); continue; }
+              const response = await upload(blob, name, going);
+              // Taken off while it went up.
+              if (!attached.includes(going)) continue;
               if (response.status === 401) return pairing();
-              if (!response.ok) { banner(response.status === 413 ? words.tooBig : words.unreachable); continue; }
-              attached.push({ id: (await response.json()).id, name, picture: isPicture ? await preview(blob) : null });
+              if (!response.ok) { drop(going); banner(response.status === 413 ? words.tooBig : words.unreachable); continue; }
+              going.id = response.id;
+              delete going.sent;
               chips();
             }
           } catch (error) {
@@ -1436,20 +1445,50 @@ enum PhonePage {
           }
         }
 
+        // XMLHttpRequest says how much has gone, which fetch can't.
+        function upload(blob, name, going) {
+          return new Promise((resolve) => {
+            const request = new XMLHttpRequest();
+            going.cancel = () => request.abort();
+            request.open('POST', '/file');
+            const sent = headers({ 'Content-Type': blob.type || 'application/octet-stream', 'X-Shades': '1', 'X-Name': encodeURIComponent(name) });
+            for (const header of Object.keys(sent)) request.setRequestHeader(header, sent[header]);
+            request.upload.onprogress = (event) => {
+              if (!event.lengthComputable || going.sent === undefined) return;
+              going.sent = event.loaded / event.total;
+              chips();
+            };
+            request.onload = () => {
+              let id = null;
+              try { id = JSON.parse(request.responseText).id; } catch (error) {}
+              resolve({ status: request.status, ok: request.status >= 200 && request.status < 300 && Boolean(id), id });
+            };
+            request.onerror = request.onabort = () => resolve({ status: 0, ok: false });
+            request.send(blob);
+          });
+        }
+
+        function drop(file) {
+          attached = attached.filter((other) => other !== file);
+          chips();
+        }
+
         // What's attached, over the box: each with a small picture or its name, and ✕ to take it off.
         function chips() {
           $('attached').replaceChildren(...attached.map((file) => {
-            const chip = el('div', 'attachment');
+            const chip = el('div', 'attachment' + (file.sent === undefined ? '' : ' going'));
             if (file.picture) {
               const picture = el('img');
               picture.src = file.picture;
               picture.alt = '';
               chip.append(picture);
             }
-            chip.append(el('span', null, file.name));
+            // A browser counts what it's handed to the network, which can be all of it long before the Mac has it, so
+            // a share shows only while it's moving.
+            const going = file.sent > 0 && file.sent < 1 ? Math.round(file.sent * 100) + '%' : words.sending;
+            chip.append(el('span', null, file.sent === undefined ? file.name : file.name + ' · ' + going));
             const remove = button('✕', () => {
-              attached = attached.filter((other) => other !== file);
-              chips();
+              drop(file);
               forget([file]);
             });
             remove.setAttribute('aria-label', 'Remove ' + file.name);
@@ -1480,9 +1519,13 @@ enum PhonePage {
           chips();
         }
 
-        // The Mac keeps only so many, so what's taken off goes there too, or it could push out one still attached.
+        // The Mac keeps only so many, so what's taken off goes there too, or it could push out one still attached. One
+        // still going up just stops.
         function forget(files) {
-          for (const file of files) post('/act', { act: 'unattach', id: file.id });
+          for (const file of files) {
+            if (file.sent !== undefined) file.cancel && file.cancel();
+            else post('/act', { act: 'unattach', id: file.id });
+          }
         }
 
         async function shrink(file) {
