@@ -4653,6 +4653,45 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.cantTakeFiles("Pepper"), "and it says why, not just that it didn't start")
     }
 
+    /// A phone offers + only where a photo would go, since one sent where it can't goes up first, and only then
+    /// fails. So what it's told always agrees with what sending decides.
+    func testAFileIsOfferedOnlyWhereSendingItWouldGo() async throws {
+        let steve = Kitten(name: "Steve", role: "Professional", covers: "work", folder: "/k/steve")
+        let pepper = Kitten(name: "Pepper", role: "Finance", covers: "their money", folder: "/k/pepper", seesScreen: false)
+        kittens = [steve, pepper]
+        func thread(_ id: String, _ mode: RuntimeMode?, of kitten: Kitten) -> AgentThread {
+            AgentThread(id: id, title: id, projectTitle: kitten.name, status: .completed, model: "m", updatedAt: clock, runtimeMode: mode, projectPath: kitten.folder)
+        }
+        controller.threadsChanged([thread("auto", .auto, of: steve), thread("unknown", nil, of: steve), thread("full", .fullAccess, of: steve), thread("screenless", .auto, of: pepper)])
+        controller.channelsPressed()
+        backend.routerSays = ["What's this?": "A keyboard."]
+        backend.projects = ["/k/steve": "p-steve", "/k/pepper": "p-pepper"]
+        let targets: [(MessageTarget, ChannelID, Bool)] = [
+            (.thread(id: "auto", title: "auto"), .of(steve), true),
+            (.thread(id: "unknown", title: "unknown"), .of(steve), false),
+            (.thread(id: "full", title: "full"), .of(steve), false),
+            (.thread(id: "screenless", title: "screenless"), .of(pepper), false),
+            (.newThread(steve), .of(steve), true),
+            (.newThread(pepper), .of(pepper), false),
+            (.router, .shades, true),
+        ]
+        for (target, channel, takes) in targets {
+            XCTAssertEqual(controller.takesFiles(target), takes, "\(target)")
+            let before = backend.sent.count
+            controller.messagesAction(.send("What's this?", to: target, shownIn: channel, files: [picture]))
+            await settle()
+            await controller.messagesTurn?.value
+            XCTAssertEqual(backend.sent.count > before, takes, "sending agrees for \(target)")
+        }
+
+        var settings = controller.settings
+        settings.quickMode = .fullAccess
+        settings.frontierMode = .fullAccess
+        controller.apply(settings)
+        XCTAssertFalse(controller.takesFiles(.router), "nor to a router with full access")
+        XCTAssertFalse(controller.takesFiles(.newThread(steve)), "nor to a new thread with full access")
+    }
+
     /// Messages' talk with the router goes to your phone and never holds your screen, so a file gets a router thread of its own.
     func testAFileToTheCatGoesOnARouterThreadOfItsOwn() async throws {
         backend.routerSays = ["What day is it?": "It's Tuesday.", "What's this?": "A keyboard."]

@@ -41,6 +41,7 @@ extension AppController {
         }
         link.textSize = settings.textSize
         link.readPriorities = { [weak self] in self?.readPriorities($0) ?? Priorities() }
+        link.takesFiles = { [weak self] in self?.takesFiles($0) ?? false }
         phone = link
         Task { [weak self, backend] in
             let environment = await backend.environmentID()

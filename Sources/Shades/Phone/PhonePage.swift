@@ -120,7 +120,7 @@ enum PhonePage {
         .symbolic:active { background: var(--control); }
 
         /* An iPhone's bar: the page's black over the large title, and glass with a hairline once the title goes under it. */
-        #top { position: sticky; top: 0; z-index: 2; background: var(--page);
+        #top { position: sticky; top: var(--above, 0px); z-index: 2; background: var(--page);
           padding: env(safe-area-inset-top) calc(env(safe-area-inset-right) + 8px) 0 calc(env(safe-area-inset-left) + 8px); }
         #top.collapsed { background: var(--glass); box-shadow: 0 1px var(--glass-edge); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
         #bar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; min-height: 44px; }
@@ -322,7 +322,7 @@ enum PhonePage {
           border: 1px solid var(--field-edge); border-radius: 12px; padding: 8px 12px; min-height: 44px; margin-top: 8px; }
 
         /* The box at the foot, on the Dock's glass, as iMessage's: + for a photo or file, and the arrow inside the field. */
-        #box { position: sticky; bottom: 0; background: var(--glass); box-shadow: 0 -1px var(--glass-edge); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+        #box { position: sticky; bottom: var(--below, 0px); background: var(--glass); box-shadow: 0 -1px var(--glass-edge); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
           padding: 8px calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px); }
         #label { display: block; color: var(--secondary); font-size: calc(13em / 17); margin: 0 4px 6px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .field { display: flex; align-items: flex-end; gap: 4px; }
@@ -416,6 +416,7 @@ enum PhonePage {
           unreachable: "Can't reach your Mac. The Kitty Litter has to be running, and your Mac awake.",
           gone: "That's changed since. Have another look.",
           wrongCode: "That code didn't work. Turn pairing on again in The Kitty Litter on your Mac for a new one.",
+          stillPaired: "That code didn't work, but this phone is still paired.",
           answer: 'Send answer', openInT3: 'Open in T3', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied', react: 'React', openThread: 'Open thread',
           waiting: (count) => count + ' waiting', unread: 'unread',
           openLink: (host) => 'Open a link to ' + host + '?',
@@ -527,12 +528,17 @@ enum PhonePage {
           const code = new URLSearchParams(location.hash.slice(1)).get('pair');
           if (code) {
             history.replaceState(history.state, '', location.pathname + location.search);
-            if (!(await pair(code))) return;
+            if (!(await pair(code)) && !pass) return;
           }
           if (!pass) return pairing();
           let hello = null;
           try { hello = await fetch('/hello', { headers: headers(), cache: 'no-store' }); } catch (error) {}
-          if (hello && hello.status === 401) return pairing();
+          if (hello && hello.status === 401) {
+            pairing();
+            // The code didn't work either.
+            if (code) $('pairnote').textContent = words.wrongCode;
+            return;
+          }
           $('pair').hidden = true;
           $('top').hidden = false;
           if (!hello || !hello.ok) { banner(words.unreachable); retry = setTimeout(start, 5000); return; }
@@ -622,6 +628,11 @@ enum PhonePage {
             localStorage.setItem('shades.key', pass);
             $('pairnote').textContent = '';
             return true;
+          }
+          // An old link with a code that's been used already leaves a phone that's paired as it was.
+          if (pass) {
+            banner(response ? words.stillPaired : words.unreachable);
+            return false;
           }
           pairing();
           $('pairnote').textContent = response ? words.wrongCode : words.unreachable;
@@ -850,6 +861,20 @@ enum PhonePage {
         // As an iPhone's large title: once it's scrolled up under the bar, the bar takes it, small, on its glass.
         function collapse() {
           $('top').classList.toggle('collapsed', $('head').hidden || $('title').getBoundingClientRect().top < $('bar').getBoundingClientRect().bottom);
+        }
+        // With the keyboard up, an iPhone slides what you see down the page rather than making the page shorter, which
+        // left the bar above the screen. The bar and the box keep to what you see, as iMessage's do, unless you've zoomed in.
+        function followKeyboard() {
+          const seen = window.visualViewport;
+          const zoomed = seen.scale > 1.01;
+          const above = zoomed ? 0 : Math.max(0, seen.offsetTop);
+          const below = zoomed ? 0 : Math.max(0, document.documentElement.clientHeight - seen.height - seen.offsetTop);
+          document.documentElement.style.setProperty('--above', above + 'px');
+          document.documentElement.style.setProperty('--below', below + 'px');
+        }
+        if (window.visualViewport) {
+          visualViewport.addEventListener('resize', followKeyboard);
+          visualViewport.addEventListener('scroll', followKeyboard);
         }
         window.addEventListener('scroll', () => {
           if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 2) jumped = false;
