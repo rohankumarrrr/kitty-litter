@@ -860,7 +860,7 @@ extension PhoneTests {
         let start = try XCTUnwrap(html.range(of: #"<header id="top">"#))
         let end = try XCTUnwrap(html.range(of: "</header>", range: start.upperBound..<html.endIndex))
         XCTAssertTrue(html[start.lowerBound..<end.upperBound].contains(#"<div id="banner" role="status"></div>"#), "always there, empty, so VoiceOver reads what it comes to say")
-        XCTAssertTrue(PhonePage.style.contains("#top { position: sticky; top: 0;"))
+        XCTAssertTrue(PhonePage.style.contains("#top { position: sticky; top: var(--above, 0px);"), "at the top of what you see, keyboard or not")
         XCTAssertFalse(PhonePage.script.contains("$('banner').hidden"), "never hidden, which would leave nothing to read out")
         XCTAssertFalse(PhonePage.script.contains("'banner', "), "nor with what pairing hides")
     }
