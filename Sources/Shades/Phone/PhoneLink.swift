@@ -122,7 +122,7 @@ final class PhoneLink {
     /// As the window does, read again at most once a minute, and kept only in memory.
     private func priorities(for book: ChannelBook) -> Priorities {
         if prioritiesRead.map({ now().timeIntervalSince($0) >= 60 }) ?? true {
-            priorities = readPriorities(book.statuses.map(\.kitten))
+            priorities = readPriorities(book.statuses.map(\.kitten).filter { !$0.planned })
             prioritiesRead = now()
         }
         return priorities

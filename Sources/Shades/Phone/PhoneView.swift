@@ -17,7 +17,8 @@ struct PhonePlace: Equatable {
     /// An unknown key is the list of places, and a key for an inbox row that's gone is Activity.
     init(_ key: String, in book: ChannelBook) {
         if key.hasPrefix("b:") {
-            guard let kitten = Self.unescape(key.dropFirst(2)), book.kitten(kitten) != nil else {
+            // As with the list of places, a kitten that's only planned isn't there.
+            guard let kitten = Self.unescape(key.dropFirst(2)), book.kitten(kitten)?.planned == false else {
                 self.init(selection: nil, in: book)
                 return
             }

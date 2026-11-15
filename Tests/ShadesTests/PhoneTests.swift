@@ -595,6 +595,9 @@ extension PhoneTests {
         XCTAssertNil(page.rows[3].detail)
         XCTAssertNil(page.box, "only to read, since its kitten keeps it")
         XCTAssertNil(PhonePlace("b:nobody", in: book).backlog, "an unknown kitten's is the list of places")
+        let cali = Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)
+        let withCali = ChannelBook.build(kittens: [steve, cali], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+        XCTAssertEqual(PhonePlace(PhonePlace.backlog(of: cali.id), in: withCali).key, "home", "and so is a planned kitten's, which isn't listed")
         XCTAssertNil(PhonePlace(PhonePlace.backlog(of: steve.id), in: book).selection)
     }
 
