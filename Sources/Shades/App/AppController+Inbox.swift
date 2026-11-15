@@ -76,7 +76,7 @@ extension AppController {
         if owed, lines.decision == nil { notifyFinished(thread, by: kitten(of: thread)) }
         // Only a decision the sorter wrote, since a report it couldn't sort is the kitten's own words, and never beside a
         // request in the form, which has its card already.
-        if !failed, changes.isEmpty, sorted?.decision != nil, let decision = inbox.entries.last(where: { $0.threadID == thread.id && $0.kind == .decision && !$0.isStanding }) {
+        if !failed, changes.isEmpty, readable?.contains(where: { !$0.isWhitespace }) == true, sorted?.decision != nil, let decision = inbox.entries.last(where: { $0.threadID == thread.id && $0.kind == .decision && !$0.isStanding }) {
             readDecision(decision.id, of: thread)
         }
     }
