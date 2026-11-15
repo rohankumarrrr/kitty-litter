@@ -594,6 +594,35 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("Return marks it too") { asked("unread") == 2 }
     }
 
+    /// Turn on hid its note whatever the Mac said, so a subscription it turned away looked like it had worked, and
+    /// nothing ever came. The Mac's web view has no push, so a stand-in phone's push service takes its place.
+    func testNotificationsTheMacTurnsAwaySaySoAndOfferTurnOnAgain() async throws {
+        try await open()
+        func turnOn() async throws {
+            try await phone.run("""
+                window.unsubscribed = false;
+                Notification.requestPermission = async () => 'granted';
+                Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { ready: Promise.resolve({ pushManager: { subscribe: async () => ({
+                    toJSON: () => ({ endpoint: 'https://push.example/phone', keys: { p256dh: 'key', auth: 'auth' } }),
+                    unsubscribe: async () => { window.unsubscribed = true; return true; },
+                }) } }) } });
+                pushKey = 'AAAA';
+                offer(words.notifyAsk, true);
+                """)
+            try await phone.tap("#notifybutton")
+        }
+        phone.pushAnswer = 400
+        try await turnOn()
+        try await phone.until("it says notifications didn't turn on") { try await phone.read("$('banner').textContent") as? String == "Notifications didn't turn on, since your Mac couldn't use this phone's push service." }
+        try await expect("!$('notify').hidden && !$('notifybutton').hidden", true, "Turn on is still there to try again")
+        try await expect("window.unsubscribed", true, "and the phone doesn't keep a subscription that goes nowhere")
+
+        phone.pushAnswer = 204
+        try await turnOn()
+        try await phone.until("taken, the note goes") { try await phone.read("$('notify').hidden") as? Bool == true }
+        try await expect("window.unsubscribed", false)
+    }
+
     func testTryAgainSendsItAgain() async throws {
         try await open(at: threadKey)
         try await phone.tap(".retry")
@@ -903,6 +932,8 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
     private(set) var uploads: [(name: String, type: String)] = []
     /// Answers to photos and files the stand-in holds back until `letUploadsGo`, as a slow link would.
     var holdingUploads = false
+    /// What the Mac says to a phone's push subscription.
+    var pushAnswer = 204
     private var heldUploads: [(task: WKURLSchemeTask, answer: () -> Void)] = []
     /// Uploads the page called off before they were answered.
     private(set) var stoppedUploads = 0
@@ -1072,6 +1103,8 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
             if let drawn = PhoneCat.png(at: path) { answer(task, 200, "image/png", drawn) } else { answer(task, 404) }
         case ("GET", "/hello"):
             answer(task, admitted ? 204 : 401)
+        case ("POST", "/push"):
+            answer(task, pushAnswer)
         case ("POST", "/pair"):
             let code = (try? JSONSerialization.jsonObject(with: body) as? [String: String])?["code"]
             if code == Self.code { json(task, ["key": Self.pass]) } else { answer(task, 403) }
