@@ -189,6 +189,7 @@ final class PhoneServer {
         case 409: return "Conflict"
         case 413: return "Payload Too Large"
         case 429: return "Too Many Requests"
+        case 503: return "Service Unavailable"
         default: return "Error"
         }
     }

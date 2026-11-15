@@ -664,6 +664,20 @@ final class PressPhoneTests: XCTestCase {
         XCTAssertEqual(phone.streamsOpen, 1)
     }
 
+    func testASendTheMacTurnsAwayForNobodyLookingGoesOnceThePageLooksAgain() async throws {
+        try await open(at: threadKey)
+        phone.refusing = 1
+        try await phone.tap("#words")
+        try await phone.type("Still there?")
+        try await phone.tap("#send")
+        guard case .send(let words, _, _, _, _, _)? = try await did("send") else { return XCTFail("not a reply") }
+        XCTAssertEqual(words, "Still there?")
+        XCTAssertEqual(asked("send"), 1, "it went once")
+        XCTAssertEqual(streams(of: threadKey), 2, "after the page started looking again")
+        try await phone.until("the box empties") { try await phone.read("$('words').value") as? String == "" }
+        try await expect("$('banner').textContent", "", "with nothing saying it changed")
+    }
+
     func testAStreamQuietForLongerThanAFewPingsIsReplacedWhileYouLook() async throws {
         try await open(at: steveKey)
         try await phone.run("heard = Date.now() - 60000")
@@ -706,6 +720,8 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// What the page asked the Mac to do, and what the Mac would do about it, which is `nil` where it turned it away.
     private(set) var acts: [(ask: PhoneAsk, action: MessagesAction?)] = []
     private(set) var searches: [String] = []
+    /// How many more times to say nobody's looking, as the Mac does once it's let go of every stream.
+    var refusing = 0
     private(set) var uploads: [(name: String, type: String)] = []
     /// Each place the page asked to be shown, in order.
     private(set) var watched: [String] = []
@@ -884,6 +900,10 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
             guard admitted else { return answer(task, 401) }
             guard let ask = try? JSONDecoder().decode(PhoneAsk.self, from: body) else { return answer(task, 400) }
             if ask.act == "unattach" { return answer(task, 204) }
+            if refusing > 0 {
+                refusing -= 1
+                return answer(task, 503)
+            }
             let done = ask.action(in: book, newTopic: { "topic-1" }, file: { [files] in files[$0] })
             acts.append((ask, done?.action))
             guard let done else { return answer(task, 409) }

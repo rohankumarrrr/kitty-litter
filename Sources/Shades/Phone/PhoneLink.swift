@@ -242,8 +242,10 @@ final class PhoneLink {
             if let id = ask.id { files[id] = nil }
             return .status(204)
         }
-        // Messages is only open while a phone is looking, and what's done is checked against what it shows.
-        guard let book, let (action, opens) = ask.action(in: book, newTopic: { "sent-\(UUID().uuidString)" }, file: { [files] in files[$0]?.file }) else { return .status(409) }
+        // Messages is only open while a phone is looking, and what's done is checked against what it shows. Nobody
+        // looking isn't the same as something having changed, since the page can start looking again and ask once more.
+        guard let book else { return .status(503) }
+        guard let (action, opens) = ask.action(in: book, newTopic: { "sent-\(UUID().uuidString)" }, file: { [files] in files[$0]?.file }) else { return .status(409) }
         for id in ask.files ?? [] { files[id] = nil }
         act(action)
         return .json(Opened(open: opens))
@@ -257,7 +259,7 @@ final class PhoneLink {
     /// a phone is looking, and nothing it was asked or found is kept.
     private func search(_ request: PhoneServer.Request) -> PhoneServer.Response {
         guard Self.isFromPage(request), let search = try? JSONDecoder().decode(Search.self, from: request.body) else { return .status(400) }
-        guard let book else { return .status(409) }
+        guard let book else { return .status(503) }
         return .json(PhoneFound(search.words, in: book, now: now(), reading: plainWords))
     }
 

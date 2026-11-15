@@ -445,6 +445,24 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertTrue(said.contains("How's December looking?"), "each place is its own stream, and moving between them mustn't forget what you sent: \(said)")
     }
 
+    /// Once the Mac lets go of a stream a phone left behind, a reply from that phone used to be told it had changed
+    /// since, which sent nothing however often it was tried. Nobody looking is said apart, so the page can look again.
+    func testWhatAPhoneDoesWhileNobodysLookingIsToldSoRatherThanThatItChanged() async throws {
+        let key = try await pair()
+        let dm = PhonePlace.key(.channel(.of(penny)))
+        let send = #"{"act":"send","key":"\#(dm)","text":"How's December looking?"}"#
+        let (unlooked, _) = try await page(send, key: key)
+        XCTAssertEqual(unlooked, 503)
+        XCTAssertTrue(backend.sent.isEmpty, "and nothing went anywhere")
+
+        let (_, stream) = try await watch(dm, key: key)
+        defer { stream.cancel() }
+        let (looked, _) = try await page(send, key: key)
+        XCTAssertEqual(looked, 200)
+        let (changed, _) = try await page(#"{"act":"send","key":"t:made-up@activity","text":"ship it"}"#, key: key)
+        XCTAssertEqual(changed, 409, "what's no longer there is still told apart")
+    }
+
     /// Pages whose streams the Mac has ended.
     private var ended: Set<String> = []
 
@@ -612,7 +630,7 @@ final class PhoneServerTests: XCTestCase {
         let elsewhere = try await search(key: key, headers: [:])
         XCTAssertEqual(elsewhere.status, 400, "only the page's own requests, which another site can't make")
         let unlooked = try await search(key: key)
-        XCTAssertEqual(unlooked.status, 409, "Messages is only open while a phone is looking")
+        XCTAssertEqual(unlooked.status, 503, "Messages is only open while a phone is looking, which the page answers by looking again")
 
         let (_, stream) = try await watch(PhonePlace.key(.channel(.of(penny))), key: key)
         defer { stream.cancel() }
