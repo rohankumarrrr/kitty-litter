@@ -623,6 +623,53 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("Return on Show shows it") { asked("picture") == 2 }
         XCTAssertEqual(phone.followed, [], "the page never goes there itself")
     }
+
+    // MARK: - The stream
+
+    // An iPhone back from the lock screen can hold a stream that never says anything again, and nothing tells the
+    // page. This stand-in Mac never pings, so each of its streams goes quiet like that unless a test pushes to it.
+
+    private func streams(of key: String) -> Int {
+        phone.watched.filter { $0 == key }.count
+    }
+
+    func testASendThatHearsNothingBackStartsANewStream() async throws {
+        try await open(at: threadKey)
+        try await phone.tap("#words")
+        try await phone.type("Still there?")
+        try await phone.tap("#send")
+        _ = try await did("send")
+        try await phone.until("the page gives up on the quiet stream") { streams(of: threadKey) == 2 }
+        XCTAssertEqual(phone.streamsOpen, 1, "and lets go of it")
+    }
+
+    func testASendThatsHeardKeepsTheStream() async throws {
+        try await open(at: threadKey)
+        try await phone.tap("#words")
+        try await phone.type("Still there?")
+        try await phone.tap("#send")
+        _ = try await did("send")
+        phone.push()
+        try await Task.sleep(nanoseconds: 3_500_000_000)
+        XCTAssertEqual(streams(of: threadKey), 1)
+    }
+
+    func testComingBackToAPageThatWentQuietStartsANewStream() async throws {
+        try await open(at: steveKey)
+        try await phone.run("heard = Date.now(); document.dispatchEvent(new Event('visibilitychange'))")
+        try await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertEqual(streams(of: steveKey), 1, "a stream that's just said something stays")
+        try await phone.run("heard = Date.now() - 60000; document.dispatchEvent(new Event('visibilitychange'))")
+        try await phone.until("coming back to a page that went quiet starts a new stream") { streams(of: steveKey) == 2 }
+        XCTAssertEqual(phone.streamsOpen, 1)
+    }
+
+    func testAStreamQuietForLongerThanAFewPingsIsReplacedWhileYouLook() async throws {
+        try await open(at: steveKey)
+        try await phone.run("heard = Date.now() - 60000")
+        try await phone.until("a stream that's said nothing for a while is replaced", seconds: 8) { streams(of: steveKey) == 2 }
+        XCTAssertEqual(phone.streamsOpen, 1)
+    }
 }
 
 /// The page at a phone's size, in a web view off the edge of every screen, with a stand-in for the Mac behind it. The
@@ -704,6 +751,8 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
         view.load(URLRequest(url: URL(string: "phone://mac/?key=\(key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")\(hash)")!))
     }
 
+    var streamsOpen: Int { streams.count }
+
     func close() {
         for stream in streams { stream.task.didFinish() }
         streams = []
@@ -764,8 +813,8 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
         try await view.callAsyncJavaScript(body, arguments: arguments, in: nil, contentWorld: .page)
     }
 
-    func until(_ what: String, file: StaticString = #filePath, line: UInt = #line, _ check: () async throws -> Bool) async throws {
-        for _ in 0..<250 {
+    func until(_ what: String, seconds: Double = 5, file: StaticString = #filePath, line: UInt = #line, _ check: () async throws -> Bool) async throws {
+        for _ in 0..<Int(seconds * 50) {
             if (try? await check()) == true { return }
             try await Task.sleep(nanoseconds: 20_000_000)
         }
