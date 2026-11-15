@@ -769,6 +769,29 @@ final class PressPhoneTests: XCTestCase {
         try await expect("[...$('rows').querySelectorAll('.bubble')].some((bubble) => bubble.textContent.includes(\"How's it going?\"))", true, "and drawn")
     }
 
+    /// Every change used to draw every row of the place again. Now what didn't change keeps what was drawn for it.
+    func testAChangeDrawsOnlyTheRowThatChanged() async throws {
+        try await open(at: threadKey)
+        try await phone.run("for (const node of $('rows').children) node.drawnBefore = true;")
+        let drawn = try await phone.read("$('rows').children.length") as? Int ?? 0
+        phone.book = book(reactions: ["e1:reply": [.eyes, .heart]])
+        phone.push()
+        try await phone.until("the new reaction shows") {
+            try await phone.read("view.rows.find((row) => row.id === 'e1:reply').reactions.filter((mark) => mark.label === '❤️').length") as? Int == 1
+        }
+        try await expect("[...$('rows').children].filter((node) => node.dataset.id && !node.drawnBefore).map((node) => node.dataset.id).join(',')", "e1:reply", "only the reply that changed is drawn again")
+        try await expect("$('rows').children.length", drawn, "and every row is still there")
+    }
+
+    func testALongMessageKeepsOneShowMoreWhenItsThreadIsShownAgain() async throws {
+        try await open(at: PhonePlace.key(.thread("p", in: .channel(.of(pepper)))))
+        try await expect("$('rows').querySelectorAll('.more').length", 1)
+        try await phone.run("window.shownAgain = 0; const shown = show; show = (next) => { shownAgain += 1; return shown(next); };")
+        phone.push()
+        try await phone.until("the thread is shown again") { try await phone.read("shownAgain") as? Int == 1 }
+        try await expect("$('rows').querySelectorAll('.more').length", 1, "with its Show more once, not twice")
+    }
+
     func testAStreamQuietForLongerThanAFewPingsIsReplacedWhileYouLook() async throws {
         try await open(at: steveKey)
         try await phone.run("heard = Date.now() - 60000")
