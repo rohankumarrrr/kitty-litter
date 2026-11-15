@@ -518,7 +518,7 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         return scratch.projectId
     }
 
-    private func environmentID() async -> String? {
+    public func environmentID() async -> String? {
         if let known = await auth.environmentID { return known }
         let file = home.appendingPathComponent("userdata/environment-id")
         return (try? String(contentsOf: file, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)

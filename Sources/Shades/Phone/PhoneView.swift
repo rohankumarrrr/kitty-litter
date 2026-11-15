@@ -288,6 +288,8 @@ struct PhoneView: Encodable, Equatable {
         var markup: [Markup.Block]?
         /// Your reactions on a message T3 has, or `nil` for one that can't take any.
         var reactions: [Choice]?
+        /// Where T3 Code's own page has its thread, for Open in T3.
+        var t3: String?
     }
 
     var key: String
@@ -310,9 +312,12 @@ struct PhoneView: Encodable, Equatable {
     var you: String?
     /// Every reaction there is, for tapping a message.
     var marks = Reaction.allCases.map { Choice(label: $0.emoji, value: $0.rawValue) }
+    /// Where T3 Code's own page has this thread, for Open in T3, as a path the page puts after its own host.
+    var t3: String?
 
-    /// `newFrom` is where each thread's New line was when this phone came here, as the window keeps it.
-    init(_ place: PhonePlace, in book: ChannelBook, now: Date, newFrom: [String: String] = [:]) {
+    /// `newFrom` is where each thread's New line was when this phone came here, as the window keeps it. `t3` is what
+    /// T3 Code's page calls this Mac, when it's known.
+    init(_ place: PhonePlace, in book: ChannelBook, now: Date, newFrom: [String: String] = [:], t3 environment: String? = nil) {
         key = place.key
         places = Self.places(in: book)
         cantReachT3 = book.cantReachT3
@@ -337,7 +342,8 @@ struct PhoneView: Encodable, Equatable {
             cat = book.home(ofThread: thread).flatMap { Self.cat(of: $0, in: book) }
             back = PhonePlace.key(selection.closed)
             backTitle = ChannelHeader.words(for: selection.place, in: book).title
-            rows = Self.shown(selection, in: book, newFrom: newFrom).map { Self.row($0, at: selection.place, in: book, now: now) }
+            t3 = environment.flatMap { Self.t3($0, thread: thread, in: book) }
+            rows = Self.rows(selection, in: book, now: now, newFrom: newFrom, t3: environment)
             if book.canMarkUnread(thread), let messages = book.threads[thread]?.messages.filter({ !$0.isSending }) {
                 unread = newFrom[thread].flatMap { first in messages.first { $0.id == first }?.id } ?? (messages.last { $0.speaker != .you } ?? messages.last)?.id
             }
@@ -350,8 +356,35 @@ struct PhoneView: Encodable, Equatable {
             back = PhonePlace.home
             backTitle = CatWords.appName
             if selection.place == .channel(.shades) { subtitle = CatWords.shadesOnPhone }
-            rows = Self.shown(selection, in: book, newFrom: newFrom).map { Self.row($0, at: selection.place, in: book, now: now) }
+            rows = Self.rows(selection, in: book, now: now, newFrom: newFrom, t3: environment)
         }
+    }
+
+    /// As the window does, a card's thread, and a thread in progress the phone can't open itself, open in T3.
+    private static func rows(_ selection: ChannelSelection, in book: ChannelBook, now: Date, newFrom: [String: String], t3 environment: String?) -> [Row] {
+        shown(selection, in: book, newFrom: newFrom).map { shown in
+            var row = Self.row(shown, at: selection.place, in: book, now: now)
+            let thread: String?
+            switch shown {
+            case .approval(let request): thread = book.thread(holding: request.id, else: request.threadID)
+            case .question(let question): thread = book.thread(holding: question.id, else: question.threadID)
+            case .report(let entry): thread = entry.threadID
+            case .issue(let issue): thread = row.open == nil ? issue.id : nil
+            default: thread = nil
+            }
+            row.t3 = environment.flatMap { environment in thread.flatMap { t3(environment, thread: $0, in: book) } }
+            return row
+        }
+    }
+
+    /// Only a kitten's thread. The cat's own work can hold what was on your screen, which T3's page shows whole and a
+    /// phone is never sent.
+    private static func t3(_ environment: String, thread: String, in book: ChannelBook) -> String? {
+        guard case .kitten? = book.home(ofThread: thread) else { return nil }
+        // JavaScript's encodeURIComponent, which T3's page builds its addresses with.
+        let plain = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.!~*'()"))
+        guard let place = environment.addingPercentEncoding(withAllowedCharacters: plain), let id = thread.addingPercentEncoding(withAllowedCharacters: plain) else { return nil }
+        return "/\(place)/\(id)"
     }
 
     /// The window's rows a phone shows for a place or thread, which are also all that Search on a phone can find.
@@ -517,7 +550,7 @@ struct PhoneView: Encodable, Equatable {
             )
         case .issue(let thread):
             let details = [CatWords.age(of: thread.updatedAt, now: now), CatWords.status(thread), thread.pullRequest.map(CatWords.pullRequest)]
-            // As in the window, only a thread Messages has read opens. A phone has no T3 to open the rest in.
+            // As in the window, only a thread Messages has read opens here, and the rest open in T3.
             return Row(
                 kind: "issue",
                 title: Self.title(ofThread: thread.id, thread.title, in: book),

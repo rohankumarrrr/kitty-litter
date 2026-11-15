@@ -569,6 +569,29 @@ extension PhoneTests {
         XCTAssertEqual(PhoneView(PhonePlace("home", in: idle), in: idle, now: noon).places.last?.cat, cat(.sleep, steve), "an idle kitten sleeps")
     }
 
+    /// T3 Code's own page shows a thread whole, so the phone offers it only where a kitten's thread is, never for the
+    /// cat's own work, which can hold what was on your screen.
+    func testOpenInT3IsOnlyForAKittensThreadAndItsCards() {
+        let fix = AgentThread(id: "fix", title: "Fix: the total", projectTitle: nil, status: .completed, model: "m", updatedAt: noon)
+        let steves = ApprovalRequest(id: "ap-a", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
+        let cats = ApprovalRequest(id: "ap-fix", threadID: "fix", threadTitle: "Fix", kind: .command, summary: "Run: ls", createdAt: noon)
+        var waiting = Waiting(approvals: [steves, cats])
+        waiting.owners = ["ap-a": steve.id]
+        let said = [Exchange(id: "e", asker: .you, askedAt: noon, ask: "Go on", reply: "Done.", repliedAt: noon)]
+        let book = ChannelBook.build(kittens: [steve], threads: [thread("a", of: steve), fix], transcripts: ["a": said, "fix": said], isReading: false, unreadable: 0, cantReachT3: false, waiting: waiting, catsWork: ["fix"], onPhone: ["fix"])
+        func view(_ selection: ChannelSelection, t3: String? = "env 1") -> PhoneView {
+            PhoneView(PhonePlace(PhonePlace.key(selection), in: book), in: book, now: noon, t3: t3)
+        }
+        XCTAssertEqual(view(.thread("a", in: .channel(.of(steve)))).t3, "/env%201/a", "a kitten's thread, at T3's own address for it")
+        XCTAssertEqual(view(.thread("fix", in: .channel(.shades))).key, PhonePlace.key(.thread("fix", in: .channel(.shades))), "the cat's work you showed opens on the phone")
+        XCTAssertNil(view(.thread("fix", in: .channel(.shades))).t3, "but never in T3 from there")
+        let activity = view(.activity)
+        XCTAssertEqual(activity.rows.first { $0.id == "ap-a" }?.t3, "/env%201/a")
+        XCTAssertEqual(activity.rows.first { $0.id == "ap-fix" }?.kind, "approval")
+        XCTAssertNil(activity.rows.first { $0.id == "ap-fix" }?.t3, "nor from a card about it")
+        XCTAssertNil(view(.thread("a", in: .channel(.of(steve))), t3: nil).t3, "nothing until T3 says what it calls this Mac")
+    }
+
     func testAChannelsHeaderHasItsKittenAndAWayToWhatItHasOpen() throws {
         var open = thread("a", of: steve)
         open.status = .running

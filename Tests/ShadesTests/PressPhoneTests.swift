@@ -625,6 +625,25 @@ final class PressPhoneTests: XCTestCase {
         XCTAssertEqual(phone.followed, [], "the page never goes there itself")
     }
 
+    // MARK: - T3
+
+    func testOpenInT3OpensAKittensThreadInT3sOwnPage() async throws {
+        try await open(at: threadKey)
+        try await phone.tap("#t3")
+        try await phone.until("the page opens T3's own page for the thread") { phone.followed.count == 1 }
+        XCTAssertEqual(phone.followed.last?.absoluteString, "https://mac/env%201/a", "at this page's address, on the usual port")
+        try await phone.press(.returnKey, on: "#t3")
+        try await phone.until("and from the keyboard") { phone.followed.count == 2 }
+    }
+
+    func testAnActivityCardOpensItsThreadInT3() async throws {
+        try await open(at: "activity")
+        try await phone.tap(".card.approval button", "Open in T3")
+        try await phone.until("the card's thread opens in T3") { phone.followed.count == 1 }
+        XCTAssertEqual(phone.followed.last?.absoluteString, "https://mac/env%201/a")
+        try await expect("$('t3').hidden", true, "Activity itself isn't a thread")
+    }
+
     // MARK: - The stream
 
     // An iPhone back from the lock screen can hold a stream that never says anything again, and nothing tells the
@@ -951,7 +970,7 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     /// As the Mac does, each stream gets its first view whole, and then only the rows that changed.
     private func send(_ task: WKURLSchemeTask, key: String) {
-        let view = PhoneView(PhonePlace(key, in: book), in: book, now: now, newFrom: book.newFrom)
+        let view = PhoneView(PhonePlace(key, in: book), in: book, now: now, newFrom: book.newFrom, t3: "env 1")
         guard let json = try? JSONEncoder().encode(view.since(shown[ObjectIdentifier(task)])) else { return }
         shown[ObjectIdentifier(task)] = view
         lastSent = String(decoding: json, as: UTF8.self)

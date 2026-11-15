@@ -357,6 +357,8 @@ public protocol AgentBackend: AnyObject, Sendable {
     func answer(_ question: AgentQuestion, with answers: [[String]]) async throws
     /// Shows the thread in T3 Code, or throws which step went wrong.
     func open(threadID: String) async throws
+    /// What T3 Code's own page calls this Mac, first in the address of each thread, or `nil` if it can't be read.
+    func environmentID() async -> String?
     /// The project registered at this folder, if any.
     func projectID(atPath path: String) async -> String?
     /// Registers this folder as a project, and gives back its ID.
@@ -388,6 +390,7 @@ public extension AgentBackend {
         AsyncThrowingStream { $0.finish() }
     }
     func projectID(atPath path: String) async -> String? { nil }
+    func environmentID() async -> String? { nil }
     func addProject(atPath path: String, title: String) async throws -> String { throw CocoaError(.featureUnsupported) }
     func archive(threadID: String) async throws {}
     func settle(threadID: String) async throws {}
