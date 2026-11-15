@@ -241,7 +241,7 @@ final class PhoneStream {
     var onClose: (() -> Void)?
     private var connection: NWConnection?
     private var gzip: Gzip?
-    private var waiting: [Data] = []
+    private var waiting: [[Data]] = []
     private var isClosed = false
     private var pings: Task<Void, Never>?
 
@@ -252,7 +252,7 @@ final class PhoneStream {
         let packed = gzip ? "Content-Encoding: gzip\r\n" : ""
         let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\(packed)Transfer-Encoding: chunked\r\n" + PhoneServer.commonHeaders + "\r\n"
         connection.send(content: Data(head.utf8), completion: .idempotent)
-        waiting.forEach { write($0, padded: true) }
+        waiting.forEach(write)
         waiting = []
         // The phone only ever reads from here, so anything at all, or nothing more, means it's gone.
         connection.receive(minimumIncompleteLength: 1, maximumLength: 1024) { [weak self] _, _, _, _ in
@@ -262,16 +262,19 @@ final class PhoneStream {
         pings = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: Self.pingSeconds * 1_000_000_000)
-                self?.write(Data(": ping\n\n".utf8), padded: false)
+                self?.ping()
             }
         }
     }
 
-    /// One event. JSON has no line breaks of its own, so it fits on one `data:` line.
-    func send(_ json: Data) {
-        guard !isClosed else { return }
-        let event = Data("data: ".utf8) + json + Data("\n\n".utf8)
-        if connection == nil { waiting.append(event) } else { write(event, padded: true) }
+    /// One event, in the parts its JSON was cut into, which are packed each on its own. JSON has no line breaks of its
+    /// own, so it fits on one `data:` line.
+    func send(_ parts: [Data]) {
+        guard !isClosed, !parts.isEmpty else { return }
+        var event = parts
+        event[0] = Data("data: ".utf8) + event[0]
+        event[event.count - 1] += Data("\n\n".utf8)
+        if connection == nil { waiting.append(event) } else { write(event) }
     }
 
     func close() {
@@ -284,10 +287,19 @@ final class PhoneStream {
         onClose = nil
     }
 
-    /// What's said is padded when it's packed. A ping says nothing, so it isn't.
-    private func write(_ data: Data, padded: Bool) {
+    private func write(_ parts: [Data]) {
+        write(gzip.map { $0.padded(parts) } ?? parts.reduce(Data(), +))
+    }
+
+    /// A ping says nothing, so it isn't padded, and packed on its own it's the same size whatever came before it.
+    private func ping() {
+        let ping = Data(": ping\n\n".utf8)
+        write(gzip.map { $0.flushed(ping) } ?? ping)
+    }
+
+    private func write(_ bytes: Data) {
         guard let connection, !isClosed else { return }
-        let chunk = Self.chunk(gzip.map { padded ? $0.padded(data) : $0.flushed(data) } ?? data)
+        let chunk = Self.chunk(bytes)
         connection.send(content: chunk, completion: .contentProcessed { [weak self] error in
             guard error != nil else { return }
             MainActor.assumeIsolated { self?.close() }

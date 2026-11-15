@@ -22,15 +22,17 @@ final class Gzip {
         Gzip().deflated(data, Z_FINISH)
     }
 
-    /// What's needed to read everything given so far.
+    /// What's needed to read everything given so far, packed without looking back at anything before it, so nothing
+    /// sent earlier changes its size.
     func flushed(_ data: Data) -> Data {
-        deflated(data, Z_SYNC_FLUSH)
+        deflated(data, Z_FULL_FLUSH)
     }
 
-    /// The same, made up to one of a few sizes with a comment the page skips. How well words pack says something about
-    /// what they are, so what goes over the link only says roughly how much there was.
-    func padded(_ event: Data) -> Data {
-        let packed = flushed(event)
+    /// An event whose parts are each packed on their own, then made up to one of a few sizes with a comment the page
+    /// skips. Words a kitten writes, which can be someone else's, would pack smaller beside the same words of yours,
+    /// so nothing is packed against anything in another part, or sent before.
+    func padded(_ parts: [Data]) -> Data {
+        let packed = parts.reduce(into: Data()) { $0 += flushed($1) }
         let size = Self.size(packed.count + Self.storedCost + 3)
         return packed + stored(size - packed.count)
     }
@@ -58,7 +60,7 @@ final class Gzip {
         level(0)
         for left in stride(from: blocks, to: 0, by: -1) {
             let part = comment.prefix((comment.count + left - 1) / left)
-            output += deflated(part, Z_SYNC_FLUSH)
+            output += deflated(part, Z_FULL_FLUSH)
             comment.removeFirst(part.count)
         }
         level(Z_DEFAULT_COMPRESSION)

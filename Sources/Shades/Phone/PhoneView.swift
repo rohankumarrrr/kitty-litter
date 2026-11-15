@@ -613,4 +613,19 @@ extension PhoneView {
         }
         return sent
     }
+
+    /// Its JSON, cut into what's around the rows and then each row, so each can be packed on its own. Put back
+    /// together, it's exactly the JSON of the whole. Nothing but the key itself can read `"rows":[]` unescaped.
+    func parts() -> [Data] {
+        let encoder = JSONEncoder()
+        // In the same order each time, so two views that say the same thing pack the same.
+        encoder.outputFormatting = .sortedKeys
+        var bare = self
+        bare.rows = []
+        guard let whole = try? encoder.encode(bare), let at = whole.range(of: Data(#""rows":[]"#.utf8)) else { return [] }
+        let rows = rows.compactMap { try? encoder.encode($0) }
+        guard rows.count == self.rows.count else { return [] }
+        let cut = at.upperBound - 1
+        return [whole[..<cut]] + rows.enumerated().map { index, row in index == 0 ? row : Data(",".utf8) + row } + [whole[cut...]]
+    }
 }

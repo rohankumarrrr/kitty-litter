@@ -351,7 +351,8 @@ final class PressPhoneTests: XCTestCase {
         try await phone.tap("#send")
         guard case .send(_, _, _, let also, _, _)? = try await did("send") else { return XCTFail("not a reply") }
         XCTAssertTrue(also)
-        try await expect("$('also').checked", false, "it's for one message")
+        // The page hears back from the Mac after the Mac has the reply, so the box clears a moment later.
+        try await phone.until("it's for one message") { try await phone.read("$('also').checked") as? Bool == false }
         try await phone.press(.space, on: "#also")
         try await expect("$('also').checked", true, "Space ticks it")
     }

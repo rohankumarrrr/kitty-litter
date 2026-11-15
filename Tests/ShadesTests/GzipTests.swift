@@ -45,7 +45,7 @@ final class GzipTests: XCTestCase {
         var said = ""
         for count in [1, 40, 300, 900, 1_000, 2_500, 9_000, 20_000, 60_000, 150_000] {
             let event = event(count, seed: UInt64(count))
-            let sent = gzip.padded(Data(event.utf8))
+            let sent = gzip.padded([Data(event.utf8)])
             XCTAssertEqual(Gzip.size(sent.count), sent.count, "\(count) characters went as \(sent.count) bytes")
             packed += sent
             said += event
@@ -55,14 +55,35 @@ final class GzipTests: XCTestCase {
         XCTAssertEqual(read.joined(separator: "\n\n") + "\n\n", said, "the page reads every event as it was, and skips what pads it")
     }
 
-    func testAGuessThatPacksBetterIsTheSameSizeOnceItsPadded() {
-        let secret = "Your code for the bank is 4F7Q-PL2K, and nobody else should see it."
-        func view(guess: String) -> Data {
-            Data("data: {\"rows\":[\"\(secret)\",\"A kitten read a page that said: Your code for the bank is \(guess)\"]}\n\n".utf8)
+    /// Padding alone didn't help: words tuned to sit at the edge of a size told a right guess from a wrong one every
+    /// time. What stops it is that a row is never packed against another row, or anything sent before.
+    func testAGuessInOneRowDoesntPackAgainstWordsInAnother() {
+        let yours = Data(#"{"rows":[{"text":"Your code for the bank is 4F7QPL2K9X, and nobody else should see it."}"#.utf8)
+        func kittens(_ guess: String) -> Data { Data(#",{"text":"A page said your code for the bank is \#(guess)."}]}"#.utf8) }
+        // The same letters backwards, so the two only differ in whether they repeat your words.
+        let right = kittens("4F7QPL2K9X"), wrong = kittens("X9K2LPQ7F4")
+        func packed(_ parts: [Data]) -> Int {
+            let gzip = Gzip()
+            return parts.reduce(0) { $0 + gzip.flushed($1).count }
         }
-        let right = view(guess: "4F7Q-PL2K"), wrong = view(guess: "9ZXW-MN8R")
-        XCTAssertLessThan(Gzip().flushed(right).count, Gzip().flushed(wrong).count, "packed alone, the right guess is smaller")
-        XCTAssertEqual(Gzip().padded(right).count, Gzip().padded(wrong).count, "padded, the two look the same")
+        XCTAssertLessThan(packed([yours + right]), packed([yours + wrong]), "packed together, the right guess is smaller")
+        XCTAssertEqual(packed([yours, right]), packed([yours, wrong]), "packed as rows, the two are the same size")
+        func later(_ guess: Data) -> Int {
+            let gzip = Gzip()
+            _ = gzip.flushed(yours)
+            return gzip.flushed(guess).count
+        }
+        XCTAssertEqual(later(right), later(wrong), "and a later event doesn't pack against an earlier one")
+    }
+
+    func testAPingIsTheSameSizeWhateverCameBefore() {
+        let ping = Data(": ping\n\n".utf8)
+        let after = ["pin", "PIN", "ping ping ping", ""].map { before -> Int in
+            let gzip = Gzip()
+            _ = gzip.padded([Data("data: {\"text\":\"my \(before)\"}\n\n".utf8)])
+            return gzip.flushed(ping).count
+        }
+        XCTAssertEqual(Set(after).count, 1, "\(after)")
     }
 
     /// Swift drops the empty pieces when it splits, and indexing into nothing used to stop the app, from a header any
