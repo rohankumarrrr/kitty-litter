@@ -87,7 +87,7 @@ final class CatWindowsTests: XCTestCase {
         bubble.hide()
         XCTAssertFalse(bubble.isVisible, "gone as far as anything else can tell")
         XCTAssertTrue(bubble.panel.isVisible, "while it fades out")
-        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+        runMainLoop { !bubble.panel.isVisible }
         XCTAssertFalse(bubble.panel.isVisible)
 
         Motion.forced = true
@@ -106,7 +106,7 @@ final class CatWindowsTests: XCTestCase {
         XCTAssertLessThan(pill.panel.alphaValue, 1)
         pill.hide()
         XCTAssertFalse(pill.isVisible)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+        runMainLoop { !pill.panel.isVisible }
         XCTAssertFalse(pill.panel.isVisible)
 
         Motion.forced = true

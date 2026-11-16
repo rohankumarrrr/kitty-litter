@@ -59,6 +59,7 @@ This is open source, and people learn it from the docs, so they change in the sa
 - Don't send a real screenshot to a model in a test. Use `--image` with a picture you made.
 - Name live test threads "Shades test: ..." and archive them afterwards. The app keeps those out of your inbox and bubble, unless it's a copy trying a flow out.
 - A correction can't be told from a real one, so never send a test correction to a real kitten. `probe-t3 router` stops at the router's decision.
+- GitHub's runner can stall for a second or two, so a test waits on the thing itself, such as `runMainLoop { button.isArmed }`, never a set time or a count of yields. The fakes answer on the main actor for the same reason. A timing test compares against a baseline it measures in the same run, by the quickest of many tries.
 
 ## Style
 

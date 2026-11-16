@@ -49,7 +49,7 @@ final class PressTests: XCTestCase {
     }
 
     private func eventually(_ condition: () -> Bool) async {
-        for _ in 0..<200 where !condition() { await Task.yield() }
+        for _ in 0..<2000 where !condition() { try? await Task.sleep(nanoseconds: 2_000_000) }
     }
 
     func testOpenInT3OnAKittensMessageHandsT3ItsThreadsLink() async throws {

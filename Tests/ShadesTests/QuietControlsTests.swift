@@ -174,7 +174,7 @@ final class QuietControlsTests: XCTestCase {
         copy.flash("Copied")
         copy.flash("Copied")
         XCTAssertNotEqual(ChannelImages.png(of: copy), untouched)
-        RunLoop.main.run(until: Date().addingTimeInterval(1.5))
+        runMainLoop { ChannelImages.png(of: copy) == untouched }
         XCTAssertEqual(ChannelImages.png(of: copy), untouched)
     }
 
