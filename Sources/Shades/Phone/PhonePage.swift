@@ -572,7 +572,6 @@ enum PhonePage {
             const kept = await keep(subscription);
             if (!kept || kept.ok) return offer(null);
             // The Mac turns it away, so nothing would come, and Turn on is back.
-            await subscription.unsubscribe().catch(() => {});
           }
           offer(words.notifyAsk, true);
         }
@@ -590,11 +589,9 @@ enum PhonePage {
             const registration = await navigator.serviceWorker.ready;
             const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decode(pushKey) });
             const kept = await keep(subscription);
-            // Nothing would come, so it says so, and Turn on stays to try again.
-            if (!kept || !kept.ok) {
-              await subscription.unsubscribe().catch(() => {});
-              return banner(kept ? words.notifyRefused : words.unreachable);
-            }
+            // Nothing would come, so it says so, and Turn on stays to try again. What the Mac turned away is left as it
+            // is, since unsubscribing the empty one a simulator gives ends the page.
+            if (!kept || !kept.ok) return banner(kept ? words.notifyRefused : words.unreachable);
             offer(null);
           } catch (error) {
             banner(words.unreachable);

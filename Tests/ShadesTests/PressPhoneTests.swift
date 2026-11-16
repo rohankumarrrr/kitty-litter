@@ -677,7 +677,8 @@ final class PressPhoneTests: XCTestCase {
     }
 
     /// Turn on hid its note whatever the Mac said, so a subscription it turned away looked like it had worked, and
-    /// nothing ever came. The Mac's web view has no push, so a stand-in phone's push service takes its place.
+    /// nothing ever came. The Mac's web view has no push, so a stand-in phone's push service takes its place. Its
+    /// unsubscribe never comes back, as the simulator's ended the page before it could say so.
     func testNotificationsTheMacTurnsAwaySaySoAndOfferTurnOnAgain() async throws {
         try await open()
         func turnOn() async throws {
@@ -686,7 +687,7 @@ final class PressPhoneTests: XCTestCase {
                 Notification.requestPermission = async () => 'granted';
                 Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { ready: Promise.resolve({ pushManager: { subscribe: async () => ({
                     toJSON: () => ({ endpoint: 'https://push.example/phone', keys: { p256dh: 'key', auth: 'auth' } }),
-                    unsubscribe: async () => { window.unsubscribed = true; return true; },
+                    unsubscribe: () => { window.unsubscribed = true; return new Promise(() => {}); },
                 }) } }) } });
                 pushKey = 'AAAA';
                 offer(words.notifyAsk, true);
@@ -697,7 +698,7 @@ final class PressPhoneTests: XCTestCase {
         try await turnOn()
         try await phone.until("it says notifications didn't turn on") { try await phone.read("$('banner').textContent") as? String == "Notifications didn't turn on, since your Mac couldn't use this phone's push service." }
         try await expect("!$('notify').hidden && !$('notifybutton').hidden", true, "Turn on is still there to try again")
-        try await expect("window.unsubscribed", true, "and the phone doesn't keep a subscription that goes nowhere")
+        try await expect("window.unsubscribed", false, "and what the Mac turned away is left alone")
 
         phone.pushAnswer = 204
         try await turnOn()
