@@ -76,10 +76,6 @@ final class PressWindowsTests: XCTestCase {
         for _ in 0..<20 { await Task.yield() }
     }
 
-    private func eventually(_ condition: () -> Bool) async {
-        for _ in 0..<200 where !condition() { await Task.yield() }
-    }
-
     private func subviews(of view: NSView?) -> [NSView] {
         guard let view else { return [] }
         return view.subviews + view.subviews.flatMap(subviews)
@@ -108,16 +104,16 @@ final class PressWindowsTests: XCTestCase {
         return (bubble, panel)
     }
 
-    /// Long enough for buttons that start, allow or change things to take clicks.
-    private func waitForArming() {
-        RunLoop.main.run(until: Date().addingTimeInterval(BubbleController.armDelay + 0.1))
+    /// Until buttons that start, allow or change things take clicks, however long past their delay a busy runner holds that up.
+    private func waitForArming(_ button: QuietButton) {
+        runMainLoop { button.isArmed }
     }
 
     func testOpenInT3InTheBubbleOpensTheThreadInT3() async throws {
         let (bubble, _) = bubble()
         bubble.show(.reply(text: "The answer.", done: true, threadID: "mcp:launch:8f2c", note: nil))
         try click(try button(CatWords.openInT3, in: bubble.view), CatWords.openInT3)
-        await eventually { !backend.opened.isEmpty }
+        await until { !backend.opened.isEmpty }
         XCTAssertEqual(backend.opened, ["mcp:launch:8f2c"])
     }
 
@@ -147,7 +143,7 @@ final class PressWindowsTests: XCTestCase {
         let replace = try button("Replace", in: bubble.view)
         try click(replace, "Replace")
         XCTAssertEqual(actions, [], "not while a click meant for something else could still land on it")
-        waitForArming()
+        waitForArming(replace)
         try click(replace, "Replace")
         XCTAssertEqual(actions, [.replace("Shorter.")])
     }
@@ -158,9 +154,10 @@ final class PressWindowsTests: XCTestCase {
             controller.addApproval(request)
             let (bubble, _) = bubble()
             bubble.show(stage.bubble)
-            waitForArming()
-            try click(try button(title, in: bubble.view), title)
-            await eventually { backend.responses.count > index }
+            let choice = try button(title, in: bubble.view)
+            waitForArming(choice)
+            try click(choice, title)
+            await until { backend.responses.count > index }
             XCTAssertEqual(backend.responses.last?.0, request.id, title)
             XCTAssertEqual(backend.responses.last?.1, decision, title)
             bubble.hide()
@@ -205,7 +202,7 @@ final class PressWindowsTests: XCTestCase {
         for _ in 0..<2 { try Press.key("\t", keyCode: 48, on: try XCTUnwrap(panel.firstResponder as? NSView)) }
         let open = try XCTUnwrap(panel.firstResponder as? QuietButton)
         try Press.key(" ", keyCode: 49, on: open)
-        await eventually { !backend.opened.isEmpty }
+        await until { !backend.opened.isEmpty }
         XCTAssertEqual(backend.opened, ["t"])
     }
 
@@ -228,14 +225,14 @@ final class PressWindowsTests: XCTestCase {
         controller.addApproval(request)
         let (bubble, panel) = bubble()
         bubble.show(stage.bubble)
-        waitForArming()
+        waitForArming(try button("Allow", in: bubble.view))
         panel.key = true
         panel.makeFirstResponder(bubble.view.textView)
         for _ in 0..<3 { try Press.key("\t", keyCode: 48, on: try XCTUnwrap(panel.firstResponder as? NSView)) }
         let allow = try XCTUnwrap(panel.firstResponder as? QuietButton)
         XCTAssertEqual(allow.accessibilityLabel(), "Allow")
         try Press.key(" ", keyCode: 49, on: allow)
-        await eventually { !backend.responses.isEmpty }
+        await until { !backend.responses.isEmpty }
         XCTAssertEqual(backend.responses.map(\.1), [.accept], "Space on Allow allows")
     }
 

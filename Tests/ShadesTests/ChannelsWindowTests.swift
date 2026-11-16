@@ -1200,7 +1200,7 @@ final class ChannelsWindowTests: XCTestCase {
         view.threadPane.reveal(row.message.id)
         wait(1.5)
         XCTAssertTrue(row.isFound, "the first one's time is up, and the second still has a second to go")
-        wait(1.5)
+        runMainLoop { !row.isFound }
         XCTAssertFalse(row.isFound)
     }
 

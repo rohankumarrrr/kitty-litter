@@ -267,9 +267,9 @@ final class MessagesShortcutsTests: XCTestCase {
         view.perform(.search)
         view.jumpBox.query = "co"
         view.jumpBox.query = "coupon"
-        let paused = expectation(description: "typing paused")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { paused.fulfill() }
-        wait(for: [paused], timeout: 3)
+        runMainLoop { !asked.isEmpty }
+        // Long enough for a second ask to have come, which a busy runner only makes longer.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
         XCTAssertEqual(asked, ["coupon"], "not every letter")
     }
 

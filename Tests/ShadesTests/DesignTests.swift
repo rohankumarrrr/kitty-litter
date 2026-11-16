@@ -204,7 +204,7 @@ final class DesignTests: XCTestCase {
 
     /// The rimlit card, the tile and a toolbar's icon each cost a few plain rounded fills of their size once they've been
     /// drawn, rather than the twenty to forty that made a long conversation scroll slowly. Each is timed beside the fill
-    /// in the same run, so a busy machine slows both.
+    /// in the same run, by the quickest of many, so a busy machine can't tip it.
     func testDrawingTheLightAgainCostsAboutWhatAPlainFillDoes() {
         let light = Opal.Light.of(Opal.kittens[2])
         let card = NSRect(x: 8, y: 8, width: 300, height: 300)
@@ -212,7 +212,8 @@ final class DesignTests: XCTestCase {
         let icon = QuietButton("Copy", style: .plain)
         icon.symbol = "doc.on.doc"
         icon.setFrameSize(NSSize(width: 26, height: 26))
-        // Kept, they come to about 1, 2 and 6 fills, and drawn afresh each time to about 44, 18 and 43.
+        // Kept, they come to about 1, 1 and 6 fills, and the card and tile drawn afresh each time to about 28 and 17, idle or
+        // with every core busy.
         let cases: [(name: String, work: () -> Void, fill: NSRect, fills: Double)] = [
             ("card", { Opal.card(in: card, radius: 16, light: light) }, card, 10),
             ("tile", { Opal.tile(in: tile, light: light) }, tile, 9),
@@ -244,23 +245,24 @@ final class DesignTests: XCTestCase {
         XCTAssertEqual(Opal.keptBytes, 0)
     }
 
-    /// The slower of each's best batches, so one hiccup on a busy runner doesn't decide it.
+    /// The quickest of many single draws of each, taken in turns. Whatever else a busy runner is doing only ever adds time,
+    /// and it lands more often on a long draw than on a short fill, which made the middle of each lean against the draw.
     private static func timed(_ work: () -> Void, beside fill: () -> Void) -> (Double, Double) {
         var works: [Double] = []
         var fills: [Double] = []
         _ = picture(flipped: true) {
             work()
-            for _ in 0..<7 {
-                works.append(batch(work))
-                fills.append(batch(fill))
+            for _ in 0..<200 {
+                works.append(once(work))
+                fills.append(once(fill))
             }
         }
-        return (works.sorted()[3], fills.sorted()[3])
+        return (works.min()!, fills.min()!)
     }
 
-    private static func batch(_ work: () -> Void) -> Double {
+    private static func once(_ work: () -> Void) -> Double {
         let start = DispatchTime.now().uptimeNanoseconds
-        for _ in 0..<40 { work() }
+        work()
         return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000_000
     }
 

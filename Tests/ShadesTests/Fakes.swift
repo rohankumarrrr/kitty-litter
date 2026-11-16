@@ -151,6 +151,8 @@ final class FakeStage: CatStage {
     }
 }
 
+/// The fakes answer on the main actor, as every test that settles by yielding takes for granted. Left nonisolated, each
+/// call went through Swift's thread pool and back, which a busy CI runner can hold up for over a second.
 final class FakeBackend: AgentBackend, @unchecked Sendable {
     enum Mode: String { case start, followUp, forward }
     struct Sent {
@@ -212,7 +214,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     var responses: [(String, ApprovalDecision)] { lock.withLock { _responses } }
     var opened: [String] { lock.withLock { _opened } }
 
-    func connect() async throws {
+    @MainActor func connect() async throws {
         if let connectError { throw connectError }
     }
 
@@ -274,8 +276,8 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     /// What Messages reads: every thread, and what was said in each.
     var listed: [AgentThread]?
     var said: [String: [Exchange]] = [:]
-    func allThreads() async -> [AgentThread]? { listed }
-    func exchanges(threadID: String) async -> [Exchange]? { said[threadID] }
+    @MainActor func allThreads() async -> [AgentThread]? { listed }
+    @MainActor func exchanges(threadID: String) async -> [Exchange]? { said[threadID] }
 
     private func play(threadID: String, prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         let routed = routerSays.first { prompt.text.contains("Their question: \($0.key)") }?.value
@@ -345,7 +347,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         AsyncStream { continuation in watcher = continuation }
     }
 
-    func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws {
+    @MainActor func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws {
         if failResponses { throw URLError(.notConnectedToInternet) }
         lock.withLock { _responses.append((request.id, decision)) }
     }
@@ -353,18 +355,18 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     private var _answers: [(String, [[String]])] = []
     var answers: [(String, [[String]])] { lock.withLock { _answers } }
 
-    func answer(_ question: AgentQuestion, with answers: [[String]]) async throws {
+    @MainActor func answer(_ question: AgentQuestion, with answers: [[String]]) async throws {
         if failResponses { throw URLError(.notConnectedToInternet) }
         lock.withLock { _answers.append((question.id, answers)) }
     }
 
-    // These run off the main actor, and more than one at once when turns overlap, so what they share is locked.
+    // More than one is partway through at once when turns overlap, so what they share is locked.
     /// T3 never answers, as when signing in waits on a Keychain dialog.
     var neverAnswers = false
     /// T3 answers nothing until this ends, then everything at once, as when a new build has signed in again.
     var silentUntil: Task<Void, Never>?
 
-    func projectID(atPath path: String) async -> String? {
+    @MainActor func projectID(atPath path: String) async -> String? {
         if lock.withLock({ neverAnswers }) { try? await Task.sleep(nanoseconds: 3_600_000_000_000) }
         if let silent = lock.withLock({ silentUntil }) { await silent.value }
         let happening = lock.withLock { () -> (() async -> Void)? in
@@ -376,7 +378,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         return lock.withLock { projects[path] }
     }
 
-    func addProject(atPath path: String, title: String) async throws -> String {
+    @MainActor func addProject(atPath path: String, title: String) async throws -> String {
         if let addProjectError { throw addProjectError }
         lock.withLock {
             addedProjects.append(path)
@@ -385,15 +387,15 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         return "project-router"
     }
 
-    func archive(threadID: String) async throws {
+    @MainActor func archive(threadID: String) async throws {
         lock.withLock { _archived.append(threadID) }
     }
 
-    func settle(threadID: String) async throws {
+    @MainActor func settle(threadID: String) async throws {
         lock.withLock { _settled.append(threadID) }
     }
 
-    func report(threadID: String, run: String?) async throws -> String? {
+    @MainActor func report(threadID: String, run: String?) async throws -> String? {
         let happening = lock.withLock { () -> (() async -> Void)? in
             defer { whileReadingAReport = nil }
             return whileReadingAReport
@@ -414,17 +416,17 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     private var _picturesAsked: [String] = []
     var picturesAsked: [String] { lock.withLock { _picturesAsked } }
 
-    func picture(attachmentID: String) async -> Data? {
+    @MainActor func picture(attachmentID: String) async -> Data? {
         lock.withLock { _picturesAsked.append(attachmentID) }
         return keptPictures[attachmentID]
     }
 
-    func picture(threadID: String, path: String) async -> Data? {
+    @MainActor func picture(threadID: String, path: String) async -> Data? {
         lock.withLock { _picturesAsked.append("\(threadID):\(path)") }
         return keptPictures["\(threadID):\(path)"]
     }
 
-    func origin(of threadID: String) async -> ThreadOrigin? {
+    @MainActor func origin(of threadID: String) async -> ThreadOrigin? {
         if untraceable.contains(threadID) { return nil }
         return origins[threadID] ?? ThreadOrigin(title: "Work", projectPath: nil, startedBy: .person)
     }
@@ -432,7 +434,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     /// What opening a thread in T3 throws, standing in for a step that went wrong.
     var openFails: Error?
 
-    func open(threadID: String) async throws {
+    @MainActor func open(threadID: String) async throws {
         lock.withLock { _opened.append(threadID) }
         if let openFails { throw openFails }
     }
@@ -448,13 +450,13 @@ final class FakeContext: ScreenContextProviding, @unchecked Sendable {
 
     init(log: Log) { self.log = log }
 
-    func snapshot(_ options: CaptureOptions) async throws -> ScreenSnapshot {
+    @MainActor func snapshot(_ options: CaptureOptions) async throws -> ScreenSnapshot {
         log.add("snapshot")
         self.options.append(options)
         return snapshotValue
     }
 
-    func pickRegion() async -> CGRect? {
+    @MainActor func pickRegion() async -> CGRect? {
         log.add("pickRegion")
         return region
     }
@@ -483,7 +485,7 @@ final class FakeVoice: VoiceEngine {
         (levels, levelsIn) = AsyncStream.makeStream(of: Float.self)
     }
 
-    func prepare() async throws {}
+    @MainActor func prepare() async throws {}
     func setVocabulary(_ words: [String]) { vocabulary = words }
     func begin() throws {
         if let beginError { throw beginError }
@@ -493,7 +495,7 @@ final class FakeVoice: VoiceEngine {
     var holdsEnd = false
     private var heldEnds: [CheckedContinuation<Void, Never>] = []
     var endsHeld: Int { heldEnds.count }
-    func end() async throws -> Transcript {
+    @MainActor func end() async throws -> Transcript {
         ended += 1
         let said = transcript
         if holdsEnd { await withCheckedContinuation { heldEnds.append($0) } }
@@ -508,8 +510,8 @@ final class FakeInserter: TextInserting {
     var inserted: [String] = []
     var replaced: [(original: String, bundleID: String?, text: String)] = []
     var replaces = true
-    func insert(_ text: String) async throws { inserted.append(text) }
-    func replaceSelection(_ original: String, in bundleID: String?, with text: String) async -> Bool {
+    @MainActor func insert(_ text: String) async throws { inserted.append(text) }
+    @MainActor func replaceSelection(_ original: String, in bundleID: String?, with text: String) async -> Bool {
         replaced.append((original, bundleID, text))
         return replaces
     }
