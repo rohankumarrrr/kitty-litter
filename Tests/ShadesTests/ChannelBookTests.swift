@@ -157,6 +157,14 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(said(quiet.threads["t"]), ["you: Ask"])
     }
 
+    func testAThreadWatchingItsPullRequestIsntStillWriting() throws {
+        var watching = thread("t", status: .running)
+        watching.turnEnded = true
+        let reply = try XCTUnwrap(book(threads: [watching], transcripts: ["t": [exchange("e")]]).threads["t"]?.latest)
+        XCTAssertEqual(reply.text, "Reply")
+        XCTAssertFalse(reply.isStillGoing, "its turn ended, so what it said is said")
+    }
+
     func testASubagentAskingYouSomethingIsntStillGoing() throws {
         var asking = thread("t", status: .running)
         asking.pendingQuestion = AgentQuestion(id: "q", threadID: "child", threadTitle: "Work", text: "")

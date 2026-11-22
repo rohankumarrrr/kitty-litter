@@ -1,0 +1,20 @@
+front
+notify-finished on
+wait 1
+report asks waiting
+wait 7
+draw .verify/shades/inbox-waiting/0-waiting
+kittens
+wait 1
+draw .verify/shades/inbox-waiting/1-kittens
+kittens
+finish demo-budget
+wait 7
+draw .verify/shades/inbox-waiting/2-done
+report ask waiting
+wait 9
+inbox
+wait 3
+draw .verify/shades/inbox-waiting/3-activity
+front
+windows

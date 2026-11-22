@@ -512,6 +512,11 @@ enum T3Wire {
             let blocking: Bool?
         }
 
+        struct BackgroundTask: Decodable {
+            /// Set on a pull request it's watching and on work it called `t3_background_wait` on, which are what wake it.
+            let awaited: Bool?
+        }
+
         struct PullRequest: Decodable {
             struct Snapshot: Decodable {
                 let state: String
@@ -529,8 +534,8 @@ enum T3Wire {
         let modelSelection: SelectedModel
         let lineage: Lineage
         let pendingRuntimeRequest: PendingRequest?
-        /// Shells and the like it left running when its turn ended. Only how many matters.
-        let pendingBackgroundTasks: [Lossy<Ignored>]?
+        /// Shells, subagents, pull request watches and the like that T3 lists as still going after its turn ended.
+        let pendingBackgroundTasks: [Lossy<BackgroundTask>]?
         let latestRunId: String?
         let latestRunCompletedAt: Date?
         let updatedAt: Date

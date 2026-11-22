@@ -291,8 +291,8 @@ struct ChannelBook: Equatable {
             var messages: [ChannelMessage] = []
             for (index, exchange) in exchanges.enumerated() {
                 let asker = speaker(of: exchange.asker, replier: replier, threads: threadsByID, owner: ownerOf, messagesThreads: messagesThreads, catsWork: catsWork)
-                // Waiting on you isn't working, so what it last said reads as said.
-                let isStillGoing = thread.status.isActive && !KittenBoard.needsYou(thread) && index == exchanges.count - 1
+                // Waiting on you, or on something it'll wake up for, isn't writing, so what it last said reads as said.
+                let isStillGoing = thread.status.isActive && !thread.turnEnded && !KittenBoard.needsYou(thread) && index == exchanges.count - 1
                 messages += self.messages(of: exchange, in: thread.id, title: title, asker: asker, replier: replier, isStillGoing: isStillGoing).map { reacted($0, reactions) }
             }
             guard !messages.isEmpty else { continue }

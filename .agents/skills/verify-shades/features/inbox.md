@@ -12,6 +12,7 @@ A kitten with `inbox: true` keeps its reports in one place instead of a bubble e
 - `inbox-scheduled` opens a report from a run a schedule started with the kitten's words in it, and takes your reply.
 - `inbox-change` shows a settings change a kitten asked for as a card with Shades' look at it, and Allow and Deny.
 - `inbox-ask` shows what a kitten asks your yes for, in the form or read from a decision in plain words, and sends only The Kitty Litter's note on Allow or Deny.
+- `inbox-waiting` reads a run whose turn ended while it watches its pull request, and only calls it done once the watch is over.
 
 ## How to get to it (user POV)
 
@@ -53,9 +54,16 @@ Journey: `journeys/inbox-ask.txt`.
 - **Allow.** `card Allow`, then `wait 2`. It presses the first card's Allow. The output has `[demo] forwarded to demo-docs with 0 attachments, to queue: --- / The Kitty Litter wrote this, not the user`, and `1-allowed` shows only the invite's card left.
 - **Deny.** `card Deny`, then `wait 2`. The output has a forward to `demo-invite`, and `2-denied` shows "Nothing needs you."
 
+Journey: `journeys/inbox-waiting.txt`.
+
+- **Waiting.** `notify-finished on`, `report asks waiting`, then `wait 7`. Pepper's turn ends on "Tidy the budget" while it watches its pull request. The output has the sorting and `[demo] notified: Pepper needs a decision`, and no line saying it finished. `0-waiting` draws only the cat, since no bubble is up.
+- **Still working.** `kittens`, then `wait 1`. `kittens.png` in `1-kittens` shows Pepper as Working.
+- **Done.** `finish demo-budget`, then `wait 7`, which is the watch ending in the same run. The output has `[demo] notified: Pepper finished` and no second sorting, and `bubble.png` in `2-done` shows "Pepper: Tidy the budget" over "Moved the pricing page...".
+- **Filed while waiting.** `report ask waiting`, `wait 9`, `inbox`, then `wait 3`. Clawde's turn ends on "Invite the tester" the same way. The output has a look at its ask and `[demo] notified: Clawde needs a decision`, and no line saying it finished. `channels.png` in `3-activity` shows its card with Deny and Allow under Waiting on you, beside Pepper's "Run git pull..." decision.
+
 ## Gotchas
 
 - A finished run is read 5 seconds after it ends (`reportDelay`), and the demo takes 0.8 seconds more to read it. Draw any sooner and Activity still says nothing needs you.
-- `report` also takes `shipped`, `note`, `long`, `scheduled` and `asks`.
+- `report` also takes `shipped`, `note`, `long`, `scheduled` and `asks`, and any of them followed by `waiting` ends the turn while it watches its pull request. `finish` on that thread then ends the watch.
 - `inbox reply` gives The Kitty Litter's box the keyboard without bringing the app to the front, the same as pressing Reply, so `active=true` shows until something else takes it. `front` still names your own app.
 - The demo has no words for "Fix login", so its thread says its messages are in T3.

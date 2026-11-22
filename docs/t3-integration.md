@@ -142,7 +142,7 @@ The shell stream sends a `snapshot`, then `thread.updated`, `thread.removed`, `p
 
 A blocking `pendingRuntimeRequest` overrides this: `user_input` is `waitingForAnswer`, and the approval kinds are `waitingForApproval`.
 
-A thread's turn can end while work it started carries on, and it wakes up again when that work hands back. So a `completed` thread with anything in `pendingBackgroundTasks`, or with an active thread whose `lineage.parentThreadId` is this one, counts as `running`. The app also waits a few seconds before reporting a thread as finished, to cover the gap between a child finishing and its parent waking.
+A thread's turn can end while something it'll wake up for carries on: a subagent, which is an active thread whose `lineage.parentThreadId` is this one, or an entry in `pendingBackgroundTasks` with `awaited: true`, which T3 sets on a pull request the thread is watching and on work it called `t3_background_wait` on. A `completed` thread like that counts as `running`, with `turnEnded` set. Its report is read as soon as its turn ends, so what it asked for, what it needs from you and an inbox kitten's rows reach you then, but it only counts as finished once that work is over too. Each run is read once and called finished once. Nothing else in `pendingBackgroundTasks` keeps a thread going. T3 lists every shell, monitor and tool call a session left running there, such as a dev server, and while no session is active it lists what ended sessions left too, which can stay there for good. The app also waits a few seconds before reporting a thread as finished, to cover the gap between a child finishing and its parent waking.
 
 ### Search
 

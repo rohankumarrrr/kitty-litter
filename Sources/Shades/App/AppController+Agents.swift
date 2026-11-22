@@ -46,6 +46,8 @@ extension AppController {
             case .finished(let thread):
                 stage.catCelebrate()
                 if !goesToInbox(thread) { reportOn(thread, failed: false) }
+            case .turnEnded(let thread):
+                if !goesToInbox(thread) { reportOn(thread, failed: false) }
             case .failed(let thread):
                 dropScreenWarning(for: thread.id, run: thread.lastRunID)
                 if !goesToInbox(thread) { reportOn(thread, failed: true) }

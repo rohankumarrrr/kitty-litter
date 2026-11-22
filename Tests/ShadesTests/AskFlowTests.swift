@@ -8,9 +8,11 @@ import XCTest
 @MainActor
 final class AskFlowTests: XCTestCase {
     private var backend: FakeBackend!
+    private var stage: FakeStage!
     private var controller: AppController!
     private var kittens: [Kitten] = []
     private var savedInbox: Inbox?
+    private var notified: [NeedsYouAlert] = []
     private let clock = Date(timeIntervalSince1970: 100_000)
     private let clawde = Kitten(name: "Clawde", role: "The system", covers: "", folder: "/k/clawde", seesScreen: false, usesInbox: true)
     private let steve = Kitten(name: "Steve", role: "Professional", covers: "", folder: "/k/steve")
@@ -28,8 +30,10 @@ final class AskFlowTests: XCTestCase {
             if prompt.text.hasPrefix("Below is the final report") { return [.finished(fullText: self.sorted)] }
             return nil
         }
+        stage = FakeStage(log: Log())
         var settings = Settings()
         settings.quickModel = ModelChoice(provider: "claudeAgent", model: "claude-haiku-5-5", effort: "medium")
+        settings.notifyFinished = true
         controller = AppController(
             dependencies: AppDependencies(
                 backend: backend,
@@ -43,9 +47,10 @@ final class AskFlowTests: XCTestCase {
                 home: NSTemporaryDirectory(),
                 routerFolder: { "/shades/router" },
                 inbox: Inbox(since: .distantPast),
-                saveInbox: { [unowned self] in self.savedInbox = $0 }
+                saveInbox: { [unowned self] in self.savedInbox = $0 },
+                notify: { [unowned self] in self.notified.append($0) }
             ),
-            stage: FakeStage(log: Log()),
+            stage: stage,
             now: { [unowned self] in self.clock }
         )
         controller.threadListWait = 0
@@ -80,6 +85,75 @@ final class AskFlowTests: XCTestCase {
     private func block(_ object: [String: String]) -> String {
         let json = String(decoding: try! JSONSerialization.data(withJSONObject: object, options: .sortedKeys), as: UTF8.self)
         return "The fix is ready.\n\n```shades-request\n\(json)\n```"
+    }
+
+    // MARK: - A turn that ends while something it'll wake up for carries on
+
+    /// Watching its pull request, say. It isn't done, but its turn has ended, so what it said is there to read.
+    private func waiting(_ id: String, of kitten: Kitten) -> AgentThread {
+        var waiting = thread(id, of: kitten, status: .running)
+        waiting.turnEnded = true
+        return waiting
+    }
+
+    private func endTurn(_ id: String, of kitten: Kitten) async {
+        controller.threadsChanged([thread(id, of: kitten, status: .running)])
+        controller.threadsChanged([waiting(id, of: kitten)])
+        for _ in 0..<50 where !controller.filing.isEmpty {
+            await controller.reportTask?.value
+            await Task.yield()
+        }
+        await controller.reportTask?.value
+        await settleReading()
+    }
+
+    private func saidDone(_ id: String) -> Bool {
+        stage.bubbles.contains { bubble in
+            guard case .notice(let caption, _, let threadID, _)? = bubble else { return false }
+            return caption.hasSuffix("Fix login") && threadID == id
+        }
+    }
+
+    private var looks: Int { backend.sent.filter { $0.prompt.text.contains("What it would do on a yes:") }.count }
+
+    func testAKittenWatchingItsPullRequestGetsItsCardAndIsOnlyDoneOnceThatsOver() async throws {
+        sorted = "NOTE: The fix is ready."
+        backend.reports["s"] = block(["ask": "Merge pull request #12 in kitty-litter.", "why": "Its tests pass."])
+        await endTurn("s", of: steve)
+        XCTAssertEqual(controller.inbox.entries.filter { $0.ask != nil }.map(\.threadID), ["s"], "its card")
+        XCTAssertFalse(controller.inbox.owes(waiting("s", of: steve)), "its run is seen")
+        XCTAssertFalse(saidDone("s"))
+        XCTAssertEqual(stage.celebrated, 0)
+        XCTAssertFalse(notified.contains { $0.kind == .finished })
+
+        controller.threadsChanged([thread("s", of: steve)])
+        await controller.reportTask?.value
+        await settleReading()
+        XCTAssertTrue(saidDone("s"), "done once nothing it'll wake up for is left")
+        XCTAssertEqual(stage.celebrated, 1)
+        XCTAssertEqual(notified.filter { $0.kind == .finished }.map(\.threadID), ["s"])
+        XCTAssertEqual(looks, 1, "its card is only looked into once")
+        XCTAssertEqual(controller.inbox.entries.filter { $0.ask != nil }.count, 1)
+    }
+
+    func testWhatAKittenWatchingItsPullRequestNeedsFromYouIsFlagged() async throws {
+        backend.reports["s"] = "I opened pull request #12, and I'm watching it. Should I merge it?"
+        await endTurn("s", of: steve)
+        let entry = try XCTUnwrap(controller.inbox.entries.first { $0.kind == .decision })
+        XCTAssertEqual(entry.threadID, "s")
+        XCTAssertEqual(entry.text, "Merge pull request #12? Its tests pass.")
+        XCTAssertEqual(notified.map(\.kind), [.decision])
+        XCTAssertFalse(saidDone("s"))
+    }
+
+    func testAnInboxKittensTurnThatEndsWhileItWatchesItsPullRequestIsFiled() async throws {
+        sorted = "NOTE: Pull request #12 is open."
+        backend.reports["w"] = "Pull request #12 is open, and I'm watching it."
+        await endTurn("w", of: clawde)
+        XCTAssertEqual(controller.inbox.entries.map(\.text), ["Pull request #12 is open."])
+        XCTAssertFalse(controller.inbox.owes(waiting("w", of: clawde)), "filed, so it's handled")
+        XCTAssertFalse(notified.contains { $0.kind == .finished }, "it isn't done")
+        XCTAssertEqual(stage.celebrated, 0)
     }
 
     func testAWrittenAskIsItsOwnCardAndAllowSaysYesToExactlyThat() async throws {

@@ -17,10 +17,15 @@ extension AppController {
             }
             try? await Task.sleep(nanoseconds: UInt64(reportDelay * 1_000_000_000))
             let current = latestThreads.first { $0.id == thread.id } ?? thread
-            if current.status.isActive { return }
+            if current.status.isActive && !current.turnEnded { return }
 
             // Settled when this started, so a kitten's file changing partway can't leave a report with nowhere to go.
             let toInbox = filing.contains(thread.id)
+            let done = !current.turnEnded
+            let wasRead = toInbox ? nil : readRuns[thread.id].flatMap { $0.run == current.lastRunID ? $0.done : nil }
+            if wasRead == true || wasRead == false && !done { return }
+            if !toInbox, let run = current.lastRunID { readRuns[thread.id] = (run, done) }
+            let firstRead = wasRead == nil
             let report: String?
             do {
                 report = try await backend.report(threadID: thread.id, run: toInbox ? current.lastRunID : nil)
@@ -35,9 +40,9 @@ extension AppController {
                 await file(report, of: current, failed: current.status == .failed, startedAnother: link)
                 return
             }
-            if !failed, let report { fileChangeRequests(in: report, of: current) }
+            if !failed, firstRead, let report { fileChangeRequests(in: report, of: current) }
             // A thread given a correction says how it went, even if it was passed work before that.
-            if !failed, dispatchers.contains(thread.id), !inbox.wasCorrected(thread.id), let link {
+            if !failed, firstRead, dispatchers.contains(thread.id), !inbox.wasCorrected(thread.id), let link {
                 passedOn(thread, to: link)
                 return
             }
@@ -46,12 +51,12 @@ extension AppController {
             let kitten = kitten(of: thread)
             let readable = readable(report)
             var sorted: SortedReport?
-            if !failed, kitten != nil, let readable, readable.contains(where: { !$0.isWhitespace }) {
+            if !failed, firstRead, kitten != nil, let readable, readable.contains(where: { !$0.isWhitespace }) {
                 sorted = await self.sorted(readable, of: thread)
             }
             if let decision = sorted?.decision { flag(decision, of: current, report: report) }
             // Held by Do Not Disturb, it's read again from the thread, so there's nothing to sum up.
-            guard mayPopUp(.thread(thread.id)) else { return }
+            guard done, mayPopUp(.thread(thread.id)) else { return }
             let words = await words(for: readable, of: thread, failed: failed, sorted: sorted)
             post(
                 caption: failed ? CatWords.failedCaption(thread) : CatWords.finishedCaption(thread, kitten: kitten),

@@ -272,16 +272,28 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    func finish(threadID: String, status: AgentStatus = .completed) {
+    /// `waiting` ends its turn while it watches its pull request, and finishing it after that is the watch ending, in the
+    /// same run.
+    func finish(threadID: String, status: AgentStatus = .completed, waiting: Bool = false) {
         update { threads in
             guard let index = threads.firstIndex(where: { $0.id == threadID }) else { return }
-            Self.end(&threads[index], status: status)
+            if threads[index].turnEnded {
+                threads[index].status = status
+                threads[index].turnEnded = false
+                threads[index].updatedAt = Date()
+                return
+            }
+            Self.end(&threads[index], status: waiting ? .running : status)
+            threads[index].turnEnded = waiting
         }
     }
 
     /// A kitten finishes a run, the one with an inbox except for `asks`, which is one without that needs you to do
-    /// something. Its report comes to what's asked for here once it's sorted.
-    func report(_ kind: String) {
+    /// something. Its report comes to what's asked for here once it's sorted. `<kind> waiting` ends its turn while it
+    /// watches its pull request instead.
+    func report(_ request: String) {
+        let kind = request.split(separator: " ").first.map(String.init) ?? ""
+        let waiting = request.hasSuffix(" waiting")
         let replies = [
             "decision": ("demo-login", "Clawde: Fix login", "\(Prompts.decisionMarker) Ship the login fix? Tests pass, and it only touches the sign-in page."),
             "shipped": ("demo-icon", "Clawde: New icon", "\(Prompts.shippedMarker) The new icon is live and healthy."),
@@ -305,7 +317,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
             guard !threads.contains(where: { $0.id == threadID }) else { return }
             threads.append(AgentThread(id: threadID, title: title, projectTitle: nil, status: .running, model: "claude-opus-5-5", updatedAt: Date(), runtimeMode: .auto))
         }
-        finish(threadID: threadID)
+        finish(threadID: threadID, waiting: waiting)
     }
 
     func stopEverything() {

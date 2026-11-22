@@ -175,9 +175,10 @@ public struct Inbox: Codable, Equatable, Sendable {
         return Dictionary(uniqueKeysWithValues: kept.map { ($0.key, $0.value) })
     }
 
-    /// Finished, has a run ID, that run isn't handled, and it ended at or after `since`.
+    /// Its run ended, has an ID, isn't handled, and ended at or after `since`. A run counts as ended even while something
+    /// it'll wake up for carries on, since what it said then can be waiting on you.
     public func owes(_ thread: AgentThread) -> Bool {
-        guard thread.status == .completed || thread.status == .failed,
+        guard thread.status == .completed || thread.status == .failed || thread.turnEnded,
               let run = thread.lastRunID,
               handled[thread.id] != run
         else { return false }
@@ -263,7 +264,7 @@ public struct Inbox: Codable, Equatable, Sendable {
 
     /// A run that ended while you weren't looking, or one you marked unread. One still going isn't news yet.
     public func isUnread(_ thread: AgentThread) -> Bool {
-        guard !thread.status.isActive else { return false }
+        guard !thread.status.isActive || thread.turnEnded else { return false }
         if markedUnread?.contains(thread.id) == true { return true }
         guard let run = thread.lastRunID, read?[thread.id] != run else { return false }
         return (thread.lastRunEndedAt ?? thread.updatedAt) >= since

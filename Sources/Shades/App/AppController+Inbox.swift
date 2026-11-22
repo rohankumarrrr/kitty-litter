@@ -73,7 +73,7 @@ extension AppController {
         changes.forEach { inbox.ask($0) }
         keepInbox()
         inboxChanged()
-        if owed, lines.decision == nil { notifyFinished(thread, by: kitten(of: thread)) }
+        if owed, lines.decision == nil, !thread.turnEnded { notifyFinished(thread, by: kitten(of: thread)) }
         // Only a decision the sorter wrote, since a report it couldn't sort is the kitten's own words, and never beside a
         // request in the form, which has its card already.
         if !failed, changes.isEmpty, readable?.contains(where: { !$0.isWhitespace }) == true, let decision = sorted?.decision,
