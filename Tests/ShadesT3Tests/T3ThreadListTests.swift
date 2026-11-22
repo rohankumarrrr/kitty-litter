@@ -58,18 +58,46 @@ final class T3ThreadListTests: XCTestCase {
         let listed = list.agentThreads(summaries: [:])
         XCTAssertEqual(listed.map(\.id), ["parent"], "a reviewer never shows up by itself")
         XCTAssertEqual(listed.first?.status, .running)
+        XCTAssertEqual(listed.first?.turnEnded, true, "what it said before handing over can be read")
 
         list.apply(try updated(thread(id: "reviewer", status: "completed", parent: "parent", relationship: "subagent")))
         XCTAssertEqual(list.agentThreads(summaries: [:]).first?.status, .completed)
+        XCTAssertEqual(list.agentThreads(summaries: [:]).first?.turnEnded, false)
     }
 
-    func testAThreadWithSomethingLeftRunningIsStillWorking() throws {
-        var list = T3ThreadList()
-        let running = thread(id: "t", status: "completed")
-            .replacingOccurrences(of: #""pendingBackgroundTasks":[]"#, with: #""pendingBackgroundTasks":[{"id":"task-1"}]"#)
-        XCTAssertTrue(running.contains("task-1"))
-        list.apply(try snapshot(threads: [running]))
-        XCTAssertEqual(list.agentThreads(summaries: [:]).first?.status, .running)
+    private func leaving(_ tasks: String) -> String {
+        thread(id: "t", status: "completed").replacingOccurrences(of: #""pendingBackgroundTasks":[]"#, with: #""pendingBackgroundTasks":\#(tasks)"#)
+    }
+
+    /// T3 lists these as it sends them: one is a background shell it called `t3_background_wait` on, the other the pull
+    /// request it's watching.
+    func testAThreadWaitingToBeWokenIsStillWorkingThoughItsTurnEnded() throws {
+        let waits = [
+            #"[{"taskId":"bash-1","kind":"command","description":"sleep 90","awaited":true}]"#,
+            #"[{"taskId":"pull-request-watch:github.com/owner/repo#12","description":"Watching pull request #12","kind":"monitor","awaited":true}]"#,
+        ]
+        for tasks in waits {
+            var list = T3ThreadList()
+            list.apply(try snapshot(threads: [leaving(tasks)]))
+            let listed = try XCTUnwrap(list.agentThreads(summaries: [:]).first)
+            XCTAssertEqual(listed.status, .running, tasks)
+            XCTAssertTrue(listed.turnEnded, tasks)
+        }
+    }
+
+    /// A dev server it left up doesn't wake it, and T3 can keep a leftover from a session that's gone on the list for good.
+    func testWhatItIsntWaitingOnDoesntKeepItGoing() throws {
+        let leftovers = [
+            #"[{"taskId":"bash-2","kind":"command","description":"npm run dev"}]"#,
+            #"[{"taskId":"toolu_1","kind":"background_task","description":"preview_open"},{"taskId":"toolu_2","kind":"subagent"}]"#,
+        ]
+        for tasks in leftovers {
+            var list = T3ThreadList()
+            list.apply(try snapshot(threads: [leaving(tasks)]))
+            let listed = try XCTUnwrap(list.agentThreads(summaries: [:]).first)
+            XCTAssertEqual(listed.status, .completed, tasks)
+            XCTAssertFalse(listed.turnEnded, tasks)
+        }
     }
 
     func testAQuestionGoesOnTheThreadOnceItsWordsAreKnown() throws {

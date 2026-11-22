@@ -109,6 +109,9 @@ final class AppController {
     var inbox: Inbox
     /// Threads whose report is being read and sorted, so each is only filed once.
     var filing: Set<String> = []
+    /// Each thread's last run read outside the inbox, and whether it was done by then. A run that ends while something
+    /// it'll wake up for carries on is read once then, and called done once that's over.
+    var readRuns: [String: (run: String, done: Bool)] = [:]
     /// Summaries that were already running when the app started, which nobody's following.
     var leftoverSummaries: Set<String> = []
     /// Runs that don't belong to a kitten with an inbox, so nobody reads the kittens again for them.

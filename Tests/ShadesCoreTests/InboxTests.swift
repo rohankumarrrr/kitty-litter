@@ -79,6 +79,19 @@ final class InboxTests: XCTestCase {
         }
     }
 
+    /// Watching its pull request, say: still going, but what it said when its turn ended can be waiting on you.
+    func testARunThatEndedWhileWorkItWaitsOnCarriesOnIsOwedAndUnread() {
+        var waiting = thread(status: .running)
+        waiting.turnEnded = true
+        var inbox = Inbox(since: start)
+        XCTAssertTrue(inbox.owes(waiting))
+        XCTAssertTrue(inbox.isUnread(waiting))
+        XCTAssertTrue(inbox.markRead([waiting]))
+        XCTAssertFalse(inbox.isUnread(waiting))
+        inbox.skip(waiting)
+        XCTAssertFalse(inbox.owes(waiting))
+    }
+
     func testAThreadWithNoRunIDIsntOwed() {
         XCTAssertFalse(Inbox(since: start).owes(thread(run: nil)))
     }

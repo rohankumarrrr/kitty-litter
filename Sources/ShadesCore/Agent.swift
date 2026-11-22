@@ -212,6 +212,9 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     /// The folder of the project it's in. Titles can be renamed, so this is what says whose it is.
     public var projectPath: String?
     public var status: AgentStatus
+    /// Its turn has ended while something it'll wake up for carries on, such as a pull request it's watching. It's still
+    /// `.running`, since it isn't done, but what it said by then is there to read.
+    public var turnEnded: Bool
     public var model: String
     public var updatedAt: Date
     public var pendingApprovals: [ApprovalRequest]
@@ -233,6 +236,7 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         title: String,
         projectTitle: String?,
         status: AgentStatus,
+        turnEnded: Bool = false,
         model: String,
         updatedAt: Date,
         pendingApprovals: [ApprovalRequest] = [],
@@ -249,6 +253,7 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         self.projectTitle = projectTitle
         self.projectPath = projectPath
         self.status = status
+        self.turnEnded = turnEnded
         self.model = model
         self.updatedAt = updatedAt
         self.pendingApprovals = pendingApprovals

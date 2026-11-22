@@ -354,6 +354,24 @@ final class AgentWatchTests: XCTestCase {
         XCTAssertEqual(watch.update([done]), [])
     }
 
+    /// Watching its pull request, say: each run is read when its turn ends, and it's finished once the watch is over.
+    func testATurnThatEndsWhileItWaitsIsNoticedOnceAndFinishesLater() {
+        var watch = AgentWatch()
+        XCTAssertEqual(watch.update([thread("a", .running)]), [])
+        var waiting = thread("a", .running)
+        waiting.turnEnded = true
+        waiting.lastRunID = "r1"
+        XCTAssertEqual(watch.update([waiting]), [.turnEnded(waiting)])
+        XCTAssertTrue(watch.isBusy, "it still looks busy")
+        XCTAssertEqual(watch.update([waiting]), [])
+        waiting.lastRunID = "r2"
+        XCTAssertEqual(watch.update([waiting]), [.turnEnded(waiting)], "a run that started and ended between lists")
+        var done = waiting
+        done.status = .completed
+        done.turnEnded = false
+        XCTAssertEqual(watch.update([done]), [.finished(done)])
+    }
+
     func testOldFinishedThreadsDontCelebrate() {
         var watch = AgentWatch()
         XCTAssertEqual(watch.update([thread("a", .completed)]), [])

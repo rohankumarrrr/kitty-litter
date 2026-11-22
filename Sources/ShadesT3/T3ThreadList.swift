@@ -135,11 +135,13 @@ struct T3ThreadList {
             .filter(\.isListed)
             .map { thread in
                 let approvals = (approvalsByListedThread[thread.id] ?? []).sorted { $0.createdAt < $1.createdAt }
+                let waiting = isWaitingOnWork(thread)
                 return AgentThread(
                     id: thread.id,
                     title: thread.title,
                     projectTitle: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.title },
-                    status: approvals.isEmpty ? status(of: thread) : .waitingForApproval,
+                    status: !approvals.isEmpty ? .waitingForApproval : waiting ? .running : thread.agentStatus,
+                    turnEnded: waiting,
                     model: thread.modelSelection.model,
                     updatedAt: thread.updatedAt,
                     pendingApprovals: approvals,
@@ -170,16 +172,16 @@ struct T3ThreadList {
         threads[id].flatMap(listedOwner)?.id
     }
 
-    /// A thread's turn can end while what it started carries on, and then it'll wake up and carry on
-    /// itself. That isn't finished, so it isn't reported as finished.
-    private func status(of thread: T3Wire.ThreadShell) -> AgentStatus {
-        let status = thread.agentStatus
-        guard status == .completed else { return status }
-        let leftRunning = thread.pendingBackgroundTasks?.isEmpty == false
+    /// A thread's turn can end while something it'll wake up for carries on: a subagent, a pull request it's watching, or
+    /// work it said it waits on. That isn't finished. Anything else T3 lists, like a dev server or a leftover from a
+    /// session that's gone, which can stay listed for good, doesn't keep it going.
+    private func isWaitingOnWork(_ thread: T3Wire.ThreadShell) -> Bool {
+        guard thread.agentStatus == .completed else { return false }
+        let awaited = thread.pendingBackgroundTasks?.contains { $0.value?.awaited == true } == true
         let childWorking = threads.values.contains { child in
             child.lineage.parentThreadId == thread.id && child.agentStatus.isActive
         }
-        return leftRunning || childWorking ? .running : status
+        return awaited || childWorking
     }
 
     /// The nearest thread a person can see, for a subagent that needs something.

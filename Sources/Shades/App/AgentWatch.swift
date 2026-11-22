@@ -5,6 +5,8 @@ import ShadesCore
 struct AgentWatch {
     enum Event: Equatable {
         case finished(AgentThread)
+        /// Its turn ended while something it'll wake up for carries on, so what it said is read, but it isn't done yet.
+        case turnEnded(AgentThread)
         case failed(AgentThread)
         case hasQuestion(AgentQuestion)
     }
@@ -13,7 +15,7 @@ struct AgentWatch {
     static let recentWindow: TimeInterval = 15 * 60
     private static let maxRows = 12
 
-    private var last: [String: AgentStatus] = [:]
+    private var last: [String: AgentThread] = [:]
     private var quickThreads: Set<String> = []
     private var announcedQuestions: Set<String> = []
     private(set) var threads: [AgentThread] = []
@@ -36,11 +38,12 @@ struct AgentWatch {
             if let question = thread.pendingQuestion, announcedQuestions.insert(question.id).inserted {
                 events.append(.hasQuestion(question))
             }
-            guard let before = last[thread.id], before != thread.status else { continue }
-            if before.isActive && thread.status == .completed { events.append(.finished(thread)) }
-            if before.isActive && thread.status == .failed { events.append(.failed(thread)) }
+            guard let before = last[thread.id], before.status.isActive else { continue }
+            if thread.status == .completed { events.append(.finished(thread)) }
+            if thread.status == .failed { events.append(.failed(thread)) }
+            if thread.turnEnded && (!before.turnEnded || before.lastRunID != thread.lastRunID) { events.append(.turnEnded(thread)) }
         }
-        last = Dictionary(work.map { ($0.id, $0.status) }, uniquingKeysWith: { _, new in new })
+        last = Dictionary(work.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
         self.threads = work
         return events
     }
