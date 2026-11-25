@@ -58,6 +58,7 @@ Each rule says what enforces it. A check is the rule: when one fails, its messag
 | Claude threads in this repo run in a sandbox set by `.claude/settings.json`, which also keeps them out of saved copies of the screen. Run `swift` commands on their own, with no pipe or `cd`, since only that form is let out. A refused read means it's working, so don't look for a way around it. | The sandbox |
 | A place in The Kitty Litter is bold, and counts, only for unread threads it shows, so opening them or Mark as read always clears it. Its bold, its count and Mark as read all come from `ChannelBook.unreadThreads(in:)`. | `ChannelBookTests`, `PressMarkReadTests` |
 | When the self-check could have caught a problem, teach it to, in `HealthCheck.swift`, with a test. | You |
+| What the demo, the probes and the dev flags print goes on public pull requests, so it never names the app in front or its windows: `DemoDriver.front(_:)` says only The Kitty Litter or another app. A scratch `.repro/` folder never reaches the repo. | `PrivateOutputTests`, and `.gitignore` |
 | Never log or store tokens, transcripts, screenshots or page text beyond what a feature needs. | You |
 | Keep dependencies few, and permissively licensed only. Don't copy from GPL projects. | You |
 | Never send synthetic clicks or keystrokes while testing. They land on whatever's really on the desktop, which has already meant stray clicks in someone's calendar. Use `--demo`, the flags above, the probes, or a person. | You |
