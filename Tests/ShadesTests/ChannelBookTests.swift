@@ -709,3 +709,32 @@ extension ChannelBookTests {
         XCTAssertEqual(broken.alsoSentHeard, [:], "a send that failed is kept nowhere")
     }
 }
+
+extension ChannelBookTests {
+    func testBuildingMessagesCostsAboutTheSameHoweverLongItsRepliesAre() {
+        let short = DemoBusy.transcripts.mapValues { exchanges in
+            exchanges.map { exchange in
+                var exchange = exchange
+                exchange.reply = exchange.reply.map { String($0.prefix(12)) }
+                return exchange
+            }
+        }
+        let talks = Set(DemoBusy.threads.filter { $0.projectPath == DemoChannels.routerFolder }.map(\.id))
+        let build = { (transcripts: [String: [Exchange]]) in
+            _ = ChannelBook.build(kittens: Demo.kittens, threads: DemoBusy.threads, transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, withShades: talks, said: { $0 })
+        }
+        var long: [Double] = []
+        var brief: [Double] = []
+        for _ in 0..<12 {
+            long.append(Self.seconds { build(DemoBusy.transcripts) })
+            brief.append(Self.seconds { build(short) })
+        }
+        XCTAssertLessThan(long.min()!, brief.min()! * 1.25, "\(long.min()!)s with the load's replies against \(brief.min()!)s with each cut to 12 letters")
+    }
+
+    private static func seconds(_ work: () -> Void) -> Double {
+        let start = DispatchTime.now().uptimeNanoseconds
+        work()
+        return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000_000
+    }
+}

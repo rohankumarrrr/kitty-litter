@@ -557,9 +557,9 @@ extension ChannelBook {
     }
 
     mutating func eachMessage(_ change: (inout ChannelMessage) -> Void) {
-        for id in threads.keys {
-            change(&threads[id]!.parent)
-            for index in threads[id]!.replies.indices { change(&threads[id]!.replies[index]) }
+        for thread in threads.values.indices {
+            change(&threads.values[thread].parent)
+            for index in threads.values[thread].replies.indices { change(&threads.values[thread].replies[index]) }
         }
         for channel in channels.indices {
             for post in channels[channel].posts.indices {

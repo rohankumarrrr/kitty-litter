@@ -1,9 +1,7 @@
 front
 busy
 wait 1
-channels
-wait 2
 perf
-wait 70
+wait 75
 front
 windows

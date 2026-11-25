@@ -29,6 +29,7 @@ swift run shades --demo   # everything faked: no T3, permissions, microphone or 
 swift run shades --demo --no-script --commands steps.txt   # plays demo commands from a file, one a line
 swift test --filter ScreenBoundaryTests   # every route your screen could take to a kitten
 swift test --filter RepoChecks   # the checks in the rule table, such as no comments
+swift run -c release shades --demo --no-script --commands .agents/skills/verify-shades/journeys/perf.txt   # times The Kitty Litter on a load like a real one, and fails when a step misses its budget
 ~/shades/scripts/triage.sh logs --start "2026-01-31 09:00:00" --end "2026-01-31 10:00:00"   # signing's and the app's system log, once you're let out to run it
 ~/shades/scripts/triage.sh processes   # those processes and an install's build steps
 ```
@@ -64,6 +65,7 @@ Each rule says what enforces it. A check is the rule: when one fails, its messag
 | A correction can't be told from a real one, so never send a test correction to a real kitten. | `probe-t3 router`, which stops at the router's decision, and you elsewhere |
 | A test waits on the thing itself, with `until` or `runMainLoop` from `Tests/TestSupport`, never a set time or a count of yields. | `TimedWaitTests`, which counts what's left in each file and lets it only go down |
 | The fakes answer on the main actor, since GitHub's runner can stall for a second or two. A timing test compares against a baseline it measures in the same run, by the quickest of many tries. | You |
+| A change to how The Kitty Litter draws, lays out, animates or builds what's been said is timed before and after on a load like a real one, and keeps each step within its budget: a 120 Hz frame, 8.3 ms, while you scroll, type, hover or resize or something arrives, 100 ms to open or switch, and 0.5% CPU sitting still. | `perf.txt` and `perf-idle.txt` in `verify-shades`, which name each step past its budget and fail, and `ChannelBookTests` for building what's been said |
 | Write code that reads like the code around it, with small files and plain names. | You |
 | User-facing text is short, plain and friendly. | You |
 | Commit messages are one plain sentence saying what changed for the user, such as "Let the cat run to whatever you point at". | You |
