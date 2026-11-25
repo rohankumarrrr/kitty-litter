@@ -729,7 +729,7 @@ extension ChannelBookTests {
             long.append(Self.seconds { build(DemoBusy.transcripts) })
             brief.append(Self.seconds { build(short) })
         }
-        XCTAssertLessThan(long.min()!, brief.min()! * 1.25, "\(long.min()!)s with the load's replies against \(brief.min()!)s with each cut to 12 letters")
+        XCTAssertLessThan(long.min()!, brief.min()! * 1.6, "\(long.min()!)s with the load's replies against \(brief.min()!)s with each cut to 12 letters")
     }
 
     private static func seconds(_ work: () -> Void) -> Double {

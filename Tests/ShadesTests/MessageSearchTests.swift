@@ -115,6 +115,26 @@ final class MessageSearchTests: XCTestCase {
         XCTAssertEqual(plainWords.reads, 80, "the search itself read nothing")
     }
 
+    func testReadingAheadLeavesTheMainThreadAtOnceOnALoadLikeARealOne() {
+        let talks = Set(DemoBusy.threads.filter { $0.projectPath == DemoChannels.routerFolder }.map(\.id))
+        let build = { ChannelBook.build(kittens: Demo.kittens, threads: DemoBusy.threads, transcripts: DemoBusy.transcripts, isReading: false, unreadable: 0, cantReachT3: false, withShades: talks, said: { $0 }) }
+        var book = build()
+        let plainWords = PlainWords()
+        var aheads: [Double] = []
+        var builds: [Double] = []
+        for _ in 0..<8 {
+            aheads.append(Self.seconds { plainWords.readAhead(book) })
+            builds.append(Self.seconds { book = build() })
+        }
+        XCTAssertLessThan(aheads.min()!, builds.min()! / 10, "\(aheads.min()!)s to read ahead against \(builds.min()!)s to build what it reads")
+    }
+
+    private static func seconds(_ work: () -> Void) -> Double {
+        let start = DispatchTime.now().uptimeNanoseconds
+        work()
+        return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000_000
+    }
+
     func testAPhoneFindsOnlyTheCatsOwnWorkYouShowedThereAndCallsItByYourWords() throws {
         let fix = AgentThread(id: "w", title: "Fix: Safari pricing page", projectTitle: nil, status: .completed, model: "m", updatedAt: at)
         let toCat = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Is the coupon box on this page?", at: at.addingTimeInterval(120), threadID: "", threadTitle: "")
