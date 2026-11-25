@@ -17,6 +17,7 @@ struct AppDependencies {
     var screenBlockGaps: (String) -> [String] = { _ in [] }
     var routerFolder: () -> String? = { nil }
     var reportHealth: ([HealthFinding], String?) -> Void = { _, _ in }
+    var kittensCheckSummary: () -> Data? = { nil }
     var inbox = Inbox(since: .distantPast)
     var saveInbox: (Inbox) throws -> Void = { _ in }
     var hidesTestThreads = true

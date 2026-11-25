@@ -68,6 +68,7 @@ MainActor.assumeIsolated {
                     let report = HealthCheck.report(findings, pid: getpid(), version: version, at: Date(), lockdown: lockdown)
                     SystemHealth.write(report, to: Settings.directory.appendingPathComponent("health.json"))
                 },
+                kittensCheckSummary: { KittensCheck.readSummary() },
                 inbox: keepsToItself ? Inbox(since: .distantFuture) : Inbox.load(from: inboxFile, now: Date()),
                 saveInbox: { inbox in
                     if !keepsToItself { try inbox.save(to: inboxFile) }

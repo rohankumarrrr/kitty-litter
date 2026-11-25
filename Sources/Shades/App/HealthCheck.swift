@@ -6,6 +6,7 @@ struct HealthFinding: Codable, Equatable {
     var ok: Bool
     var problem: String?
     var fix: String?
+    var advice = false
 
     static func good(_ check: String) -> HealthFinding {
         HealthFinding(check: check, ok: true)
@@ -37,6 +38,7 @@ struct HealthFacts: Equatable {
     var kittensWithoutInstructions: [String] = []
     var kittensOffScreenInNameOnly: [String] = []
     var routinesT3CanLose: [KittenRoutines] = []
+    var kittensCheck = KittensCheck.found([])
     var frontDoorProblem: FrontDoorProblem?
     var frontDoorProjectTrouble: String?
     var inboxSaves = true
@@ -159,6 +161,7 @@ enum HealthCheck {
             ))
         }
         results += facts.routinesT3CanLose.map(routinesFinding)
+        results.append(kittensCheckFinding(facts.kittensCheck))
         if facts.lockdownKittenGone {
             results.append(HealthFinding(
                 check: "lockdown",
@@ -253,8 +256,31 @@ enum HealthCheck {
         )
     }
 
+    static let kittensCheck = "kittens check"
+
+    private static func kittensCheckFinding(_ check: KittensCheck) -> HealthFinding {
+        let problem: String
+        switch check {
+        case .found(let misses) where misses.isEmpty:
+            return HealthFinding(check: kittensCheck, ok: true, advice: true)
+        case .found(let misses):
+            let counts = misses.enumerated().map { index, miss in
+                index > 0 ? "\(miss.count) for \(miss.kitten)" : "\(miss.count) \(miss.count == 1 ? "problem" : "problems") for \(miss.kitten)"
+            }
+            problem = "The kittens check finds \(listed(counts))."
+        case .stale(let since):
+            problem = "The kittens check hasn't run since \(since.formatted(date: .abbreviated, time: .shortened))."
+        case .unreadable:
+            problem = "I can't tell when the kittens check last ran, since I can't read what it found."
+        }
+        return HealthFinding(check: kittensCheck, ok: false, problem: problem, fix: "Ask Clawde to run tools/check-kittens.py.", advice: true)
+    }
+
     private static func quoted(_ titles: [String]) -> String {
-        let all = titles.map { "“\($0)”" }
+        listed(titles.map { "“\($0)”" })
+    }
+
+    private static func listed(_ all: [String]) -> String {
         guard let last = all.last, all.count > 1 else { return all.joined() }
         return all.dropLast().joined(separator: ", ") + " and " + last
     }
@@ -297,6 +323,6 @@ enum HealthCheck {
     }
 
     static func report(_ findings: [HealthFinding], pid: Int32, version: String, at date: Date, lockdown: String? = nil) -> HealthReport {
-        HealthReport(pid: pid, version: version, checkedAt: date, ok: findings.allSatisfy(\.ok), findings: findings, lockdown: lockdown)
+        HealthReport(pid: pid, version: version, checkedAt: date, ok: findings.allSatisfy { $0.ok || $0.advice }, findings: findings, lockdown: lockdown)
     }
 }

@@ -735,6 +735,9 @@ final class DemoDriver {
             controller.checkMyselfPressed()
         case "team":
             parts.facts.found.isSignedByTeam = rest != "off"
+        case "kittens-check":
+            let (hours, misses) = (rest.prefix { $0 != " " }, rest.drop { $0 != " " })
+            parts.facts.kittensCheck = Double(hours).map { DemoFacts.kittensCheck(hoursAgo: $0, misses: String(misses)) } ?? Data(rest.utf8)
         case "screen":
             parts.context.fails = rest == "off"
         case "ears":
