@@ -32,14 +32,13 @@ final class PlainWords: @unchecked Sendable {
     }
 
     func readAhead(_ book: ChannelBook) {
-        let said = MessageSearch.said(in: book)
-        keep(only: Set(said.map(\.0.id)))
-        let unread = said.compactMap { message, _ in message.text.flatMap { known(message.id, $0) == nil ? (message.id, $0) : nil } }
         ahead?.cancel()
-        guard !unread.isEmpty else { return }
         ahead = Task.detached(priority: .utility) { [weak self] in
-            for (id, text) in unread where !Task.isCancelled {
-                self?.store(id, Words(text))
+            let said = MessageSearch.said(in: book)
+            self?.keep(only: Set(said.map(\.0.id)))
+            for (message, _) in said where !Task.isCancelled {
+                guard let self, let text = message.text, self.known(message.id, text) == nil else { continue }
+                self.store(message.id, Words(text))
             }
         }
     }
