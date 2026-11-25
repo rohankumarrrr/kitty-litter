@@ -46,7 +46,10 @@ logs() {
 processes() {
   (( $# == 0 )) || refuse "processes takes nothing after it."
   print "PID PPID ELAPSED NAME"
-  /bin/ps -axww -o pid=,ppid=,etime=,args= |
+  {
+    /bin/ps -axww -o pid=,args= | awk '{ print "args", $0 }'
+    /bin/ps -axww -o pid=,ppid=,etime=,ucomm= | awk '{ print "name", $0 }'
+  } |
     awk -v names="${allowed[*]} ${build_steps[*]}" '
       BEGIN {
         split(names, list, " ")
@@ -54,13 +57,17 @@ processes() {
         shell["zsh"] = shell["bash"] = shell["sh"] = 1
       }
       function base(path, parts) { return parts[split(path, parts, "/")] }
-      $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^([0-9]+-)?([0-9]+:)?[0-9]+:[0-9]+$/ {
-        name = base($4)
-        if (name in shell) {
-          for (i = 5; i <= NF && $i ~ /^-/; i++) ;
-          name = (i <= NF && base($i) ~ /^(install|bundle)\.sh$/) ? base($i) : ""
-        }
-        if (name in wanted) print $1, $2, $3, name
+      $1 == "args" && $2 ~ /^[0-9]+$/ {
+        for (i = 4; i <= NF && $i ~ /^-/; i++) ;
+        if (i <= NF && base($i) ~ /^(install|bundle)\.sh$/) script[$2] = base($i)
+        next
+      }
+      $1 == "name" && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^([0-9]+-)?([0-9]+:)?[0-9]+:[0-9]+$/ {
+        name = $0
+        sub(/^name +[0-9]+ +[0-9]+ +[^ ]+ +/, "", name)
+        sub(/ +$/, "", name)
+        if (name in shell) name = ($2 in script) ? script[$2] : ""
+        if (name in wanted) print $2, $3, $4, name
       }'
 }
 
