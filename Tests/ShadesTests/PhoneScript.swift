@@ -107,6 +107,7 @@ final class PhoneScript {
     var key: String { read("view && view.key") as? String ?? "" }
     var clock: Double { call("__clock")?.toDouble() ?? 0 }
     var timers: String { call("__timers")?.toString() ?? "" }
+    var timersDue: Int { Int(call("__timersDue")?.toInt32() ?? 0) }
     var nextTimer: Double? { call("__nextTimerAt").map { $0.toDouble() }.flatMap { $0 >= 0 ? $0 : nil } }
 
     func tap(_ selector: String, _ text: String? = nil, file: StaticString = #filePath, line: UInt = #line) {
@@ -177,7 +178,7 @@ final class PhoneScript {
         for _ in 0..<1000 {
             if let (next, reply) = pending.lazy.compactMap({ request in self.mac(request).map { (request, $0) } }).first {
                 answer(next, reply)
-            } else if call("__timersDue")?.toInt32() ?? 0 > 0 {
+            } else if timersDue > 0 {
                 call("__fireNextTimer")
             } else {
                 return
