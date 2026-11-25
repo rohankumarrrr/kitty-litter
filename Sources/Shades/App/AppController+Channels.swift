@@ -221,8 +221,8 @@ extension AppController {
         case .newThread(let kitten):
             echo(startsThread: true)
             let title = String(words.prefix { !$0.isNewline }.prefix(60))
-            give(words, to: kitten, snapshot: snapshot, youPicked: true, onStarted: { [weak self] threadID in
-                self?.channels.started(echoID, in: threadID, title: title)
+            give(words, to: kitten, snapshot: snapshot, youPicked: true, onStarted: { [weak self] landing in
+                self?.channels.started(echoID, in: landing.thread, title: title)
             }, refused: { [weak self] in
                 self?.channels.failed(echoID, because: CatWords.cantTakeFiles(kitten.name))
             })
@@ -255,12 +255,9 @@ extension AppController {
             channels.failed(echoID, because: why)
             if !channels.isOpen { catSays(why) }
         }
-        func started(in home: ChannelID) -> (String?) -> Void {
-            { [weak self] started in
-                guard let self, let started else { return }
-                self.messagesThreads[started] = self.messagesThreads[started] ?? sentAt
-                self.channels.sent(ChannelMessage(exchangeID: "started-\(echoID)", kind: .ask, speaker: .you, text: words, at: sentAt, threadID: started, threadTitle: ""), in: home)
-            }
+        func started(_ thread: String, in home: ChannelID) {
+            messagesThreads[thread] = messagesThreads[thread] ?? sentAt
+            channels.sent(ChannelMessage(exchangeID: "started-\(echoID)", kind: .ask, speaker: .you, text: words, at: sentAt, threadID: thread, threadTitle: ""), in: home)
         }
         await waitForThreadList()
         let current = file == nil ? messagesQuick.thread(at: now()) : nil
@@ -305,7 +302,26 @@ extension AppController {
         let corrected = reading.corrections.compactMap { kittens.indices.contains($0 - 1) ? kittens[$0 - 1] : nil }
         if corrected.count < reading.corrections.count { catSays(CatWords.lostTheCorrection) }
         var copies = corrected
-        defer { copies.forEach { give(words, to: $0, snapshot: nil, as: .correctionCopy) } }
+        var copiesLand: ((Landing) -> Void)?
+        defer { copies.forEach { give(words, to: $0, snapshot: nil, as: .correctionCopy, onStarted: copiesLand) } }
+        let close = closeTalk(threadID, archives: isFresh)
+        var handedOn = false
+        func lands(_ said: String, startingIn home: ChannelID? = nil) -> (Landing) -> Void {
+            handedOn = true
+            var landed = false
+            return { [weak self] landing in
+                guard let self, !landed else { return }
+                landed = true
+                switch landing {
+                case .reached(let destination):
+                    if let home { started(destination, in: home) }
+                    passedOn(said)
+                case .stopped(let why):
+                    if self.channels.isOpen { passedOn(why) }
+                }
+                close(landing)
+            }
+        }
         switch reading.outcome {
         case .answer(let text, _) where !text.isEmpty || reading.corrections.isEmpty, .rewrite(let text):
             catSays(text.isEmpty ? CatWords.noReply : text, thread: talk)
@@ -315,46 +331,37 @@ extension AppController {
             if reading.wentNowhere {
                 catSays(CatWords.lostTheSession)
             } else if corrected.count == 1 {
-                give(words, to: corrected[0], snapshot: nil, as: .correction, asked: asked, onStarted: started(in: .of(corrected[0])))
+                give(words, to: corrected[0], snapshot: nil, as: .correction, asked: asked, onStarted: lands(CatWords.passedOnCorrection, startingIn: .of(corrected[0])))
                 copies = []
+            } else if !corrected.isEmpty {
+                copiesLand = lands(CatWords.passedOnCorrection)
             }
-            if !reading.wentNowhere, !corrected.isEmpty { passedOn(CatWords.passedOnCorrection) }
         case .handoff(let task):
-            var refused = false
-            handOff(task: task, question: words, snapshot: file, asked: asked, onStarted: started(in: .shades), refused: { refused = true })
-            if refused { channels.failed(echoID, because: CatWords.cantTakeFiles(frontierName)) } else { passedOn(CatWords.handedOff(task)) }
+            handOff(task: task, question: words, snapshot: file, asked: asked, onStarted: lands(CatWords.handedOff(task), startingIn: .shades))
         case .route(let session):
             guard sessions.indices.contains(session - 1) else {
                 catSays(CatWords.lostTheSession)
-                return
+                break
             }
             let thread = sessions[session - 1]
             if KittenBoard.owner(of: thread, among: owners) == nil { messagesThreads[thread.id] = messagesThreads[thread.id] ?? sentAt }
             let home = corrected.first { KittenBoard.isInFolder(thread.projectPath, of: $0) }
-            forward(words, to: thread, snapshot: file, correction: home != nil, asked: asked) { [weak self] in
-                self?.channels.failed(echoID, because: CatWords.cantTakeFiles(thread.title))
-            } unheard: { [weak self] in
+            let said = thread.status.isActive ? CatWords.passedOnToBusySession : CatWords.passedOnToSession
+            forward(words, to: thread, snapshot: file, correction: home != nil, asked: asked, unheard: { [weak self] in
                 self?.channels.failed(echoID, because: $0)
-            }
+            }, landed: lands(said))
             copies.removeAll { $0 == home }
-            passedOn(CatWords.passedOnToSession)
         case .kitten(let number):
             guard kittens.indices.contains(number - 1) else {
                 catSays(CatWords.lostTheSession)
-                return
+                break
             }
             let kitten = kittens[number - 1]
-            var refused = false
-            give(words, to: kitten, snapshot: file, as: corrected.contains(kitten) ? .correction : .work, asked: asked, onStarted: started(in: .of(kitten)), refused: { refused = true })
+            give(words, to: kitten, snapshot: file, as: corrected.contains(kitten) ? .correction : .work, asked: asked, onStarted: lands(CatWords.passedOnToKitten, startingIn: .of(kitten)))
             copies.removeAll { $0 == kitten }
-            if refused { channels.failed(echoID, because: CatWords.cantTakeFiles(kitten.name)) } else { passedOn(CatWords.passedOnToKitten) }
         }
-        if isFresh {
-            if file == nil { messagesQuick.reset() }
-            Task { [backend] in try? await backend.archive(threadID: threadID) }
-        } else {
-            Task { [backend] in try? await backend.settle(threadID: threadID) }
-        }
+        if isFresh, handedOn, file == nil { messagesQuick.reset() }
+        if !handedOn { close(.stopped(CatWords.noReply)) }
     }
 
     private func sendLockedDown(_ words: String, echoID: String, file: ScreenSnapshot?) {

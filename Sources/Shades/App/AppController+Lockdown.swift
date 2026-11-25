@@ -83,7 +83,8 @@ extension AppController {
                     finished = true
                     done.resume()
                 }
-                give(words, to: kitten, snapshot: snapshot, youPicked: youPicked, asked: asked, onStarted: { id in
+                give(words, to: kitten, snapshot: snapshot, youPicked: youPicked, asked: asked, onStarted: { landing in
+                    let id = landing.thread
                     if let id { self.keepLockdownThread(id, of: kitten) }
                     sent?(id, true)
                     finish()

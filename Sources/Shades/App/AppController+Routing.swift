@@ -1,6 +1,15 @@
 import Foundation
 import ShadesCore
 
+enum Landing: Equatable {
+    case reached(String)
+    case stopped(String)
+
+    var thread: String? {
+        if case .reached(let id) = self { id } else { nil }
+    }
+}
+
 enum FrontDoorProblem: LocalizedError, Equatable {
     case notClaude, noFolder
 
@@ -127,10 +136,25 @@ extension AppController {
         }
     }
 
-    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, as errand: Errand = .work, youPicked: Bool = false, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil, refused: (() -> Void)? = nil) {
+    func closeTalk(_ talk: String, archives: Bool) -> (Landing) -> Void {
+        var closed = false
+        return { [weak self] landing in
+            guard let self, !closed else { return }
+            closed = true
+            let backend = self.backend
+            if archives, let destination = landing.thread {
+                self.channels.passedOn(talk, to: destination)
+                Task { try? await backend.archive(threadID: talk) }
+            } else {
+                Task { try? await backend.settle(threadID: talk) }
+            }
+        }
+    }
+
+    func give(_ words: String, to kitten: Kitten, snapshot: ScreenSnapshot?, as errand: Errand = .work, youPicked: Bool = false, asked: Int? = nil, onStarted: ((Landing) -> Void)? = nil, refused: (() -> Void)? = nil) {
         let seesScreen = mayHaveScreen(kitten)
         if !seesScreen, snapshot?.isDropped == true {
-            if let refused { refused() } else { onStarted?(nil) }
+            if let refused { refused() } else { onStarted?(.stopped(CatWords.cantTakeFiles(kitten.name))) }
             say(CatWords.cantTakeFiles(kitten.name))
             if errand == .correction { give(words, to: kitten, snapshot: nil, as: .correctionCopy) }
             return
@@ -140,7 +164,7 @@ extension AppController {
         let asked = asked ?? questionsAsked
         flow = Task {
             guard let projectID = await backend.projectID(atPath: kitten.workspace) else {
-                onStarted?(nil)
+                onStarted?(.stopped(CatWords.notSetUp(kitten)))
                 tell(CatWords.notSetUp(kitten), as: errand)
                 return
             }
@@ -207,16 +231,24 @@ extension AppController {
         behavior: FollowUpBehavior = .queue,
         asked: Int? = nil,
         refused: (() -> Void)? = nil,
-        unheard: ((String) -> Void)? = nil
+        unheard: ((String) -> Void)? = nil,
+        landed: ((Landing) -> Void)? = nil
     ) {
         let isQuick = watch.isQuick(thread.id)
         let asked = asked ?? questionsAsked
         forwardTask = Task {
             var seesScreen = Self.mayHaveScreen(thread.runtimeMode)
             if seesScreen, snapshot != nil { seesScreen = await isClearOfScreenlessKittens(thread) }
+            var landedAt: Landing?
+            func land(_ landing: Landing) {
+                guard landedAt == nil else { return }
+                landedAt = landing
+                landed?(landing)
+            }
             guard seesScreen || snapshot?.isDropped != true else {
                 say(CatWords.cantTakeFiles(thread.title))
                 refused?()
+                land(.stopped(CatWords.cantTakeFiles(thread.title)))
                 return
             }
             if correction {
@@ -224,7 +256,8 @@ extension AppController {
                 dispatchers.remove(thread.id)
                 noteCorrection(in: thread.id)
             }
-            if !youPicked { say(CatWords.sentTo(thread), threadID: thread.id, fades: true) }
+            let waits = behavior == .queue && thread.status.isActive
+            if !youPicked { say(waits ? CatWords.sentToBusy(thread) : CatWords.sentTo(thread), threadID: thread.id, fades: true) }
             let shared = seesScreen ? snapshot : nil
             let text = Prompts.forwarded(
                 words: words,
@@ -240,6 +273,7 @@ extension AppController {
             do {
                 for try await event in backend.forward(threadID: thread.id, text: text, attachments: attachments(for: shared), behavior: behavior) {
                     if case .started = event {
+                        land(.reached(thread.id))
                         if missesScreen {
                             warning = sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: true, asked: asked, followUp: true)
                         }
@@ -260,9 +294,11 @@ extension AppController {
                 if !heardBack, let warning { takeBackNotice(warning) }
                 reached = heardBack
                 let problem = CatWords.problem(error, while: .agents)
+                land(.stopped(problem))
                 if !heardBack { unheard?(problem) }
                 say(problem, unasked: heardBack)
             }
+            land(.stopped(CatWords.noReply))
             if correction, let before = correctionSends.end(thread.id, reached: reached) {
                 if before.wasDispatcher { dispatchers.insert(thread.id) }
                 if !before.wasCorrected { forgetCorrection(in: thread.id) }

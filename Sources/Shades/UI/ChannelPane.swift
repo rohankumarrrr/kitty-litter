@@ -730,8 +730,9 @@ final class ChannelPane: QuietView {
             return view
         case .message(let message):
             let view = messageView(message, in: book)
-            if !message.threadID.isEmpty, book.knows(thread: message.threadID) {
-                view.onOpen = { [weak self] in self?.onOpenThread?(message.threadID) }
+            let thread = book.started[message.threadID] ?? message.threadID
+            if !thread.isEmpty, book.knows(thread: thread) {
+                view.onOpen = { [weak self] in self?.onOpenThread?(thread) }
             }
             offerMarkUnread(on: view, message, in: message.threadID, of: book)
             return view

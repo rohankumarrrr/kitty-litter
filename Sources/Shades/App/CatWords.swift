@@ -132,6 +132,7 @@ enum CatWords {
     static let shadesEmpty = "Say something, or ask me anywhere, and it shows up here."
     static func handedOff(_ task: String) -> String { "I started on that: \(task)" }
     static let passedOnToSession = "I passed that on to the work it carries on from."
+    static let passedOnToBusySession = "I passed that on to the work it carries on from. It'll get to it once it's done with what it's on."
     static let passedOnToKitten = "I passed that to the kitten it's for."
     static let passedOnCorrection = "I passed that correction on."
     static let shades = "Shades"
@@ -304,6 +305,7 @@ enum CatWords {
     static let earlierMessageFailed = "It didn't get through. Mind saying it again?"
     static func sentTo(_ thread: AgentThread) -> String { sentTo(thread.title) }
     static func sentTo(_ title: String) -> String { "Sent that to \(title)." }
+    static func sentToBusy(_ thread: AgentThread) -> String { "Sent that to \(thread.title). It'll get to it once it's done with what it's on." }
     static let sendTheLink = "It can't see your screen, so send the link or paste the text."
     static func passedOn(to title: String?) -> String {
         title.map { "Work's started in a new session: \($0)." } ?? "Work's started in a new session."

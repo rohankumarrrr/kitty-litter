@@ -35,6 +35,7 @@ final class ChannelFeed {
     private var unreadNew: Set<String> = []
     private var couldntRead: Set<String> = []
     private var sent: [SentMessage] = []
+    private var passedOn: [String: String] = [:]
     private var olderPages: [ChannelID: Int] = [:]
     private var loadingOlder: Set<ChannelID> = []
     private var found: [String] = []
@@ -125,6 +126,12 @@ final class ChannelFeed {
     func delivered(_ exchangeID: String) {
         guard let index = sent.firstIndex(where: { $0.message.exchangeID == exchangeID }), sent[index].message.isSending else { return }
         sent[index].message.isSending = false
+        publish()
+    }
+
+    func passedOn(_ talk: String, to thread: String) {
+        passedOn[talk] = thread
+        isDirty = true
         publish()
     }
 
@@ -365,6 +372,7 @@ final class ChannelFeed {
             cantReachT3: cantReachT3,
             waiting: waiting(),
             sent: sent,
+            passedOn: passedOn,
             isUnread: isUnread,
             firstNew: firstNew,
             messagesThreads: messagesThreads(),

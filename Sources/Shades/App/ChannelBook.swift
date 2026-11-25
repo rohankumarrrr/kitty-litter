@@ -167,6 +167,7 @@ struct ChannelBook: Equatable {
         cantReachT3: Bool,
         waiting: Waiting = Waiting(),
         sent: [SentMessage] = [],
+        passedOn: [String: String] = [:],
         isUnread: (AgentThread) -> Bool = { _ in false },
         firstNew: (AgentThread, [ChannelMessage]) -> String? = { _, _ in nil },
         messagesThreads: [String: Date] = [:],
@@ -346,6 +347,7 @@ struct ChannelBook: Equatable {
             return firstNew(listed, thread.messages).map { (id, $0) }
         })
         let started = Dictionary(sent.compactMap { $0.startsThread && !$0.message.threadID.isEmpty ? ($0.message.exchangeID, $0.message.threadID) : nil }, uniquingKeysWith: { first, _ in first })
+            .merging(passedOn) { first, _ in first }
         return ChannelBook(
             statuses: statuses,
             channels: channels,

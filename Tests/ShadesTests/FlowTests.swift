@@ -416,8 +416,8 @@ final class FlowTests: XCTestCase {
     func testANewThreadThatOnlyPassedWorkOnIsTidiedAway() async {
         backend.replies = [[.finished(fullText: "HANDOFF: Fix the bug")], [.finished(fullText: "Done.")]]
         await ask("fix it")
-        try? await Task.sleep(nanoseconds: 20_000_000)
-        XCTAssertEqual(backend.archived, ["thread-1"])
+        let archived = await until { backend.archived == ["thread-1"] }
+        XCTAssertTrue(archived)
         XCTAssertEqual(backend.settled, [])
     }
 
@@ -1246,6 +1246,45 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("Haiku can't take files. Put a link or the text in your message instead.", threadID: nil))
     }
 
+    func testADropNothingCanTakeKeepsTheCatsThreadAndSaysWhereItStopped() async {
+        useFullAccess(frontier: true)
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        controller.threadsChanged([session("w", "Fix the site", mode: .fullAccess)])
+        let routes = [("KITTEN: 1", steve.name), ("HANDOFF: Summarize the syllabus", controller.frontierName), ("SEND TO: 1", "Fix the site")]
+        for (number, (routed, refusedBy)) in routes.enumerated() {
+            let talk = "thread-\(number + 1)"
+            backend.replies = [[.finished(fullText: routed)]]
+            await drop("what's this about?")
+            await controller.frontierTask?.value
+            await controller.forwardTask?.value
+            XCTAssertEqual(stage.bubble, .line(CatWords.cantTakeFiles(refusedBy), threadID: nil), routed)
+            let settled = await until { backend.settled.contains(talk) }
+            XCTAssertTrue(settled, "\(routed): the cat's own thread stays, so nothing leads to one it archived")
+            XCTAssertFalse(backend.archived.contains(talk), routed)
+        }
+        XCTAssertEqual(backend.sent.filter { $0.prompt.projectID != "project-router" }.count, 0, "and nothing went anywhere")
+    }
+
+    func testAQuestionTheCatPassesOnLeadsMessagesToTheThreadThatGotIt() async throws {
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.routerSays = ["tighten my resume": "KITTEN: 1"]
+        backend.holdQuestion = "tighten my resume"
+        await controller.beginAsk()
+        stage.type("tighten my resume")
+        let thinking = await until { controller.quick.thread(at: clock) == "thread-1" }
+        XCTAssertTrue(thinking)
+        controller.threadsChanged([AgentThread(id: "thread-1", title: "tighten my resume", projectTitle: "Shades router", status: .running, model: "m", updatedAt: clock, projectPath: "/shades/router")])
+        controller.bubbleAction(.show(threadID: "thread-1"))
+        XCTAssertEqual(stage.selections.last, .thread("thread-1", in: .channel(.shades)), "opened from the bubble while the cat thought")
+        backend.releaseHeld()
+        await settle()
+        let archived = await until { backend.archived == ["thread-1"] }
+        XCTAssertTrue(archived, "the cat's thread goes once the work has its own")
+        XCTAssertEqual(shownBook?.started["thread-1"], "thread-2", "so Messages follows it into the kitten's thread")
+    }
+
     func testTalkingIntoADropsBoxAsksAboutTheDrop() async {
         voice.transcript = Transcript(raw: "when is the final", cleaned: "When is the final?", audioSeconds: 1, latencySeconds: 0.1)
         controller.dropped(syllabus)
@@ -1365,8 +1404,8 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(given?.attachments.count, 1)
         XCTAssertEqual(stage.bubble, .line("Steve Pawsniak has this.", threadID: "thread-2"))
         XCTAssertFalse(stage.bubbles.contains(.line(CatWords.noReply, threadID: nil)))
-        try? await Task.sleep(nanoseconds: 20_000_000)
-        XCTAssertEqual(backend.archived, ["thread-1"], "a new thread that only passed it on goes")
+        let archived = await until { backend.archived == ["thread-1"] }
+        XCTAssertTrue(archived, "a new thread that only passed it on goes")
     }
 
     func testAKittenThatDoesntSeeTheScreenStaysThatWayForACorrection() async {
@@ -4515,6 +4554,7 @@ final class FlowTests: XCTestCase {
         let sent = try XCTUnwrap(backend.sent.last { $0.mode == .forward })
         XCTAssertEqual(sent.threadID, "f")
         XCTAssertEqual(sent.behavior, .queue)
+        XCTAssertTrue(stage.bubbles.contains(.line(CatWords.sentToBusy(busy), threadID: "f")), "and the cat says it gets them once it's done")
     }
 
     func testSeveralFilesGoTogetherInOneMessage() async throws {
@@ -4610,7 +4650,7 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.cantTakeFiles("Pepper"), "and it says why, not just that it didn't start")
     }
 
-    func testAFileTheRouterPassesOnToAKittenWithFullAccessSaysWhyUnderWhatYouSent() async throws {
+    func testAFileTheRouterPassesOnToAKittenWithFullAccessSaysWhyUnderWhatYouSentAndKeepsTheCatsThread() async throws {
         var fresh = settings
         fresh.frontierMode = Settings().frontierMode
         controller.apply(fresh)
@@ -4625,13 +4665,52 @@ final class FlowTests: XCTestCase {
             await controller.messagesTurn?.value
             await settle()
             let shown = said(in: .shades, of: shownBook)
-            let mine = try XCTUnwrap(shown.first { $0.text == words && $0.speaker == .you })
-            XCTAssertEqual(mine.failure, CatWords.cantTakeFiles(refusedBy), words)
+            let mine = try XCTUnwrap(shown.lastIndex { $0.text == words && $0.speaker == .you })
+            XCTAssertEqual(shown[(mine + 1)...].map(\.text), [CatWords.cantTakeFiles(refusedBy)], "\(words): the cat says why, under what you sent")
         }
         let shown = said(in: .shades, of: shownBook).map(\.text)
         XCTAssertFalse(shown.contains(CatWords.passedOnToKitten), "it wasn't passed on")
         XCTAssertFalse(shown.contains(CatWords.handedOff(handOff)), "nor started on")
         XCTAssertFalse(backend.sent.contains { $0.mode == .start && $0.prompt.model == settings.frontierModel })
+        let settled = await until { backend.settled.count == 2 }
+        XCTAssertTrue(settled)
+        XCTAssertEqual(backend.archived, [], "the cat's threads stay, so nothing leads to one it archived")
+    }
+
+    func testAQuestionMessagesPassesToAKittenThatIsntSetUpKeepsTheCatsThreadAndSaysSo() async {
+        kittens = [steve, penny]
+        backend.replies = [[.finished(fullText: "KITTEN: 2")]]
+        controller.channelsPressed()
+        await messages("Can I afford a new laptop?", to: .router)
+        XCTAssertEqual(shadesSaid, ["Can I afford a new laptop?", CatWords.notSetUp(penny)], "where it stopped, not that it went")
+        let settled = await until { backend.settled == ["thread-1"] }
+        XCTAssertTrue(settled)
+        XCTAssertEqual(backend.archived, [])
+    }
+
+    func testAQuestionMessagesPassesOnLeadsToTheThreadThatGotIt() async throws {
+        kittens = [steve, penny]
+        backend.projects["/k/penny"] = "project-penny"
+        backend.replies = [[.finished(fullText: "KITTEN: 2")], [.finished(fullText: "On it.")]]
+        controller.channelsPressed()
+        await messages("Can I afford a new laptop?", to: .router)
+        let archived = await until { backend.archived == ["thread-1"] }
+        XCTAssertTrue(archived)
+        XCTAssertEqual(shownBook?.started["thread-1"], "thread-2", "a pane on the cat's thread follows the question")
+        let loose = said(in: .shades, of: shownBook)
+        XCTAssertEqual(loose.map(\.text), ["Can I afford a new laptop?", CatWords.passedOnToKitten])
+        XCTAssertEqual(Set(loose.map { shownBook?.started[$0.threadID] }), ["thread-2"], "and so do your words and the cat's line")
+    }
+
+    func testAQuestionMessagesPassesToABusySessionSaysItWaitsItsTurn() async {
+        kittens = [steve]
+        controller.threadsChanged([AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .running, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/k/steve")])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")]]
+        controller.channelsPressed()
+        await messages("And the footer too", to: .router)
+        XCTAssertEqual(backend.sent.last?.threadID, "s")
+        XCTAssertEqual(backend.sent.last?.behavior, .queue)
+        XCTAssertEqual(shadesSaid.last, CatWords.passedOnToBusySession, "it says the session gets it once it's done")
     }
 
     func testTheHandOffFlagGoesTheWayAHandOffDoesSoFullAccessGetsNoScreen() async throws {

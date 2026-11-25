@@ -248,19 +248,24 @@ extension AppController {
     }
 
     func finish(_ reading: ReplyHoldback.Reading, turn: QuickTurn, thread: String?) {
+        let isTakenBack = takenBack.contains(turn.generation)
+        var close: (Landing) -> Void = { _ in }
         if let thread, thread == quick.thread(at: now()) {
             quick.use(thread, at: now())
-            wrapUpQuickThread(thread, after: reading)
+            close = wrapUpQuickThread(thread, after: reading, takenBack: isTakenBack)
         } else if let thread, hiddenThreads.contains(thread) {
             Task { [backend] in try? await backend.archive(threadID: thread) }
         }
-        guard !takenBack.contains(turn.generation) else { return }
+        var handedOn = false
+        defer { if !handedOn { close(.stopped(CatWords.noReply)) } }
+        guard !isTakenBack else { return }
         let owners = reading.corrections.compactMap(turn.kitten(numbered:))
         if owners.count < reading.corrections.count {
             post(caption: CatWords.correctionCaption, text: CatWords.lostTheCorrection, threadID: nil)
         }
         var copies = owners
-        defer { copies.forEach { give(turn.question, to: $0, snapshot: nil, as: .correctionCopy) } }
+        var copiesLand: ((Landing) -> Void)?
+        defer { copies.forEach { give(turn.question, to: $0, snapshot: nil, as: .correctionCopy, onStarted: copiesLand) } }
         guard turn.generation == replyGeneration else { return }
         switch reading.outcome {
         case .answer(let text, let point):
@@ -271,10 +276,14 @@ extension AppController {
                 if reading.wentNowhere, !reading.corrections.isEmpty {
                     say(CatWords.lostTheSession)
                 } else if owners.count == 1 {
-                    give(turn.question, to: owners[0], snapshot: turn.snapshot, as: .correction)
+                    handedOn = true
+                    give(turn.question, to: owners[0], snapshot: turn.snapshot, as: .correction, onStarted: close)
                     copies = []
                 } else if reading.corrections.isEmpty {
                     say(CatWords.noReply)
+                } else if !owners.isEmpty {
+                    handedOn = true
+                    copiesLand = close
                 }
             } else if text.isEmpty && region == nil {
                 reply = nil
@@ -293,7 +302,8 @@ extension AppController {
             renderBubble()
         case .handoff(let task):
             reply = nil
-            handOff(task: task, question: turn.question, snapshot: turn.snapshot)
+            handedOn = true
+            handOff(task: task, question: turn.question, snapshot: turn.snapshot, onStarted: close)
         case .route(let session):
             reply = nil
             guard turn.sessions.indices.contains(session - 1) else {
@@ -302,9 +312,10 @@ extension AppController {
             }
             let thread = turn.sessions[session - 1]
             let home = owners.first { KittenBoard.isInFolder(thread.projectPath, of: $0) }
-            forward(turn.question, to: thread, snapshot: turn.snapshot, correction: home != nil) { [weak self] in
+            handedOn = true
+            forward(turn.question, to: thread, snapshot: turn.snapshot, correction: home != nil, refused: { [weak self] in
                 if let home { self?.give(turn.question, to: home, snapshot: nil, as: .correctionCopy) }
-            }
+            }, landed: close)
             copies.removeAll { $0 == home }
         case .kitten(let number):
             reply = nil
@@ -313,7 +324,8 @@ extension AppController {
                 say(CatWords.lostTheSession)
                 return
             }
-            give(turn.question, to: kitten, snapshot: turn.snapshot, as: owners.contains(kitten) ? .correction : .work)
+            handedOn = true
+            give(turn.question, to: kitten, snapshot: turn.snapshot, as: owners.contains(kitten) ? .correction : .work, onStarted: close)
             copies.removeAll { $0 == kitten }
         }
     }
@@ -330,12 +342,12 @@ extension AppController {
         }
     }
 
-    private func wrapUpQuickThread(_ threadID: String, after reading: ReplyHoldback.Reading) {
+    private func wrapUpQuickThread(_ threadID: String, after reading: ReplyHoldback.Reading, takenBack: Bool) -> (Landing) -> Void {
         var passedOn = false
         switch reading.outcome {
         case .answer(let text, let point):
             if text.isEmpty && point == nil {
-                if reading.corrections.isEmpty { return }
+                if reading.corrections.isEmpty { return { _ in } }
                 passedOn = true
             }
         case .rewrite:
@@ -343,13 +355,18 @@ extension AppController {
         case .handoff, .route, .kitten:
             passedOn = true
         }
-        if passedOn && quickIsFresh {
-            quick.reset()
-            Task { [backend] in try? await backend.archive(threadID: threadID) }
-        } else {
-            Task { [backend] in try? await backend.settle(threadID: threadID) }
-        }
+        let isFresh = quickIsFresh
         quickIsFresh = false
+        guard passedOn && isFresh else {
+            Task { [backend] in try? await backend.settle(threadID: threadID) }
+            return { _ in }
+        }
+        quick.reset()
+        guard !takenBack else {
+            Task { [backend] in try? await backend.archive(threadID: threadID) }
+            return { _ in }
+        }
+        return closeTalk(threadID, archives: true)
     }
 
     func catFollowsReply() {
@@ -363,10 +380,10 @@ extension AppController {
 
     var frontierName: String { ModelNames.friendly(settings.frontierModel) }
 
-    func handOff(task: String, question: String, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil, refused: (() -> Void)? = nil) {
+    func handOff(task: String, question: String, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((Landing) -> Void)? = nil, refused: (() -> Void)? = nil) {
         guard settings.frontierMode != .fullAccess else {
             guard snapshot?.isDropped != true else {
-                if let refused { refused() } else { onStarted?(nil) }
+                if let refused { refused() } else { onStarted?(.stopped(CatWords.cantTakeFiles(frontierName))) }
                 say(CatWords.cantTakeFiles(frontierName))
                 return
             }
@@ -428,7 +445,7 @@ extension AppController {
         youPicked: Bool = false,
         missesScreen: Bool = false,
         asked: Int? = nil,
-        onStarted: ((String?) -> Void)? = nil
+        onStarted: ((Landing) -> Void)? = nil
     ) {
         let name = name ?? frontierName
         let asked = asked ?? questionsAsked
@@ -456,7 +473,7 @@ extension AppController {
                         } else {
                             noteCorrection(in: threadID)
                         }
-                        onStarted?(threadID)
+                        onStarted?(.reached(threadID))
                         if errand == .work, projectID == nil, messagesThreads[threadID] == nil { catsWork[threadID] = now() }
                         let said = errand == .correctionCopy ? CatWords.correctionSent(to: name) : CatWords.onIt(modelName: name)
                         if missesScreen {
@@ -478,12 +495,13 @@ extension AppController {
                     }
                 }
                 if startedThread == nil {
-                    onStarted?(nil)
+                    onStarted?(.stopped(CatWords.noReply))
                     tell(CatWords.noReply, as: errand)
                 }
             } catch {
-                if startedThread == nil { onStarted?(nil) }
-                tell(CatWords.problem(error, while: .agents), as: errand, unasked: startedThread != nil)
+                let problem = CatWords.problem(error, while: .agents)
+                if startedThread == nil { onStarted?(.stopped(problem)) }
+                tell(problem, as: errand, unasked: startedThread != nil)
             }
         }
     }
