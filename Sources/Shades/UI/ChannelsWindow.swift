@@ -427,8 +427,7 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     private static let threadWidthKey = "ChannelsThreadWidth"
     private static let sidebarWidthKey = "ChannelsSidebarWidth"
     private static let sidebarHiddenKey = "ChannelsSidebarHidden"
-    private static let tickSeconds: TimeInterval = 0.2
-    private static let ticksPerTimeRefresh = 300
+    private static let timeRefreshSeconds: TimeInterval = 60
 
     let window: NSWindow = NSApplication.shared.activationPolicy() == .accessory ? ChannelsPanel() : ChannelsMainWindow()
     let view = ChannelsView(frame: NSRect(origin: .zero, size: ChannelsWindow.size))
@@ -436,8 +435,7 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
 
     private(set) var isOpen = false
     private var isPlaced = false
-    private var timer: Timer?
-    private var tick = 0
+    private var clock: Timer?
 
     init(defaults: UserDefaults = .standard) {
         super.init()
@@ -449,6 +447,7 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         view.onChooseSidebarWidth = { defaults.set($0.map(Double.init), forKey: Self.sidebarWidthKey) }
         view.isSidebarHidden = defaults.bool(forKey: Self.sidebarHiddenKey)
         view.onHideSidebar = { defaults.set($0, forKey: Self.sidebarHiddenKey) }
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(motionChanged), name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
     }
 
     func show(_ book: ChannelBook, centeredIn visible: NSRect) {
@@ -518,8 +517,8 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         isOpen = false
-        timer?.invalidate()
-        timer = nil
+        clock?.invalidate()
+        clock = nil
         Opal.forgetKept()
         onClose?()
     }
@@ -528,27 +527,28 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         updateTimer()
     }
 
+    @objc private func motionChanged() {
+        view.sidebar.motionChanged()
+    }
+
     private func updateTimer() {
         let wanted = window.isVisible && window.occlusionState.contains(.visible)
         if !wanted {
-            timer?.invalidate()
-            timer = nil
-        } else if timer == nil {
-            let timer = Timer(timeInterval: Self.tickSeconds, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.advance() }
+            clock?.invalidate()
+            clock = nil
+        } else if clock == nil {
+            let clock = Timer(timeInterval: Self.timeRefreshSeconds, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshTimes() }
             }
-            RunLoop.main.add(timer, forMode: .common)
-            self.timer = timer
+            clock.tolerance = Self.timeRefreshSeconds / 10
+            RunLoop.main.add(clock, forMode: .common)
+            self.clock = clock
         }
     }
 
-    private func advance() {
-        tick += 1
-        view.sidebar.advance(tick: tick)
-        if tick % Self.ticksPerTimeRefresh == 0 {
-            view.pane.refreshTimes()
-            view.threadPane.refreshTimes()
-            view.refreshPriorities()
-        }
+    private func refreshTimes() {
+        view.pane.refreshTimes()
+        view.threadPane.refreshTimes()
+        view.refreshPriorities()
     }
 }

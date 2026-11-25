@@ -166,7 +166,9 @@ enum ChannelImages {
             bitsPerPixel: 0
         ) else { return nil }
         rep.size = view.bounds.size
+        SidebarCat.drawsForAPicture = true
         view.cacheDisplay(in: view.bounds, to: rep)
+        SidebarCat.drawsForAPicture = false
         return rep
     }
 

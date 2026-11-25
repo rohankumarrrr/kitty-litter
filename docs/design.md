@@ -240,6 +240,7 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 - 120 ms for hover and press, 200 ms for something appearing, 280 ms for something moving.
 - Nothing jumps on load, and nothing moves content when it appears on hover. A hover toolbar floats over the row instead.
 - The cat's bubble and pill fade in over 200 ms and out over 120 ms, and take no clicks on their way out. The Ask box fades in, and goes at once when you press Return or Escape, as Spotlight does.
+- A kitten that's working or needs you runs in The Kitty Litter's sidebar, four frames over 0.8 seconds. Core Animation plays them in the window server (`SidebarCat`), so the app itself sleeps while they run, and a picture of the window has each cat draw the frame it's on.
 - Reduce Motion stills all of it, and the cats hold still. `Motion.isReduced` says when.
 
 ## Which surface gets which

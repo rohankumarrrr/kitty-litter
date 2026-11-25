@@ -34,10 +34,12 @@ final class QuietScroller: NSScroller {
 enum CatStamp {
     private static let renderer = CatRenderer()
 
+    static func image(_ pose: CatPose, jacket: UInt32?, on view: NSView) -> CGImage {
+        renderer.image(for: pose, theme: view.effectiveAppearance.isDark ? .dark : .light, jacket: jacket)
+    }
+
     static func draw(_ pose: CatPose, jacket: UInt32?, in rect: NSRect, on view: NSView, fraction: CGFloat = 1) {
-        let theme: CatTheme = view.effectiveAppearance.isDark ? .dark : .light
-        let cgImage = renderer.image(for: pose, theme: theme, jacket: jacket)
-        NSImage(cgImage: cgImage, size: rect.size).draw(
+        NSImage(cgImage: image(pose, jacket: jacket, on: view), size: rect.size).draw(
             in: rect,
             from: .zero,
             operation: .sourceOver,

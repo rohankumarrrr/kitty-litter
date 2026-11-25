@@ -400,6 +400,7 @@ enum DemoBench {
             settle(window)
             for reduced in [false, true] {
                 Motion.forced = reduced
+                NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: NSWorkspace.shared)
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 let before = usage()
                 try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
@@ -413,6 +414,7 @@ enum DemoBench {
             }
         }
         Motion.forced = DevFlags.reducesMotion ? true : nil
+        NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: NSWorkspace.shared)
         stage.showBubble(nil)
     }
 

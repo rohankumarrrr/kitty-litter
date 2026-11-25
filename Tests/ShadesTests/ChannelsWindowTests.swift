@@ -217,6 +217,29 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertFalse(moves(.needsYou))
     }
 
+    func testAWorkingKittenRunsInCoreAnimationSoNothingWakesTheAppAndReduceMotionStopsIt() throws {
+        Motion.forced = false
+        defer { Motion.forced = nil }
+        let channels = ChannelsWindow()
+        defer { channels.window.close() }
+        let running = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .running, model: "m", updatedAt: at, projectPath: "/k/steve")
+        channels.show(ChannelBook.build(kittens: [steve, pepper], threads: [running], transcripts: ["t": []], isReading: false, unreadable: 0, cantReachT3: false), centeredIn: NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900))
+        let cats = subviews(of: channels.view).compactMap { $0 as? SidebarCat }
+        XCTAssertEqual(cats.count, 2, "Steve's and Pepper's")
+        let steves = try XCTUnwrap(cats.first { $0.moves }, "Steve is working")
+        XCTAssertTrue(runMainLoop { steves.layer?.animation(forKey: SidebarCat.poseKey) != nil }, "his cat runs in the window server, with no timer in the app")
+        let pepper = try XCTUnwrap(cats.first { !$0.moves })
+        XCTAssertNotNil(pepper.layer?.contents, "Pepper's cat is there")
+        XCTAssertNil(pepper.layer?.animation(forKey: SidebarCat.poseKey), "Pepper is idle and holds still")
+        XCTAssertNotNil(ChannelImages.bitmap(of: channels.view, scale: 2))
+        XCTAssertNotNil(steves.layer?.animation(forKey: SidebarCat.poseKey), "drawing a picture of the window leaves him running")
+
+        Motion.forced = true
+        NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: NSWorkspace.shared)
+        XCTAssertTrue(runMainLoop { steves.layer?.animation(forKey: SidebarCat.poseKey) == nil }, "Reduce Motion holds him still")
+        XCTAssertNotNil(steves.layer?.contents)
+    }
+
     func testAChannelThatNeedsYouSaysSoOnce() throws {
         func marks(badge: Int) throws -> (onTile: Int, after: Int, words: String?) {
             let item = ChannelSidebarItem(place: .channel(.of(steve)), title: "steve", icon: .kitten(KittenStatus(kitten: steve, state: .needsYou)), badge: badge)
