@@ -93,13 +93,15 @@ final class AskRequestTests: XCTestCase {
         XCTAssertEqual(inbox.entries.map(\.id), ["a", "d"])
 
         inbox.file(SortedReport(decision: "Roll it back?"), from: thread(run: "run-2"), startedBy: .you, at: start, id: { "r" })
-        XCTAssertEqual(inbox.entries.map(\.id), ["a", "r"], "a newer decision replaces the one Shades read an ask from, and not the one the kitten wrote")
+        XCTAssertEqual(inbox.entries.map(\.id), ["a", "d"], "a newer decision updates the row Shades read an ask from, and not the one the kitten wrote")
+        XCTAssertEqual(inbox.entries.last?.text, "Roll it back?")
+        XCTAssertNil(inbox.entries.last?.ask, "the ask read from its old words goes with them")
 
-        inbox.markReplied("r", at: start)
-        XCTAssertFalse(inbox.attach(AskRequest(ask: "Roll it back.", readFromWords: true), to: "r"), "you've answered it in your own words")
+        inbox.markReplied("d", at: start)
+        XCTAssertFalse(inbox.attach(AskRequest(ask: "Roll it back.", readFromWords: true), to: "d"), "you've answered it in your own words")
         inbox.file(SortedReport(note: "Okay, I'll wait."), from: thread(run: "run-3"), startedBy: .you, at: start, id: { "n" })
-        XCTAssertNil(inbox.entries.first { $0.id == "r" }?.repliedAt, "its answer came")
-        XCTAssertFalse(inbox.attach(AskRequest(ask: "Roll it back.", readFromWords: true), to: "r"), "nor once the thread has answered you")
+        XCTAssertNil(inbox.entries.first { $0.id == "d" }?.repliedAt, "its answer came")
+        XCTAssertFalse(inbox.attach(AskRequest(ask: "Roll it back.", readFromWords: true), to: "d"), "nor once the thread has answered you")
         XCTAssertFalse(inbox.attach(AskRequest(ask: "Anything.", readFromWords: true), to: "gone"))
     }
 

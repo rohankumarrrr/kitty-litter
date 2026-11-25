@@ -203,9 +203,6 @@ extension AppController {
         do {
             try await backend.deliver(threadID: asker, text: Prompts.launchedReport(readable(report), of: thread))
             relayLimit.record(thread.id, asker, at: now())
-            inbox.anotherThreadWrote(to: asker, at: now())
-            keepInbox()
-            inboxChanged()
             return true
         } catch {
             inbox.appDidntWrite(to: asker)

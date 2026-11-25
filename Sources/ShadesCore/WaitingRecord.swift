@@ -13,7 +13,17 @@ public struct WaitingVisit: Codable, Equatable, Sendable {
         case replied, done, ignored, allowed, denied
         case superseded, withdrawn, alreadyMade, reportDidntAsk, turnWithoutYou, settled, archived, pullRequestMerged, pullRequestClosed
 
-        public var tookYou: Bool { [.replied, .done, .ignored, .allowed, .denied].contains(self) }
+        public enum Verdict: Sendable {
+            case answeredByYou, unanswered, neither
+        }
+
+        public var verdict: Verdict {
+            switch self {
+            case .replied, .done, .ignored, .allowed, .denied: .answeredByYou
+            case .superseded, .reportDidntAsk, .settled, .pullRequestMerged, .pullRequestClosed: .unanswered
+            case .withdrawn, .alreadyMade, .turnWithoutYou, .archived: .neither
+            }
+        }
     }
 
     public var row: String
@@ -25,6 +35,8 @@ public struct WaitingVisit: Codable, Equatable, Sendable {
     public var enteredAt: Date
     public var leftAt: Date?
     public var exit: Exit?
+    public var text: String?
+    public var updates: Int?
 
     public var isOpen: Bool { exit == nil }
 }
@@ -45,7 +57,8 @@ public struct WaitingRecord: Codable, Equatable, Sendable {
             startedBy: startedBy,
             held: held,
             source: source,
-            enteredAt: date
+            enteredAt: date,
+            text: entry.text
         ))
         if visits.count > Self.kept { visits.removeFirst(visits.count - Self.kept) }
     }
@@ -54,6 +67,12 @@ public struct WaitingRecord: Codable, Equatable, Sendable {
         guard let index = visits.lastIndex(where: { $0.row == row && $0.isOpen }) else { return }
         visits[index].exit = exit
         visits[index].leftAt = date
+    }
+
+    mutating func updated(_ row: String, to text: String) {
+        guard let index = visits.lastIndex(where: { $0.row == row && $0.isOpen }) else { return }
+        visits[index].text = text
+        visits[index].updates = (visits[index].updates ?? 0) + 1
     }
 
     mutating func renamed(_ row: String, to newRow: String) {
@@ -72,8 +91,9 @@ public struct WaitingRecord: Codable, Equatable, Sendable {
     }
 
     public func leftSince(_ date: Date) -> (all: Int, withoutYou: Int) {
-        let left = visits.filter { ($0.leftAt ?? .distantPast) >= date }
-        return (left.count, left.filter { $0.exit?.tookYou == false }.count)
+        let verdicts = visits.filter { ($0.leftAt ?? .distantPast) >= date }.compactMap { $0.exit?.verdict }
+        let judged = verdicts.filter { $0 != .neither }
+        return (judged.count, judged.filter { $0 == .unanswered }.count)
     }
 
     public static func load(beside inboxFile: URL) -> WaitingRecord {

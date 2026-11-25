@@ -234,7 +234,7 @@ enum HealthCheck {
         return HealthFinding(
             check: "waiting on you",
             ok: false,
-            problem: "\(withoutYou) of the \(all) things that left Waiting on you this week went without you, so it's asking you about things that sort themselves out.",
+            problem: "\(withoutYou) of the \(all) things that left Waiting on you this week went with no answer from you, so it's asking you about things that sort themselves out.",
             fix: "Ask Clawde to read \(WaitingRecord.fileName), next to inbox.json, which says where each one came from and how it left."
         )
     }

@@ -140,6 +140,7 @@ extension AppController {
         forwardTask = Task {
             for thread in [entry.threadID] + change.alsoAskedIn {
                 do {
+                    inbox.appWillWrite(to: thread, at: now())
                     for try await _ in backend.forward(threadID: thread, text: text, attachments: [], behavior: .queue) {}
                 } catch {
                     say(CatWords.problem(error, while: .agents))
