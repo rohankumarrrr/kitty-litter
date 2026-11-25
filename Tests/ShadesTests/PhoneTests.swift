@@ -277,6 +277,24 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(ask("unread", key: key).action(in: book) { "x" })
     }
 
+    func testMarkAsReadOnlyMarksAPlaceAndWhatThePhoneCanSeeThere() {
+        let said = [Exchange(id: "f", asker: .you, askedAt: noon, ask: "Fix the total", reply: "Fixed.", repliedAt: noon)]
+        let fix = AgentThread(id: "fix", title: "Fix", projectTitle: nil, status: .completed, model: "m", updatedAt: noon)
+        let hidden = AgentThread(id: "hidden", title: "Tidy", projectTitle: nil, status: .completed, model: "m", updatedAt: noon)
+        let book = ChannelBook.build(
+            kittens: [steve], threads: [thread("a", of: steve), fix, hidden], transcripts: ["a": said, "fix": said, "hidden": said],
+            isReading: false, unreadable: 0, cantReachT3: false, isUnread: { _ in true }, catsWork: ["fix", "hidden"], onPhone: ["fix"]
+        )
+        XCTAssertEqual(ask("read", key: PhonePlace.key(.channel(.of(steve)))).action(in: book) { "x" }?.action, .markRead(["a"]))
+        XCTAssertEqual(ask("read", key: PhonePlace.key(.channel(.shades))).action(in: book) { "x" }?.action, .markRead(["fix"]), "the cat's own work you didn't show here stays as it was")
+        XCTAssertNil(ask("read", key: PhonePlace.key(.thread("a", in: .channel(.of(steve))))).action(in: book) { "x" }, "a thread's page has Mark unread")
+        XCTAssertNil(ask("read", key: PhonePlace.key(.activity)).action(in: book) { "x" }, "nothing there to mark")
+
+        let places = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon).places
+        XCTAssertEqual(places.first { $0.key == PhonePlace.key(.channel(.shades)) }?.unread, 1)
+        XCTAssertEqual(places.first { $0.key == PhonePlace.key(.channel(.of(steve))) }?.unread, 1)
+    }
+
     func testAThreadsPageShowsItsNewLineAndWhatMarkUnreadMakesNew() throws {
         let book = book()
         let place = PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book)

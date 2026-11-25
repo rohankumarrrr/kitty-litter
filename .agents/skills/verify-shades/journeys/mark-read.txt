@@ -1,0 +1,63 @@
+front
+channels
+wait 2
+channel steve
+wait 1
+finish demo-tidy
+wait 4
+thread pricing copy
+wait 1
+unread Done. I went through
+wait 1
+back
+wait 1
+unread Are the plan names on the pricing page final
+wait 1
+channel shades
+wait 1
+front
+places
+draw .verify/shades/mark-read/0-counts
+channel steve
+wait 1
+draw .verify/shades/mark-read/1-steve
+read The pricing page feels cramped
+wait 1
+front
+places
+draw .verify/shades/mark-read/2-thread-read
+read Steve Pawsniak
+wait 1
+front
+places
+draw .verify/shades/mark-read/3-channel-read
+channel threads
+wait 1
+draw .verify/shades/mark-read/4-threads
+front
+key mark-all-read
+wait 1
+front
+places
+draw .verify/shades/mark-read/5-all-read
+phone on
+wait 3
+phone pair
+wait 1
+channel steve
+wait 1
+unread Are the plan names on the pricing page final
+wait 1
+channel shades
+wait 1
+places
+phone open steve
+wait 4
+phone js 'read=' + !$('read').hidden + ' count=' + (view.places.find((place) => place.key === view.key) || {}).unread + ' list=' + view.places.map((place) => place.title + ':' + (place.unread || 0)).join(',')
+draw .verify/shades/mark-read/6-phone-steve
+phone press Mark as read
+wait 2
+phone js 'read=' + !$('read').hidden
+places
+front
+windows

@@ -256,6 +256,7 @@ final class ChannelPane: QuietView {
     var onClose: (() -> Void)?
     var onAction: ((MessagesAction) -> Void)?
     var onMarkUnread: ((_ thread: String, _ message: String) -> Void)?
+    var onMarkRead: (([String]) -> Void)?
     var onOpenLink: ((URL) -> Void)?
     var onShowOnPhone: ((String) -> Void)?
     var onAttach: ((ChannelComposer, NSView) -> Void)?
@@ -724,6 +725,7 @@ final class ChannelPane: QuietView {
                 view.onReply = { [weak self] in self?.onOpen?(post.threadID, nil, true, nil) }
             }
             if book.knows(thread: post.threadID) { view.onOpen = { [weak self] in self?.onOpenThread?(post.threadID) } }
+            if post.isUnread { view.onMarkRead = { [weak self] in self?.onMarkRead?([post.threadID]) } }
             offerMarkUnread(on: view, post.parent, in: post.threadID, of: book)
             return view
         case .message(let message):
@@ -742,6 +744,12 @@ final class ChannelPane: QuietView {
         case .digest(let digest):
             let view = ThreadDigestRowView(digest: digest, in: book, now: now)
             view.onPress = { [weak self] in self?.onOpen?(digest.threadID, nil, false, nil) }
+            if digest.isUnread {
+                view.onMarkRead = { [weak self] in self?.onMarkRead?([digest.threadID]) }
+            } else if book.canMarkUnread(digest.threadID) {
+                let latest = digest.latest ?? digest.parent
+                view.onMarkUnread = { [weak self] in self?.onMarkUnread?(digest.threadID, latest.id) }
+            }
             return view
         case .replies(let count):
             return RepliesRowView(count: count)

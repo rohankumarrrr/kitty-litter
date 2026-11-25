@@ -5094,8 +5094,8 @@ final class FlowTests: XCTestCase {
         backend.said = ["w": [Exchange(id: "e", asker: .you, askedAt: clock, ask: "How's December?", reply: "Fine.", repliedAt: clock)]]
         controller.threadsChanged([finished])
         controller.channelsPressed()
-        XCTAssertEqual(stage.channelsShown.last?.unread, [penny.id])
         await until { stage.channelsUpdated.last?.isReading == false }
+        XCTAssertEqual(stage.channelsUpdated.last?.isUnread(.of(penny)), true)
 
         let before = savedInbox
         controller.messagesAction(.seen(.activity))
@@ -5104,7 +5104,37 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(savedInbox, before, "its channel shows only the thread's parent, not the reply that's new")
         controller.messagesAction(.seen(.thread("w", in: .channel(.of(penny)))))
         XCTAssertEqual(savedInbox?.isUnread(finished), false, "its pane shows the latest reply")
-        XCTAssertEqual(stage.channelsUpdated.last?.unread, [])
+        XCTAssertEqual(stage.channelsUpdated.last?.isUnread(.of(penny)), false)
+    }
+
+    func testMarkAsReadIsSavedAndAThreadReadInT3IsReadHereToo() async {
+        kittens = [penny]
+        let finished = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: clock, projectPath: penny.folder, lastRunID: "r1", lastRunEndedAt: clock)
+        let other = AgentThread(id: "x", title: "Taxes", projectTitle: "Penny", status: .completed, model: "m", updatedAt: clock, projectPath: penny.folder, lastRunID: "r2", lastRunEndedAt: clock)
+        backend.listed = [finished, other]
+        backend.said = [
+            "w": [Exchange(id: "e", asker: .you, askedAt: clock, ask: "How's December?", reply: "Fine.", repliedAt: clock)],
+            "x": [Exchange(id: "f", asker: .you, askedAt: clock, ask: "Filed?", reply: "Filed.", repliedAt: clock)],
+        ]
+        controller.threadsChanged([finished, other])
+        controller.channelsPressed()
+        await until { stage.channelsUpdated.last?.isReading == false }
+        XCTAssertEqual(stage.channelsUpdated.last?.unreadThreads(in: .channel(.of(penny))), ["w", "x"])
+
+        controller.messagesAction(.markRead(["w"]))
+        XCTAssertEqual(savedInbox?.isUnread(finished), false)
+        XCTAssertEqual(stage.channelsUpdated.last?.unreadThreads(in: .channel(.of(penny))), ["x"])
+        XCTAssertNil(stage.channelsUpdated.last?.newFrom["w"], "nothing in it is new any more")
+
+        var looked = other
+        looked.lastVisitedAt = clock.addingTimeInterval(1)
+        backend.listed = [finished, looked]
+        controller.channelsClosed()
+        controller.threadsChanged([finished, looked])
+        controller.channelsPressed()
+        await until { stage.channelsUpdated.last?.isUnread(.of(penny)) == false }
+        XCTAssertEqual(stage.channelsUpdated.last?.isUnread(.of(penny)), false, "you read it in T3")
+        XCTAssertEqual(savedInbox?.isUnread(looked), false)
     }
 
     func testMarkingUnreadBringsBackTheNewLineAcrossARestartUntilYouLookAgain() async throws {
@@ -5128,7 +5158,7 @@ final class FlowTests: XCTestCase {
         controller.messagesAction(.markUnread("w", from: "e2:ask"))
         XCTAssertEqual(savedInbox?.isUnread(finished), true)
         XCTAssertEqual(stage.channelsUpdated.last?.newFrom, ["w": "e2:ask"])
-        XCTAssertEqual(stage.channelsUpdated.last?.unread, [penny.id], "and its channel is bold again")
+        XCTAssertEqual(stage.channelsUpdated.last?.isUnread(.of(penny)), true, "and its channel is bold again")
 
         let beforeRestart = stage.channelsUpdated.count
         controller = makeController(inbox: try XCTUnwrap(savedInbox))

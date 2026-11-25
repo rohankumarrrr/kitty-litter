@@ -51,6 +51,20 @@ final class T3ThreadListTests: XCTestCase {
         XCTAssertNil(old.lastRunEndedAt)
     }
 
+    func testWhenYouLastLookedAtAThreadInT3IsKept() throws {
+        let looked = thread(id: "looked", status: "completed")
+            .replacingOccurrences(of: #""lastVisitedAt":null"#, with: #""lastVisitedAt":"2026-11-02T19:11:15.374Z""#)
+        let never = thread(id: "never", status: "completed").replacingOccurrences(of: #""lastVisitedAt":null,"#, with: "")
+        var list = T3ThreadList()
+        list.apply(try snapshot(threads: [looked, never]))
+        let listed = list.agentThreads(summaries: [:])
+
+        let seen = try XCTUnwrap(listed.first { $0.id == "looked" })
+        XCTAssertEqual(seen.lastVisitedAt, T3Wire.parseDate("2026-11-02T19:11:15.374Z"))
+        XCTAssertTrue(seen.wasSeenInT3, "looked at once its last run had ended")
+        XCTAssertNil(listed.first { $0.id == "never" }?.lastVisitedAt)
+    }
+
     func testAThreadWaitingOnASubagentIsStillWorking() throws {
         var list = T3ThreadList()
         let parent = thread(id: "parent", status: "completed")

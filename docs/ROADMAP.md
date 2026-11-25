@@ -34,12 +34,12 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - A check on where a thread can send. The router has no way to now, but the frontier agent and kittens that see your screen need T3's tools. A `PreToolUse` hook in their folders could turn away messages and launches aimed at a kitten that isn't meant to see your screen, or T3 could take a rule for it.
 - A screen block that follows a kitten instead of its folder. T3 can run Claude with `--settings` per provider instance, so a kitten's threads could share one wherever they work. Untested, because it needs a change to T3's settings.
 
-- Say on a thread's reply bar how many of its replies are new, so a bold channel shows which thread it's bold for. Today a channel's New line, like Slack's, only goes over threads none of which you've seen and replies also sent to it, and a thread with only new replies shows its line in its pane.
 - Leave a problem out of the bubble when The Kitty Litter already shows it under what you sent. A reply from Activity puts its report back but doesn't say why there yet, so for now the bubble says it too, and stays until you press Esc or click in another app.
 - Run the tests on GitHub's `xcode-27` runner too, macOS 27 with Xcode 27, still in preview. CI runs macOS 15, so a change in AppKit or the compiler on a newer system shows up today only on a Mac that's already updated.
 - Show each private app in Settings by its name and icon rather than as a bundle ID you type. Today the box shows the whole list, but as bundle IDs.
 - Answer an agent's question from the bubble. It shows the question and options now, and you answer in The Kitty Litter or T3.
 - Fold a busy conversation in The Kitty Litter down to one row per thread, with how many replies it has and the latest, the way a Slack channel shows a thread. Today every thread's messages are shown in order, and its title and project mark where each one starts.
+- Tell T3 when you read a thread in The Kitty Litter, with its `thread.visit`, so T3 Code's own sidebar agrees. Today a thread read in T3 counts as read here, but not the other way round.
 - Set a channel's notifications from the phone, and see which channels are muted in The Kitty Litter's sidebar. Both are set from the channel's header on the Mac now, and only its header says it's muted.
 - Read a thread's whole history in The Kitty Litter when it opens on its own, even past each kitten's newest 30, instead of saying the rest is in T3.
 - Show a reply's earlier notes in place, under the reply when you press "2 earlier notes". Today pressing it opens the thread in T3, since The Kitty Litter only keeps how many there were.

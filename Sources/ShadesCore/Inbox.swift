@@ -210,7 +210,7 @@ public struct Inbox: Codable, Equatable, Sendable {
     public func isUnread(_ thread: AgentThread) -> Bool {
         guard !thread.status.isActive || thread.turnEnded else { return false }
         if markedUnread?.contains(thread.id) == true { return true }
-        guard let run = thread.lastRunID, read?[thread.id] != run else { return false }
+        guard let run = thread.lastRunID, read?[thread.id] != run, !thread.wasSeenInT3 else { return false }
         return (thread.lastRunEndedAt ?? thread.updatedAt) >= since
     }
 

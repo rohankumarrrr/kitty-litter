@@ -162,6 +162,10 @@ enum CatWords {
     static func newMessages(_ count: Int) -> String { count == 1 ? "1 new message" : "\(count) new messages" }
     static func jumpToNew(_ count: Int) -> String { "↑  \(newMessages(count))" }
     static let markUnread = "Mark unread"
+    static let markRead = "Mark as read"
+    static let markAllRead = "Mark all as read"
+    static func unread(_ count: Int) -> String { "\(count) unread" }
+    static let unreadLabel = "unread"
     static func alsoSendTo(_ channel: String) -> String { "Also send to \(channel)" }
     static let answerInWords = "Type an answer"
     static let didntStart = "That didn't start. Try again?"
@@ -201,7 +205,7 @@ enum CatWords {
         ("Threads", [
             ("⌘⇧[  ⌘⇧]", "Thread above or below"),
             ("⌘↩", "Steer or queue, the other way from Settings"),
-            ("Esc", "Close the thread"),
+            ("Esc  ⇧Esc", "Close the thread, or mark all as read"),
         ]),
         (appName, [
             ("⌘N", "Write here"),

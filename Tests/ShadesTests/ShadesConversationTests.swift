@@ -108,7 +108,7 @@ final class ShadesConversationTests: XCTestCase {
         XCTAssertFalse(channel.rows.contains { $0.open == PhonePlace.key(.thread("r", in: .channel(.of(steve)))) }, "nothing in Steve's channel leads to it")
         XCTAssertNil(PhonePlace(PhonePlace.key(.thread("r", in: .channel(.of(steve)))), in: built).target, "it has no box")
         XCTAssertNil(send(PhonePlace.key(.thread("r", in: .channel(.of(steve)))), in: built), "and nothing goes into the router's thread")
-        XCTAssertEqual(built.unread, [], "and Steve gets no dot for it")
+        XCTAssertFalse(built.isUnread(.of(steve)), "and Steve gets no dot for it")
     }
 
     private var books: [ChannelBook] = []

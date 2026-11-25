@@ -22,7 +22,7 @@ final class PressPhoneTests: XCTestCase {
         AgentThread(id: id, title: "Work", projectTitle: kitten.name, status: status, model: "m", updatedAt: noon, projectPath: kitten.folder)
     }
 
-    private func book(reactions: [String: [Reaction]] = ["e1:reply": [.eyes]]) -> ChannelBook {
+    private func book(reactions: [String: [Reaction]] = ["e1:reply": [.eyes]], unread: Set<String> = []) -> ChannelBook {
         let command = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
         let font = AnswerForm(parts: [AnswerForm.Part(key: "font", text: "Which font?", options: ["Silkscreen", "System"], values: ["s", "y"], takesOwnWords: false)])
         let question = AgentQuestion(id: "q", threadID: "p", threadTitle: "Work", text: "Which font?", form: font)
@@ -54,14 +54,15 @@ final class PressPhoneTests: XCTestCase {
         )
         if let steves = book.channels.firstIndex(where: { $0.id == .of(steve) }) { book.channels[steves].isCut = true }
         book.newFrom["p"] = "e2:reply"
+        book.unreadThreads = unread
         return book
     }
 
     private var steveKey: String { PhonePlace.key(.channel(.of(steve))) }
     private var threadKey: String { PhonePlace.key(.thread("a", in: .channel(.of(steve)))) }
 
-    private func open(at key: String = PhonePlace.home, paired: Bool = true, priorities: Priorities = Priorities()) async throws {
-        phone = Phone(book: book(), now: noon, paired: paired)
+    private func open(at key: String = PhonePlace.home, paired: Bool = true, priorities: Priorities = Priorities(), unread: Set<String> = []) async throws {
+        phone = Phone(book: book(unread: unread), now: noon, paired: paired)
         phone.priorities = priorities
         phone.open(key)
         if paired { try await shows(key) }
@@ -623,6 +624,22 @@ final class PressPhoneTests: XCTestCase {
         try await shows("threads")
         try await phone.press(.returnKey, on: ".digest")
         try await phone.until("Return opens it too") { (try await phone.read("view.key") as? String)?.hasPrefix("t:") == true }
+    }
+
+    func testMarkAsReadMarksAChannelsNewThreadsRead() async throws {
+        let pepperKey = PhonePlace.key(.channel(.of(pepper)))
+        try await open(at: pepperKey, unread: ["p"])
+        let count = try await phone.read("view.places.find((place) => place.key === '\(pepperKey)').unread") as? Int
+        XCTAssertEqual(count, 1, "the list says how much is new")
+        try await phone.until("Mark as read shows") { try await phone.read("$('read').hidden") as? Bool == false }
+        try await phone.tap("#read")
+        try await did("read", .markRead(["p"]))
+        try await phone.press(.returnKey, on: "#read")
+        try await phone.until("Return marks it too") { asked("read") == 2 }
+
+        try await open(at: steveKey, unread: ["p"])
+        let hidden = try await phone.read("$('read').hidden") as? Bool
+        XCTAssertEqual(hidden, true, "a channel with nothing new has nothing to mark")
     }
 
     func testMarkUnreadMarksTheLatestReplyNew() async throws {

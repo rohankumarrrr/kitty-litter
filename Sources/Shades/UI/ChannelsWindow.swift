@@ -155,6 +155,8 @@ final class ChannelsView: QuietView {
         jumpBox.onFind = { [weak self] in self?.onAction?(.find($0)) }
         cheatsheet.onClose = { [weak self] in self?.cheatsheet.isHidden = true }
         sidebar.onSelect = { [weak self] in self?.select(ChannelSelection($0)) }
+        sidebar.onMarkRead = { [weak self] place in self?.markRead(self?.book?.unreadThreads(in: place) ?? []) }
+        sidebar.onMarkAllRead = { [weak self] in self?.markAllRead() }
         sidebar.onShortcuts = { [weak self] in self?.perform(.cheatsheet) }
         sidebar.onDoNotDisturb = { [weak self] in self?.onAction?(.doNotDisturb) }
         for pane in panes {
@@ -162,6 +164,7 @@ final class ChannelsView: QuietView {
             pane.onOpen = { [weak self] thread, place, typing, report in self?.open(thread: thread, from: place, typing: typing, replyingTo: report) }
             pane.onClose = { [weak self] in self?.closeThread() }
             pane.onMarkUnread = { [weak self] thread, message in self?.markUnread(thread, from: message) }
+            pane.onMarkRead = { [weak self] in self?.markRead($0) }
             pane.composer.onEscape = { [weak self] in self?.perform(.escape) }
             pane.composer.onMic = { [weak self, weak pane] in
                 pane?.focusComposer()
@@ -289,6 +292,16 @@ final class ChannelsView: QuietView {
     func markUnread(_ thread: String, from message: String) {
         keptUnread.insert(thread)
         onAction?(.markUnread(thread, from: message))
+    }
+
+    func markRead(_ threads: [String]) {
+        guard !threads.isEmpty else { return }
+        keptUnread.subtract(threads)
+        onAction?(.markRead(threads))
+    }
+
+    func markAllRead() {
+        markRead(book?.unreadThreads.sorted() ?? [])
     }
 
     func closeThread() {

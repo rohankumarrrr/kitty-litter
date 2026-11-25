@@ -159,7 +159,7 @@ struct PhoneView: Encodable, Equatable {
         var title: String
         var group: String?
         var count: Int?
-        var unread: Bool
+        var unread: Int?
         var cat: String?
         var state: String?
         var dot: String?
@@ -381,6 +381,10 @@ struct PhoneView: Encodable, Equatable {
         return rows
     }
 
+    static func unreadThreads(in place: ChannelPlace, of book: ChannelBook) -> [String] {
+        book.unreadThreads(in: place).filter { book.home(ofThread: $0) != .shades || book.onPhone.contains($0) }
+    }
+
     private static func places(in book: ChannelBook) -> [Place] {
         ChannelSidebarItem.groups(in: book).flatMap { group in
             group.items.filter { $0.place.channelID != .shades || !book.onPhone.isEmpty }.map { item in
@@ -388,6 +392,7 @@ struct PhoneView: Encodable, Equatable {
                 var state: String?
                 var dot: UInt32?
                 var icon: String?
+                let unread = unreadThreads(in: item.place, of: book).count
                 switch item.icon {
                 case .kitten(let status):
                     cat = PhoneCat.key(PhoneCat.Pose(status.state), jacket: ChannelSpeakerLook.color(of: status.kitten))
@@ -402,7 +407,7 @@ struct PhoneView: Encodable, Equatable {
                     title: item.title,
                     group: group.heading,
                     count: item.badge > 0 ? item.badge : nil,
-                    unread: item.place == .channel(.shades) ? !book.unreadThreads.isDisjoint(with: book.onPhone) : item.isUnread,
+                    unread: unread > 0 ? unread : nil,
                     cat: cat,
                     state: state,
                     dot: dot.map(hex),
@@ -470,6 +475,7 @@ struct PhoneView: Encodable, Equatable {
                 return Face(cat: cat(of: look), color: look.hasCat ? nil : look.bubble.map(hex))
             }
             row.waiting = post.needsYou ? true : nil
+            row.unread = post.isUnread ? true : nil
             row.going = post.isGoing
             return row
         case .alsoSent(let message, let threadID, let parent):

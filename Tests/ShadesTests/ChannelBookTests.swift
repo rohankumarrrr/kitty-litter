@@ -535,13 +535,16 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(built.name(of: .cat), "Shades")
     }
 
-    func testAKittenIsUnreadWhenAnyOfItsThreadsIs() {
-        let built = book(threads: [thread("s"), thread("p", project: "Pepper"), thread("nobody", project: nil)], transcripts: ["s": [exchange("e")]], isUnread: { $0.id != "p" })
-        XCTAssertEqual(built.unread, [steve.id])
-        XCTAssertTrue(built.isUnread(.of(steve)))
-        XCTAssertFalse(built.isUnread(.of(pepper)))
+    func testAChannelIsUnreadOnlyForTheUnreadThreadsItShows() {
+        let built = book(threads: [thread("s"), thread("s-old"), thread("p", project: "Pepper"), thread("nobody", project: nil)], transcripts: ["s": [exchange("e")]], isUnread: { _ in true })
         XCTAssertEqual(built.unreadThreads, ["s"], "only threads that are shown")
+        XCTAssertTrue(built.isUnread(.of(steve)))
+        XCTAssertFalse(built.isUnread(.of(pepper)), "one Messages hasn't read couldn't be cleared by looking, so it can't keep a channel bold")
         XCTAssertFalse(built.isUnread(.shades))
+        XCTAssertEqual(built.unreadThreads(in: .channel(.of(steve))), ["s"])
+        XCTAssertEqual(built.unreadThreads(in: .activity), [])
+        let steveRow = ChannelSidebarItem.groups(in: built).flatMap(\.items).first { $0.place == .channel(.of(steve)) }
+        XCTAssertEqual(steveRow?.unread, 1, "which the sidebar counts")
     }
 
     func testTheCatIsUnreadWhenAThreadOfItsOwnWorkIs() {
