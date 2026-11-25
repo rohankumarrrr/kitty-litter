@@ -1,6 +1,7 @@
 import AppKit
 @testable import Shades
 import ShadesCore
+import TestSupport
 import XCTest
 
 @MainActor
@@ -108,7 +109,7 @@ final class MessageSearchTests: XCTestCase {
         let book = book(["a": said])
         let plainWords = PlainWords()
         plainWords.readAhead(book)
-        for _ in 0..<400 where plainWords.reads < 80 { try? await Task.sleep(for: .milliseconds(5)) }
+        await until { plainWords.reads >= 80 }
         XCTAssertEqual(plainWords.reads, 80, "every message with words, asks and replies alike")
         XCTAssertEqual(MessageSearch.find("silkscreen h1", in: book, limit: 8, reading: plainWords).found.count, 8)
         XCTAssertEqual(plainWords.reads, 80, "the search itself read nothing")

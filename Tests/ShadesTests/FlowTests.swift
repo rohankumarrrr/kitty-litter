@@ -1856,7 +1856,6 @@ final class FlowTests: XCTestCase {
         backend.replies = [[.finished(fullText: "CORRECTION: 1")], [.finished(fullText: "Started.")]]
         await ask(wrong)
         await waitForSends(2)
-        XCTAssertFalse(controller.dispatchers.contains("thread-2"))
 
         var work = session("thread-2", "Team size", status: .running)
         work.projectPath = steve.folder
@@ -1879,7 +1878,8 @@ final class FlowTests: XCTestCase {
         await waitForSends(3)
         let copy = controller.notices.first?.threadID
         XCTAssertNotNil(copy)
-        XCTAssertFalse(controller.dispatchers.contains(copy ?? ""))
+        let passedOn = await finishesPointingAtAnotherThread(copy ?? "")
+        XCTAssertFalse(passedOn, "the copy's own report shows, not just that work started elsewhere")
     }
 
     func testAKittensSessionThatGetsACorrectionStopsBeingADispatcher() async {
@@ -1888,7 +1888,6 @@ final class FlowTests: XCTestCase {
         backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
         await ask("tailor my resume")
         await waitForSends(2)
-        XCTAssertTrue(controller.dispatchers.contains("thread-2"))
 
         var work = session("thread-2", "Tailor resume")
         work.projectPath = steve.folder
@@ -1897,7 +1896,8 @@ final class FlowTests: XCTestCase {
         await ask(wrong)
         await waitForSends(4)
         XCTAssertEqual(backend.sent.last?.mode, .forward)
-        XCTAssertFalse(controller.dispatchers.contains("thread-2"))
+        let passedOnAfter = await finishesPointingAtAnotherThread("thread-2", run: "r2")
+        XCTAssertFalse(passedOnAfter, "after a correction reached it, its report shows")
     }
 
     func testAnOrdinaryKittenThreadCanStillStepAside() async {
@@ -2278,6 +2278,23 @@ final class FlowTests: XCTestCase {
         await laterPassesWorkOn("C-control-later")
     }
 
+    private func finishesPointingAtAnotherThread(_ id: String, run: String = "r1") async -> Bool {
+        controller.bubbleDismissed(byClick: true)
+        let others = controller.latestThreads.filter { $0.id != id }
+        var work = controller.latestThreads.first { $0.id == id } ?? session(id, "Work")
+        work.projectPath = steve.folder
+        work.lastRunID = run
+        work.status = .running
+        controller.threadsChanged(others + [work])
+        backend.reports[id] = "The change went to a new thread, <t3-thread://v2/env/worker>, in a worktree."
+        work.status = .completed
+        controller.threadsChanged(others + [work])
+        await controller.reportTask?.value
+        let saidItPassedOn: BubbleContent = .line("Work's started in a new session.", threadID: "worker")
+        await until { stage.bubble == saidItPassedOn || controller.notices.contains { $0.threadID == id } }
+        return stage.bubble == saidItPassedOn
+    }
+
     private func laterPassesWorkOn(_ tag: String) async {
         controller.bubbleDismissed(byClick: true)
         var work = session("w", "Tailor resume", status: .running, mode: .fullAccess)
@@ -2397,7 +2414,8 @@ final class FlowTests: XCTestCase {
     func testAFailedForwardFromEveryoneLeavesTheSessionUnmarked() async {
         await correctFromEveryone(failing: true)
         XCTAssertFalse(controller.inbox.wasCorrected("w"))
-        XCTAssertTrue(controller.dispatchers.contains("w"))
+        let passedOn = await finishesPointingAtAnotherThread("w")
+        XCTAssertTrue(passedOn, "nothing reached the session, so it still only passes work on")
         XCTAssertNil(sentTo("project-steve"), "no extra copy")
     }
 
@@ -2405,7 +2423,8 @@ final class FlowTests: XCTestCase {
         await correctFromEveryone(failing: false)
         XCTAssertEqual(backend.sent.last?.mode, .forward)
         XCTAssertTrue(controller.inbox.wasCorrected("w"))
-        XCTAssertFalse(controller.dispatchers.contains("w"))
+        let passedOn = await finishesPointingAtAnotherThread("w")
+        XCTAssertFalse(passedOn, "the correction reached it, so its report shows")
     }
 
     func testAFailedCorrectionDoesNotUndoOneThatGotThere() async {
