@@ -13,8 +13,8 @@ A desktop app for macOS whose cat, Shades, sees your screen when you ask, answer
 - `docs/kittens.md`: how specialist agents are set up. Real kittens are personal and live outside this repo.
 - `docs/ROADMAP.md`: ideas saved for later. Version one stays small, so new ideas go there first.
 - `Tests/RepoChecks`: checks over the repo's own files, each enforcing a rule in the table below.
-- `Tests/TestSupport`: the one way a test waits for something, which every test target can use.
-- `.agents/skills/`: how to prove a change here. `verify-shades` drives the app in demo mode and has its windows draw themselves to pictures, and `verify-screen-boundary` checks that nothing from your screen reaches a kitten that isn't allowed to see it.
+- `Tests/TestSupport`: the one way a test waits for something, and `explore`, which tries every order of a model's steps, for every test target.
+- `.agents/skills/`: how to prove a change here. `verify-shades` drives the app in demo mode and has its windows draw themselves to pictures, `verify-screen-boundary` checks that nothing from your screen reaches a kitten that isn't allowed to see it, and `verify-run-filing` checks every order of a kitten's run against the inbox.
 
 ## Commands
 
@@ -52,6 +52,7 @@ Each rule says what enforces it. A check is the rule: when one fails, its messag
 | Capture only when asked, never in the background, and skip apps on the privacy list. | `PrivacyTests` for the list, you for the rest |
 | A kitten with `seesScreen: false` never gets text from your screen, follow-ups to its work in other projects included. `docs/kittens.md` says what enforces that and what doesn't. | `ScreenBoundaryTests`, and `verify-screen-boundary` |
 | The router only replies, and the app acts on its one line. It runs in its own folder, where `RouterBlock` leaves it only web search, so whatever starts a router thread gets its project from `routerProjectID(for:)`. | `RouterBlockTests`, and `FakeBackend`, which fails a test that starts a router thread anywhere else |
+| Every run a kitten ends reaches the inbox once, and never as done while a pull request it watches or a reviewer it started still works. | `RunFilingModelTests`, which tries every order of a run's steps on the real code, and `verify-run-filing` |
 | An inbox row is data, and a reply is only what you typed or said. It goes straight to the thread, with no capture and no canned answer. | `ScreenBoundaryTests` (`inboxReply`) |
 | A kitten's request card offers Allow only while its file is exactly as the card showed it. Ignore and a kitten's withdraw only ever take a card away, and a withdraw only takes back the asking thread's own share. | `StaleRequestTests`, `ChangeRequestFlowTests` |
 | The router only picks numbers, only your own words get passed on, and an extra copy of a correction never carries screen text. | `ScreenBoundaryTests` |
