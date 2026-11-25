@@ -543,6 +543,26 @@ final class FlowTests: XCTestCase {
         }
     }
 
+    func testAKittensThreadStartsWithFullAccessAndNoScreenUnlessYouPickAnotherMode() async {
+        var fresh = settings
+        fresh.frontierMode = Settings().frontierMode
+        controller.apply(fresh)
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("I need a tailored resume for this job")
+        await controller.frontierTask?.value
+
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("<screen>"), "the router still looks")
+        let given = backend.sent[1].prompt
+        XCTAssertEqual(given.projectID, "project-steve")
+        XCTAssertEqual(given.runtimeMode, .fullAccess)
+        XCTAssertTrue(given.text.hasPrefix("I need a tailored resume for this job"))
+        XCTAssertFalse(given.text.contains("<screen>"))
+        XCTAssertTrue(given.attachments.isEmpty)
+        XCTAssertEqual(context.saved, 0, "no screenshot kept for it either")
+    }
+
     private let clawde = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", seesScreen: false)
 
     func testAKittenThatDoesntSeeTheScreenGetsYourWordsOnly() async {
@@ -4557,6 +4577,52 @@ final class FlowTests: XCTestCase {
         await settle()
         XCTAssertTrue(backend.sent.isEmpty, "nor a new thread with it")
         XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.cantTakeFiles("Pepper"), "and it says why, not just that it didn't start")
+    }
+
+    func testAFileTheRouterPassesOnToAKittenWithFullAccessSaysWhyUnderWhatYouSent() async throws {
+        var fresh = settings
+        fresh.frontierMode = Settings().frontierMode
+        controller.apply(fresh)
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        let handOff = "Fix the layout in the picture"
+        backend.routerSays = ["Tailor my resume to this": "KITTEN: 1", "Fix this layout": "HANDOFF: \(handOff)"]
+        controller.channelsPressed()
+        for (words, refusedBy) in [("Tailor my resume to this", steve.name), ("Fix this layout", controller.frontierName)] {
+            controller.messagesAction(.send(words, to: .router, shownIn: .shades, files: [picture]))
+            await settle()
+            await controller.messagesTurn?.value
+            await settle()
+            let shown = said(in: .shades, of: shownBook)
+            let mine = try XCTUnwrap(shown.first { $0.text == words && $0.speaker == .you })
+            XCTAssertEqual(mine.failure, CatWords.cantTakeFiles(refusedBy), words)
+        }
+        let shown = said(in: .shades, of: shownBook).map(\.text)
+        XCTAssertFalse(shown.contains(CatWords.passedOnToKitten), "it wasn't passed on")
+        XCTAssertFalse(shown.contains(CatWords.handedOff(handOff)), "nor started on")
+        XCTAssertFalse(backend.sent.contains { $0.mode == .start && $0.prompt.model == settings.frontierModel })
+    }
+
+    func testTheHandOffFlagGoesTheWayAHandOffDoesSoFullAccessGetsNoScreen() async throws {
+        var fresh = settings
+        fresh.frontierMode = Settings().frontierMode
+        controller.apply(fresh)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let page = folder.appendingPathComponent("page.png")
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 8, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: page)
+        let real = CommandLine.arguments
+        CommandLine.arguments = ["shades", "--hand-off", "Which of my projects is the budget app?", "--image", page.path]
+        defer { CommandLine.arguments = real }
+        DevFlags.run(on: controller)
+        await until { !backend.sent.isEmpty }
+        let sent = try XCTUnwrap(backend.sent.first)
+        XCTAssertEqual(sent.prompt.runtimeMode, .fullAccess)
+        XCTAssertTrue(sent.prompt.attachments.isEmpty)
+        XCTAssertFalse(sent.prompt.text.contains("Test picture"), "nor what was on the screen")
+        XCTAssertEqual(context.saved, 0, "nor a copy to open")
     }
 
     func testAFileIsOfferedOnlyWhereSendingItWouldGo() async throws {

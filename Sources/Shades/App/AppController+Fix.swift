@@ -52,9 +52,9 @@ extension AppController {
 
     func sendFix(_ description: String, snapshot: ScreenSnapshot, onOwnWindow: Bool = false) {
         defer { catGoesHomeSoon() }
-        guard settings.lockdown == nil else { return sendLockedDown(description.isEmpty ? CatWords.fixThis : description, snapshot: snapshot) }
-        let said = description.isEmpty ? nil : description
         let shared = settings.frontierMode == .fullAccess ? nil : snapshot
+        guard settings.lockdown == nil else { return sendLockedDown(description.isEmpty ? CatWords.fixThis : description, snapshot: shared) }
+        let said = description.isEmpty ? nil : description
         let path = saveScreenshot(of: shared)
         let what = said ?? shared?.appName.map { "Something in \($0)" } ?? "Something on screen"
         startFrontier(

@@ -320,8 +320,9 @@ extension AppController {
             }
             if !reading.wentNowhere, !corrected.isEmpty { passedOn(CatWords.passedOnCorrection) }
         case .handoff(let task):
-            handOff(task: task, question: words, snapshot: file, asked: asked, onStarted: started(in: .shades))
-            passedOn(CatWords.handedOff(task))
+            var refused = false
+            handOff(task: task, question: words, snapshot: file, asked: asked, onStarted: started(in: .shades), refused: { refused = true })
+            if refused { channels.failed(echoID, because: CatWords.cantTakeFiles(frontierName)) } else { passedOn(CatWords.handedOff(task)) }
         case .route(let session):
             guard sessions.indices.contains(session - 1) else {
                 catSays(CatWords.lostTheSession)
@@ -343,9 +344,10 @@ extension AppController {
                 return
             }
             let kitten = kittens[number - 1]
-            give(words, to: kitten, snapshot: file, as: corrected.contains(kitten) ? .correction : .work, asked: asked, onStarted: started(in: .of(kitten)))
+            var refused = false
+            give(words, to: kitten, snapshot: file, as: corrected.contains(kitten) ? .correction : .work, asked: asked, onStarted: started(in: .of(kitten)), refused: { refused = true })
             copies.removeAll { $0 == kitten }
-            passedOn(CatWords.passedOnToKitten)
+            if refused { channels.failed(echoID, because: CatWords.cantTakeFiles(kitten.name)) } else { passedOn(CatWords.passedOnToKitten) }
         }
         if isFresh {
             if file == nil { messagesQuick.reset() }

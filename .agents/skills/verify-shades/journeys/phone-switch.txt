@@ -11,7 +11,7 @@ submit Where could I find a keyboard like this?
 wait 12
 fix
 wait 1
-submit
+submit And this one?
 wait 3
 phone text
 wait 2

@@ -25,7 +25,7 @@ final class LockdownTests: XCTestCase {
         controller = makeController()
     }
 
-    private func makeController(settings: Settings = Settings()) -> AppController {
+    private func makeController(settings: Settings = Settings(frontierMode: .auto)) -> AppController {
         var settings = settings
         settings.quickMode = .approvalRequired
         let controller = AppController(
@@ -175,6 +175,17 @@ final class LockdownTests: XCTestCase {
         XCTAssertEqual(backend.sent.count, 1)
         XCTAssertEqual(backend.sent[0].prompt.projectID, "project-builder")
         XCTAssertTrue(backend.sent[0].prompt.text.hasPrefix(CatWords.fixThis))
+    }
+
+    func testAFixWithFullAccessLeavesTheScreenOutEvenForAThreadStartedInAnotherMode() async {
+        controller = makeController(settings: Settings(lockdown: Lockdown(kitten: builder.id, thread: "t")))
+        controller.threadsChanged([thread("t", of: builder)])
+        controller.sendFix("The total is wrong", snapshot: screen)
+        await settle()
+        let sent = backend.sent.last
+        XCTAssertEqual(sent?.mode, .forward)
+        XCTAssertEqual(sent?.threadID, "t")
+        XCTAssertFalse(sent?.prompt.text.contains("let total = 0") == true, "the Fix box said your screen wouldn't go")
     }
 
     func testItSurvivesARestartAndCarriesOnInTheSameThread() async throws {

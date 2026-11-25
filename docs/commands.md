@@ -4,7 +4,7 @@ Everything here is for working on The Kitty Litter. None of it is needed to use 
 
 ## Trying a flow from the command line
 
-These run a flow without touching the mouse or keyboard. With `--image`, the agent sees that picture instead of your real screen, as if it filled the main display, so an answer that points there sends the cat to the same spot. They talk to real T3, so name test threads `Shades test: ...` and archive them afterwards.
+These run a flow without touching the mouse or keyboard. With `--image`, whatever would see your screen sees that picture instead, as if it filled the main display, so an answer that points there sends the cat to the same spot. A hand-off or a Fix runs with full access unless Frontier's mode says otherwise, and then only the router sees it. `--hand-off` goes the way a hand-off from the router does. They talk to real T3, so name test threads `Shades test: ...` and archive them afterwards.
 
 ```bash
 shades --ask "What's on my screen?" --image page.jpg

@@ -45,7 +45,7 @@ public struct Settings: Codable, Sendable, Equatable {
         frontierModel: ModelChoice = .frontier,
         summaryModel: ModelChoice = .summary,
         quickMode: RuntimeMode = .auto,
-        frontierMode: RuntimeMode = .auto,
+        frontierMode: RuntimeMode = .fullAccess,
         privateApps: [String] = Settings.defaultPrivateApps,
         vocabulary: [String] = [],
         talkKey: HoldKey = .rightOption,
@@ -128,19 +128,37 @@ public struct Settings: Codable, Sendable, Equatable {
             .appendingPathComponent("shades", isDirectory: true)
     }
 
-    private static var fileURL: URL { directory.appendingPathComponent("settings.json") }
+    public static var fileURL: URL { directory.appendingPathComponent("settings.json") }
 
-    public static func load() -> Settings {
-        guard let data = try? Data(contentsOf: fileURL),
+    public static func load(from file: URL = fileURL) -> Settings {
+        guard let data = try? Data(contentsOf: file),
               let settings = try? JSONDecoder().decode(Settings.self, from: data)
         else { return Settings() }
         return settings
     }
 
-    public func save() throws {
-        try FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
+    public static func moveKittensToFullAccessOnce(in folder: URL = directory) {
+        let moved = folder.appendingPathComponent("kittens-moved-to-full-access")
+        let file = folder.appendingPathComponent("settings.json")
+        guard !FileManager.default.fileExists(atPath: moved.path) else { return }
+        if let data = try? Data(contentsOf: file) {
+            guard var saved = try? JSONDecoder().decode(Settings.self, from: data) else { return }
+            if saved.frontierMode == .auto {
+                saved.frontierMode = .fullAccess
+                guard (try? saved.save(to: file)) != nil else { return }
+            }
+        }
+        try? Data().write(to: moved)
+    }
+
+    public func save(to file: URL = fileURL) throws {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try encoded().write(to: file, options: .atomic)
+    }
+
+    private func encoded() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(self).write(to: Self.fileURL, options: .atomic)
+        return try encoder.encode(self)
     }
 }

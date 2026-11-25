@@ -363,10 +363,10 @@ extension AppController {
 
     var frontierName: String { ModelNames.friendly(settings.frontierModel) }
 
-    func handOff(task: String, question: String, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil) {
+    func handOff(task: String, question: String, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((String?) -> Void)? = nil, refused: (() -> Void)? = nil) {
         guard settings.frontierMode != .fullAccess else {
             guard snapshot?.isDropped != true else {
-                onStarted?(nil)
+                if let refused { refused() } else { onStarted?(nil) }
                 say(CatWords.cantTakeFiles(frontierName))
                 return
             }

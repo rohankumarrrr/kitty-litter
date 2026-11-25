@@ -60,6 +60,66 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(read, changed)
     }
 
+    private func settingsFolder() throws -> URL {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        return folder
+    }
+
+    private func saved(in file: URL) throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+    }
+
+    func testAFreshInstallStartsKittensWithFullAccess() throws {
+        let folder = try settingsFolder()
+        Settings.moveKittensToFullAccessOnce(in: folder)
+        XCTAssertEqual(Settings.load(from: folder.appendingPathComponent("settings.json")).frontierMode, .fullAccess)
+        XCTAssertEqual(Settings().quickMode, .auto, "the cat's own answers keep theirs")
+    }
+
+    func testAFileSavedBeforeKittensHadFullAccessMovesToItOnceAndAModePickedAfterwardsStays() throws {
+        let folder = try settingsFolder()
+        let file = folder.appendingPathComponent("settings.json")
+        try Data(#"{"frontierMode":"auto","quickMode":"auto","vocabulary":["Pawsniak"]}"#.utf8).write(to: file)
+        Settings.moveKittensToFullAccessOnce(in: folder)
+        let moved = try saved(in: file)
+        XCTAssertEqual(moved["frontierMode"] as? String, "full-access", "written at launch, so the file says so before anything changes")
+        XCTAssertEqual(moved["quickMode"] as? String, "auto")
+        XCTAssertEqual(moved["vocabulary"] as? [String], ["Pawsniak"])
+
+        var picked = Settings.load(from: file)
+        picked.frontierMode = .auto
+        try picked.save(to: file)
+        Settings.moveKittensToFullAccessOnce(in: folder)
+        XCTAssertEqual(Settings.load(from: file).frontierMode, .auto)
+    }
+
+    func testARollbackToAnOlderCopyCantMakeTheMoveHappenAgain() throws {
+        let folder = try settingsFolder()
+        let file = folder.appendingPathComponent("settings.json")
+        try Data(#"{"frontierMode":"approval-required"}"#.utf8).write(to: file)
+        Settings.moveKittensToFullAccessOnce(in: folder)
+        XCTAssertEqual(Settings.load(from: file).frontierMode, .approvalRequired, "a stricter pick stays")
+
+        try Data(#"{"frontierMode":"auto"}"#.utf8).write(to: file)
+        Settings.moveKittensToFullAccessOnce(in: folder)
+        XCTAssertEqual(Settings.load(from: file).frontierMode, .auto, "Auto picked in an older copy after a rollback stays, since the move already happened")
+    }
+
+    func testAFileThatCantBeReadIsLeftForYouToFixAndMovedOnceItCanBe() throws {
+        let folder = try settingsFolder()
+        let file = folder.appendingPathComponent("settings.json")
+        let broken = Data(#"{"frontierMode": "#.utf8)
+        try broken.write(to: file)
+        Settings.moveKittensToFullAccessOnce(in: folder)
+        XCTAssertEqual(try Data(contentsOf: file), broken)
+
+        try Data(#"{"frontierMode":"auto"}"#.utf8).write(to: file)
+        Settings.moveKittensToFullAccessOnce(in: folder)
+        XCTAssertEqual(Settings.load(from: file).frontierMode, .fullAccess)
+    }
+
     func testItListsTheCatAndEachKittenByNameWithWhatEachTellsYou() {
         kittens = [steve, Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)]
         controller.settingsPressed(overMessages: true)
@@ -188,7 +248,7 @@ final class SettingsTests: XCTestCase {
             }
         }
         XCTAssertEqual(menus, [
-            "Front door mode: Auto", "Frontier mode: Auto", "Hold to talk: Right Option", "Hold to dictate: fn",
+            "Front door mode: Auto", "Frontier mode: Full access", "Hold to talk: Right Option", "Hold to dictate: fn",
             "Shades: Everything", "Steve Pawsniak: Everything", "Font: SF Pro",
         ])
     }
