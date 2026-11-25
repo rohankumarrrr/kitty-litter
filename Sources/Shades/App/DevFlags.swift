@@ -58,13 +58,7 @@ enum DevFlags {
             }
         } else if let request = value(after: "--hand-off") {
             Task {
-                let snapshot = await look(controller).value.snapshot
-                let path = controller.saveScreenshot(of: snapshot)
-                controller.startFrontier(
-                    title: request,
-                    text: Prompts.frontier(request: request, snapshot: snapshot, screenshotPath: path),
-                    snapshot: snapshot
-                )
+                controller.handOff(task: request, question: request, snapshot: await look(controller).value.snapshot)
             }
         } else if let description = value(after: "--fix") {
             Task {

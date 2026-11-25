@@ -4603,6 +4603,28 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(backend.sent.contains { $0.mode == .start && $0.prompt.model == settings.frontierModel })
     }
 
+    func testTheHandOffFlagGoesTheWayAHandOffDoesSoFullAccessGetsNoScreen() async throws {
+        var fresh = settings
+        fresh.frontierMode = Settings().frontierMode
+        controller.apply(fresh)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let page = folder.appendingPathComponent("page.png")
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 8, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: page)
+        let real = CommandLine.arguments
+        CommandLine.arguments = ["shades", "--hand-off", "Which of my projects is the budget app?", "--image", page.path]
+        defer { CommandLine.arguments = real }
+        DevFlags.run(on: controller)
+        await until { !backend.sent.isEmpty }
+        let sent = try XCTUnwrap(backend.sent.first)
+        XCTAssertEqual(sent.prompt.runtimeMode, .fullAccess)
+        XCTAssertTrue(sent.prompt.attachments.isEmpty)
+        XCTAssertFalse(sent.prompt.text.contains("Test picture"), "nor what was on the screen")
+        XCTAssertEqual(context.saved, 0, "nor a copy to open")
+    }
+
     func testAFileIsOfferedOnlyWhereSendingItWouldGo() async throws {
         let steve = Kitten(name: "Steve", role: "Professional", covers: "work", folder: "/k/steve")
         let pepper = Kitten(name: "Pepper", role: "Finance", covers: "their money", folder: "/k/pepper", seesScreen: false)
