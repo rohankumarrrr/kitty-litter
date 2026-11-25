@@ -203,4 +203,38 @@ final class MessageRowTests: XCTestCase {
         XCTAssertEqual(chips.last?.symbol, "face.smiling")
         XCTAssertEqual(chips.first?.frame.minX, row.bubble.minX, "from the bubble's side")
     }
+
+    func testAMessagesWordsNeverSlowDownTheRestOfTheWindowOnceTheyreShownOrGone() {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 400), styleMask: [.borderless], backing: .buffered, defer: true)
+        let other = NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 10))
+        func frameChange() -> Double {
+            (0..<8).map { _ in
+                let start = DispatchTime.now().uptimeNanoseconds
+                for step in 0..<200 { other.setFrameSize(NSSize(width: 10 + step % 2, height: 10)) }
+                return Double(DispatchTime.now().uptimeNanoseconds - start) / 200
+            }.min()!
+        }
+        let alone = frameChange()
+        let kept = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 400))
+        window.contentView?.addSubview(kept)
+        let shown = (0..<300).map { ChannelTextBlock(NSAttributedString(string: "Message \($0), with a few words in it")) }
+        shown.forEach {
+            _ = $0.fit(width: 300)
+            $0.show(in: kept)
+        }
+        autoreleasepool {
+            let gone = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 400))
+            window.contentView?.addSubview(gone)
+            for index in 0..<300 {
+                let block = ChannelTextBlock(NSAttributedString(string: "Message \(index) in a place you left"))
+                _ = block.fit(width: 300)
+                block.show(in: gone)
+            }
+            gone.removeFromSuperview()
+        }
+        shown.prefix(100).forEach { $0.view.removeFromSuperview() }
+        let after = frameChange()
+        XCTAssertLessThan(after, alone * 3 + 200, "another view's frame change took \(Int(alone)) ns alone and \(Int(after)) ns with 600 messages' words shown, moved away or gone")
+        kept.removeFromSuperview()
+    }
 }
