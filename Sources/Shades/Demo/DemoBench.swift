@@ -10,12 +10,19 @@ enum DemoBench {
     private enum Budget: Double {
         case frame = 8.3
         case instant = 100
+        case launch = 200
     }
 
     private static let idleBudget = 0.5
     private static let triesForATail = 20
     private static var missed: [String] = []
     static var missedABudget: Bool { !missed.isEmpty }
+    private static var launched: (milliseconds: Double, footprint: Double)?
+
+    static func markLaunch(_ stage: AppStage) {
+        settle(stage.cat.panel)
+        launched = Launch.milliseconds.map { ($0, footprint()) }
+    }
 
     static func run(_ argument: String, controller: AppController, stage: AppStage) async {
         let started = Date()
@@ -32,6 +39,7 @@ enum DemoBench {
         case "messages": await messages(controller: controller, stage: stage)
         case "cat": await cat(stage: stage)
         case "phone": await phone(controller: controller)
+        case "launch": reportLaunch()
         default:
             await messages(controller: controller, stage: stage)
             await cat(stage: stage)
@@ -40,6 +48,11 @@ enum DemoBench {
         print(String(format: "perf done in %.0fs", Date().timeIntervalSince(started)))
         print("perf budgets missed=\(missed.count)\(missed.isEmpty ? "" : " " + missed.joined(separator: " "))")
         fflush(stdout)
+    }
+
+    private static func reportLaunch() {
+        guard let launched else { return print("perf launch unknown") }
+        report("launch", [launched.milliseconds], String(format: "memory=%.1fMB", launched.footprint), budget: .launch)
     }
 
     private static func messages(controller: AppController, stage: AppStage) async {
