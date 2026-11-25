@@ -243,6 +243,7 @@ final class ChannelPane: QuietView {
     private static let topPad: CGFloat = 6
     private static let bottomPad: CGFloat = 14
     static let page = 60
+    static let pageWhileScrolling = page / 4
     private static let overscan: CGFloat = 600
     private var firstPage: Int { role == .thread ? Self.page / 2 : Self.page }
     private static let reuseReach = 64
@@ -1074,7 +1075,7 @@ final class ChannelPane: QuietView {
         isPaging = true
         while first > 0, scroll.contentView.bounds.minY < scroll.contentSize.height {
             let anchors = inSight
-            layOutPageAbove()
+            layOutPageAbove(scroll.contentView.bounds.minY > 0 ? Self.pageWhileScrolling : Self.page)
             keep(anchors)
         }
         attach()
@@ -1094,9 +1095,9 @@ final class ChannelPane: QuietView {
             .map { (views[$0], seen.minY - frames[$0].minY) }
     }
 
-    private func layOutPageAbove() {
+    private func layOutPageAbove(_ rows: Int = page) {
         guard let book else { return }
-        let start = max(first - Self.page, 0)
+        let start = max(first - rows, 0)
         views = shown[start..<first].map { view(for: $0, in: book, among: shown) } + views
         first = start
         stack()
