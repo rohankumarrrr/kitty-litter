@@ -44,6 +44,7 @@ struct HealthFacts: Equatable {
     var otherCopies: [Int32] = []
     var phoneNeedsPairingAgain = false
     var lockdownKittenGone = false
+    var shownName: String?
 }
 
 enum T3Silence: Equatable {
@@ -200,6 +201,16 @@ enum HealthCheck {
             fix: "Run swift run probe-t3 to see what changed."
         ))
         results.append(shortcutsFinding(facts))
+        if facts.isBundled, let shown = facts.shownName, shown != CatWords.appName {
+            results.append(HealthFinding(
+                check: "name",
+                ok: false,
+                problem: "The Dock and ⌘Tab call me \(shown), not \(CatWords.appName).",
+                fix: "Run scripts/install.sh."
+            ))
+        } else {
+            results.append(.good("name"))
+        }
         if facts.phoneNeedsPairingAgain {
             results.append(HealthFinding(
                 check: "phone",

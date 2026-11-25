@@ -1,4 +1,5 @@
 import AppKit
+import ShadesContext
 
 @MainActor
 enum ClickAway {
@@ -18,7 +19,8 @@ class QuietPanel: NSPanel {
         )
         isFloatingPanel = true
         level = .statusBar
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        collectionBehavior = .floatsOverEverything
+        canHide = false
         hidesOnDeactivate = false
         isOpaque = false
         backgroundColor = .clear

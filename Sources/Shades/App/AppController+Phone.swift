@@ -3,7 +3,7 @@ import ShadesCore
 
 extension AppController {
     func channelsChanged(_ book: ChannelBook) {
-        if stage.isChannelsVisible { stage.updateChannels(book) }
+        if stage.isChannelsOpen { stage.updateChannels(book) }
         phone?.publish(book)
     }
 
@@ -23,7 +23,7 @@ extension AppController {
                 return self.channels.open(threads: self.latestThreads)
             },
             release: { [weak self] in
-                guard let self, !self.stage.isChannelsVisible else { return }
+                guard let self, !self.stage.isChannelsOpen else { return }
                 self.channels.close()
             },
             act: { [weak self] in self?.messagesAction($0) },

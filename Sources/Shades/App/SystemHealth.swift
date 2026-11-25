@@ -8,6 +8,7 @@ enum SystemHealth {
     static func facts(skillsFolder: URL = Kittens.defaultFolder.appendingPathComponent("_skills")) -> HealthFacts {
         var facts = HealthFacts()
         facts.isBundled = Bundle.main.bundleURL.pathExtension == "app"
+        facts.shownName = NSRunningApplication.current.localizedName
         let signature = readSignature()
         facts.isSignedWithIdentity = signature.hasIdentity
         facts.signatureIsValid = signature.isValid

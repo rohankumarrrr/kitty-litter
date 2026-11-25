@@ -10,7 +10,7 @@ final class PressChromeTests: XCTestCase {
     private let pepper = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper")
     private let at = Date(timeIntervalSince1970: 1_000_000)
 
-    private final class KeyPanel: ChannelsPanel {
+    private final class KeyWindow: ChannelsMainWindow {
         override var isKeyWindow: Bool { true }
     }
 
@@ -57,8 +57,8 @@ final class PressChromeTests: XCTestCase {
         )
     }
 
-    private func messages(_ book: ChannelBook) -> (KeyPanel, ChannelsView, Calls) {
-        let panel = KeyPanel()
+    private func messages(_ book: ChannelBook) -> (KeyWindow, ChannelsView, Calls) {
+        let panel = KeyWindow()
         let view = ChannelsView(frame: NSRect(origin: .zero, size: ChannelsWindow.size))
         panel.contentView = view
         panel.setContentSize(ChannelsWindow.size)
@@ -583,7 +583,7 @@ extension PressChromeTests {
 }
 
 extension PressChromeTests {
-    private func threadBox() -> (KeyPanel, ChannelsView, Calls, ChannelComposer) {
+    private func threadBox() -> (KeyWindow, ChannelsView, Calls, ChannelComposer) {
         let (panel, view, calls) = messages(book())
         view.select(.thread("s1", in: .channel(.of(steve))))
         view.layoutSubtreeIfNeeded()

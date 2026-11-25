@@ -22,6 +22,7 @@ struct NeedsYouAlert: Equatable {
 
 extension AppController {
     func notifyNeedsYou() {
+        showNeedsYouCount()
         let waiting = waiting
         let items: [(kind: NeedsYouAlert.Kind, id: String, threadID: String, title: String, at: Date?)] =
             waiting.approvals.map { (.approval, $0.id, waiting.listed[$0.id] ?? $0.threadID, $0.threadTitle, $0.createdAt) }

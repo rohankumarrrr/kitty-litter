@@ -73,7 +73,7 @@ protocol CatStage: AnyObject {
     func showKittens(_ statuses: [KittenStatus])
     func hideKittens()
 
-    var isChannelsVisible: Bool { get }
+    var isChannelsOpen: Bool { get }
     var isChannelsInFront: Bool { get }
     func showChannels(_ book: ChannelBook, selecting selection: ChannelSelection?)
     func updateChannels(_ book: ChannelBook)
@@ -85,6 +85,9 @@ protocol CatStage: AnyObject {
 
     func isOwnWindow(at region: CGRect) -> Bool
     func showStatus(_ status: String, needsYou: Bool)
+    func showNeedsYou(_ count: Int)
+    var isFrontmost: Bool { get }
+    func typeInOwnBox(_ text: String) -> Bool
     func showSettings(_ form: SettingsForm, overMessages: Bool)
     func settingsChanged(_ form: SettingsForm)
     func showText(size: TextSize, font: String?)

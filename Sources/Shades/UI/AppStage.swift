@@ -97,7 +97,7 @@ final class AppStage: CatStage {
         channels.view.onMic = { [weak self] in self?.controller?.micPressed(in: .messages) }
         channels.view.onStopListening = { [weak self] in self?.controller?.cancelListening() }
         input.onMic = { [weak self] in self?.controller?.micPressed(in: .ask) }
-        channels.view.onCloseWindow = { [weak self] in self?.hideChannels() }
+        channels.view.onCloseWindow = { [weak self] in self?.channels.window.close() }
 
         menuBar.onAsk = { [weak self] in self?.controller?.askPressed() }
         menuBar.onFix = { [weak self] in self?.controller?.fixPressed() }
@@ -133,6 +133,7 @@ final class AppStage: CatStage {
         claim(.ask) { [weak self] in self?.controller?.askPressed() }
         claim(.fix) { [weak self] in self?.controller?.fixPressed() }
         claim(.messages) { [weak self] in self?.controller?.messagesHotkeyPressed() }
+        menuBar.installMainMenu()
     }
 
     private func claim(_ shortcut: Shortcut, run: @escaping () -> Void) {
@@ -261,7 +262,7 @@ final class AppStage: CatStage {
         kittens.hide()
     }
 
-    var isChannelsVisible: Bool { channels.panel.isVisible }
+    var isChannelsOpen: Bool { channels.isOpen }
     var isChannelsInFront: Bool { channels.isInFront }
 
     func showChannels(_ book: ChannelBook, selecting selection: ChannelSelection?) {
@@ -274,7 +275,7 @@ final class AppStage: CatStage {
     }
 
     func hideChannels() {
-        channels.panel.close()
+        channels.putAway()
     }
 
     private func showRecentFiles(for composer: ChannelComposer, under anchor: NSView) {
@@ -289,7 +290,7 @@ final class AppStage: CatStage {
     }
 
     var isMessagesBoxTyping: Bool {
-        channels.panel.isKeyWindow && channels.view.typingPane != nil
+        channels.window.isKeyWindow && channels.view.typingPane != nil
     }
 
     func holdMessagesBox() {
@@ -311,9 +312,22 @@ final class AppStage: CatStage {
         menuBar.show(status: status, needsYou: needsYou)
     }
 
+    var isFrontmost: Bool { NSApp.isActive }
+
+    func typeInOwnBox(_ text: String) -> Bool {
+        guard let box = NSApp.keyWindow?.firstResponder as? NSTextView, box.isEditable else { return false }
+        box.insertText(text, replacementRange: box.selectedRange())
+        return true
+    }
+
+    func showNeedsYou(_ count: Int) {
+        let badge = count > 0 ? String(count) : nil
+        if NSApp.dockTile.badgeLabel != badge { NSApp.dockTile.badgeLabel = badge }
+    }
+
     func showSettings(_ form: SettingsForm, overMessages: Bool) {
-        let messages = channels.panel.frame
-        let corner = overMessages && channels.panel.isVisible
+        let messages = channels.window.frame
+        let corner = overMessages && channels.window.isVisible
             ? NSPoint(x: messages.midX + SettingsPanel.width / 2, y: messages.maxY - 44)
             : menuBar.corner
         settingsPanel.show(form, near: corner)

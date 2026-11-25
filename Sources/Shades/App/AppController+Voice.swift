@@ -164,6 +164,10 @@ extension AppController {
             refreshStatus()
             let text = transcript.cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
+            if stage.isFrontmost {
+                if !stage.typeInOwnBox(text) { say(CatWords.noBoxToTypeIn) }
+                return
+            }
             do {
                 try await inserter.insert(text)
             } catch {

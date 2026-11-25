@@ -61,7 +61,7 @@ final class InstallLockTests: XCTestCase {
                 """#,
             "mktemp": #"[[ "$*" == -d ]] && exec /usr/bin/mktemp -d "$TMPDIR/next.XXXXXX"; exec /usr/bin/mktemp "$@""#,
             "lsregister": "",
-            "open": #"touch "$STANDIN/running"; print '{}' > "$HOME/Library/Application Support/shades/health.json""#,
+            "open": #"print -r -- "$*" >> "$STANDIN/opened"; touch "$STANDIN/running"; print '{}' > "$HOME/Library/Application Support/shades/health.json""#,
             "pkill": #"rm -f "$STANDIN/running""#,
             "pgrep": #"[[ -e "$STANDIN/running" ]]"#,
         ]
@@ -116,6 +116,7 @@ final class InstallLockTests: XCTestCase {
     private var built: [String] { read(root.appendingPathComponent("built")).split(separator: "\n").map(String.init) }
     private var installed: String { read(root.appendingPathComponent("Applications/Shades.app/build")) }
     private var lastGood: String { read(data.appendingPathComponent("last-good/Shades.app/build")) }
+    private var opened: [String] { read(root.appendingPathComponent("opened")).split(separator: "\n").map(String.init) }
     private func exists(_ name: String) -> Bool { FileManager.default.fileExists(atPath: root.appendingPathComponent(name).path) }
 
     func testOfTwoInstallsStartedTogetherOnlyOneGoesAhead() throws {
@@ -214,5 +215,33 @@ final class InstallLockTests: XCTestCase {
         XCTAssertFalse(blocked.output.contains("Another install"), blocked.output)
         XCTAssertEqual(built, [])
         XCTAssertEqual(installed, "old")
+    }
+
+    func testAnInstallAndARollbackOpenTheAppBehindYourWorkAndKeepItsDockPin() throws {
+        let app = root.appendingPathComponent("Applications/Shades.app")
+        let pin = try app.bookmarkData()
+        func pinned() throws -> String {
+            var stale = false
+            return try URL(resolvingBookmarkData: pin, options: [.withoutUI, .withoutMounting], bookmarkDataIsStale: &stale).resolvingSymlinksInPath().path
+        }
+        letBuildsFinish()
+
+        let install = try start("new")
+        XCTAssertTrue(waitUntil { !install.process.isRunning })
+        XCTAssertEqual(install.process.terminationStatus, 0, install.output)
+        XCTAssertEqual(installed, "new")
+        XCTAssertEqual(try pinned(), app.resolvingSymlinksInPath().path, "a pin made before the install finds the new copy")
+
+        let rollback = try start("rollback", "--rollback")
+        XCTAssertTrue(waitUntil { !rollback.process.isRunning })
+        XCTAssertEqual(rollback.process.terminationStatus, 0, rollback.output)
+        XCTAssertEqual(installed, "old")
+        XCTAssertEqual(try pinned(), app.resolvingSymlinksInPath().path, "and the copy a rollback puts back")
+
+        XCTAssertEqual(opened.count, 2)
+        for line in opened {
+            XCTAssertTrue(line.hasPrefix("-g "), "opened behind whatever you're in: \(line)")
+            XCTAssertTrue(line.hasSuffix("/Applications/Shades.app"), line)
+        }
     }
 }

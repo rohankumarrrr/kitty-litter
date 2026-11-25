@@ -84,7 +84,7 @@ probe-context --picker-test <dir>        # drives the picker with events handed 
 
 ```bash
 scripts/bundle.sh [output-folder]   # builds and signs Shades.app into build/, or the folder you give
-scripts/install.sh                  # build and install, keeping the old copy and rolling back if the new one doesn't come up
+scripts/install.sh                  # build and install, keeping the old copy and rolling back if the new one doesn't come up, and open it behind the app you're in
 scripts/install.sh --pull           # stop if there's uncommitted work, pull, then build and install
 scripts/install.sh --rollback       # put the last working copy back
 scripts/install.sh --ad-hoc         # allow a build with no stable signature, losing permissions

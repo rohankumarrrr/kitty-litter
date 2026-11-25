@@ -6,10 +6,11 @@ import ShadesVoice
 
 MainActor.assumeIsolated {
     let app = NSApplication.shared
-    app.setActivationPolicy(.accessory)
     app.appearance = NSAppearance(named: .darkAqua)
 
     let wantsDemo = CommandLine.arguments.contains("--demo")
+    let neverComesForward = wantsDemo || DevFlags.wantsFlow || DevFlags.wantsChannelsCheck || DevFlags.pictureFile != nil
+    app.setActivationPolicy(neverComesForward ? .accessory : .regular)
     if DevFlags.wantsChannelsCheck { DevFlags.checkChannels() }
     if let picture = DevFlags.pictureFile { DevFlags.savePicture(from: picture) }
     if wantsDemo, let folder = DevFlags.channelsImageFolder {
@@ -110,6 +111,8 @@ MainActor.assumeIsolated {
     }
 
     stage.controller = controller
+    let delegate = AppDelegate(controller: controller, menuBar: stage.menuBar)
+    app.delegate = delegate
     Hotkeys.shared.claimsKeys = !wantsDemo && !DevFlags.wantsFlow
     stage.start()
     controller.start()
@@ -127,7 +130,7 @@ MainActor.assumeIsolated {
         }
     }
 
-    withExtendedLifetime((stage, controller, driver)) {
+    withExtendedLifetime((stage, controller, driver, delegate)) {
         app.run()
     }
 }

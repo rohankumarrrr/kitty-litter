@@ -95,20 +95,30 @@ final class FakeStage: CatStage {
         statusText = status
         statusNeedsYou = needsYou
     }
+    var needsYouBadge = 0
+    func showNeedsYou(_ count: Int) { needsYouBadge = count }
+    var isFrontmost = false
+    var ownBoxTakesTyping = false
+    var typedInOwnBox: [String] = []
+    func typeInOwnBox(_ text: String) -> Bool {
+        guard ownBoxTakesTyping else { return false }
+        typedInOwnBox.append(text)
+        return true
+    }
     func showKittens(_ statuses: [KittenStatus]) { kittens = statuses }
     func hideKittens() { kittens = nil }
-    var isChannelsVisible = false
+    var isChannelsOpen = false
     var isChannelsCovered = false
-    var isChannelsInFront: Bool { isChannelsVisible && !isChannelsCovered }
+    var isChannelsInFront: Bool { isChannelsOpen && !isChannelsCovered }
     var selections: [ChannelSelection?] = []
     func showChannels(_ book: ChannelBook, selecting selection: ChannelSelection?) {
         channelsShown.append(book)
         selections.append(selection)
-        isChannelsVisible = true
+        isChannelsOpen = true
         isChannelsCovered = false
     }
     func updateChannels(_ book: ChannelBook) { channelsUpdated.append(book) }
-    func hideChannels() { isChannelsVisible = false }
+    func hideChannels() { isChannelsOpen = false }
     var isMessagesBoxTyping = false
     var sentInMessages: [String] = []
     var messagesBoxHeld = false
