@@ -24,7 +24,7 @@ final class AppController {
     let loadKittens: () -> [Kitten]
     let screenBlockGaps: (String) -> [String]
     let routerFolder: () -> String?
-    let systemFacts: () -> HealthFacts
+    let systemFacts: () async -> HealthFacts
     let fileExists: (String) -> Bool
     let home: String
     let reportHealth: ([HealthFinding], String?) -> Void

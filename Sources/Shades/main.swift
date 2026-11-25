@@ -58,7 +58,7 @@ MainActor.assumeIsolated {
                 saveSettings: { if !DevFlags.wantsFlow { try? $0.save() } },
                 screenTip: { context.takeJavaScriptTip() },
                 kittens: { Kittens.load() },
-                systemFacts: { SystemHealth.facts() },
+                systemFacts: { await SystemHealth.facts() },
                 fileExists: { FileManager.default.fileExists(atPath: $0) },
                 screenBlockGaps: { ScreenBlock.gaps(in: FileManager.default.contents(atPath: $0 + "/.claude/settings.json")) },
                 routerFolder: { try? RouterBlock.prepare(Settings.directory.appendingPathComponent("router", isDirectory: true)) },

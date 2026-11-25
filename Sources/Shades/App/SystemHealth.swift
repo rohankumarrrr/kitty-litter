@@ -5,11 +5,12 @@ import ShadesCore
 import ShadesVoice
 
 enum SystemHealth {
-    static func facts(skillsFolder: URL = Kittens.defaultFolder.appendingPathComponent("_skills")) -> HealthFacts {
+    @MainActor
+    static func facts(skillsFolder: URL = Kittens.defaultFolder.appendingPathComponent("_skills")) async -> HealthFacts {
         var facts = HealthFacts()
         facts.isBundled = Bundle.main.bundleURL.pathExtension == "app"
         facts.shownName = NSRunningApplication.current.localizedName
-        let signature = readSignature()
+        let signature = await Self.signature()
         facts.isSignedWithIdentity = signature.hasIdentity
         facts.signatureIsValid = signature.isValid
         facts.isSignedByTeam = signature.hasTeam
@@ -26,7 +27,11 @@ enum SystemHealth {
         return facts
     }
 
-    private static func readSignature() -> (hasIdentity: Bool, isValid: Bool, hasTeam: Bool) {
+    static func signature() async -> (hasIdentity: Bool, isValid: Bool, hasTeam: Bool) {
+        await Task.detached(priority: .utility) { readSignature() }.value
+    }
+
+    nonisolated private static func readSignature() -> (hasIdentity: Bool, isValid: Bool, hasTeam: Bool) {
         var code: SecCode?
         guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return (false, false, false) }
 

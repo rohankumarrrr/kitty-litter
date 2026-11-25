@@ -11,7 +11,7 @@ struct AppDependencies {
     var saveSettings: (Settings) -> Void
     var screenTip: () -> String? = { nil }
     var kittens: () -> [Kitten] = { [] }
-    var systemFacts: () -> HealthFacts = { HealthFacts() }
+    var systemFacts: () async -> HealthFacts = { HealthFacts() }
     var fileExists: (String) -> Bool = { _ in true }
     var home = FileManager.default.homeDirectoryForCurrentUser.path
     var screenBlockGaps: (String) -> [String] = { _ in [] }

@@ -48,17 +48,17 @@ extension AppController {
         let kittens = loadKittens().filter { !$0.planned }
         let asking = Task { await askT3(about: kittens) }
         if let answers = await within(t3Wait, { await asking.value }) {
-            return report(answers, kittens: kittens, check: check, each: each)
+            return await report(answers, kittens: kittens, check: check, each: each)
         }
         if check == healthChecks {
             t3Recheck = Task {
                 if await within(t3StuckAfter, { await asking.value }) == nil {
-                    report(T3Answers(silence: .stuck), kittens: kittens, check: check, each: each)
+                    await report(T3Answers(silence: .stuck), kittens: kittens, check: check, each: each)
                 }
-                report(await asking.value, kittens: kittens, check: check, each: each)
+                await report(await asking.value, kittens: kittens, check: check, each: each)
             }
         }
-        return report(T3Answers(silence: .connecting), kittens: kittens, check: check, each: each)
+        return await report(T3Answers(silence: .connecting), kittens: kittens, check: check, each: each)
     }
 
     private func askT3(about kittens: [Kitten]) async -> T3Answers {
@@ -74,8 +74,8 @@ extension AppController {
     }
 
     @discardableResult
-    private func report(_ t3: T3Answers, kittens: [Kitten], check: Int, each: (([HealthFinding]) -> Void)?) -> [HealthFinding] {
-        var facts = systemFacts()
+    private func report(_ t3: T3Answers, kittens: [Kitten], check: Int, each: (([HealthFinding]) -> Void)?) async -> [HealthFinding] {
+        var facts = await systemFacts()
         facts.inboxSaves = !inboxSaveFailed
         (facts.waitingLeft, facts.waitingLeftWithoutYou) = inbox.record.leftSince(now().addingTimeInterval(-7 * 24 * 3600))
         facts.shortcutsTaken = takenShortcuts
