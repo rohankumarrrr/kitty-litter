@@ -116,7 +116,6 @@ struct ChannelBook: Equatable {
     var threads: [String: ChannelThread]
     var issues: [KittenIssues]
     var waiting: Waiting
-    var unread: Set<String>
     var unreadThreads: Set<String>
     var newFrom: [String: String] = [:]
     var listed: [String: AgentThread]
@@ -332,7 +331,6 @@ struct ChannelBook: Equatable {
         for entry in waiting.reports {
             waiting.owners[entry.id] = threadsByID[entry.threadID].flatMap(ownerOf)?.id
         }
-        let unreadListed = threads.filter(isUnread)
         var named: [String: AgentThread] = [:]
         var homes: [String: ChannelID] = [:]
         for thread in talkThreads where named[thread.id] == nil { named[thread.id] = thread }
@@ -342,7 +340,7 @@ struct ChannelBook: Equatable {
             if owner != nil || messagesThreads[thread.id] != nil || catsWork.contains(thread.id) { homes[thread.id] = home(of: owner) }
             if let owner { named[thread.id]?.title = title(of: thread, owner: owner) }
         }
-        let unreadShown = Set(unreadListed.map(\.id)).intersection(built.keys)
+        let unreadShown = Set(built.keys.filter { threadsByID[$0].map(isUnread) == true })
         let newFrom = Dictionary(uniqueKeysWithValues: unreadShown.compactMap { id -> (String, String)? in
             guard let listed = threadsByID[id], let thread = built[id] else { return nil }
             return firstNew(listed, thread.messages).map { (id, $0) }
@@ -354,7 +352,6 @@ struct ChannelBook: Equatable {
             threads: built,
             issues: issues,
             waiting: waiting,
-            unread: Set(unreadListed.compactMap { ownerOf($0)?.id }),
             unreadThreads: unreadShown,
             newFrom: newFrom,
             listed: named,
@@ -633,21 +630,30 @@ extension ChannelBook {
     }
 
     func isUnread(_ id: ChannelID) -> Bool {
-        switch id {
-        case .kitten(let kitten): return unread.contains(kitten)
-        case .shades: return unreadThreads.contains { threads[$0]?.home == id }
+        !unreadThreads(in: .channel(id)).isEmpty
+    }
+
+    func unreadThreads(in place: ChannelPlace) -> [String] {
+        switch place {
+        case .activity: return []
+        case .threads: return unreadThreads.filter { threads[$0].map(isYours) == true }.sorted()
+        case .channel(let id): return unreadThreads.filter { threads[$0]?.home == id }.sorted()
         }
     }
 
     var yours: [ChannelThread] {
         threads.values
-            .filter { $0.hasYou && !talks.contains($0.id) && !catsWork.contains($0.id) }
+            .filter(isYours)
             .sorted { a, b in
                 let unreadA = unreadThreads.contains(a.id), unreadB = unreadThreads.contains(b.id)
                 if unreadA != unreadB { return unreadA }
                 if a.latest.at != b.latest.at { return a.latest.at > b.latest.at }
                 return a.id < b.id
             }
+    }
+
+    private func isYours(_ thread: ChannelThread) -> Bool {
+        thread.hasYou && !talks.contains(thread.id) && !catsWork.contains(thread.id)
     }
 
     func threads(in id: ChannelID) -> [String] {

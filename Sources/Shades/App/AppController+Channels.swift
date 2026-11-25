@@ -10,6 +10,7 @@ enum MessagesAction: Equatable {
     case inbox(InboxAction)
     case seen(ChannelSelection, keepingUnread: Set<String> = [])
     case markUnread(String, from: String)
+    case markRead([String])
     case tryAgain(String)
     case doNotDisturb
     case older(ChannelID)
@@ -129,12 +130,9 @@ extension AppController {
         case .seen(let selection, let kept):
             if selection.place == .activity, !away.isEmpty { awaySeen = true }
             channels.lookingAt = selection
-            let seen = channels.threads(in: selection).filter { !kept.contains($0.id) }
-            let last = { [channels] in channels.messages(in: $0).last { !$0.isStillGoing && !$0.isSending }?.id }
-            if inbox.markRead(seen, upTo: last) {
-                keepInbox()
-                channels.refresh()
-            }
+            markRead(channels.threads(in: selection).filter { !kept.contains($0.id) })
+        case .markRead(let threads):
+            markRead(threads.compactMap(channels.listed))
         case .markUnread(let thread, let message):
             inbox.markUnread(thread, from: message, of: channels.messages(in: thread).map(\.id))
             keepInbox()
@@ -155,6 +153,13 @@ extension AppController {
         case .showPicture(let url):
             channels.pictures.show(url)
         }
+    }
+
+    private func markRead(_ threads: [AgentThread]) {
+        let lastSaid = { [channels] in channels.messages(in: $0).last { !$0.isStillGoing && !$0.isSending }?.id }
+        guard inbox.markRead(threads, upTo: lastSaid) else { return }
+        keepInbox()
+        channels.refresh()
     }
 
     func keepAlsoSent(_ heard: [String: ChannelBook.HeardAlsoSent]) {

@@ -53,6 +53,7 @@ Each rule says what enforces it. A check is the rule: when one fails, its messag
 | An inbox row is data, and a reply is only what you typed or said. It goes straight to the thread, with no capture and no canned answer. | `ScreenBoundaryTests` (`inboxReply`) |
 | The router only picks numbers, only your own words get passed on, and an extra copy of a correction never carries screen text. | `ScreenBoundaryTests` |
 | Claude threads in this repo run in a sandbox set by `.claude/settings.json`, which also keeps them out of saved copies of the screen. Run `swift` commands on their own, with no pipe or `cd`, since only that form is let out. A refused read means it's working, so don't look for a way around it. | The sandbox |
+| A place in The Kitty Litter is bold, and counts, only for unread threads it shows, so opening them or Mark as read always clears it. Its bold, its count and Mark as read all come from `ChannelBook.unreadThreads(in:)`. | `ChannelBookTests`, `PressMarkReadTests` |
 | When the self-check could have caught a problem, teach it to, in `HealthCheck.swift`, with a test. | You |
 | Never log or store tokens, transcripts, screenshots or page text beyond what a feature needs. | You |
 | Keep dependencies few, and permissively licensed only. Don't copy from GPL projects. | You |

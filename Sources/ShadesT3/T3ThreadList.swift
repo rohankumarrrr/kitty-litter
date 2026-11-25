@@ -143,7 +143,8 @@ struct T3ThreadList {
                     pullRequest: thread.latestPullRequest,
                     projectPath: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.workspaceRoot },
                     lastRunID: thread.latestRunId,
-                    lastRunEndedAt: thread.latestRunCompletedAt
+                    lastRunEndedAt: thread.latestRunCompletedAt,
+                    lastVisitedAt: thread.lastVisitedAt
                 )
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }

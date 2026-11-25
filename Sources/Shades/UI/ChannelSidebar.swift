@@ -13,15 +13,16 @@ struct ChannelSidebarItem: Equatable {
     var title: String
     var icon: Icon
     var badge = 0
-    var isUnread = false
+    var unread = 0
+    var isUnread: Bool { unread > 0 }
 
     static func groups(in book: ChannelBook) -> [(heading: String?, items: [ChannelSidebarItem])] {
         let activity = ChannelSidebarItem(place: .activity, title: CatWords.activityTitle, icon: .activity, badge: book.waiting.count)
-        let threads = ChannelSidebarItem(place: .threads, title: CatWords.threadsTitle, icon: .threads, isUnread: book.yours.contains { book.unreadThreads.contains($0.id) })
-        let shades = ChannelSidebarItem(place: .channel(.shades), title: CatWords.shades, icon: .shades, isUnread: book.isUnread(.shades))
+        let threads = ChannelSidebarItem(place: .threads, title: CatWords.threadsTitle, icon: .threads, unread: book.unreadThreads(in: .threads).count)
+        let shades = ChannelSidebarItem(place: .channel(.shades), title: CatWords.shades, icon: .shades, unread: book.unreadThreads(in: .channel(.shades)).count)
         let kittens = book.statuses.filter { !$0.kitten.planned }.map { status in
             let id = ChannelID.of(status.kitten)
-            return ChannelSidebarItem(place: .channel(id), title: book.name(of: id), icon: .kitten(status), badge: book.badge(of: id), isUnread: book.isUnread(id))
+            return ChannelSidebarItem(place: .channel(id), title: book.name(of: id), icon: .kitten(status), badge: book.badge(of: id), unread: book.unreadThreads(in: .channel(id)).count)
         }
         return [(nil, [activity, threads]), (CatWords.kittensHeading, [shades] + kittens)]
     }
@@ -39,6 +40,8 @@ final class ChannelSidebar: QuietView {
     private static let footerHeight: CGFloat = 68
 
     var onSelect: ((ChannelPlace) -> Void)?
+    var onMarkRead: ((ChannelPlace) -> Void)?
+    var onMarkAllRead: (() -> Void)?
     var onShortcuts: (() -> Void)?
     var onSettings: (() -> Void)?
     var onDoNotDisturb: (() -> Void)?
@@ -115,6 +118,7 @@ final class ChannelSidebar: QuietView {
         rows = []
         var y: CGFloat = 0
         let count = groups.reduce(0) { $0 + $1.items.count }
+        let anyUnread = groups.contains { $0.items.contains(where: \.isUnread) }
         for group in groups {
             if let heading = group.heading {
                 y += addHeading(heading, at: y)
@@ -122,6 +126,8 @@ final class ChannelSidebar: QuietView {
             for item in group.items {
                 let row = ChannelSidebarRow(item: item, light: .drifting(rows.count, of: count))
                 row.onPress = { [weak self] in self?.onSelect?(item.place) }
+                row.onMarkRead = { [weak self] in self?.onMarkRead?(item.place) }
+                if anyUnread { row.onMarkAllRead = { [weak self] in self?.onMarkAllRead?() } }
                 row.update(tick: tick)
                 row.frame = NSRect(x: 8, y: y, width: bounds.width - 16, height: Self.rowHeight)
                 list.addSubview(row)
@@ -208,6 +214,8 @@ final class ChannelSidebarRow: ChannelRowView {
     let item: ChannelSidebarItem
     private let light: Opal.Light
     var onPress: (() -> Void)?
+    var onMarkRead: (() -> Void)?
+    var onMarkAllRead: (() -> Void)?
     var isSelected = false {
         didSet {
             guard isSelected != oldValue else { return }
@@ -235,12 +243,20 @@ final class ChannelSidebarRow: ChannelRowView {
         var words = [item.title]
         if case .kitten(let status) = item.icon { words.append(CatWords.kittenState(status.state)) }
         if item.badge > 0 { words.append("\(item.badge) waiting") }
-        if item.isUnread { words.append("unread") }
+        if item.isUnread { words.append(CatWords.unread(item.unread)) }
         return words.joined(separator: ", ")
     }
 
     override var isPressable: Bool { true }
     override func press() { onPress?() }
+
+    override var actions: [(name: String, run: () -> Void)] {
+        let all: [(name: String, run: (() -> Void)?)] = [
+            (CatWords.markRead, item.isUnread ? onMarkRead : nil),
+            (CatWords.markAllRead, onMarkAllRead),
+        ]
+        return all.compactMap { action in action.run.map { (action.name, $0) } }
+    }
 
     var isLive: Bool {
         guard !Motion.isReduced, case .kitten(let status) = item.icon else { return false }
@@ -289,6 +305,11 @@ final class ChannelSidebarRow: ChannelRowView {
             NSBezierPath(roundedRect: pill, xRadius: 9, yRadius: 9).fill()
             count.draw(at: NSPoint(x: pill.midX - size.width / 2, y: pill.midY - size.height / 2))
             right = pill.minX - 6
+        } else if item.isUnread {
+            let count = NSAttributedString(string: "\(item.unread)", attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta, tabular: true), .foregroundColor: MessagesInk.soft])
+            let size = count.size()
+            count.draw(at: NSPoint(x: right - ceil(size.width) - 4, y: (bounds.midY - size.height / 2).rounded()))
+            right -= ceil(size.width) + 10
         }
 
         let left = tile.maxX + 9

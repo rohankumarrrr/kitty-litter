@@ -374,6 +374,21 @@ final class InboxTests: XCTestCase {
         XCTAssertFalse(inbox.markRead([thread()]), "seeing it twice changes nothing, so there's nothing to save")
     }
 
+    func testARunYouLookedAtInT3IsntUnreadHere() {
+        var inbox = Inbox(since: start)
+        var looked = thread()
+        looked.lastVisitedAt = looked.lastRunEndedAt
+        XCTAssertFalse(inbox.isUnread(looked))
+        XCTAssertNil(inbox.firstNew(in: looked, among: [("reply-1", false)]))
+
+        looked.lastVisitedAt = looked.lastRunEndedAt?.addingTimeInterval(-0.001)
+        XCTAssertTrue(inbox.isUnread(looked), "T3's Mark as Unread puts it a moment before the run ended")
+
+        looked.lastVisitedAt = looked.lastRunEndedAt
+        inbox.markUnread("t", from: "reply-1", of: ["reply-1"])
+        XCTAssertTrue(inbox.isUnread(looked), "and marking it unread here still counts")
+    }
+
     func testWhatYouveReadIsSavedAsIDsAndAFileFromBeforeItStillLoads() throws {
         let file = try folder().appendingPathComponent("inbox.json")
         var inbox = Inbox(since: start)

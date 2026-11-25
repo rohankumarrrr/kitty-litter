@@ -128,7 +128,7 @@ final class ShadesConversationPrivacyTests: XCTestCase {
         XCTAssertNil(send("Carry on", key: key, in: built))
         XCTAssertFalse(built.issues.flatMap(\.threads).contains { $0.id == "router" })
         XCTAssertFalse(built.channel(.of(steve))?.posts.contains(.thread("router")) == true)
-        XCTAssertEqual(built.unread, [], "A router thread marked the kitten unread")
+        XCTAssertFalse(built.isUnread(.of(steve)), "A router thread marked the kitten unread")
         XCTAssertFalse(built.isUnread(.shades), "nor the cat, since you were there for the answer")
     }
 

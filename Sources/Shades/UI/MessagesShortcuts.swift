@@ -5,6 +5,7 @@ enum MessagesShortcut: Hashable {
     case previousThread, nextThread
     case previousPlace, nextPlace
     case previousUnread, nextUnread
+    case markAllRead
     case back, forward
     case place(Int)
     case jump
@@ -70,6 +71,9 @@ enum MessagesShortcut: Hashable {
         case []:
             guard keyCode == Key.escape else { return nil }
             self = .escape
+        case [.shift]:
+            guard keyCode == Key.escape else { return nil }
+            self = .markAllRead
         default:
             return nil
         }
@@ -451,6 +455,9 @@ extension ChannelsView {
         case .nextPlace: return step(place: 1, in: book)
         case .previousUnread: return step(unread: -1, in: book)
         case .nextUnread: return step(unread: 1, in: book)
+        case .markAllRead:
+            markAllRead()
+            return true
         case .back: return travel(-1, in: book)
         case .forward: return travel(1, in: book)
         case .place(let number):

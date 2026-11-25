@@ -64,6 +64,11 @@ struct PhoneAsk: Decodable {
                 selection = .thread(thread, in: .threads)
             }
             return (.seen(selection), nil)
+        case "read":
+            guard let selection = key.flatMap({ PhonePlace($0, in: book).selection }), selection.thread == nil else { return nil }
+            let threads = PhoneView.unreadThreads(in: selection.place, of: book)
+            guard !threads.isEmpty else { return nil }
+            return (.markRead(threads), nil)
         case "unread":
             guard let thread = key.flatMap({ PhonePlace($0, in: book).selection?.thread }), book.canMarkUnread(thread),
                   let id, book.threads[thread]?.messages.contains(where: { $0.id == id }) == true
