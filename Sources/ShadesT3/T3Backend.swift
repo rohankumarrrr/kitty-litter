@@ -289,7 +289,13 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
             T3Wire.GetThreadProjection(threadId: threadID)
         ) else { return nil }
         let path = await hub.projects().first { $0.id == projection.thread.projectId }?.path
-        return ThreadOrigin(title: projection.thread.title, projectPath: path, startedBy: projection.startedBy)
+        var firstMessage: T3Wire.TurnItem?
+        if !projection.isFromPerson {
+            let request = T3Wire.GetTurnItem(threadId: threadID, itemId: projection.firstMessageItemID(threadID: threadID))
+            let found: T3Wire.TurnItemResult? = try? await socket.call(T3Wire.Method.getTurnItem, request)
+            firstMessage = found?.item
+        }
+        return ThreadOrigin(title: projection.thread.title, projectPath: path, startedBy: projection.startedBy(firstMessage: firstMessage))
     }
 
     public func open(threadID: String) async throws {

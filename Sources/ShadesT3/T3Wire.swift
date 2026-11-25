@@ -46,6 +46,10 @@ enum T3Wire {
         "turn-item:runtime-request:\(encodeComponent(requestID))"
     }
 
+    static func userMessageItemID(messageID: String) -> String {
+        "turn-item:message:\(encodeComponent(messageID))"
+    }
+
     static func providerItemID(_ ref: TurnItem.NativeRef) -> String {
         "turn-item:provider:\(encodeComponent(ref.driver)):native-item:\(encodeComponent(ref.nativeId))"
     }
@@ -608,23 +612,22 @@ enum T3Wire {
             let createdBy: String?
         }
 
-        struct Message: Decodable {
-            let role: String
-            let createdAt: Date?
-            let senderThreadId: String?
-        }
-
         let thread: Thread
         let runs: [Lossy<Run>]
         let turnItems: [Lossy<TurnItem>]
-        let messages: [Lossy<Message>]?
 
-        var startedBy: ThreadOrigin.Starter {
-            if thread.createdBy == "user" { return .person }
-            let first = messages?.compactMap(\.value)
-                .filter { $0.role == "user" }
-                .min { ($0.createdAt ?? .distantFuture) < ($1.createdAt ?? .distantFuture) }
-            return first?.senderThreadId.map(ThreadOrigin.Starter.thread) ?? .unknown
+        var isFromPerson: Bool { thread.createdBy == "user" }
+
+        // Outside the repo: T3 leaves a long thread's first runs out of its projection, and t3_thread_launch gives a thread's first message the thread's own ID.
+        func firstMessageItemID(threadID: String) -> String {
+            let first = runs.compactMap(\.value).first { $0.ordinal == 1 }
+            return T3Wire.userMessageItemID(messageID: first?.userMessageId ?? threadID)
+        }
+
+        func startedBy(firstMessage: TurnItem?) -> ThreadOrigin.Starter {
+            if isFromPerson { return .person }
+            guard let firstMessage, firstMessage.isUserMessage else { return .unknown }
+            return firstMessage.senderThreadId.map(ThreadOrigin.Starter.thread) ?? .unknown
         }
     }
 
@@ -636,6 +639,7 @@ enum T3Wire {
         let id: String
         let userMessageId: String
         let status: String
+        let ordinal: Int?
 
         var outcome: Outcome? {
             switch status {

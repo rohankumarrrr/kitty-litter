@@ -298,24 +298,39 @@ final class T3WireTests: XCTestCase {
         XCTAssertTrue(summary.hasSuffix("…"))
     }
 
-    private func projection(createdBy: String?, messages: String) throws -> T3Wire.Projection {
+    private func projection(createdBy: String?, runs: String = "[]") throws -> T3Wire.Projection {
         let by = createdBy.map { #""createdBy":"\#($0)","# } ?? ""
-        let json = #"{"thread":{\#(by)"title":"T","projectId":"p"},"runs":[],"turnItems":[],"messages":\#(messages)}"#
+        let json = #"{"thread":{\#(by)"title":"T","projectId":"p"},"runs":\#(runs),"turnItems":[]}"#
         return try T3Wire.decoder().decode(T3Wire.Projection.self, from: Data(json.utf8))
     }
 
     func testAThreadAPersonStartedSaysSo() throws {
-        XCTAssertEqual(try projection(createdBy: "user", messages: "[]").startedBy, .person)
+        let sent = try turnItem(#"{"id":"m","type":"user_message","status":"completed","createdBy":"agent","senderThreadId":"other"}"#)
+        XCTAssertEqual(try projection(createdBy: "user").startedBy(firstMessage: sent), .person)
     }
 
     func testAThreadAnAgentStartedNamesTheThreadOfItsFirstMessage() throws {
-        let messages = #"[{"role":"assistant","createdAt":"2026-01-01T00:00:00Z"},{"role":"user","createdAt":"2026-01-03T00:00:00Z","senderThreadId":"later"},{"role":"user","createdAt":"2026-01-02T00:00:00Z","senderThreadId":"first"}]"#
-        XCTAssertEqual(try projection(createdBy: "agent", messages: messages).startedBy, .thread("first"))
+        let sent = try turnItem(#"{"id":"m","type":"user_message","status":"completed","createdBy":"agent","senderThreadId":"first"}"#)
+        XCTAssertEqual(try projection(createdBy: "agent").startedBy(firstMessage: sent), .thread("first"))
     }
 
     func testAnAgentsThreadWithNoSenderCantBeTraced() throws {
-        XCTAssertEqual(try projection(createdBy: "agent", messages: #"[{"role":"user"}]"#).startedBy, .unknown)
-        XCTAssertEqual(try projection(createdBy: nil, messages: "[]").startedBy, .unknown)
+        let scheduled = try turnItem(#"{"id":"m","type":"user_message","status":"completed","createdBy":"agent","scheduledTaskId":"daily"}"#)
+        let wake = try turnItem(#"{"id":"m","type":"notification","status":"completed","createdBy":"agent","senderThreadId":"watcher"}"#)
+        XCTAssertEqual(try projection(createdBy: "agent").startedBy(firstMessage: scheduled), .unknown)
+        XCTAssertEqual(try projection(createdBy: "agent").startedBy(firstMessage: wake), .unknown, "only a message counts as the one that started it")
+        XCTAssertEqual(try projection(createdBy: "agent").startedBy(firstMessage: nil), .unknown)
+        XCTAssertEqual(try projection(createdBy: nil).startedBy(firstMessage: nil), .unknown)
+    }
+
+    func testTheFirstMessageIsTheFirstRunsWhenT3StillHasIt() throws {
+        let runs = #"[{"id":"r2","userMessageId":"later","status":"completed","ordinal":2},{"id":"r1","userMessageId":"msg:first","status":"completed","ordinal":1}]"#
+        XCTAssertEqual(try projection(createdBy: "agent", runs: runs).firstMessageItemID(threadID: "t"), "turn-item:message:msg%3Afirst")
+    }
+
+    func testALongThreadsFirstMessageIsTheOneItWasLaunchedWith() throws {
+        let runs = #"[{"id":"r5","userMessageId":"message:pr-watch:1","status":"completed","ordinal":5}]"#
+        XCTAssertEqual(try projection(createdBy: "agent", runs: runs).firstMessageItemID(threadID: "mcp:launch:abc"), "turn-item:message:mcp%3Alaunch%3Aabc", "a later run's wake-up isn't the first message")
     }
 }
 
