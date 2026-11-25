@@ -90,6 +90,7 @@ scripts/install.sh --rollback       # put the last working copy back
 scripts/install.sh --ad-hoc         # allow a build with no stable signature, losing permissions
 scripts/install.sh --change-team    # allow a build not signed by the installed copy's team
 scripts/make-dev-cert.sh            # a self-signed "Shades Dev" certificate in your login keychain
+scripts/install-kitten-skills.sh [folder]   # the skills kittens work by, into ~/kittens/_skills or the folder you give
 scripts/triage.sh logs --start "2026-01-31 09:00:00" --end "2026-01-31 10:00:00" [--process codesign]...
 scripts/triage.sh processes
 ```

@@ -1,15 +1,4 @@
 #!/bin/zsh
-# Puts the skills kittens work by into ~/kittens/_skills: Lauren Tan's pstack, as adapted for T3 by
-# t3-pstack, and Ponytail. Both are MIT licensed, and their licenses are copied along with them.
-# design/ holds four skills for design passes, by dickwu, Jakub Krehel, Emil Kowalski and
-# Superfuture. Jakub's and Emil's MIT licenses come along, and dickwu's README, which holds that
-# repo's origin and license note. Superfuture's is MIT by its README, and has no license file.
-#
-# This copies instruction files, pinned to commits that were read first. It doesn't run their
-# installers, which would add session hooks and auto-updates to every agent on this Mac. To
-# update, read what changed, then change the commits here.
-#
-#   scripts/install-kitten-skills.sh [folder]     # defaults to ~/kittens/_skills
 set -euo pipefail
 
 pstack_commit=11a71d2932c09b6192b598ce52517b7a826fc9f0
@@ -36,9 +25,7 @@ fetch jakub https://github.com/jakubkrehel/skills "$jakub_commit"
 fetch emil https://github.com/emilkowalski/skills "$emil_commit"
 fetch superfuture https://github.com/Superfuture/design-review "$superfuture_commit"
 
-# Superfuture's review posts an install ID to its author's server on every run, and its Pro mode
-# uploads the code under review. Its README says deleting the ping is how to opt out, so both
-# sections go, and nothing is copied if what's left could still reach out.
+# Outside the repo: Superfuture's review posts an install ID to its author's server on every run, and its Pro mode uploads the code under review. Its README says deleting those sections opts out.
 review="$work/superfuture/design-review/skills/design-review"
 awk '/^## /{skip = /^## (0\. Usage ping|5\. Pro mode)/} !skip' "$review/SKILL.md" > "$work/review.md"
 mv "$work/review.md" "$review/SKILL.md"
@@ -55,7 +42,6 @@ cp "$work/pstack/LICENSE" "$work/pstack/LICENSE-cursor-team-kit" "$work/pstack/L
 cp -R "$work/ponytail/skills/ponytail" "$out/ponytail/skill"
 cp "$work/ponytail/LICENSE" "$out/ponytail/"
 cp -R "$work/dickwu/SKILL.md" "$work/dickwu/README.md" "$work/dickwu/references" "$design/dickwu-apple-design/"
-# Better Interface and the skills it hands work to.
 cp -R "$work/jakub/skills/"{better-interface,interface-review,better-accessibility,better-colors,better-layout,better-typography,better-ui,better-writing} "$design/jakubkrehel-better-interface/skills/"
 cp "$work/jakub/LICENSE" "$design/jakubkrehel-better-interface/"
 cp -R "$work/emil/skills/apple-design" "$design/emilkowalski-apple-design"
