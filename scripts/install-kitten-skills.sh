@@ -12,7 +12,7 @@
 #   scripts/install-kitten-skills.sh [folder]     # defaults to ~/kittens/_skills
 set -euo pipefail
 
-pstack_commit=7f64e2ba7e1aedcee95cc6e3e92eb5fda62f8b6a
+pstack_commit=11a71d2932c09b6192b598ce52517b7a826fc9f0
 ponytail_commit=96608e078b2d5ea607c5c3b8b5a54d1c1fba6846
 dickwu_commit=ff4ebddf0488598723a82bfdce1afb04de0b1c44
 jakub_commit=659cc4e5b6df90cfe1f306f5ae1c83fa549e075c
@@ -20,7 +20,7 @@ emil_commit=5206a950b715e0cabe7043ea0b2304332b91494e
 superfuture_commit=d4d2609b53fccb475d11490e2c6261e5eb2f0c5d
 
 out="${1:-$HOME/kittens/_skills}"
-work="$(mktemp -d)"
+work="$(mktemp -d "${TMPDIR:-/tmp}/kitten-skills.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 
 fetch() {
