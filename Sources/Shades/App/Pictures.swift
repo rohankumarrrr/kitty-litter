@@ -118,33 +118,43 @@ final class PictureShelf {
 
 enum WebPicture {
     static let biggest = 10 * 1024 * 1024
-    private static let session: URLSession = {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpShouldSetCookies = false
-        configuration.httpCookieAcceptPolicy = .never
-        configuration.urlCache = nil
-        configuration.timeoutIntervalForRequest = 15
-        return URLSession(configuration: configuration, delegate: Redirects(), delegateQueue: nil)
-    }()
+    static let redirectsFollowed = 5
 
     static func fetch(_ url: URL) async -> Data? {
-        guard await reachesOnlyTheWeb(url) else { return nil }
-        guard let (bytes, response) = try? await session.bytes(from: url),
-              let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-              let url = http.url, isPublic(url),
-              let type = http.mimeType?.lowercased(), type.hasPrefix("image/"), type != "image/svg+xml",
-              http.expectedContentLength <= biggest
+        await fetch(
+            url,
+            resolve: { host in await Task.detached { addresses(of: host) }.value },
+            get: { await PinnedHTTP.get($0, biggest: biggest) }
+        )
+    }
+
+    static func fetch(
+        _ url: URL,
+        redirectsLeft: Int = redirectsFollowed,
+        resolve: (String) async -> [[UInt8]]?,
+        get: (PictureRequest) async -> PictureResponse?
+    ) async -> Data? {
+        guard let address = await checkedAddress(of: url, resolve: resolve),
+              let response = await get(PictureRequest(url: url, address: address))
         else { return nil }
-        var data = Data()
-        do {
-            for try await byte in bytes {
-                data.append(byte)
-                if data.count > biggest { return nil }
-            }
-        } catch {
-            return nil
+        if [301, 302, 303, 307, 308].contains(response.status) {
+            guard redirectsLeft > 0, let location = response.headers["location"],
+                  let next = URL(string: location, relativeTo: url)?.absoluteURL
+            else { return nil }
+            return await fetch(next, redirectsLeft: redirectsLeft - 1, resolve: resolve, get: get)
         }
-        return data
+        guard (200..<300).contains(response.status),
+              let type = response.mediaType, type.hasPrefix("image/"), type != "image/svg+xml",
+              response.body.count <= biggest
+        else { return nil }
+        return response.body
+    }
+
+    static func checkedAddress(of url: URL, resolve: (String) async -> [[UInt8]]?) async -> [UInt8]? {
+        guard isPublic(url), let host = url.host, let addresses = await resolve(host), let first = addresses.first,
+              addresses.allSatisfy(isPublic(address:))
+        else { return nil }
+        return first
     }
 
     static func isPublic(_ url: URL) -> Bool {
@@ -154,11 +164,6 @@ enum WebPicture {
         let parts = host.split(separator: ".").compactMap { UInt8($0) }
         if parts.count == 4 { return isPublic(v4: parts) }
         return !host.contains(":") && host.rangeOfCharacter(from: CharacterSet.letters) != nil
-    }
-
-    static func reachesOnlyTheWeb(_ url: URL) async -> Bool {
-        guard isPublic(url), let host = url.host else { return false }
-        return await Task.detached { addresses(of: host).map { !$0.isEmpty && $0.allSatisfy(isPublic(address:)) } ?? false }.value
     }
 
     private static func isPublic(v4 parts: [UInt8]) -> Bool {
@@ -198,12 +203,5 @@ enum WebPicture {
             }
         }
         return addresses
-    }
-
-    private final class Redirects: NSObject, URLSessionTaskDelegate {
-        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest) async -> URLRequest? {
-            guard let url = request.url else { return nil }
-            return await WebPicture.reachesOnlyTheWeb(url) ? request : nil
-        }
     }
 }
