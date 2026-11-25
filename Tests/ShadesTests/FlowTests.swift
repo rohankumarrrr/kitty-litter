@@ -543,6 +543,26 @@ final class FlowTests: XCTestCase {
         }
     }
 
+    func testAKittensThreadStartsWithFullAccessAndNoScreenUnlessYouPickAnotherMode() async {
+        var fresh = settings
+        fresh.frontierMode = Settings().frontierMode
+        controller.apply(fresh)
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await ask("I need a tailored resume for this job")
+        await controller.frontierTask?.value
+
+        XCTAssertTrue(backend.sent[0].prompt.text.contains("<screen>"), "the router still looks")
+        let given = backend.sent[1].prompt
+        XCTAssertEqual(given.projectID, "project-steve")
+        XCTAssertEqual(given.runtimeMode, .fullAccess)
+        XCTAssertTrue(given.text.hasPrefix("I need a tailored resume for this job"))
+        XCTAssertFalse(given.text.contains("<screen>"))
+        XCTAssertTrue(given.attachments.isEmpty)
+        XCTAssertEqual(context.saved, 0, "no screenshot kept for it either")
+    }
+
     private let clawde = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", seesScreen: false)
 
     func testAKittenThatDoesntSeeTheScreenGetsYourWordsOnly() async {

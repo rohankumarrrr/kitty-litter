@@ -98,7 +98,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
                 ]),
                 Group(label: "Frontier", rows: [
                     stacked("Model", note: "Does the real work you hand off.", frontier, id: "Frontier model"),
-                    row("Mode", popup(Self.modes, settings.frontierMode) { $0.frontierMode = $1 }, id: "Frontier mode"),
+                    row("Mode", note: "With full access, it gets your words but never your screen.", popup(Self.modes, settings.frontierMode) { $0.frontierMode = $1 }, id: "Frontier mode"),
                 ]),
                 Group(label: "Summaries", rows: [
                     stacked("Model", note: "Sums up each session's report when it ends.", summary, id: "Summary model"),

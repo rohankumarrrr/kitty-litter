@@ -25,7 +25,7 @@ final class LockdownTests: XCTestCase {
         controller = makeController()
     }
 
-    private func makeController(settings: Settings = Settings()) -> AppController {
+    private func makeController(settings: Settings = Settings(frontierMode: .auto)) -> AppController {
         var settings = settings
         settings.quickMode = .approvalRequired
         let controller = AppController(

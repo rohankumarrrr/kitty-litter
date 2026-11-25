@@ -35,6 +35,7 @@ MainActor.assumeIsolated {
         let keys = KeyHoldMonitor()
         let inboxFile = Settings.directory.appendingPathComponent("inbox.json")
         let notifications = keepsToItself ? nil : NeedsYouNotifications()
+        if !keepsToItself { Settings.rewriteInTodaysForm() }
         var settings = Settings.load()
         MessagesInk.picture = YourPicture.load()
         if keepsToItself { settings.phone = false }

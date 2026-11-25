@@ -45,7 +45,7 @@ public struct Settings: Codable, Sendable, Equatable {
         frontierModel: ModelChoice = .frontier,
         summaryModel: ModelChoice = .summary,
         quickMode: RuntimeMode = .auto,
-        frontierMode: RuntimeMode = .auto,
+        frontierMode: RuntimeMode = .fullAccess,
         privateApps: [String] = Settings.defaultPrivateApps,
         vocabulary: [String] = [],
         talkKey: HoldKey = .rightOption,
@@ -81,17 +81,25 @@ public struct Settings: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb, channelNotifications, textSize, openInMessages, messagesFont, followUpBehavior, lockdown
+        case frontierMode = "kittenMode"
+        case quickModel, frontierModel, summaryModel, quickMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb, channelNotifications, textSize, openInMessages, messagesFont, followUpBehavior, lockdown
+    }
+
+    private enum KeysBeforeKittensHadFullAccess: String, CodingKey {
+        case frontierMode
     }
 
     public init(from decoder: Decoder) throws {
         let saved = try decoder.container(keyedBy: CodingKeys.self)
+        let before = try decoder.container(keyedBy: KeysBeforeKittensHadFullAccess.self)
+        let savedBefore = try before.decodeIfPresent(RuntimeMode.self, forKey: .frontierMode)
+        let pickedBefore = savedBefore == .auto ? nil : savedBefore
         let defaults = Settings()
         quickModel = try saved.decodeIfPresent(ModelChoice.self, forKey: .quickModel) ?? defaults.quickModel
         frontierModel = try saved.decodeIfPresent(ModelChoice.self, forKey: .frontierModel) ?? defaults.frontierModel
         summaryModel = try saved.decodeIfPresent(ModelChoice.self, forKey: .summaryModel) ?? defaults.summaryModel
         quickMode = try saved.decodeIfPresent(RuntimeMode.self, forKey: .quickMode) ?? defaults.quickMode
-        frontierMode = try saved.decodeIfPresent(RuntimeMode.self, forKey: .frontierMode) ?? defaults.frontierMode
+        frontierMode = try saved.decodeIfPresent(RuntimeMode.self, forKey: .frontierMode) ?? pickedBefore ?? defaults.frontierMode
         privateApps = try saved.decodeIfPresent([String].self, forKey: .privateApps) ?? defaults.privateApps
         vocabulary = try saved.decodeIfPresent([String].self, forKey: .vocabulary) ?? defaults.vocabulary
         talkKey = try saved.decodeIfPresent(HoldKey.self, forKey: .talkKey) ?? defaults.talkKey
@@ -128,19 +136,31 @@ public struct Settings: Codable, Sendable, Equatable {
             .appendingPathComponent("shades", isDirectory: true)
     }
 
-    private static var fileURL: URL { directory.appendingPathComponent("settings.json") }
+    public static var fileURL: URL { directory.appendingPathComponent("settings.json") }
 
-    public static func load() -> Settings {
-        guard let data = try? Data(contentsOf: fileURL),
+    public static func load(from file: URL = fileURL) -> Settings {
+        guard let data = try? Data(contentsOf: file),
               let settings = try? JSONDecoder().decode(Settings.self, from: data)
         else { return Settings() }
         return settings
     }
 
-    public func save() throws {
-        try FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
+    public static func rewriteInTodaysForm(_ file: URL = fileURL) {
+        guard let data = try? Data(contentsOf: file),
+              let settings = try? JSONDecoder().decode(Settings.self, from: data),
+              let today = try? settings.encoded(), today != data
+        else { return }
+        try? today.write(to: file, options: .atomic)
+    }
+
+    public func save(to file: URL = fileURL) throws {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try encoded().write(to: file, options: .atomic)
+    }
+
+    private func encoded() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(self).write(to: Self.fileURL, options: .atomic)
+        return try encoder.encode(self)
     }
 }
