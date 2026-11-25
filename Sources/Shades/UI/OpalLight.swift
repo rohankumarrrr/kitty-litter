@@ -136,7 +136,7 @@ extension Opal {
         kept("tile", in: rect, light: light) { drawTile(in: $0, light: light) }
     }
 
-    static func drawTile(in rect: NSRect, light: Light) {
+    static func drawTile(in rect: NSRect, light: Light, rimShare: CGFloat = 1.5 / 40) {
         let side = min(rect.width, rect.height)
         let radius = side * 0.225
         let shape = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
@@ -145,7 +145,7 @@ extension Opal {
         vertical(tileGlass, in: rect)
         glow(cached(&tileGlows, light.glow) { fading($0, alpha: 0.45, end: 1) }, center: NSPoint(x: rect.midX, y: bottom(of: rect)), radii: NSSize(width: rect.width, height: rect.height * 0.6))
         NSGraphicsContext.restoreGraphicsState()
-        ring(shape, width: 1.5 * side / 40, gradient: cached(&tileRims, light.rim) { rim in
+        ring(shape, width: rimShare * side, gradient: cached(&tileRims, light.rim) { rim in
             NSGradient(colors: [NSColor(white: 1, alpha: 0.22), .clear, .clear, Ink.hex(rim)], atLocations: [0, 0.4, 0.6, 1], colorSpace: .sRGB)!
         }, over: rect)
     }

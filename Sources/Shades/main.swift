@@ -10,10 +10,11 @@ MainActor.assumeIsolated {
     app.appearance = NSAppearance(named: .darkAqua)
 
     let wantsDemo = CommandLine.arguments.contains("--demo")
-    let neverComesForward = wantsDemo || DevFlags.wantsFlow || DevFlags.wantsChannelsCheck || DevFlags.pictureFile != nil
+    let neverComesForward = wantsDemo || DevFlags.wantsFlow || DevFlags.wantsChannelsCheck || DevFlags.pictureFile != nil || DevFlags.iconFolder != nil
     app.setActivationPolicy(neverComesForward ? .accessory : .regular)
     if DevFlags.wantsChannelsCheck { DevFlags.checkChannels() }
     if let picture = DevFlags.pictureFile { DevFlags.savePicture(from: picture) }
+    if let folder = DevFlags.iconFolder { DevFlags.drawIcon(into: folder) }
     if wantsDemo, let folder = DevFlags.channelsImageFolder {
         ChannelImages.draw(to: folder)
         exit(0)

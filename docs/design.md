@@ -187,10 +187,20 @@ A white glyph on a black tile, lit from below in its hue: an Opal Dock icon, and
 
 - A rounded square with corners 22.5% of its side.
 - The body is the card's black gradient. A glow of its light rises from the bottom centre: an ellipse centred on the bottom edge, as wide as the tile and 60% as tall in radius, from the light at 45% to clear.
-- The rim is 1.5 points at a 40-point tile, scaled with it: white at 22% across the top, clear down the sides, brightening into the light along the bottom.
-- The glyph is white. A pixel cat goes on it as it is.
+- The rim is 1.5 points at a 40-point tile, scaled with it, and an app icon's is 1.4% of its side, as thin as other Dock icons': white at 22% across the top, clear down the sides, brightening into the light along the bottom.
+- The glyph is white. In the app, a pixel cat goes on it as it is.
 - A kitten's tile takes the kitten's colour. A tile that isn't a kitten's, such as a section's in a sidebar, takes a hue drifting down the list from 172° to 344°, teal to pink.
 - `Opal.tile(in:light:)`, kept the same way as the card.
+
+![Two Rimlight tiles drawn for reference, then The Kitty Litter's icon in the Dock and on a phone's Home Screen](images/app-icon.png)
+
+The Kitty Litter's own icon is one, so it sits with the other Rimlight icons in a Dock. `AppIcon` draws it, from the cat's own art and `Opal.drawTile`, for every place it shows: the Dock while the app runs, the phone page's Home Screen icon, and `assets/AppIcon.icns`, which `swift run shades --draw-icon assets` redraws and a test keeps equal to the drawing.
+
+- Its light is hue 161°, the mint of `good`, which is the cat's listening glint. A Dock of Rimlight icons drifts from teal to pink, about 13° a step, so a hue inside that run would sit one step from a neighbour. 161° sits just past the teal end, apart from all of them.
+- The cat is white, as a Dock icon's glyph is: fur and outline `white`, the jacket `secondary`, and the shades and nose cut out so the tile shows through. Toward its foot it takes a wash of the light, clear at 57% down the tile, 26% at 70%, 65% from 80% on.
+- The cat's 16-cell grid is 62% of the tile, in whole pixels per cell, so it stays sharp.
+- In the Dock, the tile sits 100 pixels in from each side of 1,024, as Apple's icon grid has it. On the phone, it fills its square with no margin, since iOS rounds the corners itself.
+- The running app shows the icon itself, which macOS draws as given, while a tinted icon style greys the copy in the app's bundle. Nothing is pasted onto the app, which would break its signature.
 
 ### The rim gradient
 
