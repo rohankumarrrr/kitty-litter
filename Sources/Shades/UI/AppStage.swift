@@ -7,7 +7,7 @@ import ShadesCore
 final class AppStage: CatStage {
     private static let wordSeconds: TimeInterval = 1.2
 
-    let cat = CatController()
+    let cat: CatController
     let bubble = BubbleController()
     let input = InputPanel()
     let pill = SayPill()
@@ -22,7 +22,8 @@ final class AppStage: CatStage {
     private var escape: UInt32?
     private var spokenPane: ChannelPane?
 
-    init() {
+    init(cat: CatController) {
+        self.cat = cat
         bubble.anchor = { [weak self] in
             guard let self else { return (.zero, .zero) }
             let frame = self.input.isVisible ? self.input.frame
@@ -128,7 +129,6 @@ final class AppStage: CatStage {
     }
 
     func start() {
-        cat.start()
         if let controller { showTalkKey(controller.settings.talkKey) }
         claim(.ask) { [weak self] in self?.controller?.askPressed() }
         claim(.fix) { [weak self] in self?.controller?.fixPressed() }

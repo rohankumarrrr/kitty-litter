@@ -12,4 +12,16 @@ final class LaunchMarkTests: XCTestCase {
         put anything new after it.
         """)
     }
+
+    func testTheCatIsOnScreenBeforeTheWindowsNobodySeesAtLaunchAreBuilt() throws {
+        let stage = try Repo.read("Sources/Shades/main.swift")
+            .split(separator: "\n")
+            .filter { $0.contains("AppStage(") }
+        XCTAssertEqual(stage.map { $0.trimmingCharacters(in: .whitespaces) }, ["let stage = AppStage(cat: Launch.putOnScreen(CatController()))"], """
+        Sources/Shades/main.swift has to build the stage on a cat that's already on screen, with \
+        `AppStage(cat: Launch.putOnScreen(CatController()))`. The stage builds the bubble, the Ask box and The Kitty \
+        Litter's window, which nobody sees at launch, and on a cold launch, with macOS reading AppKit back in, they held \
+        the cat back by 300 ms or more.
+        """)
+    }
 }

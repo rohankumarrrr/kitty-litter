@@ -38,7 +38,7 @@ final class PanelsTests: XCTestCase {
     func testEscClosesThePairingCodeAndItStopsWorking() {
         Offstage.isOn = true
         defer { Offstage.isOn = false }
-        let stage = AppStage()
+        let stage = AppStage(cat: CatController())
         var closed = 0
         stage.pairing.onClose = { closed += 1 }
         stage.showPairing(PhonePairingCard(address: "http://example.test", code: "ABCD-2345"))
