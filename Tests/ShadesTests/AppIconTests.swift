@@ -67,7 +67,7 @@ final class AppIconTests: XCTestCase {
     }
 
     func testTheRunningAppShowsItsIconInTheDockWithTheBadgeOnTop() throws {
-        let stage = AppStage()
+        let stage = AppStage(cat: CatController())
         defer { stage.showNeedsYou(0) }
         let controller = AppController(dependencies: AppDependencies(backend: FakeBackend(), context: FakeContext(log: Log()), voice: FakeVoice(), inserter: FakeInserter(), keys: FakeKeys(), settings: Settings(), saveSettings: { _ in }, kittens: { [] }, inbox: Inbox(since: .distantPast)), stage: FakeStage(log: Log()))
         AppDelegate(controller: controller, menuBar: MenuBar()).applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))

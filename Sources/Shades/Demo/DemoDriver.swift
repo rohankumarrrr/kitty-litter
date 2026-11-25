@@ -35,7 +35,7 @@ final class DemoDriver {
             fflush(stdout)
         }
         if let steve = Demo.kittens.first { controller.channels.sent(DemoChannels.alsoSentEcho, in: .of(steve), alsoSent: true) }
-        DemoBench.markLaunch(stage)
+        DemoBench.markLaunch()
         readCommands()
         print(Offstage.isOn ? "Demo mode, out of sight. Type a command. Try: help" : "Demo mode. Type a command, or use the menu bar item. Try: help")
         if script {

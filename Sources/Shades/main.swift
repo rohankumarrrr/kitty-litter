@@ -20,7 +20,7 @@ MainActor.assumeIsolated {
         ChannelImages.draw(to: folder)
         exit(0)
     }
-    let stage = AppStage()
+    let stage = AppStage(cat: Launch.putOnScreen(CatController()))
     let controller: AppController
     var driver: DemoDriver?
 

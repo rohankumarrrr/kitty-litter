@@ -19,9 +19,8 @@ enum DemoBench {
     static var missedABudget: Bool { !missed.isEmpty }
     private static var launched: (milliseconds: Double, footprint: Double)?
 
-    static func markLaunch(_ stage: AppStage) {
-        settle(stage.cat.panel)
-        launched = Launch.milliseconds.map { ($0, footprint()) }
+    static func markLaunch() {
+        launched = Launch.catOnScreen.map { ($0, footprint()) }
     }
 
     static func run(_ argument: String, controller: AppController, stage: AppStage) async {
