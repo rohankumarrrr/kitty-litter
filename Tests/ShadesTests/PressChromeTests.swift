@@ -473,7 +473,7 @@ extension PressChromeTests {
             XCTAssertEqual(calls.actions, [], name)
         }
         try pressEveryWay(CatWords.ignore, on: "Only a comma.") { _, calls, name in
-            XCTAssertEqual(calls.actions, [.inbox(.done(id: "c"))], name)
+            XCTAssertEqual(calls.actions, [.inbox(.ignore(id: "c"))], name)
         }
         let (_, view, _) = messages(activityBook())
         XCTAssertEqual(try card("Only a comma.", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", "Allow", CatWords.ignore, CatWords.viewThread], "Deny comes first, and there's no Reply or Done")
@@ -482,7 +482,7 @@ extension PressChromeTests {
             XCTAssertEqual(calls.actions, [.inbox(.deny(id: "u"))], name)
         }
         try pressEveryWay(CatWords.ignore, on: "Mine too.") { _, calls, name in
-            XCTAssertEqual(calls.actions, [.inbox(.done(id: "u"))], name)
+            XCTAssertEqual(calls.actions, [.inbox(.ignore(id: "u"))], name)
         }
     }
 
@@ -506,7 +506,7 @@ extension PressChromeTests {
         }
         for (text, id) in [("Fine to send", "a1"), ("Safe to merge", "a2")] {
             try pressEveryWay(CatWords.ignore, on: text) { _, calls, name in
-                XCTAssertEqual(calls.actions, [.inbox(.done(id: id))], name)
+                XCTAssertEqual(calls.actions, [.inbox(.ignore(id: id))], name)
             }
         }
         let (_, view, _) = messages(activityBook())

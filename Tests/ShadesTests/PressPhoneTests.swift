@@ -564,14 +564,14 @@ final class PressPhoneTests: XCTestCase {
         try await shows("activity")
         try await phone.tap(".card.ask button", "Ignore")
         try await phone.until("Ignore takes it away") { asked("ask") == 3 }
-        XCTAssertEqual(phone.acts.last?.action, .inbox(.done(id: "k1")))
+        XCTAssertEqual(phone.acts.last?.action, .inbox(.ignore(id: "k1")))
     }
 
     func testASettingsChangeOnlyTakesIgnoreOnAPhone() async throws {
         try await open(at: "activity")
         try await expect("[...document.querySelectorAll('.card.change button')].map((b) => b.textContent)", ["Ignore"])
         try await phone.tap(".card.change button", "Ignore")
-        try await did("ask", .inbox(.done(id: "c1")))
+        try await did("ask", .inbox(.ignore(id: "c1")))
         try await expect("[...document.querySelectorAll('.card.change button')].every((b) => b.disabled)", true)
     }
 

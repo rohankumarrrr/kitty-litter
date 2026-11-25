@@ -1,6 +1,7 @@
 import Foundation
 @testable import Shades
 import ShadesCore
+import TestSupport
 import XCTest
 
 @MainActor
@@ -90,16 +91,8 @@ final class WaitingOnYouTests: XCTestCase {
         running.turnEnded = false
         show(listed.filter { $0.id != thread.id } + [running])
         show(listed.filter { $0.id != thread.id } + [thread])
-        await until { !self.controller.inbox.owes(thread) && self.controller.filing.isEmpty }
-    }
-
-    private func until(_ condition: @escaping () -> Bool) async {
-        let deadline = Date().addingTimeInterval(5)
-        while !condition(), Date() < deadline {
-            await controller.reportTask?.value
-            try? await Task.sleep(nanoseconds: 1_000_000)
-        }
-        XCTAssertTrue(condition(), "it never got there")
+        let filed = await until { !self.controller.inbox.owes(thread) && self.controller.filing.isEmpty }
+        XCTAssertTrue(filed, "it never got filed")
     }
 
     private var waiting: [InboxEntry] { controller.inboxEntries.filter(\.needsYou) }
@@ -184,7 +177,8 @@ final class WaitingOnYouTests: XCTestCase {
 
         let card = "Need one setting.\n\n```shades-request\n{\"ask\": \"Merge pull request #9.\"}\n```"
         await endTurn(work("card", of: clawde, launchedBy: "main"), report: card)
-        await until { self.controller.inbox.entries.contains { $0.ask != nil } }
+        let carded = await until { self.controller.inbox.entries.contains { $0.ask != nil } }
+        XCTAssertTrue(carded)
         XCTAssertTrue(waiting.contains { $0.ask?.ask == "Merge pull request #9." }, "only you can answer a card, whoever started the thread")
 
         var asking = work("question", of: clawde, launchedBy: "main")
