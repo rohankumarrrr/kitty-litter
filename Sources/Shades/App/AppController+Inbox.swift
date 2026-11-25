@@ -94,7 +94,7 @@ extension AppController {
         inbox.flag(decision, from: thread, at: now(), id: id)
         keepInbox()
         inboxChanged()
-        if ChangeRequests.all(in: report ?? "").isEmpty { readDecision(id, decision: decision, of: thread) }
+        if ChangeRequests.cards(in: report ?? "").isEmpty { readDecision(id, decision: decision, of: thread) }
     }
 
     private func unsorted(_ report: String?) -> SortedReport {

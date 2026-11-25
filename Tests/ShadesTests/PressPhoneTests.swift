@@ -34,7 +34,7 @@ final class PressPhoneTests: XCTestCase {
         let decision = InboxEntry(id: "r1", kind: .decision, text: "Ship it?", threadID: "p", threadTitle: "Work", at: noon)
         let shipped = InboxEntry(id: "s1", kind: .shipped, text: "Live.", threadID: "a", threadTitle: "Work", at: noon)
         let ask = InboxEntry(id: "k1", kind: .decision, text: "Asks for your yes to: Send it.", threadID: "a", threadTitle: "Work", at: noon, ask: AskRequest(ask: "Send it.", readFromWords: false))
-        let change = InboxEntry(id: "c1", kind: .decision, text: "Asks to change ~/k/.claude/settings.json.", threadID: "a", threadTitle: "Work", at: noon, change: ChangeRequest(file: "~/k/.claude/settings.json", replace: "a", with: "b", why: nil))
+        let change = InboxEntry(id: "c1", kind: .decision, text: "Asks to change ~/k/.claude/settings.json.", threadID: "settings", threadTitle: "Settings", at: noon, change: ChangeRequest(file: "~/k/.claude/settings.json", replace: "a", with: "b", why: nil))
         var waiting = Waiting(approvals: [command], questions: [question, twoParts], reports: [decision, shipped, ask, change])
         waiting.owners = ["ap": steve.id, "q": pepper.id, "q2": pepper.id, "r1": pepper.id, "s1": steve.id]
         var failed = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "And then?", at: noon, threadID: "a", threadTitle: "Work")
@@ -569,10 +569,10 @@ final class PressPhoneTests: XCTestCase {
 
     func testASettingsChangeOnlyTakesIgnoreOnAPhone() async throws {
         try await open(at: "activity")
-        try await expect("[...document.querySelectorAll('.card.change button')].map((b) => b.textContent)", ["Ignore", "Open in T3"])
+        try await expect("[...document.querySelectorAll('.card.change button')].map((b) => b.textContent)", ["Ignore"])
         try await phone.tap(".card.change button", "Ignore")
         try await did("ask", .inbox(.done(id: "c1")))
-        try await expect("[...document.querySelectorAll('.card.change button')].filter((b) => b.textContent === 'Ignore').every((b) => b.disabled)", true)
+        try await expect("[...document.querySelectorAll('.card.change button')].every((b) => b.disabled)", true)
     }
 
     func testAQuestionsChoiceAnswersItOnTheTap() async throws {

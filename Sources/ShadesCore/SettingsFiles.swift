@@ -69,26 +69,30 @@ public struct SettingsFiles: Sendable {
     }
 
     public func staleness(of change: ChangeRequest) -> Staleness? {
+        let current: Data?
         do {
             let place = try allowed(change.file)
-            let current = try inFolder(place, creating: false) { try read(place.name, in: $0) }
-            guard current.map(Self.hash) != change.before else { return nil }
-            let text = current.flatMap { String(data: $0, encoding: .utf8) }
-            if let text, text.contains(change.with), change.replace.map({ change.with.contains($0) || !text.contains($0) }) ?? (text == change.with) {
-                return .alreadyMade
-            }
-            let changed = "The file changed after it asked."
-            do {
-                _ = try result(of: change, on: current)
-                return .cantBeMade(changed)
-            } catch let problem as Problem {
-                return .cantBeMade("\(changed) \(problem.reason)")
-            }
-        } catch let problem as Problem {
-            return .cantBeMade(problem.reason)
+            current = try inFolder(place, creating: false) { try read(place.name, in: $0) }
         } catch {
-            return .cantBeMade(error.localizedDescription)
+            return nil
         }
+        guard current.map(Self.hash) != change.before else { return nil }
+        if let text = current.flatMap({ String(data: $0, encoding: .utf8) }), isMade(change, in: text) { return .alreadyMade }
+        let changed = "The file changed after it asked."
+        do {
+            _ = try result(of: change, on: current)
+            return .cantBeMade(changed)
+        } catch let problem as Problem {
+            return .cantBeMade("\(changed) \(problem.reason)")
+        } catch {
+            return .cantBeMade(changed)
+        }
+    }
+
+    private func isMade(_ change: ChangeRequest, in text: String) -> Bool {
+        guard let replace = change.replace else { return text == change.with }
+        guard !change.with.isEmpty, text.components(separatedBy: change.with).count == 2 else { return false }
+        return Self.hash(Data(text.replacingOccurrences(of: change.with, with: replace).utf8)) == change.before
     }
 
     public func shown(listed written: String) -> String? {

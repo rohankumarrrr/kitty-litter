@@ -42,6 +42,14 @@ public enum ChangeRequests {
         blocks(in: reply).map(read)
     }
 
+    public static func cards(in reply: String) -> [Result<Request, Problem>] {
+        all(in: reply).filter { (try? $0.get().withdrawn) == nil }
+    }
+
+    public static func withdrawals(in reply: String) -> [String] {
+        all(in: reply).compactMap { try? $0.get().withdrawn }
+    }
+
     public static func withoutBlocks(_ reply: String, saying placeholder: String, withdrawn: String) -> String {
         let lines = reply.split(separator: "\n", omittingEmptySubsequences: false)
         var kept: [Substring] = []

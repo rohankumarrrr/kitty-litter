@@ -14,7 +14,9 @@ extension AppController {
     }
 
     func fileChangeRequests(in report: String, of thread: AgentThread) {
-        Task {
+        let earlier = changeFiling[thread.id]
+        changeFiling[thread.id] = Task {
+            await earlier?.value
             let asked = await changeRequests(in: report, of: thread)
             let withdrew = withdrawRequests(in: report, of: thread)
             guard withdrew || !asked.isEmpty else { return }
@@ -27,7 +29,7 @@ extension AppController {
     @discardableResult
     func withdrawRequests(in report: String?, of thread: AgentThread) -> Bool {
         guard let report, kitten(of: thread) != nil else { return false }
-        let withdrawn = ChangeRequests.all(in: report).compactMap { try? $0.get().withdrawn }
+        let withdrawn = ChangeRequests.withdrawals(in: report)
         guard !withdrawn.isEmpty else { return false }
         let files = settingsFiles
         let before = inbox.entries
@@ -63,7 +65,7 @@ extension AppController {
 
     func changeRequests(in report: String?, of thread: AgentThread) async -> [InboxEntry] {
         guard let report, let kitten = kitten(of: thread) else { return [] }
-        let asked = ChangeRequests.all(in: report)
+        let asked = ChangeRequests.cards(in: report)
         guard !asked.isEmpty else { return [] }
         let files = settingsFiles
         var entries: [InboxEntry] = []

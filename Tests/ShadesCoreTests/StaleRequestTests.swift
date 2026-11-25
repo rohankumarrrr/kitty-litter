@@ -97,6 +97,29 @@ final class StaleRequestTests: XCTestCase {
         XCTAssertEqual(files.staleness(of: making), .cantBeMade("The file changed after it asked. The file is already there, so it can't be made new."))
     }
 
+    func testARemovalIsOnlyMadeWhenTheFileIsExactlyWhatItWouldHaveMade() throws {
+        let three = "{\n  \"allow\": [\n    \"Bash(swift build)\",\n    \"Bash(curl *)\",\n    \"Bash(swift test)\"\n  ]\n}\n"
+        try write(three)
+        let keepingNeighbour = files.check(ChangeRequest(file: settings.path, replace: "    \"Bash(swift build)\",\n    \"Bash(curl *)\",\n", with: "    \"Bash(swift build)\",\n", why: nil))
+        let emptyWith = files.check(ChangeRequest(file: settings.path, replace: "    \"Bash(curl *)\",\n", with: "", why: nil))
+        XCTAssertNil(keepingNeighbour.problem)
+        XCTAssertNil(emptyWith.problem)
+
+        try write(three.replacingOccurrences(of: "\"Bash(swift build)\",\n", with: "\"Bash(swift build)\",\n    \"Bash(ls)\",\n"))
+        XCTAssertEqual(files.staleness(of: keepingNeighbour), .cantBeMade("The file changed after it asked. What it asks to replace isn't in the file."), "curl is still allowed")
+        try write(three.replacingOccurrences(of: "    \"Bash(curl *)\",\n    \"Bash(swift test)\"\n", with: "    \"Bash(curl *)\"\n"))
+        XCTAssertNotEqual(files.staleness(of: emptyWith), .alreadyMade, "curl is still allowed")
+
+        try write(three.replacingOccurrences(of: "    \"Bash(curl *)\",\n", with: ""))
+        XCTAssertEqual(files.staleness(of: keepingNeighbour), .alreadyMade)
+    }
+
+    func testAFileThatCantBeFoundRightNowIsNoReasonToTakeAllowAway() {
+        let change = commaFix
+        XCTAssertNil(SettingsFiles(home: home.path, kittenFolders: []).staleness(of: change), "its kitten wasn't in one reading of the list")
+        XCTAssertNil(files.staleness(of: change))
+    }
+
     func testAListedFileIsNamedTheWayACardShowsIt() {
         XCTAssertEqual(files.shown(listed: settings.path), "~/kittens/clawde/.claude/settings.json")
         XCTAssertEqual(files.shown(listed: "~/kittens/clawde/.claude/settings.json"), "~/kittens/clawde/.claude/settings.json")
