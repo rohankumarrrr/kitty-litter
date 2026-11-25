@@ -63,6 +63,7 @@ probe-t3 router                          # what the router decides for made-up k
 probe-t3 sort                            # the real summary model sorting seven made-up reports, five of them the kind that never wait on you, and archives each
 
 probe-t3 search <words>                  # how many threads T3's search names for those words, and how fast
+probe-t3 routines                        # how many of T3's scheduled tasks are on, run at a set time, or have no thread, and never their titles
 probe-t3 picture [<thread> <path>]       # a made-up picture sent and read back, or a picture in a thread's folder
 ```
 

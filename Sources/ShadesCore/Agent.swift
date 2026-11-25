@@ -369,6 +369,7 @@ public protocol AgentBackend: AnyObject, Sendable {
     func threads(matching words: String) async -> [String]?
     func picture(attachmentID: String) async -> Data?
     func picture(threadID: String, path: String) async -> Data?
+    func scheduledTasks() async -> [ScheduledTask]?
 }
 
 public extension AgentBackend {
@@ -390,4 +391,5 @@ public extension AgentBackend {
     func threads(matching words: String) async -> [String]? { nil }
     func picture(attachmentID: String) async -> Data? { nil }
     func picture(threadID: String, path: String) async -> Data? { nil }
+    func scheduledTasks() async -> [ScheduledTask]? { nil }
 }

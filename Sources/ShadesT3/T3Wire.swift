@@ -24,6 +24,7 @@ enum T3Wire {
         static let mutateProject = "projects.mutate"
         static let createUploadURL = "attachments.createUploadUrl"
         static let createAssetURL = "assets.createUrl"
+        static let subscribeScheduledTasks = "scheduledTasks.subscribe"
     }
 
     static func threadLink(environmentID: String, threadID: String) -> URL? {
@@ -397,6 +398,25 @@ enum T3Wire {
     struct SearchThreads: Encodable {
         let query: String
         var limit = 50
+    }
+
+    struct ScheduledTaskList: Decodable {
+        struct Entry: Decodable {
+            struct Schedule: Decodable { let type: String }
+            let title: String
+            let enabled: Bool
+            let schedule: Schedule
+            let projectId: String
+            let threadId: String?
+        }
+
+        let tasks: [Lossy<Entry>]
+
+        var scheduledTasks: [ScheduledTask] {
+            tasks.compactMap(\.value).map {
+                ScheduledTask(title: $0.title, projectID: $0.projectId, enabled: $0.enabled, runsAtSetTime: $0.schedule.type == "fixed_time", threadID: $0.threadId)
+            }
+        }
     }
 
     struct SearchResult: Decodable {

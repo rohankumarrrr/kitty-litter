@@ -36,6 +36,7 @@ struct HealthFacts: Equatable {
     var kittensNotInT3: [Kitten] = []
     var kittensWithoutInstructions: [String] = []
     var kittensOffScreenInNameOnly: [String] = []
+    var routinesT3CanLose: [KittenRoutines] = []
     var frontDoorProblem: FrontDoorProblem?
     var frontDoorProjectTrouble: String?
     var inboxSaves = true
@@ -47,6 +48,11 @@ struct HealthFacts: Equatable {
     var phoneNeedsPairingAgain = false
     var lockdownKittenGone = false
     var shownName: String?
+}
+
+struct KittenRoutines: Equatable {
+    var kitten: String
+    var tasks: [ScheduledTask]
 }
 
 enum T3Silence: Equatable {
@@ -152,6 +158,7 @@ enum HealthCheck {
                 fix: "Put the screen block from docs/kittens.md in their folder, and run them on a Claude model."
             ))
         }
+        results += facts.routinesT3CanLose.map(routinesFinding)
         if facts.lockdownKittenGone {
             results.append(HealthFinding(
                 check: "lockdown",
@@ -224,6 +231,32 @@ enum HealthCheck {
             ))
         }
         return results
+    }
+
+    private static func routinesFinding(_ lost: KittenRoutines) -> HealthFinding {
+        let name = lost.kitten
+        let atSetTime = lost.tasks.filter(\.runsAtSetTime).map(\.title)
+        let unbound = lost.tasks.filter { $0.threadID == nil }.map(\.title)
+        var problems = ["\(name) has routines T3 can lose."]
+        if !atSetTime.isEmpty {
+            problems.append("It skips \(quoted(atSetTime)) if your Mac is asleep at \(atSetTime.count == 1 ? "its set time" : "their set times").")
+        }
+        if !unbound.isEmpty {
+            let one = unbound.count == 1
+            problems.append("\(quoted(unbound)) \(one ? "has" : "have") no thread, so T3 runs \(one ? "it" : "them") in a new worktree from main, away from \(name)'s folder.")
+        }
+        return HealthFinding(
+            check: "routines: \(name)",
+            ok: false,
+            problem: problems.joined(separator: " "),
+            fix: "Make \(lost.tasks.count == 1 ? "it" : "each") an interval that every run re-aims at its next time, bound to a thread in \(name)'s own folder."
+        )
+    }
+
+    private static func quoted(_ titles: [String]) -> String {
+        let all = titles.map { "“\($0)”" }
+        guard let last = all.last, all.count > 1 else { return all.joined() }
+        return all.dropLast().joined(separator: ", ") + " and " + last
     }
 
     static let waitingRowsToJudge = 4
