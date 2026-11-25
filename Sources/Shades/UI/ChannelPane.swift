@@ -303,6 +303,7 @@ final class ChannelPane: QuietView {
     private var newFrom: [String: String] = [:]
     private var jump: QuietButton?
     private var stackedSize = NSSize.zero
+    private var stackedFrames: [ObjectIdentifier: NSRect] = [:]
     private var isPaging = false
     private var isShowing = false
 
@@ -391,6 +392,17 @@ final class ChannelPane: QuietView {
         showJump()
     }
 
+    var isResizing = false {
+        didSet {
+            guard isResizing != oldValue else { return }
+            views.compactMap { $0 as? MessageRowView }.forEach { $0.drawsQuickly = isResizing }
+            if !isResizing {
+                stackedSize = .zero
+                arrange()
+            }
+        }
+    }
+
     func arrange(force: Bool = false) {
         let box = composer.height
         let bar = min(linkBar.height(for: bounds.width), max(bounds.height - ChannelHeader.height - box, 0))
@@ -401,8 +413,9 @@ final class ChannelPane: QuietView {
         if force { composer.needsLayout = true }
         guard stackedSize != scroll.contentSize else { return }
         let wasAtBottom = isNearBottom
+        let anchors = inSight.filter { $0.above <= 0 }.reversed() + inSight
         stack()
-        if wasAtBottom, followsLatest { scrollToBottom() }
+        if wasAtBottom, followsLatest { scrollToBottom() } else { keep(anchors) }
         attach()
     }
 
@@ -933,16 +946,21 @@ final class ChannelPane: QuietView {
     }
 
     private func stack() {
+        let seen = scroll.contentView.bounds
+        let kept = isResizing ? stackedFrames : [:]
         stackedSize = scroll.contentSize
         let width = stackedSize.width
         let clipHeight = stackedSize.height
-        let heights = views.map { $0.fit(width: width) }
+        let heights = views.map { view in
+            kept[ObjectIdentifier(view)].flatMap { $0.intersects(seen) ? nil : $0.height } ?? view.fit(width: width)
+        }
         let total = heights.reduce(0, +) + Self.topPad + Self.bottomPad
         var y = isLoneNote ? max((clipHeight - total) / 2, 0) : Self.topPad
         frames = heights.map { height in
             defer { y += height }
             return NSRect(x: 0, y: y, width: width, height: height)
         }
+        stackedFrames = Dictionary(uniqueKeysWithValues: zip(views.map(ObjectIdentifier.init), frames))
         for (view, frame) in zip(views, frames) where view.superview === document && view.frame != frame {
             view.frame = frame
         }

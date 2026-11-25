@@ -542,6 +542,9 @@ final class MessageRowView: ChannelRowView {
     var onMarkUnread: (() -> Void)?
     var onMarkRead: (() -> Void)?
     var isExpanded = false
+    var drawsQuickly = false {
+        didSet { if drawsQuickly != oldValue { needsDisplay = true } }
+    }
     var replyBar: ReplyBar? { didSet { fitted = nil } }
     var context: String? { didSet { fitted = nil } }
     private(set) var isFound = false { didSet { needsDisplay = true } }
@@ -883,7 +886,9 @@ final class MessageRowView: ChannelRowView {
             context?.setAlpha(Self.stillGoingAlpha)
             context?.beginTransparencyLayer(auxiliaryInfo: nil)
         }
-        if let light = look.light {
+        if drawsQuickly, look.light != nil {
+            Opal.quickCard(in: bubble, radius: radius)
+        } else if let light = look.light {
             Opal.card(in: bubble, radius: radius, light: light)
         } else {
             fill.setFill()

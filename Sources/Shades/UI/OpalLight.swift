@@ -28,6 +28,17 @@ extension Opal {
         drawCard(in: rect, light: light, shape: shape)
     }
 
+    static func quickCard(in rect: NSRect, radius: CGFloat = Corner.card) {
+        let shape = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
+        NSGraphicsContext.saveGraphicsState()
+        shape.addClip()
+        vertical(cardGlass, in: rect)
+        Ink.hex(Opal.white).withAlphaComponent(Opal.hairlineAlpha).setStroke()
+        shape.lineWidth = 2
+        shape.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
     static func drawCard(in rect: NSRect, light: Light, shape: NSBezierPath) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         NSGraphicsContext.saveGraphicsState()
