@@ -36,7 +36,8 @@ final class TriageScriptTests: XCTestCase {
             #!/bin/zsh -f
             print -rl -- "$@" >> "$STANDIN/ps-ran"
             [[ -f "$STANDIN/ps-table" ]] || exit 0
-            columns=(${(s:,:)${${@[(r)pid=*]}//=/}})
+            columns=(${(s:,:)${${@[(r)*=*]}//=/}})
+            newline=$'\n'
             while IFS=$'\t' read -r pid ppid etime ucomm args; do
               line=""
               for column in $columns; do
@@ -44,7 +45,7 @@ final class TriageScriptTests: XCTestCase {
                   pid) line+="$(printf '%5s' "$pid") " ;;
                   ppid) line+="$(printf '%5s' "$ppid") " ;;
                   etime) line+="$(printf '%11s' "$etime") " ;;
-                  ucomm) line+="$(printf '%-16s' "$ucomm") " ;;
+                  ucomm) line+="$(printf '%-16s' "${ucomm//\\n/$newline}") " ;;
                   args) line+="$args " ;;
                 esac
               done
@@ -259,7 +260,7 @@ final class TriageScriptTests: XCTestCase {
             """)
         XCTAssertEqual(
             try String(contentsOf: psRan, encoding: .utf8),
-            "-axww\n-o\npid=,args=\n-axww\n-o\npid=,ppid=,etime=,ucomm=\n",
+            "-axww\n-o\npid=,args=\n-axww\n-o\nucomm=,pid=,ppid=,etime=\n",
             "ps is asked for nothing more"
         )
         XCTAssertFalse(logRan)
@@ -274,6 +275,23 @@ final class TriageScriptTests: XCTestCase {
         ])
         let result = try run("processes")
         XCTAssertEqual(result.output, "PID PPID ELAPSED NAME\n304 1 00:10 codesign\n", "only what the kernel says it runs counts, never the name it gives itself")
+    }
+
+    func testALineBreakInAProgramsNameCantMakeUpARow() throws {
+        try table([
+            ("401", "1", "00:01", "a\\n1 1 0:01 lsd", "/tmp/a 30"),
+            ("402", "1", "00:01", "x\\nlsd", "/tmp/x 30"),
+            ("403", "1", "00:01", "\\nlsd", "/tmp/y 30"),
+            ("404", "1", "00:01", "lsd", "/usr/libexec/lsd"),
+        ])
+        let result = try run("processes")
+        XCTAssertFalse(result.output.contains("1 1 0:01 lsd"), "a row it made up, for launchd's PID: \(result.output)")
+        XCTAssertEqual(result.output, "PID PPID ELAPSED NAME\n402 1 00:01 lsd\n403 1 00:01 lsd\n404 1 00:01 lsd\n", "every row's numbers are its own process's, as for a program saved as lsd")
+    }
+
+    func testARealSwiftBuildIsListedUnderTheProgramItRuns() throws {
+        try table([("501", "203", "00:05", "swift-package", "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-build -c release")])
+        XCTAssertEqual(try run("processes").output, "PID PPID ELAPSED NAME\n501 203 00:05 swift-package\n", "swift-build is a link to swift-package, which is what the kernel names")
     }
 
     func testABrokenCharacterInAnArgumentNeitherShowsNorStopsTheList() throws {

@@ -4,7 +4,7 @@ PATH=/usr/bin:/bin:/usr/sbin:/sbin
 export LC_ALL=C
 
 allowed=(codesign trustd securityd SecurityAgent syspolicyd amfid tccd runningboardd launchservicesd lsd Shades)
-build_steps=(install.sh bundle.sh codesign swift-build swift-frontend)
+build_steps=(install.sh bundle.sh codesign swift-build swift-package swift-frontend)
 max_lines=3000
 time_format='[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]'
 
@@ -48,7 +48,7 @@ processes() {
   print "PID PPID ELAPSED NAME"
   {
     /bin/ps -axww -o pid=,args= | awk '{ print "args", $0 }'
-    /bin/ps -axww -o pid=,ppid=,etime=,ucomm= | awk '{ print "name", $0 }'
+    /bin/ps -axww -o ucomm=,pid=,ppid=,etime= | awk '{ print "name", $0 }'
   } |
     awk -v names="${allowed[*]} ${build_steps[*]}" '
       BEGIN {
@@ -62,12 +62,15 @@ processes() {
         if (i <= NF && base($i) ~ /^(install|bundle)\.sh$/) script[$2] = base($i)
         next
       }
-      $1 == "name" && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^([0-9]+-)?([0-9]+:)?[0-9]+:[0-9]+$/ {
+      $1 == "name" {
+        if (NF < 4 || $NF !~ /^([0-9]+-)?([0-9]+:)?[0-9]+:[0-9]+$/ || $(NF - 1) !~ /^[0-9]+$/ || $(NF - 2) !~ /^[0-9]+$/) next
+        pid = $(NF - 2); ppid = $(NF - 1); elapsed = $NF
         name = $0
-        sub(/^name +[0-9]+ +[0-9]+ +[^ ]+ +/, "", name)
+        sub(/^name +/, "", name)
+        sub(/ +[0-9]+ +[0-9]+ +[^ ]+ *$/, "", name)
         sub(/ +$/, "", name)
-        if (name in shell) name = ($2 in script) ? script[$2] : ""
-        if (name in wanted) print $2, $3, $4, name
+        if (name in shell) name = (pid in script) ? script[pid] : ""
+        if (name in wanted) print pid, ppid, elapsed, name
       }'
 }
 
