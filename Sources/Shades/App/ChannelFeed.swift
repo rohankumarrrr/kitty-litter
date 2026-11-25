@@ -49,6 +49,7 @@ final class ChannelFeed {
     private var loop: Task<Void, Never>?
     private var nap: Task<Void, Never>?
     private var published: ChannelBook?
+    private var gathering: ChannelBook.Gathering?
     private var said: [String: String?] = [:]
 
     private(set) var isOpen = false
@@ -352,6 +353,16 @@ final class ChannelFeed {
         }
     }
 
+    private func gather(_ sources: ChannelBook.Sources) -> ChannelBook.Gathering {
+        var said: [String: String?] = [:]
+        defer { self.said = said }
+        return ChannelBook.gather(sources) { reply in
+            let words = self.said[reply] ?? ChannelBook.said(reply)
+            said[reply] = words
+            return words
+        }
+    }
+
     private func publish() {
         let book = book()
         if !book.alsoSentHeard.isEmpty { keepAlsoSent(book.alsoSentHeard) }
@@ -361,12 +372,20 @@ final class ChannelFeed {
     }
 
     private func book() -> ChannelBook {
-        var said: [String: String?] = [:]
-        defer { self.said = said }
-        var book = ChannelBook.build(
+        let sources = ChannelBook.Sources(
             kittens: kittens(),
             threads: unreadNew.isEmpty ? threads : threads.filter { !unreadNew.contains($0.id) },
             transcripts: transcripts,
+            messagesThreads: messagesThreads(),
+            withShades: Set(threads.filter(isWithShades).map(\.id)),
+            catsWork: Set(threads.filter(isCatsWork).map(\.id)),
+            couldntRead: couldntRead,
+            reactions: reactions()
+        )
+        let gathering = gathering.flatMap { $0.sources == sources ? $0 : nil } ?? gather(sources)
+        self.gathering = gathering
+        var book = ChannelBook.build(
+            gathering,
             isReading: !hasRead,
             unreadable: unreadable,
             cantReachT3: cantReachT3,
@@ -375,22 +394,12 @@ final class ChannelFeed {
             passedOn: passedOn,
             isUnread: isUnread,
             firstNew: firstNew,
-            messagesThreads: messagesThreads(),
-            withShades: Set(threads.filter(isWithShades).map(\.id)),
-            catsWork: Set(threads.filter(isCatsWork).map(\.id)),
             onPhone: onPhone(),
             hasPhone: hasPhone(),
             alsoSent: alsoSent(),
             olderPages: olderPages,
             loadingOlder: loadingOlder,
-            couldntRead: couldntRead,
-            reactions: reactions(),
-            searchingT3: searching?.words,
-            said: { reply in
-                let words = self.said[reply] ?? ChannelBook.said(reply)
-                said[reply] = words
-                return words
-            }
+            searchingT3: searching?.words
         )
         pictures.fill(&book)
         return book

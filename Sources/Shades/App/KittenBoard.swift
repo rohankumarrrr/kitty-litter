@@ -61,26 +61,30 @@ enum KittenBoard {
 
     final class Owners {
         private let kittens: [Kitten]
+        private let prefixes: [String]
         private let folders: [[String]]
+        private let standard: (String) -> String
         private var byFolder: [String: Kitten?] = [:]
 
-        init(_ kittens: [Kitten]) {
+        init(_ kittens: [Kitten], standard: @escaping (String) -> String = KittenBoard.standard) {
             self.kittens = kittens
-            folders = kittens.map { [$0.folder, $0.project].map(KittenBoard.standard) }
+            self.standard = standard
+            prefixes = kittens.map { "\($0.name):" }
+            folders = kittens.map { [$0.folder, $0.project].map(standard) }
         }
 
         func of(_ thread: AgentThread) -> Kitten? {
-            if let named = kittens.first(where: { thread.title.hasPrefix("\($0.name):") }) { return named }
+            if let named = prefixes.firstIndex(where: thread.title.hasPrefix) { return kittens[named] }
             guard let folder = thread.projectPath else { return nil }
             if let known = byFolder[folder] { return known }
-            let path = KittenBoard.standard(folder)
+            let path = standard(folder)
             let owner = zip(kittens, folders).first { $0.1.contains(path) }?.0
             byFolder[folder] = owner
             return owner
         }
     }
 
-    private static func standard(_ path: String) -> String {
+    static func standard(_ path: String) -> String {
         URL(fileURLWithPath: path).standardizedFileURL.path
     }
 
