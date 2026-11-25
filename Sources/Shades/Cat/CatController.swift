@@ -21,6 +21,7 @@ final class CatController {
 
     private var dragStart: (mouse: NSPoint, origin: CGPoint)?
     private var dragging = false
+    private var takesClicks = false
 
     private var strokeX: CGFloat?
     private var strokeDirection: CGFloat = 0
@@ -204,13 +205,15 @@ final class CatController {
         let mouse = NSEvent.mouseLocation
         let inView = NSPoint(x: mouse.x - panel.frame.minX, y: mouse.y - panel.frame.minY)
         let over = view.isVisiblePixel(at: inView)
-        if panel.ignoresMouseEvents == over { panel.ignoresMouseEvents = !over }
+        guard takesClicks != over else { return }
+        takesClicks = over
+        panel.ignoresMouseEvents = !over
     }
 
     private func mouseMoved() {
         guard !dragging else { return }
         let near = panel.frame.insetBy(dx: -4, dy: -4).contains(NSEvent.mouseLocation)
-        if near || !panel.ignoresMouseEvents { updateClickThrough() }
+        if near || takesClicks { updateClickThrough() }
         if near { stroke() } else { strokeX = nil }
     }
 

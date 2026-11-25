@@ -76,12 +76,12 @@ Journey: `journeys/messages.txt`, drawn in Opal Horizon.
 
 - Opal is dark only, so the demo has no light or dark to pick. `opal <folder>` draws a sheet of its primitives, from `journeys/opal.txt`, and `opal <folder> <hex>...` adds a row of cats in those jackets.
 - `key` gives The Kitty Litter the keyboard first, as a click into it does, so `windows` says `channels ... key=true` afterwards, and `front` stays your app. `key close` closes The Kitty Litter, the same as ⌘W.
-- `highlight` gives The Kitty Litter the keyboard, as pressing in words does, so `windows` says `channels ... key=true` and `active=true` afterwards. The app in front stays yours.
+- `highlight` gives The Kitty Litter the run's keyboard, as pressing in words does, so `windows` says `channels ... key=true` afterwards, with `active=false`. The app in front stays yours.
 - `channel` takes `activity`, `threads`, `shades` or the start of a kitten's name, such as `steve`, and closes any thread that's open. `thread` opens the newest thread the place shows, or with words, the newest whose parent has them, and prints its ID. `back` closes the pane, the same as its ✕. `also on|off` ticks "Also send to" under an open thread's box.
 - `draft <words>` types into the box that's showing without sending, the way typing does, so the line over it can be drawn. `react <name>` picks that reaction from React on the last message that takes one, one of `thumbsUp`, `check`, `eyes`, `heart`, `laugh` and `tada`, and prints which message, or prints `nothing takes a reaction`. A message T3 hasn't echoed yet takes none, so react a few seconds after sending.
 - `t3 off` is T3 not running: replies fail, and The Kitty Litter says it can't reach T3 until `t3 on`. `t3 stuck` is T3 never answering, as when signing in waits on a Keychain dialog. `retry` presses Try again under the last message that has one, or prints `nothing to try again`.
 - `messages` is the same as ⌃⌘B, so a second one closes the window, unless something has covered it since. `channels` only opens it.
-- The window is live, so a row under the real pointer can draw highlighted. That's where the mouse is, not a bug.
+- The window is live, so a row where the real pointer sits can draw highlighted, though nothing of the run shows there. That's where the mouse is, not a bug.
 - `send` is the same as typing in a box and pressing Return: the open thread's, or the place's when no thread is open. It never takes the keyboard. The box beeps and sends nothing when there's nowhere to send, such as in a new thread before T3 has started it. Activity and Threads have no box.
 - The Kitty Litter reads the canned transcripts when it opens. Draw before `wait 1` and it can still say it's reading.
 - The window opens where it was last left. Its frame in `windows` can be on another display.

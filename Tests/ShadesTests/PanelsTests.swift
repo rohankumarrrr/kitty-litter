@@ -36,6 +36,8 @@ final class PanelsTests: XCTestCase {
     }
 
     func testEscClosesThePairingCodeAndItStopsWorking() {
+        Offstage.isOn = true
+        defer { Offstage.isOn = false }
         let stage = AppStage()
         var closed = 0
         stage.pairing.onClose = { closed += 1 }

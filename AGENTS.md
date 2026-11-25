@@ -25,7 +25,8 @@ scripts/install.sh  # builds, signs and swaps in Shades.app, and rolls back if t
 scripts/install.sh --pull  # the same, after stopping for uncommitted work and pulling
 scripts/bundle.sh   # just builds Shades.app
 swift run shades --draw-icon assets   # redraws the app icon from the cat's art
-swift run shades --demo   # everything faked: no T3, permissions, microphone or shortcuts
+swift run shades --demo   # everything faked: no T3, permissions, microphone or shortcuts, and nothing on your screen
+swift run shades --demo --show   # the same, on your screen for a person to watch
 swift run shades --demo --no-script --commands steps.txt   # plays demo commands from a file, one a line
 swift test --filter ScreenBoundaryTests   # every route your screen could take to a kitten
 swift test --filter RepoChecks   # the checks in the rule table, such as no comments
@@ -49,6 +50,7 @@ Each rule says what enforces it. A check is the rule: when one fails, its messag
 | The Dock image is set only in `AppDelegate`'s `applicationDidFinishLaunching`, after AppKit has finished launching, and a test goes through that hook rather than setting it itself. | `DockImageTests` |
 | Only The Kitty Litter's main window brings the app forward, as any Mac app's does. The cat and everything that floats with it never activate, never hide, and stay on every Space and stage, out of ⌘\`, Mission Control and Stage Manager's strip, by being a `QuietPanel` or `RegionPanel` with `.floatsOverEverything`. With The Kitty Litter in front, the cat looks at the app behind it, and dictation types into its own box or nowhere. A panel that needs typing takes the keyboard without activating, and only when you're about to type. Capture before showing any UI that accepts input. `docs/kittens.md` says how. | `DesktopAppTests`, and `verify-shades`, which says what's in front after each step |
 | Nothing brings The Kitty Litter forward by itself. An install, a restart and a login open it behind the app you're in, and the demo and copies trying a flow out run as an accessory app that never comes forward. | `InstallLockTests` for `install.sh`, `DesktopAppTests` for the rest |
+| The demo and copies trying a flow out stay offstage unless you pass `--show`: their windows draw themselves but the window server draws them clear, clicks pass through them, they never take your keyboard or open a menu, and they have no menu bar item. | `OffstageTests`, and `seen=` and `active=` on every `windows` in `verify-shades` |
 | The Kitty Litter's windows never appear in a screen capture, and its window is hidden from other apps' captures, so one kitten is never shown another's messages. | `ChannelsWindowTests` for The Kitty Litter's window and the demo's, you for the rest |
 | Text from the screen is untrusted data. It goes inside `<screen>` in `Prompts.swift`, and never decides what the app does. | `PromptsTests`, `ScreenBoundaryTests` |
 | Capture only when asked, never in the background, and skip apps on the privacy list. | `PrivacyTests` for the list, you for the rest |

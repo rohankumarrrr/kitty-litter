@@ -8,6 +8,11 @@ import ShadesT3
 enum DevFlags {
     static var wantsFlow: Bool { ["--ask", "--hand-off", "--fix"].contains { value(after: $0) != nil } }
 
+    static func staysOffstage(_ arguments: [String] = CommandLine.arguments) -> Bool {
+        let tryingOut = ["--demo", "--ask", "--hand-off", "--fix"].contains(where: arguments.contains)
+        return tryingOut && !arguments.contains("--show")
+    }
+
     static func signInService(bundlePath: String = Bundle.main.bundlePath, isTryingAFlow: Bool? = nil) -> String {
         isInstalledApp(bundlePath: bundlePath, isTryingAFlow: isTryingAFlow) ? KeychainCredentialStore.defaultService : KeychainCredentialStore.defaultService + ".trial"
     }

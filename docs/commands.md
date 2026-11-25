@@ -4,7 +4,7 @@ Everything here is for working on The Kitty Litter. None of it is needed to use 
 
 ## Trying a flow from the command line
 
-These run a flow without touching the mouse or keyboard. With `--image`, whatever would see your screen sees that picture instead, as if it filled the main display, so an answer that points there sends the cat to the same spot. A hand-off or a Fix runs with full access unless Frontier's mode says otherwise, and then only the router sees it. `--hand-off` goes the way a hand-off from the router does. They talk to real T3, so name test threads `Shades test: ...` and archive them afterwards.
+These run a flow without touching the mouse or keyboard. With `--image`, whatever would see your screen sees that picture instead, as if it filled the main display, so an answer that points there sends the cat to the same spot. A hand-off or a Fix runs with full access unless Frontier's mode says otherwise, and then only the router sees it. `--hand-off` goes the way a hand-off from the router does. They talk to real T3, so name test threads `Shades test: ...` and archive them afterwards. Like the demo, they stay out of sight: their windows draw themselves, but nothing shows on your screen, takes a click or takes your keyboard, and there's no menu bar item. Add `--show` to watch one.
 
 ```bash
 shades --ask "What's on my screen?" --image page.jpg
@@ -32,6 +32,7 @@ And the rest:
 shades --picture photo.jpg                        # keeps a small copy of your picture in the app's folder, then quits
 shades --draw-icon assets                         # draws AppIcon.icns into a folder from the app's own drawing, then quits
 shades --demo --no-script --commands steps.txt    # drives the demo from a file of its commands, one a line, such as `wait 2` or `draw out`
+shades --demo --show                              # shows the demo on your screen, with its menu bar item, for a person to watch
 shades --demo --reduce-motion                     # as if Reduce Motion were on, whatever your Mac is set to
 ```
 

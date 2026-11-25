@@ -659,7 +659,7 @@ final class PressWindowsTests: XCTestCase {
     }
 
     private func menuBar() -> MenuBar {
-        let bar = MenuBar()
+        let bar = outOfSight { MenuBar() }
         bar.onAsk = { [unowned controller] in controller!.askPressed() }
         bar.onFix = { [unowned controller] in controller!.fixPressed() }
         bar.onKittens = { [unowned controller] in controller!.kittensPressed() }
@@ -758,7 +758,7 @@ final class PressWindowsTests: XCTestCase {
     func testPairPhoneInTheMenuShowsANewCode() async throws {
         let (controller, stage, _) = try await phoneController()
         let shown = stage.pairings.count
-        let bar = MenuBar()
+        let bar = outOfSight { MenuBar() }
         bar.canPairPhone = { controller.phone != nil }
         bar.onPairPhone = { controller.pairPhone() }
         try await choose(CatWords.pairItem, in: bar)

@@ -38,4 +38,4 @@ Journey: `journeys/settings.txt`. `settings <page>` turns to a page, the same as
 ## Gotchas
 
 - A menu waits for a click on the real desktop, so nothing in the demo opens one. `setting Front door mode Auto` picks from a row's own choices the way a click on that item would. macOS draws a menu itself, outside the app, so no picture can show one open: `menuitems`, `notifications` and `fonts` print what each holds. Font and a channel's button make their menus as they open, so `font` and `notifications` stand in for picking from those, and Settings shows the result. Reaching them with Tab, and pressing Done with Space, is in [keyboard.md](keyboard.md).
-- `front` must stay whatever was in front before the run. `window settings ... key=true` and `active=true` are expected while Settings has the keyboard.
+- `front` must stay whatever was in front before the run. `window settings ... key=true` is expected while Settings has the run's keyboard, with `active=false`.

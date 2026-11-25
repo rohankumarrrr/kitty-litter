@@ -37,7 +37,7 @@ final class DemoDriver {
         if let steve = Demo.kittens.first { controller.channels.sent(DemoChannels.alsoSentEcho, in: .of(steve), alsoSent: true) }
         DemoBench.markLaunch(stage)
         readCommands()
-        print("Demo mode. Type a command, or use the menu bar item. Try: help")
+        print(Offstage.isOn ? "Demo mode, out of sight. Type a command. Try: help" : "Demo mode. Type a command, or use the menu bar item. Try: help")
         if script {
             Task {
                 try? await Task.sleep(nanoseconds: 8_000_000_000)
@@ -759,7 +759,7 @@ final class DemoDriver {
             print("voiceover \(verb) [\(view.accessibilityLabel() ?? "")] \(done ? "done" : "refused")")
         case "windows":
             for (name, window) in windows {
-                print("window \(name) id=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) frame=\(NSStringFromRect(window.frame)) clicks=\(!window.ignoresMouseEvents) alpha=\(String(format: "%.2f", window.alphaValue))")
+                print("window \(name) id=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) frame=\(NSStringFromRect(window.frame)) clicks=\(Offstage.takesClicks(window)) alpha=\(String(format: "%.2f", Offstage.alpha(of: window))) seen=\(Offstage.isSeen(window) ? "yes" : "no")")
             }
             print("state \(stage.cat.brain.state) pose=\(stage.cat.brain.pose.frame.rawValue) active=\(NSApp.isActive)")
         case "opal":
