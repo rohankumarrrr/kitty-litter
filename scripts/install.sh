@@ -70,7 +70,7 @@ restore() {
   stop_running
   rm -f "$health"
   put_in_place "$keep"
-  open "$app"
+  open -g "$app"
 }
 
 take_lock
@@ -110,7 +110,7 @@ fi
 put_in_place "$next/Shades.app"
 
 rm -f "$health"
-open "$app" || true
+open -g "$app" || true
 deadline=$(( SECONDS + wait_seconds ))
 while (( SECONDS < deadline )); do
   if [[ -f "$health" ]] && pgrep -x Shades >/dev/null; then

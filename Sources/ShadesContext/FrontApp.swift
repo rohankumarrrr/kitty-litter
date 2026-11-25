@@ -17,18 +17,21 @@ struct FrontApp: Equatable, Sendable {
 
     static func current() -> FrontApp? {
         let me = ProcessInfo.processInfo.processIdentifier
-        if let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != me {
-            return FrontApp(app)
-        }
-        guard let pid = FrontWindow.topOwner(excluding: me),
+        let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        guard let pid = pid(frontmost: frontmost, me: me, windows: FrontWindow.windows()),
               let app = NSRunningApplication(processIdentifier: pid)
         else { return nil }
         return FrontApp(app)
     }
+
+    static func pid(frontmost: pid_t?, me: pid_t, windows: [[String: Any]]) -> pid_t? {
+        if let frontmost, frontmost != me { return frontmost }
+        return FrontWindow.topOwner(excluding: me, among: windows)
+    }
 }
 
 public enum FrontWindow {
-    private static func windows() -> [[String: Any]] {
+    static func windows() -> [[String: Any]] {
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
         return CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
     }
@@ -52,8 +55,8 @@ public enum FrontWindow {
         return window?[kCGWindowName as String] as? String
     }
 
-    static func topOwner(excluding pid: pid_t) -> pid_t? {
-        windows().first { isNormal($0) && owner($0) != pid }.flatMap(owner)
+    static func topOwner(excluding pid: pid_t, among windows: [[String: Any]]) -> pid_t? {
+        windows.first { isNormal($0) && owner($0) != pid }.flatMap(owner)
     }
 
     public static func isOnTop(_ id: Int) -> Bool {

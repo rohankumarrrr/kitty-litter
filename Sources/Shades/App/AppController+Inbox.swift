@@ -123,6 +123,7 @@ extension AppController {
 
     func startInbox() {
         keepInbox()
+        showNeedsYouCount()
         let news = inboxEntries.filter { $0.needsYou || $0.kind == .shipped }
         if !news.isEmpty { nudgeInbox(about: news.map { .thread($0.threadID) }) }
         renderBubble()
@@ -130,7 +131,7 @@ extension AppController {
 
     func nudgeInbox(about missed: [Missed]) {
         guard missed.map({ mayPopUp($0) }).contains(true) else { return }
-        if stage.isChannelsVisible {
+        if stage.isChannelsOpen {
             nudgeOnClose = true
         } else {
             inboxNudge = true
@@ -148,6 +149,10 @@ extension AppController {
 
     var messagesMenuLine: String? {
         CatWords.inboxSummary(inboxEntries)
+    }
+
+    func showNeedsYouCount() {
+        stage.showNeedsYou(inboxEntries.filter(\.needsYou).count)
     }
 
     func inboxAction(_ action: InboxAction) {

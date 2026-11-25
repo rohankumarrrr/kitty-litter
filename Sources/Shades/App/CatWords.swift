@@ -19,6 +19,7 @@ enum CatWords {
     static let noReply = "Hm, nothing came back. Try again?"
     static let rewriteCopied = "I couldn't swap it in, so it's copied. Paste it where you want it."
     static let didntCatch = "I didn't catch that."
+    static let noBoxToTypeIn = "Click into a box first, and I'll type there."
     static let tellMeWhatsWrong = "I can't see this one, so tell me what's wrong."
     static let cantSeeScreen = "I can't see your screen just now, but ask away."
     static let overHere = "Over here."

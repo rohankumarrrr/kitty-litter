@@ -72,12 +72,12 @@ final class MessagesShortcutsTests: XCTestCase {
         let window = ChannelsWindow()
         window.update(book())
         window.view.select(.channel(.of(steve)))
-        XCTAssertFalse(window.panel.isKeyWindow)
+        XCTAssertFalse(window.window.isKeyWindow)
         let all: [MessagesShortcut] = [.previousThread, .nextThread, .previousPlace, .nextPlace, .previousUnread, .nextUnread, .back, .forward, .place(1), .jump, .search, .escape, .threads, .activity, .compose, .toggleSidebar, .close, .cheatsheet]
         var closed = false
         window.view.onCloseWindow = { closed = true }
         for shortcut in all {
-            XCTAssertFalse(window.panel.handle(shortcut), "\(shortcut)")
+            XCTAssertFalse(window.window.handle(shortcut), "\(shortcut)")
         }
         XCTAssertEqual(window.view.selection, .channel(.of(steve)), "nothing moved")
         XCTAssertTrue(window.view.jumpBox.isHidden)
@@ -295,10 +295,10 @@ final class MessagesShortcutsTests: XCTestCase {
         let view = window.view
         view.select(.channel(.of(steve)))
         XCTAssertTrue(view.perform(.compose))
-        XCTAssertTrue(window.panel.firstResponder === view.pane.composer.textView)
+        XCTAssertTrue(window.window.firstResponder === view.pane.composer.textView)
         view.select(.thread("s1", in: .threads))
         XCTAssertTrue(view.perform(.compose))
-        XCTAssertTrue(window.panel.firstResponder === view.threadPane.composer.textView, "Threads has no box, so the thread's")
+        XCTAssertTrue(window.window.firstResponder === view.threadPane.composer.textView, "Threads has no box, so the thread's")
         view.select(.activity)
         XCTAssertFalse(view.perform(.compose), "and Activity has neither")
     }
@@ -332,13 +332,6 @@ final class MessagesShortcutsTests: XCTestCase {
         let roomy = ChannelsView(frame: NSRect(origin: .zero, size: ChannelsWindow.size))
         roomy.layoutSubtreeIfNeeded()
         XCTAssertLessThan(roomy.cheatsheet.card.width, ChannelsWindow.size.width / 2, "one column where it fits, as Slack's list is")
-    }
-
-    func testClickingIntoMessagesGivesItTheKeyboardWithoutActivatingShades() {
-        let panel = ChannelsPanel()
-        XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel), "so the app you were in stays active")
-        XCTAssertTrue(panel.canBecomeKey)
-        XCTAssertFalse(panel.canBecomeMain)
     }
 }
 

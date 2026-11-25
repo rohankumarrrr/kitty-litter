@@ -85,7 +85,8 @@ final class RegionPanel: NSPanel {
         contentView = overlay
         setFrame(screen.frame, display: false)
         level = .screenSaver
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        collectionBehavior = .floatsOverEverything
+        canHide = false
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
@@ -115,4 +116,8 @@ final class RegionPanel: NSPanel {
     func globalRect(from rect: CGRect) -> CGRect {
         rect.offsetBy(dx: frame.minX, dy: frame.minY)
     }
+}
+
+public extension NSWindow.CollectionBehavior {
+    static let floatsOverEverything: Self = [.canJoinAllSpaces, .canJoinAllApplications, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 }
