@@ -93,13 +93,7 @@ extension MenuBar {
         menu.addItem(standard("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"))
         menu.addItem(standard("Zoom", #selector(NSWindow.performZoom(_:))))
         menu.addItem(.separator())
-        let litter = addAction(CatWords.appName, shortcut: .messages, to: menu) { [weak self] in self?.onMessages?() }
-        menu.addItem(.separator())
         menu.addItem(standard("Bring All to Front", #selector(NSApplication.arrangeInFront(_:)), target: NSApp))
-        menu.delegate = self
-        refreshesOnOpen[menu] = { [weak self] in
-            litter.badge = self?.messagesSummary?().map { NSMenuItemBadge(string: $0) }
-        }
         return menu
     }
 

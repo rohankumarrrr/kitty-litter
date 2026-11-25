@@ -162,9 +162,33 @@ final class DesktopAppTests: XCTestCase {
             [kCGWindowOwnerPID as String: owner, kCGWindowLayer as String: layer]
         }
         let stack = [window(me, layer: 25), window(me), window(1, layer: 24), window(editor), window(browser)]
-        XCTAssertEqual(FrontApp.pid(frontmost: me, me: me, windows: stack), editor, "its own windows, the cat's included, are passed over")
-        XCTAssertEqual(FrontApp.pid(frontmost: browser, me: me, windows: stack), browser, "with another app active, that's the one")
-        XCTAssertNil(FrontApp.pid(frontmost: me, me: me, windows: [window(me)]), "nothing of anyone else's to look at")
+        XCTAssertEqual(FrontApp.pid(frontmost: me, me: me, windows: stack, isApp: { _ in true }), editor, "its own windows, the cat's included, are passed over")
+        XCTAssertEqual(FrontApp.pid(frontmost: browser, me: me, windows: stack, isApp: { _ in true }), browser, "with another app active, that's the one")
+        XCTAssertNil(FrontApp.pid(frontmost: me, me: me, windows: [window(me)], isApp: { _ in true }), "nothing of anyone else's to look at")
+    }
+
+    func testWithTheKittyLitterInFrontTheCatLooksPastAToolsBorderToTheAppBehind() {
+        let me: pid_t = 10, editor: pid_t = 20, borders: pid_t = 30
+        func window(_ owner: pid_t, layer: Int = 0) -> [String: Any] {
+            [kCGWindowOwnerPID as String: owner, kCGWindowLayer as String: layer]
+        }
+        let stack = [window(me, layer: 25), window(me), window(borders), window(editor)]
+        XCTAssertEqual(FrontApp.pid(frontmost: me, me: me, windows: stack, isApp: { $0 != borders }), editor, "a tool with no app draws over the app it's for")
+    }
+
+    func testTheWindowMenuListsTheKittyLittersWindowOnce() throws {
+        let bar = menuBar()
+        bar.installMainMenu()
+        defer {
+            NSApp.mainMenu = nil
+            NSApp.windowsMenu = nil
+        }
+        let window = ChannelsMainWindow()
+        window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+        window.orderFrontRegardless()
+        defer { window.close() }
+        let titles = try XCTUnwrap(NSApp.windowsMenu).items.map(\.title)
+        XCTAssertEqual(titles.filter { $0 == CatWords.appName }.count, 1, "\(titles)")
     }
 
     func testDictatingWhileTheKittyLitterIsInFrontTypesIntoItsBoxAndNeverPastes() async {
@@ -284,7 +308,7 @@ final class DesktopAppTests: XCTestCase {
         ])
         XCTAssertEqual(main.item(withTitle: "File")?.submenu?.items.map(\.title), ["Ask…", "Fix What I'm Looking At", "", "Close Window"])
         XCTAssertEqual(main.item(withTitle: "View")?.submenu?.items.map(\.title), [CatWords.kittensTitle, "", "Enter Full Screen"])
-        XCTAssertEqual(main.item(withTitle: "Window")?.submenu?.items.map(\.title), ["Minimize", "Zoom", "", CatWords.appName, "", "Bring All to Front"])
+        XCTAssertEqual(main.item(withTitle: "Window")?.submenu?.items.map(\.title), ["Minimize", "Zoom", "", "Bring All to Front"])
     }
 
     func testTheAppMenusSystemItemsDoWhatEveryMacAppsDo() throws {
@@ -338,8 +362,6 @@ final class DesktopAppTests: XCTestCase {
         XCTAssertTrue(stage.log.all.contains("pickRegion"), "Fix asks where to look")
         try await choose("View", CatWords.kittensTitle, in: main)
         XCTAssertEqual(stage.kittens?.map(\.kitten.name), ["Steve Pawsniak"], "the kittens view opens")
-        try await choose("Window", CatWords.appName, in: main)
-        XCTAssertEqual(stage.channelsShown.count, 1, "The Kitty Litter opens")
         try await choose(CatWords.appName, CatWords.doNotDisturb, in: main)
         XCTAssertTrue(controller.settings.doNotDisturb)
         XCTAssertEqual(try item(CatWords.appName, CatWords.doNotDisturb, in: main).state, .on, "ticked while it's on")
@@ -355,25 +377,23 @@ final class DesktopAppTests: XCTestCase {
         let main = bar.mainMenu()
         try await press(",", .command, in: main)
         XCTAssertEqual(stage.settingsShown.count, 1, "⌘, opens Settings")
-        try await press("b", [.control, .command], in: main)
-        XCTAssertEqual(stage.channelsShown.count, 1, "⌃⌘B opens The Kitty Litter")
-        try await press(" ", .option, in: main)
-        XCTAssertNotNil(stage.input, "⌥Space opens the Ask box")
+        try await press(Shortcut.ask.key, Shortcut.ask.keyModifiers, in: main)
+        XCTAssertNotNil(stage.input, "the Ask shortcut opens the Ask box")
+        stage.hideInput()
+        try await press(Shortcut.fix.key, Shortcut.fix.keyModifiers, in: main)
+        XCTAssertTrue(stage.log.all.contains("pickRegion"), "the Fix shortcut asks where to look")
         let keys = everyItem(in: main).filter { !$0.keyEquivalent.isEmpty }.map { "\($0.keyEquivalentModifierMask.rawValue) \($0.keyEquivalent)" }
         XCTAssertEqual(keys.count, Set(keys).count, "each shortcut does one thing: \(keys.sorted())")
         withExtendedLifetime(bar) {}
     }
 
-    func testThePairItemOnlyShowsWithAPhoneToPairAndTheWindowItemCarriesTheCount() throws {
+    func testThePairItemOnlyShowsWithAPhoneToPair() throws {
         let bar = menuBar()
         var phone = false
         bar.canPairPhone = { phone }
-        bar.messagesSummary = { "1 needs you" }
         let main = bar.mainMenu()
         XCTAssertTrue(try item(CatWords.appName, CatWords.pairItem, in: main).isHidden)
         phone = true
         XCTAssertFalse(try item(CatWords.appName, CatWords.pairItem, in: main).isHidden)
-        XCTAssertEqual(try item("Window", CatWords.appName, in: main).badge?.stringValue, "1 needs you")
-        XCTAssertEqual(try item("Window", CatWords.appName, in: main).keyEquivalent, "b", "the shortcut the app holds")
     }
 }
