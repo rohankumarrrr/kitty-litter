@@ -619,10 +619,11 @@ enum T3Wire {
 
         var isFromPerson: Bool { thread.createdBy == "user" }
 
-        // Outside the repo: T3 leaves a long thread's first runs out of its projection, and t3_thread_launch gives a thread's first message the thread's own ID.
-        func firstMessageItemID(threadID: String) -> String {
-            let first = runs.compactMap(\.value).first { $0.ordinal == 1 }
-            return T3Wire.userMessageItemID(messageID: first?.userMessageId ?? threadID)
+        // Outside the repo: t3_thread_launch gives a thread's first message the thread's own ID, a restart points run 1 at the message that restarted it, and a long thread's projection leaves run 1 out.
+        func firstMessageItemIDs(threadID: String) -> [String] {
+            let launched = T3Wire.userMessageItemID(messageID: threadID)
+            guard let first = runs.compactMap(\.value).first(where: { $0.ordinal == 1 }), first.userMessageId != threadID else { return [launched] }
+            return [launched, T3Wire.userMessageItemID(messageID: first.userMessageId)]
         }
 
         func startedBy(firstMessage: TurnItem?) -> ThreadOrigin.Starter {

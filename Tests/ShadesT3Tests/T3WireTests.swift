@@ -323,14 +323,23 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(try projection(createdBy: nil).startedBy(firstMessage: nil), .unknown)
     }
 
-    func testTheFirstMessageIsTheFirstRunsWhenT3StillHasIt() throws {
-        let runs = #"[{"id":"r2","userMessageId":"later","status":"completed","ordinal":2},{"id":"r1","userMessageId":"msg:first","status":"completed","ordinal":1}]"#
-        XCTAssertEqual(try projection(createdBy: "agent", runs: runs).firstMessageItemID(threadID: "t"), "turn-item:message:msg%3Afirst")
+    func testTheMessageItWasLaunchedWithComesBeforeOneThatRestartedItsFirstRun() throws {
+        let runs = #"[{"id":"r2","userMessageId":"later","status":"completed","ordinal":2},{"id":"r1","userMessageId":"message:restart:1","status":"completed","ordinal":1}]"#
+        XCTAssertEqual(
+            try projection(createdBy: "agent", runs: runs).firstMessageItemIDs(threadID: "mcp:launch:abc"),
+            ["turn-item:message:mcp%3Alaunch%3Aabc", "turn-item:message:message%3Arestart%3A1"],
+            "another thread restarting run 1 doesn't make it the one that started the thread"
+        )
     }
 
     func testALongThreadsFirstMessageIsTheOneItWasLaunchedWith() throws {
         let runs = #"[{"id":"r5","userMessageId":"message:pr-watch:1","status":"completed","ordinal":5}]"#
-        XCTAssertEqual(try projection(createdBy: "agent", runs: runs).firstMessageItemID(threadID: "mcp:launch:abc"), "turn-item:message:mcp%3Alaunch%3Aabc", "a later run's wake-up isn't the first message")
+        XCTAssertEqual(try projection(createdBy: "agent", runs: runs).firstMessageItemIDs(threadID: "mcp:launch:abc"), ["turn-item:message:mcp%3Alaunch%3Aabc"], "a later run's wake-up isn't the first message")
+    }
+
+    func testRunOneLaunchedWithTheThreadsOwnIDIsAskedForOnce() throws {
+        let runs = #"[{"id":"r1","userMessageId":"mcp:launch:abc","status":"completed","ordinal":1}]"#
+        XCTAssertEqual(try projection(createdBy: "agent", runs: runs).firstMessageItemIDs(threadID: "mcp:launch:abc"), ["turn-item:message:mcp%3Alaunch%3Aabc"])
     }
 }
 
