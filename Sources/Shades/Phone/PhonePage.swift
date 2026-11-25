@@ -467,13 +467,14 @@ enum PhonePage {
 
         async function act(body, quiet) {
           const asked = Date.now();
+          const holding = pass;
           const response = await request('/act', body);
           if (response && response.ok) {
             if (quiet) reached(); else banner('');
             if (!quiet) setTimeout(() => { if (stream && heard < asked) listen(); }, 3000);
             return response.json();
           }
-          if (response && response.status === 401) { pairing(); return null; }
+          if (response && response.status === 401) { refused(holding); return null; }
           if (!quiet) banner(response && response.status === 409 ? words.gone : words.unreachable);
           return null;
         }
@@ -487,9 +488,10 @@ enum PhonePage {
           }
           if (!pass) return pairing();
           let hello = null;
+          const holding = pass;
           try { hello = await fetch('/hello', { headers: headers(), cache: 'no-store' }); } catch (error) {}
           if (hello && hello.status === 401) {
-            pairing();
+            if (!refused(holding)) return;
             if (code) $('pairnote').textContent = words.wrongCode;
             return;
           }
@@ -560,11 +562,24 @@ enum PhonePage {
           return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
         }
 
+        function refused(holding) {
+          if (holding !== pass) return false;
+          const stored = localStorage.getItem('shades.key');
+          if (stored && stored !== holding) {
+            pass = stored;
+            start();
+            return false;
+          }
+          pairing();
+          return true;
+        }
+
         function pairing() {
           if (stream) stream.abort();
           stream = null;
+          if (localStorage.getItem('shades.key') === pass) localStorage.removeItem('shades.key');
           pass = null;
-          localStorage.removeItem('shades.key');
+          for (const sheet of document.querySelectorAll('dialog')) if (sheet.open) sheet.close();
           $('found').replaceChildren();
           $('bar').hidden = false;
           banner('');
@@ -597,9 +612,10 @@ enum PhonePage {
           stream = mine;
           received = null;
           heard = began = Date.now();
+          const holding = pass;
           try {
             const response = await fetch('/events?key=' + encodeURIComponent(key) + '&page=' + page, { headers: headers(), cache: 'no-store', signal: mine.signal });
-            if (response.status === 401) return pairing();
+            if (response.status === 401) return refused(holding);
             if (!response.ok || !response.body) throw new Error(String(response.status));
             const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
             let buffer = '';
@@ -852,9 +868,10 @@ enum PhonePage {
         async function find() {
           const asked = $('query').value;
           if (asked.trim().length < 2) return $('found').replaceChildren(el('p', 'note', words.searchHint));
+          const holding = pass;
           const response = await request('/search', { words: asked });
           if (asked !== $('query').value || $('search').hidden) return;
-          if (response && response.status === 401) return pairing();
+          if (response && response.status === 401) return refused(holding);
           if (!response || !response.ok) return banner(response && response.status === 409 ? words.gone : words.unreachable);
           banner('');
           const result = await response.json();
@@ -1406,9 +1423,10 @@ enum PhonePage {
               if (isPicture) { going.picture = await preview(blob); chips(); }
               if (!attached.includes(going)) continue;
               if (blob.size > 10 * 1024 * 1024) { drop(going); banner(words.tooBig); continue; }
+              const holding = pass;
               const response = await upload(blob, name, going);
               if (!attached.includes(going)) continue;
-              if (response.status === 401) return pairing();
+              if (response.status === 401 && refused(holding)) return;
               if (!response.ok) { drop(going); banner(response.status === 413 ? words.tooBig : words.unreachable); continue; }
               going.id = response.id;
               delete going.sent;
