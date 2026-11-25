@@ -17,6 +17,7 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
     public var change: ChangeRequest?
     public var ask: AskRequest?
     public var raisedAt: Date?
+    public var turnSeenAt: Date?
     public var pullRequest: Int?
 
     public init(
@@ -32,6 +33,7 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
         change: ChangeRequest? = nil,
         ask: AskRequest? = nil,
         raisedAt: Date? = nil,
+        turnSeenAt: Date? = nil,
         pullRequest: Int? = nil
     ) {
         self.id = id
@@ -46,6 +48,7 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
         self.change = change
         self.ask = ask
         self.raisedAt = raisedAt
+        self.turnSeenAt = turnSeenAt
         self.pullRequest = pullRequest
     }
 
@@ -190,6 +193,10 @@ public struct Inbox: Codable, Equatable, Sendable {
         }
     }
 
+    private static func raised(_ thread: AgentThread, filedAt date: Date) -> Date {
+        min(date, thread.lastRunEndedAt ?? date)
+    }
+
     private static func openPullRequest(of thread: AgentThread) -> Int? {
         thread.pullRequest.flatMap { $0.isOpen ? $0.number : nil }
     }
@@ -203,7 +210,7 @@ public struct Inbox: Codable, Equatable, Sendable {
         func add(_ kind: InboxEntry.Kind, _ text: String) {
             entries.append(InboxEntry(
                 id: id(), kind: kind, text: text, threadID: thread.id, threadTitle: thread.title, at: at,
-                raisedAt: at, pullRequest: Self.openPullRequest(of: thread)
+                raisedAt: Self.raised(thread, filedAt: at), pullRequest: Self.openPullRequest(of: thread)
             ))
         }
         guard sorted.decision != nil || sorted.shipped != nil else {
@@ -211,7 +218,7 @@ public struct Inbox: Codable, Equatable, Sendable {
             if let row = rowYouAskedOn(from: thread.id) {
                 entries[row].answer = note
                 entries[row].repliedAt = nil
-                entries[row].raisedAt = at
+                entries[row].raisedAt = Self.raised(thread, filedAt: at)
                 log(since: before, at: at, leaving: .reportDidntAsk, entering: (startedBy, thread.turnEnded, .answerToYou))
                 return true
             }
@@ -241,14 +248,19 @@ public struct Inbox: Codable, Equatable, Sendable {
         entries.removeAll { $0.threadID == thread.id && $0.followsItsThread }
         entries.append(InboxEntry(
             id: id, kind: .decision, text: decision, threadID: thread.id, threadTitle: thread.title, at: at,
-            raisedAt: at, pullRequest: Self.openPullRequest(of: thread)
+            raisedAt: Self.raised(thread, filedAt: at), pullRequest: Self.openPullRequest(of: thread)
         ))
         log(since: before, at: at, leaving: .superseded, entering: (startedBy, thread.turnEnded, .sorter))
     }
 
     public mutating func ask(_ entry: InboxEntry, startedBy: WaitingVisit.Starter, held: Bool, title: (String) -> String? = { _ in nil }) {
-        let before = waiting
+        var before = waiting
+        let again = entries.first { $0.needsYou && $0.threadID == entry.threadID && $0.asksForSame(as: entry) }?.id
         add(asked: entry, title: title)
+        if let again, !entries.contains(where: { $0.id == again }), entries.contains(where: { $0.id == entry.id && $0.needsYou }) {
+            record.renamed(again, to: entry.id)
+            before = before.map { $0.id == again ? entry : $0 }
+        }
         log(since: before, at: entry.at, leaving: .superseded, entering: (startedBy, held, .requestCard))
     }
 
@@ -326,9 +338,11 @@ public struct Inbox: Codable, Equatable, Sendable {
             let exit = listed[entry.threadID].map { Self.movedOn(entry, $0) } ?? .archived
             guard let exit else { continue }
             if exit == .replied {
-                guard entry.followsItsThread, entry.repliedAt == nil else { continue }
-                entries[index].repliedAt = date
-                exits[entry.id] = .replied
+                entries[index].turnSeenAt = listed[entry.threadID]?.lastRunStartedAt
+                if entry.followsItsThread, entry.repliedAt == nil {
+                    entries[index].repliedAt = date
+                    exits[entry.id] = .replied
+                }
             } else if entry.followsItsThread {
                 entries.remove(at: index)
                 exits[entry.id] = exit
@@ -344,14 +358,24 @@ public struct Inbox: Codable, Equatable, Sendable {
 
     static func movedOn(_ entry: InboxEntry, _ thread: AgentThread) -> WaitingVisit.Exit? {
         let raised = entry.raisedAt ?? entry.at
+        let since = max(raised, entry.turnSeenAt ?? raised)
         if let number = entry.pullRequest, let pull = thread.pullRequest, pull.number == number {
             if pull.state == "merged" { return .pullRequestMerged }
             if pull.state == "closed" { return .pullRequestClosed }
         }
         if let settled = thread.settledAt, settled > raised { return .settled }
-        guard let started = thread.lastRunStartedAt, started > raised else { return nil }
-        if let words = thread.lastWordsFromYouAt, words > raised { return .replied }
+        guard let started = thread.lastRunStartedAt, started > since else { return nil }
+        if let words = thread.lastWordsFromYouAt, words > since { return .replied }
         return .turnWithoutYou
+    }
+
+    public mutating func anotherThreadWrote(to threadID: String, at date: Date) {
+        let before = waiting
+        entries.removeAll { $0.threadID == threadID && $0.followsItsThread }
+        for index in entries.indices where entries[index].threadID == threadID && !entries[index].isStanding {
+            entries[index].repliedAt = nil
+        }
+        log(since: before, at: date, leaving: .turnWithoutYou)
     }
 
     public mutating func startedForYou(_ threadID: String, at date: Date) {

@@ -59,6 +59,7 @@ extension AppController {
         let starter = starter(of: thread)
         if inbox.file(lines, from: thread, startedBy: starter, at: now(), id: { UUID().uuidString }) { nudgeInbox(about: [.thread(thread.id)]) }
         changes.forEach { inbox.ask($0, startedBy: starter, held: thread.turnEnded, title: title(ofThread:)) }
+        inbox.follow(latestThreads, at: now())
         keepInbox()
         inboxChanged()
         if owed, lines.decision == nil, !thread.turnEnded { notifyFinished(thread, by: kitten(of: thread)) }

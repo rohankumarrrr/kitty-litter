@@ -56,6 +56,11 @@ public struct WaitingRecord: Codable, Equatable, Sendable {
         visits[index].leftAt = date
     }
 
+    mutating func renamed(_ row: String, to newRow: String) {
+        guard let index = visits.lastIndex(where: { $0.row == row && $0.isOpen }) else { return }
+        visits[index].row = newRow
+    }
+
     mutating func cameBack(_ row: String) {
         guard let index = visits.lastIndex(where: { $0.row == row }), visits[index].exit == .replied else { return }
         visits[index].exit = nil

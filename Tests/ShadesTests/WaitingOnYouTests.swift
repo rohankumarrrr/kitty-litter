@@ -144,6 +144,60 @@ final class WaitingOnYouTests: XCTestCase {
         XCTAssertEqual(relays.map(\.threadID), ["main"], "what it said in an earlier run doesn't count")
     }
 
+    func testADelegatedThreadIsntToldToItsParentTwice() async {
+        var delegated = work("thread:delegated-task:c1", of: clawde, launchedBy: "main")
+        delegated.isDelegated = true
+        await endTurn(delegated, report: "Pick A or B?", sorted: "DECISION: Pick A or B?")
+        XCTAssertTrue(relays.isEmpty, "T3 tells the parent itself")
+        XCTAssertEqual(waiting, [])
+    }
+
+    func testALaunchedThreadNoKittenOwnsIsLeftAsItWas() async {
+        let loose = Kitten(name: "Nobody", role: "", covers: "", folder: "/k/nobody")
+        let thread = work("w", of: loose, launchedBy: "main")
+        backend.reports["w"] = "All done."
+        var running = thread
+        running.status = .running
+        show([running])
+        show([thread])
+        let read = await until { self.controller.readRuns["w"] != nil && self.controller.filing.isEmpty }
+        await controller.reportTask?.value
+        XCTAssertTrue(read)
+        XCTAssertTrue(relays.isEmpty, "no thread the app doesn't own gets a note")
+    }
+
+    func testTheLaunchersRowGoesWhenTheAppPassesItAReport() async throws {
+        await endTurn(work("main", of: clawde), report: "Pick plan A or plan B?", sorted: "DECISION: Pick plan A or plan B?")
+        XCTAssertEqual(waiting.count, 1)
+        clock = clock.addingTimeInterval(60)
+        await endTurn(work("w", of: clawde, launchedBy: "main"), report: "PR #4 is up.")
+        XCTAssertEqual(relays.map(\.threadID), ["main"])
+        XCTAssertEqual(waiting, [], "another thread wrote to it, so it's moved on")
+        XCTAssertEqual(controller.inbox.record.visits.first?.exit, .turnWithoutYou)
+
+        var main = try XCTUnwrap(listed.first { $0.id == "main" })
+        main.lastWordsFromYouAt = clock
+        main.lastRunStartedAt = clock.addingTimeInterval(1)
+        main.lastRunID = "run-main-2"
+        main.lastRunEndedAt = clock.addingTimeInterval(30)
+        await endTurn(main, report: "The worker's PR #4 waits on CI.", sorted: "NOTE: The worker's PR #4 waits on CI.")
+        XCTAssertEqual(waiting, [], "the note isn't an answer to you")
+    }
+
+    func testARowFiledWhileItsThreadIsWokenAgainGoesAtOnce() async {
+        let thread = work("w", of: clawde, held: true, pullRequest: ThreadPullRequest(number: 2, state: "open", watched: true))
+        backend.whileReadingAReport = { @MainActor [unowned self] in
+            var woken = thread
+            woken.turnEnded = false
+            woken.lastRunStartedAt = self.clock.addingTimeInterval(5)
+            self.controller.latestThreads = [woken]
+            self.clock = self.clock.addingTimeInterval(10)
+        }
+        await endTurn(thread, report: "Pick A or B?", sorted: "DECISION: Pick A or B?")
+        XCTAssertEqual(waiting, [], "its checks woke it before the row was filed")
+        XCTAssertEqual(controller.inbox.record.visits.map(\.exit), [.turnWithoutYou])
+    }
+
     func testIfTheLauncherCantBeReachedTheReportComesToYou() async {
         backend.forwardError = URLError(.badServerResponse)
         await endTurn(work("w", of: clawde, launchedBy: "gone"), report: "Pick A or B?", sorted: "DECISION: Pick A or B?")

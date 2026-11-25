@@ -15,11 +15,11 @@ description: Check that a row stays in The Kitty Litter's Waiting on you only wh
 swift test --filter WaitingOnYouModelTests
 ```
 
-Run `swift` on its own, with no pipe and no `cd`. It takes about 7 seconds and passes with `Executed 3 tests, with 0 failures`.
+Run `swift` on its own, with no pipe and no `cd`. It takes about a second and passes with `Executed 4 tests, with 0 failures`.
 
 ## How it works
 
-`Tests/ShadesCoreTests/WaitingOnYouModelTests.swift` walks every sequence of up to six events from a start where threads `a` and `b` are both mid-run, and applies each one to the real `Inbox` the way `AppController.threadsChanged` and `file` do: it updates the thread as T3 would list it, calls `Inbox.follow`, and files the report.
+`Tests/ShadesCoreTests/WaitingOnYouModelTests.swift` walks every sequence of up to five events from a start where threads `a` and `b` are both mid-run, and applies each one to the real `Inbox` the way `AppController.threadsChanged` and `file` do: it updates the thread as T3 would list it, calls `Inbox.follow`, and files the report.
 
 | Event | What it stands for in the code |
 |---|---|
@@ -55,7 +55,7 @@ A failure prints the path, such as `a ends with decision, you reply to a's row, 
 - **Who started the thread.** Which threads file rows at all is `WaitingOnYouTests` in `Tests/ShadesTests`, through the real `AppController`.
 - **Request cards.** Standing rows never follow their thread. `StaleRequestTests` covers when they go.
 - **Timing within T3.** It assumes a run's start and the words that started it reach the app in the same list, as T3 sends them together.
-- **Bounds.** Two threads, six events. The rules are per thread, so a longer path only repeats these steps.
+- **Bounds.** Two threads, five events, which holds the longest bug it replays. The rules are per thread, so a longer path only repeats these steps.
 
 ## Sync
 

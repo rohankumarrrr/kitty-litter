@@ -14,6 +14,9 @@ public struct T3Project: Identifiable, Sendable, Hashable {
 }
 
 struct T3ThreadList {
+    // Outside the repo: T3 names a delegate_task child thread this way, and tells its parent itself when it's done.
+    static let delegatedThreadPrefix = "thread:delegated-task:"
+
     struct PendingApproval: Equatable {
         let requestID: String
         let threadID: String
@@ -146,6 +149,7 @@ struct T3ThreadList {
                     lastRunEndedAt: thread.latestRunCompletedAt,
                     lastVisitedAt: thread.lastVisitedAt,
                     startedByAgent: thread.createdBy == "agent",
+                    isDelegated: thread.id.hasPrefix(Self.delegatedThreadPrefix),
                     lastRunStartedAt: thread.latestRunStartedAt,
                     lastWordsFromYouAt: thread.latestUserAuthoredMessageAt
                 )

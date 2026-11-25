@@ -79,7 +79,7 @@ extension AppController {
     }
 
     func launcher(of thread: AgentThread) async -> String? {
-        guard thread.startedByAgent, !dispatchers.contains(thread.id), !inbox.wasStartedForYou(thread.id) else { return nil }
+        guard thread.startedByAgent, !dispatchers.contains(thread.id), !inbox.wasStartedForYou(thread.id), kitten(of: thread) != nil else { return nil }
         if let known = launchers[thread.id] { return known }
         guard case .thread(let launcher)? = await backend.origin(of: thread.id)?.startedBy else { return nil }
         launchers[thread.id] = launcher
@@ -93,12 +93,16 @@ extension AppController {
     }
 
     private func tellLauncher(_ launcher: String, about thread: AgentThread, report: String?) async -> Bool {
+        if thread.isDelegated { return true }
         if let started = thread.lastRunStartedAt, let said = await backend.exchanges(threadID: launcher),
            said.contains(where: { $0.asker == .agent(threadID: thread.id) && $0.askedAt >= started }) {
             return true
         }
         do {
             try await backend.deliver(threadID: launcher, text: Prompts.launchedReport(readable(report), of: thread))
+            inbox.anotherThreadWrote(to: launcher, at: now())
+            keepInbox()
+            inboxChanged()
             return true
         } catch {
             return false

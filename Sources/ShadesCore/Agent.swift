@@ -203,6 +203,7 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var isSettled: Bool { settledAt != nil }
     public var pullRequest: ThreadPullRequest?
     public var startedByAgent: Bool
+    public var isDelegated: Bool
     public var lastRunStartedAt: Date?
     public var lastWordsFromYouAt: Date?
     public var isLiveTest: Bool { Self.isLiveTest(title: title) }
@@ -234,6 +235,7 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         lastRunEndedAt: Date? = nil,
         lastVisitedAt: Date? = nil,
         startedByAgent: Bool = false,
+        isDelegated: Bool = false,
         lastRunStartedAt: Date? = nil,
         lastWordsFromYouAt: Date? = nil
     ) {
@@ -254,6 +256,7 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         self.settledAt = settledAt ?? (isSettled ? .distantPast : nil)
         self.pullRequest = pullRequest
         self.startedByAgent = startedByAgent
+        self.isDelegated = isDelegated
         self.lastRunStartedAt = lastRunStartedAt
         self.lastWordsFromYouAt = lastWordsFromYouAt
     }

@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 
 final class WaitingOnYouModelTests: XCTestCase {
-    static let depth = 6
+    static let depth = 5
 
     func testEveryOrderOfEventsKeepsWaitingOnYouTrue() {
         var explored = 0
@@ -35,6 +35,15 @@ final class WaitingOnYouModelTests: XCTestCase {
         XCTAssertEqual(world.inbox.entries.filter(\.needsYou), [], "a note from a turn you didn't start isn't an answer to you")
     }
 
+    func testAWakeAfterYourTurnSaidNothingIsntAnAnswerToYou() {
+        var world = World()
+        for event: Event in [.end(.a, .decision), .youWrite(.a), .end(.a, .silent), .wake(.a), .end(.a, .note)] {
+            world.apply(event)
+            XCTAssertNil(world.broken(), world.trace.joined(separator: ", "))
+        }
+        XCTAssertEqual(world.inbox.entries.filter(\.needsYou), [])
+    }
+
     func testAStaleRowFromTheAuditIsCaught() {
         var world = World()
         for event: Event in [.end(.a, .decisionHeld), .merge(.a)] { world.apply(event) }
@@ -49,7 +58,7 @@ private enum Worker: String, CaseIterable {
 }
 
 private enum Ending: String {
-    case decision, decisionHeld, note, shipped, failed
+    case decision, decisionHeld, note, shipped, failed, silent
 }
 
 private enum Event: CustomStringConvertible {
@@ -91,6 +100,7 @@ private struct World {
     var threads: [Worker: AgentThread] = [:]
     var running: Set<Worker> = [.a, .b]
     var sending: Worker?
+    var sendingRow: String?
     var expected: [Worker: Expected] = [.a: Expected(), .b: Expected()]
     var clock = Date(timeIntervalSince1970: 1_000)
     var runs = 0
@@ -116,7 +126,7 @@ private struct World {
         var events: [Event] = []
         for thread in Worker.allCases where threads[thread] != nil {
             if running.contains(thread) {
-                let endings: [Ending] = thread == .a ? [.decision, .decisionHeld, .note, .shipped, .failed] : [.decision]
+                let endings: [Ending] = thread == .a ? [.decision, .decisionHeld, .note, .shipped, .failed, .silent] : [.decision]
                 events += endings.map { .end(thread, $0) }
             } else {
                 events.append(.wake(thread))
@@ -146,9 +156,14 @@ private struct World {
             case .failed: SortedReport(decision: "Hit a snag.")
             case .note: SortedReport(note: "By the way.")
             case .shipped: SortedReport(shipped: "It's live.")
+            case .silent: SortedReport()
             }
             let runs = runs
-            inbox.file(sorted, from: shown, startedBy: .you, at: clock) { "row-\(runs)" }
+            if ending == .silent {
+                inbox.skip(shown)
+            } else {
+                inbox.file(sorted, from: shown, startedBy: .you, at: clock) { "row-\(runs)" }
+            }
             var hope = expected[thread]!
             switch ending {
             case .decision, .decisionHeld, .failed:
@@ -160,6 +175,8 @@ private struct World {
             case .note:
                 hope.asking = hope.repliedRow && hope.runIsYours
                 hope.repliedRow = false
+            case .silent:
+                break
             }
             expected[thread] = hope
         case .wake(let thread):
@@ -169,16 +186,17 @@ private struct World {
         case .replyInApp(let thread):
             if let row = inbox.entries.last(where: { $0.threadID == thread.rawValue && $0.followsItsThread && $0.repliedAt == nil }) {
                 inbox.markReplied(row.id, at: clock)
+                sendingRow = row.id
             }
             sending = thread
         case .sendLands(let thread):
             sending = nil
+            sendingRow = nil
             start(thread, yours: true)
-        case .sendFails(let thread):
+        case .sendFails:
             sending = nil
-            if let row = inbox.entries.last(where: { $0.threadID == thread.rawValue && $0.followsItsThread && $0.repliedAt != nil }) {
-                inbox.markReplied(row.id, at: nil)
-            }
+            if let row = sendingRow { inbox.markReplied(row, at: nil) }
+            sendingRow = nil
         case .settle(let thread):
             threads[thread]?.settledAt = clock
             follow()

@@ -52,6 +52,17 @@ final class InboxTests: XCTestCase {
         XCTAssertEqual(saved.entries.first { $0.id == "c" }?.change, inbox.entries.first { $0.id == "c" }?.change)
     }
 
+    func testTheSameCardAskedAgainStaysOneVisitWaitingOnYou() {
+        var inbox = Inbox(since: start)
+        for turn in 1...5 {
+            let card = InboxEntry(id: "card-\(turn)", kind: .decision, text: "Asks for your yes.", threadID: "t", threadTitle: "Clawde: Work", at: start.addingTimeInterval(Double(turn)), ask: AskRequest(ask: "Merge pull request #9.", readFromWords: false))
+            inbox.ask(card, startedBy: .you, held: false)
+        }
+        XCTAssertEqual(inbox.entries.map(\.id), ["card-5"])
+        XCTAssertEqual(inbox.record.visits.map(\.row), ["card-5"], "one ask, still waiting, not four that left without you")
+        XCTAssertEqual(inbox.record.visits.map(\.isOpen), [true])
+    }
+
     func testAFinishedRunIsOwedOnceWhetherItWorkedOrNot() {
         var inbox = Inbox(since: start)
         XCTAssertTrue(inbox.owes(thread()))
