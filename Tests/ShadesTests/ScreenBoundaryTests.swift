@@ -68,7 +68,7 @@ final class ScreenBoundaryTests: XCTestCase {
                                 let world = World(kittens: [clawde])
                                 world.add(destination, clawde: clawde)
                                 await world.run(route)
-                                reachedAllowed += world.check("\(route) to \(destination), Clawde in \(clawde.project)", threads: ["w": destination.mightBeScreenless])
+                                reachedAllowed += world.check("\(route) to \(destination), Clawde in \(clawde.project)", threads: ["w": destination.mightBeScreenless], modes: ["w": destination.mode])
                             }
                         }
                     }
@@ -246,8 +246,9 @@ private enum Give: CaseIterable {
     case lockdownAttach
     case lockdownDrop
     case lockdownFix
+    case handOffWithoutALook
 
-    var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff, .shadesHandOff, .attachHandOff].contains(self) }
+    var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff, .shadesHandOff, .attachHandOff, .handOffWithoutALook].contains(self) }
 }
 
 private enum Pass: CaseIterable {
@@ -438,6 +439,11 @@ private final class World {
         case .fix:
             controller.sendFix("the total is wrong", snapshot: ScreenBoundaryTests.screen)
             await settle()
+        case .handOffWithoutALook:
+            await ask("what's this?", routerSays: "It's Page-5ad1.")
+            backend.routerSays["this one"] = "HANDOFF: Do what Page-5ad1 says"
+            controller.ask("this one", snapshot: nil)
+            await settle()
         case .dropKitten:
             await drop("this one", routerSays: "KITTEN: \(number)")
         case .dropHandOff:
@@ -602,7 +608,7 @@ private final class World {
         return prompts + answers
     }
 
-    func check(_ scene: String, threads: [String: Bool], file: StaticString = #filePath, line: UInt = #line) -> Int {
+    func check(_ scene: String, threads: [String: Bool], modes: [String: RuntimeMode?] = [:], file: StaticString = #filePath, line: UInt = #line) -> Int {
         let screenless = Set(kittens.filter { !$0.seesScreen }.flatMap { [$0.folder, $0.project] })
         let names = kittens.filter { !$0.seesScreen }.map { "\($0.name):" }
         var reachedAllowed = 0
@@ -620,6 +626,15 @@ private final class World {
             case .thread(let id): threads[id] ?? true
             }
             XCTAssertFalse(mightBeScreenless, "\(scene): the screen reached \(send.place)", file: file, line: line)
+            switch send.place {
+            case .router:
+                break
+            case .scratch, .project:
+                XCTAssertTrue(send.prompt.runtimeMode.takesScreen, "\(scene): the screen reached a new thread at \(send.place) starting with \(send.prompt.runtimeMode.rawValue)", file: file, line: line)
+            case .thread(let id):
+                guard let mode = modes[id] else { break }
+                XCTAssertTrue(mode?.takesScreen == true, "\(scene): the screen reached thread \(id), which runs with \(mode?.rawValue ?? "a mode nobody knows")", file: file, line: line)
+            }
             if !mightBeScreenless, send.place != .router { reachedAllowed += 1 }
         }
         return reachedAllowed

@@ -443,6 +443,7 @@ final class FakeContext: ScreenContextProviding, @unchecked Sendable {
     var snapshotValue = ScreenSnapshot(appName: "Safari", windowTitle: "Pricing", screenshotJPEG: Data([1, 2, 3]))
     var region: CGRect? = CGRect(x: 100, y: 200, width: 50, height: 60)
     var saved = 0
+    var snapshotError: Error?
     private(set) var options: [CaptureOptions] = []
 
     init(log: Log) { self.log = log }
@@ -450,6 +451,7 @@ final class FakeContext: ScreenContextProviding, @unchecked Sendable {
     @MainActor func snapshot(_ options: CaptureOptions) async throws -> ScreenSnapshot {
         log.add("snapshot")
         self.options.append(options)
+        if let snapshotError { throw snapshotError }
         return snapshotValue
     }
 

@@ -316,6 +316,8 @@ extension AppController {
                 case .reached(let destination):
                     if let home { started(destination, in: home) }
                     passedOn(said)
+                case .reachedWithoutFile:
+                    passedOn(CatWords.passedOnWithoutFile)
                 case .stopped(let why):
                     if self.channels.isOpen { passedOn(why) }
                 }

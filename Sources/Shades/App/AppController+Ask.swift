@@ -380,13 +380,12 @@ extension AppController {
 
     var frontierName: String { ModelNames.friendly(settings.frontierModel) }
 
-    func handOff(task: String, question: String, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((Landing) -> Void)? = nil, refused: (() -> Void)? = nil) {
-        guard settings.frontierMode != .fullAccess else {
-            guard snapshot?.isDropped != true else {
-                if let refused { refused() } else { onStarted?(.stopped(CatWords.cantTakeFiles(frontierName))) }
-                say(CatWords.cantTakeFiles(frontierName))
-                return
-            }
+    func frontierMode(carrying snapshot: ScreenSnapshot?) -> RuntimeMode {
+        settings.frontierMode.carrying(screen: carriesScreen(snapshot))
+    }
+
+    func handOff(task: String, question: String, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((Landing) -> Void)? = nil) {
+        guard frontierMode(carrying: snapshot).takesScreen else {
             startFrontier(
                 title: question,
                 text: Prompts.frontier(request: question, snapshot: nil, screenshotPath: nil),
@@ -454,7 +453,7 @@ extension AppController {
             text: text,
             attachments: attachments(for: snapshot),
             model: settings.frontierModel,
-            runtimeMode: settings.frontierMode,
+            runtimeMode: frontierMode(carrying: snapshot),
             projectID: projectID
         )
         if errand != .correctionCopy, !youPicked { say(CatWords.handingOff(modelName: name)) }

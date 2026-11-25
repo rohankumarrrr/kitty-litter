@@ -20,7 +20,7 @@ extension AppController {
         let capture = await startLook(CaptureOptions(includeElements: false, focusRegion: region)).value
         let snapshot = capture.snapshot ?? ScreenSnapshot(focusRegion: region)
 
-        let leftOut = settings.frontierMode == .fullAccess
+        let leftOut = lockdownLeavesScreenOut
         let canSee = !leftOut && !snapshot.isPrivate && snapshot.screenshotJPEG != nil
         let caption: String
         if let error = capture.error {
@@ -28,7 +28,7 @@ extension AppController {
         } else if snapshot.isPrivate {
             caption = CatWords.privateApp
         } else if leftOut {
-            caption = CatWords.fullAccessLeavesScreenOut
+            caption = CatWords.cantSeeYourScreen(lockedDownKitten?.name ?? frontierName)
         } else if !canSee {
             caption = screenBlockedBy ?? CatWords.needsScreenRecording
         } else {
@@ -50,9 +50,13 @@ extension AppController {
         ))
     }
 
+    var lockdownLeavesScreenOut: Bool {
+        settings.lockdown != nil && !takesFiles(.router)
+    }
+
     func sendFix(_ description: String, snapshot: ScreenSnapshot, onOwnWindow: Bool = false) {
         defer { catGoesHomeSoon() }
-        let shared = settings.frontierMode == .fullAccess ? nil : snapshot
+        let shared = lockdownLeavesScreenOut || snapshot.isEmpty ? nil : snapshot
         guard settings.lockdown == nil else { return sendLockedDown(description.isEmpty ? CatWords.fixThis : description, snapshot: shared) }
         let said = description.isEmpty ? nil : description
         let path = saveScreenshot(of: shared)

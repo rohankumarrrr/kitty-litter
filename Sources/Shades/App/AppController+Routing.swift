@@ -3,10 +3,14 @@ import ShadesCore
 
 enum Landing: Equatable {
     case reached(String)
+    case reachedWithoutFile(String)
     case stopped(String)
 
     var thread: String? {
-        if case .reached(let id) = self { id } else { nil }
+        switch self {
+        case .reached(let id), .reachedWithoutFile(let id): id
+        case .stopped: nil
+        }
     }
 }
 
@@ -88,7 +92,7 @@ extension AppController {
     }
 
     func carriesScreen(_ shared: ScreenSnapshot?) -> Bool {
-        shared.map { !$0.isPrivate } ?? false
+        shared.map { !$0.isPrivate && !$0.isEmpty } ?? false
     }
 
     func dropScreenWarning(for threadID: String?, run: String? = nil) {
@@ -194,11 +198,11 @@ extension AppController {
         let sharesWithScreenless = loadKittens().contains {
             !$0.seesScreen && KittenBoard.belongs(title: "", projectPath: kitten.workspace, to: $0)
         }
-        return kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
+        return kitten.seesScreen && !sharesWithScreenless
     }
 
     static func mayHaveScreen(_ mode: RuntimeMode?) -> Bool {
-        mode != nil && mode != .fullAccess
+        mode?.takesScreen == true
     }
 
     func takesFiles(_ target: MessageTarget) -> Bool {
@@ -245,7 +249,8 @@ extension AppController {
                 landedAt = landing
                 landed?(landing)
             }
-            guard seesScreen || snapshot?.isDropped != true else {
+            let leavesOutFile = !seesScreen && snapshot?.isDropped == true
+            guard !leavesOutFile || !youPicked else {
                 say(CatWords.cantTakeFiles(thread.title))
                 refused?()
                 land(.stopped(CatWords.cantTakeFiles(thread.title)))
@@ -257,7 +262,7 @@ extension AppController {
                 noteCorrection(in: thread.id)
             }
             let waits = behavior == .queue && thread.status.isActive
-            if !youPicked { say(waits ? CatWords.sentToBusy(thread) : CatWords.sentTo(thread), threadID: thread.id, fades: true) }
+            if !youPicked { say(leavesOutFile ? CatWords.sentWithoutFile(thread) : waits ? CatWords.sentToBusy(thread) : CatWords.sentTo(thread), threadID: thread.id, fades: !leavesOutFile) }
             let shared = seesScreen ? snapshot : nil
             let text = Prompts.forwarded(
                 words: words,
@@ -273,7 +278,7 @@ extension AppController {
             do {
                 for try await event in backend.forward(threadID: thread.id, text: text, attachments: attachments(for: shared), behavior: behavior) {
                     if case .started = event {
-                        land(.reached(thread.id))
+                        land(leavesOutFile ? .reachedWithoutFile(thread.id) : .reached(thread.id))
                         if missesScreen {
                             warning = sayPassedOn(CatWords.sentTo(thread), threadID: thread.id, missesScreen: true, asked: asked, followUp: true)
                         }

@@ -171,7 +171,7 @@ final class LockdownEdgeTests: XCTestCase {
         var release: CheckedContinuation<Void, Never>?
         let gate = Task { await withCheckedContinuation { release = $0 } }
         backend.heldBeforeStarted = gate
-        controller.ask("Start the page", snapshot: screen)
+        controller.ask("Start the page", snapshot: nil)
         for _ in 0..<20 { await Task.yield() }
         await controller.replyTask?.value
         await controller.flow?.value
