@@ -2,6 +2,29 @@ import AppKit
 import ShadesContext
 import ShadesCore
 
+class ChannelsMainWindow: NSWindow {
+    init() {
+        super.init(
+            contentRect: NSRect(origin: .zero, size: ChannelsWindow.size),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: true
+        )
+        collectionBehavior = [.primary, .managed, .participatesInCycle, .fullScreenPrimary]
+        tabbingMode = .disallowed
+        ChannelsWindow.setUp(self)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        messagesShortcut(event) || super.performKeyEquivalent(with: event)
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        if takesMessagesKey(event) { return }
+        super.sendEvent(event)
+    }
+}
+
 class ChannelsPanel: NSPanel {
     init() {
         super.init(
@@ -10,26 +33,17 @@ class ChannelsPanel: NSPanel {
             backing: .buffered,
             defer: true
         )
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
-        level = .normal
         hidesOnDeactivate = false
         collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
-        isReleasedWhenClosed = false
-        contentMinSize = ChannelsWindow.minimumSize
-        backgroundColor = MessagesInk.sidebar
-        animationBehavior = .none
         becomesKeyOnlyIfNeeded = true
-        autorecalculatesKeyViewLoop = true
-        title = CatWords.appName
-        sharingType = .none
+        ChannelsWindow.setUp(self)
     }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        QuietPanel.performEdit(event, from: self) || shortcut(event) || super.performKeyEquivalent(with: event)
+        QuietPanel.performEdit(event, from: self) || messagesShortcut(event) || super.performKeyEquivalent(with: event)
     }
 
     override func sendEvent(_ event: NSEvent) {
@@ -37,19 +51,24 @@ class ChannelsPanel: NSPanel {
             orderFrontRegardless()
             if !isKeyWindow { makeKey() }
         }
-        // Outside the repo: AppKit hands keys without ⌘ straight to whatever has the keyboard.
-        if event.type == .keyDown, !event.modifierFlags.contains(.command), shortcut(event) || movesOn(event) { return }
+        if takesMessagesKey(event) { return }
         super.sendEvent(event)
     }
+}
 
-    // Outside the repo: AppKit's ⌃Tab moves out of a text view, but anywhere else here it leaves no window with the keyboard.
-    private func movesOn(_ event: NSEvent) -> Bool {
-        guard event.keyCode == 48, event.modifierFlags.contains(.control), !(firstResponder is NSTextView) else { return false }
-        if event.modifierFlags.contains(.shift) { selectPreviousKeyView(nil) } else { selectNextKeyView(nil) }
-        return true
+extension NSWindow {
+    @discardableResult
+    func handle(_ shortcut: MessagesShortcut) -> Bool {
+        guard isKeyWindow, let view = contentView as? ChannelsView else { return false }
+        return view.perform(shortcut)
     }
 
-    private func shortcut(_ event: NSEvent) -> Bool {
+    // Outside the repo: AppKit hands keys without ⌘ straight to whatever has the keyboard.
+    fileprivate func takesMessagesKey(_ event: NSEvent) -> Bool {
+        event.type == .keyDown && !event.modifierFlags.contains(.command) && (messagesShortcut(event) || movesOn(event))
+    }
+
+    fileprivate func messagesShortcut(_ event: NSEvent) -> Bool {
         guard let shortcut = MessagesShortcut(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers, modifiers: event.modifierFlags) else { return false }
         if let text = firstResponder as? NSTextView, text.isEditable, shortcut == .escape || (shortcut.movesInText && !text.string.isEmpty) {
             return false
@@ -57,10 +76,11 @@ class ChannelsPanel: NSPanel {
         return handle(shortcut)
     }
 
-    @discardableResult
-    func handle(_ shortcut: MessagesShortcut) -> Bool {
-        guard isKeyWindow, let view = contentView as? ChannelsView else { return false }
-        return view.perform(shortcut)
+    // Outside the repo: AppKit's ⌃Tab moves out of a text view, but anywhere else here it leaves no window with the keyboard.
+    private func movesOn(_ event: NSEvent) -> Bool {
+        guard event.keyCode == 48, event.modifierFlags.contains(.control), !(firstResponder is NSTextView) else { return false }
+        if event.modifierFlags.contains(.shift) { selectPreviousKeyView(nil) } else { selectNextKeyView(nil) }
+        return true
     }
 }
 
@@ -410,18 +430,19 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     private static let tickSeconds: TimeInterval = 0.2
     private static let ticksPerTimeRefresh = 300
 
-    let panel = ChannelsPanel()
+    let window: NSWindow = NSApplication.shared.activationPolicy() == .accessory ? ChannelsPanel() : ChannelsMainWindow()
     let view = ChannelsView(frame: NSRect(origin: .zero, size: ChannelsWindow.size))
     var onClose: (() -> Void)?
 
+    private(set) var isOpen = false
     private var isPlaced = false
     private var timer: Timer?
     private var tick = 0
 
     init(defaults: UserDefaults = .standard) {
         super.init()
-        panel.contentView = view
-        panel.delegate = self
+        window.contentView = view
+        window.delegate = self
         view.chosenThreadWidth = (defaults.object(forKey: Self.threadWidthKey) as? Double).map { CGFloat($0) }
         view.onChooseThreadWidth = { defaults.set($0.map(Double.init), forKey: Self.threadWidthKey) }
         view.chosenSidebarWidth = (defaults.object(forKey: Self.sidebarWidthKey) as? Double).map { CGFloat($0) }
@@ -435,16 +456,27 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         view.refreshPriorities()
         if !isPlaced {
             isPlaced = true
-            if !panel.setFrameUsingName(Self.frameName) { panel.setFrame(Self.centered(in: visible), display: false) }
-            if panel.frame.width < Self.minimumSize.width || panel.frame.height < Self.minimumSize.height {
-                var frame = panel.frame
+            if !window.setFrameUsingName(Self.frameName) { window.setFrame(Self.centered(in: visible), display: false) }
+            if window.frame.width < Self.minimumSize.width || window.frame.height < Self.minimumSize.height {
+                var frame = window.frame
                 frame.size = NSSize(width: max(frame.width, Self.minimumSize.width), height: max(frame.height, Self.minimumSize.height))
-                panel.setFrame(frame, display: false)
+                window.setFrame(frame, display: false)
             }
-            panel.setFrameAutosaveName(Self.frameName)
+            window.setFrameAutosaveName(Self.frameName)
         }
-        panel.orderFrontRegardless()
+        isOpen = true
+        if NSApplication.shared.activationPolicy() == .regular {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            window.orderFrontRegardless()
+        }
         updateTimer()
+    }
+
+    func putAway() {
+        window.close()
+        if NSApp.isActive, NSApplication.shared.activationPolicy() == .regular { NSApp.hide(nil) }
     }
 
     func update(_ book: ChannelBook) {
@@ -452,7 +484,7 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     }
 
     var isInFront: Bool {
-        panel.isVisible && panel.isOnActiveSpace && FrontWindow.isOnTop(panel.windowNumber)
+        window.isVisible && window.isOnActiveSpace && FrontWindow.isOnTop(window.windowNumber)
     }
 
     func apply(_ size: TextSize, font: String?) {
@@ -460,6 +492,19 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         MessagesInk.textSize = size
         MessagesInk.fontFamily = font
         view.restyle()
+    }
+
+    static func setUp(_ window: NSWindow) {
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.level = .normal
+        window.isReleasedWhenClosed = false
+        window.contentMinSize = minimumSize
+        window.backgroundColor = MessagesInk.sidebar
+        window.animationBehavior = .none
+        window.autorecalculatesKeyViewLoop = true
+        window.title = CatWords.appName
+        window.sharingType = .none
     }
 
     static func centered(in visible: NSRect) -> NSRect {
@@ -472,6 +517,7 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        isOpen = false
         timer?.invalidate()
         timer = nil
         Opal.forgetKept()
@@ -483,7 +529,7 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     }
 
     private func updateTimer() {
-        let wanted = panel.isVisible && panel.occlusionState.contains(.visible)
+        let wanted = window.isVisible && window.occlusionState.contains(.visible)
         if !wanted {
             timer?.invalidate()
             timer = nil

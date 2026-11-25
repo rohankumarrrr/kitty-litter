@@ -35,20 +35,10 @@ final class ChannelsWindowTests: XCTestCase {
         view.subviews + view.subviews.flatMap(subviews)
     }
 
-    func testThePanelTakesTheKeyboardOnlyWhenNeededAndNeverFloatsOverYourWork() {
-        let panel = ChannelsPanel()
-        XCTAssertTrue(panel.canBecomeKey, "for the box at the bottom")
-        XCTAssertTrue(panel.becomesKeyOnlyIfNeeded, "opening it leaves the keyboard where it was, and only a click into it, which makes it key without activating Shades, takes it")
-        XCTAssertFalse(panel.canBecomeMain)
-        XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
-        XCTAssertEqual(panel.level, .normal)
-        XCTAssertFalse(panel.hidesOnDeactivate)
-        XCTAssertFalse(panel.isReleasedWhenClosed)
-        XCTAssertTrue(panel.collectionBehavior.contains(.ignoresCycle))
-    }
-
     func testNoScreenCaptureCanSeeIt() {
-        XCTAssertEqual(ChannelsPanel().sharingType, .none, "so a kitten's own screen tools can't be shown another kitten's messages")
+        for window in [ChannelsMainWindow(), ChannelsPanel(), ChannelsWindow().window] {
+            XCTAssertEqual(window.sharingType, .none, "\(type(of: window)): so a kitten's own screen tools can't be shown another kitten's messages")
+        }
     }
 
     func testEveryViewTakesClicksAndOnlyTheBoxesAndWordsYouPressInTakeTheKeyboard() throws {
@@ -446,7 +436,7 @@ final class ChannelsWindowTests: XCTestCase {
     }
 
     func testTheWindowIsTheKittyLitterAndTheCatIsStillShades() {
-        XCTAssertEqual(ChannelsPanel().title, "The Kitty Litter", "what VoiceOver and window lists call it")
+        XCTAssertEqual(ChannelsMainWindow().title, "The Kitty Litter", "what VoiceOver, the Window menu and Mission Control call it")
         XCTAssertEqual(CatWords.shortcutGroups.last?.title, "The Kitty Litter")
         XCTAssertTrue(CatWords.shortcutGroups.last?.rows.contains { $0.keys == "⌘W" && $0.does == "Close The Kitty Litter" } == true)
         XCTAssertEqual(CatWords.placeholder(.router), "Message Shades", "the cat keeps its name")
@@ -819,7 +809,7 @@ final class ChannelsWindowTests: XCTestCase {
         defaults.removePersistentDomain(forName: suite)
         defer { defaults.removePersistentDomain(forName: suite) }
         func opened(_ window: ChannelsWindow, size: NSSize = ChannelsWindow.size) -> ChannelsView {
-            window.panel.setContentSize(size)
+            window.window.setContentSize(size)
             window.view.show(book(threads: 2))
             window.view.select(.thread("t0", in: .channel(.of(steve))))
             window.view.layoutSubtreeIfNeeded()
@@ -850,12 +840,12 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound, "the thread still reads")
 
         try drag(view, to: view.threadPane.frame.maxX - 440)
-        window.panel.setContentSize(ChannelsWindow.minimumSize)
+        window.window.setContentSize(ChannelsWindow.minimumSize)
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(view.pane.frame.width, ChannelsView.narrowestPlace, "a narrower window takes from the thread only once the place can't give")
         XCTAssertGreaterThanOrEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound)
         XCTAssertEqual(view.threadPane.frame.maxX, ChannelsWindow.minimumSize.width - Opal.Space.inset)
-        window.panel.setContentSize(ChannelsWindow.size)
+        window.window.setContentSize(ChannelsWindow.size)
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(view.threadPane.frame.width, 440, "and gives it back")
 
@@ -868,7 +858,7 @@ final class ChannelsWindowTests: XCTestCase {
         defaults.removePersistentDomain(forName: suite)
         defer { defaults.removePersistentDomain(forName: suite) }
         func opened(_ window: ChannelsWindow) -> ChannelsView {
-            window.panel.setContentSize(ChannelsWindow.size)
+            window.window.setContentSize(ChannelsWindow.size)
             window.view.show(book(threads: 2))
             window.view.select(.thread("t0", in: .channel(.of(steve))))
             window.view.layoutSubtreeIfNeeded()
@@ -938,12 +928,12 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.sidebar.frame.width, 260, "and shows it again as wide as it was")
         XCTAssertNil(header.windowButtonsEnd, "and they're back on the sidebar")
 
-        window.panel.setContentSize(ChannelsWindow.minimumSize)
+        window.window.setContentSize(ChannelsWindow.minimumSize)
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(view.sidebar.frame.width, ChannelSidebar.width, "a narrower window takes from the sidebar before the place or the thread")
         XCTAssertEqual(view.pane.frame.width, ChannelsView.narrowestPlace)
         XCTAssertEqual(view.threadPane.frame.width, ChannelsView.threadWidths.lowerBound)
-        window.panel.setContentSize(ChannelsWindow.size)
+        window.window.setContentSize(ChannelsWindow.size)
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(view.sidebar.frame.width, 260, "and gives it back")
 

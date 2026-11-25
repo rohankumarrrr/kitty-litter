@@ -246,6 +246,8 @@ Native text fields then get the text through Accessibility, which leaves your cl
 3. A synthetic Command-V is sent from a private event source, so a key you're holding can't turn it into a different shortcut. The key is looked up on your current layout, so Dvorak works.
 4. 0.6 s later the clipboard is put back, also marked transient, unless you've copied something new.
 
+While The Kitty Litter is the app in front, none of that happens. Dictation goes straight into whichever of its boxes you're typing in, and if you aren't in one, the cat says to click into one and types nothing, so nothing is pasted into its window and it never reads its own window through Accessibility.
+
 Web views, terminals and Electron apps go straight to paste (`pasteOnlyPrefixes`), since that list is where Accessibility is known to misbehave. Only TextEdit has been tested, so the list comes from what other projects report, and it's worth correcting with real use.
 
 Tested in a real TextEdit window with `probe-voice insert-test`: Accessibility insert in 6 to 59 ms, spacing between sentences, replacing a selection, Command-Z undoing both an Accessibility insert and a paste, and the clipboard coming back intact.

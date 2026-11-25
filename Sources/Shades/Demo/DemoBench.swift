@@ -43,12 +43,12 @@ enum DemoBench {
     }
 
     private static func messages(controller: AppController, stage: AppStage) async {
-        let window = stage.channels.panel
+        let window = stage.channels.window
         let view = stage.channels.view
         let pane = view.pane
         let thread = view.threadPane
         let start = footprint()
-        if !stage.isChannelsVisible {
+        if !stage.isChannelsOpen {
             report("open", [time(window) { controller.channelsPressed() }], budget: .instant)
         }
         await finishReading(controller)
@@ -384,7 +384,7 @@ enum DemoBench {
 
     private static func idle(seconds: Double, controller: AppController, stage: AppStage) async {
         guard let steve = Demo.kittens.first else { return }
-        let window = stage.channels.panel
+        let window = stage.channels.window
         let states: [(name: String, setUp: () -> Void)] = [
             ("messages", {
                 controller.channelsPressed()

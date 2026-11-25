@@ -19,10 +19,15 @@ enum Setup {
         }
     }
 
-    static func restart() {
+    static var relaunch: NSWorkspace.OpenConfiguration {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, _ in
+        configuration.activates = false
+        return configuration
+    }
+
+    static func restart() {
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: relaunch) { _, _ in
             DispatchQueue.main.async { NSApp.terminate(nil) }
         }
     }

@@ -187,7 +187,7 @@ final class DemoDriver {
     }
 
     private func highlight(_ words: String) {
-        let panel = stage.channels.panel
+        let panel = stage.channels.window
         for view in allSubviews(of: panel.contentView) {
             guard let text = view as? ChannelTextView else { continue }
             let range = (text.string as NSString).range(of: words)
@@ -201,12 +201,12 @@ final class DemoDriver {
     }
 
     private func pressLink(_ words: String) {
-        for view in allSubviews(of: stage.channels.panel.contentView) {
+        for view in allSubviews(of: stage.channels.window.contentView) {
             guard let text = view as? ChannelTextView, let storage = text.textStorage else { continue }
             let range = (text.string as NSString).range(of: words)
             guard range.location != NSNotFound, let link = storage.attribute(.link, at: range.location, effectiveRange: nil) as? URL else { continue }
             text.tryToPerform(#selector(ChannelPane.ask(toOpen:)), with: link)
-            let bars = allSubviews(of: stage.channels.panel.contentView).compactMap { $0 as? LinkBar }.filter { !$0.isHidden }
+            let bars = allSubviews(of: stage.channels.window.contentView).compactMap { $0 as? LinkBar }.filter { !$0.isHidden }
             return print("link bar shows \(bars.map { $0.link?.absoluteString ?? "" })")
         }
         print("no link shows [\(words)]")
@@ -383,7 +383,7 @@ final class DemoDriver {
             ("bubble", stage.bubble.panel),
             ("input", stage.input.panel),
             ("kittens", stage.kittens.panel),
-            ("channels", stage.channels.panel),
+            ("channels", stage.channels.window),
             ("pairing", stage.pairing.panel),
             ("settings", stage.settingsPanel.panel),
             ("pill", stage.pill.panel),
@@ -480,7 +480,7 @@ final class DemoDriver {
             guard let shortcut = Self.shortcuts[rest] else {
                 return print("key \(Self.shortcuts.keys.sorted().joined(separator: " | "))")
             }
-            let panel = stage.channels.panel
+            let panel = stage.channels.window
             panel.makeKey()
             let handled = panel.handle(shortcut)
             print("key \(rest) handled=\(handled) \(whereMessagesIs) key=\(panel.isKeyWindow) front=\(front)")
@@ -495,16 +495,16 @@ final class DemoDriver {
         case "jump":
             let view = stage.channels.view
             if view.jumpBox.isHidden {
-                stage.channels.panel.makeKey()
-                stage.channels.panel.handle(.jump)
+                stage.channels.window.makeKey()
+                stage.channels.window.handle(.jump)
             }
             view.jumpBox.query = rest
             print("jump [\(rest)] \(view.jumpBox.items.map(\.title).joined(separator: ", "))")
         case "search":
             let view = stage.channels.view
             if view.jumpBox.isHidden || view.jumpBox.mode != .search {
-                stage.channels.panel.makeKey()
-                stage.channels.panel.handle(.search)
+                stage.channels.window.makeKey()
+                stage.channels.window.handle(.search)
             }
             if view.jumpBox.query != rest { view.jumpBox.query = rest }
             print("search [\(rest)] \(view.jumpBox.items.map { "\($0.title): \($0.found?.snippet ?? "")" }.joined(separator: " | "))")
@@ -531,7 +531,7 @@ final class DemoDriver {
             guard let row = pane.shownMessageRows.last else { return print("no message shows") }
             row.hovering = true
             guard let button = row.toolbar?.button(rest) else { return print("no [\(rest)] in its bar") }
-            let panel = stage.channels.panel
+            let panel = stage.channels.window
             let shown = button.isHidden ? row.toolbar?.more : button
             guard let shown, let frame = panel.contentView?.superview else { return }
             let centre = shown.convert(NSPoint(x: shown.bounds.midX, y: shown.bounds.midY), to: nil)
@@ -722,7 +722,7 @@ final class DemoDriver {
         case "recent":
             pickRecent(rest)
         case "copy":
-            let target = NSApp.target(forAction: #selector(NSText.copy(_:)), to: nil, from: stage.channels.panel)
+            let target = NSApp.target(forAction: #selector(NSText.copy(_:)), to: nil, from: stage.channels.window)
             let words = (target as? NSTextView).map { ($0.string as NSString).substring(with: $0.selectedRange()) }
             print("copy goes to \(target.map { String(describing: type(of: $0)) } ?? "nothing") with [\(words ?? "")] types=\((target as? NSTextView)?.writablePasteboardTypes.map(\.rawValue) ?? [])")
         case "private":
@@ -839,7 +839,7 @@ final class DemoDriver {
         case "cover":
             // Outside the repo: AppKit pulls a titled window back over Messages when beside it would go off the screen.
             let window = cover ?? NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
-            let frame = stage.channels.panel.frame
+            let frame = stage.channels.window.frame
             window.isReleasedWhenClosed = false
             window.setFrame(rest == "beside" ? frame.offsetBy(dx: -frame.width - 1, dy: 0) : frame, display: false)
             window.orderFrontRegardless()

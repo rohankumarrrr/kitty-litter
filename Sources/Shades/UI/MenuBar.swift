@@ -11,7 +11,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
     private var status = "Napping"
-    private var actions: [() -> Void] = []
+    var refreshesOnOpen: [NSMenu: () -> Void] = [:]
 
     var onAsk: (() -> Void)?
     var onFix: (() -> Void)?
@@ -65,7 +65,11 @@ final class MenuBar: NSObject, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        rebuild()
+        if menu === self.menu { rebuild() }
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshesOnOpen[menu]?()
     }
 
     var shownItems: [NSMenuItem] {
@@ -75,7 +79,6 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
     private func rebuild() {
         menu.removeAllItems()
-        actions = []
 
         let header = NSMenuItem(title: status, action: nil, keyEquivalent: "")
         header.isEnabled = false
@@ -99,20 +102,25 @@ final class MenuBar: NSObject, NSMenuDelegate {
         quiet.state = isDoNotDisturb?() == true ? .on : .off
         bind(quiet) { [weak self] in self?.onDoNotDisturb?() }
         menu.addItem(quiet)
-        addLockdown()
+        let lockdown = NSMenuItem(title: CatWords.lockdown, action: nil, keyEquivalent: "")
+        lockdown.submenu = NSMenu()
+        if showLockdown(on: lockdown) { menu.addItem(lockdown) }
         menu.addItem(.separator())
         addAction("Settings…") { [weak self] in self?.onSettings?() }
         addAction("Quit \(CatWords.appName)") { NSApp.terminate(nil) }
     }
 
-    private func addLockdown() {
+    func showLockdown(on row: NSMenuItem) -> Bool {
         let kittens = lockdownKittens?() ?? []
         let on = lockedDownKitten?()
-        guard !kittens.isEmpty || on != nil else { return }
-        let pinned = kittens.first { $0.id == on }
-        let row = NSMenuItem(title: pinned.map { CatWords.lockdownOn($0.name) } ?? CatWords.lockdown, action: nil, keyEquivalent: "")
+        row.title = kittens.first { $0.id == on }.map { CatWords.lockdownOn($0.name) } ?? CatWords.lockdown
         row.state = on == nil ? .off : .on
-        let choices = NSMenu()
+        if let choices = row.submenu { fill(choices, lockdownOf: kittens, on: on) }
+        return !kittens.isEmpty || on != nil
+    }
+
+    private func fill(_ choices: NSMenu, lockdownOf kittens: [Kitten], on: String?) {
+        choices.removeAllItems()
         for kitten in kittens {
             let choice = NSMenuItem(title: kitten.name, action: nil, keyEquivalent: "")
             choice.state = kitten.id == on ? .on : .off
@@ -125,40 +133,36 @@ final class MenuBar: NSObject, NSMenuDelegate {
             bind(fresh) { [weak self] in self?.onLockdownNewThread?() }
             choices.addItem(fresh)
         }
-        if on != nil, pinned == nil {
+        if on != nil, !kittens.contains(where: { $0.id == on }) {
             let off = NSMenuItem(title: CatWords.lockdownOff, action: nil, keyEquivalent: "")
             bind(off) { [weak self] in self?.onLockdownOff?() }
             choices.addItem(off)
         }
-        row.submenu = choices
-        menu.addItem(row)
     }
 
     @discardableResult
-    private func addAction(_ title: String, shortcut: Shortcut? = nil, run: @escaping () -> Void) -> NSMenuItem {
+    func addAction(_ title: String, shortcut: Shortcut? = nil, to target: NSMenu? = nil, run: @escaping () -> Void) -> NSMenuItem {
         let row = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         if let shortcut, held.contains(shortcut) {
             row.keyEquivalent = shortcut.key
             row.keyEquivalentModifierMask = shortcut.keyModifiers
         }
         bind(row, run: run)
-        menu.addItem(row)
+        (target ?? menu).addItem(row)
         return row
     }
 
     private func bind(_ row: NSMenuItem, run: @escaping () -> Void) {
         row.target = self
         row.action = #selector(runItem(_:))
-        row.tag = actions.count
+        row.representedObject = MenuAction(run: run)
         row.isEnabled = true
-        actions.append(run)
     }
 
     @objc private func runItem(_ sender: NSMenuItem) {
-        guard actions.indices.contains(sender.tag) else { return }
+        guard let action = sender.representedObject as? MenuAction else { return }
         // Outside the repo: NSMenu runs an item's action before the menu has finished closing.
-        let run = actions[sender.tag]
-        DispatchQueue.main.async { run() }
+        DispatchQueue.main.async { action.run() }
     }
 
     private static func icon() -> NSImage {
@@ -186,5 +190,13 @@ final class MenuBar: NSObject, NSMenuDelegate {
         image.addRepresentation(rep)
         image.isTemplate = true
         return image
+    }
+}
+
+private final class MenuAction: NSObject {
+    let run: () -> Void
+
+    init(run: @escaping () -> Void) {
+        self.run = run
     }
 }

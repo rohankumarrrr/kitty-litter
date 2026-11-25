@@ -17,18 +17,21 @@ struct FrontApp: Equatable, Sendable {
 
     static func current() -> FrontApp? {
         let me = ProcessInfo.processInfo.processIdentifier
-        if let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != me {
-            return FrontApp(app)
-        }
-        guard let pid = FrontWindow.topOwner(excluding: me),
+        let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        guard let pid = pid(frontmost: frontmost, me: me, windows: FrontWindow.windows(), isApp: FrontWindow.isApp),
               let app = NSRunningApplication(processIdentifier: pid)
         else { return nil }
         return FrontApp(app)
     }
+
+    static func pid(frontmost: pid_t?, me: pid_t, windows: [[String: Any]], isApp: (pid_t) -> Bool) -> pid_t? {
+        if let frontmost, frontmost != me { return frontmost }
+        return FrontWindow.topOwner(excluding: me, among: windows, isApp: isApp)
+    }
 }
 
 public enum FrontWindow {
-    private static func windows() -> [[String: Any]] {
+    static func windows() -> [[String: Any]] {
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
         return CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
     }
@@ -52,14 +55,19 @@ public enum FrontWindow {
         return window?[kCGWindowName as String] as? String
     }
 
-    static func topOwner(excluding pid: pid_t) -> pid_t? {
-        windows().first { isNormal($0) && owner($0) != pid }.flatMap(owner)
+    // Outside the repo: a tool with no app, such as one drawing a border around your window, puts its own windows over others.
+    static func topOwner(excluding pid: pid_t, among windows: [[String: Any]], isApp: (pid_t) -> Bool) -> pid_t? {
+        windows.first { window in isNormal(window) && owner(window).map { $0 != pid && isApp($0) } == true }.flatMap(owner)
+    }
+
+    static func isApp(_ pid: pid_t) -> Bool {
+        NSRunningApplication(processIdentifier: pid).map { $0.activationPolicy != .prohibited } ?? false
     }
 
     public static func isOnTop(_ id: Int) -> Bool {
         let options: CGWindowListOption = [.optionOnScreenAboveWindow, .optionIncludingWindow]
         let above = CGWindowListCopyWindowInfo(options, CGWindowID(id)) as? [[String: Any]] ?? []
-        return isOnTop(id, among: above) { NSRunningApplication(processIdentifier: $0).map { $0.activationPolicy != .prohibited } ?? false }
+        return isOnTop(id, among: above, isApp: isApp)
     }
 
     // Outside the repo: a tool with no app, such as one drawing a border around your window, puts its own windows over others.

@@ -126,7 +126,7 @@ enum ChannelImages {
     }
 
     private static func render(_ shot: Shot) -> Data? {
-        let panel = ChannelsPanel()
+        let panel = ChannelsMainWindow()
         let view = ChannelsView(frame: .zero)
         panel.contentView = view
         panel.setContentSize(NSSize(width: shot.width, height: shot.height))

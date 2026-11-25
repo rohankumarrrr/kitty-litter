@@ -31,7 +31,11 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <key>CFBundleName</key>
     <string>The Kitty Litter</string>
     <key>CFBundleDisplayName</key>
-    <string>The Kitty Litter</string>
+    <string>Shades</string>
+    <key>LSHasLocalizedDisplayName</key>
+    <true/>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
     <key>CFBundleIdentifier</key>
     <string>me.rohan-is.shades</string>
     <key>CFBundleExecutable</key>
@@ -46,8 +50,6 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <string>$version</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
-    <key>LSUIElement</key>
-    <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
@@ -58,6 +60,12 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 plutil -lint -s "$app/Contents/Info.plist"
+mkdir -p "$app/Contents/Resources/en.lproj"
+cat > "$app/Contents/Resources/en.lproj/InfoPlist.strings" <<STRINGS
+CFBundleDisplayName = "The Kitty Litter";
+CFBundleName = "The Kitty Litter";
+STRINGS
+plutil -lint -s "$app/Contents/Resources/en.lproj/InfoPlist.strings"
 
 identity="${SHADES_SIGN_IDENTITY:-$(signing_identity "$(security find-identity -v -p codesigning 2>/dev/null || true)")}"
 if [[ -n "$identity" ]]; then

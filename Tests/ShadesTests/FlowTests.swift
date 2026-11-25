@@ -2587,6 +2587,18 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(reportedHealth.last?.first { $0.check == "T3 Code" }?.ok, true)
     }
 
+    func testTheSelfCheckRunsAgainOnceT3ComesBackAfterItCouldntBeReached() async {
+        controller.threadListWait = 0
+        let first = await controller.runHealthCheck().first { $0.check == "T3 Code" }
+        XCTAssertEqual(first, HealthCheck.cantReachT3, "T3 is offline when the check runs")
+        controller.threadsChanged([])
+        await controller.healthTask?.value
+        XCTAssertEqual(reportedHealth.map { $0.first { $0.check == "T3 Code" }?.ok }, [false, true], "checked again by itself once T3 sent its list")
+        controller.threadsChanged([])
+        await controller.healthTask?.value
+        XCTAssertEqual(reportedHealth.count, 2, "and only that once")
+    }
+
     func testCheckMyselfSaysAgainOnceT3Answers() async {
         backend.whileFindingAProject = { [unowned self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
@@ -3965,7 +3977,7 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”. Clawde shipped “Other”."))
         controller.bubbleAction(.openMessages)
         XCTAssertNil(stage.bubble, "opening Messages clears the bubble")
-        XCTAssertTrue(stage.isChannelsVisible)
+        XCTAssertTrue(stage.isChannelsOpen)
         XCTAssertEqual(stage.selections.last, .activity, "at what needs you")
         XCTAssertEqual(stage.channelsShown.last?.waiting.reports.map(\.text), ["Ship the fix?", "The icon is live."])
     }
@@ -5865,10 +5877,10 @@ extension FlowTests {
 extension FlowTests {
     func testTheHotkeyOpensMessagesAndClosesItWithoutLooking() async {
         controller.messagesHotkeyPressed()
-        XCTAssertTrue(stage.isChannelsVisible)
+        XCTAssertTrue(stage.isChannelsOpen)
         XCTAssertEqual(stage.selections, [nil], "where you were last time")
         controller.messagesHotkeyPressed()
-        XCTAssertFalse(stage.isChannelsVisible)
+        XCTAssertFalse(stage.isChannelsOpen)
         XCTAssertFalse(log.all.contains("snapshot"))
         XCTAssertNil(stage.input, "it never takes the keyboard by itself")
     }
@@ -5877,10 +5889,10 @@ extension FlowTests {
         controller.messagesHotkeyPressed()
         stage.isChannelsCovered = true
         controller.messagesHotkeyPressed()
-        XCTAssertTrue(stage.isChannelsVisible, "open behind your work isn't showing, so the press shows it")
+        XCTAssertTrue(stage.isChannelsOpen, "open behind your work isn't showing, so the press shows it")
         XCTAssertEqual(stage.channelsShown.count, 2, "brought in front")
         controller.messagesHotkeyPressed()
-        XCTAssertFalse(stage.isChannelsVisible, "and once it's in front, the next press closes it")
+        XCTAssertFalse(stage.isChannelsOpen, "and once it's in front, the next press closes it")
     }
 
     func testMessagesCoversWhatTheCatWasNudgingAbout() async {
