@@ -2,8 +2,6 @@
 import ShadesCore
 import XCTest
 
-/// Lockdown: every ask goes straight to one kitten, with no router, its screen as that kitten may have it, and carries on
-/// in one thread. Nothing else pops up until it's off, and then it all comes in one catch-up.
 @MainActor
 final class LockdownTests: XCTestCase {
     private var stage: FakeStage!
@@ -27,7 +25,6 @@ final class LockdownTests: XCTestCase {
         controller = makeController()
     }
 
-    /// The app as it comes up: a new one of these, with what the last one saved, is a restart.
     private func makeController(settings: Settings = Settings()) -> AppController {
         var settings = settings
         settings.quickMode = .approvalRequired
@@ -74,8 +71,6 @@ final class LockdownTests: XCTestCase {
         controller.ask(words, snapshot: screen)
         await settle()
     }
-
-    // MARK: - Every ask goes to the kitten
 
     func testAnAskGoesStraightToTheKittenWithItsScreenMarkedAndNoRouter() async {
         controller.lockdownPicked(builder)
@@ -208,8 +203,6 @@ final class LockdownTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line(CatWords.lockdownKittenGone, threadID: nil))
     }
 
-    // MARK: - Only that kitten comes through
-
     func testOnlyItsKittensWorkPopsUpAndTheRestWaitsForOneCatchUp() async {
         controller.lockdownPicked(builder)
         let other = thread("m", of: money)
@@ -257,8 +250,6 @@ final class LockdownTests: XCTestCase {
         XCTAssertFalse(controller.mayPopUp(.line("Something finished")))
         XCTAssertEqual(controller.away, [.line("Something finished")])
     }
-
-    // MARK: - Checking it
 
     func testHealthSaysWhichKittenItsOnFor() async {
         controller.lockdownPicked(builder)

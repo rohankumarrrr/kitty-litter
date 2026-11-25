@@ -1,6 +1,5 @@
 import AppKit
 
-/// Draws the cat through a layer with no smoothing, and only answers on its visible pixels.
 final class CatView: NSView {
     var pose = CatPose(frame: .sit)
     var onAppearanceChange: (() -> Void)?
@@ -8,11 +7,9 @@ final class CatView: NSView {
     var onMouseDragged: ((NSEvent) -> Void)?
     var onMouseUp: ((NSEvent) -> Void)?
     var onRightMouseDown: ((NSEvent) -> Void)?
-    /// VoiceOver's press and show menu, which do what a click and a right-click do.
     var onPress: (() -> Void)?
     var onShowMenu: (() -> Void)?
     var onDragEnter: (() -> Void)?
-    /// Something was let go over the cat. Says whether it was taken.
     var onDrop: ((NSPasteboard) -> Bool)?
 
     override init(frame: NSRect) {

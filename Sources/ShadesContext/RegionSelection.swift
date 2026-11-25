@@ -1,8 +1,6 @@
 import CoreGraphics
 
-/// One drag across the overlay, kept inside the display it started on.
 struct RegionSelection: Equatable {
-    /// Anything smaller was a click, or too thin to frame anything.
     static let minimumSide: CGFloat = 4
 
     let start: CGPoint

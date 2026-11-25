@@ -4,52 +4,14 @@ import ShadesContext
 import ShadesCore
 import ShadesT3
 
-/// Runs a flow from the command line, so it can be tried without touching the mouse or
-/// keyboard. With `--image`, the agent sees that picture instead of your real screen, as if it
-/// filled the main display, so an answer that points there sends the cat to the same spot.
-///
-///     shades --ask "What's on my screen?" --image page.jpg
-///     shades --hand-off "Which of my projects is the budget app?" --image page.jpg
-///     shades --fix "The total is wrong" --image page.jpg
-///     shades --ask "Summarize this." --drop syllabus.pdf   # a file or link dropped onto the cat, with no look at the screen
-///     shades --ask "Research this" --then "And that part?" --image page.jpg   # waits for the agents first
-///     shades --ask "Make this friendlier" --selection "Send it by Friday." --image page.jpg   # as if that were selected
-///
-/// `--ask` prints where the cat pointed once the answer's in, or that it didn't, and how long until work it handed on
-/// had a thread. `--lockdown` pins it to a kitten by name, as Lockdown does, for that run only:
-///
-///     shades --ask "Add a total to the invoice page" --image page.jpg --lockdown "Kitten Name"
-///
-/// And for the Channels window, none of which sends anything:
-///
-///     shades --channels                     # opens Messages at launch, with --demo or for real
-///     shades --demo --channels-image out    # draws it to PNGs from canned data, then quits
-///     shades --channels-check               # reads real T3 once, prints only counts, then signs out
-///
-/// And for your picture beside your messages, which the app shows from its next start:
-///
-///     shades --picture photo.jpg            # keeps a small copy in the app's folder, then quits
-///
-/// And for driving the demo from a file of its commands, one a line, such as `wait 2` or `draw out`:
-///
-///     shades --demo --no-script --commands steps.txt
-///
-/// And for seeing it with Reduce Motion on, whatever your Mac is set to:
-///
-///     shades --demo --reduce-motion
 @MainActor
 enum DevFlags {
     static var wantsFlow: Bool { ["--ask", "--hand-off", "--fix"].contains { value(after: $0) != nil } }
 
-    /// Where a copy keeps its T3 sign-in. Only the installed app, where `scripts/install.sh` puts it, uses its own
-    /// place. Any other copy, built from source or bundled elsewhere, or trying a flow out, keeps one apart, so it can
-    /// never save a sign-in where the app looks, or revoke the app's as one left by an older build.
     static func signInService(bundlePath: String = Bundle.main.bundlePath, isTryingAFlow: Bool? = nil) -> String {
         isInstalledApp(bundlePath: bundlePath, isTryingAFlow: isTryingAFlow) ? KeychainCredentialStore.defaultService : KeychainCredentialStore.defaultService + ".trial"
     }
 
-    /// Whether this is the copy `scripts/install.sh` put in place, doing its own work, which is the only copy that
-    /// uses the app's Keychain entries: its T3 sign-in and its phone keys.
     static func isInstalledApp(bundlePath: String = Bundle.main.bundlePath, isTryingAFlow: Bool? = nil) -> Bool {
         URL(fileURLWithPath: bundlePath).standardizedFileURL.path == "/Applications/Shades.app" && !(isTryingAFlow ?? wantsFlow)
     }
@@ -83,7 +45,6 @@ enum DevFlags {
             }
             Task {
                 while controller.reply?.done == false { try? await Task.sleep(nanoseconds: 200_000_000) }
-                // Where the cat went and nothing of what was said, so a run can check an answer pointed right.
                 print(controller.reply?.pointingAt.map { "pointed at \(NSStringFromRect($0))" } ?? "didn't point")
                 fflush(stdout)
             }
@@ -114,14 +75,11 @@ enum DevFlags {
         }
     }
 
-    /// One real pass over what's been said, then Messages closed and opened again a second later, the way you'd hide it
-    /// and bring it back. It never prints a name, a title or a word of text.
     static func checkChannels() -> Never {
         let backend = T3Backend(credentials: MemoryCredentialStore(), label: "Shades channels check", sessionTTL: "1h", renewBefore: 0)
         let feed = ChannelFeed(backend: backend, kittens: { Kittens.load() })
         let router = Settings.directory.appendingPathComponent("router", isDirectory: true).standardizedFileURL.path
         feed.isWithShades = { $0.projectPath.map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.path } == router }
-        // Where Messages put things, read without loading the inbox, so nothing in Shades' folder is touched.
         let inbox = (try? Data(contentsOf: Settings.directory.appendingPathComponent("inbox.json"))).flatMap { try? JSONDecoder().decode(Inbox.self, from: $0) }
         feed.messagesThreads = { inbox?.messagesThreads ?? [:] }
         feed.isCatsWork = { AppController.isCatsWork($0, kept: inbox?.catsWork ?? [:]) }

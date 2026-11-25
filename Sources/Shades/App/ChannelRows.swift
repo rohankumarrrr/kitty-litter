@@ -1,11 +1,8 @@
 import Foundation
 import ShadesCore
 
-/// A row of the sidebar: Activity and Threads at the top, then the cat and each kitten.
 enum ChannelPlace: Hashable {
-    /// What's waiting on you, what's shipped, and what each kitten is on.
     case activity
-    /// Every thread you've written in.
     case threads
     case channel(ChannelID)
 
@@ -15,11 +12,8 @@ enum ChannelPlace: Hashable {
     }
 }
 
-/// What the window shows: a place, and maybe a thread open in the pane beside it, as Slack does. It holds only IDs, so
-/// it survives the window closing.
 struct ChannelSelection: Hashable {
     var place: ChannelPlace
-    /// Until a new topic has its thread, its ID is the ID of what you sent.
     var thread: String?
 
     init(_ place: ChannelPlace, thread: String? = nil) {
@@ -33,11 +27,9 @@ struct ChannelSelection: Hashable {
     static func thread(_ id: String, in place: ChannelPlace) -> ChannelSelection { ChannelSelection(place, thread: id) }
 
     var channelID: ChannelID? { place.channelID }
-    /// The same place with its thread pane closed.
     var closed: ChannelSelection { ChannelSelection(place) }
 }
 
-/// A thread's parent and its reply bar, holding only what they show, so an unchanged one isn't drawn again.
 struct ThreadPost: Equatable {
     var threadID: String
     var parent: ChannelMessage
@@ -58,13 +50,11 @@ struct ThreadPost: Equatable {
     }
 }
 
-/// One thread you're in, as Threads lists it.
 struct ThreadDigest: Equatable {
     var threadID: String
     var channel: ChannelID
     var parent: ChannelMessage
     var latest: ChannelMessage?
-    /// Replies before the latest.
     var more: Int
     var isUnread: Bool
 }
@@ -73,12 +63,9 @@ enum ChannelRow: Equatable {
     case day(Date)
     case parent(ThreadPost)
     case message(ChannelMessage)
-    /// A reply also sent to the channel, under a line saying which thread it's in.
     case alsoSent(ChannelMessage, threadID: String, parent: String)
     case digest(ThreadDigest)
-    /// In a thread's pane, the line between its parent and its replies.
     case replies(Int)
-    /// The line over what's new to you, as Slack's New line, and how many new messages or posts there are under it.
     case new(Int)
     case section(String, clearing: InboxEntry.Kind?)
     case heading(KittenStatus)
@@ -87,10 +74,8 @@ enum ChannelRow: Equatable {
     case question(AgentQuestion)
     case report(InboxEntry)
     case note(String)
-    /// At the top of a channel with older posts, which scrolling back to it loads.
     case older(isLoading: Bool)
 
-    /// The message it shows, by `ChannelMessage.id`, if it shows one.
     var messageID: String? {
         switch self {
         case .message(let message), .alsoSent(let message, _, _): return message.id
@@ -100,21 +85,13 @@ enum ChannelRow: Equatable {
     }
 }
 
-/// Where what you type in Messages goes. None of them carry your screen, and each carries only your words.
 enum MessageTarget: Equatable {
-    /// The cat's box: through the router, as the Ask box sends it, on Messages' own conversation with it.
     case router
-    /// A new thread in the kitten's folder.
     case newThread(Kitten)
-    /// `report` is the inbox row you're replying to, if you pressed Reply or Ask on one, so the answer goes under it.
     case thread(id: String, title: String, report: String? = nil)
-    /// The new topic you just started, until T3 has its thread. Nothing can be sent before then.
     case starting(Kitten)
-    /// Your own words as the answer.
     case question(AgentQuestion)
 
-    /// The box under a place. `nil` means there's no box: you only read there. A kitten's channel always starts
-    /// something new, the way a message in a Slack channel does, so carrying on in a thread is always a choice you can see.
     static func standard(for place: ChannelPlace, in book: ChannelBook) -> MessageTarget? {
         switch place {
         case .activity, .threads:
@@ -126,11 +103,7 @@ enum MessageTarget: Equatable {
         }
     }
 
-    /// The box in a thread's pane, which goes only into that thread. `answered` is how many parts of each question
-    /// have their answer so far, since your words answer the next one.
     static func reply(in id: String, of book: ChannelBook, answered: [String: Int] = [:]) -> MessageTarget? {
-        // The router answers in lines the app acts on, so nothing goes straight into one of its threads. Work the cat
-        // started for you is a session like any other, so it takes a reply, if it's work Messages shows.
         guard !book.talks.contains(id), book.home(ofThread: id) != .shades || book.catsWork.contains(id) || book.threads[id] != nil else { return nil }
         let thread = book.threads[id]
         if let thread, thread.isStarting, let kitten = thread.owner.flatMap({ book.kitten($0) }) {
@@ -144,18 +117,14 @@ enum MessageTarget: Equatable {
         return .thread(id: id, title: book.title(ofThread: id))
     }
 
-    /// The kitten an @ in your words names, by its name written as one word, such as `@steve-pawsniak`: the first one,
-    /// as a word of its own, so an email address isn't one. Only your words are read for it.
     static func mentioned(in words: String, among kittens: [Kitten]) -> Kitten? {
         for word in words.split(whereSeparator: \.isWhitespace) where word.hasPrefix("@") {
             let name = word.dropFirst().prefix { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }.lowercased()
-            // A lone @ names no one, even a kitten whose name has no letters or numbers to make a word of.
             if !name.isEmpty, let kitten = kittens.first(where: { ChannelBook.slug($0.name) == name }) { return kitten }
         }
         return nil
     }
 
-    /// Whether the part of a question that's next to answer takes your own words.
     static func takesWords(_ question: AgentQuestion, answered: [String: Int]) -> Bool {
         guard let parts = question.form?.parts, parts.indices.contains(answered[question.id] ?? 0) else { return false }
         return parts[answered[question.id] ?? 0].takesOwnWords
@@ -163,15 +132,12 @@ enum MessageTarget: Equatable {
 }
 
 extension MessageTarget {
-    /// Whether a file or picture can go with your words. An answer to a question is only words.
     var takesFiles: Bool {
         switch self {
         case .router, .newThread, .thread: return true
         case .starting, .question: return false
         }
     }
-    /// Whether words already typed can still go here. An answered question can't take them, and a new topic
-    /// that's started moves on to its thread.
     var isReady: Bool {
         if case .starting = self { return false }
         return true
@@ -186,9 +152,7 @@ extension MessageTarget {
     }
 }
 
-/// Turns a place or a thread into rows, so the view doesn't branch.
 enum ChannelRows {
-    /// `newFrom` is where each thread's line over what's new goes, as `ChannelBook.newFrom` has it.
     static func rows(_ place: ChannelPlace, in book: ChannelBook, newFrom: [String: String] = [:]) -> [ChannelRow] {
         switch place {
         case .activity: return activity(in: book)
@@ -197,7 +161,6 @@ enum ChannelRows {
         }
     }
 
-    /// One thread on its own: its parent, how many replies, each reply, then whatever it's waiting on you for.
     static func thread(_ id: String, in book: ChannelBook, newFrom: [String: String] = [:]) -> [ChannelRow] {
         var rows: [ChannelRow] = []
         if let thread = book.threads[id] {
@@ -223,9 +186,6 @@ enum ChannelRows {
         return rows + approvals + book.waiting.questions.filter { book.thread(holding: $0.id, else: $0.threadID) == id }.map(ChannelRow.question)
     }
 
-    /// The threads Activity opens beside a channel, top to bottom: a question's Type an answer, a report's Reply or
-    /// Ask, and what's in progress that Messages has read. An approval, and anything else, only opens in T3. `answered`
-    /// is how many parts of each question have their answer so far.
     static func activityThreads(in book: ChannelBook, answered: [String: Int] = [:]) -> [String] {
         var seen: Set<String> = []
         return activity(in: book).compactMap { row -> String? in
@@ -240,16 +200,13 @@ enum ChannelRows {
         }.filter { seen.insert($0).inserted }
     }
 
-    /// Whether something's waiting on you in this thread, which its reply bar says.
     static func needsYou(_ id: String, in book: ChannelBook) -> Bool {
         book.waiting.approvals.contains { book.thread(holding: $0.id, else: $0.threadID) == id }
             || book.waiting.questions.contains { book.thread(holding: $0.id, else: $0.threadID) == id }
     }
 
-    /// What came in while you were away first, then what's waiting on you, then reports, then what each kitten is on.
     private static func activity(in book: ChannelBook) -> [ChannelRow] {
         let away = away(in: book)
-        // Each shows once, in the order it came, rather than again in its usual place below.
         var above: Set<String> = []
         for row in away {
             switch row {
@@ -278,8 +235,6 @@ enum ChannelRows {
         return statusNotes(of: book) + caughtUp + rows + (progress.isEmpty ? [] : [.section(CatWords.inProgress, clearing: nil)] + progress)
     }
 
-    /// Everything Do Not Disturb held, each as it shows anywhere else, with its usual buttons. A thread shows as its
-    /// inbox rows if it has any, or else as its latest reply. Anything that's been answered or has gone is left out.
     private static func away(in book: ChannelBook) -> [ChannelRow] {
         let waiting = book.waiting
         return waiting.away.flatMap { missed -> [ChannelRow] in
@@ -301,7 +256,6 @@ enum ChannelRows {
 
     private static func inProgress(in book: ChannelBook) -> [ChannelRow] {
         let shades = book.waiting.shadesWork
-        // Threads are known before any words are, so reading only matters if there's nothing to show yet.
         if book.issueCount == 0, shades.isEmpty {
             if book.cantReachT3 { return [] }
             if book.isReading { return [.note(CatWords.readingMessages)] }
@@ -367,8 +321,6 @@ enum ChannelRows {
         return rows + statusNotes(of: book)
     }
 
-    /// Whether a post is new to you: a thread none of which you've seen, or a reply also sent here that came after what
-    /// you'd read of its thread. A thread with only new replies is new in its pane, as in Slack.
     private static func isNew(_ post: ChannelPost, in book: ChannelBook, newFrom: [String: String]) -> Bool {
         switch post {
         case .thread(let id):
@@ -381,18 +333,15 @@ enum ChannelRows {
         }
     }
 
-    /// The start of a thread's first message, for "replied to a thread".
     static func firstWords(of text: String) -> String {
         let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
         return line.count > 60 ? String(line.prefix(59)) + "…" : line
     }
 
-    /// Why there's nothing to show, where that's known.
     private static func emptyThreadNote(_ id: String, in book: ChannelBook) -> String {
         if book.cantReachT3 { return CatWords.cantReachT3Yet }
         if book.isReading { return CatWords.readingMessages }
         if book.unreadable > 0 { return CatWords.couldntRead(book.unreadable) }
-        // Only listed threads are read, and T3 stops listing one once it's archived.
         if book.listed[id] == nil { return CatWords.threadNotListed }
         return CatWords.quietThread
     }

@@ -1,7 +1,5 @@
 import Foundation
 
-/// Keeps using the same quick thread for follow-ups, which saves about 1.5 s a question,
-/// and starts fresh once the conversation has clearly gone quiet.
 struct QuickSession {
     static let lifetime: TimeInterval = 10 * 60
 

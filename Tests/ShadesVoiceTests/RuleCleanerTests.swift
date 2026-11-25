@@ -8,8 +8,6 @@ final class RuleCleanerTests: XCTestCase {
         XCTAssertEqual(cleaner.tidy(raw), expected, file: file, line: line)
     }
 
-    // MARK: - Fillers
-
     func testRemovesFillerWords() {
         assertCleans("Um, so I think we should, uh, go with the blue one.", to: "So I think we should go with the blue one.")
         assertCleans("Let's, um, do it.", to: "Let's do it.")
@@ -37,8 +35,6 @@ final class RuleCleanerTests: XCTestCase {
         XCTAssertFalse(RuleCleaner.isOnlyFillers("Um, okay."))
     }
 
-    // MARK: - Stutters
-
     func testCollapsesStutters() {
         assertCleans("The, the problem is here.", to: "The problem is here.")
         assertCleans("I, I, I don't think so.", to: "I don't think so.")
@@ -50,8 +46,6 @@ final class RuleCleanerTests: XCTestCase {
         assertCleans("It's very very good.", to: "It's very very good.")
         assertCleans("Call five five five.", to: "Call five five five.")
     }
-
-    // MARK: - Corrections
 
     func testReplacesCorrectedValue() {
         assertCleans("Let's meet at three, no, actually four.", to: "Let's meet at four.")
@@ -76,11 +70,8 @@ final class RuleCleanerTests: XCTestCase {
     }
 
     func testLeavesCorrectionsItCantLineUp() {
-        // Unsure which words "blue" replaces, so nothing is lost.
         assertCleans("The red one, no wait, blue.", to: "The red one, no wait, blue.")
     }
-
-    // MARK: - Edges
 
     func testAddsCapitalAndFullStop() {
         assertCleans("sounds good", to: "Sounds good.")

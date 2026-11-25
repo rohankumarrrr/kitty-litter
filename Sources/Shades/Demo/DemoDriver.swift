@@ -2,8 +2,6 @@ import AppKit
 import ShadesContext
 import ShadesCore
 
-/// Plays the demo: a little script when it starts, a few menu items, and commands typed
-/// on stdin, so you can try each flow without any real keys, permissions or agents.
 @MainActor
 final class DemoDriver {
     private let parts: Demo.Parts
@@ -32,12 +30,10 @@ final class DemoDriver {
             .init(title: "Ask a Question") { [weak self] in self?.parts.backend.askQuestion(threadID: "demo-research") },
             .init(title: "Finish All the Work") { [weak self] in self?.parts.backend.stopEverything() },
         ]
-        // What VoiceOver was asked to say, which is only ever spoken.
         BubbleController.onAnnounce = { words, priority in
             print("voiceover says\(priority == .high ? " at once" : ""): \(words.replacingOccurrences(of: "\n", with: " / "))")
             fflush(stdout)
         }
-        // A reply you also sent to Steve's channel, which Messages keeps in memory only.
         if let steve = Demo.kittens.first { controller.channels.sent(DemoChannels.alsoSentEcho, in: .of(steve), alsoSent: true) }
         readCommands()
         print("Demo mode. Type a command, or use the menu bar item. Try: help")
@@ -64,8 +60,6 @@ final class DemoDriver {
 
     private func readCommands() {
         let driver = self
-        // A file stands in for typing, since an agent can only start the app with a plain `swift run`.
-        // It quits when the file runs out, since a run left going can't be found from the agent's sandbox.
         let file = DevFlags.commandsFile
         if let file, freopen(file, "r", stdin) == nil {
             print("Couldn't read \(file)")
@@ -86,8 +80,6 @@ final class DemoDriver {
         }
     }
 
-    /// Messages on your phone, on loopback only: `on` and `off` are the switch in Settings, `pair` shows a code, and
-    /// `open` loads the page at a phone's size, pairing with the code that's showing. The rest go through the page.
     private func phone(_ line: String) {
         let word = line.split(separator: " ").first.map(String.init) ?? ""
         let rest = String(line.dropFirst(word.count)).trimmingCharacters(in: .whitespaces)
@@ -106,7 +98,6 @@ final class DemoDriver {
         case "open":
             guard let address = controller.phoneAddress else { return print("The phone page isn't on. Try: phone on") }
             let key = rest.isEmpty ? PhonePlace.home : phoneKey(rest)
-            // As scanning the picture does: the page pairs with the code that's showing.
             let code = controller.phone?.door.pairing.map { "#pair=\($0.code)" } ?? ""
             let phone = self.phone ?? DemoPhone()
             self.phone = phone
@@ -114,29 +105,22 @@ final class DemoDriver {
         case "go":
             runOnPhone("go(\(DemoPhone.quoted(phoneKey(rest))))")
         case "js":
-            // Runs a line of script on the page and prints what it comes to, such as where its rows are.
             runOnPhone(rest)
         case "attach":
-            // The same as picking a photo from the page's + button: a made-up picture goes up, as the page sends one.
             guard let phone else { return print("The page isn't open. Try: phone open") }
             Task {
                 print("[phone] \(await phone.runAsync(DemoPhone.attachPicture(named: rest.isEmpty ? "keyboard" : rest)))")
                 fflush(stdout)
             }
         case "send":
-            // The same as typing into the page's box and pressing Send.
             runOnPhone("$('words').value = \(DemoPhone.quoted(rest)); $('box').requestSubmit(); 'sent'")
         case "press":
-            // The same as tapping the first button that says this.
             runOnPhone("(() => { const b = [...document.querySelectorAll('button')].find((b) => !b.disabled && !b.closest('[hidden]') && b.textContent.trim() === \(DemoPhone.quoted(rest))); if (!b) return 'no button'; b.click(); return 'pressed' })()")
         case "search":
-            // The same as tapping Search and typing those words. The page asks once typing pauses, so `wait 1` first.
             runOnPhone("(() => { if ($('search').hidden) $('find').click(); $('query').value = \(DemoPhone.quoted(rest)); $('query').dispatchEvent(new Event('input')); return 'typed' })()")
         case "answer":
-            // The same as typing into a question card's box.
             runOnPhone("(() => { const i = document.querySelector('.card input'); if (!i) return 'no box'; i.value = \(DemoPhone.quoted(rest)); i.dispatchEvent(new Event('input')); return 'typed' })()")
         case "subscribe":
-            // What turning notifications on does, with a stand-in for the phone's push service.
             guard let phone else { return print("The page isn't open. Try: phone open") }
             let subscription = String(decoding: (try? JSONEncoder().encode(Demo.phoneSubscription)) ?? Data(), as: UTF8.self)
             Task {
@@ -146,13 +130,10 @@ final class DemoDriver {
         case "text":
             runOnPhone("document.body.innerText.split('\\n').filter((l) => l.trim()).join(' | ')")
         case "select":
-            // The same as pressing and dragging over those words on the page.
             runOnPhone("(() => { const words = \(DemoPhone.quoted(rest)); const walk = document.createTreeWalker($('rows'), NodeFilter.SHOW_TEXT); for (let node = walk.nextNode(); node; node = walk.nextNode()) { const at = node.data.indexOf(words); if (at < 0) continue; const range = document.createRange(); range.setStart(node, at); range.setEnd(node, at + words.length); getSelection().removeAllRanges(); getSelection().addRange(range); return 'selected [' + getSelection().toString() + ']'; } return 'no such words' })()")
         case "link":
-            // The same as tapping a link in a message: the page shows where it goes, and opens nothing.
             runOnPhone("(() => { const a = [...$('rows').querySelectorAll('[role=link]')].find((a) => a.textContent.includes(\(DemoPhone.quoted(rest)))); if (!a) return 'no link'; a.click(); return $('linktitle').textContent + ' ' + $('linkaddress').textContent })()")
         case "unselect":
-            // The same as tapping somewhere else on the page.
             runOnPhone("getSelection().removeAllRanges(); 'unselected'")
         case "close":
             phone?.close()
@@ -162,7 +143,6 @@ final class DemoDriver {
         }
     }
 
-    /// `record <file.gif> <window>...` records those windows, or `phone`, until `record stop` writes the GIF.
     private func record(_ line: String) {
         if line == "stop" {
             print(recorder?.stop() ?? "Nothing's recording. Try: record <file.gif> cat bubble")
@@ -180,7 +160,7 @@ final class DemoDriver {
                 guard let self else { return [] }
                 return self.windows.compactMap { name, window in
                     guard names.contains(name), window.isVisible else { return nil }
-                    // The cat is pixel art on a layer, which a drawn copy would smooth, so its own picture goes in.
+                    // Outside the repo: AppKit's drawn copy of a view smooths a layer's pixel art.
                     if name == "cat", let sprite = self.stage.cat.view.layer?.contents {
                         let view = self.stage.cat.view
                         return ((sprite as! CGImage), window.convertToScreen(view.convert(view.bounds, to: nil)))
@@ -195,15 +175,12 @@ final class DemoDriver {
             phone: names.contains("phone") ? phone : nil
         )
         self.recorder = recorder
-        // The person's own clicks and typing go on around the demo, and mustn't close what's being recorded.
         ClickAway.isPaused = true
         let screen = NSScreen.screens.first?.frame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         stage.pointer = { CGPoint(x: screen.minX + screen.width * 0.55, y: screen.minY + screen.height * 0.3) }
         recorder.start()
     }
 
-    /// The same as dragging over those words in Messages: the first message showing them gets the keyboard, the way
-    /// pressing in it does, and they're selected.
     private func highlight(_ words: String) {
         let panel = stage.channels.panel
         for view in allSubviews(of: panel.contentView) {
@@ -218,7 +195,6 @@ final class DemoDriver {
         print("no message shows [\(words)]")
     }
 
-    /// The same as pressing a link in Messages whose words include these: the pane shows where it goes, and nothing opens.
     private func pressLink(_ words: String) {
         for view in allSubviews(of: stage.channels.panel.contentView) {
             guard let text = view as? ChannelTextView, let storage = text.textStorage else { continue }
@@ -231,9 +207,6 @@ final class DemoDriver {
         print("no link shows [\(words)]")
     }
 
-    /// The same as changing a control in Settings, found by its row: `setting Text size Large` picks Large,
-    /// `setting Extra words Pawsniak` types that and presses Return, and a box or a button is pressed, such as
-    /// `setting Do Not Disturb` or `setting Pepper`. Prints what each control on the page says afterwards.
     private func setting(_ words: String) {
         let controls = allSubviews(of: stage.settingsPanel.panel.contentView).filter { $0 is NSControl || $0 is QuietButton || $0 is SettingsControl }
         func names(_ view: NSView) -> [String] {
@@ -257,8 +230,6 @@ final class DemoDriver {
             field.stringValue = choice
             field.sendAction(field.action, to: field.target)
         case let button as QuietButton where button.accessibilityRole() == .popUpButton:
-            // A menu waits for a click, so this picks from a row's own choices the way the click would. Font
-            // and a channel's make theirs as they open, so `font` and `notifications` stand in for those.
             guard let menu = button.menu else { return print("\(label) opens a menu: use notifications or font") }
             guard let index = menu.items.firstIndex(where: { $0.title == choice }) else { return print("no choice [\(choice)] in \(label)") }
             menu.performActionForItem(at: index)
@@ -271,11 +242,8 @@ final class DemoDriver {
         settingsShown()
     }
 
-    /// Hands Tab, Shift-Tab, Ctrl-Tab or Space to whichever window has the keyboard, the way the key arrives there, without
-    /// posting anything to the system. Prints what has the keyboard afterwards.
     private func pressKey(_ characters: String, keyCode: UInt16? = nil, control: Bool = false) {
         guard let (name, window) = windows.first(where: { $0.1.isKeyWindow }) else { return print("no window has the keyboard") }
-        // A menu opens on the real desktop and waits there for a click, so `setting` picks from one instead.
         if characters == " ", let button = window.firstResponder as? QuietButton, button.accessibilityRole() == .popUpButton {
             return print("space on \(button.accessibilityLabel() ?? "") would open its menu: use setting")
         }
@@ -293,7 +261,6 @@ final class DemoDriver {
         print("focus \(name) \(label.isEmpty ? responder.map { String(describing: type(of: $0)) } ?? "nothing" : label) key=\(window.isKeyWindow) front=\(front)")
     }
 
-    /// Each control on Settings' page as it shows now.
     private func settingsShown() {
         let panel = stage.settingsPanel
         print("settings page=\(panel.page.title) visible=\(panel.isVisible)")
@@ -309,7 +276,6 @@ final class DemoDriver {
         }
     }
 
-    /// `webpicture` presses the first web picture showing, which only shows its address, and `webpicture show` presses Show.
     private func pressPicture(_ words: String) {
         let view = stage.channels.view
         if words == "show" {
@@ -324,7 +290,6 @@ final class DemoDriver {
         print("link bar shows \(bars.map { "\($0.title) \($0.link?.absoluteString ?? "")" })")
     }
 
-    /// `recent` lists what Attach's menu offers, and `recent <n>` picks the nth, as choosing it from the menu does.
     private func pickRecent(_ words: String) {
         let files = controller.recentFiles()
         let items = stage.recentFiles.items(files)
@@ -350,10 +315,8 @@ final class DemoDriver {
         }
     }
 
-    /// activity, threads, shades, home, the start of a kitten's name for its channel, or a key as it is.
     private func phoneKey(_ place: String) -> String {
         if ["activity", "threads", "shades", "home"].contains(place) { return place }
-        // `steve/demo-steve-yesterday` is that thread, in that kitten's channel.
         let parts = place.split(separator: "/", maxSplits: 1).map(String.init)
         if parts.count == 2, let kitten = Demo.kittens.first(where: { $0.name.lowercased().hasPrefix(parts[0].lowercased()) }) {
             return PhonePlace.key(.thread(parts[1], in: .channel(.of(kitten))))
@@ -364,7 +327,6 @@ final class DemoDriver {
         return place
     }
 
-    /// The threads the place that's showing leads to, with the words each is shown by, top to bottom.
     private var shownThreads: [(id: String, words: String)] {
         stage.channels.view.pane.shown.compactMap { row in
             switch row {
@@ -376,7 +338,6 @@ final class DemoDriver {
         }
     }
 
-    /// What `key` takes, each named for what it does, standing in for the keys `docs/kittens.md` lists.
     private static let shortcuts: [String: MessagesShortcut] = {
         var named: [String: MessagesShortcut] = [
             "previous-thread": .previousThread, "next-thread": .nextThread,
@@ -389,8 +350,6 @@ final class DemoDriver {
         return named
     }()
 
-    /// Whether this copy of The Kitty Litter is in front or another app is, for the output. Never another app's name,
-    /// since what a journey prints goes on public pull requests.
     static func front(_ app: NSRunningApplication?) -> String {
         guard let app else { return "nothing" }
         return app.processIdentifier == NSRunningApplication.current.processIdentifier ? CatWords.appName : "another app"
@@ -398,7 +357,6 @@ final class DemoDriver {
 
     private var front: String { Self.front(NSWorkspace.shared.frontmostApplication) }
 
-    /// Which place Messages is on and which thread is open, for the output.
     private var whereMessagesIs: String {
         let view = stage.channels.view
         let place: String
@@ -423,7 +381,6 @@ final class DemoDriver {
         ]
     }
 
-    /// What VoiceOver can find in each window that's showing, and in The Kitty Litter's sidebar.
     private var voiceOverElements: [(window: String, view: NSView)] {
         let roots: [(String, NSView?)] = [
             ("cat", stage.cat.view),
@@ -459,13 +416,10 @@ final class DemoDriver {
                 controller.ask(rest, snapshot: ScreenSnapshot(appName: "Safari", windowTitle: "Pricing", selectedText: parts.inserter.selection))
             }
         case "select":
-            // What's selected in the pretend app, for the next ask to read. Alone, it's a click somewhere else.
             parts.inserter.selection = rest.isEmpty ? nil : rest
         case "replace":
-            // The same as pressing Replace under a rewrite.
             if case .reply(let text, true, _, _, true)? = stage.bubble.content { controller.bubbleAction(.replace(text)) }
         case "drop":
-            // The same as letting go of it over the cat. `drop pdf` makes up a syllabus to drop.
             let url = rest == "pdf" ? Demo.samplePDF() : URL(string: rest)?.scheme == nil ? URL(fileURLWithPath: rest) : URL(string: rest)
             let pasteboard = NSPasteboard(name: NSPasteboard.Name("shades-demo-drop"))
             pasteboard.clearContents()
@@ -484,7 +438,6 @@ final class DemoDriver {
         case "dictate":
             hold(.dictate)
         case "busy":
-            // Hundreds more threads, with long conversations, for timing Messages under a real load.
             parts.backend.makeBusy()
         case "perf":
             Task { await DemoBench.run(rest, controller: controller, stage: stage) }
@@ -493,10 +446,8 @@ final class DemoDriver {
         case "channels":
             controller.channelsPressed()
         case "messages":
-            // The same as pressing ⌃⌘B: it brings Messages in front of you, or closes it if it's already there.
             controller.messagesHotkeyPressed()
         case "channel":
-            // channel activity | threads | shades | the start of a kitten's name, the same as clicking it in the sidebar.
             let kitten = Demo.kittens.first { $0.name.lowercased().hasPrefix(rest.lowercased()) }
             switch rest {
             case "activity": stage.channels.view.select(.activity)
@@ -505,8 +456,6 @@ final class DemoDriver {
             default: if let kitten, !rest.isEmpty { stage.channels.view.select(.channel(.of(kitten))) }
             }
         case "thread":
-            // The same as clicking the reply bar under the newest thread showing, or under the one whose words include these.
-            // `thread reply` is pressing Reply on it instead, which puts the keyboard in its box.
             let typing = rest == "reply" || rest.hasPrefix("reply ")
             let words = typing ? String(rest.dropFirst(5)).trimmingCharacters(in: .whitespaces) : rest
             let chosen = words.isEmpty ? shownThreads.last : shownThreads.last { $0.words.localizedCaseInsensitiveContains(words) }
@@ -517,11 +466,8 @@ final class DemoDriver {
                 print("no thread shows [\(rest)]")
             }
         case "back":
-            // The same as the ✕ on a thread's pane.
             stage.channels.view.closeThread()
         case "key":
-            // The same as pressing that shortcut in Messages, once a click into it has given it the keyboard. That
-            // doesn't make Shades the active app, so `front` stays yours.
             guard let shortcut = Self.shortcuts[rest] else {
                 return print("key \(Self.shortcuts.keys.sorted().joined(separator: " | "))")
             }
@@ -530,17 +476,14 @@ final class DemoDriver {
             let handled = panel.handle(shortcut)
             print("key \(rest) handled=\(handled) \(whereMessagesIs) key=\(panel.isKeyWindow) front=\(front)")
         case "keyboard":
-            // Stands in for Keyboard navigation in System Settings, which the demo leaves as it is.
             QuietFocus.fullKeyboardAccess = { rest != "off" }
             print("keyboard navigation \(rest == "off" ? "off" : "on")")
         case "tab", "space":
             pressKey(word == "space" ? " " : rest == "back" ? "\u{19}" : "\t", control: rest == "control")
         case "arrow":
-            // ↑ or ↓, handed to the window with the keyboard the way `tab` is.
             let up = rest == "up"
             pressKey(String(Character(UnicodeScalar(up ? NSUpArrowFunctionKey : NSDownArrowFunctionKey)!)), keyCode: up ? 126 : 125)
         case "jump":
-            // The same as typing into ⌘K's box, which opens it first if it isn't open.
             let view = stage.channels.view
             if view.jumpBox.isHidden {
                 stage.channels.panel.makeKey()
@@ -549,40 +492,31 @@ final class DemoDriver {
             view.jumpBox.query = rest
             print("jump [\(rest)] \(view.jumpBox.items.map(\.title).joined(separator: ", "))")
         case "search":
-            // The same as typing into ⌘F's box, which opens it first if it isn't open.
             let view = stage.channels.view
             if view.jumpBox.isHidden || view.jumpBox.mode != .search {
                 stage.channels.panel.makeKey()
                 stage.channels.panel.handle(.search)
             }
-            // The same words again only says what it shows now, such as what T3 found since.
             if view.jumpBox.query != rest { view.jumpBox.query = rest }
             print("search [\(rest)] \(view.jumpBox.items.map { "\($0.title): \($0.found?.snippet ?? "")" }.joined(separator: " | "))")
         case "jump-down", "jump-up":
-            // The arrows in ⌘K's box.
             stage.channels.view.jumpBox.move(by: word == "jump-down" ? 1 : -1)
             print("\(word) \(stage.channels.view.jumpBox.highlighted)")
         case "jump-open":
-            // Return in ⌘K's box.
             stage.channels.view.jumpBox.open()
             print("jump-open \(whereMessagesIs)")
             let view = stage.channels.view
             let found = (view.threadPane.isHidden ? view.pane : view.threadPane).shownMessageRows.first(where: \.isFound)
             if let found { print("found \(found.message.id) [\((found.message.text ?? "").prefix(60))]") }
         case "also":
-            // The same as clicking "Also send to #channel" under a thread's box.
             let composer = stage.channels.view.threadPane.composer
             composer.alsoSends = rest == "on"
             print("also \(composer.alsoSend.isHidden ? "isn't offered" : "\(composer.alsoSend.title) \(composer.alsoSends ? "on" : "off")")")
         case "more":
-            // The same as pressing Show more under the first cut message in the thread pane, or the place without one.
             let view = stage.channels.view
             let pane = view.threadPane.isHidden ? view.pane : view.threadPane
             if let row = pane.longMessageRow { row.pressShowMore() } else { print("no message is cut") }
         case "toolbar":
-            // The same as pointing at the newest message in the thread's pane, or the place's, and clicking the button in
-            // its bar with these words. The window finds what's under the button's centre, as it would for the pointer,
-            // and that gets the press and the release, made here and handed straight to it, so nothing is posted.
             let view = stage.channels.view
             let pane = view.threadPane.isHidden ? view.pane : view.threadPane
             guard let row = pane.shownMessageRows.last else { return print("no message shows") }
@@ -595,7 +529,6 @@ final class DemoDriver {
             let hit = frame.hitTest(frame.convert(centre, from: nil))
             print("toolbar [\(rest)] \(button.isHidden ? "is under More, " : "")lands on \(hit === shown ? "it" : hit.map { String(describing: type(of: $0)) } ?? "nothing")")
             if button.isHidden, let menu = row.menu(for: NSEvent()) {
-                // More's menu is the right-click one. Opening it would hold the demo in the menu's loop, so its item is chosen.
                 return menu.performActionForItem(at: menu.indexOfItem(withTitle: rest))
             }
             guard let hit else { return }
@@ -604,15 +537,12 @@ final class DemoDriver {
                 type == .leftMouseDown ? hit.mouseDown(with: event) : hit.mouseUp(with: event)
             }
         case "unread":
-            // The same as pressing Mark unread on the newest message whose words include these, in the thread's pane if
-            // one's open.
             let view = stage.channels.view
             let pane = view.threadPane.isHidden ? view.pane : view.threadPane
             let row = pane.shownMessageRows.last { $0.onMarkUnread != nil && ($0.accessibilityLabel() ?? "").localizedCaseInsensitiveContains(rest) }
             print(row == nil ? "no message to mark unread shows [\(rest)]" : "marked unread [\(rest)]")
             row?.onMarkUnread?()
         case "new":
-            // Where each pane's New line is, and whether its way up to it shows. `new jump` presses that.
             let view = stage.channels.view
             let panes = [("place", view.pane), ("thread", view.threadPane)].filter { !$0.1.isHidden }
             if rest == "jump", let (name, pane) = panes.last(where: { $0.1.jumpTitle != nil }) {
@@ -624,33 +554,27 @@ final class DemoDriver {
                 print("new \(name) line=\(line.map { "\(pane.shown[$0])" } ?? "none") jump=\(pane.jumpTitle ?? "none")")
             }
         case "scroll":
-            // Moves what Messages shows by that many points, up if it's negative, the way scrolling would.
             let pane = stage.channels.view.pane
             if let points = Double(rest) { pane.scrollOffset = min(max(pane.scrollOffset + points, 0), pane.scrollOffset + pane.distanceFromBottom) }
         case "send":
-            // The same as typing into a box in Messages and pressing Return: the open thread's, or the place's.
             let view = stage.channels.view
             (view.selection.thread == nil ? view.pane : view.threadPane).composer.send(rest)
         case "retry":
-            // The same as pressing Try again under the last of your messages that went nowhere.
             let view = stage.channels.view
             let row = (view.pane.shownMessageRows + view.threadPane.shownMessageRows).last { $0.onTryAgain != nil }
             print(row == nil ? "nothing to try again" : "tried again")
             row?.onTryAgain?()
         case "draft":
-            // The same as typing into that box without sending, such as `draft @pepper how's my budget?`.
             let view = stage.channels.view
             let text = (view.selection.thread == nil ? view.pane : view.threadPane).composer.textView
             text.insertText(rest, replacementRange: NSRange(location: (text.string as NSString).length, length: 0))
         case "react":
-            // The same as picking a reaction from React on the last message that takes one, such as `react thumbsUp`.
             let view = stage.channels.view
             let row = (view.pane.shownMessageRows + view.threadPane.shownMessageRows).last { $0.onReact != nil }
             guard let reaction = Reaction(rawValue: rest) else { return print("react " + Reaction.allCases.map(\.rawValue).joined(separator: " | ")) }
             print(row.map { "reacted \(reaction.emoji) to [\(($0.accessibilityLabel() ?? "").prefix(70))]" } ?? "nothing takes a reaction")
             row?.onReact?(reaction)
         case "attach":
-            // The same as dropping a file onto that box: `attach pdf` makes up a syllabus, `attach picture` a picture.
             let view = stage.channels.view
             let drop: Drop? = switch rest {
             case "pdf": Demo.samplePDF().map(Drop.file)
@@ -660,7 +584,6 @@ final class DemoDriver {
             let taken = drop.map { (view.selection.thread == nil ? view.pane : view.threadPane).composer.attach([$0]) } ?? false
             print("attached \(drop?.name ?? rest), taken: \(taken)")
         case "settings":
-            // Opens Settings from the menu, or turns to a page of it: `settings messages`.
             if let page = SettingsPanel.Page.allCases.first(where: { [$0.title.lowercased(), "\($0)"].contains(rest.lowercased()) }) {
                 stage.settingsPanel.select(page)
                 print("settings page \(page.title)")
@@ -672,7 +595,6 @@ final class DemoDriver {
         case "phone":
             phone(rest)
         case "type":
-            // Fills the Ask box a letter at a time, the way typing looks. `submit` with the same words sends it.
             Task {
                 for count in 1...max(rest.count, 1) {
                     stage.input.setText(String(rest.prefix(count)))
@@ -696,11 +618,9 @@ final class DemoDriver {
         case "report":
             parts.backend.report(rest)
         case "inbox":
-            // The same as pressing a report's buttons in Messages, so nothing has to click.
             let first = controller.inboxEntries.first { $0.questionID == nil }
             switch rest {
             case "reply":
-                // The same as pressing the first report's Reply: its thread opens beside its channel with the box ready.
                 controller.channelsPressed(selecting: .activity)
                 if let first { stage.channels.view.pane.reply(to: first) }
             case "done":
@@ -711,22 +631,17 @@ final class DemoDriver {
                 controller.channelsPressed(selecting: .activity)
             }
         case "card":
-            // The same as clicking the button with these words on a card in Messages' main pane.
             let cards = allSubviews(of: stage.channels.view.pane).compactMap { $0 as? CardRowView }
             let button = cards.lazy.flatMap(\.buttons).first { $0.accessibilityLabel() == rest }
             guard let button else { return print("no card button [\(rest)]") }
             print(button.accessibilityPerformPress() ? "pressed \(rest)" : "didn't press \(rest)")
         case "notification":
-            // The same as clicking a notification about that thread.
             controller.showInMessages(rest.isEmpty ? "demo-tidy" : rest)
         case "notify-finished":
-            // The same as ticking Also when a session finishes in Settings.
             var settings = controller.settings
             settings.notifyFinished = rest != "off"
             controller.apply(settings)
         case "notifications":
-            // notifications <channel> [mute | mac <level> | phone <level>], the same as picking that from the channel's
-            // Notifications menu, which it prints after. The channel is named as `channel` names it.
             let words = rest.split(separator: " ").map(String.init)
             let kitten = Demo.kittens.first { $0.name.lowercased().hasPrefix(words.first?.lowercased() ?? "-") }
             let channel: ChannelID? = words.first == "shades" ? .shades : kitten.map(ChannelID.of)
@@ -752,7 +667,6 @@ final class DemoDriver {
         case "pet":
             stage.catPet()
         case "pose":
-            // pose [frame [flip]], or just "pose" to let go.
             let words = rest.split(separator: " ").map(String.init)
             stage.cat.hold(words.first.flatMap(CatFrame.init(rawValue:)).map { CatPose(frame: $0, flip: words.count > 1) })
         case "run":
@@ -761,13 +675,11 @@ final class DemoDriver {
         case "home":
             stage.catGoHome()
         case "fonts":
-            // What Font in Settings offers: the system's faces, then how many families All fonts has.
             for item in FontMenu().items(current: controller.settings.messagesFont, families: NSFontManager.shared.availableFontFamilies) {
                 let more = item.submenu.map { " (\($0.items.count) families)" } ?? ""
                 print(item.isSeparatorItem ? "font ---" : "font \(item.state == .on ? "*" : " ") \(item.title)\(more)\(item.isEnabled ? "" : " (not on this Mac)")")
             }
         case "font":
-            // The same as picking that font from Settings' Font menu, by its name, or `font` alone for the system's.
             let items = FontMenu().items(current: controller.settings.messagesFont, families: NSFontManager.shared.availableFontFamilies)
             let picked = (items + items.compactMap(\.submenu).flatMap(\.items)).first { $0.title == (rest.isEmpty ? MessagesInk.systemFaces[0].name : rest) && $0.isEnabled }
             guard let picked else { return print("no font [\(rest)]") }
@@ -776,7 +688,6 @@ final class DemoDriver {
             controller.settingsEdited(settings)
             print("font \(settings.messagesFont ?? "system")")
         case "picture":
-            // As if you'd given it a picture with --picture, with a drawn stand-in, and shown at once.
             MessagesInk.picture = rest == "off" ? nil : DemoPicture.jpeg
             stage.channels.view.restyle()
             print("picture \(MessagesInk.picture == nil ? "off" : "on")")
@@ -789,7 +700,6 @@ final class DemoDriver {
         case "recent":
             pickRecent(rest)
         case "copy":
-            // Where ⌘C in Messages would go and what it would copy, without copying, so your pasteboard is left alone.
             let target = NSApp.target(forAction: #selector(NSText.copy(_:)), to: nil, from: stage.channels.panel)
             let words = (target as? NSTextView).map { ($0.string as NSString).substring(with: $0.selectedRange()) }
             print("copy goes to \(target.map { String(describing: type(of: $0)) } ?? "nothing") with [\(words ?? "")] types=\((target as? NSTextView)?.writablePasteboardTypes.map(\.rawValue) ?? [])")
@@ -799,10 +709,8 @@ final class DemoDriver {
             parts.backend.connectFails = rest == "off"
             parts.backend.stuck = rest == "stuck"
         case "check":
-            // The same as choosing Check Myself from the cat's menu.
             controller.checkMyselfPressed()
         case "team":
-            // Off is a copy signed without a developer team, such as with "Shades Dev".
             parts.facts.found.isSignedByTeam = rest != "off"
         case "screen":
             parts.context.fails = rest == "off"
@@ -810,7 +718,6 @@ final class DemoDriver {
             parts.voice.downloading = rest == "off"
             parts.voice.denied = rest == "denied"
         case "voiceover":
-            // voiceover [window] lists what VoiceOver finds. voiceover press|menu [label] is VO-Space or VO-Shift-M on the first it calls that.
             let action = rest.split(separator: " ", maxSplits: 1).map(String.init)
             guard let verb = action.first, verb == "press" || verb == "menu" else {
                 for (window, view) in voiceOverElements where rest.isEmpty || window == rest {
@@ -833,13 +740,11 @@ final class DemoDriver {
             }
             print("state \(stage.cat.brain.state) pose=\(stage.cat.brain.pose.frame.rawValue) active=\(NSApp.isActive)")
         case "opal":
-            // Opal's primitives on one sheet, and a row of cats in any jackets given after the folder.
             let parts = rest.split(separator: " ").map(String.init)
             let jackets = parts.dropFirst().compactMap { UInt32($0.replacingOccurrences(of: "#", with: ""), radix: 16) }
             let file = OpalSheet.draw(to: parts.first ?? ".verify/shades/opal", jackets: jackets)
             print(file.map { "drew opal \($0.path)" } ?? "couldn't draw opal")
         case "draw":
-            // Each window draws itself into a picture, so nothing reads the screen.
             let folder = URL(fileURLWithPath: rest.isEmpty ? ".verify/shades/windows" : rest, isDirectory: true)
             try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             for (name, window) in windows where window.isVisible {
@@ -855,12 +760,10 @@ final class DemoDriver {
                 }
             }
         case "bubble":
-            // The same as clicking the bubble's button with these words.
             let button = stage.bubble.view.subviews.compactMap { $0 as? QuietButton }.first { $0.accessibilityLabel() == rest }
             print(button == nil ? "no bubble button [\(rest)]" : "pressed \(rest)")
             button?.onPress?()
         case "words":
-            // The same as clicking into the bubble's words, which gives it the keyboard when they can be selected.
             let bubble = stage.bubble
             guard bubble.isVisible, bubble.view.textView.needsPanelToBecomeKey else { return print("no words to click into") }
             bubble.panel.makeKey()
@@ -880,7 +783,6 @@ final class DemoDriver {
         case "menuclose":
             stage.menuBar.closeMenu()
         case "menuitems":
-            // What the cat's menu and the menu bar show, with a check by what's on, and each one's shortcut, badge and tip.
             for item in stage.menuBar.shownItems {
                 guard !item.isSeparatorItem else {
                     print("menu ---")
@@ -894,7 +796,6 @@ final class DemoDriver {
                 }
             }
         case "menupress":
-            // The same as choosing that item from the menu, or from a submenu as "Lockdown > Pepper".
             let path = rest.components(separatedBy: " > ")
             let item = path.dropFirst().reduce(stage.menuBar.shownItems.first { $0.title == path[0] }) { parent, title in
                 parent?.submenu?.items.first { $0.title == title }
@@ -902,24 +803,19 @@ final class DemoDriver {
             print(item == nil ? "no menu item [\(rest)]" : "chose \(rest)")
             if let item, let action = item.action { NSApp.sendAction(action, to: item.target, from: item) }
         case "header":
-            // The same as pressing a button at the top of the open thread's pane, such as Show on phone, or the place's
-            // with no thread open, such as a kitten's backlog.
             let view = stage.channels.view
             let header = (view.threadPane.isHidden ? view.pane : view.threadPane).subviews.compactMap { $0 as? ChannelHeader }.first
             let button = header?.subviews.compactMap { $0 as? QuietButton }.first { $0.accessibilityLabel() == rest }
             print(button == nil ? "no header button [\(rest)]" : "pressed \(rest)")
             button?.onPress?()
         case "sidebar":
-            // The same as pressing a button at the foot of Messages' sidebar.
             let button = stage.channels.view.sidebar.subviews.compactMap { $0 as? QuietButton }.first { !$0.isHidden && $0.accessibilityLabel() == rest }
             print(button == nil ? "no sidebar button [\(rest)]" : "pressed \(rest)")
             button?.onPress?()
         case "dnd":
-            // Where Do Not Disturb stands: the switch, the cat, and what's waiting to be caught up on.
             print("dnd \(controller.settings.doNotDisturb ? "on" : "off") cat=\(stage.cat.brain.state) away=\(controller.away.count)")
         case "cover":
-            // A window standing in for your work, over Messages as clicking back into another app leaves it, or beside it.
-            // Borderless, since AppKit pulls a titled window back over Messages when beside it would go off the screen.
+            // Outside the repo: AppKit pulls a titled window back over Messages when beside it would go off the screen.
             let window = cover ?? NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
             let frame = stage.channels.panel.frame
             window.isReleasedWhenClosed = false

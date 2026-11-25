@@ -3,12 +3,8 @@ import AppKit
 import ShadesCore
 import XCTest
 
-/// The quiet buttons and checkbox: Tab reaches them only with Full Keyboard Access on and only in a window that already
-/// has the keyboard, Space presses them, and pressing always shows. Each test calls what the key or click calls on the
-/// control itself, never a made-up press posted to the system, since that would land on whatever's really on the desktop.
 @MainActor
 final class QuietControlsTests: XCTestCase {
-    /// A window that says it has the keyboard or doesn't, since a test can't make a real one key.
     private final class Window: NSWindow {
         var key = false
         override var isKeyWindow: Bool { key }

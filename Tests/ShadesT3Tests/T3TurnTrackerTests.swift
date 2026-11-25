@@ -43,7 +43,6 @@ final class T3TurnTrackerTests: XCTestCase {
         XCTAssertEqual(run(&tracker, recorded), [])
     }
 
-    /// After a reconnect the server can send updates again. Whole-text updates make that harmless.
     func testReplayedUpdatesDontRepeatText() throws {
         var tracker = streamedTracker()
         let recorded = try items(T3Fixtures.streamedTurn)
@@ -71,8 +70,6 @@ final class T3TurnTrackerTests: XCTestCase {
         XCTAssertNotNil(run)
     }
 
-    // MARK: Approvals
-
     func testRecordedApprovalShowsTheActualCommandOnce() throws {
         var tracker = T3TurnTracker(threadID: T3Fixtures.approvalTurnThreadID, messageID: T3Fixtures.approvalTurnMessageID, threadTitle: "Approval")
         let recorded = try items(T3Fixtures.approvalTurn)
@@ -92,14 +89,11 @@ final class T3TurnTrackerTests: XCTestCase {
 
     func testAnApprovalAlreadyAnsweredIsNotAsked() throws {
         var tracker = T3TurnTracker(threadID: T3Fixtures.approvalTurnThreadID, messageID: T3Fixtures.approvalTurnMessageID, threadTitle: "Approval")
-        // The recording without the frame where the request was still open.
         var recorded = T3Fixtures.approvalTurn
         recorded.remove(at: 2)
         let events = run(&tracker, try items(recorded))
         XCTAssertFalse(events.contains { if case .needsApproval = $0 { return true } else { return false } })
     }
-
-    // MARK: How turns end
 
     private func event(_ type: String, _ payload: String, sequence: Int = 1) throws -> T3Wire.ThreadItem {
         let json = #"{"kind":"event","sequence":\#(sequence),"event":{"type":"\#(type)","payload":\#(payload)}}"#
@@ -168,7 +162,6 @@ final class T3TurnTrackerTests: XCTestCase {
         XCTAssertEqual(tracker.runID, "run-1")
     }
 
-    /// A steer joins a run another message started, so following only the run its own message started never ended.
     func testASteerFollowsTheRunItJoinedToItsEnd() throws {
         var tracker = newTracker()
         func update(_ status: String) throws -> T3Wire.ThreadItem {
@@ -196,7 +189,6 @@ final class T3TurnTrackerTests: XCTestCase {
         XCTAssertEqual(events, [.text(delta: "A blue logo."), .finished(fullText: "A blue logo.")])
     }
 
-    /// Queued words have no run until theirs starts, so they never take the one going for theirs.
     func testQueuedWordsWaitForTheirOwnRun() throws {
         var tracker = newTracker()
         var events = tracker.apply(try event("run.updated", #"{"id":"run-0","userMessageId":"message-0","status":"running"}"#))

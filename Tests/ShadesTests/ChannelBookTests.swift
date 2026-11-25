@@ -49,7 +49,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertTrue(more.channels.allSatisfy(\.posts.isEmpty))
     }
 
-    /// A thread that carries a kitten's name from working in another project, before any of its words are read.
     func testAListedThreadNothingsBeenReadOfLivesWithTheKittenItsTitleNames() {
         let elsewhere = thread("fix", project: "Shades", title: "Steve: Fix login")
         let built = book(threads: [elsewhere])
@@ -58,7 +57,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(book(threads: [elsewhere], messagesThreads: ["fix": at]).home(ofThread: "fix"), .of(steve), "even when Messages started it")
     }
 
-    /// Channels were named the way Slack names one, as #steve-pawsniak, where the cat was just Shades.
     func testAChannelIsNamedForItsKittenTheWayTheCatIs() {
         let named = Kitten(name: "Steve Pawsniak", role: "", covers: "", folder: "/k/sp")
         let built = book(kittens: [named, Kitten(name: "Dr. Mew  2", role: "", covers: "", folder: "/k/m")])
@@ -290,7 +288,6 @@ final class ChannelBookTests: XCTestCase {
     }
 
     func testALongThreadKeepsItsParent() throws {
-        // The feed keeps a thread's first exchange and its newest, so the one that started it is never lost.
         let many = (0..<ChannelBook.keptExchanges).map { exchange("e\($0)", ask: $0 == 0 ? "Start here" : "More", asked: TimeInterval($0)) }
         let thread = try XCTUnwrap(book(threads: [thread("t")], transcripts: ["t": many]).threads["t"])
         XCTAssertEqual(thread.parent.text, "Start here")
@@ -315,7 +312,6 @@ final class ChannelBookTests: XCTestCase {
     }
 
     func testBuildingTheBookWorksOutEachThreadsOwnerOnce() throws {
-        // Standardizing a thread's folder is slow, and a build used to ask every thread's owner again at each step.
         let kittens = (0..<6).map { Kitten(name: "Kitten \($0)", role: "", covers: "", folder: "/k/\($0)") }
         let threads = (0..<800).map { thread("\($0)", project: "elsewhere-\($0 % 30)") }
         func best(_ work: () -> Void) -> TimeInterval {
@@ -363,9 +359,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(built.issues[1].threads, [])
     }
 
-    // MARK: - Home channels
-
-    /// Threads Messages started lived in #general, which is gone, so each lives with whoever has it now.
     func testAThreadMessagesStartedLivesWithItsKittenOrElseWithTheCat() throws {
         let built = book(
             threads: [thread("from-messages"), thread("own"), thread("cats", project: nil)],
@@ -388,8 +381,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertNil(built.threads["ask-box"], "anything else the cat started can hold your screen")
     }
 
-    /// A fix or a hand-off from the Ask box used to show nowhere in Messages, so asking the cat about a keyboard with
-    /// Fix left nothing in its DM.
     func testWorkYouStartedWithTheCatLivesInItsDMUnderYourWords() throws {
         let built = ChannelBook.build(
             kittens: [steve], threads: [thread("fix", project: nil, title: "Fix: Where could I find a keyboard like this?"), thread("steve-work")],
@@ -428,7 +419,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(thread.home, .shades)
         XCTAssertEqual(waiting.channel(.shades)?.posts, [.thread("handed")])
 
-        // The frontier agent's prompt carries no words of yours, so what you said stays its parent.
         let read = book(
             threads: [self.thread("handed", project: nil)],
             transcripts: ["handed": [exchange("h", ask: nil, reply: "Found one for $212.", asked: 5)]],
@@ -451,8 +441,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(said(read.threads["t"]), ["you: Tidy it", "kitten: Reply"], "said once, by T3")
         XCTAssertNil(read.threads["sent-topic"])
     }
-
-    // MARK: - Also send to #channel
 
     private func echo(_ text: String, at offset: TimeInterval = 0, in channel: ChannelID, thread: String = "", alsoSent: Bool = false, speaker: Speaker = .you) -> SentMessage {
         SentMessage(
@@ -477,7 +465,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(heard.threads["t"]?.messages.filter { $0.text == "Keep the FAQ" }.count, 1)
     }
 
-    /// What was also sent to a channel was only remembered while the app ran, so a restart took it out of the channel.
     func testAReplyAlsoSentToTheChannelIsStillThereAfterARestartByItsID() throws {
         let reply = echo("Keep the FAQ", at: 10, in: .of(steve), thread: "t", alsoSent: true)
         let said = ["t": [exchange("e", ask: "Rewrite it", asked: 0), exchange("f", ask: "Keep the FAQ", reply: "Kept.", asked: 11)]]
@@ -548,8 +535,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(built.name(of: .cat), "Shades")
     }
 
-    // MARK: - Unread and badges
-
     func testAKittenIsUnreadWhenAnyOfItsThreadsIs() {
         let built = book(threads: [thread("s"), thread("p", project: "Pepper"), thread("nobody", project: nil)], transcripts: ["s": [exchange("e")]], isUnread: { $0.id != "p" })
         XCTAssertEqual(built.unread, [steve.id])
@@ -559,7 +544,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertFalse(built.isUnread(.shades))
     }
 
-    /// #general went bold for an unread thread of the cat's own, which lives with the cat now.
     func testTheCatIsUnreadWhenAThreadOfItsOwnWorkIs() {
         let built = book(threads: [thread("s"), thread("c", project: nil)], transcripts: ["s": [exchange("e")], "c": [exchange("f")]], isUnread: { _ in true }, messagesThreads: ["s": at, "c": at])
         XCTAssertTrue(built.isUnread(.shades))
@@ -598,8 +582,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(built.waiting.count, 2)
     }
 
-    // MARK: - Threads
-
     func testThreadsAreEveryThreadYouWroteInWithUnreadFirstThenNewest() {
         let built = book(
             threads: [thread("yours-old"), thread("yours-new"), thread("unread"), thread("not-yours")],
@@ -614,8 +596,6 @@ final class ChannelBookTests: XCTestCase {
         XCTAssertEqual(built.yours.map(\.id), ["unread", "yours-new", "yours-old"])
     }
 }
-
-// MARK: - Talking to the cat
 
 extension ChannelBookTests {
     private func talk(_ id: String, title: String = "Which plan is cheapest here?", status: AgentStatus = .completed) -> AgentThread {
@@ -708,7 +688,6 @@ extension ChannelBookTests {
 }
 
 extension ChannelBook {
-    /// Everything said in the cat's DM, talk by talk, for tests that read it as one conversation.
     var shadesMessages: [ChannelMessage] {
         threads(in: .shades).flatMap { threads[$0]?.messages ?? [] }
     }
@@ -716,13 +695,11 @@ extension ChannelBook {
 
 extension ChannelBookTests {
     func testNothingIsKeptWhileT3OnlyHasTheSameWordsFromBefore() {
-        // You said "Yes" in the thread, not also sent, and 30 seconds later "Yes" again, also sent. T3 only has the first.
         let said = ["t": [exchange("e", ask: "Rewrite it", asked: 0), exchange("f", ask: "Yes", reply: nil, asked: 100)]]
         let second = echo("Yes", at: 130, in: .of(steve), thread: "t", alsoSent: true)
         let built = book(threads: [thread("t")], transcripts: said, sent: [second])
         XCTAssertEqual(built.alsoSentHeard, [:], "T3 doesn't have the second Yes yet")
 
-        // The same when the second never reached T3 at all.
         var failed = second
         failed.message.failure = "Couldn't send."
         let broken = book(threads: [thread("t")], transcripts: said, sent: [failed])

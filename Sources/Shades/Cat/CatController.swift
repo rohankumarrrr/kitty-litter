@@ -1,7 +1,5 @@
 import AppKit
 
-/// Puts the brain on screen: one small window, moved at 10 ticks a second. The timer
-/// sleeps through ticks where nothing would change, so an idle cat costs next to nothing.
 @MainActor
 final class CatController {
     private static let homeKey = "catHome"
@@ -19,7 +17,6 @@ final class CatController {
     private var shown: CatPose?
     private var shownTheme: CatTheme?
     private var mouseMonitors: [Any] = []
-    /// Demo mode can hold one drawing still, to look at it closely.
     var heldPose: CatPose?
 
     private var dragStart: (mouse: NSPoint, origin: CGPoint)?
@@ -32,10 +29,8 @@ final class CatController {
 
     var onClick: (() -> Void)?
     var onShiftClick: (() -> Void)?
-    /// A right-click, or VoiceOver asking for the menu, at this point in the cat's view.
     var onMenu: ((NSPoint) -> Void)?
     var onStroke: (() -> Void)?
-    /// The cat's window moved, so whatever hangs off it should follow.
     var onMove: (() -> Void)?
 
     init() {
@@ -61,7 +56,6 @@ final class CatController {
         }
         view.onDragEnter = { [weak self] in self?.wake() }
 
-        // These events don't need any permission, and only wake us while the mouse moves.
         let events: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
         if let global = NSEvent.addGlobalMonitorForEvents(matching: events, handler: { [weak self] _ in
             MainActor.assumeIsolated { self?.mouseMoved() }
@@ -89,18 +83,14 @@ final class CatController {
         schedule()
     }
 
-    /// Where the cat is, or where it's headed. Anything anchored to it can settle there straight away.
     var frame: NSRect { NSRect(origin: brain.position, size: Self.size) }
     var destinationFrame: NSRect { NSRect(origin: brain.target, size: Self.size) }
 
-    /// The usable part of the screen the cat is on.
     var visibleFrame: NSRect {
         let center = NSPoint(x: destinationFrame.midX, y: destinationFrame.midY)
         let screen = NSScreen.screens.first { $0.frame.contains(center) } ?? NSScreen.main
         return screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
     }
-
-    // MARK: - Things it does
 
     func run(to origin: CGPoint, arrived: (() -> Void)? = nil) {
         let target = ScreenBounds.clamp(origin, size: Self.size, to: Self.screens())
@@ -160,9 +150,6 @@ final class CatController {
         poke()
     }
 
-    // MARK: - Ticking
-
-    /// Something changed from outside, so draw now and work out the next wake-up again.
     private func poke() {
         apply()
         schedule()
@@ -176,7 +163,6 @@ final class CatController {
             MainActor.assumeIsolated { self?.fire(ticks) }
         }
         timer.tolerance = interval * 0.1
-        // Common modes, so the cat keeps going while a menu is open.
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
@@ -196,7 +182,6 @@ final class CatController {
     }
 
     private func apply() {
-        // The cat sits on your wallpaper, so it follows the system's light or dark, where every window of ours is Opal's dark.
         let theme: CatTheme = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark" ? .dark : .light
         let pose = heldPose ?? brain.pose
         if pose != shown || theme != shownTheme {
@@ -214,10 +199,6 @@ final class CatController {
         }
     }
 
-    // MARK: - The mouse
-
-    /// The window only takes clicks while the pointer is on one of the cat's pixels, so
-    /// the empty corners of its square really are empty.
     private func updateClickThrough() {
         guard !dragging else { return }
         let mouse = NSEvent.mouseLocation
@@ -233,7 +214,6 @@ final class CatController {
         if near { stroke() } else { strokeX = nil }
     }
 
-    /// Moving the pointer back and forth over the cat counts as petting it.
     private func stroke() {
         let x = NSEvent.mouseLocation.x
         defer { strokeX = x }
@@ -295,7 +275,6 @@ final class CatController {
         UserDefaults.standard.set([Double(settled.x), Double(settled.y)], forKey: Self.homeKey)
         poke()
         onMove?()
-        // Picked up on the way somewhere, so wherever it landed will have to do.
         finishArrival()
     }
 
@@ -311,8 +290,6 @@ final class CatController {
         brain.still = Motion.isReduced
         poke()
     }
-
-    // MARK: - Screens
 
     private static let size = CGSize(width: CatArt.points, height: CatArt.points)
 

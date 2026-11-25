@@ -2,7 +2,6 @@ import ShadesCore
 @testable import ShadesVoice
 import XCTest
 
-/// Answers with canned text, so the engine's flow can be tested without any model.
 private final class FakeRecognizer: SpeechRecognizing {
     var finalText = "Um, let's meet at three, no, actually four."
     var partialText = "let's meet"
@@ -32,7 +31,6 @@ private final class FakeRecognizer: SpeechRecognizing {
     }
 }
 
-/// Counts starts and stops, and never touches a microphone.
 private final class FakeSource: AudioSource {
     var isOpen = false
     var starts = 0
@@ -168,7 +166,6 @@ final class EngineTests: XCTestCase {
         XCTAssertThrowsError(try engine.begin())
         _ = try await first
 
-        // Once the mic has closed, the next press works.
         try engine.begin()
         await waitUntil { source.isOpen }
         source.send(seconds: 0.5)
@@ -272,14 +269,12 @@ final class EngineTests: XCTestCase {
         let engine = ParakeetVoiceEngine(source: source, recognizer: FakeRecognizer(), options: options)
         try await engine.prepare()
 
-        // Still talking at release: stays open until the maximum.
         try engine.begin()
         await waitUntil { source.isOpen }
         source.send(seconds: 0.5, value: 0.2)
         var transcript = try await engine.end()
         XCTAssertGreaterThanOrEqual(engine.lastTimings.tail, 0.28)
 
-        // Already quiet: closes straight away.
         try engine.begin()
         await waitUntil { source.isOpen }
         source.send(seconds: 0.5, value: 0.2)
@@ -333,7 +328,6 @@ final class ModelStoreTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: folder) }
         let file = folder.appendingPathComponent("model.bin")
         try Data(repeating: 1, count: 10).write(to: file)
-        // An address that can't work, so this would fail if it tried.
         let unreachable = URL(string: "http://127.0.0.1:9/none")!
         try await ModelStore.fetch(from: unreachable, to: file, byteCount: 10, sha256: "unused", progress: { _ in })
     }
@@ -345,7 +339,6 @@ final class AudioTests: XCTestCase {
         var input = [Float](repeating: 0, count: 48_000)
         for i in input.indices { input[i] = sin(2 * .pi * 440 * Float(i) / 48_000) * 0.5 }
         var output: [Float] = []
-        // In device-sized pieces, as the mic delivers it.
         var position = 0
         while position < input.count {
             let end = min(position + 512, input.count)
@@ -390,12 +383,9 @@ final class AudioTests: XCTestCase {
 
     func testDraftFollowsTheInput() {
         var cursor = 0
-        // After [1, 2], the input says 3, 4 come next.
         XCTAssertEqual(LlamaModel.draft(after: [1, 2], from: [1, 2, 3, 4, 5], count: 2, cursor: &cursor), [3, 4])
         XCTAssertEqual(cursor, 2)
-        // A repeated word doesn't send it back to the start.
         XCTAssertEqual(LlamaModel.draft(after: [9, 1], from: [1, 2, 3, 1, 4], count: 1, cursor: &cursor), [4])
-        // Nothing to go on.
         var fresh = 0
         XCTAssertEqual(LlamaModel.draft(after: [7], from: [1, 2, 3], count: 2, cursor: &fresh), [])
         XCTAssertEqual(LlamaModel.draft(after: [], from: [1, 2, 3], count: 2, cursor: &fresh), [])

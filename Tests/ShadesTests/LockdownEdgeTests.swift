@@ -2,7 +2,6 @@
 import ShadesCore
 import XCTest
 
-/// Lockdown at its edges, each found by trying to break it: what shows on a shared screen, and what goes where.
 @MainActor
 final class LockdownEdgeTests: XCTestCase {
     private var stage: FakeStage!
@@ -64,14 +63,12 @@ final class LockdownEdgeTests: XCTestCase {
         AgentThread(id: id, title: title, projectTitle: kitten.name, status: status, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: kitten.folder, lastRunID: "run-1", lastRunEndedAt: clock)
     }
 
-    // 1. Another kitten's inbox row shows in the bubble during Lockdown.
     func testInboxBubbleDuringLockdownNamesOnlyItsKitten() async {
         controller.lockdownPicked(builder)
         let rent = thread("m", title: "Rent is overdue", of: money)
         let page = thread("b", title: "Invoice page", of: builder)
         controller.threadsChanged([rent, page])
         backend.reports = ["m": "Rent is overdue. Pay it?", "b": "Built the invoice page."]
-        // The sorting model reads Money's as a decision and Builder's as shipped.
         backend.replyTo = { prompt in
             if prompt.text.contains("Rent is overdue. Pay it?") { return [.finished(fullText: "DECISION: Pay the rent?")] }
             if prompt.text.contains("Built the invoice page.") { return [.finished(fullText: "SHIPPED: The invoice page.")] }
@@ -94,7 +91,6 @@ final class LockdownEdgeTests: XCTestCase {
         XCTAssertFalse(shown.contains { $0.contains("Money") || $0.contains("Rent") }, "another kitten's inbox row reached the bubble: \(shown)")
     }
 
-    // 2. Its own approval doesn't come up once another kitten's has been held.
     func testItsOwnApprovalComesUpAfterAnotherKittensWasHeld() async {
         controller.lockdownPicked(builder)
         let theirs = ApprovalRequest(id: "a-m", threadID: "m", threadTitle: "Bills", kind: .command, summary: "pay", createdAt: clock)
@@ -115,7 +111,6 @@ final class LockdownEdgeTests: XCTestCase {
         }
     }
 
-    // 2b. The same, with no other kitten's approval waiting: it does come up.
     func testControlItsOwnApprovalAloneComesUp() async {
         controller.lockdownPicked(builder)
         let ours = ApprovalRequest(id: "a-b", threadID: "b", threadTitle: "Page", kind: .command, summary: "npm test", createdAt: clock.addingTimeInterval(1))
@@ -126,7 +121,6 @@ final class LockdownEdgeTests: XCTestCase {
         if case .approval(let request, _, _)? = stage.bubble { XCTAssertEqual(request.id, "a-b") } else { XCTFail("control: \(String(describing: stage.bubble))") }
     }
 
-    // 2c. Its own approval's counter counts another kitten's held one.
     func testItsOwnApprovalsCounterLeavesOutHeldOnes() async {
         controller.lockdownPicked(builder)
         let theirs = ApprovalRequest(id: "a-m", threadID: "m", threadTitle: "Bills", kind: .command, summary: "pay", createdAt: clock)
@@ -144,7 +138,6 @@ final class LockdownEdgeTests: XCTestCase {
         await settle()
     }
 
-    // 3. Clicking the cat while only another kitten's approval waits opens nothing.
     func testClickingTheCatOpensTheAskBoxWhenOnlyAnotherKittensApprovalWaits() async {
         controller.lockdownPicked(builder)
         let theirs = ApprovalRequest(id: "a-m", threadID: "m", threadTitle: "Bills", kind: .command, summary: "pay", createdAt: clock)
@@ -157,7 +150,6 @@ final class LockdownEdgeTests: XCTestCase {
         XCTAssertNotNil(stage.input, "the click did nothing: no Ask box and no bubble")
     }
 
-    // 4. Esc on the thinking bubble takes the ask back, but Lockdown sends it anyway.
     func testEscOnTheThinkingBubbleTakesTheAskBack() async {
         controller.ask("Never mind this", snapshot: screen)
         controller.bubbleDismissed(byClick: false)
@@ -171,7 +163,6 @@ final class LockdownEdgeTests: XCTestCase {
         XCTAssertEqual(backend.sent.count, 0, "an ask taken back with Esc still went to the kitten")
     }
 
-    // 6. Full access turned off while the first ask's thread starts: the next ask sends the screen to that full-access thread.
     func testFullAccessThreadGetsNoScreenThroughTheStartedFallback() async {
         var full = controller.settings
         full.frontierMode = .fullAccess
@@ -184,7 +175,6 @@ final class LockdownEdgeTests: XCTestCase {
         for _ in 0..<20 { await Task.yield() }
         await controller.replyTask?.value
         await controller.flow?.value
-        // You turn full access off in Settings while T3 is still starting it.
         var auto = controller.settings
         auto.frontierMode = .auto
         controller.settingsEdited(auto)
@@ -199,14 +189,12 @@ final class LockdownEdgeTests: XCTestCase {
         XCTAssertFalse(second?.prompt.text.contains("let total = 0") == true, "screen text reached a thread started with full access")
     }
 
-    // 7. Restart with Lockdown on, ask before T3's list is in: the pinned thread is replaced.
     func testAnAskRightAfterARestartCarriesOnInThePinnedThread() async throws {
         controller.lockdownPicked(builder)
         controller.ask("Start the page", snapshot: nil)
         await settle()
         let pinned = controller.settings.lockdown?.thread
         controller = makeController(settings: try XCTUnwrap(savedSettings))
-        // The app's own default (AppController.swift: `var threadListWait: TimeInterval = 2`), with T3's list not in yet.
         controller.threadListWait = 2
         let started = Date()
         controller.ask("Carry on", snapshot: nil)

@@ -3,8 +3,6 @@ import AppKit
 import ShadesCore
 import XCTest
 
-/// Messages' keyboard shortcuts. Each test calls what the key calls, never a made-up key press, since those would land
-/// on whatever's really on the desktop.
 @MainActor
 final class MessagesShortcutsTests: XCTestCase {
     private let steve = Kitten(name: "Steve", role: "Professional", covers: "", folder: "/k/steve")
@@ -19,7 +17,6 @@ final class MessagesShortcutsTests: XCTestCase {
         [Exchange(id: id, asker: .you, askedAt: at.addingTimeInterval(offset), ask: ask, reply: "Done.", repliedAt: at.addingTimeInterval(offset + 1))]
     }
 
-    /// Steve has three threads, oldest first, and Pepper one you haven't seen.
     private func book(waiting: Waiting = Waiting()) -> ChannelBook {
         ChannelBook.build(
             kittens: [steve, pepper],
@@ -268,7 +265,6 @@ final class MessagesShortcutsTests: XCTestCase {
         view.jumpBox.query = "co"
         view.jumpBox.query = "coupon"
         runMainLoop { !asked.isEmpty }
-        // Long enough for a second ask to have come, which a busy runner only makes longer.
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
         XCTAssertEqual(asked, ["coupon"], "not every letter")
     }
@@ -345,10 +341,6 @@ final class MessagesShortcutsTests: XCTestCase {
     }
 }
 
-// MARK: - Drafts
-
-/// Words typed in a box stay with the place or thread they were typed in, as Slack keeps a draft in each, so no
-/// shortcut, click or question arriving can send them anywhere else.
 extension MessagesShortcutsTests {
     private func question(_ id: String, in thread: String, _ text: String) -> AgentQuestion {
         AgentQuestion(id: id, threadID: thread, threadTitle: "Cover letter", text: text, form: AnswerForm(parts: [AnswerForm.Part(key: "k", text: text, options: [], values: [], takesOwnWords: true)]))
@@ -496,7 +488,6 @@ extension MessagesShortcutsTests {
         composer.textView.string = "Yes"
         view.perform(.nextThread)
 
-        // Meanwhile the font question is answered in T3, and another arrives.
         view.show(book(waiting: Waiting(questions: [next], owners: ["q2": steve.id])))
         view.perform(.previousThread)
         XCTAssertEqual(composer.textView.string, "Yes", "your words are still there")
@@ -531,11 +522,8 @@ extension MessagesShortcutsTests {
     }
 }
 
-// MARK: - Activity
-
 extension MessagesShortcutsTests {
     func testActivitysThreadKeysOnlyGoWhereAClickThereOpensABox() {
-        // Another project of yours that Messages hasn't read, with an approval and a question with only choices.
         var other = AgentThread(id: "other", title: "Deploy billing", projectTitle: "billing", status: .running, model: "m", updatedAt: at, projectPath: "/elsewhere/billing")
         other.status = .waitingForApproval
         let approval = ApprovalRequest(id: "ap", threadID: "other", threadTitle: "Deploy billing", kind: .command, summary: "Run: deploy", createdAt: at)

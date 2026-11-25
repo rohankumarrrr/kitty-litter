@@ -1,9 +1,6 @@
 import Foundation
 import ShadesCore
 
-/// A settings change a kitten asked for and can't make itself. Shades looks into it, you press Allow or Deny, and only
-/// Allow changes the file, exactly as its card showed. Either way the kitten hears how it went, in a note that can't
-/// pass for your own words.
 extension AppController {
     static let reviewTimeout: TimeInterval = 90
     static let reviewTitle = "Shades review:"
@@ -12,12 +9,10 @@ extension AppController {
         SettingsFiles(home: home, kittenFolders: loadKittens().map(\.folder))
     }
 
-    /// The report as the sorter and the bubble read it, with each request standing as one line, since it has a card.
     func readable(_ report: String?) -> String? {
         report.map { ChangeRequests.withoutBlocks($0, saying: Prompts.changeCardLine) }
     }
 
-    /// For a kitten without an inbox, whose run isn't filed, so its requests wait in Activity by themselves.
     func fileChangeRequests(in report: String, of thread: AgentThread) {
         Task {
             let asked = await changeRequests(in: report, of: thread)
@@ -28,8 +23,6 @@ extension AppController {
         }
     }
 
-    /// Each request in a kitten's report, checked and looked into, ready for its card. Nothing is saved here, so an inbox
-    /// kitten's are saved with the rest of its run.
     func changeRequests(in report: String?, of thread: AgentThread) async -> [InboxEntry] {
         guard let report, let kitten = kitten(of: thread) else { return [] }
         let asked = ChangeRequests.all(in: report)
@@ -59,8 +52,6 @@ extension AppController {
         return entries
     }
 
-    /// Something that can only reply looks into it, in the router's folder, where no tool that acts, sends or reads a
-    /// file works. It only ever sees what's in `prompt`, never your screen.
     func lookInto(_ prompt: String, about subject: String) async -> String? {
         let model = settings.quickModel
         guard let projectID = try? await routerProjectID(for: model) else { return nil }
@@ -97,7 +88,6 @@ extension AppController {
         }
     }
 
-    /// The card goes, and each thread that asked hears what happened, queued behind whatever it's doing.
     private func answer(_ entry: InboxEntry, _ outcome: Prompts.ChangeOutcome) {
         guard let change = entry.change else { return }
         inbox.remove(entry.id)

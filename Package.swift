@@ -1,7 +1,6 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// AppKit and callback-heavy system APIs are easier to work with in Swift 5 mode.
 let settings: [SwiftSetting] = [.swiftLanguageMode(.v5)]
 
 let package = Package(
@@ -14,36 +13,27 @@ let package = Package(
         .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.18.2"),
     ],
     targets: [
-        // Shared types, contracts and prompts. No UI and no system capture.
         .target(name: "ShadesCore", swiftSettings: settings),
-        // Talks to the local T3 Code server.
         .target(name: "ShadesT3", dependencies: ["ShadesCore"], swiftSettings: settings),
-        // Sees the screen: capture, selected text, browser page.
         .target(name: "ShadesContext", dependencies: ["ShadesCore"], swiftSettings: settings),
-        // Hears you: microphone, on-device speech, cleanup, text insertion.
         .target(
             name: "ShadesVoice",
             dependencies: ["ShadesCore", "llama", .product(name: "FluidAudio", package: "FluidAudio")],
             swiftSettings: settings,
-            // Where llama.framework lives once it's inside Shades.app.
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
-        // llama.cpp, prebuilt with its Metal shaders inside, for the cleanup model.
         .binaryTarget(
             name: "llama",
             url: "https://github.com/ggml-org/llama.cpp/releases/download/b12121/llama-b12121-xcframework.zip",
             checksum: "00bc6fec00beba802a3912a6afb81e1678da5248a6a92548a9ce66724a3e7638"
         ),
-        // macOS's own zlib, for gzipping the phone page and its stream.
         .systemLibrary(name: "CZlib"),
-        // The cat itself, and the app that wires everything together.
         .executableTarget(
             name: "Shades",
             dependencies: ["ShadesCore", "ShadesT3", "ShadesContext", "ShadesVoice", "CZlib"],
             swiftSettings: settings
         ),
 
-        // Small command-line tools for trying one module without the app.
         .executableTarget(name: "probe-t3", dependencies: ["ShadesCore", "ShadesT3"], path: "Sources/Probes/T3", swiftSettings: settings),
         .executableTarget(name: "probe-context", dependencies: ["ShadesCore", "ShadesContext"], path: "Sources/Probes/Context", swiftSettings: settings),
         .executableTarget(name: "probe-voice", dependencies: ["ShadesCore", "ShadesVoice", .product(name: "FluidAudio", package: "FluidAudio")], path: "Sources/Probes/Voice", swiftSettings: settings),
@@ -53,5 +43,6 @@ let package = Package(
         .testTarget(name: "ShadesContextTests", dependencies: ["ShadesContext"], swiftSettings: settings),
         .testTarget(name: "ShadesVoiceTests", dependencies: ["ShadesVoice"], swiftSettings: settings),
         .testTarget(name: "ShadesTests", dependencies: ["Shades"], swiftSettings: settings),
+        .testTarget(name: "RepoChecks", swiftSettings: settings),
     ]
 )

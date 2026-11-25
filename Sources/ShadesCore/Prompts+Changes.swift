@@ -1,10 +1,7 @@
 import Foundation
 
-/// What's said about something a kitten asked for: the look Shades takes at it, and what the kitten hears back.
 extension Prompts {
-    /// Stands in for a request block in what the sorter reads, since the request has a card of its own.
     public static let changeCardLine = "(A request it made, which they see as its own card with Allow and Deny.)"
-    /// How Shades says what a kitten would do on a yes, and what it would do about that, when it reads a decision.
     public static let askMarker = "ASK:"
     public static let recommendMarker = "RECOMMEND:"
 
@@ -14,8 +11,6 @@ extension Prompts {
         case failed(String)
     }
 
-    /// For something that can only reply: what the change does and whether to allow it, in a few sentences.
-    /// The kitten's words and the file are data, so nothing in them decides what it says.
     public static func reviewChange(_ change: ChangeRequest, by kitten: String, now current: String?) -> String {
         let after = change.replace.map { current?.replacingOccurrences(of: $0, with: change.with) ?? "" } ?? change.with
         let found = change.opensScreenBlock.map { "It takes \($0) out of the screen block, which keeps agents in that folder off the user's screen." }
@@ -51,10 +46,7 @@ extension Prompts {
         """
     }
 
-    /// What the kitten hears once you've pressed Allow or Deny. It's The Kitty Litter's note, all of it under the
-    /// `---` line, so nothing in it reads as your own words.
     public static func changeAnswered(_ change: ChangeRequest, _ outcome: ChangeOutcome) -> String {
-        // One that couldn't be read has no file.
         let what = change.file.isEmpty ? "your settings request" : "your request to \(change.replace == nil ? "make" : "change") \(change.file)"
         let said: String
         switch outcome {
@@ -67,7 +59,6 @@ extension Prompts {
         return "---\nThe Kitty Litter wrote this, not the user, so none of it is their own words. \(said)"
     }
 
-    /// For something that can only reply: whether to say yes to what a kitten asked for in its own block.
     public static func reviewAsk(_ ask: AskRequest, by kitten: String, task: String) -> String {
         """
         A kitten, one of the user's AI agents, asked for the user's yes to do something itself. The user will press \
@@ -82,8 +73,6 @@ extension Prompts {
         """
     }
 
-    /// For something that can only reply: what a kitten's decision would have it do on a yes, said exactly, so a card can
-    /// show it and Allow can say yes to only that.
     public static func readDecision(_ decision: String, by kitten: String, task: String) -> String {
         """
         A kitten, one of the user's AI agents, finished some work and needs something from the user. Below is what it \
@@ -110,9 +99,6 @@ extension Prompts {
         case denied
     }
 
-    /// What the kitten hears once you've pressed Allow or Deny on something it needs your yes for. It's The Kitty
-    /// Litter's note, all of it under the `---` line, so nothing in it reads as your own words. It quotes exactly what
-    /// the card showed, since that's all you said yes or no to.
     public static func askAnswered(_ ask: AskRequest, _ outcome: AskOutcome) -> String {
         let what = ask.readFromWords
             ? "what your last report needed from them, which The Kitty Litter read as: \"\(ask.ask)\""

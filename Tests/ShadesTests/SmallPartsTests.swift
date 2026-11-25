@@ -169,7 +169,6 @@ final class ScreenWordsTests: XCTestCase {
         }
     }
 
-    /// Code is where follow-ups usually go, and plenty of it is named after things on a page.
     func testCodeNamedAfterAThingIsntTheThing() {
         for words in [
             "Why is this thread pool deadlocking?",
@@ -187,7 +186,6 @@ final class ScreenWordsTests: XCTestCase {
         XCTAssertTrue(ScreenWords.pointAtScreen("Read this blog post", isFollowUp: true))
     }
 
-    /// Doing what the cat says mustn't get the same advice again.
     func testPastedTextDoesntGetAskedForAgain() {
         for words in [
             "Summarize this: the build failed because the signing key expired.",
@@ -354,7 +352,6 @@ final class AgentWatchTests: XCTestCase {
         XCTAssertEqual(watch.update([done]), [])
     }
 
-    /// Watching its pull request, say: each run is read when its turn ends, and it's finished once the watch is over.
     func testATurnThatEndsWhileItWaitsIsNoticedOnceAndFinishesLater() {
         var watch = AgentWatch()
         XCTAssertEqual(watch.update([thread("a", .running)]), [])
@@ -390,7 +387,6 @@ final class AgentWatchTests: XCTestCase {
         _ = watch.update([thread("a", .running), thread("b", .running)])
         let failed = thread("a", .failed)
         var asking = thread("b", .waitingForAnswer)
-        // The words arrive a moment after the thread stops, and then it counts, once.
         XCTAssertEqual(watch.update([failed, asking]), [.failed(failed)])
         let question = AgentQuestion(id: "q", threadID: "b", threadTitle: "b", text: "Which?")
         asking.pendingQuestion = question
@@ -427,7 +423,6 @@ final class AgentWatchTests: XCTestCase {
 final class LayoutTests: XCTestCase {
     private let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
 
-    /// The app's name is longer than what it says under it, and was cut off as "The Kitty Lit...".
     @MainActor
     func testABubblesCaptionIsNeverCutShortOfTheWidthItWasGiven() throws {
         let view = BubbleView(frame: .zero)
@@ -436,7 +431,6 @@ final class LayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(caption.frame.width, try XCTUnwrap(caption.cell).cellSize.width, "its words and the padding either side")
     }
 
-    /// A long answer opened at its end, scrolled past the start you read from, as no card on the desktop does.
     @MainActor
     func testALongAnswerOpensAtItsStartAndShowsThereIsMoreBelow() throws {
         let view = BubbleView(frame: .zero)
@@ -457,7 +451,6 @@ final class LayoutTests: XCTestCase {
         XCTAssertFalse(scroll.hasVerticalScroller)
     }
 
-    /// What you say as you hold the talk key keeps its newest words in sight, as a caption does.
     @MainActor
     func testWhatYouSayKeepsItsNewestWordsInSight() throws {
         let view = BubbleView(frame: .zero)
@@ -467,7 +460,6 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(view.textView.fades.bottom, false)
     }
 
-    /// "--project=chromium --" ended one line and "reporter=line" started the next, splitting the flag.
     @MainActor
     func testACommandToApproveWrapsOnlyBetweenWords() throws {
         let view = BubbleView(frame: .zero)
@@ -487,7 +479,6 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(view.textView.string, command, "and what you'd copy is what would run")
     }
 
-    /// The inbox's Open was grey text while Open after a hand-off was a pill, though each is the bubble's one action.
     @MainActor
     func testTheInboxBubblesOpenIsDrawnLikeOpenEverywhereElse() throws {
         func open(_ content: BubbleContent) throws -> QuietButton {
@@ -553,7 +544,6 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(ScreenBounds.perch(on: button, size: CGSize(width: 64, height: 64), screens: screens), CGPoint(x: 418, y: 327))
     }
 
-    /// A toolbar right under the menu bar has no room above it, and sitting on it would cover it.
     func testWithNoRoomAboveTheCatSitsUnderWhatItPointsAt() {
         let screens = [CGRect(x: 0, y: 0, width: 1000, height: 775)]
         let size = CGSize(width: 64, height: 64)
@@ -735,7 +725,6 @@ final class HealthCheckTests: XCTestCase {
         XCTAssertEqual(finding, .good(HealthCheck.signature))
     }
 
-    /// A self-signed certificate keeps permissions, but the Keychain ties each item to the build that saved it.
     func testABuildWithoutATeamSaysItCostsThePairingButStillChecksPermissions() throws {
         let facts = HealthFacts(isSignedByTeam: false, hasScreenRecording: false)
         let problems = HealthCheck.findings(from: facts).filter { !$0.ok }
@@ -799,7 +788,6 @@ final class CorrectionSendsTests: XCTestCase {
         XCTAssertNil(sends.end("w", reached: true))
     }
 
-    /// Whichever order they end in, one that got there keeps the mark, and only the first one's view of before counts.
     func testOverlappingSendsOnlyPutBackWhatNoneEarned() {
         for firstEndsFirst in [true, false] {
             var sends = CorrectionSends()
@@ -823,8 +811,6 @@ final class CorrectionSendsTests: XCTestCase {
 
 @MainActor
 final class SignInServiceTests: XCTestCase {
-    /// A copy built from source shared the installed app's Keychain entry, so it could save sign-ins where the app
-    /// looks, and revoke the app's own as one an older build left.
     func testOnlyTheInstalledAppUsesItsSignIn() {
         XCTAssertEqual(DevFlags.signInService(bundlePath: "/Applications/Shades.app", isTryingAFlow: false), "dev.shades.t3-session")
         XCTAssertEqual(DevFlags.signInService(bundlePath: "/Users/someone/code/shades/.build/arm64-apple-macosx/debug", isTryingAFlow: false), "dev.shades.t3-session.trial")

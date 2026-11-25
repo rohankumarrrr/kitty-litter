@@ -1,6 +1,5 @@
 import Foundation
 
-/// Cleans text with a small on-device model made for exactly this: S1-mini by Superwhisper.
 public final class ModelCleaner: TextCleaning {
     public struct Timing: Sendable {
         public var seconds: Double
@@ -8,7 +7,6 @@ public final class ModelCleaner: TextCleaning {
         public var draftedTokens: Int
     }
 
-    /// Past this the rules take over, so a stuck model can't hold up your text. Long takes get longer.
     public var timeLimit: TimeInterval = 1
     public var timeLimitPerWord: TimeInterval = 0.012
     public private(set) var lastTiming: Timing?
@@ -30,7 +28,6 @@ public final class ModelCleaner: TextCleaning {
                 do {
                     let model = try LlamaModel(path: url.path)
                     try model.warm(prefix: S1Mini.prefix(structure: .prose))
-                    // The first real run sets up the GPU pipelines, and nobody should have to wait for that.
                     let warmUp = "Okay, um, so this is just a warm up, no, actually a test of the model."
                     for _ in 0..<2 {
                         _ = try model.complete(prompt: S1Mini.prompt(transcript: warmUp, structure: .prose), draftSource: warmUp, maxTokens: 32)
@@ -44,7 +41,6 @@ public final class ModelCleaner: TextCleaning {
         }
     }
 
-    /// Gets the GPU ready ahead of time. Only worth it after sitting idle, so most calls do nothing.
     public func wake() {
         queue.async {
             guard Date().timeIntervalSince(self.lastUsed) > self.wakeAfterIdle else { return }
@@ -105,7 +101,6 @@ public final class ModelCleaner: TextCleaning {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// The model is built for dictation-length input, so long takes go through a sentence group at a time.
     static func chunks(of text: String, maxWords: Int = 350) -> [String] {
         let words = text.split(whereSeparator: \.isWhitespace)
         guard words.count > maxWords else { return [text] }

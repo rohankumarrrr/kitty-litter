@@ -2,19 +2,13 @@ import Foundation
 import ShadesContext
 import ShadesCore
 
-/// Where a picture on a message comes from. A reply is untrusted, so the only paths it can name are in the folder its
-/// own thread works in, which T3 keeps them to, and a web address it names waits until you've seen it and pressed Show.
 enum PictureSource: Hashable {
-    /// A picture you sent, by T3's ID for the copy it keeps.
     case sent(attachmentID: String)
-    /// A picture in the folder a thread works in, by its path there.
     case workspace(threadID: String, path: String)
-    /// A picture on the web.
     case web(URL)
 
     private static let pictureTypes: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tif", "tiff", "bmp"]
 
-    /// What a reply's markdown points at, or `nil` for anything that isn't a picture in its thread's folder or on the web.
     init?(_ url: URL, inThread threadID: String) {
         if Markup.opens(url) {
             self = .web(url)
@@ -34,9 +28,6 @@ enum PictureSource: Hashable {
     }
 }
 
-/// Small copies of the pictures on messages, fetched once and kept in memory only, never on disk, like the rest of
-/// what Messages has read. What you sent and what a thread's folder holds come from T3. A web picture is fetched by
-/// the Mac only once you've pressed Show on it, so a reply can't make Shades load an address you haven't seen.
 @MainActor
 final class PictureShelf {
     nonisolated static let side: CGFloat = 480
@@ -48,9 +39,7 @@ final class PictureShelf {
     private var order: [PictureSource] = []
     private var fetching: Set<PictureSource> = []
     private var failed: Set<PictureSource> = []
-    /// What the book last showed, which is never let go of, however many there are.
     private var inUse: Set<PictureSource> = []
-    /// Web pictures you've pressed Show on.
     private var shown: Set<URL> = []
 
     init(fetch: @escaping (PictureSource) async -> Data?) {
@@ -70,15 +59,12 @@ final class PictureShelf {
         }
     }
 
-    /// Fetches a web picture you pressed Show on, even one that didn't come last time.
     func show(_ url: URL) {
         shown.insert(url)
         failed.remove(.web(url))
         want(.web(url))
     }
 
-    /// Puts each small copy there is on the book's messages, and fetches the rest. A reply's picture that couldn't be
-    /// had comes off, since its description is still in its words.
     func fill(_ book: inout ChannelBook) {
         var used: Set<PictureSource> = []
         book.eachMessage { message in
@@ -102,7 +88,6 @@ final class PictureShelf {
         trim()
     }
 
-    /// Lets go of the oldest copies past what it keeps, but never one still showing, or it would only fetch it again.
     private func trim() {
         var index = 0
         while copies.count > Self.kept, index < order.count {
@@ -131,9 +116,6 @@ final class PictureShelf {
     }
 }
 
-/// A picture on the web, fetched the way a picture should be and nothing more: from a public http or https address,
-/// with no cookies, no cache and nothing saved, up to 10 MB, and only if it says it's a picture. Addresses on your
-/// Mac, your network or your tailnet are refused, here and after a redirect, so a reply can't use Shades to reach them.
 enum WebPicture {
     static let biggest = 10 * 1024 * 1024
     private static let session: URLSession = {
@@ -165,20 +147,15 @@ enum WebPicture {
         return data
     }
 
-    /// Whether an address is on the open web, by its name or numbers, rather than this Mac, a local network or a tailnet.
     static func isPublic(_ url: URL) -> Bool {
         guard Markup.opens(url), let host = url.host?.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[].")) else { return false }
         if host == "localhost" || [".localhost", ".local", ".internal", ".home.arpa", ".ts.net", ".lan"].contains(where: host.hasSuffix) { return false }
         if !host.contains(".") { return false }
         let parts = host.split(separator: ".").compactMap { UInt8($0) }
         if parts.count == 4 { return isPublic(v4: parts) }
-        // Any address written in IPv6 numbers is refused, since a name is how a picture on the web is reached.
         return !host.contains(":") && host.rangeOfCharacter(from: CharacterSet.letters) != nil
     }
 
-    /// The same, for every address its name leads to as well, since a name anyone can register can lead to this Mac.
-    /// shortcut: the lookup happens again when it's fetched, so a name that changes in between still gets through,
-    /// which only matters once you've seen the address and pressed Show.
     static func reachesOnlyTheWeb(_ url: URL) async -> Bool {
         guard isPublic(url), let host = url.host else { return false }
         return await Task.detached { addresses(of: host).map { !$0.isEmpty && $0.allSatisfy(isPublic(address:)) } ?? false }.value
@@ -192,7 +169,6 @@ enum WebPicture {
         }
     }
 
-    /// An IPv6 address is public unless it's this Mac, unset, local to a link or a network, or an IPv4 one inside.
     static func isPublic(address: [UInt8]) -> Bool {
         if address.count == 4 { return isPublic(v4: address) }
         guard address.count == 16 else { return false }
@@ -203,7 +179,6 @@ enum WebPicture {
         return true
     }
 
-    /// Every address a name leads to, or `nil` if it leads nowhere.
     private static func addresses(of host: String) -> [[UInt8]]? {
         var hints = addrinfo()
         hints.ai_socktype = SOCK_STREAM

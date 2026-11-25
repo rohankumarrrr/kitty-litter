@@ -22,7 +22,6 @@ final class ChannelsWindowTests: XCTestCase {
         return ChannelBook.build(kittens: [steve, pepper], threads: [thread], transcripts: ["t": said], isReading: false, unreadable: 0, cantReachT3: false)
     }
 
-    /// A channel with `count` threads of Steve's, each one exchange, for scrolling a channel.
     private func book(threads count: Int) -> ChannelBook {
         let threads = (0..<count).map { AgentThread(id: "t\($0)", title: "Work \($0)", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve") }
         let said = Dictionary(uniqueKeysWithValues: (0..<count).map { ("t\($0)", [Exchange(id: "e\($0)", asker: .you, askedAt: at.addingTimeInterval(TimeInterval($0)), ask: "Ask \($0)", reply: "Reply", repliedAt: at.addingTimeInterval(TimeInterval($0)))]) })
@@ -63,12 +62,10 @@ final class ChannelsWindowTests: XCTestCase {
             XCTAssertFalse(row.acceptsFirstResponder, "\(row)")
             XCTAssertFalse(row.needsPanelToBecomeKey, "\(row)")
         }
-        // The jump box is a box too, only there once ⌘K opens it.
         let boxes = Set(([view.jumpBox.field] + subviews(of: view.pane.composer) + subviews(of: view.threadPane.composer) + subviews(of: view.jumpBox)).map(ObjectIdentifier.init))
         let taking = subviews(of: view).filter { !boxes.contains(ObjectIdentifier($0)) && ($0.acceptsFirstResponder || $0.needsPanelToBecomeKey) }
         XCTAssertFalse(taking.isEmpty, "the words can be selected")
         for taker in taking {
-            // Only so you can select and copy them, the way the bubble's reply does, and never to type into.
             let words = try XCTUnwrap(taker as? ChannelTextView, "only the boxes and words take the keyboard, not \(type(of: taker))")
             XCTAssertFalse(words.isEditable)
             XCTAssertTrue(words.isSelectable)
@@ -89,7 +86,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(row.bubble.contains(words.frame), "the words sit in their bubble, so pressing beside it selects nothing")
         XCTAssertFalse(words.string.isEmpty)
 
-        // Command-C copies the selection. The pasteboard itself is out of reach of tests, so this checks what it'd get.
         words.setSelectedRange(NSRange(location: 0, length: 4))
         XCTAssertEqual((words.string as NSString).substring(with: words.selectedRange()), String(words.string.prefix(4)))
         XCTAssertEqual(words.writablePasteboardTypes.map(\.rawValue), ["NSStringPboardType"], "plain words, without the bubble's colours")
@@ -146,8 +142,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.pane.shown.compactMap { row -> String? in if case .parent(let post) = row { post.threadID } else { nil } }, ["t"])
     }
 
-    /// Channels and Direct messages were two sections, with #general, slugs like #steve-pawsniak, and kittens that
-    /// were only planned. Now it's one list of kittens, the cat first, each by its name.
     func testTheSidebarHasActivityThreadsThenTheCatAndEachKittenByName() throws {
         let named = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
         let planned = Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)
@@ -160,8 +154,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(CatWords.kittensHeading.uppercased(), "KITTENS", "drawn in small capitals")
     }
 
-    /// The cat moved from Direct messages to the top of the list, and each kitten under it, so each row is clicked
-    /// where a mouse would click it, and its toolbar names it as the sidebar does.
     func testClickingTheCatOrAKittenInTheSidebarOpensIt() throws {
         let named = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1040, height: 620), styleMask: [.borderless], backing: .buffered, defer: true)
@@ -176,7 +168,6 @@ final class ChannelsWindowTests: XCTestCase {
             XCTAssertTrue(row.isSelected, title)
             XCTAssertEqual(header(in: view.pane)?.components(separatedBy: ", ").first, title, "the toolbar names it as the sidebar does")
         }
-        // ⌘3 is the cat's row now, where #general was, and ⌘4 the first kitten.
         for (code, place) in [(UInt16(20), ChannelPlace.channel(.shades)), (21, .channel(.of(named)))] {
             view.perform(try XCTUnwrap(MessagesShortcut(keyCode: code, characters: nil, modifiers: .command)))
             XCTAssertEqual(view.selection, ChannelSelection(place))
@@ -185,8 +176,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.selection, .channel(.of(pepper)), "and VoiceOver's press opens it too")
     }
 
-    /// An @ in #general went straight to that kitten. Typed to the cat, it does the same, and the new thread opens
-    /// beside the cat, the way the box in the kitten's own channel opens one.
     func testAnAtToTheCatGoesStraightToThatKittenInAThreadThatOpensBeside() throws {
         let named = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
         let planned = Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)
@@ -248,7 +237,6 @@ final class ChannelsWindowTests: XCTestCase {
             let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
             host.cacheDisplay(in: host.bounds, to: rep)
             let scale = CGFloat(rep.pixelsWide) / host.bounds.width
-            // The cat sits on its tile up to 25 points in, and the tile ends at 28, where the name starts after it.
             let catEnds = Int(26 * scale), tileEnds = Int(34 * scale)
             return (Self.redMarks(in: rep, rightOf: catEnds, before: tileEnds), Self.redMarks(in: rep, rightOf: tileEnds), row.accessibilityLabel())
         }
@@ -261,7 +249,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(dotted.after, 0, "and leaves the name its room")
     }
 
-    /// Separate patches of the needs-you red right of the cat, so a pill with its digits counts once.
     private static func redMarks(in rep: NSBitmapImageRep, rightOf left: Int, before right: Int? = nil) -> Int {
         let red = Ink.hex(CatGlint.attention(bright: true).color!)
         func isRed(_ x: Int, _ y: Int) -> Bool {
@@ -336,7 +323,6 @@ final class ChannelsWindowTests: XCTestCase {
         view.show(book(exchanges: 42))
         XCTAssertEqual(pane.distanceFromBottom, 0, accuracy: 1, "close enough counts")
 
-        // Near the top, older rows are laid out above what you're reading, so where you are is wherever that leaves you.
         pane.scrollOffset = 100
         let reading = pane.scrollOffset
         view.show(book(exchanges: 43))
@@ -535,12 +521,10 @@ final class ChannelsWindowTests: XCTestCase {
         let words = try XCTUnwrap(subviews(of: row).compactMap { $0 as? ChannelTextView }.first)
         let at = (words.string as NSString).range(of: "the docs")
         let rect = words.layoutManager!.boundingRect(forGlyphRange: words.layoutManager!.glyphRange(forCharacterRange: at, actualCharacterRange: nil), in: words.textContainer!)
-        // An event made here and handed straight to the view, never posted, so nothing reaches the desktop.
         let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: words.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil), modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
         XCTAssertEqual(words.menu(for: event)?.items.map(\.title), row.accessibilityCustomActions()?.map(\.name), "only its message's own, with no Open Link or Open With, which would skip the bar")
         XCTAssertEqual(row.accessibilityCustomActions()?.map(\.name), [CatWords.openInT3, CatWords.markUnread, "Copy", CatWords.react])
 
-        // What AppKit does with a link any other way, such as VoiceOver pressing it.
         var opened: [URL] = []
         view.onOpenLink = { opened.append($0) }
         words.clicked(onLink: URL(string: "https://example.invalid/docs")!, at: at.location)
@@ -641,8 +625,6 @@ final class ChannelsWindowTests: XCTestCase {
         }
     }
 
-    // MARK: - The box
-
     private func header(in view: NSView) -> String? {
         subviews(of: view).compactMap { $0 as? ChannelHeader }.first?.accessibilityLabel()
     }
@@ -667,7 +649,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertFalse(titles().contains { $0 == "Notifications" || $0 == "Muted" })
     }
 
-    /// The cat's own work had no way onto your phone. Its switch is in its thread's header, apart from what a phone can do.
     func testTheCatsOwnThreadOffersToShowOnYourPhoneWhileMessagesIsThere() throws {
         let fix = AgentThread(id: "fix", title: "Fix: it", projectTitle: nil, status: .completed, model: "m", updatedAt: at)
         let steves = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
@@ -731,7 +712,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.pane.composer.target, .newThread(steve), "and the channel's own box still starts something new")
     }
 
-    /// ⌘Return steers or queues the other way from Settings, as in T3 Code, and Return the way Settings says.
     func testCommandReturnInAThreadsBoxSendsItTheOtherWay() throws {
         let view = view()
         let window = keyWindow(showing: view)
@@ -773,8 +753,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertTrue(view.pane.composer.alsoSend.isHidden, "a channel's own box has none")
     }
 
-    /// A thread Messages started offered Also send to #general. It lives with its kitten now, so it offers that kitten,
-    /// by name.
     func testAThreadMessagesStartedOffersItsKittenByName() {
         let named = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
         let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
@@ -895,7 +873,6 @@ final class ChannelsWindowTests: XCTestCase {
             window.view.layoutSubtreeIfNeeded()
             return window.view
         }
-        // What the window's own hit test finds under the pointer, then its mouse down, drags and up, in-process.
         func edge(of view: ChannelsView) throws -> ResizeEdge {
             let frame = try XCTUnwrap(view.superview)
             let found = frame.hitTest(view.convert(NSPoint(x: view.panel.minX, y: 200), to: nil))
@@ -1121,7 +1098,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.keptUnread, [])
     }
 
-    /// An event made here and handed straight to a view, never posted, so nothing reaches the desktop.
     private func mouse(_ type: NSEvent.EventType, at point: NSPoint, in view: NSView) throws -> NSEvent {
         try XCTUnwrap(NSEvent.mouseEvent(with: type, location: view.convert(point, to: nil), modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
     }
@@ -1235,7 +1211,6 @@ final class ChannelsWindowTests: XCTestCase {
         view.show(book())
         view.select(inThread)
         view.layoutSubtreeIfNeeded()
-        // As Settings changes it, in a window that's already open.
         func pick(_ size: TextSize) {
             MessagesInk.textSize = size
             view.restyle()
@@ -1301,7 +1276,6 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(view.threadPane.composer.target, .starting(steve))
         view.threadPane.composer.textView.string = "Keep it to one page"
 
-        // Meanwhile the resume thread finishes.
         threads[0].status = .completed
         threads[0].updatedAt = at.addingTimeInterval(61)
         transcripts["t"] = [Exchange(id: "e", asker: .you, askedAt: at, ask: "Tidy my resume", reply: "Done.", repliedAt: at.addingTimeInterval(61))]
@@ -1407,8 +1381,6 @@ final class ChannelsWindowTests: XCTestCase {
     }
 }
 
-// MARK: - Bubbles
-
 extension ChannelsWindowTests {
     private func bubbles(in view: NSView) -> [MessageRowView] {
         subviews(of: view).compactMap { $0 as? MessageRowView }
@@ -1445,8 +1417,6 @@ extension ChannelsWindowTests {
         XCTAssertEqual(ChannelSpeakerLook(.you, in: book).bubbleText, MessagesInk.text, "Opal's body words on your selected violet-black")
     }
 }
-
-// MARK: - Messages, review round 1
 
 extension ChannelsWindowTests {
     private static func luminance(_ color: NSColor) -> Double {
@@ -1511,8 +1481,6 @@ extension ChannelsWindowTests {
         XCTAssertGreaterThanOrEqual(ratio, 4.5, "white words on a faded teal were \(ratio)")
     }
 }
-
-// MARK: - Messages, review round 2
 
 extension ChannelsWindowTests {
     func testWordsYouStartedSayingStayWhereTheBoxPointedWhenAQuestionArrives() {
@@ -1615,10 +1583,7 @@ extension ChannelsWindowTests {
     }
 }
 
-// MARK: - Messages, review round 3
-
 extension ChannelsWindowTests {
-    /// Steve's thread that Pepper's thread started, with a report in Steve's inbox.
     private func reportInAThreadBetweenKittens() -> (ChannelBook, InboxEntry) {
         let asked = AgentThread(id: "asked", title: "From Pepper", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
         let plans = AgentThread(id: "p", title: "Plans", projectTitle: "Pepper", status: .completed, model: "m", updatedAt: at, projectPath: "/k/pepper")
@@ -1644,8 +1609,6 @@ extension ChannelsWindowTests {
     }
 }
 
-// MARK: - Opal
-
 extension ChannelsWindowTests {
     func testYourMessagesSitOnOpalsSelectedAndEveryKittenKeepsItsOwnColour() throws {
         let colours = ChannelSpeakerLook.palette + Demo.kittens.compactMap(ChannelSpeakerLook.color(of:))
@@ -1661,8 +1624,6 @@ extension ChannelsWindowTests {
         }
     }
 
-    /// The Ask box, the kittens view and the pairing code float, so they're Opal's glass, and the pill a capsule of it. The
-    /// bubble floats on the desktop beside its widgets, so it's their black card.
     func testTheCatsOwnWindowsAreOpalGlass() throws {
         let away = NSRect(x: -20_000, y: -20_000, width: 800, height: 600)
         let cat = NSRect(x: away.midX, y: away.minY, width: 64, height: 64)
@@ -1704,8 +1665,6 @@ extension ChannelsWindowTests {
     }
 }
 
-// MARK: - Your picture
-
 extension ChannelsWindowTests {
     private func drawn(_ row: MessageRowView, width: CGFloat = 640) throws -> (NSBitmapImageRep, CGFloat) {
         let host = QuietView(frame: NSRect(x: 0, y: 0, width: width, height: 120))
@@ -1717,7 +1676,6 @@ extension ChannelsWindowTests {
         return (rep, CGFloat(rep.pixelsWide) / host.bounds.width)
     }
 
-    /// The stand-in's 0x8a6cff, which is neither your blue bubble nor the window.
     private static func isVioletStandIn(_ color: NSColor) -> Bool {
         abs(color.redComponent - 0.54) < 0.1 && abs(color.greenComponent - 0.42) < 0.1 && abs(color.blueComponent - 1) < 0.1
     }
@@ -1732,7 +1690,6 @@ extension ChannelsWindowTests {
         let row = MessageRowView(message: mine, look: ChannelSpeakerLook(.you, in: book))
         let (rep, scale) = try drawn(row)
         XCTAssertEqual(row.bubble.maxX, 640 - ChannelRowView.textLeft, accuracy: 1, "short of the picture, as a kitten's start after its cat")
-        // Near the top of the picture, where the stand-in is violet, in the cat's spot mirrored onto the right.
         let x = 640 - ChannelRowView.catLeft - 14
         let y = max(row.bubble.maxY - 28, 0) + 4
         let pixel = try XCTUnwrap(rep.colorAt(x: Int(x * scale), y: Int(y * scale))?.usingColorSpace(.sRGB))
@@ -1754,7 +1711,6 @@ extension ChannelsWindowTests {
             return (thread, [Exchange(id: "e-\(id)", asker: .you, askedAt: at.addingTimeInterval(offset), ask: "Ask \(id)", reply: "Reply", repliedAt: at.addingTimeInterval(offset))])
         }
         let newer = (0..<30).map { work("n\($0)", at: TimeInterval($0) * 60) }
-        // Earlier the same morning, rather than a day before.
         let older = (0..<30).map { work("o\($0)", at: -TimeInterval($0 + 1) * 60) }
         func build(_ read: [(AgentThread, [Exchange])]) -> ChannelBook {
             ChannelBook.build(
@@ -1802,9 +1758,7 @@ extension ChannelsWindowTests {
             return (thread, [Exchange(id: "e-\(id)", asker: .you, askedAt: at.addingTimeInterval(asked), ask: "Ask \(id)", reply: "Reply", repliedAt: at.addingTimeInterval(updated))])
         }
         let day: TimeInterval = 86_400
-        // A long thread started two days ago that you're still in, and 29 from today.
         let newer = [work("long", asked: -2 * day, updated: 3_600)] + (0..<29).map { work("n\($0)", asked: TimeInterval($0) * 60, updated: TimeInterval($0) * 60) }
-        // Yesterday's threads, which are older by when they last moved, and newer than the long thread's start.
         let older = (0..<30).map { work("o\($0)", asked: -day + TimeInterval($0) * 60, updated: -day + TimeInterval($0) * 60) }
         func build(_ read: [(AgentThread, [Exchange])]) -> ChannelBook {
             ChannelBook.build(
@@ -1817,7 +1771,6 @@ extension ChannelsWindowTests {
         view.select(.channel(.of(steve)))
         let pane = view.pane
         for _ in 0..<20 { pane.scrollOffset = 0 }
-        // Reading from the long thread's parent down.
         let long = try XCTUnwrap(pane.shownMessageRows.first { $0.accessibilityLabel()?.contains("Ask long") == true })
         pane.scrollOffset = long.frame.minY
         let next = try XCTUnwrap(pane.shownMessageRows.first { $0.accessibilityLabel()?.contains("Ask n0") == true })
@@ -1829,15 +1782,12 @@ extension ChannelsWindowTests {
     }
 }
 
-// MARK: - Opal's main window
-
 extension ChannelsWindowTests {
     private func color(_ rep: NSBitmapImageRep, at point: NSPoint, in view: NSView) throws -> NSColor {
         let scale = CGFloat(rep.pixelsWide) / view.bounds.width
         return try XCTUnwrap(rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.usingColorSpace(.sRGB))
     }
 
-    /// Where the place and its thread sit: flush against the sidebar and 8 in from the window's other edges.
     private func panel(of view: NSView) -> NSRect {
         NSRect(x: ChannelSidebar.width, y: Opal.Space.inset, width: view.bounds.width - ChannelSidebar.width - Opal.Space.inset, height: view.bounds.height - Opal.Space.inset * 2)
     }
@@ -1898,10 +1848,8 @@ extension ChannelsWindowTests {
     }
 }
 
-// MARK: - Opal's messages and box
-
 extension ChannelsWindowTests {
-    /// A window that says it has the keyboard, since a test can't make a real one key.
+    // Outside the repo: AppKit won't make a real window key during a test.
     private final class KeyWindow: NSWindow {
         override var isKeyWindow: Bool { true }
     }

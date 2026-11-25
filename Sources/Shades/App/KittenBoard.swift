@@ -1,24 +1,20 @@
 import Foundation
 import ShadesCore
 
-/// One kitten and how it's doing, for the view you get by Shift-clicking the cat.
 struct KittenStatus: Equatable, Identifiable {
     enum State: Equatable {
         case working(sessions: Int)
         case needsYou
         case idle
-        /// Its folder exists, but it isn't taking work yet.
         case notSetUp
     }
 
     var kitten: Kitten
     var state: State
-    /// What clicking on it opens: whatever most needs looking at, if it's ever done anything.
     var threadID: String?
 
     var id: String { kitten.id }
 
-    /// How it looks right now, at this tick of a timer running five times a second. Tick 0 is how it holds still.
     func pose(tick: Int) -> CatPose {
         switch state {
         case .working:
@@ -34,7 +30,6 @@ struct KittenStatus: Equatable, Identifiable {
 }
 
 enum KittenBoard {
-    /// The cat itself, for its own work in Messages. It has no folder, so no thread is ever counted as its by that.
     static let shades = Kitten(name: CatWords.shades, role: CatWords.shadesRole, covers: "", folder: "")
 
     static func shadesStatus(_ work: [AgentThread]) -> KittenStatus {
@@ -44,8 +39,6 @@ enum KittenBoard {
         return KittenStatus(kitten: shades, state: .idle, threadID: work.first?.id)
     }
 
-    /// A thread belongs to a kitten if it's in the kitten's folder or project, or carries its
-    /// name from working in another project, the way a code change does.
     static func belongs(_ thread: AgentThread, to kitten: Kitten) -> Bool {
         belongs(title: thread.title, projectPath: thread.projectPath, to: kitten)
     }
@@ -56,20 +49,16 @@ enum KittenBoard {
         return inFolder == true || title.hasPrefix("\(kitten.name):")
     }
 
-    /// Only a thread in a kitten's own folder keeps its notes, so "Name: ..." or the app project it works in doesn't count.
     static func isInFolder(_ projectPath: String?, of kitten: Kitten) -> Bool {
         projectPath.map {
             URL(fileURLWithPath: $0).standardizedFileURL.path == URL(fileURLWithPath: kitten.folder).standardizedFileURL.path
         } == true
     }
 
-    /// Who a thread counts as, when more than one could. Carrying a kitten's name beats being in its project.
     static func owner(of thread: AgentThread, among kittens: [Kitten]) -> Kitten? {
         Owners(kittens).of(thread)
     }
 
-    /// `owner(of:among:)` for many threads. Standardizing a path is slow, so each kitten's are standardized once here,
-    /// and each folder threads are in once, however many threads are in it.
     final class Owners {
         private let kittens: [Kitten]
         private let folders: [[String]]
@@ -99,7 +88,6 @@ enum KittenBoard {
         !thread.pendingApprovals.isEmpty || thread.pendingQuestion != nil || thread.status == .waitingForApproval || thread.status == .waitingForAnswer
     }
 
-    /// Kittens that are taking work come first, and otherwise they stay put, so you can find one at a glance.
     static func statuses(kittens: [Kitten], threads: [AgentThread]) -> [KittenStatus] {
         let owners = threads.map(Owners(kittens).of)
         let working = kittens.filter { !$0.planned }.map { kitten in

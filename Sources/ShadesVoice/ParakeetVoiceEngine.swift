@@ -1,29 +1,20 @@
 import Foundation
 import ShadesCore
 
-/// Hold-to-talk: audio goes in, live text comes out, and on release you get clean text fast.
 public final class ParakeetVoiceEngine: VoiceEngine {
     public struct Options {
-        /// People let go as the last word ends, so the mic stays on until it's quiet, within these limits.
         public var tailMinimumSeconds: TimeInterval = 0.03
         public var tailMaximumSeconds: TimeInterval = 0.15
-        /// How often live text updates while you talk.
         public var partialInterval: TimeInterval = 0.4
-        /// No live text until there's this much to go on.
         public var firstPartialSeconds: TimeInterval = 0.5
-        /// Download and load the cleanup model. Without it, the rules do what they can.
         public var useCleanupModel = true
-        /// Shorter than this is an accidental tap, not speech.
         public var minimumSpeechSeconds: TimeInterval = 0.15
-        /// The mic turns itself off after this, in case a release is somehow never heard.
         public var maximumTakeSeconds: TimeInterval = 300
-        /// Quieter than this all the way through means nothing was said. Models imagine words in silence.
         public var silenceLevel: Float = 0.002
 
         public init() {}
     }
 
-    /// How far first-time setup has got.
     public struct SetupProgress: Sendable {
         public enum Stage: String, Sendable {
             case speechModel, cleanupModel, ready
@@ -33,7 +24,6 @@ public final class ParakeetVoiceEngine: VoiceEngine {
         public var fraction: Double
     }
 
-    /// What one take spent its time on, for checking the feel.
     public struct Timings: Sendable {
         public var tail: TimeInterval = 0
         public var waitForPartial: TimeInterval = 0
@@ -47,7 +37,6 @@ public final class ParakeetVoiceEngine: VoiceEngine {
 
     public let partials: AsyncStream<String>
     public let levels: AsyncStream<Float>
-    /// May be called on any thread.
     public var onSetupProgress: ((SetupProgress) -> Void)?
     public private(set) var lastTimings = Timings()
     public let source: AudioSource
@@ -62,7 +51,6 @@ public final class ParakeetVoiceEngine: VoiceEngine {
     private let lock = NSLock()
     private var isPrepared = false
     private var current: Take?
-    /// The mic stays on briefly after a release, and a new take has to wait for it to close.
     private var isCapturing = false
     private var pendingVocabulary: [String]?
     private var vocabularyTask: Task<Void, Never>?
@@ -88,10 +76,6 @@ public final class ParakeetVoiceEngine: VoiceEngine {
         levelContinuation.finish()
     }
 
-    // MARK: - Setup
-
-    /// Loads speech first, because that's all you need to start talking. The cleanup model
-    /// comes next, and until it's ready the rules stand in.
     public func prepare() async throws {
         try source.prepare()
         try await recognizer.load { [weak self] fraction in
@@ -109,7 +93,6 @@ public final class ParakeetVoiceEngine: VoiceEngine {
                 )
                 try await modelCleaner.load()
             } catch {
-                // Dictation still works, just with plainer cleanup.
             }
         }
         report(.ready, 1)
@@ -129,13 +112,10 @@ public final class ParakeetVoiceEngine: VoiceEngine {
         _ = queueVocabulary(words)
     }
 
-    /// The same, for when you need it in place before going on.
     public func applyVocabulary(_ words: [String]) async {
         await queueVocabulary(words).value
     }
 
-    /// The recognizer loads its model on the first set and isn't safe to call twice at once,
-    /// so sets go in one at a time and only the newest waiting set is applied.
     private func queueVocabulary(_ words: [String]) -> Task<Void, Never> {
         lock.withLock {
             pendingVocabulary = words
@@ -164,8 +144,6 @@ public final class ParakeetVoiceEngine: VoiceEngine {
         }
     }
 
-    // MARK: - One take
-
     public func begin() throws {
         let pressed = Date()
         lock.lock()
@@ -185,7 +163,6 @@ public final class ParakeetVoiceEngine: VoiceEngine {
         partialContinuation.yield("")
         modelCleaner?.wake()
 
-        // Opening the mic can block for a moment, and the key's main thread shouldn't feel that.
         let source = self.source
         let limit = options.maximumTakeSeconds
         captureQueue.async { [weak self] in
@@ -209,7 +186,6 @@ public final class ParakeetVoiceEngine: VoiceEngine {
         guard let take = takeCurrent() else { throw VoiceError.notListening }
         var timings = Timings()
 
-        // Hear the rest of the last word, without waiting if it's already over.
         while Date().timeIntervalSince(released) < options.tailMaximumSeconds {
             let elapsed = Date().timeIntervalSince(released)
             if elapsed >= options.tailMinimumSeconds, take.recentPeak(seconds: 0.03) < Self.quietPeak { break }
@@ -219,7 +195,7 @@ public final class ParakeetVoiceEngine: VoiceEngine {
         stopCapture()
         levelContinuation.yield(0)
 
-        // The Neural Engine runs one thing at a time, so the last partial has to land first.
+        // Outside the repo: the Neural Engine runs one thing at a time.
         let waitStart = Date()
         take.partialTask?.cancel()
         _ = await take.partialTask?.value
@@ -231,7 +207,6 @@ public final class ParakeetVoiceEngine: VoiceEngine {
 
         let audio = take.audio()
         let seconds = take.speechSeconds
-        // Half a second held with no audio at all means the mic never came alive.
         if seconds == 0, released.timeIntervalSince(take.pressed) > 0.5 { throw VoiceError.microphoneUnavailable }
         guard seconds >= options.minimumSpeechSeconds, take.loudest >= options.silenceLevel else {
             lastTimings = timings
@@ -275,14 +250,11 @@ public final class ParakeetVoiceEngine: VoiceEngine {
 
     private func stopCapture() {
         let source = self.source
-        // Queued behind `begin`'s start, so a very quick release can't leave the mic open.
         captureQueue.sync { source.stop() }
         lock.lock()
         isCapturing = false
         lock.unlock()
     }
-
-    // MARK: - Live text
 
     private func startPartials(for take: Take) {
         let interval = options.partialInterval
@@ -305,10 +277,8 @@ public final class ParakeetVoiceEngine: VoiceEngine {
         }
     }
 
-    /// Below this peak the speaker has stopped, even with some room noise.
     static let quietPeak: Float = 0.01
 
-    /// RMS on a perceptual scale, from about -60 dB to -15 dB.
     static func level(of samples: [Float]) -> Float {
         guard !samples.isEmpty else { return 0 }
         let energy = samples.reduce(Float(0)) { $0 + $1 * $1 } / Float(samples.count)
@@ -317,7 +287,6 @@ public final class ParakeetVoiceEngine: VoiceEngine {
     }
 }
 
-/// The audio and live text of one press of the key.
 private final class Take {
     let pressed: Date
     var partialTask: Task<Void, Never>?
@@ -329,13 +298,11 @@ private final class Take {
     private var samples: [Float] = []
     private var peak: Float = 0
     private var limitReached = false
-    /// Live text past one window is the settled text so far plus a guess at the rest.
     private var settled = ""
     private var settledUpTo: Int
 
-    /// The model's window is 15 seconds, and live text doesn't need more.
+    // Outside the repo: Parakeet's window is 15 seconds.
     private let partialWindowSamples = Int(14 * AudioFormat.sampleRate)
-    /// Once this much is heard, that part stops changing and the window starts again after it.
     private let settleSamples = Int(12 * AudioFormat.sampleRate)
 
     init(pressed: Date) {
@@ -353,7 +320,6 @@ private final class Take {
         lock.unlock()
     }
 
-    /// The loudest sample in the most recent stretch of audio.
     func recentPeak(seconds: Double) -> Float {
         lock.lock()
         defer { lock.unlock() }
@@ -368,7 +334,6 @@ private final class Take {
         return peak
     }
 
-    /// True the first time it's called.
     func markLimitReached() -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -409,7 +374,6 @@ private final class Take {
         return (Array(samples[start..<end]), start, end)
     }
 
-    /// Returns the live text to show, moving the settled point forward once the window fills up.
     func addPartial(_ text: String, windowStart: Int, windowEnd: Int) -> String {
         lock.lock()
         defer { lock.unlock() }

@@ -2,12 +2,6 @@ import AppKit
 import ShadesContext
 import ShadesCore
 
-// Drives the real picker with events handed straight to its own windows, so nothing reaches your
-// apps and your real mouse stays where it is. Each run covers your screen for under a second.
-// Pictures hold the overlay alone, never your screen.
-
-/// Launching from a terminal can make the probe itself the active app, which would prove nothing,
-/// so the test only runs once some other app is really in front.
 @MainActor
 private func someoneElseInFront() async -> pid_t? {
     let me = ProcessInfo.processInfo.processIdentifier
@@ -53,13 +47,11 @@ func runPickerTest(in directory: URL) async {
             if index == 0 { await shoot("picker-dragging.jpg", in: directory) }
             await drive([(.leftMouseUp, to)])
         } check: { region in
-            // Global points in AppKit's coordinates, exactly as dragged.
             let expected = CGRect(x: from.x, y: from.y, width: to.x - from.x, height: to.y - from.y)
             return region == expected ? "OK, \(describe(region))" : "WRONG, got \(describe(region)), wanted \(describe(expected))"
         }
     }
 
-    // Past the edge of the display it started on, the box stops at that edge.
     if let last = screens.last, screens.count > 1 {
         let from = CGPoint(x: last.minX + 100, y: last.minY + 100)
         let beyond = CGPoint(x: last.maxX + 2000, y: last.maxY + 2000)
@@ -99,8 +91,6 @@ func runPickerTest(in directory: URL) async {
     }
 }
 
-/// A stuck overlay would block the whole Mac, so switching apps has to clear it. A small app of
-/// the probe's own comes forward for a moment, and the app you were in gets focus back.
 private func checkAnotherAppCancels() async {
     print("another app comes forward:")
     let previous = NSWorkspace.shared.frontmostApplication
@@ -153,7 +143,6 @@ private func run(
 
 private func waitForResult(of picking: Task<CGRect?, Never>) async -> CGRect? {
     let watchdog = Task {
-        // If an event never landed, get out of your way rather than leave the screen dimmed.
         try? await Task.sleep(for: .seconds(2))
         if !Task.isCancelled {
             print("  picker didn't finish on its own, pressing Esc")
@@ -165,7 +154,6 @@ private func waitForResult(of picking: Task<CGRect?, Never>) async -> CGRect? {
     return result
 }
 
-/// Asks the other app and the system, since this process's own idea of being active isn't the question.
 @MainActor
 private func printFocus(of front: pid_t, when: String) {
     let app = NSRunningApplication(processIdentifier: front)
@@ -183,7 +171,6 @@ private func printFocus(of front: pid_t, when: String) {
         + "AX focus \(focusedPID == front ? "other app" : focusedPID == me ? "PROBE" : "\(focusedPID)")")
 }
 
-/// Hot spots and image data both vary between copies of a cursor, so this compares what it looks like.
 @MainActor
 private func cursorReport() -> String {
     guard let cursor = NSCursor.currentSystem else { return "unknown" }
@@ -222,9 +209,6 @@ private func who(before: pid_t) -> String {
     return front == before ? "same app" : front == me ? "PROBE" : "a different app"
 }
 
-/// One drag with the real mouse, through the window server, which events handed to a window can't
-/// stand in for: it's the only proof a real click doesn't activate the app. It runs only once the
-/// overlay is the top window under the pointer, and the pointer goes back where it was.
 private func runRealMouseTest(frontBefore: pid_t) async {
     print("real mouse:")
     let picking = Task { await ScreenContextProvider().pickRegion() }
@@ -236,9 +220,7 @@ private func runRealMouseTest(frontBefore: pid_t) async {
     let ready = await MainActor.run { () -> Bool in
         let me = ProcessInfo.processInfo.processIdentifier
         let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
-        // The pointer is a window itself, above everything, and it doesn't take clicks.
         let pointerLevel = Int(CGWindowLevelForKey(.cursorWindow))
-        // Both the pointer now and where the drag will happen have to be under the overlay.
         func topIsOurs(at point: CGPoint) -> Bool {
             let top = list.first {
                 guard let box = $0[kCGWindowBounds as String], let rect = CGRect(dictionaryRepresentation: box as! CFDictionary)
@@ -259,7 +241,7 @@ private func runRealMouseTest(frontBefore: pid_t) async {
         return
     }
 
-    // Same place first: a real move is what prompts the system to update the cursor.
+    // Outside the repo: macOS only updates the cursor after a real mouse move.
     func post(_ type: CGEventType, _ point: CGPoint) {
         CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
     }
@@ -297,7 +279,6 @@ private func runRealMouseTest(frontBefore: pid_t) async {
         printFocus(of: frontBefore, when: "after")
     }
 
-    // The whole of "fix what I'm looking at": what you dragged goes straight into a snapshot.
     let provider = ScreenContextProvider()
     if let result, let snapshot = try? await provider.snapshot(CaptureOptions(focusRegion: result)) {
         print("  then a snapshot: \(Int(provider.lastReport.timings.total)) ms, \(snapshot.screenshotJPEG?.count ?? 0) bytes, marked at \(describe(snapshot.focusRegion))")

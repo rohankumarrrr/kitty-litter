@@ -2,7 +2,6 @@ import Darwin
 import Foundation
 
 enum Metrics {
-    /// Lowercase words with punctuation gone and spelled-out numbers as digits, so "Three," and "3" match.
     static func words(_ text: String) -> [String] {
         let lowered = text.lowercased()
             .replacingOccurrences(of: "’", with: "'")
@@ -38,7 +37,6 @@ enum Metrics {
         return row[hypothesis.count]
     }
 
-    /// Whether `phrase` appears as whole words in `text`.
     static func contains(_ text: String, phrase: String) -> Bool {
         let haystack = " " + words(text).joined(separator: " ") + " "
         let needle = " " + words(phrase).joined(separator: " ") + " "
@@ -52,7 +50,6 @@ enum Metrics {
         return sorted[rank]
     }
 
-    /// Memory charged to this process, the number Activity Monitor shows.
     static func footprintMB() -> Double {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
@@ -65,7 +62,6 @@ enum Metrics {
     }
 }
 
-/// Tallies word errors over many clips, so long clips count for more than short ones.
 struct ErrorTally {
     private(set) var edits = 0
     private(set) var words = 0

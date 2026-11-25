@@ -2,7 +2,6 @@ import CoreAudio
 import Foundation
 import IOKit
 
-/// Finds the right microphone.
 enum AudioDevices {
     struct Device: Equatable {
         var id: AudioDeviceID
@@ -16,8 +15,7 @@ enum AudioDevices {
         var isBuiltIn: Bool { transport == kAudioDeviceTransportTypeBuiltIn }
     }
 
-    /// The microphone to use. A Bluetooth headset drops into its call profile when its mic opens, which
-    /// loses the first second or two of speech and ruins any music, so the built-in mic stands in when it can.
+    // Outside the repo: a Bluetooth headset drops to its call profile when its mic opens, losing the first second or two of speech.
     static func preferred(uid: String? = nil) -> Device? {
         let all = inputs()
         if let uid, let match = all.first(where: { $0.uid == uid }) { return match }
@@ -80,7 +78,6 @@ enum AudioDevices {
         return rate
     }
 
-    /// Calls back when microphones come and go or the system default changes.
     static func watchChanges(_ handler: @escaping () -> Void) {
         for selector in [kAudioHardwarePropertyDevices, kAudioHardwarePropertyDefaultInputDevice] {
             var address = AudioObjectPropertyAddress(
@@ -94,7 +91,6 @@ enum AudioDevices {
         }
     }
 
-    /// A closed lid cuts the built-in mic off in hardware.
     static func isLidClosed() -> Bool {
         let root = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
         guard root != 0 else { return false }

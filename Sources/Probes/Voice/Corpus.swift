@@ -1,6 +1,5 @@
 import Foundation
 
-/// One thing someone might say, with what a perfect transcriber and a perfect editor would write.
 struct Utterance {
     enum Kind: String, CaseIterable {
         case plain, filler, correction, keepWords, technical, list, command, numbers, long
@@ -8,31 +7,23 @@ struct Utterance {
 
     let id: String
     let kind: Kind
-    /// Text for `say`. `[[slnc 300]]` adds a pause in milliseconds.
     let spoken: String
-    /// Every word as said, for scoring the raw transcript.
     let verbatim: String
-    /// The same words as a good transcriber writes them, with digits and symbols. Either form counts as right.
     var written: String? = nil
-    /// What it should read like. Any of these counts as right.
     let clean: [String]
-    /// Must appear in the cleaned text, ignoring case and punctuation.
     var mustKeep: [String] = []
-    /// Must not appear in the cleaned text, such as a corrected value or an answer.
     var mustDrop: [String] = []
 }
 
 enum Corpus {
     static let voices = ["Samantha", "Daniel", "Karen", "Moira", "Rishi", "Reed (English (US))"]
 
-    /// Names a person would add to Settings.vocabulary, plus their T3 projects.
     static let vocabulary = [
         "T3", "Opus", "Pepper", "Swift", "GitHub", "Parakeet", "FluidAudio", "Haiku",
         "Kubernetes", "Postgres", "Sentry", "JSON", "worktree", "Copper Money", "Shades",
     ]
 
     static let utterances: [Utterance] = [
-        // Control: nothing to fix but punctuation.
         .init(id: "plain-report", kind: .plain,
               spoken: "Can you send me the quarterly report before the meeting tomorrow?",
               verbatim: "can you send me the quarterly report before the meeting tomorrow",
@@ -59,7 +50,6 @@ enum Corpus {
               verbatim: "thanks for the help",
               clean: ["Thanks for the help."]),
 
-        // Filler words and stutters.
         .init(id: "filler-blue", kind: .filler,
               spoken: "Um, so I think we should, uh, go with the blue one.",
               verbatim: "um so i think we should uh go with the blue one",
@@ -94,7 +84,6 @@ enum Corpus {
                       "So, basically, the test is flaky on the build server."],
               mustKeep: ["test is flaky", "build server"], mustDrop: ["um", "uh", "you know"]),
 
-        // Self-corrections: the earlier value has to go.
         .init(id: "fix-time", kind: .correction,
               spoken: "Let's meet at three, no, actually four.",
               verbatim: "let's meet at three no actually four",
@@ -138,7 +127,6 @@ enum Corpus {
               clean: ["Book a table for 5 people on Friday.", "Book a table for five people on Friday."],
               mustKeep: ["people on friday"], mustDrop: ["four"]),
 
-        // Words that look like corrections or fillers but aren't. They have to stay.
         .init(id: "keep-actually", kind: .keepWords,
               spoken: "Actually, the new design is great.",
               verbatim: "actually the new design is great",
@@ -160,7 +148,6 @@ enum Corpus {
               clean: ["No, I don't think we should keep it."],
               mustKeep: ["no", "keep it"]),
 
-        // Technical words, the reason vocabulary exists.
         .init(id: "tech-thread", kind: .technical,
               spoken: "Open a new thread in T3 and ask Opus to review the pull request on GitHub.",
               verbatim: "open a new thread in t3 and ask opus to review the pull request on github",
@@ -204,7 +191,6 @@ enum Corpus {
               clean: ["Use Opus for the hard refactor and Haiku for quick questions."],
               mustKeep: ["opus", "haiku"]),
 
-        // Spoken formatting.
         .init(id: "list-steps", kind: .list,
               spoken: "To set it up, first, install the app. Second, grant permissions. Third, restart it.",
               verbatim: "to set it up first install the app second grant permissions third restart it",
@@ -233,7 +219,6 @@ enum Corpus {
               clean: ["Add a new line to the config file before you save it."],
               mustKeep: ["add a new line"]),
 
-        // Sounds like a request. Dictation writes it down and never answers it.
         .init(id: "cmd-capital", kind: .command,
               spoken: "What is the capital of France?",
               verbatim: "what is the capital of france",
@@ -260,7 +245,6 @@ enum Corpus {
               clean: ["What's two plus two?", "What's 2 plus 2?", "What's 2 + 2?"],
               mustDrop: ["four"]),
 
-        // Numbers, money, addresses.
         .init(id: "num-invoice", kind: .numbers,
               spoken: "The invoice came to twenty three thousand four hundred and fifty dollars.",
               verbatim: "the invoice came to twenty three thousand four hundred and fifty dollars",
@@ -288,7 +272,6 @@ enum Corpus {
               clean: ["It's about 5% faster than version 2.1.", "It's about five percent faster than version 2.1."],
               mustKeep: ["faster than version"]),
 
-        // Longer takes, where windowing and memory start to matter.
         .init(id: "long-outage", kind: .long,
               spoken: "I spent most of the afternoon looking through the logs from yesterday's outage, and I think the root cause is a slow query in the billing service that started holding locks after we added the new index, so I'd like to roll that change back tonight and then test it properly in staging tomorrow morning before we try again.",
               verbatim: "i spent most of the afternoon looking through the logs from yesterday's outage and i think the root cause is a slow query in the billing service that started holding locks after we added the new index so i'd like to roll that change back tonight and then test it properly in staging tomorrow morning before we try again",
@@ -307,7 +290,6 @@ enum Corpus {
               mustKeep: ["signing certificate", "troubleshooting guide", "plugin system"]),
     ]
 
-    /// Written after the rules were finished and never used to tune them, so this is the honest score.
     static let heldOut: [Utterance] = [
         .init(id: "held-oh-wait", kind: .correction,
               spoken: "Can we push the demo to, uh, Wednesday, oh wait, Thursday afternoon?",

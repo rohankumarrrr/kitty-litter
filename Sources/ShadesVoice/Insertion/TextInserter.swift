@@ -4,21 +4,15 @@ import Carbon.HIToolbox
 import Foundation
 import ShadesCore
 
-/// Types dictated text wherever the cursor is.
-///
-/// Native text fields take it directly through Accessibility, which leaves the clipboard alone, and the
-/// result is read back to prove it landed. Everything else gets a paste, with your clipboard put back after.
 public final class TextInserter: TextInserting {
     public enum Method: String, Sendable {
         case accessibility, paste, nothing
     }
 
-    /// How the last insert got there.
     public private(set) var lastMethod = Method.nothing
     public private(set) var lastSeconds: TimeInterval = 0
 
-    /// Web views, terminals and Electron apps, where Accessibility tends to report success without typing
-    /// anything, or breaks undo. The read-back would catch most of that, but paste just works there.
+    // Outside the repo: in web views, terminals and Electron apps, Accessibility can report success without typing anything, or break undo.
     public static let pasteOnlyPrefixes = [
         "com.google.Chrome", "com.brave.Browser", "com.microsoft.edgemac", "org.mozilla.firefox", "company.thebrowser",
         "com.apple.Safari", "com.apple.Terminal", "com.googlecode.iterm2", "net.kovidgoyal.kitty", "com.mitchellh.ghostty",
@@ -26,19 +20,15 @@ public final class TextInserter: TextInserting {
         "com.linear", "notion.id", "md.obsidian", "com.hnc.Discord", "com.figma", "com.apple.dt.Xcode",
     ]
 
-    /// How long apps get to read the clipboard before it's put back. Slow Electron apps need most of this.
     public var clipboardHold: TimeInterval = 0.6
-    /// Always paste, for trying that path in a native app.
     public var pasteOnly = false
 
     private var pendingRestore: Task<Void, Never>?
 
     public init() {}
 
-    /// Whether the system lets this app read fields and send keystrokes. Doesn't prompt.
     public static var hasPermission: Bool { AXIsProcessTrusted() }
 
-    /// Shows the system prompt for Accessibility.
     public static func requestPermission() {
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
@@ -51,8 +41,7 @@ public final class TextInserter: TextInserting {
 
         let target = FocusedField.current()
         if target?.isSecure == true { throw VoiceError.passwordField }
-        // Secure input with no readable field is most likely a password box on a web page. With a
-        // plain text field in front it's probably left over from another app, and shouldn't block you.
+        // Outside the repo: another app can leave secure input on, so it only means a password box when no plain text field is in front.
         if IsSecureEventInputEnabled(), target?.isTextField != true { throw VoiceError.passwordField }
 
         let fitted = TextFit.fit(text, before: target?.textBefore, after: target?.textAfter)
@@ -66,7 +55,6 @@ public final class TextInserter: TextInserting {
         lastSeconds = Date().timeIntervalSince(started)
     }
 
-    /// Never pastes, since a paste can't be checked, so apps that only take paste say no.
     public func replaceSelection(_ original: String, in bundleID: String?, with text: String) async -> Bool {
         guard AXIsProcessTrusted(), let target = FocusedField.current(), target.bundleID == bundleID,
               !target.isSecure, target.canSetSelection, !Self.isPasteOnly(bundleID), target.selectedText == original
@@ -75,46 +63,38 @@ public final class TextInserter: TextInserting {
     }
 
     static func isPasteOnly(_ bundleID: String?) -> Bool {
-        // No bundle ID means something unusual, and paste is the choice that always works.
         guard let bundleID else { return true }
         return pasteOnlyPrefixes.contains(where: bundleID.hasPrefix)
     }
 
-    // MARK: - Paste
-
     private func paste(_ text: String) async throws {
-        // A paste still waiting to restore has to finish, or its text would be saved as yours.
         await pendingRestore?.value
 
         let pasteboard = NSPasteboard.general
         let saved = PasteboardSnapshot(pasteboard)
         let ours = PasteboardSnapshot.write(text, to: pasteboard)
 
-        // Keystrokes are read off the current keyboard layout, so this has to run on the main thread.
         let posted = await MainActor.run { Self.postPaste() }
         guard posted else {
             saved.restore(to: pasteboard)
             throw VoiceError.accessibilityNeeded
         }
 
-        // There's no signal for when an app has read the clipboard, so this just waits long enough.
+        // Outside the repo: macOS gives no signal for when an app has read the clipboard.
         let hold = clipboardHold
         pendingRestore = Task {
             try? await Task.sleep(nanoseconds: UInt64(hold * 1_000_000_000))
-            // If it changed, you copied something new, and that's the one to keep.
             if pasteboard.changeCount == ours {
                 saved.restore(to: pasteboard)
             }
         }
     }
 
-    /// Waits until the clipboard is back to how it was.
     public func finishRestoring() async {
         await pendingRestore?.value
     }
 
     private static func postPaste() -> Bool {
-        // A private source, so a modifier you happen to be holding can't turn this into Command-Shift-V.
         guard let source = CGEventSource(stateID: .privateState) else { return false }
         let key = keyCode(for: "v") ?? CGKeyCode(kVK_ANSI_V)
         guard let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true),
@@ -127,7 +107,6 @@ public final class TextInserter: TextInserting {
         return true
     }
 
-    /// Which physical key types `character` on the current layout. On Dvorak, V isn't where it is on QWERTY.
     private static func keyCode(for character: Character) -> CGKeyCode? {
         guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
               let property = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
@@ -152,7 +131,6 @@ public final class TextInserter: TextInserting {
     }
 }
 
-/// A copy of everything on the clipboard, every type of every item.
 struct PasteboardSnapshot {
     private let items: [[(NSPasteboard.PasteboardType, Data)]]
 
@@ -165,8 +143,6 @@ struct PasteboardSnapshot {
     static let transient = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
     static let autoGenerated = NSPasteboard.PasteboardType("org.nspasteboard.AutoGeneratedType")
 
-    /// Puts dictated text on the clipboard, marked so clipboard managers leave it out of their history.
-    /// Returns the change count, for telling later whether anything else has written since.
     @discardableResult
     static func write(_ text: String, to pasteboard: NSPasteboard) -> Int {
         let item = NSPasteboardItem()
@@ -184,7 +160,6 @@ struct PasteboardSnapshot {
         let restored = items.map { pairs -> NSPasteboardItem in
             let item = NSPasteboardItem()
             for (type, data) in pairs { item.setData(data, forType: type) }
-            // Putting it back isn't a new copy, so histories shouldn't list it twice.
             item.setData(Data(), forType: Self.transient)
             return item
         }
@@ -192,7 +167,6 @@ struct PasteboardSnapshot {
     }
 }
 
-/// The text field with the cursor, as Accessibility sees it.
 struct FocusedField {
     let element: AXUIElement
     let bundleID: String?
@@ -206,7 +180,6 @@ struct FocusedField {
     private static let editableRoles: Set<String> = ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"]
 
     static func current() -> FocusedField? {
-        // The system-wide element is the direct way, but it can refuse, so the front app is asked next.
         if let element = focusedElement(in: AXUIElementCreateSystemWide()) { return FocusedField(element: element) }
         guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
               let element = focusedElement(in: AXUIElementCreateApplication(pid))
@@ -220,7 +193,6 @@ struct FocusedField {
         guard AXUIElementCopyAttributeValue(parent, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
               let focused, CFGetTypeID(focused) == AXUIElementGetTypeID()
         else { return nil }
-        // swiftlint:disable:next force_cast
         return (focused as! AXUIElement)
     }
 
@@ -256,7 +228,6 @@ struct FocusedField {
         }
     }
 
-    /// Sets the selected text, then checks it actually happened. Some apps report success and do nothing.
     func insert(_ text: String) -> Bool {
         guard let before = Self.valueAndSelection(element) else { return false }
         let status = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
@@ -264,7 +235,6 @@ struct FocusedField {
 
         let inserted = (text as NSString).length
         let expected = before.value.length - before.selection.length + inserted
-        // Native fields update at once, and a blink of patience covers the slower ones.
         for attempt in 0..<4 {
             if attempt > 0 { usleep(8_000) }
             if let after = Self.valueAndSelection(element), after.value.length == expected {
@@ -291,7 +261,6 @@ struct FocusedField {
               let text = value as? String, let selection, CFGetTypeID(selection) == AXValueGetTypeID()
         else { return nil }
         var range = CFRange()
-        // swiftlint:disable:next force_cast
         guard AXValueGetValue(selection as! AXValue, .cfRange, &range) else { return nil }
         return (text as NSString, NSRange(location: range.location, length: range.length))
     }

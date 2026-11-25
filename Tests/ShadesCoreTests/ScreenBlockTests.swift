@@ -19,7 +19,6 @@ final class ScreenBlockTests: XCTestCase {
         return try JSONSerialization.data(withJSONObject: parsed)
     }
 
-    /// Threads working on this repo run under these settings, wherever the agent that started them came from.
     func testThisRepoHasTheBlock() throws {
         let data = try Data(contentsOf: repo.appendingPathComponent(".claude/settings.json"))
         XCTAssertEqual(ScreenBlock.gaps(in: data), [])
@@ -34,12 +33,10 @@ final class ScreenBlockTests: XCTestCase {
         XCTAssertTrue(ScreenBlock.gaps(in: try settings(removing: ["sandbox", "enabled"])).contains("sandbox.enabled"))
     }
 
-    /// The tool has a flag for running outside the sandbox, and it's on unless turned off.
     func testAWayOutOfTheSandboxIsAGap() throws {
         XCTAssertTrue(ScreenBlock.gaps(in: try settings(removing: ["sandbox", "allowUnsandboxedCommands"])).contains("sandbox.allowUnsandboxedCommands"))
     }
 
-    /// Left to its default, turning the sandbox on would stop asking before commands run.
     func testAutoApprovalIsAGap() throws {
         XCTAssertTrue(ScreenBlock.gaps(in: try settings(removing: ["sandbox", "autoAllowBashIfSandboxed"])).contains("sandbox.autoAllowBashIfSandboxed"))
     }
@@ -55,7 +52,6 @@ final class ScreenBlockTests: XCTestCase {
         XCTAssertTrue(gaps.contains("Read(~/.t3/userdata/**)"))
     }
 
-    /// `mv` carried a file out of T3's attachments folder when reading it was denied.
     func testMovingFilesOutOfT3sFolderIsDenied() throws {
         var parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: try settings(removing: [])) as? [String: Any])
         var permissions = try XCTUnwrap(parsed["permissions"] as? [String: Any])

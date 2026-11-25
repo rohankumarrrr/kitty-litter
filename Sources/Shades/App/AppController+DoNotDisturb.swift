@@ -1,13 +1,7 @@
 import Foundation
 import ShadesCore
 
-/// Do Not Disturb. While it's on nothing pops up by itself: no bubble, no notification and no push to your phone. What
-/// would have popped up waits as IDs, read again from T3 or the inbox, for one catch-up once it's off. Anything you
-/// start yourself, such as asking the cat, still answers as usual, since you're there.
 extension AppController {
-    /// The one place everything that comes in by itself asks before it pops up, on the Mac or, for a notification, on
-    /// your phone. Its channel can say no for good, which isn't kept. Do Not Disturb, and Lockdown for anything but its
-    /// kitten's, keep what they hold for the catch-up.
     func mayPopUp(_ missed: Missed, on device: NotifyDevice = .mac) -> Bool {
         guard channelAllows(missed, on: device) else { return false }
         guard settings.doNotDisturb || lockdownHolds(missed) else { return true }
@@ -15,7 +9,6 @@ extension AppController {
         return false
     }
 
-    /// What a bubble that came by itself was about.
     func missed(question: String? = nil, thread: String?, text: String) -> Missed {
         question.map(Missed.question) ?? thread.map(Missed.thread) ?? .line(text)
     }
@@ -42,7 +35,6 @@ extension AppController {
         renderBubble()
     }
 
-    /// What came in while you were away that's still there to see. An approval or question answered meanwhile isn't.
     var awayNow: [Missed] {
         let asked = Set(waiting.questions.map(\.id))
         return away.filter { missed in
@@ -54,8 +46,6 @@ extension AppController {
         }
     }
 
-    /// What came by itself and is up or waiting to be read when it's turned on goes too, so nothing pops up after.
-    /// Approvals wait in Messages, as if you'd pressed Esc, and clicking the cat still brings them up.
     func putAway() {
         for notice in notices { keepForLater(missed(question: notice.questionID, thread: notice.threadID, text: notice.text)) }
         notices = []

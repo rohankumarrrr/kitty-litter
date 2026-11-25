@@ -1,9 +1,6 @@
 import Foundation
 import XCTest
 
-/// Runs a copy of scripts/triage.sh whose `log` and `ps` are stand-ins, to check it only ever reads the processes on
-/// its list. The stand-in `log` writes down what it was asked and what it was given, and prints made-up lines, and `ps`
-/// prints a made-up table. `log` gets no environment, so it works from the files beside it.
 final class TriageScriptTests: XCTestCase {
     private var root: URL!
     private var script: URL { root.appendingPathComponent("triage.sh") }
@@ -70,7 +67,6 @@ final class TriageScriptTests: XCTestCase {
         return (process.terminationStatus, try read(out), try read(err))
     }
 
-    /// What the stand-in `log` was asked, as flag and value, after `show`.
     private func askedLog() throws -> [String: String] {
         let arguments = try String(contentsOf: logArguments, encoding: .utf8).split(separator: "\n", omittingEmptySubsequences: false).dropLast().map(String.init)
         XCTAssertEqual(arguments.first, "show")
@@ -98,8 +94,6 @@ final class TriageScriptTests: XCTestCase {
         XCTAssertFalse(logRan, "\(why): log never ran", file: file, line: line)
         XCTAssertFalse(FileManager.default.fileExists(atPath: psRan.path), "\(why): ps never ran", file: file, line: line)
     }
-
-    // MARK: logs
 
     func testWithNoProcessNamedItReadsTheWholeListAndNothingElse() throws {
         let result = try run("logs", "--start", Self.start, "--end", Self.end)
@@ -174,7 +168,6 @@ final class TriageScriptTests: XCTestCase {
         XCTAssertEqual(result.output.split(separator: "\n").map(String.init), (1...3000).map { "line \($0)" })
     }
 
-    /// So an agent can tell `log` refusing to run from the script refusing what it was asked.
     func testWhatLogRefusesComesThroughAsLogSaidIt() throws {
         try given("log-refuses", "log: Cannot run while sandboxed\n")
         let result = try run("logs", "--start", Self.start, "--end", Self.end)
@@ -183,7 +176,6 @@ final class TriageScriptTests: XCTestCase {
         XCTAssertEqual(result.output, "")
     }
 
-    /// A `.logrc` can add options such as `--archive` or `--pager`, and predicate aliases, and `log` finds it from HOME.
     func testLogGetsNothingFromTheCallersEnvironment() throws {
         try given(".logrc", "show:\n    --debug\n")
         let result = try run("logs", "--start", Self.start, "--end", Self.end, environment: ["LOG_STYLE": "json"])
@@ -191,7 +183,6 @@ final class TriageScriptTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: logEnvironment, encoding: .utf8), "HOME=/var/empty LOG_STYLE= STANDIN=\n")
     }
 
-    /// It runs outside the sandbox, so tools earlier on the caller's PATH, or zsh startup files, could stand in for it.
     func testItIgnoresTheCallersToolsAndStartupFiles() throws {
         let tools = root.appendingPathComponent("tools")
         try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
@@ -211,8 +202,6 @@ final class TriageScriptTests: XCTestCase {
         XCTAssertEqual(logged.status, 0, logged.errors)
         XCTAssertEqual(logged.output, "line 1\n")
     }
-
-    // MARK: processes
 
     func testProcessesListsOnlyTheListAndTheBuildByName() throws {
         try """
@@ -254,7 +243,6 @@ final class TriageScriptTests: XCTestCase {
         XCTAssertFalse(logRan)
     }
 
-    /// In a UTF-8 locale, awk stops at a byte that isn't UTF-8 and quotes the word it's in.
     func testABrokenCharacterInAnArgumentNeitherShowsNorStopsTheList() throws {
         var table = Data("  101   150      00:10 /bin/zsh -c ".utf8) + [0xFF] + Data("private-words\n".utf8)
         table += Data("  102     1      00:10 note:".utf8) + [0xFF] + Data("private-words\n".utf8)

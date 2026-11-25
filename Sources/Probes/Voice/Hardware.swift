@@ -5,7 +5,6 @@ import Foundation
 import ShadesCore
 import ShadesVoice
 
-/// The parts that need a real Mac: microphone, keys and other apps.
 enum Hardware {
     static func permissions() {
         let mic: String
@@ -21,7 +20,6 @@ enum Hardware {
         print("Press Globe key to: \(globe)")
     }
 
-    /// How fast the mic opens, cold start included. Nothing is kept: samples are only counted and measured.
     static func microphone(_ args: [String]) async throws {
         guard MicrophoneSource.authorization == .granted || args.contains("--ask") else {
             print("This opens the real microphone. Run it with --ask to allow the system prompt.")
@@ -57,7 +55,6 @@ enum Hardware {
         }
     }
 
-    /// The whole feature with a real microphone and real keys, without the app around it.
     static func dictate(_ args: [String]) async throws {
         if MicrophoneSource.authorization == .notAsked { _ = await MicrophoneSource.requestAccess() }
         let source = MicrophoneSource()
@@ -138,7 +135,6 @@ enum Hardware {
         await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
     }
 
-    /// Posts modifier events and checks the tap hears the right key. They're quick and carry no letter.
     static func keysSelfTest() async throws {
         guard KeyHoldMonitor.hasPermission else {
             print("Needs Input Monitoring.")
@@ -153,7 +149,6 @@ enum Hardware {
         monitor.onCancel = { log("cancel \($0.rawValue)") }
         try monitor.start(keys: [.fn, .rightOption, .rightCommand, .rightControl])
 
-        // Device bits tell left from right, the same as a real keyboard reports them.
         let cases: [(name: String, code: CGKeyCode, flags: UInt64, expected: String?)] = [
             ("right Option", 61, CGEventFlags.maskAlternate.rawValue | 0x40, "rightOption"),
             ("left Option", 58, CGEventFlags.maskAlternate.rawValue | 0x20, nil),
@@ -187,8 +182,6 @@ enum Hardware {
         print(failures == 0 ? "All keys told apart correctly." : "\(failures) failed.")
     }
 
-    /// Real insertion into a real app, on a temp file that gets deleted. Refuses to send a keystroke
-    /// unless TextEdit is in front, so a stray paste can never land in something else.
     static func insertTest() async throws {
         guard TextInserter.hasPermission else {
             print("Needs Accessibility.")
@@ -256,18 +249,15 @@ enum Hardware {
         let pasteboard = NSPasteboard.general
         let clipboardCount = pasteboard.changeCount
 
-        // Accessibility, into an empty document.
         try await inserter.insert("The build is green.")
         var value = Self.fieldValue(of: app) ?? ""
         check("Accessibility inserted the text", value == "The build is green.", "\(inserter.lastMethod.rawValue) in \(Int(inserter.lastSeconds * 1000)) ms: \(value)")
         check("Clipboard untouched by Accessibility", pasteboard.changeCount == clipboardCount)
 
-        // Continuing a sentence: a space, and no capital in the middle.
         try await inserter.insert("Then we ship.")
         value = Self.fieldValue(of: app) ?? ""
         check("Next sentence gets a space", value == "The build is green. Then we ship.", value)
 
-        // Replacing a selection, the way typing would.
         guard await inFront() else {
             print("TextEdit lost the front, so the rest was skipped.")
             return
@@ -277,7 +267,6 @@ enum Hardware {
         value = Self.fieldValue(of: app) ?? ""
         check("Replaces the selection", value.hasPrefix("The build is ready."), value)
 
-        // Undo has to take dictated text back out, or a bad take can't be fixed.
         guard await inFront() else {
             print("TextEdit lost the front, so the rest was skipped.")
             return
@@ -287,7 +276,6 @@ enum Hardware {
         let undone = Self.fieldValue(of: app) ?? ""
         check("Command-Z undoes an Accessibility insert", undone.hasPrefix("The build is green."), undone)
 
-        // Paste, keeping whatever was on the clipboard.
         guard await inFront() else {
             print("TextEdit lost the front, so the paste test was skipped.")
             return
@@ -321,7 +309,6 @@ enum Hardware {
         guard AXUIElementCopyAttributeValue(element, kAXFocusedUIElementAttribute as CFString, &focused) == .success, let focused else { return }
         var range = CFRange(location: location, length: length)
         guard let value = AXValueCreate(.cfRange, &range) else { return }
-        // swiftlint:disable:next force_cast
         AXUIElementSetAttributeValue(focused as! AXUIElement, kAXSelectedTextRangeAttribute as CFString, value)
     }
 
@@ -340,12 +327,10 @@ enum Hardware {
         var focused: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXFocusedUIElementAttribute as CFString, &focused) == .success, let focused else { return nil }
         var value: CFTypeRef?
-        // swiftlint:disable:next force_cast
         guard AXUIElementCopyAttributeValue(focused as! AXUIElement, kAXValueAttribute as CFString, &value) == .success else { return nil }
         return value as? String
     }
 
-    /// Closes the test window. Its temp file autosaves, so TextEdit doesn't ask anything.
     private static func closeWindows(of app: NSRunningApplication) {
         let element = AXUIElementCreateApplication(app.processIdentifier)
         var windows: CFTypeRef?
@@ -355,7 +340,6 @@ enum Hardware {
         for window in list {
             var close: CFTypeRef?
             if AXUIElementCopyAttributeValue(window, kAXCloseButtonAttribute as CFString, &close) == .success, let close {
-                // swiftlint:disable:next force_cast
                 AXUIElementPerformAction(close as! AXUIElement, kAXPressAction as CFString)
             }
         }

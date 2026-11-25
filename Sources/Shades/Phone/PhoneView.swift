@@ -1,23 +1,16 @@
 import Foundation
 import ShadesCore
 
-/// Where a phone is in Messages, and where words typed there go. The phone only ever names a place by its key, so
-/// what it can reach is worked out here from the book, the same way the window works it out. A phone has no room for
-/// a thread's pane, so a thread is a page of its own, as in Slack's app.
 struct PhonePlace: Equatable {
-    /// `nil` is the list of places.
     var selection: ChannelSelection?
     var target: MessageTarget?
     var key: String
-    /// A kitten's backlog, by the kitten's ID, which is a page of its own, read only.
     var backlog: String?
 
     static let home = "home"
 
-    /// An unknown key is the list of places, and a key for an inbox row that's gone is Activity.
     init(_ key: String, in book: ChannelBook) {
         if key.hasPrefix("b:") {
-            // As with the list of places, a kitten that's only planned isn't there.
             guard let kitten = Self.unescape(key.dropFirst(2)), book.kitten(kitten)?.planned == false else {
                 self.init(selection: nil, in: book)
                 return
@@ -32,7 +25,6 @@ struct PhonePlace: Equatable {
                 return
             }
             let title = book.title(ofThread: entry.threadID)
-            // As with Reply on a report in the window: it goes to the report's thread wherever that is, and stops it asking.
             let target = MessageTarget.thread(id: entry.threadID, title: title.isEmpty ? entry.threadTitle : title, report: entry.id)
             self.init(selection: .thread(entry.threadID, in: .activity), target: target, key: key)
             return
@@ -41,11 +33,7 @@ struct PhonePlace: Equatable {
             self.init(selection: nil, in: book)
             return
         }
-        // A new topic carries on in its own thread once T3 has one.
         if let thread = selection.thread, let started = book.started[thread] { selection.thread = started }
-        // T3 lists every thread, and the window's own rules would let you write in any of them. What keeps it to the
-        // ones it shows is that it only leads to those, so a phone gets only those too.
-        // Words meant for it go nowhere, rather than into the place's own box.
         if let thread = selection.thread, !Self.leadsTo(thread, from: selection.place, in: book) {
             self.init(selection: selection.closed, target: nil, key: Self.key(selection.closed))
             return
@@ -53,8 +41,6 @@ struct PhonePlace: Equatable {
         self.init(selection: selection, in: book)
     }
 
-    /// What you've asked the cat can be about your screen, so it stays on the Mac, all but the cat's own work you've
-    /// chosen to show on your phone with the switch in its pane.
     private static func staysOnMac(_ selection: ChannelSelection, in book: ChannelBook) -> Bool {
         if let thread = selection.thread, book.talks.contains(thread) || book.home(ofThread: thread) == .shades {
             return !book.onPhone.contains(thread)
@@ -67,9 +53,6 @@ struct PhonePlace: Equatable {
         return true
     }
 
-    /// Whether anything the window shows for this place opens this thread beside it: a channel's parents and the
-    /// replies also sent to it, the threads you're in, or in Activity, Type an answer, Reply or Ask, and what's in
-    /// progress that Messages has read.
     static func leadsTo(_ id: String, from place: ChannelPlace, in book: ChannelBook) -> Bool {
         switch place {
         case .channel(.shades):
@@ -92,9 +75,7 @@ struct PhonePlace: Equatable {
         var target = selection.flatMap { selection in
             selection.thread.map { MessageTarget.reply(in: $0, of: book) } ?? MessageTarget.standard(for: selection.place, in: book)
         }
-        // A question is answered from its card, where every part goes at once, so the box doesn't take it.
         if case .question = target { target = nil }
-        // The DM's own box talks to the cat, and that stays on the Mac.
         if selection == .channel(.shades) { target = nil }
         self.init(selection: selection, target: target, key: selection.map(Self.key) ?? Self.home)
     }
@@ -105,14 +86,11 @@ struct PhonePlace: Equatable {
         self.key = key
     }
 
-    /// Where a phone opens a message Search found, if it can see it at all: where the window opens it, or for a thread
-    /// its channel doesn't lead to, Threads. It's the same gate as a key the phone asks for.
     static func opening(_ selection: ChannelSelection, in book: ChannelBook) -> ChannelSelection? {
         let tries = [selection] + (selection.thread.map { [ChannelSelection.thread($0, in: .threads)] } ?? [])
         return tries.first { PhonePlace(key($0), in: book).selection == $0 }
     }
 
-    /// The channel a reply here can also be sent to: the thread's home, as the window's checkbox offers.
     func alsoSendTo(in book: ChannelBook) -> ChannelID? {
         guard case .thread(let id, _, _)? = target, let home = book.home(ofThread: id), home != .shades else { return nil }
         return home
@@ -124,7 +102,6 @@ struct PhonePlace: Equatable {
         return "t:\(escape(thread))@\(place)"
     }
 
-    /// The thread a key asks for, if it asks for one.
     static func thread(in key: String) -> String? {
         selection(key)?.thread
     }
@@ -157,8 +134,6 @@ struct PhonePlace: Equatable {
 
     private static func place(_ key: String) -> ChannelPlace? {
         switch key {
-        // The names before Activity, and #general, which went into the cat's conversation, that a page still open from
-        // then can ask for.
         case "activity", "needs": return .activity
         case "threads": return .threads
         case "shades", "general", "everyone": return .channel(.shades)
@@ -178,44 +153,31 @@ struct PhonePlace: Equatable {
     }
 }
 
-/// What a phone is shown: one place in Messages, worked out on the Mac from the same rows the window shows, so the page
-/// only draws. A phone gets these and never whole threads.
 struct PhoneView: Encodable, Equatable {
     struct Place: Encodable, Equatable {
         var key: String
-        /// As the window's sidebar writes it.
         var title: String
         var group: String?
-        /// What's waiting on you there.
         var count: Int?
         var unread: Bool
-        /// Its kitten, posed for what it's doing, or the cat, as `PhoneCat.key` writes it.
         var cat: String?
-        /// What its kitten is doing, in the words VoiceOver says for the window's sidebar.
         var state: String?
-        /// The window's dot for a kitten that's working or needs you, which a count says in its place.
         var dot: String?
-        /// `activity` or `threads`, for the ones without a cat.
         var icon: String?
     }
 
-    /// A way to another place, such as a kitten's "4 open", which goes to Activity as the window's does.
     struct Link: Encodable, Equatable {
         var label: String
         var open: String
     }
 
-    /// Someone in a reply bar: their cat, or for you, a square in your colour or your picture, as the window draws them.
     struct Face: Encodable, Equatable {
         var cat: String?
         var color: String?
     }
 
-    /// A file or picture on a message: its name, and a small copy of a picture once the Mac has one. A web picture
-    /// that's waiting for you to press Show has its whole address, which is what the page shows before it's fetched.
     struct File: Encodable, Equatable {
         var name: String
-        /// Only ever a JPEG Shades made, as base64.
         var picture: String?
         var web: String?
         var failed: Bool?
@@ -224,15 +186,11 @@ struct PhoneView: Encodable, Equatable {
     struct Box: Encodable, Equatable {
         var label: String
         var placeholder: String
-        /// A new topic that's still starting can't take more yet.
         var ready = true
-        /// A thread's "Also send to #channel".
         var also: String?
-        /// Whether a photo or file can go with your words, which an answer to a question can't.
         var files = true
     }
 
-    /// The latest reply under a thread in Threads.
     struct Reply: Encodable, Equatable {
         var name: String
         var text: String?
@@ -250,11 +208,9 @@ struct PhoneView: Encodable, Equatable {
         var text: String
         var choices: [Choice]
         var words: Bool
-        /// It takes as many of its choices as you pick.
         var several = false
     }
 
-    /// One row, by `kind`, with only the fields that kind uses.
     struct Row: Encodable, Equatable {
         var kind: String
         var id: String?
@@ -264,33 +220,22 @@ struct PhoneView: Encodable, Equatable {
         var text: String?
         var answer: String?
         var footer: String?
-        /// Your bubble's colour, or someone's square where they have no cat. Anyone else's bubble takes its light from
-        /// their cat's jacket.
         var color: String?
-        /// A message that's still coming or on its way, drawn at 55% as the window draws it.
         var faded: Bool?
-        /// Whoever it's from, or what a heading's kitten is doing, as `PhoneCat.key` writes it. Yours have none.
         var cat: String?
-        /// The colour of an issue's dot. `nil` is the soft grey.
         var dot: String?
         var mine: Bool?
         var going: Bool?
         var failure: String?
-        /// Yours, on its way to T3.
         var sending: Bool?
-        /// Yours, which went nowhere and can go again.
         var retry: Bool?
-        /// Milliseconds since 1970.
         var at: Double?
-        /// The key of the place it opens.
         var open: String?
         var clear: String?
         var done: Bool?
         var choices: [Choice]?
         var parts: [Part]?
-        /// Over a reply also sent to a channel: which thread it's in.
         var context: String?
-        /// A thread's reply bar: how many replies, when the last one was, and who replied.
         var replies: Int?
         var lastReply: String?
         var faces: [Face]?
@@ -298,20 +243,15 @@ struct PhoneView: Encodable, Equatable {
         var reply: Reply?
         var more: Int?
         var unread: Bool?
-        /// The files and pictures on a message.
         var files: [File]?
-        /// A message's words as the Mac read them, for the page to build without reading any markdown itself.
         var markup: [Markup.Block]?
-        /// Your reactions on a message T3 has, or `nil` for one that can't take any.
         var reactions: [Choice]?
-        /// Where T3 Code's own page has its thread, for Open in T3.
         var t3: String?
     }
 
     var key: String
     var title: String
     var subtitle: String?
-    /// The kitten whose channel it is, or whose channel a thread is in.
     var cat: String?
     var link: Link?
     var back: String?
@@ -319,22 +259,13 @@ struct PhoneView: Encodable, Equatable {
     var places: [Place]
     var rows: [Row]
     var box: Box?
-    /// On a thread's page, the message Mark unread makes new again: where its New line was, or else its latest from
-    /// someone else.
     var unread: String?
     var cantReachT3: Bool
-    /// Your picture, beside yours and for you in reply bars. Unlike a cat's, it comes only in what a paired phone is
-    /// sent, never from an address of its own.
     var you: String?
-    /// Every reaction there is, for tapping a message.
     var marks = Reaction.allCases.map { Choice(label: $0.emoji, value: $0.rawValue) }
-    /// Where T3 Code's own page has this thread, for Open in T3, as a path the page puts after its own host.
     var t3: String?
-    /// A kitten's channel's "3 in backlog", which opens its backlog.
     var backlog: Link?
 
-    /// `newFrom` is where each thread's New line was when this phone came here, as the window keeps it. `t3` is what
-    /// T3 Code's page calls this Mac, when it's known. `takesFiles` is whether a file could go where the box sends.
     init(_ place: PhonePlace, in book: ChannelBook, now: Date, newFrom: [String: String] = [:], t3 environment: String? = nil, priorities: Priorities = Priorities(), takesFiles: (MessageTarget) -> Bool = { $0.takesFiles }) {
         key = place.key
         places = Self.places(in: book)
@@ -342,7 +273,6 @@ struct PhoneView: Encodable, Equatable {
         let also = place.alsoSendTo(in: book).map { CatWords.alsoSendTo(book.name(of: $0)) }
         box = place.target.map { target in
             var label = CatWords.target(target)
-            // Not by its title, as `title(ofThread:)` says.
             if case .thread(let id, _, let report) = target, book.home(ofThread: id) == .shades {
                 label = CatWords.target(.thread(id: id, title: "", report: report))
             }
@@ -360,7 +290,6 @@ struct PhoneView: Encodable, Equatable {
         }
         guard let selection = place.selection else {
             title = CatWords.appName
-            // The focus, in a quiet line over the places, as the window's sidebar has it.
             subtitle = priorities.focus
             rows = []
             return
@@ -393,8 +322,6 @@ struct PhoneView: Encodable, Equatable {
         }
     }
 
-    /// What's under way, then what's next and what can wait, as the window's sheet has them, each with when you asked
-    /// and your words.
     private static func rows(of backlog: Backlog) -> [Row] {
         Backlog.Level.allCases.flatMap { level -> [Row] in
             let items = backlog.items.filter { $0.level == level }
@@ -406,7 +333,6 @@ struct PhoneView: Encodable, Equatable {
         }
     }
 
-    /// As the window does, a card's thread, and a thread in progress the phone can't open itself, open in T3.
     private static func rows(_ selection: ChannelSelection, in book: ChannelBook, now: Date, newFrom: [String: String], t3 environment: String?) -> [Row] {
         shown(selection, in: book, newFrom: newFrom).map { shown in
             var row = Self.row(shown, at: selection.place, in: book, now: now)
@@ -423,25 +349,20 @@ struct PhoneView: Encodable, Equatable {
         }
     }
 
-    /// Only a kitten's thread. The cat's own work can hold what was on your screen, which T3's page shows whole and a
-    /// phone is never sent.
     private static func t3(_ environment: String, thread: String, in book: ChannelBook) -> String? {
         guard case .kitten? = book.home(ofThread: thread) else { return nil }
-        // JavaScript's encodeURIComponent, which T3's page builds its addresses with.
+        // Outside the repo: T3 Code's page builds its addresses with JavaScript's encodeURIComponent, which leaves these unescaped.
         let plain = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.!~*'()"))
         guard let place = environment.addingPercentEncoding(withAllowedCharacters: plain), let id = thread.addingPercentEncoding(withAllowedCharacters: plain) else { return nil }
         return "/\(place)/\(id)"
     }
 
-    /// The window's rows a phone shows for a place or thread, which are also all that Search on a phone can find.
     static func shown(_ selection: ChannelSelection, in book: ChannelBook, newFrom: [String: String] = [:]) -> [ChannelRow] {
         if let thread = selection.thread { return ChannelRows.thread(thread, in: book, newFrom: newFrom) }
         if selection.place == .channel(.shades) { return shownOnPhone(in: book) }
         return ChannelRows.rows(selection.place, in: book, newFrom: newFrom)
     }
 
-    /// The cat's DM as a phone has it: only the threads you chose to show there, each under the day it started, and
-    /// never your talks with the cat or what you said to it.
     private static func shownOnPhone(in book: ChannelBook) -> [ChannelRow] {
         var rows: [ChannelRow] = []
         var day: ChannelRow?
@@ -491,7 +412,6 @@ struct PhoneView: Encodable, Equatable {
         }
     }
 
-    /// The header's cat: a kitten's channel has its kitten, sitting, as the window's header draws it.
     private static func cat(of channel: ChannelID, in book: ChannelBook) -> String? {
         guard case .kitten(let kitten) = channel, book.kitten(kitten) != nil else { return nil }
         return cat(of: ChannelSpeakerLook(.kitten(kitten), in: book))
@@ -504,8 +424,6 @@ struct PhoneView: Encodable, Equatable {
     private static func message(_ message: ChannelMessage, in book: ChannelBook) -> Row {
         let look = ChannelSpeakerLook(message.speaker, in: book)
         let text = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
-        // A file's name came inside the screen block, and a picture in the folder the cat's work runs in can be a copy
-        // of the screen, so the cat's own work shows only words.
         let files = book.home(ofThread: message.threadID) == .shades ? [] : message.files
         return Row(
             kind: "message",
@@ -565,7 +483,6 @@ struct PhoneView: Encodable, Equatable {
                 let look = ChannelSpeakerLook(latest.speaker, in: book)
                 return Reply(name: look.name, text: latest.text ?? latest.failure, color: look.bubble.map(hex), cat: cat(of: look), at: millis(latest.at))
             }
-            // The cat's own work you haven't shown here, such as in Do Not Disturb's catch-up, is only your words.
             let hidden = digest.channel == .shades && !book.onPhone.contains(digest.threadID)
             return Row(
                 kind: "digest",
@@ -596,7 +513,6 @@ struct PhoneView: Encodable, Equatable {
             )
         case .issue(let thread):
             let details = [CatWords.age(of: thread.updatedAt, now: now), CatWords.status(thread), thread.pullRequest.map(CatWords.pullRequest)]
-            // As in the window, only a thread Messages has read opens here, and the rest open in T3.
             return Row(
                 kind: "issue",
                 title: Self.title(ofThread: thread.id, thread.title, in: book),
@@ -626,7 +542,6 @@ struct PhoneView: Encodable, Equatable {
                 $0.footer = question.form == nil ? CatWords.answerInT3 : nil
             }
         case .report(let entry) where entry.change == nil && entry.ask != nil:
-            // A yes to something the kitten does itself is no more than your own words could already say from here.
             let kitten = book.kitten(of: entry.id)
             let ask = entry.ask!
             let text = CatWords.askRow(ask, decision: ask.readFromWords ? entry.text : nil, by: kitten?.name ?? "it")
@@ -638,7 +553,6 @@ struct PhoneView: Encodable, Equatable {
                     + (ask.readFromWords ? [Choice(label: "Reply", value: "reply")] : [])
             }
         case .report(let entry) where entry.change != nil:
-            // Changing a settings file is new reach, which a phone that's lost could hand anyone, so it's only to read here.
             return card("report", id: entry.id, kitten: book.kitten(of: entry.id), title: entry.threadTitle, text: entry.text, at: entry.at, in: book) {
                 $0.answer = entry.change?.review
                 $0.footer = CatWords.allowChangeOnMac
@@ -659,10 +573,7 @@ struct PhoneView: Encodable, Equatable {
         }
     }
 
-    /// The cat's own work is titled from what was on your screen, such as the app or the router's reading of it, so a
-    /// phone calls it by your words instead. So is a thread Messages can't place yet, which could be the cat's own work.
     static func title(ofThread id: String, _ title: String, in book: ChannelBook) -> String {
-        // A listed thread Messages doesn't show, such as another project's, keeps its title, as it did in #general.
         if book.home(ofThread: id).map({ $0 != .shades }) ?? (book.listed[id] != nil) { return title }
         guard let parent = book.threads[id]?.parent, parent.speaker == .you, let words = parent.text else { return CatWords.shades }
         return ChannelRows.firstWords(of: words)
@@ -693,8 +604,6 @@ struct PhoneView: Encodable, Equatable {
 }
 
 extension PhoneView {
-    /// What goes to a page that was last sent `shown` on the same stream: a row that's just as it was goes as its ID,
-    /// which the page fills in from what it has, so a change in a long thread doesn't send the whole thread again.
     func since(_ shown: PhoneView?) -> PhoneView {
         guard let shown else { return self }
         var before: [String: Row] = [:]
@@ -711,11 +620,8 @@ extension PhoneView {
         return sent
     }
 
-    /// Its JSON, cut into what's around the rows and then each row, so each can be packed on its own. Put back
-    /// together, it's the JSON of the whole. Nothing but the key itself can read `"rows":[]` unescaped.
     func parts() -> [Data] {
         let encoder = JSONEncoder()
-        // In the same order each time, so two views that say the same thing pack the same.
         encoder.outputFormatting = .sortedKeys
         var bare = self
         bare.rows = []
@@ -729,9 +635,6 @@ extension PhoneView {
         return parts + [Data(whole[(at.upperBound - 1)...])]
     }
 
-    /// A row in pieces: one person's words, and each field that can hold someone else's beside them on its own, such
-    /// as Threads' latest reply under your message, an answer you gave on a kitten's card, or a thread's title, which
-    /// can be your words, over a kitten's reply.
     private static func pieces(of row: Row, _ encoder: JSONEncoder) -> [Data]? {
         var rest = row
         (rest.title, rest.answer, rest.reply, rest.context) = (nil, nil, nil, nil)

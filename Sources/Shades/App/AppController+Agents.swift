@@ -1,7 +1,6 @@
 import Foundation
 import ShadesCore
 
-/// Keeps up with the agents: what they're doing, how the cat feels about it, and what they're asking.
 extension AppController {
     func connect() async {
         do {
@@ -24,8 +23,6 @@ extension AppController {
             }
         }
         threadListArrived = true
-        // Being the router's is only remembered while the app runs, and its folder says so after a restart too, so a
-        // talk with the cat never counts as work, a session to pass words to, or a kitten's.
         for thread in threads where isWithShades(thread) { watch.markQuick(thread.id) }
         let asked = Set(threads.compactMap(\.pendingQuestion?.id))
         answeredQuestions.formIntersection(asked)
@@ -59,8 +56,6 @@ extension AppController {
         fileOwedReports()
     }
 
-    /// A live test isn't for you, so nothing about it reaches the inbox or the bubble. Probes follow their own
-    /// streams, and a copy trying a flow out keeps seeing them, so a test can still see its own result.
     private func hideTestThreads(_ threads: [AgentThread]) {
         guard hidesTestThreads else { return }
         for thread in threads where thread.isLiveTest {
@@ -73,7 +68,6 @@ extension AppController {
         KittenBoard.statuses(kittens: loadKittens(), threads: latestThreads.filter { !isWithShades($0) })
     }
 
-    /// Normally there's just Shades. This shows everyone else, and how they're doing.
     func kittensPressed() {
         if stage.isKittensVisible {
             stage.hideKittens()
@@ -82,14 +76,11 @@ extension AppController {
         }
     }
 
-    /// A kitten in the kittens view opens what most needs looking at, where Open goes, or its channel if it's had
-    /// nothing to do yet.
     func kittenPressed(_ status: KittenStatus) {
         guard let threadID = status.threadID else { return channelsPressed(selecting: .channel(.of(status.kitten))) }
         showInMessages(threadID)
     }
 
-    /// Project names are the words speech recognition most often gets wrong.
     func updateVocabulary(_ threads: [AgentThread]) {
         let words = Array(Set(settings.vocabulary + projectNames + threads.compactMap(\.projectTitle))).sorted()
         guard words != vocabulary else { return }
@@ -106,9 +97,7 @@ extension AppController {
     func approvalsChanged(hadApprovals: Bool) {
         channels.refresh()
         notifyNeedsYou()
-        // Every one asks, so Do Not Disturb keeps them all, however many came at once.
         let comes = approvals.pending.map { mayPopUp(.approval($0.id)) }.contains(true)
-        // Lockdown's kitten's first comes up even behind others it's holding, as if it were the only one.
         let hadApprovals = hadApprovals && (hadAskable || askable.isEmpty)
         hadAskable = !askable.isEmpty
         if approvals.isEmpty {
@@ -119,11 +108,9 @@ extension AppController {
                 catFollowsReply()
             }
         } else if !hadApprovals, !comes {
-            // They wait in Messages, as if you'd pressed Esc, and clicking the cat still brings them up.
             approvalsOnShow = true
             approvalsHidden = true
         } else if !hadApprovals {
-            // It comes to you first, then asks.
             approvalsOnShow = false
             approvalsHidden = false
             catIsAway = true

@@ -3,8 +3,6 @@ import JavaScriptCore
 import ShadesCore
 import XCTest
 
-/// What a phone can ask for, and what it's shown. A phone only names places and IDs, so every test here is about what
-/// the book allows, never what the phone says.
 @MainActor
 final class PhoneTests: XCTestCase {
     private let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
@@ -17,7 +15,6 @@ final class PhoneTests: XCTestCase {
 
     private func book(waiting: Waiting = Waiting(), sentBetween: Bool = false, also: [AgentThread] = []) -> ChannelBook {
         var transcripts = ["a": [Exchange(id: "e1", asker: .you, askedAt: noon, ask: "How's it going?", reply: "Fine.", repliedAt: noon)]]
-        // A thread of Pepper's that Steve started, which is a thread in Pepper's channel with Steve's ask as its parent.
         if sentBetween { transcripts["p"] = [Exchange(id: "e2", asker: .agent(threadID: "a"), askedAt: noon, ask: "Numbers?", reply: "Here.", repliedAt: noon)] }
         for thread in also { transcripts[thread.id] = [Exchange(id: "e-\(thread.id)", asker: .you, askedAt: noon, ask: "Also", reply: "Yes.", repliedAt: noon)] }
         return ChannelBook.build(
@@ -34,8 +31,6 @@ final class PhoneTests: XCTestCase {
     private func ask(_ act: String, key: String? = nil, text: String? = nil, id: String? = nil, value: String? = nil, answers: [[String]]? = nil, kind: String? = nil) -> PhoneAsk {
         PhoneAsk(act: act, key: key, text: text, id: id, value: value, answers: answers, kind: kind)
     }
-
-    // MARK: - Places
 
     func testEveryPlaceComesBackFromItsKey() {
         let book = book(sentBetween: true, also: [thread("a/b@c", of: pepper)])
@@ -67,8 +62,6 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(place.selection, .thread("a", in: .channel(.of(steve))))
         XCTAssertEqual(place.key, PhonePlace.key(.thread("a", in: .channel(.of(steve)))), "so the phone moves along too")
     }
-
-    // MARK: - Sending
 
     func testWordsGoWhereTheWindowWouldSendThem() throws {
         let book = book()
@@ -104,11 +97,9 @@ final class PhoneTests: XCTestCase {
     }
 
     func testAPhoneOnlyReachesAThreadTheWindowLeadsTo() {
-        // Some other project of yours: no kitten's, and not Shades' work. T3 lists it all the same.
         let other = AgentThread(id: "other", title: "Deploy billing", projectTitle: "billing", status: .completed, model: "m", updatedAt: noon, projectPath: "/elsewhere/billing")
         var working = thread("w", of: pepper)
         working.status = .running
-        // In progress too, but not read yet, so the window opens it in T3.
         var unread = thread("u", of: pepper)
         unread.status = .running
         let book = ChannelBook.build(
@@ -158,8 +149,6 @@ final class PhoneTests: XCTestCase {
     }
 
     func testAPhoneCantWriteInAThreadActivityOnlyOpensInT3() {
-        // Another project of yours that Messages hasn't read. Its approval and a question with only choices each have
-        // just Open in T3 in the window, so nothing there leads a box to it.
         var other = AgentThread(id: "other", title: "Deploy billing", projectTitle: "billing", status: .running, model: "m", updatedAt: noon, projectPath: "/elsewhere/billing")
         other.status = .waitingForApproval
         let approval = ApprovalRequest(id: "ap", threadID: "other", threadTitle: "Deploy billing", kind: .command, summary: "Run: deploy", createdAt: noon)
@@ -182,8 +171,6 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(PhonePlace(PhonePlace.reply(to: report), in: book).selection, .thread("p", in: .activity))
         XCTAssertNil(ask("send", key: "r:gone", text: "Yes").action(in: book) { "x" }, "a report that's gone is Activity, which has no box")
     }
-
-    // MARK: - Approvals, questions and the inbox
 
     func testOnlyAnApprovalThatsWaitingCanBeAnswered() throws {
         let command = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
@@ -229,7 +216,6 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(ask("answer", id: "q", answers: [["1", "Fri"]]).action(in: book) { "x" }, "only its own choices")
     }
 
-    /// Changing a settings file is new reach, so a phone shows the card to read and leaves Allow and Deny to the Mac.
     func testAChangeAKittenAskedForIsOnlyToReadOnAPhone() throws {
         var request = ChangeRequest(file: "/k/steve/.claude/settings.json", replace: "a", with: "b", why: nil)
         request.review = "I'd allow it."
@@ -247,8 +233,6 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(ask("send", key: PhonePlace.reply(to: change), text: "yes").action(in: book) { "x" }, "nor a reply that would stand in for it")
     }
 
-    /// A yes to something a kitten does itself is no more than your words could already say from a phone, so the phone
-    /// answers an ask, and never a settings change.
     func testAnAskIsAnsweredFromAPhoneAndASettingsChangeIsnt() throws {
         let written = InboxEntry(id: "a1", kind: .decision, text: "Asks for your yes to: Send it.", threadID: "a", threadTitle: "Work", at: noon, ask: AskRequest(ask: "Send it.", review: "Fine.", readFromWords: false))
         let read = InboxEntry(id: "a2", kind: .decision, text: "Merge it?", threadID: "a", threadTitle: "Work", at: noon, ask: AskRequest(ask: "Merge pull request 12.", readFromWords: true))
@@ -333,7 +317,6 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(hello.retry)
     }
 
-    /// A reaction is only a mark on a message T3 has, from the fixed few, and the page shows the ones it has.
     func testAPhoneReactsOnlyWithAMarkOnAMessageT3Has() throws {
         let sending = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Hello?", at: noon, threadID: "", threadTitle: "", isSending: true)
         let book = ChannelBook.build(
@@ -362,8 +345,6 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(ask("older", key: PhonePlace.key(.channel(.shades))).action(in: book) { "x" })
     }
 
-    // MARK: - The door
-
     func testOnlyTheCodeShowingPairsAndOnlyOnce() throws {
         let keys = MemoryPhoneKeys()
         let door = PhoneDoor(keys: keys)
@@ -389,7 +370,6 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(door.pair(pairing.code, now: noon.addingTimeInterval(601)), "and ten minutes on it's gone too")
     }
 
-    /// A phone's pure black, with words in white at the 100, 80 and 62% an Opal iPhone's widgets use, and Opal's light.
     func testThePageIsOpalOnAPhonesBlack() {
         for line in ["color-scheme: dark", "--page: #000000", "--white: #ffffff", "--body: rgba(255, 255, 255, 0.8)", "--secondary: rgba(255, 255, 255, 0.62)",
                      "--primary: #7458e8", "--lilac: #b9a6ff", "--selected: #1e1830"] {
@@ -413,7 +393,6 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(twice.sorted(), [], "such as a pull request's chip and what's attached over the box")
     }
 
-    /// Each rule in the page's style, by its selector without the comment over it.
     private static func rules() throws -> [(selector: String, body: String)] {
         let style = PhonePage.style
         return try NSRegularExpression(pattern: "([^{}]+)\\{([^{}]*)\\}").matches(in: style, range: NSRange(style.startIndex..., in: style)).map {
@@ -422,7 +401,6 @@ final class PhoneTests: XCTestCase {
         }
     }
 
-    /// Opal's colours as the page has them, each white at an opacity as it comes to on what it's written on.
     private static func colors() throws -> [String: PageColor] {
         let sheet = PhonePage.colors
         let pattern = try NSRegularExpression(pattern: "--([a-z-]+): (#[0-9a-f]{6}|rgba\\([^)]*\\))")
@@ -433,7 +411,6 @@ final class PhoneTests: XCTestCase {
         return colors
     }
 
-    /// A colour as the page writes it: solid, or see-through over whatever it's on.
     private struct PageColor {
         var color: UInt32
         var alpha: Double
@@ -454,8 +431,6 @@ final class PhoneTests: XCTestCase {
         func on(_ under: UInt32) -> UInt32 { Opal.mix(under, color, alpha) }
     }
 
-    /// Each rule that colours words, with the colour they come to and the one they're on: the rule's own background,
-    /// or the page.
     private static func words(in colors: [String: PageColor]) throws -> [(rule: String, words: UInt32, under: UInt32)] {
         func value(_ property: String, in body: String) -> PageColor? {
             guard let found = body.range(of: "(?<![-\\w])\(property): [^;}]+", options: .regularExpression) else { return nil }
@@ -474,8 +449,6 @@ final class PhoneTests: XCTestCase {
     private func request(key: String) -> PhoneServer.Request {
         PhoneServer.Request(method: "GET", path: "/events", query: [:], headers: ["authorization": key], body: Data())
     }
-
-    // MARK: - What it shows
 
     func testThePhoneSeesWhatTheWindowShows() throws {
         let command = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Steve Pawsniak: Work", kind: .command, summary: "Run: ls", createdAt: noon)
@@ -512,8 +485,6 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(thread.backTitle, "Steve Pawsniak")
     }
 
-    /// The Mac says where a file could go, by what sending would decide, so + only shows where a photo would go
-    /// rather than going up first and only then failing.
     func testTheBoxTakesAFileOnlyWhereTheMacSaysOneWouldGo() {
         let book = book()
         let thread = PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book)
@@ -567,8 +538,6 @@ final class PhoneTests: XCTestCase {
     }
 }
 
-// MARK: - Talking to the cat
-
 extension PhoneTests {
     func testWhatYouAskedTheCatStaysOnTheMac() {
         let book = book()
@@ -578,8 +547,6 @@ extension PhoneTests {
         XCTAssertNil(PhonePlace("shades", in: book).selection)
     }
 }
-
-// MARK: - The window's own cats, and the rest of its layout
 
 extension PhoneTests {
     private func cat(_ pose: PhoneCat.Pose, _ kitten: Kitten) -> String {
@@ -611,7 +578,6 @@ extension PhoneTests {
         XCTAssertEqual(places.map(\.cat), [nil, nil, cat(.alert, steve), cat(.work, pepper)])
         XCTAssertEqual(places.map(\.dot), [nil, nil, Opal.hex(Opal.error), Opal.hex(Opal.lilac)], "needs you, then working")
 
-        // The cat shows first among the kittens once you've shown some of its work here, on its own tile, as in the window.
         let fix = AgentThread(id: "fix", title: "Fix: the total", projectTitle: nil, status: .completed, model: "m", updatedAt: noon)
         let shown = ChannelBook.build(kittens: [steve, pepper, cali], threads: [fix, waiting], transcripts: ["fix": [Exchange(id: "f", asker: .you, askedAt: noon, ask: "Fix the total", reply: "Fixed.", repliedAt: noon)]], isReading: false, unreadable: 0, cantReachT3: false, catsWork: ["fix"], onPhone: ["fix"])
         let withCat = PhoneView(PhonePlace("home", in: shown), in: shown, now: noon).places
@@ -624,8 +590,6 @@ extension PhoneTests {
         XCTAssertEqual(PhoneView(PhonePlace("home", in: idle), in: idle, now: noon).places.last?.cat, cat(.sleep, steve), "an idle kitten sleeps")
     }
 
-    /// Asked for on the phone as well as in the window: the focus over the places, and each kitten's backlog from its
-    /// channel's header, to read only.
     func testThePhoneHasTheFocusAndEachKittensBacklogToRead() {
         let book = book()
         let steves = Backlog(reading: "## Doing\n- 2026-11-12 · Tidy the footer · \"the footer is a mess\" · thread a\n## Next\n- A dark pricing page\n")
@@ -656,8 +620,6 @@ extension PhoneTests {
         XCTAssertNil(PhonePlace(PhonePlace.backlog(of: steve.id), in: book).selection)
     }
 
-    /// What the stream packs a part at a time is, put back together, the whole view, with each field that can hold
-    /// someone else's words beside yours in a part of its own.
     func testAViewsPartsPutTogetherAreTheWholeViewWithTheLatestReplyApart() throws {
         let book = book()
         let view = PhoneView(PhonePlace("threads", in: book), in: book, now: noon)
@@ -672,8 +634,6 @@ extension PhoneTests {
         XCTAssertFalse(texts.contains { $0.contains("How's it going?") && $0.contains("Fine.") }, "never in the same part as your words")
     }
 
-    /// T3 Code's own page shows a thread whole, so the phone offers it only where a kitten's thread is, never for the
-    /// cat's own work, which can hold what was on your screen.
     func testOpenInT3IsOnlyForAKittensThreadAndItsCards() {
         let fix = AgentThread(id: "fix", title: "Fix: the total", projectTitle: nil, status: .completed, model: "m", updatedAt: noon)
         let steves = ApprovalRequest(id: "ap-a", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
@@ -773,8 +733,6 @@ extension PhoneTests {
         XCTAssertEqual(manifest["short_name"] as? String, "Kitty Litter")
     }
 
-    /// What review found: a phone that lost its pairing kept what Search had found on the pairing screen, and a thread
-    /// that finished behind Search's results was marked seen.
     func testSearchLeavesNothingBehindAndCoveringAThreadDoesntMarkItSeen() throws {
         let script = PhonePage.script
         let pairing = try XCTUnwrap(script.range(of: "function pairing() {").map { String(script[$0.upperBound...].prefix(600)) })
@@ -862,11 +820,7 @@ extension PhoneTests {
     }
 }
 
-// MARK: - Errors, the link sheet and questions
-
 extension PhoneTests {
-    /// A conversation is read from its bottom, so anything above it is out of sight. An error goes at the bottom of the
-    /// header, which stays at the top of the screen.
     func testAnErrorShowsInTheHeaderWhereverYouAreAndIsReadOut() throws {
         let html = PhonePage.html
         let start = try XCTUnwrap(html.range(of: #"<header id="top">"#))
@@ -877,8 +831,6 @@ extension PhoneTests {
         XCTAssertFalse(PhonePage.script.contains("'banner', "), "nor with what pairing hides")
     }
 
-    /// What the helper reported: everything the Mac sent took away whatever the page had said, such as a file being
-    /// too big, before you'd seen it. What comes in by itself only shows the Mac can be reached.
     func testOnlyWhatYouDoTakesAnErrorAway() throws {
         let page = try Self.page(["banner", "reached"])
         page.evaluateScript("let writes = 0, shown = ''; const strip = { get textContent() { return shown; }, set textContent(text) { writes += 1; shown = text; } }; const $ = () => strip;")
@@ -892,8 +844,6 @@ extension PhoneTests {
         XCTAssertTrue(PhonePage.script.contains("if (quiet) reached(); else banner('');"), "and what the page marks seen by itself")
     }
 
-    /// The sheet a link shows is a real one: over a dimmed page that can't be reached until it's gone, which Escape puts
-    /// away, with the keyboard on Cancel, never on Open, so a held Enter can't open what you haven't read.
     func testALinksSheetIsModalOverADimmedPageWithTheKeyboardOnCancel() throws {
         let html = PhonePage.html
         XCTAssertTrue(html.contains(#"<dialog id="linksheet" class="sheet" aria-labelledby="linktitle">"#))
@@ -905,7 +855,6 @@ extension PhoneTests {
         XCTAssertTrue(PhonePage.script.contains("if (event.key === 'Enter') { event.preventDefault(); ask(part.link); }"), "the Enter that shows it goes no further")
     }
 
-    /// A question's text is its first part's, so the card says it once, numbered, as the window's card does.
     func testAQuestionCardAsksEachPartOnce() throws {
         let font = AnswerForm.Part(key: "font", text: "Which font?", options: ["Silkscreen", "System"], values: ["s", "y"], takesOwnWords: false)
         let pages = AnswerForm.Part(key: "pages", text: "Which pages?", options: ["Home", "Blog"], values: ["h", "b"], takesOwnWords: false, picksSeveral: true)
@@ -925,8 +874,6 @@ extension PhoneTests {
         XCTAssertEqual(said["t3"]?.filter { $0.contains("Which") }, ["Which font?"], "and one answered in T3 still says it")
     }
 
-    /// The page's `words` and its functions with these names, with just enough of a document to build nodes and read
-    /// back what they say.
     private static func page(_ names: [String]) throws -> JSContext {
         let script = PhonePage.script
         func cut(from start: String, to end: String) throws -> String {
@@ -950,11 +897,7 @@ extension PhoneTests {
     }
 }
 
-// MARK: - Size, labels and reach
-
 extension PhoneTests {
-    /// The page's words grow with the phone's own text size, and with the Mac's on top of it, so none is written in
-    /// pixels. The Mac's grows them as much as the window's 13 points grow.
     func testThePagesWordsGrowWithThePhonesTextSizeAndTheMacs() throws {
         let style = PhonePage.style
         let fixed = try NSRegularExpression(pattern: "font(-size)?: [\\d.]+px").matches(in: style, range: NSRange(style.startIndex..., in: style))
@@ -966,8 +909,6 @@ extension PhoneTests {
         XCTAssertTrue(PhonePage.size(.larger).contains("--size: calc(100% * 17 / 13)"))
     }
 
-    /// Apple's 44 points for anything you tap, so a small one such as Search or Try again isn't missed. A reaction's
-    /// pill is drawn smaller, and reaches past itself.
     func testEveryButtonIsBigEnoughToTap() throws {
         let rules = try Self.rules()
         XCTAssertTrue(rules.contains { $0.selector == "button" && $0.body.contains("min-width: 44px; min-height: 44px") })
@@ -976,15 +917,12 @@ extension PhoneTests {
         XCTAssertTrue(rules.contains { $0.selector == ".reactions button::after" && $0.body.contains("inset: -6px 0") })
     }
 
-    /// Only a cat and a button you can't press are ever see-through. Faded words, such as a message on its way at 55%,
-    /// read at little over 2:1.
     func testNothingThePageSaysIsSeeThrough() throws {
         for rule in try Self.rules() where rule.body.contains("opacity:") {
             XCTAssertTrue(rule.selector.hasSuffix(" .cat") || rule.selector.contains(":disabled"), rule.selector)
         }
     }
 
-    /// A message still coming, or on its way, is drawn at 55% as in the window, with secondary words that still read.
     func testAMessageOnItsWayIsPalerInAColourItsWordsReadOn() throws {
         func said(_ speaker: Speaker, _ id: String, going: Bool = false, sending: Bool = false) -> SentMessage {
             SentMessage(channel: .of(steve), message: ChannelMessage(exchangeID: id, kind: speaker == .you ? .ask : .reply, speaker: speaker, text: "Words", at: noon, threadID: "", threadTitle: "", isStillGoing: going, isSending: sending))
@@ -1004,8 +942,6 @@ extension PhoneTests {
         XCTAssertGreaterThanOrEqual(Opal.contrast(secondary.on(Opal.cardTop), Opal.cardTop), 4.5, "and on a lit bubble's black glass")
     }
 
-    /// What VoiceOver hears for each place is what it hears in the window's sidebar: its name, what its kitten is doing
-    /// and what's waiting. A count says it needs you, so as in the sidebar the dot shows only without one.
     func testEachPlaceSaysWhatItsKittenIsDoingAndACountTakesTheDotsPlace() throws {
         let cali = Kitten(name: "Cali", role: "Scheduling", covers: "", folder: "/k/cali", planned: true)
         var working = thread("p", of: pepper)
@@ -1027,7 +963,6 @@ extension PhoneTests {
         XCTAssertEqual(heard, ["Steve Pawsniak, Needs you, 1 waiting", "Pepper, Working"])
     }
 
-    /// Tapping what a message said offers its reactions, which a keyboard and VoiceOver can't, so React does the same.
     func testAKeyboardOrVoiceOverCanReactToo() {
         XCTAssertTrue(PhonePage.script.contains("node.append(button(words.react, () => react(item), 'react'));"))
         XCTAssertTrue(PhonePage.script.contains("$('marks').firstChild.focus();"), "and the keyboard goes to the marks it offers")
@@ -1035,15 +970,11 @@ extension PhoneTests {
     }
 }
 
-// MARK: - Opal, the way an iPhone does it
-
 extension PhoneTests {
     private static func ruleBodies() throws -> [String: String] {
         Dictionary(try rules().map { ($0.selector, $0.body) }, uniquingKeysWith: { first, _ in first })
     }
 
-    /// An iPhone's large title: 32 points, bold and white at the top of each page. Once it's scrolled up under the bar,
-    /// the bar takes it, small, on its glass.
     func testEachPageHasALargeTitleThatFoldsIntoTheBar() throws {
         let rules = try Self.ruleBodies()
         XCTAssertEqual(rules["#title"]?.contains("color: var(--white); font-size: calc(32em / 17); font-weight: 700"), true)
@@ -1061,8 +992,6 @@ extension PhoneTests {
         XCTAssertEqual(rules["#top.collapsed #bartitle"]?.contains("visibility: visible"), true)
     }
 
-    /// Search has the bar while it's open, with Cancel beside its field, as on an iPhone, and going anywhere, Back
-    /// included, puts it away. Nothing of the page you left stays in the header while the next one comes.
     func testSearchHasTheBarAndGoingAnywherePutsItAway() throws {
         let html = PhonePage.html
         let form = try XCTUnwrap(html.range(of: #"<form id="search" hidden>"#))
@@ -1084,8 +1013,6 @@ extension PhoneTests {
         XCTAssertEqual(page.evaluateScript("['back', 'headcat', 'link', 'unread'].every((id) => $(id).hidden)")?.toBool(), true, "and the old buttons")
     }
 
-    /// The box is iMessage's: one + for a photo or a file, which on an iPhone offers the camera too, and the arrow inside
-    /// the field, armed only once there's something to send. Return makes a new line, as its key says.
     func testTheBoxIsIMessagesAndSendIsArmedOnlyWithSomethingToSend() throws {
         let html = PhonePage.html
         XCTAssertTrue(html.contains(#"<textarea id="words" rows="1"></textarea>"#), "no Send on a key that only makes a new line")
@@ -1107,8 +1034,6 @@ extension PhoneTests {
         XCTAssertEqual(page.evaluateScript("view.box.ready = false; armed()")?.toBool(), false, "a new thread that's still starting")
     }
 
-    /// Reactions come up in a sheet from the foot, as Slack's do, so nothing on the page moves and nothing sits over
-    /// the message. Every sheet has 24-point corners, the link's included.
     func testReactionsComeUpInASheetSoNothingOnThePageMoves() throws {
         XCTAssertTrue(PhonePage.html.contains(#"<dialog id="reactsheet" class="sheet" aria-label="React">"#))
         let script = PhonePage.script
@@ -1120,8 +1045,6 @@ extension PhoneTests {
         XCTAssertEqual(try Self.ruleBodies()[".sheet[open]"]?.contains("border-radius: 24px"), true)
     }
 
-    /// A kitten's message is lit at its edge in its jacket's colour, as the window draws it, with body words on black
-    /// glass, never dark words on a fill. Yours stays filled in your colour. The stylesheet alone says how each looks.
     func testAKittensMessageIsLitAtItsEdgeAndYoursIsFilled() throws {
         let page = try Self.page(["el", "button", "lit", "message"])
         page.evaluateScript("""
@@ -1140,8 +1063,6 @@ extension PhoneTests {
         XCTAssertFalse(PhonePage.script.contains("bubble.style.color"), "and never words of its own")
     }
 
-    /// Every place is on a Rimlight tile, as an Opal Dock icon: a kitten's in its own light, and the rest drifting teal
-    /// to pink down the list.
     func testEachPlaceIsOnATileInItsKittensLight() throws {
         let book = ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
         let places = PhoneView(PhonePlace("home", in: book), in: book, now: noon).places
@@ -1153,7 +1074,6 @@ extension PhoneTests {
         XCTAssertEqual(tiles, ["tile hsl(172 100% 68%)", "tile hsl(344 100% 68%)", jacket(steve), jacket(pepper)])
     }
 
-    /// Allow is the one primary on an approval's card, as on the cat's own, and the card is lit in its kitten's light.
     func testAllowIsTheOnePrimaryOnAnApprovalsCard() throws {
         let command = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
         let book = book(waiting: Waiting(approvals: [command], owners: ["ap": steve.id]))
@@ -1165,9 +1085,6 @@ extension PhoneTests {
         XCTAssertEqual(page.evaluateScript("node.style.props['--light']")?.toString(), Opal.hex(ChannelSpeakerLook.color(of: steve)!))
     }
 
-    /// A picture comes in after the page is drawn, so opening a conversation with one in it landed above its newest
-    /// message, behind the box. If you were at the foot, the picture keeps you there, as iMessage does, and it never
-    /// pulls you down from where you'd scrolled to.
     func testAPictureThatComesInLateKeepsAConversationAtItsFoot() throws {
         let page = try Self.page(["el", "button", "lit", "message", "settle"])
         page.evaluateScript("""
@@ -1199,14 +1116,12 @@ extension PhoneTests {
         XCTAssertEqual(foot.evaluateScript("atFoot")?.toBool(), true, "and scrolling back down comes back to it")
     }
 
-    /// Your square in a reply bar has an edge, as in the window, since your colour is too close to the phone's black.
     func testYourSquareHasAnEdgeOnThePhonesBlack() throws {
         XCTAssertEqual(try Self.ruleBodies()[".face"]?.contains("box-shadow: inset 0 0 0 1px var(--dim)"), true)
         XCTAssertGreaterThanOrEqual(Opal.contrast(Opal.dim, 0), 3, "the 3:1 a shape needs")
         XCTAssertLessThan(Opal.contrast(Opal.selected, 0), 3, "which your colour alone isn't")
     }
 
-    /// Added to the Home Screen, it opens on pure black under a status bar it draws behind, as an iPhone's own apps do.
     func testOnTheHomeScreenItOpensOnPureBlack() throws {
         let manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(PhonePage.manifest.utf8)) as? [String: Any])
         XCTAssertEqual(manifest["background_color"] as? String, "#000000")
@@ -1215,16 +1130,12 @@ extension PhoneTests {
         XCTAssertTrue(PhonePage.html.contains(#"<meta name="color-scheme" content="dark">"#))
     }
 
-    /// The horizon belongs to the wallpaper alone, so the page draws none: no arc at its foot, and no room kept at the
-    /// end of a list to scroll clear of one.
     func testThePageDrawsNoHorizon() throws {
         let sheet = PhonePage.style + PhonePage.colors
         for part in ["html::after", "--horizon", "image/svg+xml", "#box[hidden]) main"] { XCTAssertFalse(sheet.contains(part), part) }
         XCTAssertEqual(try Self.ruleBodies()["main"]?.contains("24px calc(env(safe-area-inset-left) + 16px)"), true, "a list ends as any page does")
     }
 
-    /// A pull request's state is in Opal's status colours rather than GitHub's fills, and an error sits on Opal's error
-    /// surface rather than a block of rose.
     func testStatesAndErrorsAreInOpalsStatusColours() throws {
         let rules = try Self.ruleBodies()
         XCTAssertEqual(rules[".chip[data-state=open]"]?.contains("color: var(--good)"), true)

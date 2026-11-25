@@ -121,8 +121,6 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(rows.filter { if case .day = $0 { true } else { false } }.count, 1, "a day divider once the replies reach a new day")
     }
 
-    // MARK: - What's new
-
     private func lines(_ rows: [ChannelRow]) -> [ChannelRow] {
         rows.filter { if case .new = $0 { true } else { false } }
     }
@@ -313,8 +311,6 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(CatWords.repliedToThread("Tidy it"), "replied to a thread: Tidy it")
     }
 
-    // MARK: - Messages
-
     private func question(_ id: String = "q", ownWords: Bool = true, form: Bool = true) -> AgentQuestion {
         AgentQuestion(
             id: id, threadID: "a", threadTitle: "Work", text: "Which?", options: ["A", "B"],
@@ -326,7 +322,6 @@ final class ChannelRowsTests: XCTestCase {
         ChannelBook.build(kittens: [steve, pepper, cali], threads: [thread("a")], transcripts: transcripts, isReading: false, unreadable: 0, cantReachT3: false, waiting: waiting)
     }
 
-    /// An @ names a kitten by its name written as one word, the first one that's set up, as a word of its own.
     func testAnAtNamesTheFirstKittenThatsSetUpByItsNameAsOneWord() {
         let named = Kitten(name: "Steve Pawsniak", role: "", covers: "", folder: "/k/sp")
         let built = ChannelBook.build(kittens: [named, pepper, cali], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
@@ -451,8 +446,6 @@ final class ChannelRowsTests: XCTestCase {
         XCTAssertEqual(progress[1], .issue(own))
     }
 }
-
-// MARK: - Talking to the cat
 
 extension ChannelRowsTests {
     func testTheCatsBoxGoesThroughTheRouterAndItsThreadsTakeNothingStraightIn() {

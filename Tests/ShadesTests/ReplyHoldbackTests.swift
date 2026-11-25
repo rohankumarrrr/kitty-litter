@@ -40,7 +40,6 @@ final class ReplyHoldbackTests: XCTestCase {
         XCTAssertEqual(ReplyHoldback().read(fullText: "CORRECTION: 2"), .init(corrections: [2], outcome: .answer("")))
     }
 
-    /// A marker with nothing usable after it meant the rest for somewhere, so it isn't an answer of nothing.
     func testAMarkerThatGoesNowhereBesideACorrectionIsntNothing() {
         for rest in ["KITTEN: Penny", "SEND TO: Work", "HANDOFF:", "REWRITE: "] {
             XCTAssertTrue(ReplyHoldback().read(fullText: "CORRECTION: 1\n\(rest)").wentNowhere, rest)

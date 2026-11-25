@@ -3,8 +3,6 @@ import Foundation
 import ShadesCore
 import XCTest
 
-/// A kitten asks for a settings change it can't make, Shades looks into it, and only your Allow makes it, through the
-/// app's own controller with a fake T3 that records everything sent.
 @MainActor
 final class ChangeRequestFlowTests: XCTestCase {
     private var home: URL!
@@ -81,7 +79,6 @@ final class ChangeRequestFlowTests: XCTestCase {
         AgentThread(id: id, title: "\(kitten.name): Fix the install", projectTitle: nil, status: status, model: "m", updatedAt: clock, projectPath: kitten.folder, lastRunID: "run-\(id)", lastRunEndedAt: clock)
     }
 
-    /// An inbox kitten's run is filed by itself, with its requests saved alongside.
     private func finishClawde(_ report: String) async throws -> InboxEntry {
         backend.reports["w"] = report
         controller.threadsChanged([thread("w", of: clawde)])
@@ -143,7 +140,6 @@ final class ChangeRequestFlowTests: XCTestCase {
         XCTAssertNil(Prompts.ownWords(in: told.prompt.text))
     }
 
-    /// The card showed the change against the file as it was, so a file that's changed since is left alone.
     func testAFileThatChangedSinceIsLeftAloneAndBothYouAndTheKittenHearWhy() async throws {
         let entry = try await finishClawde(reply(asking: commaFix))
         let meanwhile = original.replacingOccurrences(of: "allow", with: "deny")
@@ -169,7 +165,6 @@ final class ChangeRequestFlowTests: XCTestCase {
         XCTAssertTrue(backend.sent.last?.prompt.text.contains("isn't one of the settings files") == true)
     }
 
-    /// A kitten without an inbox has its run said in the bubble, and what it asks for still waits in Activity.
     func testAKittenWithoutAnInboxStillGetsItsCardAndTheBubbleSkipsTheBlock() async throws {
         let steveFile = "\(steve.folder)/.claude/settings.json"
         var work = thread("s", of: steve, status: .running)
@@ -185,7 +180,6 @@ final class ChangeRequestFlowTests: XCTestCase {
         XCTAssertFalse(stage.bubbles.contains { "\($0)".contains(ChangeRequests.fence) })
     }
 
-    /// T3 can leave out run IDs, and two cards from one thread still each make only their own change.
     func testAllowMakesThePressedCardsChangeEvenWithoutRunIDs() async throws {
         let steveFile = "\(steve.folder)/.claude/settings.json"
         let asks = ["{\"permissions\": {\"allow\": [\"Bash(rm:*)\"]}}", "{\"permissions\": {\"deny\": [\"WebFetch\"]}}"]
@@ -207,7 +201,6 @@ final class ChangeRequestFlowTests: XCTestCase {
         XCTAssertEqual(controller.inbox.entries.filter { $0.change != nil }.map(\.id), [cards[0].id])
     }
 
-    /// Two kittens can ask for the same change. It's one card, and both hear what you decided.
     func testEveryThreadThatAskedForTheSameChangeHearsWhatYouDecided() async throws {
         var asking = thread("s", of: steve, status: .running)
         controller.threadsChanged([asking])
@@ -231,7 +224,6 @@ final class ChangeRequestFlowTests: XCTestCase {
         XCTAssertTrue(backend.sent.filter { $0.mode == .forward }.allSatisfy { Prompts.ownWords(in: $0.prompt.text) == nil })
     }
 
-    /// It runs in the router's folder, where every other thread is a talk with the cat, and the app could stop before it ends.
     func testALeftoverLookAtAChangeIsTidiedAwayAndIsntATalk() async {
         let leftover = AgentThread(id: "r", title: "\(AppController.reviewTitle) ~/kittens/clawde/.claude/settings.json", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: clock, projectPath: "/shades/router")
         let talk = AgentThread(id: "t", title: "What's on my calendar?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: clock, projectPath: "/shades/router")

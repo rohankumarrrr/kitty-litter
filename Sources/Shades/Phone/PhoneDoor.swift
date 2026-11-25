@@ -3,29 +3,22 @@ import Foundation
 import Security
 import ShadesT3
 
-/// Who may use Messages from a phone. What the server takes reaches T3 as your own words, and anything on this Mac can
-/// reach it on loopback, kittens' shells included, so a key is the only way in. A phone gets one by typing or
-/// scanning a code that only a Shades window shows, which captures leave out. The page keeps its key in its own
-/// storage and sends it in a header, since a cookie would go to every port on the Mac's name. Shades keeps only a hash.
 @MainActor
 final class PhoneDoor {
     struct Pairing: Equatable {
         var code: String
         var until: Date
 
-        /// In two halves, so it's easy to read out and type.
         var shown: String { "\(code.prefix(4))-\(code.suffix(4))" }
     }
 
     private static let letters = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
     private static let codeLength = 8
     private static let pairingSeconds: TimeInterval = 600
-    /// A wrong code this many times uses the code up, so guessing gets nowhere.
     private static let tries = 5
 
     private let keys: PhoneKeyStoring
     private var hashes: Set<String>
-    /// Phones were paired by an earlier build, whose pairing this one can't read.
     private let pairedByAnotherBuild: Bool
     private(set) var pairing: Pairing?
     private var triesLeft = 0
@@ -37,7 +30,6 @@ final class PhoneDoor {
     }
 
     var hasPhones: Bool { !hashes.isEmpty }
-    /// A phone that was paired is locked out until it pairs again, since this build can't read its pairing.
     var needsPairingAgain: Bool { hashes.isEmpty && pairedByAnotherBuild }
 
     func openPairing(now: Date) -> Pairing {
@@ -53,7 +45,6 @@ final class PhoneDoor {
         pairing = nil
     }
 
-    /// A new token if this is the code that's showing. The code works once.
     func pair(_ typed: String, now: Date) -> String? {
         guard let pairing, now < pairing.until else {
             closePairing()
@@ -91,27 +82,20 @@ final class PhoneDoor {
     }
 }
 
-/// What Shades keeps for phones, each a short list of lines under its own name.
 protocol PhoneKeyStoring {
     func load(_ name: String) -> [String]
     func save(_ name: String, _ lines: [String])
-    /// Whether the last `load` of this name found items, none of which this build could read.
     func cantRead(_ name: String) -> Bool
 }
 
 enum PhoneKeys {
-    /// The hashes of paired phones' keys.
     static let paired = "paired"
-    /// Where to send each phone's notifications.
     static let pushes = "pushes"
-    /// The key Shades signs its notifications with.
     static let signing = "signing"
 }
 
-/// For the demo and tests, which never touch the Keychain.
 final class MemoryPhoneKeys: PhoneKeyStoring {
     var saved: [String: [String]] = [:]
-    /// Names saved by a build this one stands in as being unable to read.
     var unreadable: Set<String> = []
 
     var hashes: [String] { saved[PhoneKeys.paired] ?? [] }
@@ -121,14 +105,9 @@ final class MemoryPhoneKeys: PhoneKeyStoring {
     func cantRead(_ name: String) -> Bool { unreadable.contains(name) }
 }
 
-/// In the login Keychain rather than a file a kitten could rewrite to let itself in, or read to send as you. Without a
-/// Team ID a build can't read what an earlier one saved, as docs/t3-integration.md says, and changing or deleting
-/// another build's item shows a dialog and waits on it, on the main thread here, so each save is an item of its own, the newest that can be
-/// read is the one that counts, and only items this run saved are ever deleted. Saving what's already there touches
-/// nothing.
+// Outside the repo: without a Team ID, a build can't read Keychain items an earlier build saved, and changing or deleting one shows a dialog that waits.
 final class KeychainPhoneKeys: PhoneKeyStoring {
     private let keychain: PhoneKeychain
-    /// The item this run saved for each name, the only kind it deletes.
     private var savedHere: [String: String] = [:]
     private var unreadable: Set<String> = []
 
@@ -136,7 +115,6 @@ final class KeychainPhoneKeys: PhoneKeyStoring {
         self.keychain = keychain
     }
 
-    /// The newest item for this name that this build can read. Older builds saved one under the name itself.
     func load(_ name: String) -> [String] {
         let items = keychain.items().filter { $0.account == name || $0.account.hasPrefix(name + ".") }
         if !items.isEmpty, items.allSatisfy({ $0.data == nil }) { unreadable.insert(name) } else { unreadable.remove(name) }
@@ -158,9 +136,7 @@ final class KeychainPhoneKeys: PhoneKeyStoring {
     }
 }
 
-/// The few Keychain calls the phone keys make, so what they decide can be tested without the Keychain.
 protocol PhoneKeychain {
-    /// Every item, newest first: its account, and what's in it, or `nil` if this build can't read it.
     func items() -> [(account: String, data: Data?)]
     func add(account: String, data: Data, label: String) -> Bool
     func delete(account: String)

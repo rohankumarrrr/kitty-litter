@@ -1,11 +1,9 @@
 import Foundation
 
-/// A session as the router sees it when deciding where a message belongs.
 public struct SessionBrief: Sendable, Equatable {
     public var number: Int
     public var title: String
     public var project: String?
-    /// Plain words, such as "Done, 5 minutes ago".
     public var status: String
     public var model: String
     public var lastSaid: String?
@@ -20,26 +18,16 @@ public struct SessionBrief: Sendable, Equatable {
     }
 }
 
-/// Everything the agents are told. One quick agent decides where each message belongs: it answers,
-/// passes it to a session that already has the context, or starts a frontier agent, which finds
-/// the right project itself. So there's one router, and no per-project routes.
 public enum Prompts {
-    /// A quick agent replies with this, then one line of task, to start new work.
     public static let handoffMarker = "HANDOFF:"
-    /// A quick agent replies with this, then a session's number, to pass the message on.
     public static let routeMarker = "SEND TO:"
-    /// A quick agent replies with this, then a kitten's number, to give the message to a specialist.
     public static let kittenMarker = "KITTEN:"
-    /// A quick agent replies with this, then only the new text, when asked to rewrite what's selected.
     public static let rewriteMarker = "REWRITE:"
-    /// How a sorted report marks each of its lines.
     public static let shippedMarker = "SHIPPED:"
     public static let decisionMarker = "DECISION:"
     public static let noteMarker = "NOTE:"
     public static let passedMarker = "PASSED:"
-    /// A quick agent ends an answer with this, then an element's number or a spot, to have the cat point there.
     public static let pointMarker = "POINT:"
-    /// A quick agent starts its reply with this, then a kitten's number, when their words correct something it owns.
     public static let correctionMarker = "CORRECTION:"
 
     private static let untrusted = """
@@ -108,11 +96,8 @@ public enum Prompts {
         """
     }
 
-    /// What was asked in a prompt from `quick`, which is only the person's words: what comes after the screen, never
-    /// the screen. `nil` for any other prompt, or one whose words can't be told apart from the screen.
     public static func question(in prompt: String) -> String? {
         guard prompt.hasPrefix(quickOpening) else { return nil }
-        // The screen's own tags are taken out of what it says, so the last closing one is the end of the screen.
         let afterScreen = prompt.range(of: "</screen>", options: .backwards).map { prompt[$0.upperBound...] } ?? prompt[...]
         guard let label = afterScreen.range(of: "\n" + questionLabel) else { return nil }
         let words = afterScreen[label.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
@@ -120,9 +105,7 @@ public enum Prompts {
         return words
     }
 
-    /// Their own words go first and unchanged, because paraphrasing is how a router loses things.
     public static func forKitten(_ kitten: Kitten, words: String, snapshot: ScreenSnapshot?, screenshotPath: String?, screenLeftOut: Bool, correction: Bool = false) -> String {
-        // A thread in another project's folder doesn't load the kitten's instructions by itself.
         let instructions = kitten.workspace == kitten.folder
             ? "Your instructions and what you know about them are in your folder."
             : "Your instructions and what you know about them are in \(kitten.folder). Read its CLAUDE.md before anything else."
@@ -155,9 +138,6 @@ public enum Prompts {
         return "\(words)\n\n---\n\(intro)\n\n\(untrusted)\n\n\(screenBlock(snapshot, screenshotPath: screenshotPath))"
     }
 
-    /// What the person wrote, from a message `passedOn` made: everything above the first `---` line.
-    /// `nil` if that's empty or still has a screen block, as `frontier` and `fix` prompts do, so nothing
-    /// from a screen can pass as their words. That may hide some of them, which is the safe way round.
     public static func ownWords(in text: String) -> String? {
         let above = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).prefix { line in
             !(line.hasPrefix("---") && line.dropFirst(3).allSatisfy(\.isWhitespace))
@@ -171,12 +151,7 @@ public enum Prompts {
         withoutBlocks(named: "screen", in: text)
     }
 
-    /// Takes out each block with one of these tag names, nested or not, whatever its case or spacing,
-    /// and through the end if it never closes. A tag alone in backticks is someone writing about it,
-    /// so it stays. Tags have to be counted to balance them, which is why this isn't one regex.
-    /// A closing tag with nothing left to close means the block ran on, so what came before it goes too.
     public static func withoutBlocks(named names: String, in text: String) -> String {
-        // The limits keep it fast on crafted text, and a hyphen after the name makes it someone else's tag.
         let ending = "(?![\\w-])"
         let mention = "`<\\s{0,8}/?\\s{0,8}(?:\(names))\(ending)[^<>`\\n]{0,200}>`"
         let tag = "<\\s{0,8}(/?)\\s{0,8}(\(names))\(ending)(?:[^<>]{0,200}>)?"
@@ -208,7 +183,6 @@ public enum Prompts {
 
     static let askedForLabel = "What they asked for: "
     static let saidAboutLabel = "What they said about it: "
-    /// A hand-off's request is the router's reading of what they said, then this and their own words.
     public static let ownWordsLabel = "Their own words: "
 
     public static func frontier(request: String, snapshot: ScreenSnapshot?, screenshotPath: String?) -> String {
@@ -223,17 +197,13 @@ public enum Prompts {
         """
     }
 
-    /// What was asked in a prompt from `frontier` or `fix`, which is only the person's words: never the screen, and
-    /// never the router's reading of it. `nil` for any other prompt, or a fix they didn't describe.
     public static func dispatched(in prompt: String) -> String? {
         guard prompt.hasPrefix(dispatchPreamble) else { return nil }
         let words: Substring
-        // A fix says it before the screen, so only what comes before the screen's warning counts.
         let beforeScreen = prompt.range(of: "\n\n" + untrusted).map { prompt[..<$0.lowerBound] } ?? prompt[...]
         if let said = beforeScreen.range(of: "\n" + saidAboutLabel) {
             words = beforeScreen[said.upperBound...]
         } else {
-            // A hand-off asks after the screen, whose own tags are taken out of what it says.
             let afterScreen = prompt.range(of: "</screen>", options: .backwards).map { prompt[$0.upperBound...] } ?? prompt[...]
             guard let asked = afterScreen.range(of: "\n" + askedForLabel) else { return nil }
             let request = afterScreen[asked.upperBound...]
@@ -246,10 +216,6 @@ public enum Prompts {
 
     private static let droppedLabel = "Dropped onto the cat instead of a look at the screen: "
 
-    /// The names of what was dropped or attached, from the lines Shades writes first in its own screen block, one a
-    /// file. Never anything in the files. Shades writes one block, and the warning before it that names its tags, and
-    /// takes the tags out of what's on a screen, so another means something else wrote one, such as a router's
-    /// hand-off steered by a page, and then no name counts.
     public static func droppedNames(in prompt: String) -> [String] {
         let opened = prompt.replacingOccurrences(of: untrusted, with: "").ranges(of: #/<\s*screen\b/#.ignoresCase())
         guard opened.count == 1, let block = prompt.range(of: "<screen>\n") else { return [] }
@@ -262,15 +228,12 @@ public enum Prompts {
         return names
     }
 
-    /// A spot marked on one of The Kitty Litter's own windows, which no capture shows. It's the app's own fact, so it
-    /// goes before the screen and before what they said, and never inside either.
     public static let ownWindowNote = """
     They marked a spot on one of The Kitty Litter's own windows. The Kitty Litter is the app that sent you this, and \
     captures always leave its windows out, so a screenshot shows whatever was behind it there instead. What they \
     mean is in The Kitty Litter.
     """
 
-    /// The user pointed at something broken. The marked area is what they mean.
     public static func fix(description: String?, snapshot: ScreenSnapshot?, screenshotPath: String?, onOwnWindow: Bool = false) -> String {
         let said = description.map { "\(saidAboutLabel)\($0)" }
             ?? "They didn't describe it, so work out what's wrong from the screenshot."
@@ -292,7 +255,6 @@ public enum Prompts {
         """
     }
 
-    /// Sums up a finished session for someone who wasn't watching it.
     public static func summary(of report: String, title: String, failed: Bool) -> String {
         let how = failed ? " It stopped with a failure, so say what went wrong first." : ""
         return """
@@ -305,7 +267,6 @@ public enum Prompts {
         """
     }
 
-    /// Sorts a finished session's report into lines for the inbox. All this can do is write those lines.
     public static func sortReport(_ report: String, title: String) -> String {
         """
         Below is the final report from an AI coding agent. The user wasn't watching, and will read this in a short inbox. \
@@ -324,7 +285,6 @@ public enum Prompts {
 
     private static let reportLimit = 12_000
 
-    /// A long report opens with what happened and ends on what's needed from them, so it's the middle that goes.
     private static func keepingBothEnds(_ report: String) -> String {
         guard report.count > reportLimit else { return report }
         return "\(report.prefix(reportLimit / 2))\n\n(The middle is cut.)\n\n\(report.suffix(reportLimit / 2))"
@@ -399,13 +359,11 @@ public enum Prompts {
         return " \(rule)"
     }
 
-    /// Only the router is asked to point, so only its prompt lists what it could point at.
     private static func screenBlock(_ snapshot: ScreenSnapshot?, screenshotPath: String? = nil, listsElements: Bool = false) -> String {
         guard let snapshot else { return "<screen>Not captured.</screen>" }
         if snapshot.isPrivate { return "<screen>Hidden: the user keeps this app private.</screen>" }
 
         var lines: [String] = []
-        // A name is one line, so the next can't pass for another file.
         lines += snapshot.droppedNames.map { "\(droppedLabel)\($0.split(whereSeparator: \.isNewline).joined(separator: " "))" }
         if let app = snapshot.appName { lines.append("App: \(app)") }
         if let title = snapshot.windowTitle { lines.append("Window: \(title)") }
@@ -423,7 +381,6 @@ public enum Prompts {
         return "<screen>\n\(withoutScreenTags(lines.joined(separator: "\n")))\n</screen>"
     }
 
-    /// A page must not be able to close the block it's quoted in and speak for itself.
     private static func withoutScreenTags(_ text: String) -> String {
         text.replacingOccurrences(
             of: #"<\s*/?\s*screen\b[^>]*>"#,
@@ -434,19 +391,14 @@ public enum Prompts {
 
     private static let pageTextLimit = 20_000
 
-    /// The session's number, if a quick agent's reply passes the message on rather than answering it.
     public static func routeTarget(in reply: String) -> Int? {
         number(after: routeMarker, in: reply)
     }
 
-    /// The kitten's number, if a quick agent's reply gives the message to a specialist.
     public static func kittenTarget(in reply: String) -> Int? {
         number(after: kittenMarker, in: reply)
     }
 
-    /// The kittens a quick agent's reply says have a correction, and the reply without those lines.
-    /// Only the lines it starts with count, and all a line can give is a number, so a reply can't
-    /// pass any words along this way.
     public static func corrections(in reply: String) -> (owners: [Int], rest: String) {
         var owners: [Int] = []
         var rest = Substring(reply)
@@ -455,7 +407,6 @@ public enum Prompts {
             guard start.hasPrefix(correctionMarker) else { return (owners, String(rest)) }
             let line = start.prefix { !$0.isNewline }
             let said = line.dropFirst(correctionMarker.count).trimmingCharacters(in: .whitespaces)
-            // Anything but digits, sign included, is 0: no kitten has it, so you hear one was lost and its words never show.
             let owner = said.allSatisfy(\.isNumber) ? Int(said) ?? 0 : 0
             if !owners.contains(owner) { owners.append(owner) }
             rest = start[line.endIndex...]
@@ -468,7 +419,6 @@ public enum Prompts {
         return Int(trimmed.dropFirst(marker.count).drop(while: \.isWhitespace).prefix(while: \.isNumber))
     }
 
-    /// The new text, if a quick agent's reply is a rewrite of what's selected. Its own lines are kept.
     public static func rewrite(in reply: String) -> String? {
         let trimmed = reply.drop(while: \.isWhitespace)
         guard trimmed.hasPrefix(rewriteMarker) else { return nil }
@@ -476,8 +426,6 @@ public enum Prompts {
         return text.isEmpty ? nil : text
     }
 
-    /// The answer without its last line, and where that line points, if it's a pointing line.
-    /// One that makes no sense still comes off, since it's not for reading.
     public static func pointing(in reply: String) -> (words: String, target: PointTarget?) {
         var lines = reply.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
         while lines.last?.allSatisfy(\.isWhitespace) == true { lines.removeLast() }
@@ -492,7 +440,6 @@ public enum Prompts {
         return (words, .spot(x: percents[0] / 100, y: percents[1] / 100))
     }
 
-    /// The task, if a quick agent's reply is a handoff rather than an answer.
     public static func handoffTask(in reply: String) -> String? {
         let trimmed = reply.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix(handoffMarker) else { return nil }

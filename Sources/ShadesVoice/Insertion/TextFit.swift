@@ -1,6 +1,5 @@
 import Foundation
 
-/// Fits dictated text to what's around the cursor: a space where one's needed, no capital mid-sentence.
 enum TextFit {
     static func fit(_ text: String, before: String?, after: String?) -> String {
         var result = text
@@ -17,7 +16,6 @@ enum TextFit {
         }
 
         if let after, let next = after.first, !next.isNewline {
-            // Text in the middle of a line doesn't get its own full stop.
             if result.hasSuffix("."), !hasListShape(result) {
                 result.removeLast()
             }
@@ -28,7 +26,6 @@ enum TextFit {
         return result
     }
 
-    /// A rewrite keeps whatever spacing the selection had at each end, so a paragraph keeps its line break.
     static func inPlace(of original: String, _ text: String) -> String {
         let leading = String(original.prefix(while: \.isWhitespace))
         let trailing = String(original.reversed().prefix(while: \.isWhitespace).reversed())
@@ -45,7 +42,6 @@ enum TextFit {
 
     private static func hasListShape(_ text: String) -> Bool { text.contains("\n") }
 
-    /// "I", acronyms and names keep their capitals. Everyday first words don't.
     private static func startsWithKeptCapital(_ text: String) -> Bool {
         guard let word = text.split(whereSeparator: { $0.isWhitespace }).first else { return true }
         let core = word.trimmingCharacters(in: .punctuationCharacters)

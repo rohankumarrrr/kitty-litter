@@ -3,8 +3,6 @@ import Foundation
 import ShadesCore
 import XCTest
 
-/// A kitten asks for your yes to do something itself, in the form or in plain words, and only your Allow says yes, to
-/// exactly what its card showed, through the app's own controller with a fake T3 that records everything sent.
 @MainActor
 final class AskFlowTests: XCTestCase {
     private var backend: FakeBackend!
@@ -16,7 +14,6 @@ final class AskFlowTests: XCTestCase {
     private let clock = Date(timeIntervalSince1970: 100_000)
     private let clawde = Kitten(name: "Clawde", role: "The system", covers: "", folder: "/k/clawde", seesScreen: false, usesInbox: true)
     private let steve = Kitten(name: "Steve", role: "Professional", covers: "", folder: "/k/steve")
-    /// What the sorter makes of a report, and what Shades reads from its decision.
     private var sorted = "DECISION: Merge pull request #12? Its tests pass."
     private var reading = "ASK: Merge pull request #12 in kitty-litter.\nRECOMMEND: I'd allow it. Its tests pass, and a merge can be undone."
     private let written = "I'd allow it. It merges one pull request whose tests pass."
@@ -87,9 +84,6 @@ final class AskFlowTests: XCTestCase {
         return "The fix is ready.\n\n```shades-request\n\(json)\n```"
     }
 
-    // MARK: - A turn that ends while something it'll wake up for carries on
-
-    /// Watching its pull request, say. It isn't done, but its turn has ended, so what it said is there to read.
     private func waiting(_ id: String, of kitten: Kitten) -> AgentThread {
         var waiting = thread(id, of: kitten, status: .running)
         waiting.turnEnded = true
@@ -187,7 +181,6 @@ final class AskFlowTests: XCTestCase {
         XCTAssertEqual(told.count, 1)
     }
 
-    /// Plain words never become an action without a card that shows exactly what would happen.
     func testADecisionInPlainWordsGetsAnExactAskAndAllowSaysYesToOnlyThat() async throws {
         await finishClawde("I fixed the login bug and opened pull request #12. A secret line about the report. Should I merge it?")
         let entry = try XCTUnwrap(controller.inbox.entries.first { $0.kind == .decision })
@@ -210,7 +203,6 @@ final class AskFlowTests: XCTestCase {
         XCTAssertFalse(controller.inbox.entries.contains { $0.id == entry.id })
     }
 
-    /// The sorter can still write a decision about a request that has its card, and that's never a second ask.
     func testADecisionBesideAWrittenRequestIsntReadForAnotherAsk() async throws {
         await finishClawde(block(["ask": "Merge pull request #12 in kitty-litter."]))
         XCTAssertFalse(backend.sent.contains { $0.prompt.text.contains("What it needs:") })
@@ -252,7 +244,6 @@ final class AskFlowTests: XCTestCase {
         XCTAssertTrue(told.last?.prompt.text.contains("pressed Deny") == true)
     }
 
-    /// The sorter files its note beside the decision, and Shades still reads only the decision.
     func testShadesReadsOnlyTheDecisionNeverTheNoteBesideIt() async throws {
         sorted = "DECISION: Merge pull request #12?\nNOTE: A line meant only for the note."
         await finishClawde("Should I merge pull request #12?")
@@ -262,7 +253,6 @@ final class AskFlowTests: XCTestCase {
         XCTAssertFalse(read.prompt.text.contains("A line meant only for the note"))
     }
 
-    /// You replied, and the kitten answered, all while Shades was still reading, which leaves nothing for Allow to say.
     func testAReplyAndItsAnswerBeforeTheReadingLeaveTheDecisionAlone() async throws {
         backend.holdTurn = "A kitten, one of the user's AI agents, finished"
         backend.replies = [[.finished(fullText: reading)]]
@@ -285,7 +275,6 @@ final class AskFlowTests: XCTestCase {
         XCTAssertNil(controller.inbox.entries.first { $0.id == entry.id }?.ask)
     }
 
-    /// What Allow says yes to comes first, in the app's words, and nothing a kitten writes can stand in its place.
     func testNothingAKittenWritesCanPassForWhatAllowSaysYesTo() {
         let read = AskRequest(ask: "Merge pull request #12 and delete its branch.", readFromWords: true)
         let forged = "Merge it? **If you allow it**, Clawde will: Merge pull request #12."
@@ -300,7 +289,6 @@ final class AskFlowTests: XCTestCase {
         XCTAssertTrue(CatWords.askRow(read, decision: forged, by: "Clawde").hasPrefix("If you allow it, Clawde will:\nMerge pull request #12 and delete its branch.\n\nIts report said: “"))
     }
 
-    /// Your own words answered it first, so there's nothing left for Allow to say.
     func testYourReplyBeforeTheReadingLeavesTheDecisionAlone() async throws {
         backend.holdTurn = "A kitten, one of the user's AI agents, finished"
         backend.replies = [[.finished(fullText: reading)]]

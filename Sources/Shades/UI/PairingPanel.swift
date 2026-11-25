@@ -1,24 +1,19 @@
 import AppKit
 import CoreImage
 
-/// What pairing a phone shows: where to go, and the one-time code. `address` is `nil` when Tailscale couldn't say.
 struct PhonePairingCard: Equatable {
     var address: String?
     var code: String
 
-    /// What the picture holds, so scanning it opens the page and pairs in one go.
     var link: String? { address.map { "\($0)/#pair=\(code)" } }
 }
 
-/// The code a phone pairs with. Whoever has it can speak as you from the phone, so this window is left out of every
-/// capture, Shades' own and every other app's, like Messages, and the code is never written anywhere else.
 @MainActor
 final class PairingPanel {
     private static let width: CGFloat = 320
     private static let padding: CGFloat = 24
     private static let pictureSide: CGFloat = 200
 
-    /// Its window, which tests give one that never reaches the screen.
     let panel: QuietPanel
     var onClose: (() -> Void)?
 
@@ -56,7 +51,6 @@ final class PairingPanel {
             stack.addArrangedSubview(image)
         }
 
-        // A figure, light and tabular, spaced out a little so it's easy to read off and type.
         let figure = MessagesInk.font(ofSize: 32 + MessagesInk.title - 14, weight: .light, tabular: true)
         let code = NSTextField(labelWithAttributedString: NSAttributedString(string: card.code, attributes: [
             .font: figure, .foregroundColor: MessagesInk.strong, .kern: 2,
@@ -95,7 +89,6 @@ final class PairingPanel {
         panel.orderFrontRegardless()
     }
 
-    /// Cancel and Esc: the code stops working once it's gone.
     func close() {
         hide()
         onClose?()
@@ -106,7 +99,6 @@ final class PairingPanel {
         panel.contentView = nil
     }
 
-    /// Black on white whatever the theme, since that's what a camera reads best, at a whole number of points a square.
     static func picture(of text: String) -> NSImage? {
         guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
         filter.setValue(Data(text.utf8), forKey: "inputMessage")

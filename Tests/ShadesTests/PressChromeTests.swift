@@ -4,21 +4,16 @@ import ShadesContext
 import ShadesCore
 import XCTest
 
-/// Messages' chrome, boxes and shortcuts, pressed the way a person presses them: by mouse through the window's own
-/// hit-testing, and by keyboard with Tab, Space and the real keys, routed through Messages' own panel. The panel is
-/// never shown, and nothing is posted to the system.
 @MainActor
 final class PressChromeTests: XCTestCase {
     private let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
     private let pepper = Kitten(name: "Pepper", role: "Finance", covers: "", folder: "/k/pepper")
     private let at = Date(timeIntervalSince1970: 1_000_000)
 
-    /// Messages' own panel, title bar and all, saying it has the keyboard, since a test can't make a real one key.
     private final class KeyPanel: ChannelsPanel {
         override var isKeyWindow: Bool { true }
     }
 
-    /// Everything Messages hands to the rest of the app.
     private final class Calls {
         var actions: [MessagesAction] = []
         var openedInT3: [String] = []
@@ -37,8 +32,6 @@ final class PressChromeTests: XCTestCase {
         QuietFocus.fullKeyboardAccess = { NSApplication.shared.isFullKeyboardAccessEnabled }
     }
 
-    // MARK: - Data
-
     private func thread(_ id: String, of kitten: Kitten, title: String, status: AgentStatus = .completed) -> AgentThread {
         AgentThread(id: id, title: title, projectTitle: kitten.name, status: status, model: "m", updatedAt: at, projectPath: kitten.folder)
     }
@@ -50,7 +43,6 @@ final class PressChromeTests: XCTestCase {
         }
     }
 
-    /// Steve has a finished thread and one in progress, Pepper one, and the cat a piece of its own work.
     private func book(waiting: Waiting = Waiting(), exchanges: Int = 1, hasPhone: Bool = false, olderPages: [ChannelID: Int] = [:]) -> ChannelBook {
         let fix = AgentThread(id: "fix", title: "Fix: the dock", projectTitle: nil, status: .completed, model: "m", updatedAt: at)
         return ChannelBook.build(
@@ -65,7 +57,6 @@ final class PressChromeTests: XCTestCase {
         )
     }
 
-    /// Messages in its own panel, at its usual size, recording what it hands on.
     private func messages(_ book: ChannelBook) -> (KeyPanel, ChannelsView, Calls) {
         let panel = KeyPanel()
         let view = ChannelsView(frame: NSRect(origin: .zero, size: ChannelsWindow.size))
@@ -95,16 +86,12 @@ final class PressChromeTests: XCTestCase {
         return try XCTUnwrap(buttons.first { $0.accessibilityLabel() == title }, "no \(title) in \(buttons.compactMap { $0.accessibilityLabel() })", file: file, line: line)
     }
 
-    // MARK: - Pressing
-
-    /// A click that lands on `control` itself, not on something over it, pressed down and let go there.
     private func click(_ control: NSView, _ name: String, file: StaticString = #filePath, line: UInt = #line) throws {
         let hit = try Press.hit(control, file: file, line: line)
         XCTAssertTrue(hit === control, "a click on \(name) lands on it, not on \(type(of: hit))", file: file, line: line)
         try Press.click(control, file: file, line: line)
     }
 
-    /// A click at `point` in `view`, for what's drawn rather than made of views, such as the jump box's rows.
     @discardableResult
     private func click(at point: NSPoint, in view: NSView, file: StaticString = #filePath, line: UInt = #line) throws -> NSView {
         let window = try XCTUnwrap(view.window, file: file, line: line)
@@ -119,8 +106,6 @@ final class PressChromeTests: XCTestCase {
         return target
     }
 
-    /// A key pressed and let go in the panel, handed on the way the app hands it on: as a key equivalent first, and then
-    /// to whatever has the keyboard.
     private func key(_ characters: String, keyCode: UInt16, modifiers: NSEvent.ModifierFlags = [], in panel: NSWindow, file: StaticString = #filePath, line: UInt = #line) throws {
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             let event = try XCTUnwrap(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: modifiers, timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode), file: file, line: line)
@@ -136,8 +121,6 @@ final class PressChromeTests: XCTestCase {
         try key(characters, keyCode: up ? 126 : 125, modifiers: modifiers.union([.numericPad, .function]), in: panel)
     }
 
-    /// Tabs round the panel from its first stop until the keyboard is on `control`, as Tab does with Full Keyboard
-    /// Access on.
     private func tab(to control: NSView, in panel: NSWindow, file: StaticString = #filePath, line: UInt = #line) {
         panel.recalculateKeyViewLoop()
         panel.makeFirstResponder(panel.contentView?.nextValidKeyView)
@@ -150,13 +133,10 @@ final class PressChromeTests: XCTestCase {
         XCTFail("Tab never reaches \(control.accessibilityLabel() ?? "\(type(of: control))"), only \(stops)", file: file, line: line)
     }
 
-    /// Tab reaches it, and Space presses it.
     private func tabAndSpace(_ control: NSView, in panel: NSWindow, file: StaticString = #filePath, line: UInt = #line) throws {
         tab(to: control, in: panel, file: file, line: line)
         try space(in: panel)
     }
-
-    // MARK: - The header
 
     func testAThreadsHeaderShowsOnPhoneOpensInT3AndClosesByMouse() throws {
         let (_, view, calls) = messages(book(hasPhone: true))
@@ -193,8 +173,6 @@ final class PressChromeTests: XCTestCase {
         try tabAndSpace(try button(CatWords.issues(1), in: view.pane), in: panel)
         XCTAssertEqual(view.selection, .activity)
     }
-
-    // MARK: - The sidebar
 
     func testEverySidebarRowShowsItsPlaceWhenClicked() throws {
         let (_, view, _) = messages(book())
@@ -255,9 +233,6 @@ final class PressChromeTests: XCTestCase {
         XCTAssertEqual(calls.settings, 2, "⌘,")
     }
 
-    // MARK: - The thread pane's edge
-
-    /// Takes hold of `edge` `grab` into it, or at its middle, drags it `dx` across in two steps, and lets go.
     private func drag(_ edge: NSView, by dx: CGFloat, grabbing grab: CGFloat? = nil, in panel: NSWindow) throws {
         let start = edge.convert(NSPoint(x: grab ?? edge.bounds.midX, y: edge.bounds.midY), to: nil)
         let target = try Press.hit(edge)
@@ -324,8 +299,6 @@ final class PressChromeTests: XCTestCase {
     }
 }
 
-// MARK: - Threads and Activity
-
 extension PressChromeTests {
     private var approval: ApprovalRequest {
         ApprovalRequest(id: "ap", threadID: "s1", threadTitle: "Resume", kind: .command, summary: "Run: ls", createdAt: at)
@@ -343,12 +316,10 @@ extension PressChromeTests {
         InboxEntry(id: "d", kind: .decision, text: "Merged. Say ship it.", threadID: "s1", threadTitle: "Resume", at: at)
     }
 
-    /// Shipped work in a thread Messages hasn't read, so it opens in T3.
     private var shipped: InboxEntry {
         InboxEntry(id: "sh", kind: .shipped, text: "Shipped the old work.", threadID: "gone", threadTitle: "Old work", at: at)
     }
 
-    /// A settings change a kitten asked for, and one that can't be made as asked.
     private var change: InboxEntry {
         var change = ChangeRequest(file: "/k/steve/.claude/settings.json", replace: "\"a\",", with: "\"a\"", why: "Stray comma.")
         change.review = "Only a comma."
@@ -361,7 +332,6 @@ extension PressChromeTests {
         return InboxEntry(id: "u", kind: .decision, text: "Can't.", threadID: "s1", threadTitle: "Resume", at: at, change: change)
     }
 
-    /// Something a kitten asked for your yes to do itself, in the form, and one Shades read from a decision.
     private var writtenAsk: InboxEntry {
         InboxEntry(id: "a1", kind: .decision, text: "Asks.", threadID: "s1", threadTitle: "Resume", at: at, ask: AskRequest(ask: "Send the resume to the recruiter.", why: "It's ready.", review: "Fine to send.", readFromWords: false))
     }
@@ -370,7 +340,6 @@ extension PressChromeTests {
         InboxEntry(id: "a2", kind: .decision, text: "Merge pull request 12?", threadID: "s1", threadTitle: "Resume", at: at, ask: AskRequest(ask: "Merge pull request 12.", review: "Safe to merge.", readFromWords: true))
     }
 
-    /// An approval, a question with one answer, one you pick several for, a decision and something shipped.
     private func activityBook() -> ChannelBook {
         book(waiting: Waiting(approvals: [approval], questions: [question, months], owners: ["ap": steve.id, "q": steve.id, "q2": pepper.id], reports: [decision, shipped, change, unusableChange, writtenAsk, readAsk]))
     }
@@ -379,7 +348,6 @@ extension PressChromeTests {
         subviews(of: pane.list).compactMap { $0 as? ChannelRowView }
     }
 
-    /// The card that says `text`, scrolled to where you can see it.
     private func card(_ text: String, in view: ChannelsView, file: StaticString = #filePath, line: UInt = #line) throws -> CardRowView {
         let card = try XCTUnwrap(rows(in: view.pane).compactMap { $0 as? CardRowView }.first { $0.accessibilityLabel()?.contains(text) == true }, "a card saying \(text)", file: file, line: line)
         card.scrollToVisible(card.bounds)
@@ -391,7 +359,6 @@ extension PressChromeTests {
         return try XCTUnwrap(card.buttons.first { $0.accessibilityLabel() == title }, "\(title) on \(text)", file: file, line: line)
     }
 
-    /// Tab to the pane's messages, then the arrow keys down to `row`, the way a person gets to a row and its buttons.
     private func arrow(to row: () throws -> ChannelRowView, in pane: ChannelPane, panel: NSWindow, file: StaticString = #filePath, line: UInt = #line) throws {
         tab(to: pane.list, in: panel, file: file, line: line)
         let target = try row()
@@ -399,7 +366,6 @@ extension PressChromeTests {
         XCTAssertTrue(pane.currentRow === target, "the arrow keys reach it", file: file, line: line)
     }
 
-    /// Each button on Activity's cards, pressed by mouse and then by keyboard in a fresh window, and what it did.
     private func pressEveryWay(_ title: String, on text: String, file: StaticString = #filePath, line: UInt = #line, check: (ChannelsView, Calls, String) throws -> Void) throws {
         for byKeyboard in [false, true] {
             QuietFocus.fullKeyboardAccess = { byKeyboard }
@@ -483,7 +449,6 @@ extension PressChromeTests {
         }
     }
 
-    /// Allow and Deny only answer the change, and nothing else on its card does.
     func testAChangesAllowDenyAndWayToItsThreadWork() throws {
         try pressEveryWay("Allow", on: "Only a comma.") { _, calls, name in
             XCTAssertEqual(calls.actions, [.inbox(.allow(id: "c"))], name)
@@ -503,7 +468,6 @@ extension PressChromeTests {
         }
     }
 
-    /// Allow and Deny answer only the ask, and an ask Shades read from a decision can still take your own words.
     func testAnAsksAllowDenyReplyAndWayToItsThreadWork() throws {
         for (text, id) in [("Fine to send", "a1"), ("Safe to merge", "a2")] {
             try pressEveryWay("Allow", on: text) { _, calls, name in
@@ -595,8 +559,6 @@ extension PressChromeTests {
     }
 }
 
-// MARK: - The box
-
 extension PressChromeTests {
     private func threadBox() -> (KeyPanel, ChannelsView, Calls, ChannelComposer) {
         let (panel, view, calls) = messages(book())
@@ -660,8 +622,6 @@ extension PressChromeTests {
         }
     }
 }
-
-// MARK: - Shortcuts
 
 extension PressChromeTests {
     private func jumpRow(_ index: Int, in box: JumpBoxView) -> NSPoint {
@@ -776,8 +736,6 @@ extension PressChromeTests {
     }
 }
 
-// MARK: - New messages and older ones
-
 extension PressChromeTests {
     func testNewMessagesTakesYouUpToTheNewLine() throws {
         for byKeyboard in [false, true] {
@@ -814,7 +772,6 @@ extension PressChromeTests {
                 for _ in 0..<120 where view.pane.currentRow !== row { try arrow(true, in: panel) }
                 XCTAssertTrue(view.pane.currentRow === row, "↑ reaches it")
             }
-            // Scrolling back to it asks for older ones by itself, which the feed answers once, so this counts the press.
             calls.actions = []
             if byKeyboard {
                 try space(in: panel)
@@ -825,8 +782,6 @@ extension PressChromeTests {
         }
     }
 }
-
-// MARK: - The bell
 
 extension PressChromeTests {
     func testAChannelsBellOpensItsNotificationsWhoseItemsSetThem() throws {
@@ -860,8 +815,6 @@ extension PressChromeTests {
             XCTAssertEqual(calls.actions.first, .notifications(.of(steve), ChannelNotifications(muted: true)), "\(name): Mute mutes it")
         }
     }
-
-    // MARK: - Focus and backlogs
 
     private func priorities(focus: String? = "Focus: the garden show, until Sat 9 AM") -> Priorities {
         Priorities(focus: focus, backlogs: [
@@ -964,7 +917,7 @@ extension PressChromeTests {
         XCTAssertGreaterThanOrEqual(try firstRow().minY, sidebar.focusLine.frame.maxY, "the places start under it")
         XCTAssertGreaterThan(try firstRow().minY, topWithout)
 
-        // A tooltip is a window of its own, which a screen share would show, unlike this one.
+        // Outside the repo: AppKit shows a tooltip in a window of its own, which a screen share can capture.
         view.select(.channel(.of(steve)))
         view.showBacklog(of: steve.id)
         let secrets = ["garden show", "Paint the fence", "the blue one", "Sweep the porch"]

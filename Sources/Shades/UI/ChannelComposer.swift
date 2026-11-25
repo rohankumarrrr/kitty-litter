@@ -2,9 +2,6 @@ import AppKit
 import ShadesContext
 import ShadesCore
 
-/// The box at the bottom of Messages, and the only thing in the window that takes the keyboard. What's typed goes
-/// where the line above it says, and carries nothing but your words, and the files or pictures you drop, paste or pick
-/// from Attach's recent files. There's no file picker, since one would make Shades the active app, and a menu doesn't.
 final class ChannelComposer: QuietView, NSTextViewDelegate {
     private static let pad: CGFloat = 12
     private static let maxLines: CGFloat = 5
@@ -15,34 +12,23 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     private static let chipWidth: CGFloat = 220
     private static let narrowestChip: CGFloat = 130
 
-    /// The last part is ⌘Return, which steers or queues the other way from Settings, as in T3 Code.
     var onSend: ((String, MessageTarget, [Drop], Bool) -> Void)?
-    /// Attach, which offers recent files in a menu under it.
     var onAttach: ((NSView) -> Void)?
     var onResize: (() -> Void)?
-    /// Esc in the box, which closes a thread's pane as it does anywhere else in the window.
     var onEscape: (() -> Void)?
-    /// The mic, which starts saying something into this box, and then finishes it.
     var onMic: (() -> Void)?
-    /// Esc while the mic is hearing you, which forgets what you said.
     var onStopListening: (() -> Void)?
 
     private(set) var target: MessageTarget?
-    /// The line over the box as the place sets it, before anything typed changes it.
     private var standardLabel = ""
-    /// Who an @ in the words can go straight to, which is only ever in the cat's box.
     private var mentionable: [Kitten] = []
-    /// Words typed for somewhere that's gone wait in the box, and Return doesn't send them anywhere else.
     var isHeld = false
-    /// A thread's "Also send to #channel", under its box, as Slack has it.
     let alsoSend = QuietCheckbox()
     private let label = NSTextField(labelWithString: "")
     private let scroll = NSScrollView()
     let textView = ComposerTextView()
-    /// What goes with your words, until you send them or take them off.
     private(set) var attachments: [Drop] = []
     private var chips: [AttachmentChip] = []
-    /// In the field beside the mic, as Slack and iMessage keep theirs.
     private let attachButton = MessageToolbar.button(CatWords.attachRecent, symbol: "paperclip")
     let mic = QuietButton.mic()
 
@@ -89,8 +75,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         restyle()
     }
 
-    /// Puts files or pictures with what you're typing, up to `Drop.mostAtOnce`. Only words go to a question, so it
-    /// can't take any.
     @discardableResult
     func attach(_ drops: [Drop]) -> Bool {
         let files = drops.filter(\.isFile)
@@ -121,7 +105,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         onResize?()
     }
 
-    /// What was attached, which goes with what's sent now.
     func takeAttachments() -> [Drop] {
         defer {
             attachments = []
@@ -148,11 +131,9 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         alsoSend.needsDisplay = true
         mic.needsDisplay = true
         needsDisplay = true
-        // Another text size makes the box taller or shorter.
         onResize?()
     }
 
-    /// Whether what you send next also shows in the thread's channel.
     var alsoSends: Bool {
         get { !alsoSend.isHidden && alsoSend.isOn }
         set { alsoSend.isOn = newValue }
@@ -161,10 +142,8 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// `alsoSendTo` offers a thread's reply to its channel too.
     func show(_ target: MessageTarget?, label: String? = nil, alsoSendTo: String? = nil, mentionable: [Kitten] = []) {
         let changed = target != self.target || (alsoSendTo == nil) != alsoSend.isHidden
-        // A file is for where you attached it, so it never follows the box anywhere else.
         if target != self.target, !attachments.isEmpty { _ = takeAttachments() }
         self.target = target
         isHidden = target == nil
@@ -173,14 +152,12 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         if let alsoSendTo { alsoSend.title = alsoSendTo }
         guard let target else { return }
         standardLabel = label ?? CatWords.target(target)
-        // Words held for somewhere that's gone say so, whoever they name.
         self.mentionable = target == .router && label == nil ? mentionable : []
         showWhereWordsGo()
         textView.placeholder = CatWords.placeholder(target)
         if changed { needsLayout = true }
     }
 
-    /// Words to the cat that @ a kitten go straight to it, and the line says so as you type.
     private func showWhereWordsGo() {
         label.stringValue = MessageTarget.mentioned(in: textView.string, among: mentionable).map(CatWords.mentioning) ?? standardLabel
     }
@@ -190,7 +167,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         return Self.pad + Self.labelHeight + filesHeight + textHeight + Self.fieldPad * 2 + (alsoSend.isHidden ? 0 : Self.checkboxHeight) + Self.pad
     }
 
-    /// The chips wrap onto as many rows as they need, narrowing first so a narrow pane still takes two a row.
     private var chipsPerRow: Int {
         max(Int((bounds.width - ChannelRowView.margin * 2 + 8) / (Self.narrowestChip + 8)), 1)
     }
@@ -204,7 +180,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         chips.isEmpty ? 0 : CGFloat((chips.count + chipsPerRow - 1) / chipsPerRow) * Self.fileHeight
     }
 
-    /// A line of the font it's drawn in, so its words show whole at every text size.
     private var textLine: CGFloat {
         ceil(NSLayoutManager().defaultLineHeight(for: textView.font ?? .systemFont(ofSize: 14)))
     }
@@ -217,7 +192,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         return min(max(line, used), line * Self.maxLines)
     }
 
-    /// The Opal field you type in.
     private var field: NSRect {
         NSRect(x: ChannelRowView.margin, y: Self.pad + Self.labelHeight + filesHeight, width: bounds.width - ChannelRowView.margin * 2, height: textHeight + Self.fieldPad * 2)
     }
@@ -232,7 +206,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         }
         let field = field
         let side = QuietButton.micSide
-        // In the field at its right, level with the last line, so they stay by what you'd send as the box grows.
         let middle = field.maxY - Self.fieldPad - (textLine + side) / 2
         mic.frame = NSRect(x: field.maxX - side - 4, y: middle, width: side, height: side)
         attachButton.frame.origin = NSPoint(x: mic.frame.minX - side, y: middle)
@@ -245,16 +218,12 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         needsDisplay = true
     }
 
-    /// With the violet ring while you're typing in it.
     override func draw(_ dirtyRect: NSRect) {
         Opal.field(in: field, focused: showsRing)
     }
 
-    /// Whether its field has the ring, which only shows while its window has the keyboard.
     var showsRing: Bool { window?.isKeyWindow == true && window?.firstResponder === textView }
 
-    /// A box that goes while its mic hears you, as when its thread's pane closes or you go somewhere with no box, forgets
-    /// what you said, since there'd be no mic left to finish it with.
     override func viewDidHide() {
         super.viewDidHide()
         if mic.isLit { onStopListening?() }
@@ -279,7 +248,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
         }
     }
 
-    /// Sends this as if it had been typed and Return pressed.
     func send(_ text: String) {
         textView.string = text
         send()
@@ -287,7 +255,6 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
 
     var hasDraft: Bool { textView.string.contains { !$0.isWhitespace } || !attachments.isEmpty }
 
-    /// Puts another place's or thread's draft in the box, with nothing to undo back into the one it replaced.
     func showDraft(_ text: String) {
         textView.string = text
         textView.undoManager?.removeAllActions()
@@ -309,12 +276,9 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     }
 }
 
-/// The box's text, which takes files or pictures dropped or pasted into it as attachments rather than as their paths.
 final class ComposerTextView: PlaceholderTextView {
     var onAttach: (([Drop]) -> Bool)?
-    /// It took the keyboard or gave it up, or its window did, which shows or hides the field's ring.
     var onFocus: (() -> Void)?
-    /// ⌘Return, which AppKit's key bindings don't name.
     var onCommandReturn: (() -> Void)?
     private var keyObservers: [NSObjectProtocol] = []
 
@@ -347,8 +311,6 @@ final class ComposerTextView: PlaceholderTextView {
 
     override func paste(_ sender: Any?) {
         let pasteboard = NSPasteboard.general
-        // A copied file is attached rather than its name pasted, but words copied with a picture, as from a web page,
-        // paste as words.
         let hasFile = pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
         if hasFile || pasteboard.string(forType: .string) == nil, onAttach?(Drop.all(pasteboard)) == true { return }
         super.paste(sender)
@@ -366,7 +328,6 @@ final class ComposerTextView: PlaceholderTextView {
     }
 }
 
-/// What's attached, over the box: a small picture or a file's mark, its name, and ✕ to take it off.
 final class AttachmentChip: NSView {
     var onRemove: (() -> Void)?
     private let picture = NSImageView()
@@ -416,15 +377,12 @@ final class AttachmentChip: NSView {
     }
 }
 
-/// A checkbox in Messages' colours. Like `QuietButton`, a click leaves the keyboard where it was, and Space ticks it
-/// once Tab has reached it.
 final class QuietCheckbox: NSView {
     private static let box: CGFloat = 14
 
     var title = "" { didSet { needsDisplay = true; setAccessibilityLabel(title) } }
     var isOn = false { didSet { if isOn != oldValue { needsDisplay = true; setAccessibilityValue(isOn) } } }
     var onChange: ((Bool) -> Void)?
-    /// Its words' own font and colour, such as Settings', where they're the setting itself rather than a soft aside.
     var words: (font: NSFont, color: NSColor)? { didSet { needsDisplay = true } }
 
     init() {
@@ -446,7 +404,6 @@ final class QuietCheckbox: NSView {
         NSAttributedString(string: title, attributes: [.font: words?.font ?? MessagesInk.font(ofSize: 12), .foregroundColor: words?.color ?? MessagesInk.soft])
     }
 
-    /// Room inside it for the ring, which goes round the box and its words.
     static let inset: CGFloat = 4
 
     func sizeToFit() {
@@ -467,7 +424,6 @@ final class QuietCheckbox: NSView {
             MessagesInk.onAccent.setStroke()
             tick.stroke()
         } else {
-            // An edge at the 3:1 a control needs, on glass or the page.
             MessagesInk.dim.setStroke()
             shape.lineWidth = 1.2
             shape.stroke()

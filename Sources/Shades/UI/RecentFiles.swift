@@ -2,9 +2,7 @@ import AppKit
 import CoreServices
 import UniformTypeIdentifiers
 
-/// Attach's menu in Messages: the pictures and PDFs you've opened lately, newest first, as Finder's Recents finds them
-/// with Spotlight. A menu opens without making Shades the active app, where a file picker wouldn't. It's only read when
-/// you press Attach, and anything hidden, in a Library folder or in T3's folders is left out.
+// Outside the repo: a file picker makes the app active, and a menu doesn't.
 @MainActor
 final class RecentFiles: NSObject {
     nonisolated static let shown = 12
@@ -24,7 +22,6 @@ final class RecentFiles: NSObject {
             item.target = self
             item.representedObject = file
             item.toolTip = (file.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath
-            // By its kind, so nothing reads the file before you pick it.
             let icon = NSWorkspace.shared.icon(for: UTType(filenameExtension: file.pathExtension) ?? .data)
             icon.size = NSSize(width: 16, height: 16)
             item.image = icon
@@ -45,7 +42,6 @@ final class RecentFiles: NSObject {
         onPick?(file)
     }
 
-    /// The pictures and PDFs you've opened in the last month, newest first, from Spotlight.
     nonisolated static func find(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
         let text = #"(kMDItemContentTypeTree == "public.image" || kMDItemContentTypeTree == "com.adobe.pdf") && kMDItemLastUsedDate >= $time.today(-30)"#
         guard let query = MDQueryCreate(kCFAllocatorDefault, text as CFString, nil, nil) else { return [] }

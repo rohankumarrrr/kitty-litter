@@ -3,7 +3,6 @@ import AppKit
 import ShadesCore
 import XCTest
 
-/// The mic in the Ask box and in The Kitty Litter's box.
 @MainActor
 final class MicTests: XCTestCase {
     func testVoiceOverCanPressTheMicAndHearsWhetherItsListening() {

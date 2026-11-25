@@ -111,7 +111,7 @@ final class CatBrainTests: XCTestCase {
         XCTAssertTrue([.run1, .run2].contains(left.pose.frame))
         XCTAssertTrue(left.pose.flip)
 
-        // AppKit's y points up.
+        // Outside the repo: AppKit's y axis points up.
         var up = brain()
         up.go(to: CGPoint(x: 0, y: 500))
         up.tick()
@@ -305,8 +305,6 @@ final class CatBrainTests: XCTestCase {
         XCTAssertEqual(cat.position, CGPoint(x: 5, y: 6))
     }
 
-    /// The timer sleeps through ticks where nothing changes. That only works if nothing
-    /// really does, so ticking in jumps has to look exactly like ticking one at a time.
     func testSkippedTicksLookTheSameAsEveryTick() {
         var cat = brain()
         var ticks = 0
@@ -328,7 +326,6 @@ final class CatBrainTests: XCTestCase {
         var cat = brain()
         var wakes = 0
         var ticks = 0
-        // A minute awake and a minute asleep.
         while ticks < 1200 {
             let jump = cat.ticksUntilChange()
             for _ in 1...jump { cat.tick() }
@@ -336,7 +333,6 @@ final class CatBrainTests: XCTestCase {
             wakes += 1
         }
         XCTAssertLessThan(wakes, 250, "well under the 1200 wakes a plain 10 Hz timer would use")
-        // Asleep, it's two wakes every 1.2 s.
         let jump = cat.ticksUntilChange()
         XCTAssertGreaterThanOrEqual(jump, 1)
         XCTAssertLessThanOrEqual(jump, 6)

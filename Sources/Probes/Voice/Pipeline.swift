@@ -2,7 +2,6 @@ import Foundation
 import ShadesVoice
 
 extension Bench {
-    /// Every clip played in real time through the real engine, the way the app uses it.
     static func pipeline(_ args: [String]) async throws {
         let quick = args.contains("--quick")
         let idlePause = args.contains("--idle")
@@ -87,7 +86,6 @@ extension Bench {
         if args.contains("--verbose") { print(score.failures.joined(separator: "\n")) }
     }
 
-    /// Whether a first press after sitting idle is slower. The GPU and Neural Engine can page out.
     static func idle(_ args: [String]) async throws {
         let source = FileAudioSource(samples: [], speed: 1)
         let engine = ParakeetVoiceEngine(source: source)
@@ -129,7 +127,6 @@ extension Bench {
     }
 }
 
-/// Waits for a clip to finish playing.
 final class FinishSignal {
     private let lock = NSLock()
     private var fired = false

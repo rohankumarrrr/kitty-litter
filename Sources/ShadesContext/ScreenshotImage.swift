@@ -3,14 +3,11 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Marks up and encodes a capture. Pure image work, so it runs without any permissions.
 enum ScreenshotImage {
     static let longSide: CGFloat = 2048
     static let quality = 0.8
-    /// T3's attachment limit is 10 MB, so stay a little under it.
     static let byteLimit = 10_000_000
 
-    /// Draws the red rectangle around a region given in pixels with a top-left origin.
     static func marked(_ image: CGImage, region: CGRect) -> CGImage? {
         let width = image.width
         let height = image.height
@@ -29,8 +26,6 @@ enum ScreenshotImage {
         context.draw(image, in: bounds)
 
         let line = strokeWidth(forLongSide: max(width, height))
-        // Quartz contexts draw from the bottom left. The stroke sits just outside the region so it
-        // covers none of what you pointed at, but stays on the image when the region meets an edge.
         let flipped = CGRect(
             x: region.minX,
             y: CGFloat(height) - region.maxY,
@@ -41,7 +36,6 @@ enum ScreenshotImage {
             .intersection(bounds.insetBy(dx: line / 2, dy: line / 2))
         guard !box.isNull else { return context.makeImage() }
 
-        // A thin white edge keeps the mark readable on red and on dark backgrounds.
         context.setStrokeColor(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.9))
         context.setLineWidth(line + 2)
         context.stroke(box)
@@ -55,7 +49,6 @@ enum ScreenshotImage {
         max(3, (CGFloat(longSide) / 500).rounded())
     }
 
-    /// JPEG at the usual quality, dropping it if that somehow doesn't fit the limit.
     static func jpeg(_ image: CGImage, byteLimit: Int = byteLimit) -> Data? {
         for quality in [quality, 0.5, 0.3] {
             if let data = encode(image, quality: quality), data.count < byteLimit { return data }

@@ -1,8 +1,6 @@
 import Foundation
 import ShadesCore
 
-/// Folds a thread's turn items into who asked what and what came back. Pure, so it can be tested
-/// on recordings. Nothing from below a person's own words, or inside a screen block, gets through.
 enum T3Transcript {
     private static let limit = 8_000
     private static let cutEnding = "\n\nThe rest is in T3."
@@ -13,13 +11,10 @@ enum T3Transcript {
         var byMessage: [String: Int] = [:]
         var steered: [String: Int] = [:]
 
-        /// The exchange its run started, which keeps a queued follow-up from taking an earlier answer.
-        /// Most of T3's history has no runs, so otherwise it's the latest one.
         func exchange(answeredBy item: T3Wire.TurnItem) -> Int {
             if let run = item.runId, let steer = steered[run] { return steer }
             if let message = item.runId.flatMap({ askedInRun[$0] }), let index = byMessage[message] { return index }
             if let latest = exchanges.indices.last { return latest }
-            // A kitten's words with no sender belong in its DM.
             exchanges.append(Exchange(id: item.id, asker: .you, askedAt: item.when))
             return 0
         }
@@ -28,7 +23,6 @@ enum T3Transcript {
             if item.isUserMessage {
                 guard !item.isWrittenByT3 else { continue }
                 if let message = item.messageId { byMessage[message] = exchanges.count }
-                // A steer joins a run that's already going, so what comes after it answers it.
                 if let run = item.runId, let asked = askedInRun[run], asked != item.messageId { steered[run] = exchanges.count }
                 let asker: Exchange.Asker = item.scheduledTaskId != nil ? .schedule
                     : item.isFromPerson ? .you : .agent(threadID: item.agentSenderThreadID.flatMap(sender))
@@ -49,9 +43,6 @@ enum T3Transcript {
     }
 
     private static func ownWords(_ text: String?) -> String? {
-        // In this order, or a tag above the line could pair with one on the page and take the line out.
-        // A question to the cat first, since its prompt can have a line like the one that ends someone's own words,
-        // and then work the cat started, whose words are among its own instructions.
         guard let words = text.flatMap({ Prompts.question(in: $0) ?? Prompts.dispatched(in: $0) ?? Prompts.ownWords(in: $0) }).map(T3Wire.withoutToolBlocks), !words.isEmpty, words != T3Wire.attachmentsOnly else { return nil }
         guard words.hasPrefix(T3Wire.ultrathinkPrefix) else { return capped(words) }
         let rest = words.dropFirst(T3Wire.ultrathinkPrefix.count).trimmingCharacters(in: .whitespacesAndNewlines)

@@ -64,7 +64,6 @@ final class CleanupGuardTests: XCTestCase {
     }
 }
 
-/// A stand-in model that says whatever the test wants.
 private final class CannedCleaner: TextCleaning {
     var reply: String?
     init(reply: String?) { self.reply = reply }

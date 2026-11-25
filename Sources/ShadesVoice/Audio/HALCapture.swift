@@ -3,8 +3,6 @@ import CoreAudio
 import Foundation
 import os
 
-/// Reads the microphone through Core Audio's own input unit. It has far less to set up at start
-/// than AVAudioEngine, and the unit can be made ready ahead of time without opening the mic.
 final class HALCapture {
     enum Failure: Error {
         case noUnit, setup(OSStatus), start(OSStatus)
@@ -21,7 +19,6 @@ final class HALCapture {
     private var onSamples: (([Float]) -> Void)?
     private let stateLock = NSLock()
     private var running = false
-    /// Which start the drain thread belongs to, so a slow old thread can't pick up a new take's audio.
     private var session = 0
 
     init(device: AudioDevices.Device) throws {
@@ -58,7 +55,6 @@ final class HALCapture {
         guard hardware.mSampleRate > 0 else { throw Failure.setup(-1) }
         sampleRate = hardware.mSampleRate
 
-        // The unit won't change the sample rate on the way in, so that's done on our side.
         var client = AudioStreamBasicDescription(
             mSampleRate: hardware.mSampleRate,
             mFormatID: kAudioFormatLinearPCM,
@@ -131,7 +127,6 @@ final class HALCapture {
         onSamples = nil
     }
 
-    /// Runs on the audio thread, so it copies and leaves.
     private func render(
         flags: UnsafeMutablePointer<AudioUnitRenderActionFlags>,
         timestamp: UnsafePointer<AudioTimeStamp>,
@@ -166,7 +161,6 @@ final class HALCapture {
     }
 }
 
-/// A fixed buffer between the audio thread and everyone else.
 private final class CaptureRing {
     private let storage: UnsafeMutablePointer<Float>
     private let capacity: Int
@@ -196,7 +190,6 @@ private final class CaptureRing {
     func write(_ source: UnsafePointer<Float>, count frames: Int) {
         os_unfair_lock_lock(lock)
         defer { os_unfair_lock_unlock(lock) }
-        // If nobody's draining, the oldest audio goes.
         let writable = min(frames, capacity)
         for i in 0..<writable {
             storage[(head + count + i) % capacity] = source[i]

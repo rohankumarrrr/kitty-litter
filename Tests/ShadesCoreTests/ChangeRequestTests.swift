@@ -57,8 +57,6 @@ final class ChangeRequestTests: XCTestCase {
         String(decoding: try! JSONSerialization.data(withJSONObject: object, options: .sortedKeys), as: UTF8.self)
     }
 
-    // MARK: - Reading a request
-
     func testAReplyAsksForExactlyWhatItsBlockSays() throws {
         let found = ChangeRequests.all(in: request(encoded(["file": "~/shades/.claude/settings.json", "replace": "a,\n]", "with": "a\n]", "why": "The comma\nbreaks the install."])))
         XCTAssertEqual(found.count, 1)
@@ -76,7 +74,6 @@ final class ChangeRequestTests: XCTestCase {
         XCTAssertEqual(request.with, "{}")
     }
 
-    /// Talking about the form, or quoting it inside another code block, asks for nothing.
     func testOnlyAClosedBlockOfItsOwnCounts() {
         let quoted = "Here's the form:\n\n````markdown\n```shades-request\n{\"file\": \"x\", \"create\": \"{}\"}\n```\n````\n"
         XCTAssertTrue(ChangeRequests.all(in: quoted).isEmpty)
@@ -110,8 +107,6 @@ final class ChangeRequestTests: XCTestCase {
         )
     }
 
-    // MARK: - Which files
-
     func testOnlyTheListedSettingsFilesCanChange() throws {
         let path = home.path
         XCTAssertEqual(try files.allowed("\(kitten.path)/.claude/settings.json").path, kittenSettings.path)
@@ -133,7 +128,6 @@ final class ChangeRequestTests: XCTestCase {
         }
     }
 
-    /// A link anywhere it could matter would send the write to whatever it points at, such as your own Claude settings.
     func testALinkIsNeverFollowed() throws {
         let manager = FileManager.default
         try manager.createDirectory(at: home.appendingPathComponent(".claude"), withIntermediateDirectories: true)
@@ -164,9 +158,6 @@ final class ChangeRequestTests: XCTestCase {
         XCTAssertEqual(try String(contentsOfFile: "\(mine)/settings.json", encoding: .utf8), "{}", "your own settings are untouched")
     }
 
-    // MARK: - Checking and making the change
-
-    /// Claude Code reads nothing from a file it can't parse, so fixing one brings back everything in it, and the card says so.
     func testFixingATrailingCommaBringsBackWhatTheFileAllows() throws {
         let comma = block.replacingOccurrences(of: "\"Bash(swift test)\"\n", with: "\"Bash(swift test)\",\n")
         try Data(comma.utf8).write(to: kittenSettings)
@@ -225,7 +216,6 @@ final class ChangeRequestTests: XCTestCase {
         XCTAssertEqual(checked.widens, ["Takes `Read(~/.codex/**)` out of `permissions.deny`."])
     }
 
-    /// `settings.local.json` goes over `settings.json`, so a new one can switch off a block the other one holds.
     func testANewLocalFileIsWeighedWithTheFileItGoesOver() throws {
         let manager = FileManager.default
         try manager.copyItem(at: kittenSettings, to: worktree.appendingPathComponent(".claude/settings.json"))
@@ -250,7 +240,6 @@ final class ChangeRequestTests: XCTestCase {
         XCTAssertThrowsError(try files.apply(checked), "it's there now, so a second Allow can't make it again")
     }
 
-    /// You were shown the change against the file as it was, so a file that's changed since isn't touched.
     func testAFileThatChangedSinceItWasShownIsLeftAlone() throws {
         let checked = files.check(try asked(encoded(["file": kittenSettings.path, "replace": "\"Bash(swift test)\"", "with": "\"Bash(swift test)\", \"Bash(ls)\""])))
         let meanwhile = block.replacingOccurrences(of: "\"enabled\": true", with: "\"enabled\": false")
@@ -261,7 +250,6 @@ final class ChangeRequestTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: kittenSettings, encoding: .utf8), meanwhile)
     }
 
-    /// Foundation's reader takes a trailing comma, and Claude Code's doesn't, so this is what decides.
     func testOnlyJSONClaudeCodeWouldReadCounts() {
         for good in ["{}", "{\"a\": [1, -2.5e+3, true, false, null, \"\\u00e9\\n\"]}", " {\"a\": {\"b\": {}}} \n"] {
             XCTAssertNoThrow(try StrictJSON.validate(Data(good.utf8)), good)
@@ -275,7 +263,6 @@ final class ChangeRequestTests: XCTestCase {
         XCTAssertNoThrow(try StrictJSON.validate(Data("{\"a\": {\"a\": 1}, \"b\": [{\"a\": 1}, {\"a\": 2}]}".utf8)), "the same key in different objects is fine")
     }
 
-    /// It's kept as you'd write it, and Allow finds the same file again from that.
     func testTheFileIsKeptWithATildeForHome() throws {
         let checked = files.check(try asked(encoded(["file": kittenSettings.path, "replace": "\"Bash(swift test)\"", "with": "\"Bash(ls)\""])))
         XCTAssertEqual(checked.file, "~/kittens/clawde/.claude/settings.json")

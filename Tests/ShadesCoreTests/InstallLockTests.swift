@@ -1,9 +1,6 @@
 import Foundation
 import XCTest
 
-/// Runs copies of scripts/install.sh side by side, to check only one install or rollback goes at a time. Each copy
-/// installs into a stand-in app in a folder of its own, with stand-ins for bundle.sh and every tool that could reach
-/// the real app. bundle.sh holds each build until the test lets it go.
 final class InstallLockTests: XCTestCase {
     private var root: URL!
     private var runs: [Run] = []
@@ -156,8 +153,6 @@ final class InstallLockTests: XCTestCase {
         XCTAssertEqual(installed, "new")
     }
 
-    /// What the pull brings waits before taking the lock again, so another install started then would get in if the
-    /// lock were let go at the exec.
     func testTheLockIsKeptThroughTheExecAfterPull() throws {
         FileManager.default.createFile(atPath: root.appendingPathComponent("pause-after-pull").path, contents: nil)
         let install = try start("new", "--pull")
@@ -193,8 +188,6 @@ final class InstallLockTests: XCTestCase {
         XCTAssertEqual(left.count, 1, "the killed install's build folder is left in the test's own folder, where it's cleaned up")
     }
 
-    /// The install that takes the lock says who it is just after, so one stopped in between waits to name it,
-    /// rather than the killed one before it.
     func testAnInstallStoppedJustAsAnotherTakesOverNamesTheOneThatDid() throws {
         let killed = try start("killed")
         XCTAssertTrue(waitUntil { built == ["killed"] })

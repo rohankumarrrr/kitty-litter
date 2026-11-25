@@ -3,14 +3,12 @@ import AppKit
 import ShadesCore
 import XCTest
 
-/// A message's actions float over the top of its row as icons, the way Slack's and Discord's do. Showing them moves
-/// nothing and covers nothing that's drawn, and the rest of a row stays where those apps put it.
 @MainActor
 final class MessageRowTests: XCTestCase {
     private let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
     private let at = Date(timeIntervalSince1970: 1_000_000)
 
-    /// A window that says it has the keyboard, since a test can't make a real one key.
+    // Outside the repo: AppKit won't make a real window key during a test.
     private final class KeyWindow: NSWindow {
         override var isKeyWindow: Bool { true }
     }
@@ -37,7 +35,6 @@ final class MessageRowTests: XCTestCase {
         return row
     }
 
-    /// The row drawn at `width`, then drawn again while hovered, on a see-through ground.
     private func drawn(_ row: MessageRowView, width: CGFloat) throws -> (still: NSBitmapImageRep, hovered: NSBitmapImageRep) {
         let height = row.fit(width: width)
         let host = QuietView(frame: NSRect(x: 0, y: 0, width: width, height: height))
@@ -50,7 +47,6 @@ final class MessageRowTests: XCTestCase {
         return (still, try XCTUnwrap(ChannelImages.bitmap(of: host, scale: 2)))
     }
 
-    /// Every pixel that's different, as one rect in points.
     private func changed(from a: NSBitmapImageRep, to b: NSBitmapImageRep) -> NSRect? {
         var box: NSRect?
         for y in 0..<a.pixelsHigh {
@@ -66,7 +62,6 @@ final class MessageRowTests: XCTestCase {
         return (0..<rep.samplesPerPixel).map { rep.bitmapData![start + $0] }
     }
 
-    /// Whether anything at all is drawn inside `rect` in points.
     private func hasInk(_ rep: NSBitmapImageRep, in rect: NSRect) -> Bool {
         let pixels = NSRect(x: rect.minX * 2, y: rect.minY * 2, width: rect.width * 2, height: rect.height * 2).integral
         for y in Int(pixels.minY)..<min(Int(pixels.maxY), rep.pixelsHigh) {
@@ -95,7 +90,6 @@ final class MessageRowTests: XCTestCase {
             let (still, hovered) = try drawn(row, width: width)
             let toolbar = try XCTUnwrap(row.toolbar?.frame, "\(name): the toolbar shows")
             XCTAssertNotNil(changed(from: still, to: hovered), name)
-            // It may float over the bubble's top edge, as Slack's does over a message, but stops where the words start.
             let overTheBubble = NSRect(x: toolbar.minX, y: toolbar.minY, width: toolbar.width, height: max(row.bubble.minY - toolbar.minY, 0))
             XCTAssertFalse(hasInk(still, in: overTheBubble), "\(name): nothing it covers over the bubble is drawn, such as the name or the time, at \(toolbar)")
             for words in row.subviews.compactMap({ $0 as? ChannelTextView }) {

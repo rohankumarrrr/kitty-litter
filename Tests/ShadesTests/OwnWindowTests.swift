@@ -1,12 +1,9 @@
 @testable import Shades
 import XCTest
 
-/// Which window a marked spot is on, from the windows a click there reaches, front to back: 1 is The Kitty Litter, 2
-/// the region picker's overlay, which a click still reaches just after it's gone, 3 the cat, and 9 another app's.
 @MainActor
 final class OwnWindowTests: XCTestCase {
     private let counting: Set<Int> = [1]
-    /// Ours that don't count, or gone.
     private let passedOver: Set<Int> = [2, 3]
 
     private func decide(_ stack: [Int]) -> Bool {

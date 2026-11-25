@@ -1,7 +1,6 @@
 import AppKit
 import ShadesCore
 
-/// The menu bar item: how things are going, and the main actions. What your agents are saying is in Messages.
 @MainActor
 final class MenuBar: NSObject, NSMenuDelegate {
     struct Extra {
@@ -18,23 +17,18 @@ final class MenuBar: NSObject, NSMenuDelegate {
     var onFix: (() -> Void)?
     var onKittens: (() -> Void)?
     var onMessages: (() -> Void)?
-    /// What goes next to Messages, read each time the menu opens.
     var messagesSummary: (() -> String?)?
     var onSettings: (() -> Void)?
-    /// Whether Messages on your phone is on, so there's a phone to pair.
     var canPairPhone: (() -> Bool)?
     var onPairPhone: (() -> Void)?
     var isDoNotDisturb: (() -> Bool)?
     var onDoNotDisturb: (() -> Void)?
-    /// The kittens Lockdown can pin every ask to, and the one it's on for, if it's on.
     var lockdownKittens: (() -> [Kitten])?
     var lockedDownKitten: (() -> String?)?
     var onLockdown: ((Kitten) -> Void)?
     var onLockdownNewThread: (() -> Void)?
     var onLockdownOff: (() -> Void)?
-    /// Extra items, such as setting up permissions or demo mode's controls.
     var extras: [Extra] = []
-    /// The shortcuts the app holds, which are the only ones the menu shows.
     var held: [Shortcut] = []
 
     override init() {
@@ -46,7 +40,6 @@ final class MenuBar: NSObject, NSMenuDelegate {
         item.button?.toolTip = CatWords.appName
     }
 
-    /// The top-right corner of the menu bar icon, for hanging things from.
     var corner: NSPoint {
         guard let frame = item.button?.window?.frame else {
             let visible = NSScreen.main?.visibleFrame ?? .zero
@@ -75,7 +68,6 @@ final class MenuBar: NSObject, NSMenuDelegate {
         rebuild()
     }
 
-    /// Each item as the menu would show it now, for the demo to print and press.
     var shownItems: [NSMenuItem] {
         rebuild()
         return menu.items
@@ -108,13 +100,11 @@ final class MenuBar: NSObject, NSMenuDelegate {
         bind(quiet) { [weak self] in self?.onDoNotDisturb?() }
         menu.addItem(quiet)
         addLockdown()
-        // Settings… and Quit end the menu on their own, as they do in every Mac app's.
         menu.addItem(.separator())
         addAction("Settings…") { [weak self] in self?.onSettings?() }
         addAction("Quit \(CatWords.appName)") { NSApp.terminate(nil) }
     }
 
-    /// Ticked, with its kitten's name, while it's on. Picking that kitten again turns it off.
     private func addLockdown() {
         let kittens = lockdownKittens?() ?? []
         let on = lockedDownKitten?()
@@ -135,7 +125,6 @@ final class MenuBar: NSObject, NSMenuDelegate {
             bind(fresh) { [weak self] in self?.onLockdownNewThread?() }
             choices.addItem(fresh)
         }
-        // A kitten that's gone can't be picked again, so this is the way out.
         if on != nil, pinned == nil {
             let off = NSMenuItem(title: CatWords.lockdownOff, action: nil, keyEquivalent: "")
             bind(off) { [weak self] in self?.onLockdownOff?() }
@@ -167,12 +156,11 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
     @objc private func runItem(_ sender: NSMenuItem) {
         guard actions.indices.contains(sender.tag) else { return }
-        // Let the menu finish closing before anything looks at the screen.
+        // Outside the repo: NSMenu runs an item's action before the menu has finished closing.
         let run = actions[sender.tag]
         DispatchQueue.main.async { run() }
     }
 
-    /// The cat's face from the sitting frame, as a template the menu bar can tint.
     private static func icon() -> NSImage {
         let scale = 2
         let rows = Array(CatFrame.sit.rows[1...9])
@@ -186,7 +174,6 @@ final class MenuBar: NSObject, NSMenuDelegate {
         let pixels = rep.bitmapData!
         for (y, row) in rows.enumerated() {
             for (x, ch) in row.enumerated() where (2..<14).contains(x) {
-                // Outline and lenses are solid. Fur is the empty middle.
                 guard ch == "k" || ch == "s" else { continue }
                 for dx in 0..<scale {
                     for dy in 0..<scale {

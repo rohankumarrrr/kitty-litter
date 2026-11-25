@@ -49,7 +49,6 @@ final class PasteboardSnapshotTests: XCTestCase {
     private var pasteboard: NSPasteboard!
 
     override func setUp() {
-        // A private pasteboard, so these tests never touch the real clipboard.
         pasteboard = NSPasteboard(name: NSPasteboard.Name("shades.voice.tests.\(UUID().uuidString)"))
     }
 

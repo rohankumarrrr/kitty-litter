@@ -1,24 +1,18 @@
 import Foundation
 import ShadesCore
 
-/// Sees what's on your screen, and only when asked.
-///
-/// `pickRegion()` returns global points in AppKit's coordinates, with the origin at the bottom left
-/// of the primary display, the same as `NSWindow` frames. `CaptureOptions.focusRegion` takes the same.
 public final class ScreenContextProvider: ScreenContextProviding, @unchecked Sendable {
     private let sources: ContextSources
     private let store: CaptureStore
     private let defaults: UserDefaults
     private let lock = NSLock()
     private var report = CaptureReport()
-    /// The browser whose page text just went missing for want of JavaScript, if any.
     private var browserNeedingTip: Browser?
 
     private static let tipsKey = "shades.javaScriptTipsShown"
 
     public convenience init() {
         let store = CaptureStore()
-        // Otherwise they'd wait for the next save, however long that took.
         store.removeOld()
         self.init(sources: LiveSources(), store: store, defaults: .standard)
     }
@@ -29,13 +23,10 @@ public final class ScreenContextProvider: ScreenContextProviding, @unchecked Sen
         self.defaults = defaults
     }
 
-    /// How the latest snapshot went, for the UI to offer a permission or a tip.
     public var lastReport: CaptureReport {
         lock.withLock { report }
     }
 
-    /// Takes nothing but the app's identity until it's sure the window isn't private, then
-    /// reads the slower parts side by side. Missing permissions mean missing fields, never a prompt.
     public func snapshot(_ options: CaptureOptions) async throws -> ScreenSnapshot {
         let clock = ContinuousClock()
         let started = clock.now
@@ -92,7 +83,6 @@ public final class ScreenContextProvider: ScreenContextProviding, @unchecked Sen
         report.browser = Self.status(browser: frontBrowser, location: location, page: page)
         report.timings.page = frontBrowser == nil ? nil : pageTime
         let pageText = options.includePageText ? ScreenText.clean(page?.text) : nil
-        // Safari still gives up its text through Accessibility, so there it wouldn't help.
         if report.browser == .javaScriptOff, options.includePageText, pageText == nil { needingTip = frontBrowser }
         if wantsScreenshot {
             report.timings.screenshot = shotTime
@@ -116,7 +106,6 @@ public final class ScreenContextProvider: ScreenContextProviding, @unchecked Sen
         )
     }
 
-    /// What the cat could point at in an app, read the way a snapshot reads it, so a probe can check a window of its own.
     public static func elements(ofApp pid: pid_t) async -> [ScreenElement] {
         await LiveSources().elements(pid: pid)
     }
@@ -130,8 +119,6 @@ public final class ScreenContextProvider: ScreenContextProviding, @unchecked Sen
         return try store.save(jpeg)
     }
 
-    /// The tip for turning on JavaScript, the first time a browser couldn't give up its page
-    /// without it, and then never again. `nil` when the latest snapshot has nothing to suggest.
     public func takeJavaScriptTip() -> String? {
         lock.withLock {
             guard let browser = browserNeedingTip else { return nil }

@@ -1,6 +1,5 @@
 import AppKit
 
-/// The app you're using right now.
 struct FrontApp: Equatable, Sendable {
     var pid: pid_t
     var bundleID: String?
@@ -16,7 +15,6 @@ struct FrontApp: Equatable, Sendable {
         self.init(pid: app.processIdentifier, bundleID: app.bundleIdentifier, name: app.localizedName)
     }
 
-    /// If Shades itself is in front, what you're looking at is whatever sits behind it.
     static func current() -> FrontApp? {
         let me = ProcessInfo.processInfo.processIdentifier
         if let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != me {
@@ -29,7 +27,6 @@ struct FrontApp: Equatable, Sendable {
     }
 }
 
-/// The window list needs no permissions for this, and it's the only place with the stacking order.
 public enum FrontWindow {
     private static func windows() -> [[String: Any]] {
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
@@ -44,14 +41,12 @@ public enum FrontWindow {
         (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value
     }
 
-    /// In Quartz coordinates.
     static func bounds(of pid: pid_t) -> CGRect? {
         let window = windows().first { isNormal($0) && owner($0) == pid }
         guard let box = window?[kCGWindowBounds as String] else { return nil }
         return CGRect(dictionaryRepresentation: box as! CFDictionary)
     }
 
-    /// Only available with Screen Recording. Useful when Accessibility is off.
     static func title(of pid: pid_t) -> String? {
         let window = windows().first { isNormal($0) && owner($0) == pid }
         return window?[kCGWindowName as String] as? String
@@ -61,16 +56,13 @@ public enum FrontWindow {
         windows().first { isNormal($0) && owner($0) != pid }.flatMap(owner)
     }
 
-    /// Whether no app's normal window is over any of this one. Floating windows don't count, since nothing at the
-    /// normal level can go over them.
     public static func isOnTop(_ id: Int) -> Bool {
         let options: CGWindowListOption = [.optionOnScreenAboveWindow, .optionIncludingWindow]
         let above = CGWindowListCopyWindowInfo(options, CGWindowID(id)) as? [[String: Any]] ?? []
         return isOnTop(id, among: above) { NSRunningApplication(processIdentifier: $0).map { $0.activationPolicy != .prohibited } ?? false }
     }
 
-    /// `windows` are the ones above it, and it. A tool with no app, such as one drawing a border around the window
-    /// you're in, puts windows of its own over others, and those reach past the window they're for.
+    // Outside the repo: a tool with no app, such as one drawing a border around your window, puts its own windows over others.
     static func isOnTop(_ id: Int, among windows: [[String: Any]], isApp: (pid_t) -> Bool) -> Bool {
         func number(_ window: [String: Any]) -> Int? { window[kCGWindowNumber as String] as? Int }
         func frame(_ window: [String: Any]) -> CGRect? {

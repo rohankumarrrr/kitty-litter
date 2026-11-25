@@ -1,6 +1,5 @@
 import AVFoundation
 
-/// Converts audio of one sample rate to 16 kHz mono, keeping its state between chunks.
 final class Resampler {
     private let converter: AVAudioConverter
     private let input: AVAudioFormat
@@ -13,7 +12,6 @@ final class Resampler {
               let output = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: AudioFormat.sampleRate, channels: 1, interleaved: false),
               let converter = AVAudioConverter(from: input, to: output)
         else { return nil }
-        // Priming would add a few milliseconds of nothing to the front of every take.
         converter.primeMethod = .none
         converter.sampleRateConverterQuality = .max
         self.converter = converter

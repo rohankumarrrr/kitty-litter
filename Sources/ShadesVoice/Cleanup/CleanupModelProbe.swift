@@ -1,6 +1,5 @@
 import Foundation
 
-/// Lets the benchmark drive the cleanup model directly, to compare ways of using it.
 package final class CleanupModelProbe {
     let model: LlamaModel
     package struct Result { package var text: String; package var seconds: Double; package var promptTokens: Int; package var outputTokens: Int; package var drafted: Int; package var batches: Int }
@@ -19,7 +18,6 @@ package final class CleanupModelProbe {
     }
     package func release() { model.release() }
 
-    /// Runs the real first-use download into `folder`, for checking progress and the checksum.
     package static func downloadModel(to folder: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
         let target = folder.appendingPathComponent(S1Mini.fileName)
         try await ModelStore.fetch(from: S1Mini.url, to: target, byteCount: S1Mini.byteCount, sha256: S1Mini.sha256, progress: progress)

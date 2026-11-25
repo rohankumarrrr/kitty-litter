@@ -1,7 +1,6 @@
 import AVFoundation
 import Foundation
 
-/// The real microphone. It's only open between `start` and `stop`, so the orange dot means you're talking.
 public final class MicrophoneSource: AudioSource {
     public enum Authorization {
         case granted, denied, notAsked
@@ -15,22 +14,15 @@ public final class MicrophoneSource: AudioSource {
         }
     }
 
-    /// Shows the system prompt the first time.
     public static func requestAccess() async -> Bool {
         await AVCaptureDevice.requestAccess(for: .audio)
     }
 
-    /// A specific microphone, or `nil` to follow the system's default.
     public var preferredDeviceUID: String?
-    /// Skips Core Audio's input unit and uses AVAudioEngine, mostly for comparing the two.
     public var useEngineOnly = false
-    /// How long the last `start` took from the call to the first audio, once that's known.
     public var lastStartLatency: TimeInterval? { latencyLock.withLock { startLatency } }
-    /// What ended up running, for diagnostics.
     public private(set) var lastBackend = ""
 
-    /// If the fast path shows no sign of life by now, the fallback takes over.
-    /// A Bluetooth mic you chose yourself really can take seconds to wake.
     private let noAudioTimeout: TimeInterval = 0.5
     private let noAudioTimeoutBluetooth: TimeInterval = 3
 
@@ -47,7 +39,6 @@ public final class MicrophoneSource: AudioSource {
     public init() {}
 
     public func prepare() throws {
-        // Setting up the unit can count as using the mic, so it waits until that's allowed.
         guard Self.authorization == .granted, !useEngineOnly else { return }
         rebuildCapture()
         guard !watching else { return }
@@ -116,7 +107,7 @@ public final class MicrophoneSource: AudioSource {
         try capture.start(onSamples)
     }
 
-    /// A unit can start and then deliver nothing. Better to lose half a second than the whole take.
+    // Outside the repo: an audio unit can start and then deliver nothing.
     private func watchForSilence(generation: Int, _ onSamples: @escaping ([Float]) -> Void) {
         let timeout = capture?.device.isBluetooth == true ? noAudioTimeoutBluetooth : noAudioTimeout
         DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + timeout) { [weak self] in
@@ -139,8 +130,7 @@ public final class MicrophoneSource: AudioSource {
             AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &id, UInt32(MemoryLayout<AudioDeviceID>.size))
         }
 
-        // Choosing a device doesn't update the node's other side, and a tap on mismatched rates raises an
-        // exception nothing can catch. So the rates get lined up by hand, and checked.
+        // Outside the repo: choosing a device doesn't update the input node's output rate, and a tap on mismatched rates raises an exception nothing can catch.
         let hardware = input.inputFormat(forBus: 0)
         if let unit = input.audioUnit, hardware.sampleRate > 0, input.outputFormat(forBus: 0).sampleRate != hardware.sampleRate {
             var client = input.outputFormat(forBus: 0).streamDescription.pointee

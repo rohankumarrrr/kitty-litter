@@ -1,7 +1,5 @@
 import AppKit
 
-/// A floating panel with a small stepped tail that matches the pixels of the cat: Opal's glass, or a rimlit card like the
-/// widgets on your desktop, lit by whoever's speaking.
 class BalloonView: NSView {
     enum Look: Equatable {
         case glass
@@ -12,12 +10,10 @@ class BalloonView: NSView {
     var tailX: CGFloat? { didSet { needsDisplay = true } }
     var tailOnTop = false { didSet { needsDisplay = true } }
 
-    /// Glass's corners, which a card floating on the desktop rounds a little more.
     static let radius = Opal.Corner.popover
     private static let step: CGFloat = 4
     private var radius: CGFloat { look == .glass ? Self.radius : Opal.Corner.floatingCard }
 
-    /// The part of the view that's message rather than tail.
     var body: NSRect {
         var rect = bounds
         rect.size.height -= BubbleLayout.tailHeight

@@ -33,7 +33,6 @@ private final class FeedBackend: AgentBackend, @unchecked Sendable {
         get { lock.withLock { _readDuration } }
         set { lock.withLock { _readDuration = newValue } }
     }
-    /// What T3's search names, whatever it's asked.
     var named: [String] {
         get { lock.withLock { _named } }
         set { lock.withLock { _named = newValue } }
@@ -378,7 +377,6 @@ final class ChannelFeedTests: XCTestCase {
         feed.lookingAt = .channel(.of(pepper))
         backend.threads = (0..<12).map { thread("steve-\($0)", age: TimeInterval($0)) } + [thread("pepper", project: "Pepper", age: 100)]
         await openAndRead()
-        // Four go at once, so only which four is certain, not their order.
         XCTAssertTrue(backend.reads.prefix(4).contains("pepper"), "\(backend.reads)")
         XCTAssertFalse(backend.reads.prefix(4).contains("steve-11"), "then the newest: \(backend.reads)")
     }
@@ -469,8 +467,6 @@ final class ChannelFeedTests: XCTestCase {
         XCTAssertEqual(books.count, count)
     }
 
-    // MARK: - Messages
-
     func testOnlyThreadsWhoseWordsHaveBeenReadCountAsSeen() async {
         backend.holdsReads = true
         backend.threads = [thread("a"), thread("quiet", age: 5)]
@@ -535,8 +531,6 @@ final class ChannelFeedTests: XCTestCase {
     }
 }
 
-// MARK: - Messages, review round 2
-
 extension ChannelFeedTests {
     func testAThreadOnItsOwnOnlyCountsAsReadIfItsWordsAreShown() async throws {
         let work = thread("work")
@@ -569,8 +563,6 @@ extension ChannelFeedTests {
         XCTAssertEqual(feed.threads(in: .thread("work", in: .channel(.of(steve)))).map(\.id), ["work"], "but its pane shows its latest reply")
     }
 }
-
-// MARK: - Talking to the cat
 
 extension ChannelFeedTests {
     func testTheCatsOwnThreadsAreReadToo() async {
@@ -625,8 +617,6 @@ extension ChannelFeedTests {
     }
 }
 
-// MARK: - Delivery
-
 extension ChannelFeedTests {
     func testYourWordsShowAsSendingUntilT3HasThem() async {
         let work = thread("a")
@@ -675,7 +665,6 @@ extension ChannelFeedTests {
 }
 
 extension ChannelFeedTests {
-    /// Only each kitten's newest 30 were ever read, so anything older could only be found in T3.
     func testScrollingBackToTheTopOfAChannelLoadsItsOlderThreadsAPageAtATime() async {
         backend.threads = (0..<70).map { thread("t\($0)", age: TimeInterval($0)) }
         for index in 0..<70 { backend.say("Ask \(index)", in: "t\(index)") }
@@ -716,7 +705,7 @@ extension ChannelFeedTests {
         backend.say("The coupon box is in the footer.", in: "elsewhere")
         await openAndRead()
         let read = backend.reads.count
-        // T3 matches what was sent, screen and all, so a thread it names can have none of the words Messages shows.
+        // Outside the repo: T3's search matches what was sent, screen and all, so a thread it names may show none of the words.
         backend.named = ["elsewhere", "t34", "t33", "t0"]
         backend.holdsReads = true
         feed.find("coupon")
@@ -763,8 +752,6 @@ extension ChannelFeedTests {
         await eventually { self.latest?.threads(in: .shades).count == 35 }
     }
 
-    /// Everything Messages started was read in #general, whoever's it was. Now a kitten's is among its newest, and the
-    /// cat's own is among the cat's.
     func testWorkMessagesStartedIsReadWithWhoeverHasIt() async {
         backend.threads = (0..<30).map { thread("t\($0)", age: TimeInterval($0)) } + [thread("from-messages", age: 500), thread("cats", project: nil, age: 500)]
         for thread in backend.threads! { backend.say("Ask", in: thread.id) }

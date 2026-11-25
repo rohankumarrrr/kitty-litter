@@ -14,7 +14,6 @@ final class T3CredentialsTests: XCTestCase {
         XCTAssertNil(store.load())
     }
 
-    /// Uses a throwaway entry, made and removed by the same binary, so it can't show a dialog.
     func testKeychainRoundTrip() throws {
         let store = KeychainCredentialStore(service: "dev.shades.t3-session.test.\(UUID().uuidString)")
         let credential = T3Credential(sessionID: "session-1", token: "not-a-real-token")
@@ -34,8 +33,6 @@ final class T3CredentialsTests: XCTestCase {
         XCTAssertNoThrow(try store.delete(sessionID: credential.sessionID), "Deleting nothing is fine")
     }
 
-    /// The switch is process-wide, and at launch the phone's keys load on the main thread while signing in reads T3's off
-    /// it. Without taking turns, the first to finish turned prompts back on in the middle of the other's call.
     func testPromptsStayOffForAWholeCallWhileSomethingElseUsesTheSwitch() {
         let inside = DispatchSemaphore(value: 0)
         let otherDone = DispatchGroup()

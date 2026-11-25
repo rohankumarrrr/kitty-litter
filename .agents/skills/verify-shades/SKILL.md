@@ -51,7 +51,7 @@ A proof has three parts, and goes on the pull request as the command, the output
 - The output. Lines starting `[demo] started`, `[demo] carried on in` and `[demo] forwarded to` say what was sent, to which thread and with how many attachments, and a forward says whether it was sent to steer or to queue. `[demo] accept:` and `[demo] decline:` are answered approvals. These are the side effects to check alongside the pictures.
 - The `front` and `windows` lines at the end, with your own app still in front.
 
-Drive the path a person takes, which is what the demo commands do. The demo's T3 is fake and every kitten's folder looks the same to it, so it can't show which folder a thread started in. Where that matters, such as your screen staying away from a kitten, use the `verify-screen-boundary` skill. To try a flow against real agents, use `--ask`, `--hand-off` or `--fix` with `--image`, as `Sources/Shades/App/DevFlags.swift` describes. Those talk to real T3, so name test threads `Shades test: ...` and archive them afterwards.
+Drive the path a person takes, which is what the demo commands do. The demo's T3 is fake and every kitten's folder looks the same to it, so it can't show which folder a thread started in. Where that matters, such as your screen staying away from a kitten, use the `verify-screen-boundary` skill. To try a flow against real agents, use `--ask`, `--hand-off` or `--fix` with `--image`, as `docs/commands.md` describes. Those talk to real T3, so name test threads `Shades test: ...` and archive them afterwards.
 
 ## Recordings
 

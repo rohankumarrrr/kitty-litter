@@ -1,6 +1,5 @@
 import Foundation
 
-/// Decides whether cleaned text is still what was said. A cleanup that adds, answers or drops too much is thrown out.
 public enum CleanupGuard {
     public enum Verdict: Equatable {
         case accept
@@ -19,7 +18,6 @@ public enum CleanupGuard {
             return RuleCleaner.isOnlyFillers(raw) || source.isEmpty ? .accept : .droppedTooMuch("nothing left")
         }
 
-        // New words. Numbers are exempt because "twenty three" can come back as "23".
         let sourceCounts = counts(source)
         var remaining = sourceCounts
         var added: [String] = []
@@ -35,12 +33,10 @@ public enum CleanupGuard {
             return .invented(added.joined(separator: " "))
         }
 
-        // Growth beyond what punctuation and "going to" explain usually means an answer.
         if result.count > source.count + max(2, source.count / 5) {
             return .invented("\(source.count) words became \(result.count)")
         }
 
-        // Lost words. Corrections and fillers remove plenty on purpose, so they get more room.
         let lost = source.filter { word in
             guard !removable.contains(word), !isNumeric(word) else { return false }
             return (counts(result)[word] ?? 0) == 0
@@ -51,7 +47,6 @@ public enum CleanupGuard {
             return .droppedTooMuch(lost.joined(separator: " "))
         }
 
-        // Same words shuffled into a different sentence.
         let longestShared = longestCommonSubsequence(source, result)
         if Double(longestShared) < Double(result.count) * 0.6 {
             return .tooDifferent("only \(longestShared) of \(result.count) in order")
@@ -61,7 +56,6 @@ public enum CleanupGuard {
 
     static func comparable(_ text: String) -> [String] {
         WordList.parse(text.replacingOccurrences(of: "\n", with: " ")).flatMap { word -> [String] in
-            // An address comes back joined up: "rohan at example dot com" as "rohan@example.com".
             word.key.split(whereSeparator: { "@./-".contains($0) }).flatMap { piece -> [String] in
                 let key = String(piece)
                 return spokenForms[key] ?? [key]
@@ -75,13 +69,11 @@ public enum CleanupGuard {
         "ok": ["okay"], "yep": ["yes"], "yup": ["yes"],
     ]
 
-    /// Words a good cleanup may add, such as for "going to" or a list's opening.
     private static let harmless: Set<String> = [
         "a", "an", "the", "and", "to", "of", "is", "are", "be", "have", "had", "it", "that", "so", "for", "in", "at",
         "on", "with", "i", "going", "dollars", "percent", "pm", "am", "p.m", "a.m",
     ]
 
-    /// Words a good cleanup may remove without it counting against it.
     private static let removable: Set<String> = [
         "um", "umm", "uh", "uhh", "uhm", "er", "erm", "hm", "hmm", "mm", "mhm", "like", "you", "know", "so", "well",
         "basically", "actually", "literally", "just", "i", "mean", "no", "wait", "sorry", "okay", "yeah", "right",
@@ -103,7 +95,6 @@ public enum CleanupGuard {
         word.contains(where: \.isNumber) || WordList.isNumber(word)
     }
 
-    /// Spelling fixes, inflection and joined words, such as "git hub" as "github".
     private static func isCloseToAny<S: Sequence>(_ word: String, in words: S) -> Bool where S.Element == String {
         guard word.count >= 4 else { return false }
         return words.contains { other in

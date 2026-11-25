@@ -1,9 +1,7 @@
 import Foundation
 import ShadesCore
 
-/// Talk goes through the Ask flow. Dictate only ever goes to the cursor.
 extension AppController {
-    /// A box is up that what you say belongs in, so nothing needs a look at the screen.
     var boxTakesVoice: Bool { fixIsOpen || dropIsOpen }
     private var talkBoxIsStillUp: Bool { stage.isInputVisible && talkBox == boxesOpened }
 
@@ -23,14 +21,11 @@ extension AppController {
         }
     }
 
-    /// A box's mic was pressed. The first press talks into that box, as the talk key does while you type there, and the
-    /// next one finishes what you said.
     func micPressed(in box: VoiceBox) {
         switch voiceMode {
         case nil:
             talkDown(into: box)
             finishAtTheLimit(box)
-        // Only a take for a box finishes here, so a mic can't send a look the talk key took to the router.
         case .talk where hearing && boxTakesVoiceNow:
             voiceTask = Task { await talkUp() }
         default:
@@ -38,8 +33,6 @@ extension AppController {
         }
     }
 
-    /// The engine turns the mic off once a take reaches its limit. With no key to let go of, the take finishes then, so
-    /// the mic doesn't go on showing it's hearing you.
     private func finishAtTheLimit(_ box: VoiceBox) {
         guard voiceMode == .talk else { return }
         let take = takes
@@ -50,13 +43,10 @@ extension AppController {
         }
     }
 
-    /// `box` is the box whose mic was pressed. Without one, it's the talk key.
     func talkDown(into box: VoiceBox? = nil) {
         guard voiceMode == nil else { return }
         switch box {
         case nil:
-            // Messages' box only counts if you're typing in it, not if it's open behind your work. When you are, it has
-            // the keyboard, so it wins over a Fix or drop box left open behind it.
             talkToMessages = stage.isMessagesBoxTyping ? messagesClosings : nil
             talkBox = boxTakesVoice && talkToMessages == nil ? boxesOpened : nil
         case .ask:
@@ -66,10 +56,8 @@ extension AppController {
             talkToMessages = stage.isMessagesBoxTyping ? messagesClosings : nil
             talkBox = nil
         }
-        // A mic is only ever for its own box, so it never looks at the screen.
         guard box == nil || boxTakesVoiceNow else { return }
         if talkToMessages != nil { stage.holdMessagesBox() }
-        // The look happens as the key goes down: that's the moment you mean.
         if !boxTakesVoiceNow { talkLook = startLook(CaptureOptions()) }
         guard beginListening(.talk) else {
             talkLook = nil
@@ -86,7 +74,6 @@ extension AppController {
     }
 
     func talkUp() async {
-        // A take that was cancelled, such as by its box closing, has nothing left to finish.
         guard hearing, voiceMode == .talk else { return }
         let take = takes
         let forMessages = talkToMessages != nil
@@ -96,18 +83,15 @@ extension AppController {
         renderBubble()
         do {
             let transcript = try await voice.end()
-            // Cancelled while it was worked out, or another take has started, which owns where words go now.
             guard take == takes else { return }
             voiceMode = nil
             refreshStatus()
             let text = transcript.cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
             if talkBox != nil {
-                // Saying it counts as pressing Return. If the box has gone, you meant never mind, not ask the cat.
                 if !text.isEmpty, talkBoxIsStillUp { stage.submitInput(text) }
                 return
             }
             if forMessages {
-                // The same goes for Messages: if you've stopped typing there, closed it or cancelled, it isn't sent anywhere.
                 let held = talkToMessages
                 talkToMessages = nil
                 if !text.isEmpty, let held, held == messagesClosings, stage.isMessagesBoxTyping {
@@ -135,19 +119,14 @@ extension AppController {
         }
     }
 
-    /// A box what you say belongs in was up when the key went down, so nothing needs a look at the screen.
     private var boxTakesVoiceNow: Bool { talkBox != nil || talkToMessages != nil }
 
-    /// The box that's hearing you, for its mic to show it.
     var listeningBox: VoiceBox? {
         guard hearing, voiceMode == .talk else { return nil }
         return talkToMessages != nil ? .messages : talkBox != nil ? .ask : nil
     }
 
-    /// Every box over the cat goes up through here, numbered so words meant for one can't land in the next. What you're
-    /// saying into it is forgotten when it closes, since there's nowhere left for it and no mic left to finish it with.
     func showBox(_ request: InputRequest) {
-        // One that was still up, such as an Ask box opened while you were pointing for a Fix, closes first.
         if stage.isInputVisible { stage.hideInput() }
         boxesOpened += 1
         let box = boxesOpened
@@ -213,7 +192,6 @@ extension AppController {
         return true
     }
 
-    /// Esc while holding the key means forget it.
     func cancelListening() {
         takes += 1
         voice.cancel()
@@ -231,7 +209,6 @@ extension AppController {
     func heardSoFar(_ text: String) {
         guard hearing, voiceMode == .talk else { return }
         if boxTakesVoiceNow {
-            // Words for a box show in that box, if any, never over the cat as if you were asking it.
             if talkBoxIsStillUp { stage.setInputText(text) }
         } else {
             heard = text
@@ -243,8 +220,6 @@ extension AppController {
         if hearing { stage.catLevel(level) }
     }
 
-    /// The first run downloads the speech models. Loading them from disk later is quick
-    /// and needs no comment, so this only speaks up once it's clearly a download.
     func fetchingEars(_ fraction: Double?) {
         guard let fraction else {
             if fetchingEarsLine {
@@ -256,7 +231,6 @@ extension AppController {
         }
         let since = fetchingEarsSince ?? now()
         fetchingEarsSince = since
-        // Anything else the cat is saying matters more than this.
         guard now().timeIntervalSince(since) > 2, fraction < 1, line == nil || fetchingEarsLine else { return }
         let text = CatWords.fetchingEars(fraction)
         guard line?.text != text else { return }

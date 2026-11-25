@@ -3,7 +3,6 @@ import Carbon.HIToolbox
 import ShadesContext
 import ShadesCore
 
-/// All the windows, behind the `CatStage` the flows talk to.
 @MainActor
 final class AppStage: CatStage {
     private static let wordSeconds: TimeInterval = 1.2
@@ -21,13 +20,11 @@ final class AppStage: CatStage {
     weak var controller: AppController?
 
     private var escape: UInt32?
-    /// The Messages box that was typing when the talk key went down, so what you say goes there.
     private var spokenPane: ChannelPane?
 
     init() {
         bubble.anchor = { [weak self] in
             guard let self else { return (.zero, .zero) }
-            // Stack above whatever else is open over the cat, so both stay readable.
             let frame = self.input.isVisible ? self.input.frame
                 : self.kittens.isVisible ? self.kittens.frame
                 : self.cat.destinationFrame
@@ -138,7 +135,6 @@ final class AppStage: CatStage {
         claim(.messages) { [weak self] in self?.controller?.messagesHotkeyPressed() }
     }
 
-    /// The menu only shows a shortcut the app holds, so one another app has isn't offered as working.
     private func claim(_ shortcut: Shortcut, run: @escaping () -> Void) {
         if Hotkeys.shared.register(keyCode: shortcut.keyCode, modifiers: shortcut.modifiers, handler: run) == nil {
             controller?.shortcutTaken(shortcut.label)
@@ -146,8 +142,6 @@ final class AppStage: CatStage {
             menuBar.held.append(shortcut)
         }
     }
-
-    // MARK: - The cat
 
     func catWake() { cat.wake() }
 
@@ -176,13 +170,10 @@ final class AppStage: CatStage {
         catSay(cat.pet())
     }
 
-    /// Where you are, for the cat to come to. The demo fixes it while it records, so a recording doesn't depend on the
-    /// real pointer.
     var pointer: () -> CGPoint = { NSEvent.mouseLocation }
 
     func catComeToYou(arrived: @escaping () -> Void) {
         let mouse = pointer()
-        // Beside the pointer rather than under it, so it isn't in your way.
         let spot = CGPoint(x: mouse.x + 28, y: mouse.y - CGFloat(CatArt.points) - 12)
         let close = hypot(spot.x - cat.frame.minX, spot.y - cat.frame.minY) < 120
         cat.run(to: close ? cat.brain.position : spot, arrived: arrived)
@@ -201,22 +192,17 @@ final class AppStage: CatStage {
         bubble.reposition()
     }
 
-    /// Asks the window server which windows a click there would reach, which reads where windows are and nothing in
-    /// them. One of ours behind your work doesn't count.
     func isOwnWindow(at region: CGRect) -> Bool {
         let point = NSPoint(x: region.midX, y: region.midY)
         let counting = Set(NSApp.windows.filter { $0.isVisible && $0 !== cat.panel && $0 !== pill.panel }.map(\.windowNumber))
         let pid = ProcessInfo.processInfo.processIdentifier
         return Self.isOwnWindow(counting: counting, isPassedOver: { number in
-            // A window the window list no longer has is on its way out, as the picker's overlay is.
+            // Outside the repo: for a moment after a window goes, windowNumber(at:) still finds it but CGWindowList doesn't.
             guard let info = (CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(number)) as? [[String: Any]])?.first else { return true }
             return info[kCGWindowOwnerPID as String] as? pid_t == pid
         }, below: { NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: $0) })
     }
 
-    /// Goes down through the windows at a spot, past ours that don't count and any already gone: the region picker's
-    /// overlay, which a click there still reaches for a moment after it's gone, and the cat and its word, which sit
-    /// over whatever you mean. The first window left decides.
     static func isOwnWindow(counting: Set<Int>, isPassedOver: (Int) -> Bool, below: (Int) -> Int) -> Bool {
         var seen: Set<Int> = []
         var number = below(0)
@@ -227,8 +213,6 @@ final class AppStage: CatStage {
         }
         return false
     }
-
-    // MARK: - The bubble and input
 
     func showBubble(_ content: BubbleContent?) {
         if content != nil { pill.hide() }
@@ -261,14 +245,11 @@ final class AppStage: CatStage {
         channels.view.showListening(in: box == .messages ? spokenPane : nil)
     }
 
-    /// The mics name the talk key, so it's easier to find.
     private func showTalkKey(_ key: HoldKey) {
         let tip = CatWords.speakTip(talkKey: key)
         input.mic.toolTip = tip
         channels.view.micTip = tip
     }
-
-    // MARK: - The kittens
 
     var isKittensVisible: Bool { kittens.isVisible }
 
@@ -279,8 +260,6 @@ final class AppStage: CatStage {
     func hideKittens() {
         kittens.hide()
     }
-
-    // MARK: - Messages
 
     var isChannelsVisible: Bool { channels.panel.isVisible }
     var isChannelsInFront: Bool { channels.isInFront }
@@ -298,8 +277,6 @@ final class AppStage: CatStage {
         channels.panel.close()
     }
 
-    /// Only looks for recent files when you press Attach, off the main thread, since Spotlight can take a moment. What
-    /// you pick is attached as if you'd dropped it there.
     private func showRecentFiles(for composer: ChannelComposer, under anchor: NSView) {
         guard let find = controller?.recentFiles else { return }
         Task { [weak self, weak composer, weak anchor] in
@@ -329,8 +306,6 @@ final class AppStage: CatStage {
         spokenPane?.stopSpeaking()
         spokenPane = nil
     }
-
-    // MARK: - Everything else
 
     func showStatus(_ status: String, needsYou: Bool) {
         menuBar.show(status: status, needsYou: needsYou)
@@ -368,9 +343,6 @@ final class AppStage: CatStage {
         Permissions.openSettings(pane)
     }
 
-    // MARK: - Esc
-
-    /// Esc is only taken from other apps while there's something up for it to dismiss.
     private func updateEscape() {
         let wanted = bubble.isVisible || kittens.isVisible || pairing.isVisible
         if wanted, escape == nil {

@@ -1,7 +1,6 @@
 import Foundation
 import ShadesCore
 
-/// Turns one thread's stream into the events of one turn. Pure, so it can be tested on recordings.
 struct T3TurnTracker {
     let threadID: String
     let messageID: String
@@ -63,7 +62,6 @@ struct T3TurnTracker {
     }
 
     private mutating func apply(_ item: T3Wire.TurnItem) -> [AgentReplyEvent] {
-        // A steer joins a run another message started, and only its own words say which.
         if runID == nil, item.isUserMessage, item.messageId == messageID, let run = item.runId {
             runID = run
             return []
@@ -99,7 +97,6 @@ struct T3TurnTracker {
         return []
     }
 
-    /// Each update carries the whole message so far, which is why a replay after a reconnect is harmless.
     private mutating func applyMessage(id: String, text: String) -> [AgentReplyEvent] {
         guard let index = messages.firstIndex(where: { $0.id == id }) else {
             guard !text.isEmpty else { return [] }
@@ -110,7 +107,6 @@ struct T3TurnTracker {
         let known = messages[index].text
         guard !known.hasPrefix(text) else { return [] }
         messages[index].text = text
-        // A rewrite can't be sent as a delta. The finished event still carries the right text.
         guard text.hasPrefix(known) else { return [] }
         return [.text(delta: String(text.dropFirst(known.count)))]
     }

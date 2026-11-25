@@ -1,16 +1,13 @@
 import Foundation
 import ShadesCore
 
-/// Says how a session went in a few sentences, rather than only that it ended.
 extension AppController {
-    /// How long a summary can take before the report's own opening stands in for it.
     static let summaryTimeout: TimeInterval = 25
     private static let summaryTitle = "Shades summary:"
 
     func reportOn(_ thread: AgentThread, failed: Bool) {
         reportTask = Task {
             var unread = false
-            // A run that ended while this one was being read gets its turn here.
             defer {
                 filing.remove(thread.id)
                 if !unread { fileOwedReports() }
@@ -19,7 +16,6 @@ extension AppController {
             let current = latestThreads.first { $0.id == thread.id } ?? thread
             if current.status.isActive && !current.turnEnded { return }
 
-            // Settled when this started, so a kitten's file changing partway can't leave a report with nowhere to go.
             let toInbox = filing.contains(thread.id)
             let done = !current.turnEnded
             let wasRead = toInbox ? nil : readRuns[thread.id].flatMap { $0.run == current.lastRunID ? $0.done : nil }
@@ -30,7 +26,6 @@ extension AppController {
             do {
                 report = try await backend.report(threadID: thread.id, run: toInbox ? current.lastRunID : nil)
             } catch {
-                // It's still owed, and the next list tries again. Not being able to read it doesn't mean it said nothing.
                 unread = toInbox
                 if toInbox { return }
                 report = nil
@@ -41,13 +36,10 @@ extension AppController {
                 return
             }
             if !failed, firstRead, let report { fileChangeRequests(in: report, of: current) }
-            // A thread given a correction says how it went, even if it was passed work before that.
             if !failed, firstRead, dispatchers.contains(thread.id), !inbox.wasCorrected(thread.id), let link {
                 passedOn(thread, to: link)
                 return
             }
-            // A kitten's report is sorted rather than summed up, so what it needs from you reaches you even when the
-            // bubble won't show, the same as one with an inbox.
             let kitten = kitten(of: thread)
             let readable = readable(report)
             var sorted: SortedReport?
@@ -55,7 +47,6 @@ extension AppController {
                 sorted = await self.sorted(readable, of: thread)
             }
             if let decision = sorted?.decision { flag(decision, of: current, report: report) }
-            // Held by Do Not Disturb, it's read again from the thread, so there's nothing to sum up.
             guard done, mayPopUp(.thread(thread.id)) else { return }
             let words = await words(for: readable, of: thread, failed: failed, sorted: sorted)
             post(
@@ -64,26 +55,21 @@ extension AppController {
                 threadID: thread.id,
                 unasked: true
             )
-            // A decision has its own notification.
             if !failed, sorted?.decision == nil { notifyFinished(thread, by: kitten) }
         }
     }
 
-    /// Which kitten a thread belongs to, by the project it's in or the name it starts with.
     func kitten(of thread: AgentThread) -> Kitten? {
         loadKittens().first { KittenBoard.belongs(thread, to: $0) }
     }
 
-    /// The colour of the kitten a thread belongs to, which lights the bubble while it speaks.
     func kittenColor(ofThread id: String) -> UInt32? {
         latestThreads.first { $0.id == id }.flatMap(kitten(of:)).flatMap(ChannelSpeakerLook.color(of:))
     }
 
-    /// All this thread did was start another one, so that's where the work is now.
     func passedOn(_ thread: AgentThread, to next: String) {
         dispatchers.insert(next)
         moveScreenWarnings(from: thread.id, to: next)
-        // Work Messages started keeps showing from wherever it moves, and what it said before stays.
         if let since = messagesThreads[thread.id] { messagesThreads[next] = min(since, messagesThreads[next] ?? since) }
         if let since = catsWork[thread.id] { catsWork[next] = min(since, catsWork[next] ?? since) }
         hiddenThreads.insert(thread.id)
@@ -130,11 +116,7 @@ extension AppController {
         )
     }
 
-    /// A summary, or a look at a settings change, still running when the app last stopped carries on without it, and
-    /// it's reading a kitten's words just the same. So nothing it says or asks for gets through, and it's tidied up as usual.
     func tidyLeftoverSummaries(_ threads: [AgentThread]) {
-        // They're never in a project, which keeps a thread of yours in one with a title like that out of this. A look at a
-        // settings change only ever runs in the router's folder.
         let leftover = { (thread: AgentThread) in
             thread.title.hasPrefix(Self.summaryTitle) && thread.projectPath == nil
                 || thread.title.hasPrefix(Self.reviewTitle) && self.inRouterFolder(thread)
@@ -155,8 +137,6 @@ extension AppController {
         }
     }
 
-    /// Runs out of sight and tidies up after itself. It only has words to write, so it isn't
-    /// allowed to do anything else, and the report it's reading doesn't get a say in that.
     func summarize(_ prompt: AgentPrompt) async -> String? {
         var threadID: String?
         var text: String?
@@ -185,8 +165,6 @@ extension AppController {
         return trimmed?.isEmpty == false ? trimmed : nil
     }
 
-    /// Notices wait their turn behind each other and anything more urgent, so none get lost. One that's `unasked` comes
-    /// by itself, so Do Not Disturb holds it.
     func post(caption: String, text: String, threadID: String?, questionID: String? = nil, first: Bool = false, unasked: Bool = false) {
         if unasked, !mayPopUp(missed(question: questionID, thread: threadID, text: text)) { return }
         lineCounter += 1
@@ -194,7 +172,6 @@ extension AppController {
         renderBubble()
     }
 
-    /// A question that's been answered has nothing left to say.
     func dropAnsweredQuestions(_ threads: [AgentThread]) {
         let open = Set(threads.compactMap { $0.pendingQuestion?.id })
         let before = notices.count

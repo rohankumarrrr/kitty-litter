@@ -1,14 +1,9 @@
 import Foundation
 import ShadesCore
 
-/// Every shape T3 Code's server sends or expects, in one place. This is an internal beta API
-/// that can change with any T3 release, so nothing outside this file knows what it looks like.
-/// See docs/t3-integration.md.
 enum T3Wire {
-    /// The only orchestration protocol this client speaks. The server turns away anything else.
     static let protocolVersion = 2
     static let protocolQueryItem = URLQueryItem(name: "orchestrationProtocol", value: "2")
-    /// `filesystem:read` is only for a picture in a thread's own folder, which T3 keeps the path inside.
     static let scopes = ["orchestration:read", "orchestration:operate", "filesystem:read"]
 
     enum Route {
@@ -31,7 +26,6 @@ enum T3Wire {
         static let createAssetURL = "assets.createUrl"
     }
 
-    /// Link that makes the desktop app show a thread.
     static func threadLink(environmentID: String, threadID: String) -> URL? {
         URL(string: "t3code://threads/\(encodeComponent(environmentID))/\(encodeComponent(threadID))")
     }
@@ -39,7 +33,7 @@ enum T3Wire {
     static let maxImageBytes = 10 * 1024 * 1024
     static let imageTypes: Set<String> = ["image/gif", "image/jpeg", "image/png", "image/webp"]
 
-    /// JavaScript's encodeURIComponent, which T3 builds its IDs with.
+    // Outside the repo: T3 builds its IDs with JavaScript's encodeURIComponent.
     static func encodeComponent(_ text: String) -> String {
         text.addingPercentEncoding(withAllowedCharacters: componentCharacters) ?? text
     }
@@ -55,8 +49,6 @@ enum T3Wire {
     static func providerItemID(_ ref: TurnItem.NativeRef) -> String {
         "turn-item:provider:\(encodeComponent(ref.driver)):native-item:\(encodeComponent(ref.nativeId))"
     }
-
-    // MARK: Decoding helpers
 
     static func decoder() -> JSONDecoder {
         let decoder = JSONDecoder()
@@ -74,19 +66,15 @@ enum T3Wire {
     }
 
     static func encode(_ value: some Encodable) -> Data {
-        // Only plain strings and numbers go in here, so encoding can't fail.
         (try? JSONEncoder().encode(value)) ?? Data("{}".utf8)
     }
 
-    /// Skips anything a newer server sends that this client doesn't understand.
     struct Lossy<Value: Decodable>: Decodable {
         let value: Value?
         init(from decoder: Decoder) { value = try? Value(from: decoder) }
     }
 
     struct Ignored: Decodable {}
-
-    // MARK: Discovery and HTTP
 
     struct RuntimeInfo: Decodable {
         let origin: String
@@ -102,7 +90,6 @@ enum T3Wire {
 
     struct SessionState: Decodable {
         let authenticated: Bool
-        /// Only T3's older scopes. Newer ones, such as `filesystem:read`, are only in `permissions`.
         let scopes: [String]?
         let permissions: [String]?
         let expiresAt: Date?
@@ -112,14 +99,11 @@ enum T3Wire {
         }
     }
 
-    /// What `t3 auth session issue --json` prints.
     struct IssuedSession: Decodable {
         let sessionId: String
         let token: String
         let expiresAt: Date?
     }
-
-    // MARK: RPC frames (Effect RPC with its JSON serialization)
 
     static func request(id: String, method: String, payload: Data) -> Data {
         var frame = Data(#"{"_tag":"Request","id":"#.utf8)
@@ -141,7 +125,6 @@ enum T3Wire {
         let requestId: String
     }
 
-    /// One message off the socket, before anyone looks inside.
     struct FrameHeader: Decodable {
         let _tag: String
         let requestId: String?
@@ -150,7 +133,7 @@ enum T3Wire {
         var isExit: Bool { _tag == "Exit" }
     }
 
-    /// The server sends one frame at a time today, but its serializer also allows a list.
+    // Outside the repo: T3 sends one frame at a time, but its serializer also allows a list.
     static func frames<Frame: Decodable>(_ type: Frame.Type, in data: Data) throws -> [Frame] {
         let decoder = decoder()
         if data.first == UInt8(ascii: "[") { return try decoder.decode([Frame].self, from: data) }
@@ -177,12 +160,10 @@ enum T3Wire {
         let cause: [Cause]?
 
         var isSuccess: Bool { _tag == "Success" }
-        /// Nothing failed. The server ended the stream, usually because it's shutting down.
         var isInterruptOnly: Bool {
             guard let cause, !cause.isEmpty else { return false }
             return cause.allSatisfy { $0._tag == "Interrupt" }
         }
-        /// The server didn't recognize the method or the payload, so its protocol has moved on.
         var isProtocolMismatch: Bool {
             cause?.contains { cause in
                 guard cause._tag == "Die", let defect = cause.defect?.value else { return false }
@@ -210,8 +191,6 @@ enum T3Wire {
         let detail: String?
     }
 
-    // MARK: Requests
-
     struct Empty: Encodable {}
 
     struct ModelSelection: Codable, Equatable {
@@ -226,7 +205,6 @@ enum T3Wire {
         init(_ choice: ModelChoice) {
             instanceId = choice.provider
             model = choice.model
-            // Each provider names its effort option differently.
             let optionID = choice.provider.hasPrefix("codex") ? "reasoningEffort" : "effort"
             options = choice.effort.isEmpty ? nil : [Option(id: optionID, value: choice.effort)]
         }
@@ -252,8 +230,7 @@ enum T3Wire {
         let relativeUrl: String
     }
 
-    /// Something T3 keeps, which it hands out as a signed link. A file in a thread's folder is looked up by T3, which
-    /// turns away any path that leads out of that folder.
+    // Outside the repo: T3 looks up a thread's file itself and turns away any path that leads out of that folder.
     enum Asset: Encodable {
         case attachment(id: String)
         case workspaceFile(threadID: String, path: String)
@@ -329,9 +306,6 @@ enum T3Wire {
         let sequence: Int
     }
 
-    /// `start_immediately` without a delivery intent gives this message its own run: it starts now
-    /// on an idle thread and queues behind an active one. `deliveryIntent` `steer` joins the run that's
-    /// going instead, as T3's own composer does, and on an idle thread starts one as before.
     struct DispatchMessage: Encodable {
         struct Mode: Encodable { var type = "start_immediately" }
 
@@ -341,7 +315,6 @@ enum T3Wire {
         let messageId: String
         let text: String
         let attachments: [ImageAttachment]
-        /// Left out, the thread carries on with the model it already has.
         let modelSelection: ModelSelection?
         var deliveryIntent: String?
         var dispatchMode = Mode()
@@ -356,9 +329,7 @@ enum T3Wire {
         let runtimeMode: String
     }
 
-    /// An approval sends a `decision`, and a question sends `answers`, by each question's ID.
     struct RespondToRequest: Encodable {
-        /// A question that takes several choices wants a list, even of one, unless it's your own words.
         enum Answer: Encodable, Equatable {
             case one(String)
             case several([String])
@@ -397,7 +368,6 @@ enum T3Wire {
         var omitIdleSubagents = true
         var omitOlderSettled = true
 
-        /// Every thread that isn't archived, subagents and long-settled ones too.
         static let everything = SubscribeShell(omitIdleSubagents: false, omitOlderSettled: false)
     }
 
@@ -406,7 +376,6 @@ enum T3Wire {
         let afterSequence: Int?
         var acceptBoundedSnapshot = true
 
-        /// Starts with the whole thread, rather than a window of its latest rows.
         static func whole(threadID: String) -> SubscribeThread {
             SubscribeThread(threadId: threadID, afterSequence: nil, acceptBoundedSnapshot: false)
         }
@@ -421,13 +390,11 @@ enum T3Wire {
         let threadId: String
     }
 
-    /// T3 takes 2 to 200 letters and up to 50 matches. Newer servers take more keys, which older ones would turn away.
     struct SearchThreads: Encodable {
         let query: String
         var limit = 50
     }
 
-    /// Each match also has a snippet of the message, which is never read, since it can come from inside a screen block.
     struct SearchResult: Decodable {
         struct Match: Decodable {
             let threadId: String
@@ -439,8 +406,6 @@ enum T3Wire {
     struct TurnItemResult: Decodable {
         let item: TurnItem?
     }
-
-    // MARK: The shell: every thread, kept up to date
 
     enum ShellItem: Decodable {
         case snapshot(threads: [ThreadShell], projects: [ProjectShell])
@@ -466,7 +431,7 @@ enum T3Wire {
             case "snapshot":
                 let snapshot = try container.decode(Snapshot.self, forKey: .snapshot)
                 let projects = snapshot.projects.compactMap(\.value)
-                // These follow-up snapshots only refresh project details, and name no threads.
+                // Outside the repo: T3 follows its snapshot with ones that only refresh project details and name no threads.
                 if container.contains(.resolvedRepositoryIdentityRoots) {
                     self = .projectsOnly(projects)
                 } else {
@@ -513,7 +478,6 @@ enum T3Wire {
         }
 
         struct BackgroundTask: Decodable {
-            /// Set on a pull request it's watching and on work it called `t3_background_wait` on, which are what wake it.
             let awaited: Bool?
         }
 
@@ -534,7 +498,6 @@ enum T3Wire {
         let modelSelection: SelectedModel
         let lineage: Lineage
         let pendingRuntimeRequest: PendingRequest?
-        /// Shells, subagents, pull request watches and the like that T3 lists as still going after its turn ended.
         let pendingBackgroundTasks: [Lossy<BackgroundTask>]?
         let latestRunId: String?
         let latestRunCompletedAt: Date?
@@ -548,7 +511,6 @@ enum T3Wire {
             (pullRequests ?? []).compactMap(\.value).last.map { ThreadPullRequest(number: $0.number, state: $0.snapshot.state, url: $0.url) }
         }
 
-        /// Subagents and side chats live inside their parent, never in a thread list.
         var isListed: Bool {
             lineage.relationshipToParent != "subagent" && lineage.sideChat != true
                 && archivedAt == nil && deletedAt == nil
@@ -580,8 +542,6 @@ enum T3Wire {
         default: return nil
         }
     }
-
-    // MARK: One thread's stream
 
     enum ThreadItem: Decodable {
         case snapshot(Projection, sequence: Int)
@@ -659,8 +619,6 @@ enum T3Wire {
         let turnItems: [Lossy<TurnItem>]
         let messages: [Lossy<Message>]?
 
-        /// A person, or the thread whose agent wrote the first message. T3 keeps no other link
-        /// between a thread and the one that launched it.
         var startedBy: ThreadOrigin.Starter {
             if thread.createdBy == "user" { return .person }
             let first = messages?.compactMap(\.value)
@@ -679,7 +637,6 @@ enum T3Wire {
         let userMessageId: String
         let status: String
 
-        /// `waiting` isn't an ending: the run still has to save its checkpoint or finish background work.
         var outcome: Outcome? {
             switch status {
             case "completed": return .completed
@@ -698,7 +655,6 @@ enum T3Wire {
         struct Question: Decodable {
             struct Option: Decodable {
                 let label: String
-                /// What answering with it sends. Without one, it's the label.
                 let value: String?
             }
             let id: String?
@@ -723,47 +679,36 @@ enum T3Wire {
         let status: String
         let runId: String?
         let parentItemId: String?
-        /// The provider's own ID, which an approval shares with the command or file change it's about.
         let nativeItemRef: NativeRef?
         let startedAt: Date?
         let updatedAt: Date?
         let title: String?
-        /// Assistant messages: the whole text so far, not a delta.
         let messageId: String?
         let text: String?
-        /// Approval requests.
         let requestId: String?
         let requestKind: String?
         let prompt: String?
         let reason: String?
         let appName: String?
-        /// Commands and file changes.
         let input: String?
         let fileName: String?
-        /// Errors.
         let failure: Failure?
-        /// Questions for the user.
         let questions: [Question]?
-        /// User messages: the pictures that came with it, which T3 keeps.
         let attachments: [Lossy<Attachment>]?
-        /// User messages: who sent it. Agents' messages name the thread they came from.
         let createdBy: String?
         let senderThreadId: String?
-        /// Set on what a schedule sent, which carries the `createdBy` of whoever set the schedule up.
         let scheduledTaskId: String?
-        /// T3 writes these itself, some of them marked as coming from the user.
         let idleCompaction: Lossy<Ignored>?
         let workflowScript: Lossy<Ignored>?
 
         var isUserMessage: Bool { type == "user_message" }
         var isAssistantMessage: Bool { type == "assistant_message" }
         var isError: Bool { type == "error" }
-        /// Claude's thinking comes through as assistant messages too, so it doesn't count as speech.
+        // Outside the repo: T3 sends Claude's thinking as assistant messages too.
         var isSpoken: Bool {
             isAssistantMessage && !id.contains("thinking") && text?.contains(where: { !$0.isWhitespace }) == true
         }
         var isWrittenByT3: Bool { idleCompaction != nil || workflowScript != nil }
-        /// Anything but these two is never put in a person's mouth.
         var isFromPerson: Bool { createdBy == nil || createdBy == "user" }
         var agentSenderThreadID: String? { createdBy == "agent" ? senderThreadId : nil }
         var when: Date { startedAt ?? updatedAt ?? .distantPast }
@@ -773,9 +718,6 @@ enum T3Wire {
         }
     }
 
-    /// What was dropped or attached with a message, by the names Shades wrote in its screen block, each picture with
-    /// T3's ID for the copy it keeps. A look at the screen names nothing, so its picture never comes back this way.
-    /// A message from before pictures went by their names has one, called `screen.jpg`.
     static func files(of item: TurnItem) -> [ExchangeFile] {
         let names = item.text.map(Prompts.droppedNames) ?? []
         var kept = item.attachments?.compactMap(\.value) ?? []
@@ -786,13 +728,10 @@ enum T3Wire {
         }
     }
 
-    /// T3 leaves this on the front of some of a person's messages.
     static let ultrathinkPrefix = "Ultrathink:"
-    /// What T3 sends for a message that's only attachments.
     static let attachmentsOnly = "[User attached one or more files without additional text. Respond using the conversation context and the attached files.]"
 
-    /// What the coding tool behind an imported thread wrote, which T3 marks as the user's. These are
-    /// the tags found in real threads. Any hyphenated tag would do, but people write those too.
+    // Outside the repo: T3 marks what the coding tool behind an imported thread wrote as the user's, in tags like these.
     static let toolTags = [
         "system-reminder", "task-notification", "scheduled-task", "ci-monitor-event", "side-sessions-event",
         "bash-input", "bash-stdout", "bash-stderr", "command-name", "command-message", "command-args",
@@ -803,13 +742,10 @@ enum T3Wire {
         Prompts.withoutBlocks(named: toolTags, in: text)
     }
 
-    /// A thread's own items in time order. Subagents' items have a parent, so they're left out.
     static func ownItems(_ items: [TurnItem]) -> [TurnItem] {
         items.filter { $0.parentItemId == nil }.sorted { $0.when < $1.when }
     }
 
-    /// What the agent last said in a thread, with any error it ended on first. Given a run, a run that
-    /// said nothing has nothing to say, rather than the words of the one before it.
     static func finalReport(in items: [TurnItem], run: String? = nil) -> String? {
         let ordered = ownItems(items).filter { run == nil || $0.runId == run }
         let message = ordered.last(where: \.isSpoken)
@@ -819,8 +755,7 @@ enum T3Wire {
         return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
     }
 
-    /// `nil` if any question has no ID to file its answer under, so it can only be answered in T3. T3 files one answer
-    /// under each ID, so different questions sharing one are a single part, answered in your own words.
+    // Outside the repo: T3 files one answer under each question ID, so questions sharing an ID take one answer.
     static func answerForm(_ questions: [TurnItem.Question]?) -> AnswerForm? {
         guard let questions, !questions.isEmpty else { return nil }
         var parts: [AnswerForm.Part] = []
@@ -846,8 +781,6 @@ enum T3Wire {
         return AnswerForm(parts: parts)
     }
 
-    /// One answer per part, in order, or `nil` if any doesn't fit its part. Options for a question that takes several
-    /// go as a list, even of one.
     static func answers(_ answers: [[String]], to form: AnswerForm) -> [String: RespondToRequest.Answer]? {
         guard answers.count == form.parts.count, zip(form.parts, answers).allSatisfy({ $0.takes($1) }) else { return nil }
         let filed = zip(form.parts, answers).map { part, answer in
@@ -856,10 +789,7 @@ enum T3Wire {
         return Dictionary(filed) { first, _ in first }
     }
 
-    /// Plain words for the approval bubble. It comes from the agent, so it's only ever shown.
-    ///
-    /// Claude puts the command itself in `prompt`, but Codex puts its reason for asking there, so the
-    /// real command or file comes from `related`, the item the approval is about.
+    // Outside the repo: Claude puts the command in prompt, but Codex puts its reason there, so the command comes from related.
     static func approvalSummary(kind: ApprovalKind, item: TurnItem?, related: TurnItem? = nil) -> String {
         let said = item?.prompt ?? item?.title ?? item?.reason
         switch kind {
@@ -878,7 +808,7 @@ enum T3Wire {
         }
     }
 
-    /// Codex wraps commands as `/bin/zsh -lc '...'`. Anything quoted less simply is shown as it is.
+    // Outside the repo: Codex wraps commands as /bin/zsh -lc '...'.
     static func unwrappedCommand(_ input: String) -> String {
         let wrapped = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let match = wrapped.wholeMatch(of: #/(?:\S*\/)?(?:zsh|bash|sh) -l?c '((?s).*)'/#) else { return wrapped }

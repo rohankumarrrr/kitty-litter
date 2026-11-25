@@ -1,7 +1,6 @@
 import Foundation
 import XCTest
 
-/// Runs the signing choices scripts/bundle.sh and scripts/install.sh make, on output shaped like macOS's own.
 final class SigningScriptTests: XCTestCase {
     private var script: URL {
         URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -19,8 +18,6 @@ final class SigningScriptTests: XCTestCase {
         process.waitUntilExit()
         return (process.terminationStatus, String(decoding: data, as: UTF8.self).trimmingCharacters(in: .newlines))
     }
-
-    // MARK: Which certificate bundle.sh signs with
 
     private static let selfSigned = #"  1) 3333333333333333333333333333333333333333 "Shades Dev""#
     private static let development = #"  2) 1111111111111111111111111111111111111111 "Apple Development: Jane Appleseed (AB12CD34EF)""#
@@ -56,8 +53,6 @@ final class SigningScriptTests: XCTestCase {
         XCTAssertEqual(picked.status, 0)
         XCTAssertEqual(picked.output, "")
     }
-
-    // MARK: What install.sh lets replace the installed copy
 
     private func signed(by authority: String, team: String) -> String {
         """
@@ -112,7 +107,6 @@ final class SigningScriptTests: XCTestCase {
         XCTAssertEqual(try run("may_replace", teamA, "").status, 0, "onto a Mac without the app")
     }
 
-    /// A copy cut short says nothing about its team, but what it saved in the Keychain may still be the team's.
     func testAnInstalledCopyWhoseSignatureCantBeReadIsntTakenForOneWithoutATeam() throws {
         for unreadable in [
             "/Applications/Shades.app: code object is not signed at all",
@@ -143,10 +137,6 @@ final class SigningScriptTests: XCTestCase {
         XCTAssertEqual(try run("may_replace", adHoc, teamA, "--ad-hoc", "--change-team").status, 0)
     }
 
-    // MARK: How install.sh reads its flags
-
-    /// A copy of install.sh in a folder of its own, installing over a team-signed copy there with a "Shades Dev" build.
-    /// bundle.sh, codesign and git are stand-ins, and it stops where it would start replacing the app.
     private func install(_ arguments: String..., dirty: Bool = false) throws -> (status: Int32, output: String) {
         let files = FileManager.default
         let root = files.temporaryDirectory.appendingPathComponent("install-\(UUID().uuidString)")

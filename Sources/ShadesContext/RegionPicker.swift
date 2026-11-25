@@ -1,7 +1,5 @@
 import AppKit
 
-/// The drag-a-box overlay. It runs in non-activating panels, so the app you're pointing at stays
-/// frontmost throughout, and Shades can still tell what you're looking at afterwards.
 @MainActor
 final class RegionPicker {
     static let shared = RegionPicker()
@@ -11,7 +9,6 @@ final class RegionPicker {
     private var observers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
 
     func pick() async -> CGRect? {
-        // Two overlays at once would fight over the mouse, so a second request just cancels.
         guard waiting == nil else { return nil }
         return await withCheckedContinuation { continuation in
             waiting = continuation
@@ -39,18 +36,16 @@ final class RegionPicker {
         }
         panels.forEach { $0.reveal() }
 
-        // Esc only reaches a key window. The panel under the mouse takes that, without activating us.
         let mouse = NSEvent.mouseLocation
         let target = panels.first { $0.frame.contains(mouse) } ?? panels.first
         target?.makeKey()
         target?.makeFirstResponder(target?.overlay)
         NSCursor.crosshair.set()
-        // The system ignores this until the panel has reached the screen, so ask again once it has.
+        // Outside the repo: macOS ignores a cursor change until the panel has reached the screen.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
             if self?.waiting != nil { NSCursor.crosshair.set() }
         }
 
-        // A stuck overlay would block the whole Mac, so anything that pulls you away cancels it.
         watch(NSWorkspace.shared.notificationCenter, NSWorkspace.didActivateApplicationNotification)
         watch(NotificationCenter.default, NSApplication.didChangeScreenParametersNotification)
     }
@@ -74,7 +69,6 @@ final class RegionPicker {
     }
 }
 
-/// Covers one display, above the menu bar and Dock, and over full-screen apps too.
 final class RegionPanel: NSPanel {
     let overlay: RegionOverlayView
 
@@ -106,7 +100,7 @@ final class RegionPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
-    /// AppKit would otherwise push a borderless window out from under the menu bar.
+    // Outside the repo: AppKit would otherwise push a borderless window out from under the menu bar.
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 
     func reveal() {
@@ -118,7 +112,6 @@ final class RegionPanel: NSPanel {
         }
     }
 
-    /// Overlay coordinates to AppKit global points.
     func globalRect(from rect: CGRect) -> CGRect {
         rect.offsetBy(dx: frame.minX, dy: frame.minY)
     }

@@ -1,14 +1,10 @@
 import AppKit
 
-/// Clicking or typing somewhere else closes the cat's small windows. The demo pauses that while it records, since the
-/// real desktop around it goes on being used.
 @MainActor
 enum ClickAway {
     static var isPaused = false
 }
 
-/// A window that floats over everything, on every Space and over full-screen apps,
-/// without ever making Shades the active app. Most never take the keyboard either.
 class QuietPanel: NSPanel {
     private let allowsKey: Bool
 
@@ -36,11 +32,9 @@ class QuietPanel: NSPanel {
     override var canBecomeKey: Bool { allowsKey }
     override var canBecomeMain: Bool { false }
 
-    /// On its way out, so a click meant for what was there can't land on it.
     private var leaving = false
     private var fades = 0
 
-    /// Shows it without taking the keyboard, fading in over Opal's appear time, or at once with Reduce Motion on.
     func fadeIn() {
         fades += 1
         leaving = false
@@ -57,7 +51,6 @@ class QuietPanel: NSPanel {
         }
     }
 
-    /// Puts it away with a quick fade, or at once with Reduce Motion on.
     func fadeOut() {
         guard isVisible, !leaving else { return }
         fades += 1
@@ -87,13 +80,12 @@ class QuietPanel: NSPanel {
         Self.performEdit(event, from: self) || super.performKeyEquivalent(with: event)
     }
 
-    /// There's no menu bar of ours while another app is active, so the editing keys come through here.
+    // Outside the repo: an app that isn't active has no menu bar, so its Edit keys reach no menu.
     static func performEdit(_ event: NSEvent, from sender: NSWindow) -> Bool {
         guard let action = editAction(for: event) else { return false }
         return NSApp.sendAction(action, to: nil, from: sender)
     }
 
-    /// What an Edit menu would do with these keys, Redo's ⇧⌘Z included.
     static func editAction(for event: NSEvent) -> Selector? {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard let key = event.charactersIgnoringModifiers?.lowercased() else { return nil }

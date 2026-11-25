@@ -3,21 +3,13 @@ import CoreGraphics
 import Foundation
 import ShadesCore
 
-/// Watches hold keys anywhere in the system with a listen-only event tap, so every key still reaches the app you're in.
-///
-/// Callbacks arrive on the main thread. `onPress` fires the moment the key goes down so the mic can open at
-/// once. Set `onCancel` as well: it replaces `onRelease` when the press turns out to be a tap or a shortcut.
 public final class KeyHoldMonitor: KeyHoldMonitoring {
     public var onPress: ((HoldKey) -> Void)?
     public var onRelease: ((HoldKey) -> Void)?
-    /// A tap or shortcut rather than talking. If unset, these come through `onRelease`, and
-    /// the engine returns nothing for a tap but may keep a short chord's audio.
     public var onCancel: ((HoldKey) -> Void)?
 
-    /// Whether the system would let a tap see keys. Doesn't prompt.
     public static var hasPermission: Bool { CGPreflightListenEventAccess() }
 
-    /// Shows the system prompt for Input Monitoring.
     @discardableResult
     public static func requestPermission() -> Bool { CGRequestListenEventAccess() }
 
@@ -29,7 +21,6 @@ public final class KeyHoldMonitor: KeyHoldMonitoring {
     private let threadReady = DispatchSemaphore(value: 0)
     private let lock = NSLock()
     private var watchdog: DispatchSourceTimer?
-    /// Whether the system's key state agreed the key was down when it went down, so it can be trusted later.
     private var stateIsReliable = false
 
     public init() {}
@@ -67,7 +58,6 @@ public final class KeyHoldMonitor: KeyHoldMonitoring {
         }
         self.tap = tap
 
-        // Its own thread, so a busy main thread can't delay the moment the key goes down.
         let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
         let thread = Thread { [weak self] in
             let loop = CFRunLoopGetCurrent()
@@ -108,7 +98,6 @@ public final class KeyHoldMonitor: KeyHoldMonitoring {
         case .flagsChanged:
             handleFlags(event)
         case .keyDown:
-            // A key held since before the press keeps repeating, and that isn't a chord.
             guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else { return }
             let code = event.getIntegerValueField(.keyboardEventKeycode)
             let output = lock.withLock { code == KeyCodes.escape ? gesture.escapePressed() : gesture.otherKeyPressed(at: event.seconds) }
@@ -126,7 +115,6 @@ public final class KeyHoldMonitor: KeyHoldMonitoring {
         let time = event.seconds
 
         guard let key = KeyCodes.key(for: code), lock.withLock({ keys.contains(key) }) else {
-            // Caps Lock changes the flags too but doesn't make a shortcut.
             guard code != KeyCodes.capsLock, isModifierGoingDown(code: code, flags: flags) else { return }
             deliver(lock.withLock { gesture.otherKeyPressed(at: time) })
             return
@@ -158,7 +146,6 @@ public final class KeyHoldMonitor: KeyHoldMonitoring {
             stopWatchdog()
             DispatchQueue.main.async { [weak self] in self?.onRelease?(key) }
         case .cancel(let key):
-            // The key may stay down after a chord, but nothing's waiting on it anymore.
             stopWatchdog()
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
@@ -167,10 +154,7 @@ public final class KeyHoldMonitor: KeyHoldMonitoring {
         }
     }
 
-    // MARK: - Missed releases
-
-    /// Secure Keyboard Entry hides events from the tap, and a hold that started just before it would
-    /// otherwise never end, with the mic stuck open. So a timer double-checks the physical key.
+    // Outside the repo: Secure Keyboard Entry hides events from the tap, so a key's release can go unseen.
     private func startWatchdog(for key: HoldKey) {
         stopWatchdog()
         stateIsReliable = Self.isPhysicallyDown(key)
@@ -204,22 +188,16 @@ public final class KeyHoldMonitor: KeyHoldMonitoring {
         return CGEventSource.keyState(.hidSystemState, key: CGKeyCode(code))
     }
 
-    // MARK: - The Globe key
-
-    /// What macOS does with a press of the Globe key, from System Settings > Keyboard.
     public enum GlobeAction: Int {
         case doNothing = 0, changeInputSource = 1, showEmoji = 2, startDictation = 3
     }
 
-    /// `nil` means the setting has never been changed, so the Mac's default applies. Anything but
-    /// `.doNothing` can pop up over your dictation when you let go, and a tap can't stop that.
     public static var globeAction: GlobeAction? {
         CFPreferencesAppSynchronize("com.apple.HIToolbox" as CFString)
         let value = CFPreferencesCopyAppValue("AppleFnUsageType" as CFString, "com.apple.HIToolbox" as CFString)
         return (value as? Int).flatMap(GlobeAction.init(rawValue:))
     }
 
-    /// Opens the Keyboard pane, where "Press 🌐 key to" lives.
     public static func openKeyboardSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
             NSWorkspace.shared.open(url)
@@ -228,6 +206,5 @@ public final class KeyHoldMonitor: KeyHoldMonitoring {
 }
 
 extension CGEvent {
-    /// Seconds since boot, from the event's own timestamp rather than whenever it got to us.
     fileprivate var seconds: TimeInterval { TimeInterval(timestamp) / 1_000_000_000 }
 }

@@ -1,13 +1,7 @@
 import AppKit
 
-/// Where a link you pressed in Messages goes, over the box: its host, then its whole address, as much of it as fits.
-/// Nothing opens until you press Open, so a link's words can't hide where it leads, and nothing in a message can open
-/// anything by itself. A web picture asks the same way, with Show, before the Mac fetches it. It floats, so it's
-/// Opal's glass, in from the pane's sides.
 final class LinkBar: QuietView {
-    /// Inside the glass.
     private static let pad: CGFloat = 14
-    /// Round the glass, in from the pane.
     private static let inset = NSSize(width: ChannelRowView.margin, height: 4)
     private static var titleHeight: CGFloat { MessagesInk.meta + 7 }
     private static let buttonGap: CGFloat = 8
@@ -30,7 +24,6 @@ final class LinkBar: QuietView {
         cancel.onPress = { [weak self] in self?.onCancel?() }
         addSubview(open)
         addSubview(cancel)
-        // An address too long for the pane stops at the buttons, never over the box below.
         clipsToBounds = true
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
@@ -49,7 +42,6 @@ final class LinkBar: QuietView {
         needsDisplay = true
     }
 
-    /// The host it opens, which shows whatever room the address has.
     var title: String { isPicture ? CatWords.showPicture(from: link?.host ?? "") : CatWords.openLink(to: link?.host ?? "") }
 
     private var address: NSAttributedString {
@@ -66,13 +58,12 @@ final class LinkBar: QuietView {
         ceil(address.boundingRect(with: NSSize(width: max(width - (Self.pad + Self.inset.width) * 2, 60), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin]).height)
     }
 
-    /// As tall as the whole address needs, however long it is.
     func height(for width: CGFloat) -> CGFloat {
         guard link != nil else { return 0 }
         return Self.inset.height * 2 + Self.pad + Self.titleHeight + addressHeight(width: width) + Self.buttonGap + open.frame.height + Self.pad
     }
 
-    /// Never a null rect, which insetting a hidden, empty bar would give, with an origin at infinity.
+    // Outside the repo: insetting a rect past empty gives CGRect.null, whose origin is at infinity.
     private var glass: NSRect {
         NSRect(x: Self.inset.width, y: Self.inset.height, width: max(bounds.width - Self.inset.width * 2, 0), height: max(bounds.height - Self.inset.height * 2, 0))
     }

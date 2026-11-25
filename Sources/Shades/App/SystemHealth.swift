@@ -4,7 +4,6 @@ import ShadesContext
 import ShadesCore
 import ShadesVoice
 
-/// Reads the facts for the self-check from macOS.
 enum SystemHealth {
     static func facts(skillsFolder: URL = Kittens.defaultFolder.appendingPathComponent("_skills")) -> HealthFacts {
         var facts = HealthFacts()
@@ -20,15 +19,12 @@ enum SystemHealth {
         facts.skillsInstalled = FileManager.default.fileExists(
             atPath: skillsFolder.appendingPathComponent("pstack/skills/poteto-mode/SKILL.md").path
         )
-        // The app is Shades and a build from source is shades.
         facts.otherCopies = NSWorkspace.shared.runningApplications
             .filter { $0.processIdentifier != getpid() && $0.executableURL?.lastPathComponent.lowercased() == "shades" }
             .map(\.processIdentifier)
         return facts
     }
 
-    /// An ad hoc signature has no certificates, and that's the kind macOS forgets on every build. A self-signed one has
-    /// no team, and that's the kind whose Keychain items the next build can't read.
     private static func readSignature() -> (hasIdentity: Bool, isValid: Bool, hasTeam: Bool) {
         var code: SecCode?
         guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return (false, false, false) }
@@ -46,7 +42,6 @@ enum SystemHealth {
         return (hasIdentity, isValid, hasTeam)
     }
 
-    /// Written whole, so a reader never sees half of it.
     static func write(_ report: HealthReport, to file: URL) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

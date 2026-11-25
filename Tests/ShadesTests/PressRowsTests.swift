@@ -3,8 +3,6 @@ import AppKit
 import ShadesCore
 import XCTest
 
-/// Everything on a message in Messages, pressed the way a mouse and keyboard press it, through `Press`, in a window
-/// that's never shown.
 @MainActor
 final class PressRowsTests: XCTestCase {
     private let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
@@ -16,7 +14,6 @@ final class PressRowsTests: XCTestCase {
         override var isKeyWindow: Bool { true }
     }
 
-    /// What the window's owner heard, which is all pressing anything in it does.
     private final class Heard {
         var actions: [String] = []
         var copied: [String] = []
@@ -32,13 +29,10 @@ final class PressRowsTests: XCTestCase {
         QuietFocus.fullKeyboardAccess = { NSApplication.shared.isFullKeyboardAccessEnabled }
     }
 
-    // MARK: What's shown
-
     private func exchange(_ id: String, _ seconds: TimeInterval, ask: String?, reply: String?, notes: Int = 0, failure: String? = nil) -> Exchange {
         Exchange(id: id, asker: .you, askedAt: at.addingTimeInterval(seconds), ask: ask, reply: reply, repliedAt: at.addingTimeInterval(seconds + 1), earlierNotes: notes, failure: failure)
     }
 
-    /// Steve's channel: a thread Steve started, `k`, whose replies are `replies`, and one you started, `y`.
     private func book(replies: [Exchange]? = nil, sent: [SentMessage] = [], reactions: [String: [Reaction]] = [:]) -> ChannelBook {
         let threads = ["k", "y"].map { AgentThread(id: $0, title: $0 == "k" ? "Fonts" : "Pricing", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: steve.folder) }
         let k = [exchange("k0", 0, ask: nil, reply: "Picked a heading font.", notes: 2)] + (replies ?? [exchange("k1", 60, ask: "Show me.", reply: "Here it is.")])
@@ -46,7 +40,6 @@ final class PressRowsTests: XCTestCase {
         return ChannelBook.build(kittens: [steve], threads: threads, transcripts: ["k": k, "y": y], isReading: false, unreadable: 0, cantReachT3: false, sent: sent, reactions: reactions)
     }
 
-    /// Messages in a window that's never shown, telling `heard` whatever it's asked to do.
     private func messages(width: CGFloat, keyed: Bool = false) -> (window: NSWindow, view: ChannelsView, heard: Heard) {
         let frame = NSRect(x: 0, y: 0, width: width, height: 640)
         let window = keyed ? KeyWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: true) : NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: true)
@@ -77,8 +70,6 @@ final class PressRowsTests: XCTestCase {
 
     private func described(_ action: MessagesAction) -> String { String(describing: action) }
 
-    /// A press and release at `point` in `view`, handed to whatever the window finds there, as `Press.click` does at a
-    /// view's centre. Gives back what it landed on.
     @discardableResult
     private func click(at point: NSPoint, in view: NSView, file: StaticString = #filePath, line: UInt = #line) throws -> NSView {
         let window = try XCTUnwrap(view.window, "it's in a window", file: file, line: line)
@@ -93,7 +84,6 @@ final class PressRowsTests: XCTestCase {
         return target
     }
 
-    /// Tab into the list, then ↑ until the arrow keys are on `row`.
     private func arrow(to row: ChannelRowView, in pane: ChannelPane, file: StaticString = #filePath, line: UInt = #line) throws {
         let window = try XCTUnwrap(pane.window, file: file, line: line)
         XCTAssertTrue(window.makeFirstResponder(pane.list), "the list takes the keyboard", file: file, line: line)
@@ -104,7 +94,6 @@ final class PressRowsTests: XCTestCase {
         XCTAssertTrue(pane.currentRow === row, "↑ comes to it", file: file, line: line)
     }
 
-    /// Whether Tab, from the list's row the arrow keys are on, gets to `control`.
     private func tabs(from list: MessageList, to control: NSView) -> Bool {
         guard let window = list.window, window.makeFirstResponder(list) else { return false }
         for _ in 0..<12 {
@@ -114,15 +103,12 @@ final class PressRowsTests: XCTestCase {
         return false
     }
 
-    // MARK: The message toolbar
-
     private struct Case {
         var name: String
         var thread: String?
         var message: String
         var threadOfMessage: String
         var text: String
-        /// The widths at which what doesn't fit in its bar goes under More.
         var folds: Set<CGFloat> = []
         var inThreadPane: Bool { thread != nil }
     }
@@ -133,12 +119,10 @@ final class PressRowsTests: XCTestCase {
             Case(name: "yours in the channel", thread: nil, message: "y0:ask", threadOfMessage: "y", text: "Can you tidy the pricing page?"),
             Case(name: "a kitten's in its thread", thread: "k", message: "k1:reply", threadOfMessage: "k", text: "Here it is.", folds: [820]),
             Case(name: "yours in its thread", thread: "k", message: "k1:ask", threadOfMessage: "k", text: "Show me."),
-            // Its name line has earlier notes too, which leave room in a thread's pane for only More.
             Case(name: "a kitten's with earlier notes in its thread", thread: "k", message: "k0:reply", threadOfMessage: "k", text: "Picked a heading font.", folds: [1100, 820]),
         ]
     }
 
-    /// What each of its buttons, and each of More's items, is heard to do.
     private func expectations(_ c: Case, _ view: ChannelsView, _ heard: Heard) -> [String: () -> Bool] {
         [
             CatWords.react: { heard.actions == [self.described(.react(c.message, .eyes))] },
@@ -177,8 +161,7 @@ final class PressRowsTests: XCTestCase {
                     } else {
                         XCTAssertTrue(try Press.click(button) === button, "\(label): the click lands on it")
                     }
-                    // React and More open a menu, whose own loop would hold the test, so their items are chosen from
-                    // the same menu, which is the one a right-click opens.
+                    // Outside the repo: an open NSMenu runs its own tracking loop, which would hold the test.
                     if name == CatWords.react {
                         let marks = try XCTUnwrap(menu.item(withTitle: CatWords.react)?.submenu, label)
                         marks.performActionForItem(at: marks.indexOfItem(withTitle: Reaction.eyes.emoji))
@@ -230,7 +213,6 @@ final class PressRowsTests: XCTestCase {
                         continue
                     }
                     XCTAssertTrue(tabs(from: pane.list, to: button), "\(label): Tab reaches it")
-                    // Space on React opens its menu, which the mouse test chooses from.
                     guard name != CatWords.react else { continue }
                     try Press.key(" ", keyCode: 49, on: button)
                     XCTAssertTrue(try XCTUnwrap(expectations(c, view, heard)[name])(), "\(label): Space did what it says")
@@ -238,8 +220,6 @@ final class PressRowsTests: XCTestCase {
             }
         }
     }
-
-    // MARK: Reactions
 
     func testPressingAReactionTakesItOffAndTheButtonAfterThemAddsOne() throws {
         for width: CGFloat in [1100, 820] {
@@ -260,7 +240,7 @@ final class PressRowsTests: XCTestCase {
                     XCTAssertTrue(try Press.hit(add) === add, "\(label): a click lands on the button after them")
                 }
                 XCTAssertEqual(heard.actions, [described(.react("k0:reply", .check))], "\(label): pressing it takes it off")
-                // Its menu would hold the test in its own loop, so its mark is chosen from the same marks.
+                // Outside the repo: an open NSMenu runs its own tracking loop, which would hold the test.
                 let marks = try XCTUnwrap(row.menu(for: NSEvent())?.item(withTitle: CatWords.react)?.submenu, label)
                 XCTAssertEqual(marks.items.filter { $0.state == .on }.map(\.title), ["👍", "✅"], "\(label): the ones it has are ticked")
                 marks.performActionForItem(at: marks.indexOfItem(withTitle: Reaction.tada.emoji))
@@ -269,13 +249,10 @@ final class PressRowsTests: XCTestCase {
         }
     }
 
-    // MARK: Opening a thread from the channel
-
     func testPressingAParentsReplyBarOpensItsThread() throws {
         for width: CGFloat in [1100, 820] {
             let (_, view, _) = showing(book(), width: width)
             let row = try row("k0:reply", in: view.pane)
-            // The bar is drawn at the bottom of the row, under where its bubble starts.
             let bar = NSPoint(x: ChannelRowView.textLeft + 12, y: row.bounds.maxY - 5 - ReplyBar.height / 2)
             XCTAssertTrue(try click(at: bar, in: row) === row, "\(Int(width)) wide: a click on the bar lands on the message")
             XCTAssertEqual(view.selection, .thread("k", in: .channel(.of(steve))), "\(Int(width)) wide")
@@ -318,13 +295,10 @@ final class PressRowsTests: XCTestCase {
         let row = try row("k1:reply", in: view.threadPane)
         try arrow(to: row, in: view.threadPane)
         let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: "c", charactersIgnoringModifiers: "c", isARepeat: false, keyCode: 8))
-        // The panel sends an Edit key to whatever has the keyboard, as `NSApp.sendAction` does in the key window.
         let action = try XCTUnwrap(QuietPanel.editAction(for: event))
         XCTAssertTrue(window.firstResponder?.tryToPerform(action, with: window) == true, "the list takes ⌘C")
         XCTAssertEqual(heard.copied, ["Here it is."])
     }
-
-    // MARK: Earlier notes
 
     func testEarlierNotesBesideAKittensNameOpenTheThreadInT3() throws {
         let size = MessagesInk.textSize
@@ -343,7 +317,6 @@ final class PressRowsTests: XCTestCase {
         }
     }
 
-    /// The middle of the words drawn in the link's colour on the row's name line, as the row draws itself.
     private func linkWords(in row: MessageRowView) throws -> NSPoint? {
         let rep = try XCTUnwrap(row.bitmapImageRepForCachingDisplay(in: row.bounds))
         row.cacheDisplay(in: row.bounds, to: rep)
@@ -360,8 +333,6 @@ final class PressRowsTests: XCTestCase {
         return NSPoint(x: CGFloat(first + last) / 2 / scale, y: (line.lowerBound + line.upperBound) / 2 / scale)
     }
 
-    // MARK: In a message's words
-
     func testACodeBlocksCopyCopiesItsCode() throws {
         for keyboard in [false, true] {
             QuietFocus.fullKeyboardAccess = { keyboard }
@@ -374,7 +345,7 @@ final class PressRowsTests: XCTestCase {
                 XCTAssertTrue(tabs(from: view.threadPane.list, to: copy), "Tab reaches it")
                 try Press.key(" ", keyCode: 49, on: copy)
             } else {
-                // Words under the pointer would start a selection, whose own loop waits for a real release.
+                // Outside the repo: a press on text starts AppKit's selection loop, which waits for a real mouse-up.
                 let hit = try Press.hit(copy)
                 XCTAssertTrue(hit === copy, "the click lands on the code block's Copy, not on \(type(of: hit)) over it")
                 guard hit === copy else { continue }
@@ -447,8 +418,6 @@ final class PressRowsTests: XCTestCase {
         }
     }
 
-    // MARK: Under a message
-
     func testShowMoreShowsTheWholeOfALongMessage() throws {
         let long = (1...60).map { "Line \($0) of something long." }.joined(separator: "\n")
         for keyboard in [false, true] {
@@ -493,10 +462,8 @@ final class PressRowsTests: XCTestCase {
 }
 
 private extension MessageRowView {
-    /// Its own buttons, under and beside its words, rather than its bar's.
     var ownButtons: [QuietButton] { subviews.compactMap { $0 as? QuietButton } }
 
-    /// The names on its bar, made as pointing at it makes them.
     var toolbarNames: [String] {
         hovering = true
         return toolbar?.buttons.map { $0.accessibilityLabel() ?? "" } ?? []

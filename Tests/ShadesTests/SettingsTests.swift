@@ -3,8 +3,6 @@ import AppKit
 import ShadesCore
 import XCTest
 
-/// Every setting in one place: what it shows, what changing one does, and what it leaves to the switch and menus that
-/// change the rest.
 @MainActor
 final class SettingsTests: XCTestCase {
     private var stage: FakeStage!
@@ -116,8 +114,6 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(backend.opened, ["s"])
         XCTAssertTrue(stage.selections.isEmpty, "and Messages stays shut")
     }
-
-    // MARK: - The panel
 
     private func panel(_ settings: Settings = Settings()) -> (SettingsPanel, () -> [Settings]) {
         let panel = SettingsPanel()
@@ -266,7 +262,7 @@ final class SettingsTests: XCTestCase {
         let apps: NSTextField = try XCTUnwrap(control("Private apps", in: panel))
         panel.panel.contentView?.layoutSubtreeIfNeeded()
         let inside = try XCTUnwrap(apps.cell?.drawingRect(forBounds: apps.bounds))
-        // Laid out the way the box lays it out once you click into it, which wraps a little sooner than its drawing.
+        // Outside the repo: a field's editor wraps a little sooner than the field's own drawing.
         let storage = NSTextStorage(attributedString: apps.attributedStringValue)
         let layout = NSLayoutManager()
         let container = NSTextContainer(size: NSSize(width: inside.width, height: .greatestFiniteMagnitude))
@@ -310,8 +306,6 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(changes().isEmpty, "it doesn't set the switch itself")
     }
 
-    // MARK: - Text size
-
     func testWordsInMessagesGrowWithTheTextSize() {
         let text = "The pricing page feels cramped on a laptop, so here's a long enough message to wrap a few times."
         let block = ChannelTextBlock(ChannelMarkdown.attributed(text))
@@ -320,8 +314,6 @@ final class SettingsTests: XCTestCase {
         block.restyle(ChannelMarkdown.attributed(text))
         XCTAssertGreaterThan(block.fit(width: 240), usual)
     }
-
-    // MARK: - Font
 
     func testAFontGoesToMessages() {
         var georgia = controller.settings

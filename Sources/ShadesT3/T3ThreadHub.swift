@@ -1,7 +1,6 @@
 import Foundation
 import ShadesCore
 
-/// Holds the live thread list and everyone watching it. There's one shell subscription however many watchers.
 actor T3ThreadHub {
     private let socket: T3Socket
     private var list: T3ThreadList
@@ -57,7 +56,6 @@ actor T3ThreadHub {
         list.runtimeMode(of: threadID)
     }
 
-    /// Waits for the first snapshot, so the caller sees real projects rather than an empty list.
     func projects() async -> [T3Project] {
         if !list.isLoaded {
             await withCheckedContinuation { loadWaiters.append($0) }
@@ -85,9 +83,6 @@ actor T3ThreadHub {
         for watcher in watchers.values { watcher.yield(threads) }
     }
 
-    // MARK: Approval words
-
-    /// The shell only says an approval exists. Its words live on a turn item, one quick call away.
     private func fetchMissingSummaries() {
         let pendingApprovals = list.pendingApprovals
         let pendingIDs = Set(pendingApprovals.map(\.requestID))
@@ -116,7 +111,7 @@ actor T3ThreadHub {
         let id = T3Wire.approvalItemID(requestID: requestID)
         if let item = await turnItem(id: id, threadID: threadID) { return item }
 
-        // That ID is T3's convention rather than a promise, so fall back to reading the thread.
+        // Outside the repo: an approval's item ID is T3's convention, not a promise, so it may not be found.
         let projection: T3Wire.Projection? = try? await socket.call(
             T3Wire.Method.getThreadProjection,
             T3Wire.GetThreadProjection(threadId: threadID)
@@ -136,9 +131,6 @@ actor T3ThreadHub {
         publish()
     }
 
-    // MARK: Question words
-
-    /// A question's words live on a turn item too. Words that can't be read still count, so you hear about it.
     private func fetchMissingQuestions() {
         let pendingQuestions = list.pendingQuestions
         let pendingIDs = Set(pendingQuestions.map(\.requestID))

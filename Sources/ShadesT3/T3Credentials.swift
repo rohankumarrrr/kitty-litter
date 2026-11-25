@@ -1,7 +1,6 @@
 import Foundation
 import Security
 
-/// A bearer session on the T3 server.
 public struct T3Credential: Sendable, Equatable {
     public var sessionID: String
     public var token: String
@@ -16,13 +15,10 @@ public protocol T3CredentialStoring: Sendable {
     func load() throws -> T3Credential?
     func save(_ credential: T3Credential) throws
     func delete(sessionID: String) throws
-    /// The latest session the store knows about but can no longer read, which can be revoked.
     func newestUnreadableSessionID() throws -> String?
 }
 
-/// The login Keychain has no per-query way to promise "never show a dialog", and this is the switch for it. It's
-/// process-wide, so it goes back on straight after, and callers take turns with it: the phone's keys load on the main
-/// thread while signing in to T3 reads off it, and one turning it back on mid-call would let the other's read show a dialog.
+// Outside the repo: the login Keychain has no per-query way to forbid dialogs, only this process-wide switch.
 public enum KeychainPrompts {
     private static let turn = NSLock()
 
@@ -35,15 +31,7 @@ public enum KeychainPrompts {
     }
 }
 
-/// Keeps the session in the login Keychain.
-///
-/// Items belong to the exact binary that made them unless the app is signed with a Team ID, which a
-/// self-signed certificate doesn't have, so a rebuilt app can't read them. Asking would pop up a
-/// dialog on every rebuild, so this never asks: an unreadable item just means signing in again.
-///
-/// Reading and adding are safe here, but changing or deleting an item made by another build shows a
-/// dialog even with prompts turned off, and waits on it, so this never calls SecItemUpdate, and `T3Auth`
-/// only deletes what its own run saved.
+// Outside the repo: a self-signed build can't read Keychain items another build made, and changing or deleting one shows a dialog even with prompts off.
 public final class KeychainCredentialStore: T3CredentialStoring, @unchecked Sendable {
     public static let defaultService = "dev.shades.t3-session"
 
@@ -109,7 +97,6 @@ public final class KeychainCredentialStore: T3CredentialStoring, @unchecked Send
         return String(data: data, encoding: .utf8)
     }
 
-    /// Newest first. Attributes can be listed without any access to the secrets.
     private func sessionIDs() throws -> [String] {
         var result: CFTypeRef?
         let query: [String: Any] = [
@@ -131,7 +118,6 @@ public final class KeychainCredentialStore: T3CredentialStoring, @unchecked Send
     }
 }
 
-/// Holds the session for as long as the process lives, for tests and probes.
 public final class MemoryCredentialStore: T3CredentialStoring, @unchecked Sendable {
     private let lock = NSLock()
     private var credential: T3Credential?

@@ -1,10 +1,6 @@
 import Foundation
 
-/// What a settings change does, worked out from what Claude Code would use in that folder, never from what the
-/// kitten says it does.
 enum SettingsFacts {
-    /// A value at a path, each key kept apart and the value kept as typed JSON, so `"permissions.deny"` as one key, or
-    /// a hook written out as a string, can't pass for the real thing.
     struct Fact: Hashable {
         var path: [String]
         var json: String
@@ -15,8 +11,6 @@ enum SettingsFacts {
 
     static let mostShown = 8
 
-    /// What it takes away from the screen block, and what it lets agents do that they couldn't. Claude Code reads
-    /// `settings.json` with `settings.local.json` over it, and nothing from a file it can't read.
     static func assess(local: Bool, before: Data?, after: Data, other: Data?) -> (opens: [String], widens: [String]) {
         let old = readable(before), new = readable(after), beside = readable(other)
         let was = local ? merged(beside, old) : merged(old, beside)
@@ -30,7 +24,7 @@ enum SettingsFacts {
         data.flatMap { try? StrictJSON.parse($0) as? [String: Any] } ?? [:]
     }
 
-    /// As Claude Code layers them: lists add up, and anything else in `over` wins.
+    // Outside the repo: Claude Code layers settings files this way: lists add up, and anything else in the later file wins.
     static func merged(_ base: [String: Any], _ over: [String: Any]) -> [String: Any] {
         base.merging(over) { old, new in
             if let old = old as? [String: Any], let new = new as? [String: Any] { return merged(old, new) }
@@ -39,8 +33,6 @@ enum SettingsFacts {
         }
     }
 
-    /// Adding a rule to `deny` or `ask`, or taking one out of `allow`, only narrows what agents may do. Anything else
-    /// that changes is listed, since there's no telling it's harmless.
     static func widening(from was: [String: Any], to will: [String: Any]) -> [String] {
         let before = facts(was), after = facts(will)
         let added = after.subtracting(before).filter { !($0.inList && $0.isText && [["permissions", "deny"], ["permissions", "ask"]].contains($0.path)) }
@@ -83,7 +75,6 @@ enum SettingsFacts {
         return String(decoding: data, as: UTF8.self)
     }
 
-    /// Keys joined with dots, with any key that has a dot or anything unusual in it quoted, so one key can't pass for two.
     private static func shown(_ path: [String]) -> String {
         let plain = path.map { key in
             key.isEmpty || !key.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }) ? json(key) : key
@@ -91,8 +82,6 @@ enum SettingsFacts {
         return code(plain.joined(separator: "."))
     }
 
-    /// A string as itself, unless it reads as some other JSON, such as `true` or a hook written out, which keeps its
-    /// quotes, so it never looks like what it isn't.
     private static func shown(_ json: String) -> String {
         guard json.hasPrefix("\""), let text = (try? JSONSerialization.jsonObject(with: Data(json.utf8), options: .fragmentsAllowed)) as? String,
               (try? StrictJSON.parse(Data(text.utf8))) == nil

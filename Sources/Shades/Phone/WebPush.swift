@@ -1,19 +1,13 @@
 import CryptoKit
 import Foundation
 
-/// Web push to a phone, as RFC 8291 encrypts it and RFC 8292 (VAPID) signs for it, with CryptoKit and nothing else.
-/// Only the phone that subscribed can read what's sent, and the push service, Apple's on an iPhone, sees only that
-/// Shades sent something.
+// Outside the repo: push services only take what's encrypted as RFC 8291 says and signed as RFC 8292 (VAPID) says.
 enum WebPush {
     struct Subscription: Codable, Equatable {
-        /// Where the push service takes the message. Only known push services' addresses are kept.
         var endpoint: String
-        /// The phone's P-256 public key, uncompressed, in base64url.
         var p256dh: String
-        /// Its 16-byte secret, in base64url.
         var auth: String
 
-        /// The push services browsers use, so a phone can't have Shades send requests anywhere else.
         private static let services = ["push.apple.com", "fcm.googleapis.com", "push.services.mozilla.com", "notify.windows.com"]
 
         var isValid: Bool {
@@ -28,8 +22,6 @@ enum WebPush {
 
     private static let recordSize: UInt32 = 4096
 
-    /// RFC 8291 section 3, as one aes128gcm record, padded up to a whole number of `blocks` so its length doesn't give away
-    /// what it says. The sender's key and the salt are fresh each time, and only given here for the RFC's own example.
     static func encrypt(
         _ plaintext: Data,
         for phone: P256.KeyAgreement.PublicKey,
@@ -52,7 +44,6 @@ enum WebPush {
         return salt + Data(bytes: &size, count: 4) + Data([UInt8(senderPublic.count)]) + senderPublic + sealed.ciphertext + sealed.tag
     }
 
-    /// What the phone does with it. Shades only needs this to prove the other half, in tests and the demo.
     static func decrypt(_ body: Data, with phone: P256.KeyAgreement.PrivateKey, auth: Data) throws -> Data {
         let body = Data(body)
         guard body.count > 21 else { throw CryptoKitError.incorrectParameterSize }
@@ -88,7 +79,6 @@ enum WebPush {
         return (SymmetricKey(data: derive("aes128gcm", 16)), try AES.GCM.Nonce(data: derive("nonce", 12)))
     }
 
-    /// RFC 8292: who's sending, signed, so the push service takes it only from the key the phone subscribed with.
     static func vapid(for endpoint: URL, key: P256.Signing.PrivateKey, now: Date) throws -> String {
         guard let scheme = endpoint.scheme, let host = endpoint.host else { throw URLError(.badURL) }
         let header = string(Data(#"{"typ":"JWT","alg":"ES256"}"#.utf8))
@@ -102,7 +92,6 @@ enum WebPush {
         return "vapid t=\(header).\(body).\(string(signature)), k=\(string(key.publicKey.x963Representation))"
     }
 
-    /// The request that takes one alert to one phone.
     static func request(_ payload: Data, to subscription: Subscription, key: P256.Signing.PrivateKey, now: Date) throws -> URLRequest {
         guard subscription.isValid, let url = URL(string: subscription.endpoint), let phone = data(subscription.p256dh), let auth = data(subscription.auth) else {
             throw URLError(.badURL)
@@ -113,7 +102,6 @@ enum WebPush {
         request.setValue(try vapid(for: url, key: key, now: now), forHTTPHeaderField: "Authorization")
         request.setValue("aes128gcm", forHTTPHeaderField: "Content-Encoding")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        // Half a day: an approval that's still waiting by then is still worth hearing about, and the cat says so too.
         request.setValue("43200", forHTTPHeaderField: "TTL")
         request.setValue("high", forHTTPHeaderField: "Urgency")
         return request

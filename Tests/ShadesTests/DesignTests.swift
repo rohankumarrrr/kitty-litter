@@ -2,16 +2,12 @@ import AppKit
 import XCTest
 @testable import Shades
 
-/// Opal Horizon, as `docs/design.md` writes it down, held where a test can: no orange anywhere, words that read on
-/// what they sit on, kitten colours that stay soft and apart, and tokens that stay Opal's. Every value here is in the
-/// repo, so it never reads anyone's own theme files.
 @MainActor
 final class DesignTests: XCTestCase {
     private static let sources = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Sources", isDirectory: true)
 
-    /// Opal's own values, from its colour roles and its design notes.
     private static let opal: [String: UInt32] = [
         "chrome": 0x0a080d, "page": 0x0c0a10, "raised": 0x15121b, "control": 0x1b1723, "controlHover": 0x262030,
         "selected": 0x1e1830, "border": 0x241f2e, "chromeBorder": 0x1f1b27, "fieldEdge": 0x2b2536,
@@ -21,8 +17,6 @@ final class DesignTests: XCTestCase {
         "infoSurface": 0x132430, "warningSurface": 0x26231a, "errorSurface": 0x2a1420,
         "rimCyan": 0x45cfff, "rimViolet": 0x805cff, "rimPink": 0xff4fb8, "cardTop": 0x141318, "cardBottom": 0x060508,
     ]
-
-    // MARK: - No orange
 
     func testNothingTheAppDrawsIsOrange() throws {
         let literal = try NSRegularExpression(pattern: "(?:0x|#)([0-9a-fA-F]{6})(?![0-9a-fA-F])")
@@ -54,10 +48,7 @@ final class DesignTests: XCTestCase {
         }
     }
 
-    // MARK: - Words read
-
     func testEveryWordRoleReadsOnEverySurfaceItSitsOn() {
-        // Glass and cards float on the desktop, so they're checked over a white one too, the worst there is.
         let floating = [Opal.mix(0xffffff, Opal.raised, 0.94), Opal.mix(0xffffff, Opal.cardTop, Opal.cardTopAlpha), Opal.cardBottom]
         let everywhere = [Opal.chrome, Opal.page, Opal.raised, Opal.control, Opal.controlHover, Opal.selected, Opal.cardTop] + floating
         let pairs: [(String, UInt32, [UInt32])] = [
@@ -103,8 +94,6 @@ final class DesignTests: XCTestCase {
         }
     }
 
-    // MARK: - Kittens
-
     func testKittenColoursAreSoftApartAndNeverAStatus() {
         let kittens = Opal.kittens
         XCTAssertGreaterThanOrEqual(kittens.count, 8, "enough for every kitten to have its own")
@@ -127,8 +116,6 @@ final class DesignTests: XCTestCase {
             }
         }
     }
-
-    // MARK: - Tokens stay Opal's
 
     func testEveryTokenIsOpals() {
         let tokens: [String: UInt32] = [
@@ -161,10 +148,6 @@ final class DesignTests: XCTestCase {
         XCTAssertEqual(CatGlint.listening(loudness: 1).color, Opal.good, "done")
     }
 
-    // MARK: - Light that's quick to draw again
-
-    /// Every message in sight draws its card again on each step of a scroll, so a card is kept once drawn. What's kept
-    /// has to look the same as drawing it afresh, wherever it falls between pixels and whichever way up the view is.
     func testACardOrTileDrawnAgainLooksTheSameAsDrawingItAfresh() {
         let light = Opal.Light.of(Opal.kittens[0])
         let card = NSRect(x: 64.25, y: 23, width: 201.37, height: 58.6)
@@ -185,8 +168,6 @@ final class DesignTests: XCTestCase {
         }
     }
 
-    /// The cat's bubble carries the rim's light on down its tail, below the card's body, as the light along the bottom
-    /// edge does.
     func testACardsLightCarriesOnDownItsTail() {
         let body = NSRect(x: 40, y: 60, width: 200, height: 120)
         for flipped in [true, false] {
@@ -194,7 +175,7 @@ final class DesignTests: XCTestCase {
             let shape = NSBezierPath(roundedRect: body, xRadius: 20, yRadius: 20)
             shape.append(NSBezierPath(rect: tail))
             let picture = Self.drawn(flipped: flipped) { Opal.card(in: body, light: .of(0x00ff00), shape: shape) }
-            // Just inside the tail's side, near its tip, in pixels from the picture's top.
+            // Outside the repo: NSBitmapImageRep counts a pixel's y from the picture's top.
             let tip = flipped ? tail.maxY - 2 : picture.size.height - tail.minY - 2
             var pixel = [Int](repeating: 0, count: 4)
             picture.getPixel(&pixel, atX: Int((tail.minX + 0.5) * 2), y: Int(tip * 2))
@@ -202,9 +183,6 @@ final class DesignTests: XCTestCase {
         }
     }
 
-    /// The rimlit card, the tile and a toolbar's icon each cost a few plain rounded fills of their size once they've been
-    /// drawn, rather than the twenty to forty that made a long conversation scroll slowly. Each is timed beside the fill
-    /// in the same run, by the quickest of many, so a busy machine can't tip it.
     func testDrawingTheLightAgainCostsAboutWhatAPlainFillDoes() {
         let light = Opal.Light.of(Opal.kittens[2])
         let card = NSRect(x: 8, y: 8, width: 300, height: 300)
@@ -212,8 +190,6 @@ final class DesignTests: XCTestCase {
         let icon = QuietButton("Copy", style: .plain)
         icon.symbol = "doc.on.doc"
         icon.setFrameSize(NSSize(width: 26, height: 26))
-        // Kept, they come to about 1, 1 and 6 fills, and the card and tile drawn afresh each time to about 28 and 17, idle or
-        // with every core busy.
         let cases: [(name: String, work: () -> Void, fill: NSRect, fills: Double)] = [
             ("card", { Opal.card(in: card, radius: 16, light: light) }, card, 10),
             ("tile", { Opal.tile(in: tile, light: light) }, tile, 9),
@@ -226,8 +202,6 @@ final class DesignTests: XCTestCase {
         }
     }
 
-    /// What's kept is by size and light rather than one for each message, stays under its limit however many sizes a
-    /// long conversation draws, and goes when The Kitty Litter closes.
     func testWhatsKeptStaysUnderItsLimitAndGoesWhenTheKittyLitterCloses() {
         Opal.forgetKept()
         _ = Self.picture(flipped: true) {
@@ -245,8 +219,6 @@ final class DesignTests: XCTestCase {
         XCTAssertEqual(Opal.keptBytes, 0)
     }
 
-    /// The quickest of many single draws of each, taken in turns. Whatever else a busy runner is doing only ever adds time,
-    /// and it lands more often on a long draw than on a short fill, which made the middle of each lean against the draw.
     private static func timed(_ work: () -> Void, beside fill: () -> Void) -> (Double, Double) {
         var works: [Double] = []
         var fills: [Double] = []
@@ -266,7 +238,6 @@ final class DesignTests: XCTestCase {
         return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000_000
     }
 
-    /// A view drawing itself into a Retina picture, as the demo's pictures of each window are made.
     private final class Canvas: NSView {
         let upsideDown: Bool
         let work: () -> Void
@@ -293,7 +264,6 @@ final class DesignTests: XCTestCase {
         return rep
     }
 
-    /// A Retina picture of what `work` draws over the page, flipped as a message's row is or not.
     private static func picture(flipped: Bool, _ work: () -> Void) -> NSBitmapImageRep {
         let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 640, pixelsHigh: 640, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
         rep.size = NSSize(width: 320, height: 320)
@@ -311,7 +281,6 @@ final class DesignTests: XCTestCase {
         return rep
     }
 
-    /// The most any channel of any pixel is off by, and how many pixels are off by more than 2.
     private static func difference(_ a: NSBitmapImageRep, _ b: NSBitmapImageRep) -> (worst: Int, off: Int) {
         var worst = 0, off = 0
         let (p, q) = (a.bitmapData!, b.bitmapData!)
@@ -330,9 +299,6 @@ final class DesignTests: XCTestCase {
         return (worst, off)
     }
 
-    // MARK: - Measuring
-
-    /// Warm and strong enough to read as orange or amber, from red-orange to gold. Pale yellow is too soft to count.
     private static func isOrange(_ color: UInt32) -> Bool {
         let rgb = [16, 8, 0].map { CGFloat((color >> UInt32($0)) & 0xff) / 255 }
         let (high, low) = (rgb.max()!, rgb.min()!)

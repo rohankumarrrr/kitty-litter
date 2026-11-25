@@ -1,28 +1,15 @@
 import Foundation
 
-/// A kitten asking for a change to a settings file, which its own sandbox won't let it make. It writes one in its
-/// reply as a fenced `shades-request` block of JSON, and the app shows you exactly that change, and makes only that
-/// change, once you press Allow.
 public struct ChangeRequest: Codable, Equatable, Sendable {
-    /// The file as checked: a full path, starting `~` for one in your home folder, with nothing left to work out.
     public var file: String
-    /// The text that comes out, which was in the file exactly once. `nil` makes a new file.
     public var replace: String?
-    /// What goes in its place, or the whole of a new file.
     public var with: String
-    /// The kitten's reason, in its own words, cut to one short line.
     public var why: String?
-    /// A SHA-256 of the file when it was checked, or `nil` if there wasn't one. Allow only goes ahead while it still is.
     public var before: String?
-    /// What it takes away from the screen block in that folder, which keeps agents there off your screen.
     public var opensScreenBlock: [String] = []
-    /// Each thing it lets agents do that they couldn't before, in plain words.
     public var widens: [String] = []
-    /// What Shades made of it, or `nil` if it couldn't look.
     public var review: String?
-    /// Why it can't be done as asked, which leaves only Deny.
     public var problem: String?
-    /// Other threads that asked for exactly this, which hear what you decided too.
     public var alsoAskedIn: [String] = []
 
     public init(file: String, replace: String?, with: String, why: String?) {
@@ -36,13 +23,11 @@ public struct ChangeRequest: Codable, Equatable, Sendable {
 }
 
 public enum ChangeRequests {
-    /// The info string a request's fence carries.
     public static let fence = "shades-request"
     static let longest = 64_000
     static let whyLimit = 300
     static let askLimit = 500
 
-    /// What one block asks for.
     public enum Request: Equatable, Sendable {
         case change(ChangeRequest)
         case ask(AskRequest)
@@ -51,13 +36,10 @@ public enum ChangeRequests {
         public var ask: AskRequest? { if case .ask(let ask) = self { ask } else { nil } }
     }
 
-    /// Each request in a reply, as the kitten wrote it, or why it can't be read. Only fenced blocks count, so a
-    /// reply that quotes the format inside another code block, or talks about it, asks for nothing.
     public static func all(in reply: String) -> [Result<Request, Problem>] {
         blocks(in: reply).map(read)
     }
 
-    /// The reply with each request block swapped for one line, for the sorter, which only needs to know it's there.
     public static func withoutBlocks(_ reply: String, saying placeholder: String) -> String {
         let lines = reply.split(separator: "\n", omittingEmptySubsequences: false)
         var kept: [Substring] = []
@@ -71,7 +53,6 @@ public enum ChangeRequests {
         return kept.joined(separator: "\n")
     }
 
-    /// Inline code that nothing in it can close or break out of, on one line, for a card's Markdown.
     public static func code(_ text: String) -> String {
         let line = text.split(whereSeparator: \.isNewline).joined(separator: " ")
         let longest = line.split(omittingEmptySubsequences: true) { $0 != "`" }.map(\.count).max() ?? 0
@@ -97,7 +78,6 @@ public enum ChangeRequests {
             case file, replace, with, create, ask, why
         }
 
-        /// A key it doesn't know means the kitten thinks it asked for something that would be left out.
         init(from decoder: Decoder) throws {
             let keys = try decoder.container(keyedBy: AnyKey.self).allKeys.map(\.stringValue)
             if let unknown = keys.first(where: { CodingKeys(rawValue: $0) == nil }) {
@@ -159,19 +139,16 @@ public enum ChangeRequests {
         return .success(.change(request))
     }
 
-    /// Text that draws as nothing, or reverses what's around it, could make one request look like another.
     private static let hidden = Problem("It has characters that don't show, so you couldn't see exactly what it asks.")
 
     static func oneLine(_ text: String) -> String {
         text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
     }
 
-    /// Whether this would hide what's around it, or show as nothing.
     static func hides(text: String) -> Bool {
         text.unicodeScalars.contains(where: hides)
     }
 
-    /// Unicode's own list of what draws as nothing, variation selectors included, as well as the usual ones.
     private static func hides(_ scalar: Unicode.Scalar) -> Bool {
         if scalar == "\n" || scalar == "\t" || scalar == "\r" { return false }
         if scalar.properties.isDefaultIgnorableCodePoint || scalar.properties.isNoncharacterCodePoint { return true }
@@ -185,8 +162,6 @@ public enum ChangeRequests {
         scan(reply.split(separator: "\n", omittingEmptySubsequences: false)).map(\.body)
     }
 
-    /// Each closed request block, by the lines it takes up, fences included. A request fence inside another code
-    /// block is only that block's text.
     private static func scan(_ lines: [Substring]) -> [(lines: Range<Int>, body: String)] {
         var found: [(lines: Range<Int>, body: String)] = []
         var open: (fence: Fence, at: Int)?
@@ -202,7 +177,6 @@ public enum ChangeRequests {
         return found
     }
 
-    /// A Markdown code fence, as CommonMark has them: three or more of one mark, and what follows says what's in it.
     private struct Fence {
         var mark: Character
         var count: Int

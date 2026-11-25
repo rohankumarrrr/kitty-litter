@@ -25,7 +25,6 @@ final class RouterBlockTests: XCTestCase {
         return (walk?.allObjects as? [String] ?? []).sorted()
     }
 
-    /// T3's tools message and start threads, and the shell can reach T3 without them, so these are gone outright.
     func testTheWaysToAnotherThreadAreDenied() throws {
         XCTAssertEqual(try RouterBlock.prepare(folder), folder.path)
         let denied = try XCTUnwrap((try written()["permissions"] as? [String: Any])?["deny"] as? [String])
@@ -34,9 +33,6 @@ final class RouterBlockTests: XCTestCase {
         }
     }
 
-    /// What actually happened: with only a deny list, `Monitor` ran a shell command that messaged a thread through
-    /// T3's own command, and `SendMessage` put text in another Claude session. So every tool that isn't one of the
-    /// few that only search is turned away, including ones that don't exist yet and the ones that read your files.
     func testOnlyToolsThatSearchGetPastTheHook() throws {
         _ = try RouterBlock.prepare(folder)
         let rules = try XCTUnwrap((try written()["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]])
@@ -69,7 +65,6 @@ final class RouterBlockTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: settingsFile), RouterBlock.settings)
     }
 
-    /// A planted hook would be handed every prompt, screen and all, without the router doing anything.
     func testNothingElseInTheFolderSurvives() throws {
         _ = try RouterBlock.prepare(folder)
         try Data(#"{"hooks":{}}"#.utf8).write(to: folder.appendingPathComponent(".claude/settings.local.json"))
@@ -80,7 +75,6 @@ final class RouterBlockTests: XCTestCase {
         XCTAssertEqual(everything(in: folder), [".claude", ".claude/settings.json"])
     }
 
-    /// Emptying the folder mustn't empty wherever a link in it points.
     func testLinksAreRemovedNotFollowed() throws {
         let elsewhere = root.appendingPathComponent("elsewhere", isDirectory: true)
         try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
@@ -108,7 +102,6 @@ final class RouterBlockTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: settingsFile), RouterBlock.settings)
     }
 
-    /// An atomic write keeps the old file's permissions, so a settings file nothing can read stayed that way.
     func testSettingsNothingCanReadAreReplaced() throws {
         _ = try RouterBlock.prepare(folder)
         for mode in [0o000, 0o200] {

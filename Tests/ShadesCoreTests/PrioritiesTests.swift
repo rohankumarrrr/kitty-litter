@@ -1,7 +1,6 @@
 import ShadesCore
 import XCTest
 
-/// The focus and each kitten's backlog, read from the plain files kittens keep. Everything here is made up.
 final class PrioritiesTests: XCTestCase {
     func testTheFocusIsTheFirstLineUnderRightNowWithItsBoldTakenOff() {
         let file = """

@@ -1,9 +1,6 @@
 import AppKit
 import WebKit
 
-/// The phone page at a phone's size, in a web view off the edge of every screen, so the demo can use it and draw it the
-/// way the windows draw themselves. What it presses are the page's own buttons, pressed inside the page, so nothing
-/// reaches the desktop.
 @MainActor
 final class DemoPhone {
     static let size = NSSize(width: 390, height: 844)
@@ -19,7 +16,7 @@ final class DemoPhone {
         panel.sharingType = .none
         panel.isReleasedWhenClosed = false
         panel.contentView = view
-        // A web view only draws while it's in a window that's out, and this one is far off every screen.
+        // Outside the repo: a web view only draws while its window is ordered in.
         panel.orderFrontRegardless()
     }
 
@@ -27,7 +24,6 @@ final class DemoPhone {
         view.load(URLRequest(url: url))
     }
 
-    /// Runs a line of the page's own script and says what came back. The async form can't come back with nothing.
     func run(_ script: String) async -> String {
         await withCheckedContinuation { continuation in
             view.evaluateJavaScript(script) { result, error in
@@ -36,7 +32,6 @@ final class DemoPhone {
         }
     }
 
-    /// Runs the body of an async function in the page, so it can wait on the page's own requests.
     func runAsync(_ body: String) async -> String {
         await withCheckedContinuation { continuation in
             view.callAsyncJavaScript(body, arguments: [:], in: nil, in: .page) { result in
@@ -48,7 +43,6 @@ final class DemoPhone {
         }
     }
 
-    /// The page as it looks now, at a phone's size in points times `scale`.
     func image(scale: CGFloat) async -> CGImage? {
         guard let snapshot = try? await view.takeSnapshot(configuration: nil),
               let page = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(Self.size.width * scale), pixelsHigh: Int(Self.size.height * scale), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
@@ -74,13 +68,10 @@ final class DemoPhone {
         panel.close()
     }
 
-    /// A string as a script can read it.
     static func quoted(_ text: String) -> String {
         (try? JSONSerialization.data(withJSONObject: text, options: .fragmentsAllowed)).map { String(decoding: $0, as: UTF8.self) } ?? "''"
     }
 
-    /// A made-up photo, drawn on the page and attached the way its + button attaches one.
-    /// A made-up photo with `name` written on it, as the page's 📎 or 📷 would add one.
     static func attachPicture(named name: String) -> String {
         """
         const canvas = document.createElement('canvas');

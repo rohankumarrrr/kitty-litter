@@ -5,10 +5,6 @@ import ShadesCore
 import WebKit
 import XCTest
 
-/// Every control on the phone page, pressed the way a finger and a phone's hardware keyboard press it. A tap goes
-/// where the control's centre is, only if nothing is over it, as the events a tap fires, made inside the page. A key
-/// is handed straight to the web view, as `Press.key` does, so the page gets it as a real key. Nothing is posted, so
-/// nothing reaches the desktop, and a link the page would follow is only noted, never opened.
 @MainActor
 final class PressPhoneTests: XCTestCase {
     private let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
@@ -25,8 +21,6 @@ final class PressPhoneTests: XCTestCase {
         AgentThread(id: id, title: "Work", projectTitle: kitten.name, status: status, model: "m", updatedAt: noon, projectPath: kitten.folder)
     }
 
-    /// Steve's thread `a`, working, with your ask and a reply with a link, a web picture and code, and `n`, which
-    /// nobody has answered. Pepper's `p`, which Steve started, has a long reply. Activity has one of everything.
     private func book(reactions: [String: [Reaction]] = ["e1:reply": [.eyes]]) -> ChannelBook {
         let command = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
         let font = AnswerForm(parts: [AnswerForm.Part(key: "font", text: "Which font?", options: ["Silkscreen", "System"], values: ["s", "y"], takesOwnWords: false)])
@@ -76,7 +70,6 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("the page shows \(key)", file: file, line: line) { try await phone.read("!window.stale && view && view.key") as? String == key }
     }
 
-    /// What the Mac would do about the last time the page asked it to `act`, or a failure if it never asked.
     private func did(_ act: String, file: StaticString = #filePath, line: UInt = #line) async throws -> MessagesAction? {
         try await phone.until("the page asks the Mac to \(act)", file: file, line: line) { phone.acts.contains { $0.ask.act == act } }
         let asked = try XCTUnwrap(phone.acts.last { $0.ask.act == act }, file: file, line: line)
@@ -108,17 +101,12 @@ final class PressPhoneTests: XCTestCase {
         XCTAssertEqual(action, expected, file: file, line: line)
     }
 
-    // MARK: - The finger
-
-    /// What's under a sheet can't be tapped, which is what proves the rest of these taps landed on what they meant to.
     func testNothingUnderASheetTakesATap() async throws {
         try await open(at: threadKey)
         try await phone.tap(".bubble .link")
         let reached = try await phone.reach("#back")
         XCTAssertTrue(reached.hasPrefix("covered by <dialog id=\"linksheet\""), reached)
     }
-
-    // MARK: - Pairing
 
     func testTheCodeFieldAndPairPairThisPhone() async throws {
         try await open(paired: false)
@@ -145,8 +133,6 @@ final class PressPhoneTests: XCTestCase {
         try await expect("location.hash", "", "the code doesn't stay in the address")
     }
 
-    /// Safari only moves within the page when the address it already shows comes again with a new `#pair=`, as it does
-    /// when you scan a new code after one didn't work.
     func testScanningANewCodeIntoThePageAlreadyOpenPairsIt() async throws {
         try await open(paired: false)
         phone.open(PhonePlace.home, hash: "#pair=WXYZ-1234")
@@ -159,8 +145,6 @@ final class PressPhoneTests: XCTestCase {
         try await expect("location.hash", "", "the code doesn't stay in the address")
     }
 
-    /// An old link, or a second tap on one, brings a code that's been used already. That used to forget the phone's
-    /// key, which still worked, and leave it asking to pair again.
     func testACodeUsedAlreadyLeavesAPairedPhonePaired() async throws {
         try await open()
         try await phone.run("location.hash = '#pair=WXYZ-1234'")
@@ -176,8 +160,6 @@ final class PressPhoneTests: XCTestCase {
         try await expect("$('pairnote').textContent", "That code didn't work. Turn pairing on again in The Kitty Litter on your Mac for a new one.")
     }
 
-    /// The Home Screen app said to scan the code, but the camera opens its link in Safari, which keeps its own storage,
-    /// so the app has to have the code typed.
     func testTheHomeScreenAppSaysToTypeTheCode() async throws {
         try await open(paired: false)
         try await phone.until("the page asks for a code") { try await phone.read("!window.stale && !$('pair').hidden") as? Bool == true }
@@ -203,8 +185,6 @@ final class PressPhoneTests: XCTestCase {
         try await shows(PhonePlace.home)
     }
 
-    // MARK: - Places, Back and the title bar
-
     func testTappingAPlaceOpensItAndBackComesHome() async throws {
         try await open()
         try await phone.tap(".place", "Steve Pawsniak")
@@ -224,9 +204,7 @@ final class PressPhoneTests: XCTestCase {
         }
     }
 
-    /// An iPhone's browser left Back blank on Activity and Threads, since it's shown after the bar is first drawn, and
-    /// WebKit doesn't always draw what changes in a sticky bar. The Mac draws it either way, so what's checked is that
-    /// each part of the bar is on a layer of its own, which the iPhone does draw.
+    // Outside the repo: an iPhone's WebKit doesn't always redraw what changes in a sticky bar unless it's on its own layer.
     func testWhatChangesInTheBarIsOnItsOwnLayerSoAnIPhoneDrawsIt() async throws {
         try await open(at: "activity")
         try await expect("$('back').hidden", false)
@@ -245,8 +223,6 @@ final class PressPhoneTests: XCTestCase {
         try await expect("$('bartitle').textContent", "Thread")
     }
 
-    /// With the keyboard up, an iPhone slides what you see 300 points down the page and makes it 400 shorter, rather
-    /// than making the page shorter, so the page has to keep the bar and the box with what you see itself.
     func testTheBarAndTheBoxStayInSightWithTheKeyboardUp() async throws {
         try await open(at: PhonePlace.key(.thread("p", in: .channel(.of(pepper)))))
         try await phone.run("window.scrollTo(0, document.body.scrollHeight)")
@@ -268,8 +244,6 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("the bar goes back once the keyboard does") { try await phone.read("Math.round($('top').getBoundingClientRect().top)") as? Int == 0 }
         try await expect(box, 0)
     }
-
-    // MARK: - A channel
 
     func testAChannelsInProgressOpensActivity() async throws {
         try await open(at: steveKey)
@@ -298,7 +272,6 @@ final class PressPhoneTests: XCTestCase {
         try await shows(threadKey)
     }
 
-    /// A post nobody has answered has no reply bar, so its words were the only way in, which a keyboard can't get to.
     func testAParentWithNoRepliesOpensFromTheKeyboardToo() async throws {
         let quiet = PhonePlace.key(.thread("n", in: .channel(.of(steve))))
         try await open(at: steveKey)
@@ -310,7 +283,6 @@ final class PressPhoneTests: XCTestCase {
         try await shows(quiet)
     }
 
-    /// A link in a post is a link, as anywhere else. Tapping it also opened the thread, under the link's sheet.
     func testALinkInAParentAsksWithoutOpeningTheThread() async throws {
         try await open(at: steveKey)
         try await phone.tap(".msg .bubble .link")
@@ -349,8 +321,6 @@ final class PressPhoneTests: XCTestCase {
         try await phone.press(.returnKey, on: ".older")
         try await phone.until("Return asks again") { asked("older") == 2 }
     }
-
-    // MARK: - Search
 
     func testSearchFindsAMessageAndOpensItsPage() async throws {
         try await open(at: steveKey)
@@ -391,8 +361,6 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("Space puts it away too") { try await phone.read("$('search').hidden") as? Bool == true }
     }
 
-    // MARK: - The box
-
     func testTheArrowSendsWhatYouTyped() async throws {
         try await open(at: threadKey)
         try await expect("$('send').disabled", true, "nothing to send yet")
@@ -406,8 +374,6 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("the box empties") { try await phone.read("$('words').value") as? String == "" }
     }
 
-    /// Sent from halfway up, after Search landed on a message, the page stayed put, so what you sent, and anything wrong
-    /// with it, was out of sight below.
     func testSendingFromHigherUpTakesYouToWhatYouSent() async throws {
         try await open(at: PhonePlace.key(.thread("p", in: .channel(.of(pepper)))))
         try await phone.run("window.scrollTo(0, 0)")
@@ -443,7 +409,6 @@ final class PressPhoneTests: XCTestCase {
         try await phone.tap("#send")
         guard case .send(_, _, _, let also, _, _)? = try await did("send") else { return XCTFail("not a reply") }
         XCTAssertTrue(also)
-        // The page hears back from the Mac after the Mac has the reply, so the box clears a moment later.
         try await phone.until("it's for one message") { try await phone.read("$('also').checked") as? Bool == false }
         try await phone.press(.space, on: "#also")
         try await expect("$('also').checked", true, "Space ticks it")
@@ -487,7 +452,6 @@ final class PressPhoneTests: XCTestCase {
         try await expect("$('send').disabled", false)
     }
 
-    /// "IMG_0005.jpg · Sendi…" cut off how far it had got, which was the part that said anything.
     func testAPhotosLongNameGivesWaySoHowFarItsGotReadsWhole() async throws {
         try await open(at: threadKey)
         phone.holdingUploads = true
@@ -500,9 +464,6 @@ final class PressPhoneTests: XCTestCase {
         phone.letUploadsGo()
     }
 
-    /// An iPhone's photo is 12 megapixels. A model reads about 1.15, so the rest only took longer to go up: 0.9 to
-    /// 1.6 MB at 2048 pixels, 8 to 14 seconds on a slow link. The stand-in Mac never sees what an upload holds, so
-    /// what the page makes of a photo is read straight from the page.
     func testAPhotoGoesUpNoBiggerThanAModelReadsIt() async throws {
         try await open(at: threadKey)
         for (width, height) in [(4032, 3024), (3024, 4032), (4032, 2268), (8000, 2000), (800, 600)] {
@@ -539,7 +500,6 @@ final class PressPhoneTests: XCTestCase {
         XCTAssertEqual(asked("unattach"), 0, "there was nothing on the Mac to forget")
     }
 
-    /// A picture of exactly that many pixels, whatever the screen's scale.
     private func picture(width: Int = 40, height: Int = 30, named name: String? = nil) throws -> URL {
         let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
         NSGraphicsContext.saveGraphicsState()
@@ -555,8 +515,6 @@ final class PressPhoneTests: XCTestCase {
         addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
         return file
     }
-
-    // MARK: - Activity
 
     func testAnApprovalsButtonsAnswerIt() async throws {
         try await open(at: "activity")
@@ -666,8 +624,6 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("Return opens it too") { (try await phone.read("view.key") as? String)?.hasPrefix("t:") == true }
     }
 
-    // MARK: - A thread
-
     func testMarkUnreadMarksTheLatestReplyNew() async throws {
         try await open(at: threadKey)
         try await phone.tap("#unread")
@@ -676,9 +632,7 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("Return marks it too") { asked("unread") == 2 }
     }
 
-    /// Turn on hid its note whatever the Mac said, so a subscription it turned away looked like it had worked, and
-    /// nothing ever came. The Mac's web view has no push, so a stand-in phone's push service takes its place. Its
-    /// unsubscribe never comes back, as the simulator's ended the page before it could say so.
+    // Outside the repo: the Mac's web view has no push, and an iPhone ends the page before its unsubscribe resolves.
     func testNotificationsTheMacTurnsAwaySaySoAndOfferTurnOnAgain() async throws {
         try await open()
         func turnOn() async throws {
@@ -729,7 +683,6 @@ final class PressPhoneTests: XCTestCase {
 
     func testCopyCopiesTheCode() async throws {
         try await open(at: threadKey)
-        // Kept in the page, so nothing reaches the Mac's own clipboard.
         try await phone.run("window.copied = []; Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text) => { copied.push(text); } } });")
         try await phone.tap(".copy")
         try await phone.until("Copy copies the code") { try await phone.read("copied.join()") as? String == "swift test" }
@@ -738,8 +691,6 @@ final class PressPhoneTests: XCTestCase {
         try await phone.press(.returnKey, on: ".copy")
         try await phone.until("Return copies it too") { try await phone.read("copied.length") as? Int == 2 }
     }
-
-    // MARK: - Reactions
 
     func testTappingAMessageOffersReactionsAndOneReacts() async throws {
         try await open(at: threadKey)
@@ -771,8 +722,6 @@ final class PressPhoneTests: XCTestCase {
         try await phone.press(.returnKey, on: "#marks button", "❤️")
         try await did("react", .react("e1:reply", .heart))
     }
-
-    // MARK: - The link sheet
 
     func testALinkAsksBeforeItOpens() async throws {
         try await open(at: threadKey)
@@ -831,8 +780,6 @@ final class PressPhoneTests: XCTestCase {
         XCTAssertEqual(phone.followed, [], "the page never goes there itself")
     }
 
-    // MARK: - Focus and backlogs
-
     private var priorities: Priorities {
         Priorities(focus: "Focus: the launch, until Friday", backlogs: [steve.id: Backlog(reading: "## Doing\n- 2026-11-12 · Tidy the footer · \"the footer is a mess\"\n## Next\n- A dark pricing page\n")])
     }
@@ -856,8 +803,6 @@ final class PressPhoneTests: XCTestCase {
         try await shows(PhonePlace.backlog(of: steve.id))
     }
 
-    // MARK: - T3
-
     func testOpenInT3OpensAKittensThreadInT3sOwnPage() async throws {
         try await open(at: threadKey)
         try await phone.tap("#t3")
@@ -874,11 +819,6 @@ final class PressPhoneTests: XCTestCase {
         XCTAssertEqual(phone.followed.last?.absoluteString, "https://mac/env%201/a")
         try await expect("$('t3').hidden", true, "Activity itself isn't a thread")
     }
-
-    // MARK: - The stream
-
-    // An iPhone back from the lock screen can hold a stream that never says anything again, and nothing tells the
-    // page. This stand-in Mac never pings, so each of its streams goes quiet like that unless a test pushes to it.
 
     private func streams(of key: String) -> Int {
         phone.watched.filter { $0 == key }.count
@@ -944,7 +884,6 @@ final class PressPhoneTests: XCTestCase {
         try await expect("[...$('rows').querySelectorAll('.bubble')].some((bubble) => bubble.textContent.includes(\"How's it going?\"))", true, "and drawn")
     }
 
-    /// Every change used to draw every row of the place again. Now what didn't change keeps what was drawn for it.
     func testAChangeDrawsOnlyTheRowThatChanged() async throws {
         try await open(at: threadKey)
         try await phone.run("for (const node of $('rows').children) node.drawnBefore = true;")
@@ -975,9 +914,6 @@ final class PressPhoneTests: XCTestCase {
     }
 }
 
-/// The page at a phone's size, in a web view off the edge of every screen, with a stand-in for the Mac behind it. The
-/// stand-in answers from a book through the same `PhonePlace`, `PhoneView`, `PhoneAsk` and `PhoneFound` the Mac uses,
-/// and keeps what the page asked and what the Mac would have done about it.
 @MainActor
 private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
     static let pass = "a-paired-phone"
@@ -1007,31 +943,22 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
     var book: ChannelBook
     var priorities = Priorities()
     let view: WKWebView
-    /// What the page asked the Mac to do, and what the Mac would do about it, which is `nil` where it turned it away.
     private(set) var acts: [(ask: PhoneAsk, action: MessagesAction?)] = []
     private(set) var searches: [String] = []
-    /// How many more times to say nobody's looking, as the Mac does once it's let go of every stream.
     var refusing = 0
     private(set) var uploads: [(name: String, type: String, body: Data)] = []
-    /// Answers to photos and files the stand-in holds back until `letUploadsGo`, as a slow link would.
     var holdingUploads = false
-    /// What the Mac says to a phone's push subscription.
     var pushAnswer = 204
     private var heldUploads: [(task: WKURLSchemeTask, answer: () -> Void)] = []
-    /// Uploads the page called off before they were answered.
     private(set) var stoppedUploads = 0
-    /// Each place the page asked to be shown, in order.
     private(set) var watched: [String] = []
-    /// Addresses the page tried to go to, which are never gone to.
     private(set) var followed: [URL] = []
-    /// How often the page asked for a photo or file, and what's picked when it does.
     private(set) var panels = 0
     var picks: [URL] = []
     private let now: Date
     private let panel: NSPanel
     private var streams: [(task: WKURLSchemeTask, key: String)] = []
     private var shown: [ObjectIdentifier: PhoneView] = [:]
-    /// The last view sent, as it went.
     private(set) var lastSent = ""
     private var files: [String: Drop] = [:]
 
@@ -1054,14 +981,12 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
         panel.sharingType = .none
         panel.isReleasedWhenClosed = false
         panel.contentView = view
-        // A web view only lays out and runs its timers while its window is out, and this one is off every screen. Off
-        // every screen, its page would say it can't be seen, and a page that can't be seen marks nothing seen.
+        // Outside the repo: WKWebView lays out and runs timers only while its window is ordered in, and calls an occluded page hidden.
         panel.orderFrontRegardless()
         let seeEvenOffScreen = NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")
         if view.responds(to: seeEvenOffScreen) { view.perform(seeEvenOffScreen, with: false) }
     }
 
-    /// Loads the page fresh at `key`. Whatever was loaded before is marked stale, so nothing waits on it by mistake.
     func open(_ key: String, hash: String = "") {
         view.evaluateJavaScript("window.stale = true")
         view.load(URLRequest(url: URL(string: "phone://mac/?key=\(key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")\(hash)")!))
@@ -1076,39 +1001,29 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
         panel.close()
     }
 
-    /// Sends each open page what it shows now, as the Mac does when the book changes.
     func push() {
         for stream in streams { send(stream.task, key: stream.key) }
     }
 
-    // MARK: Pressing
-
-    /// Taps the first `selector` that shows, saying `text` or labelled with it, at its centre, or at `point` on the
-    /// page, and fails if anything else is there to take the tap.
     func tap(_ selector: String, _ text: String? = nil, at point: CGPoint? = nil, file: StaticString = #filePath, line: UInt = #line) async throws {
         let said = try await run(Self.finger, ["selector": selector, "text": text ?? NSNull(), "point": point.map { [$0.x, $0.y] } ?? NSNull()]) as? String
         XCTAssertEqual(said, "tapped", "tapping \(selector) \(text ?? "")", file: file, line: line)
     }
 
-    /// What a tap at the centre of the first `selector` would land on, without tapping.
     func reach(_ selector: String) async throws -> String {
         try await run(Self.finger.replacingOccurrences(of: "const at =", with: "return 'tapped';\nconst at ="), ["selector": selector, "text": NSNull(), "point": NSNull()]) as? String ?? ""
     }
 
-    /// Puts the keyboard on the first `selector` saying `text`, as Tab would, and presses `key` there.
     func press(_ key: Key, on selector: String, _ text: String? = nil, file: StaticString = #filePath, line: UInt = #line) async throws {
         let focused = try await run(Self.find + "if (!node) return 'nothing is ' + selector; node.focus(); return document.activeElement === node ? 'focused' : 'focus is on ' + (document.activeElement && document.activeElement.outerHTML.slice(0, 120));", ["selector": selector, "text": text ?? NSNull()]) as? String
         XCTAssertEqual(focused, "focused", "focusing \(selector) \(text ?? "")", file: file, line: line)
         try await press(key, file: file, line: line)
     }
 
-    /// Typed a key at a time wherever the page has the keyboard.
     func type(_ text: String, file: StaticString = #filePath, line: UInt = #line) async throws {
         for character in text { try await stroke(String(character), file: file, line: line) }
     }
 
-    /// A key pressed and let go wherever the page has the keyboard, once the page has had both. Space presses a button
-    /// as it's let go, which reaches the page after anything asked of it in between.
     func press(_ key: Key, file: StaticString = #filePath, line: UInt = #line) async throws {
         try await stroke(key.characters, code: key.code, file: file, line: line)
     }
@@ -1119,7 +1034,6 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
         try await until("the page has the key", file: file, line: line) { try await run("return letGo;") as? Int ?? 0 > before }
     }
 
-    /// What `expression` comes to in the page.
     func read(_ expression: String) async throws -> Any? {
         try await run("return \(expression);")
     }
@@ -1145,8 +1059,6 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
 
         """
 
-    /// Where a finger lands is whatever's on top there, which has to be the control or inside it. A tap there fires
-    /// the pointer's down and up, then the mouse's, then the click, as a phone's browser does.
     private static let finger = find + """
         if (!node) return 'nothing is ' + selector + (text == null ? '' : ' saying ' + text);
         let box = node.getBoundingClientRect();
@@ -1159,14 +1071,12 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
         const touch = { ...at, pointerId: 1, pointerType: 'touch', isPrimary: true };
         hit.dispatchEvent(new PointerEvent('pointerdown', touch));
         hit.dispatchEvent(new PointerEvent('pointerup', touch));
-        // A tap puts the keyboard in a field, as a made-up event doesn't on its own.
+        // Outside the repo: WebKit puts the keyboard in a field for a real tap, not for a made-up event.
         if (hit.dispatchEvent(new MouseEvent('mousedown', at))) hit.closest('textarea, input:not([type=checkbox], [type=radio], [type=file])')?.focus();
         hit.dispatchEvent(new MouseEvent('mouseup', at));
         hit.dispatchEvent(new MouseEvent('click', at));
         return 'tapped';
         """
-
-    // MARK: The Mac
 
     fileprivate func start(_ task: WKURLSchemeTask) {
         let request = task.request
@@ -1241,7 +1151,6 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
         shown[ObjectIdentifier(task)] = nil
     }
 
-    /// As the Mac does, each stream gets its first view whole, and then only the rows that changed.
     private func send(_ task: WKURLSchemeTask, key: String) {
         let view = PhoneView(PhonePlace(key, in: book), in: book, now: now, newFrom: book.newFrom, t3: "env 1", priorities: priorities)
         guard let json = try? JSONEncoder().encode(view.since(shown[ObjectIdentifier(task)])) else { return }
@@ -1270,8 +1179,6 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
         return data
     }
 
-    // MARK: Going anywhere else
-
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url, url.scheme != "phone" else { return decisionHandler(.allow) }
         followed.append(url)
@@ -1289,7 +1196,7 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 }
 
-/// Held by the web view's configuration, which would otherwise keep the phone alive.
+// Outside the repo: WKWebViewConfiguration holds its scheme handler strongly.
 @MainActor
 private final class SchemeHandler: NSObject, WKURLSchemeHandler {
     weak var phone: Phone?

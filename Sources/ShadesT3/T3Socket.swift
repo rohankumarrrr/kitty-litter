@@ -1,19 +1,14 @@
 import Foundation
 
-/// One WebSocket to the server, speaking Effect RPC. It stays connected on its own: when T3 restarts
-/// it keeps trying, then sends every open subscription again.
 actor T3Socket {
-    /// What a subscription does with each chunk. Chunks are handled one at a time, in order.
     typealias ChunkHandler = @Sendable (Data) async -> Void
 
     private struct Subscription {
         let method: String
-        /// Asked again on every reconnect, so a stream can pick up where it left off.
         let payload: @Sendable () -> Data
         let onChunk: ChunkHandler
         let onEnd: @Sendable (Error?) -> Void
         let onConnectionChange: (@Sendable (Bool) -> Void)?
-        /// A failed stream is tried again instead of ending.
         let retriesOnFailure: Bool
         var requestID: String?
     }
@@ -43,14 +38,10 @@ actor T3Socket {
         session = URLSession(configuration: .ephemeral)
     }
 
-    // MARK: Using the connection
-
-    /// Returns once connected, or throws why not. Keeps trying in the background either way.
     func connect() async throws {
         if socket != nil { return }
         if isShutDown { throw T3Error.connectionLost }
         startRunning()
-        // Someone's waiting, so try again now instead of at the next retry.
         retryDelay?.cancel()
         try await withCheckedThrowingContinuation { openWaiters.append($0) }
     }
@@ -71,9 +62,7 @@ actor T3Socket {
             send(T3Wire.request(id: id, method: method, payload: T3Wire.encode(payload)), on: socket)
         }
 
-        // The frame holds this request's result, so decode it away from the actor.
         return try await Task.detached {
-            // An answer this client can't read means the server's format has changed.
             guard let frames = try? T3Wire.frames(T3Wire.ExitFrame<Result>.self, in: frame),
                   let exit = frames.first(where: { $0.requestId == id })?.exit
             else { throw T3Error.incompatibleServer(version: nil) }
@@ -112,7 +101,6 @@ actor T3Socket {
         if let socket { send(T3Wire.interrupt(requestID: requestID), on: socket) }
     }
 
-    /// Stops for good.
     func shutdown() {
         isShutDown = true
         runner?.cancel()
@@ -129,8 +117,6 @@ actor T3Socket {
         for subscription in ended { subscription.onEnd(nil) }
         session.invalidateAndCancel()
     }
-
-    // MARK: Staying connected
 
     private func startRunning() {
         guard runner == nil, !isShutDown else { return }
@@ -151,7 +137,6 @@ actor T3Socket {
                 defer { keepAlive.cancel() }
                 try await pump(socket)
             } catch T3Error.unauthorized {
-                // The session was revoked or expired, so the next try signs in again.
                 forceNewSession = true
                 didFail(T3Error.unauthorized)
             } catch {
@@ -178,7 +163,7 @@ actor T3Socket {
         socket.maximumMessageSize = Self.maxFrameBytes
         socket.resume()
 
-        // URLSession only shows how the handshake went on the first exchange.
+        // Outside the repo: URLSession only shows how a WebSocket handshake went once the first exchange is tried.
         do {
             try await socket.send(.data(T3Wire.ping))
             _ = try await socket.receive()
@@ -208,7 +193,6 @@ actor T3Socket {
 
     private func didFail(_ error: Error) {
         lastFailure = error
-        // Anyone waiting hears why right away, and the loop keeps trying without them.
         for waiter in openWaiters { waiter.resume(throwing: error) }
         openWaiters = []
     }
@@ -235,8 +219,6 @@ actor T3Socket {
         }
     }
 
-    // MARK: Frames
-
     private nonisolated func pump(_ socket: URLSessionWebSocketTask) async throws {
         while true {
             let data: Data
@@ -257,7 +239,6 @@ actor T3Socket {
         }
     }
 
-    /// Answers now and returns any slower work, to run off the actor.
     private func route(_ header: T3Wire.FrameHeader, _ data: Data) -> ChunkHandler? {
         lastFrameAt = Date()
         guard let requestID = header.requestId else { return nil }
@@ -281,7 +262,6 @@ actor T3Socket {
         let exit = (try? T3Wire.frames(T3Wire.ExitFrame<T3Wire.Ignored>.self, in: frame))?
             .first { $0.requestId == requestID }?.exit
 
-        // A stream the server let go of, without anything failing, just needs asking for again.
         if exit?.isInterruptOnly == true || (subscription.retriesOnFailure && exit?.isSuccess != true) {
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(1))
@@ -306,13 +286,11 @@ actor T3Socket {
     }
 
     private func acknowledge(_ requestID: String, on socket: URLSessionWebSocketTask) {
-        // The server sends nothing more on a stream until the last chunk is acknowledged.
         send(T3Wire.ack(requestID: requestID), on: socket)
     }
 
     private func send(_ frame: Data, on socket: URLSessionWebSocketTask) {
         socket.send(.data(frame)) { _ in
-            // A failed send means a closed socket, and the receive loop deals with that.
         }
     }
 

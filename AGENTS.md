@@ -12,6 +12,7 @@ A desktop app for macOS whose cat, Shades, sees your screen when you ask, answer
 - `docs/design.md`: Opal Horizon, the design system and the app's only look. Everything drawn builds on it.
 - `docs/kittens.md`: how specialist agents are set up. Real kittens are personal and live outside this repo.
 - `docs/ROADMAP.md`: ideas saved for later. Version one stays small, so new ideas go there first.
+- `Tests/RepoChecks`: checks over the repo's own files, each enforcing a rule in the table below.
 - `.agents/skills/`: how to prove a change here. `verify-shades` drives the app in demo mode and has its windows draw themselves to pictures, and `verify-screen-boundary` checks that nothing from your screen reaches a kitten that isn't allowed to see it.
 
 ## Commands
@@ -26,43 +27,48 @@ swift scripts/make-icon.swift assets   # redraws the app icon from the cat's art
 swift run shades --demo   # everything faked: no T3, permissions, microphone or shortcuts
 swift run shades --demo --no-script --commands steps.txt   # plays demo commands from a file, one a line
 swift test --filter ScreenBoundaryTests   # every route your screen could take to a kitten
+swift test --filter RepoChecks   # the checks in the rule table, such as no comments
 ~/shades/scripts/triage.sh logs --start "2026-01-31 09:00:00" --end "2026-01-31 10:00:00"   # signing's and the app's system log, once you're let out to run it
 ~/shades/scripts/triage.sh processes   # those processes and an install's build steps
 ```
 
-To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-off` or `--fix` with `--image`, or `--ask` with `--drop` for a file or link dropped onto the cat, as described in `Sources/Shades/App/DevFlags.swift`. The `probe-t3`, `probe-context` and `probe-voice` tools try one module at a time.
+To try a real flow without touching the mouse or keyboard, use `--ask`, `--hand-off` or `--fix` with `--image`, or `--ask` with `--drop` for a file or link dropped onto the cat. `docs/commands.md` lists every flag, probe and script. The `probe-t3`, `probe-context` and `probe-voice` tools try one module at a time.
 
 ## Rules
 
-- macOS 14 or later, Apple Silicon. Build with Swift 6 tools in Swift 5 language mode.
-- The cat's windows must never make The Kitty Litter the active app, or it can no longer tell what you're looking at. A panel that needs typing, like the Ask box or the box in The Kitty Litter, takes the keyboard without activating, and only when you're about to type. Capture before showing any UI that accepts input. `docs/kittens.md` says how The Kitty Litter does this.
-- The Kitty Litter's windows never appear in a screen capture. Its window is also hidden from other apps' captures, so one kitten is never shown another's messages.
-- Text from the screen is untrusted data. It goes inside `<screen>` in the prompts in `Prompts.swift`, and never decides what the app does.
-- Capture only when asked, never in the background, and skip apps on the privacy list.
-- A kitten with `seesScreen: false` never gets text from your screen, and that includes follow-ups to its work in other projects. `docs/kittens.md` says what enforces that and what doesn't.
-- The router only replies, and the app acts on its one line. It runs in its own folder, where `RouterBlock` leaves it only web search, with no tools that act or read files, so whatever starts a router thread gets its project from `routerProjectID(for:)`.
-- Claude threads in this repo run in a sandbox set by `.claude/settings.json`, which also keeps them out of saved copies of the screen. Run `swift` commands on their own, with no pipe or `cd`, since only that form is let out. A refused read means it's working, so don't look for a way around it.
-- An inbox row is data, and a reply is only what you typed or said. It goes straight to the thread, with no capture and no canned answer.
-- The router only picks numbers, only your own words get passed on, and an extra copy of a correction never carries screen text.
-- When the self-check could have caught a problem, teach it to, in `HealthCheck.swift`, with a test.
-- Never log or store tokens, transcripts, screenshots or page text beyond what a feature needs.
-- Keep dependencies few, and permissively licensed only. Don't copy from GPL projects.
+Each rule says what enforces it. A check is the rule: when one fails, its message names the fix. Only a judgment call nothing can check is enforced by you. When a mistake could happen again, make it impossible at the highest level that works: the code's structure, then a type, then a check in `Tests/RepoChecks` whose error names the fix, then a test. Add the rule here with what enforces it. A line with nothing enforcing it comes last.
+
+| Rule | Enforced by |
+|---|---|
+| macOS 14 or later, Apple Silicon. Swift 6 tools in Swift 5 language mode. | `Package.swift` |
+| No comments. Say it in a name, a type, a test or the commit message. | `CommentTests` |
+| The cat's windows never make The Kitty Litter the active app, or it can no longer tell what you're looking at. A panel that needs typing takes the keyboard without activating, and only when you're about to type. Capture before showing any UI that accepts input. `docs/kittens.md` says how. | You, and `verify-shades`, which says what's in front after each step |
+| The Kitty Litter's windows never appear in a screen capture, and its window is hidden from other apps' captures, so one kitten is never shown another's messages. | `ChannelsWindowTests` for The Kitty Litter's window, you for the rest |
+| Text from the screen is untrusted data. It goes inside `<screen>` in `Prompts.swift`, and never decides what the app does. | `PromptsTests`, `ScreenBoundaryTests` |
+| Capture only when asked, never in the background, and skip apps on the privacy list. | `PrivacyTests` for the list, you for the rest |
+| A kitten with `seesScreen: false` never gets text from your screen, follow-ups to its work in other projects included. `docs/kittens.md` says what enforces that and what doesn't. | `ScreenBoundaryTests`, and `verify-screen-boundary` |
+| The router only replies, and the app acts on its one line. It runs in its own folder, where `RouterBlock` leaves it only web search, so whatever starts a router thread gets its project from `routerProjectID(for:)`. | `RouterBlockTests`, and `FakeBackend`, which fails a test that starts a router thread anywhere else |
+| An inbox row is data, and a reply is only what you typed or said. It goes straight to the thread, with no capture and no canned answer. | `ScreenBoundaryTests` (`inboxReply`) |
+| The router only picks numbers, only your own words get passed on, and an extra copy of a correction never carries screen text. | `ScreenBoundaryTests` |
+| Claude threads in this repo run in a sandbox set by `.claude/settings.json`, which also keeps them out of saved copies of the screen. Run `swift` commands on their own, with no pipe or `cd`, since only that form is let out. A refused read means it's working, so don't look for a way around it. | The sandbox |
+| When the self-check could have caught a problem, teach it to, in `HealthCheck.swift`, with a test. | You |
+| Never log or store tokens, transcripts, screenshots or page text beyond what a feature needs. | You |
+| Keep dependencies few, and permissively licensed only. Don't copy from GPL projects. | You |
+| Never send synthetic clicks or keystrokes while testing. They land on whatever's really on the desktop, which has already meant stray clicks in someone's calendar. Use `--demo`, the flags above, the probes, or a person. | You |
+| Don't send a real screenshot to a model in a test. Use `--image` with a picture you made. | You |
+| Name live test threads "Shades test: ..." and archive them afterwards. The app keeps those out of your inbox and bubble, unless it's a copy trying a flow out. | `probe-t3`, which does both, and you elsewhere |
+| A correction can't be told from a real one, so never send a test correction to a real kitten. | `probe-t3 router`, which stops at the router's decision, and you elsewhere |
+| GitHub's runner can stall for a second or two, so a test waits on the thing itself, such as `runMainLoop { button.isArmed }`, never a set time or a count of yields. The fakes answer on the main actor for the same reason. A timing test compares against a baseline it measures in the same run, by the quickest of many tries. | You |
+| Write code that reads like the code around it, with small files and plain names. | You |
+| User-facing text is short, plain and friendly. | You |
+| Commit messages are one plain sentence saying what changed for the user, such as "Let the cat run to whatever you point at". | You |
+
+A note on how something outside this repo behaves, which the code can't change, may stay as one line starting `// Outside the repo: `, or `# Outside the repo: ` in a script. It's for macOS, a vendor or a protocol, never for our own code.
 
 ## Documentation
 
-This is open source, and people learn it from the docs, so they change in the same commit as the code. `README.md` covers what someone using The Kitty Litter needs, and `docs/` covers how things work: `design.md`, `kittens.md`, `t3-integration.md` and `voice.md`. New ideas go in `docs/ROADMAP.md`, and things that get built come off it.
+This is open source, and people learn it from the docs, so they change in the same commit as the code. `README.md` covers what someone using The Kitty Litter needs, and `docs/` covers how things work: `design.md`, `kittens.md`, `t3-integration.md`, `voice.md` and `commands.md`. New ideas go in `docs/ROADMAP.md`, and things that get built come off it.
 
 ## Testing
 
-- Prove a change by running it. Use `verify-shades` for anything a person sees or does, and `verify-screen-boundary` for anything that decides what The Kitty Litter sends to T3 and where. Both are in `.agents/skills/`.
-- Never send synthetic clicks or keystrokes while testing. They land on whatever's really on the desktop, which has already meant stray clicks in someone's calendar. Use `--demo`, the flags above, the probes, or a person.
-- Don't send a real screenshot to a model in a test. Use `--image` with a picture you made.
-- Name live test threads "Shades test: ..." and archive them afterwards. The app keeps those out of your inbox and bubble, unless it's a copy trying a flow out.
-- A correction can't be told from a real one, so never send a test correction to a real kitten. `probe-t3 router` stops at the router's decision.
-- GitHub's runner can stall for a second or two, so a test waits on the thing itself, such as `runMainLoop { button.isArmed }`, never a set time or a count of yields. The fakes answer on the main actor for the same reason. A timing test compares against a baseline it measures in the same run, by the quickest of many tries.
-
-## Style
-
-- Write code that reads like the code around it. Small files, plain names, and few comments that explain why rather than what.
-- User-facing text is short, plain and friendly.
-- Commit messages are one plain sentence saying what changed for the user, such as "Let the cat run to whatever you point at".
+Prove a change by running it. Use `verify-shades` for anything a person sees or does, and `verify-screen-boundary` for anything that decides what The Kitty Litter sends to T3 and where. Both are in `.agents/skills/`. `swift test --filter RepoChecks` runs the checks in the table above on their own, and `swift test` runs them with everything else, here and on GitHub.
