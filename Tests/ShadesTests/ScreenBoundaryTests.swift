@@ -404,7 +404,7 @@ private final class World {
     func endTurn(writtenBy writer: String) async {
         let gotScreen = sends.contains { $0.place == .thread("w") && ScreenBoundaryTests.carriesScreen($0.prompt) }
         backend.reports["w"] = gotScreen ? "Worked on the page that said Page-5ad1." : "Worked on the page."
-        backend.said["w"] = [Exchange(id: "from-\(writer)", asker: .agent(threadID: writer), askedAt: clock.addingTimeInterval(-40), ask: "Can you check?")]
+        backend.said["w"] = [Exchange(id: "from-\(writer)", asker: .agent(threadID: writer), askedAt: clock.addingTimeInterval(-40), ask: "Can you check?", opensRun: "run-written")]
         guard var thread = added else { return }
         thread.lastRunID = "run-written"
         thread.lastRunStartedAt = clock.addingTimeInterval(-30)

@@ -272,8 +272,9 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
 
     var listed: [AgentThread]?
     var said: [String: [Exchange]] = [:]
+    var unreadableTranscripts: Set<String> = []
     @MainActor func allThreads() async -> [AgentThread]? { listed }
-    @MainActor func exchanges(threadID: String) async -> [Exchange]? { said[threadID] }
+    @MainActor func exchanges(threadID: String) async -> [Exchange]? { unreadableTranscripts.contains(threadID) ? nil : said[threadID] ?? [] }
 
     private func play(threadID: String, prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         let routed = routerSays.first { prompt.text.contains("Their question: \($0.key)") }?.value
