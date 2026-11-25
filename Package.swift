@@ -38,11 +38,12 @@ let package = Package(
         .executableTarget(name: "probe-context", dependencies: ["ShadesCore", "ShadesContext"], path: "Sources/Probes/Context", swiftSettings: settings),
         .executableTarget(name: "probe-voice", dependencies: ["ShadesCore", "ShadesVoice", .product(name: "FluidAudio", package: "FluidAudio")], path: "Sources/Probes/Voice", swiftSettings: settings),
 
-        .testTarget(name: "ShadesCoreTests", dependencies: ["ShadesCore"], swiftSettings: settings),
-        .testTarget(name: "ShadesT3Tests", dependencies: ["ShadesT3"], swiftSettings: settings),
-        .testTarget(name: "ShadesContextTests", dependencies: ["ShadesContext"], swiftSettings: settings),
-        .testTarget(name: "ShadesVoiceTests", dependencies: ["ShadesVoice"], swiftSettings: settings),
-        .testTarget(name: "ShadesTests", dependencies: ["Shades"], swiftSettings: settings),
+        .target(name: "TestSupport", path: "Tests/TestSupport", swiftSettings: settings),
+        .testTarget(name: "ShadesCoreTests", dependencies: ["ShadesCore", "TestSupport"], swiftSettings: settings),
+        .testTarget(name: "ShadesT3Tests", dependencies: ["ShadesT3", "TestSupport"], swiftSettings: settings),
+        .testTarget(name: "ShadesContextTests", dependencies: ["ShadesContext", "TestSupport"], swiftSettings: settings),
+        .testTarget(name: "ShadesVoiceTests", dependencies: ["ShadesVoice", "TestSupport"], swiftSettings: settings),
+        .testTarget(name: "ShadesTests", dependencies: ["Shades", "TestSupport"], swiftSettings: settings),
         .testTarget(name: "RepoChecks", swiftSettings: settings),
     ]
 )

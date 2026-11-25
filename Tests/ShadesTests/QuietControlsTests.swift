@@ -1,6 +1,7 @@
 import AppKit
 @testable import Shades
 import ShadesCore
+import TestSupport
 import XCTest
 
 @MainActor

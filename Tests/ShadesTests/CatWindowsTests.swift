@@ -2,6 +2,7 @@ import AppKit
 @testable import Shades
 import ShadesContext
 import ShadesCore
+import TestSupport
 import XCTest
 
 @MainActor

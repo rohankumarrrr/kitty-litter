@@ -13,6 +13,7 @@ A desktop app for macOS whose cat, Shades, sees your screen when you ask, answer
 - `docs/kittens.md`: how specialist agents are set up. Real kittens are personal and live outside this repo.
 - `docs/ROADMAP.md`: ideas saved for later. Version one stays small, so new ideas go there first.
 - `Tests/RepoChecks`: checks over the repo's own files, each enforcing a rule in the table below.
+- `Tests/TestSupport`: the one way a test waits for something, which every test target can use.
 - `.agents/skills/`: how to prove a change here. `verify-shades` drives the app in demo mode and has its windows draw themselves to pictures, and `verify-screen-boundary` checks that nothing from your screen reaches a kitten that isn't allowed to see it.
 
 ## Commands
@@ -58,7 +59,8 @@ Each rule says what enforces it. A check is the rule: when one fails, its messag
 | Don't send a real screenshot to a model in a test. Use `--image` with a picture you made. | You |
 | Name live test threads "Shades test: ..." and archive them afterwards. The app keeps those out of your inbox and bubble, unless it's a copy trying a flow out. | `probe-t3`, which does both, and you elsewhere |
 | A correction can't be told from a real one, so never send a test correction to a real kitten. | `probe-t3 router`, which stops at the router's decision, and you elsewhere |
-| GitHub's runner can stall for a second or two, so a test waits on the thing itself, such as `runMainLoop { button.isArmed }`, never a set time or a count of yields. The fakes answer on the main actor for the same reason. A timing test compares against a baseline it measures in the same run, by the quickest of many tries. | You |
+| A test waits on the thing itself, with `until` or `runMainLoop` from `Tests/TestSupport`, never a set time or a count of yields. | `TimedWaitTests`, which counts what's left in each file and lets it only go down |
+| The fakes answer on the main actor, since GitHub's runner can stall for a second or two. A timing test compares against a baseline it measures in the same run, by the quickest of many tries. | You |
 | Write code that reads like the code around it, with small files and plain names. | You |
 | User-facing text is short, plain and friendly. | You |
 | Commit messages are one plain sentence saying what changed for the user, such as "Let the cat run to whatever you point at". | You |
