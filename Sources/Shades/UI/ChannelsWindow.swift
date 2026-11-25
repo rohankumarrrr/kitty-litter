@@ -454,7 +454,7 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
     private static let sidebarHiddenKey = "ChannelsSidebarHidden"
     private static let timeRefreshSeconds: TimeInterval = 60
 
-    let window: NSWindow = NSApplication.shared.activationPolicy() == .accessory ? ChannelsPanel() : ChannelsMainWindow()
+    let window: NSWindow = NeverInFront.isKept ? ChannelsPanel() : ChannelsMainWindow()
     let view = ChannelsView(frame: NSRect(origin: .zero, size: ChannelsWindow.size))
     var onClose: (() -> Void)?
 

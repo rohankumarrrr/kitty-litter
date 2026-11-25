@@ -764,7 +764,7 @@ final class DemoDriver {
             for (name, window) in windows {
                 print("window \(name) id=\(window.windowNumber) visible=\(window.isVisible) key=\(window.isKeyWindow) frame=\(NSStringFromRect(window.frame)) clicks=\(Offstage.takesClicks(window)) alpha=\(String(format: "%.2f", Offstage.alpha(of: window))) seen=\(Offstage.isSeen(window) ? "yes" : "no")")
             }
-            print("state \(stage.cat.brain.state) pose=\(stage.cat.brain.pose.frame.rawValue) active=\(NSApp.isActive)")
+            print("state \(stage.cat.brain.state) pose=\(stage.cat.brain.pose.frame.rawValue) active=\(NSApp.isActive) madeActive=\(NeverInFront.timesMadeActive) activeFor=\(String(format: "%.0f", NeverInFront.secondsActive * 1000))ms")
         case "opal":
             let parts = rest.split(separator: " ").map(String.init)
             let jackets = parts.dropFirst().compactMap { UInt32($0.replacingOccurrences(of: "#", with: ""), radix: 16) }
