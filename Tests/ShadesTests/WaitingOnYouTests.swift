@@ -258,6 +258,25 @@ final class WaitingOnYouTests: XCTestCase {
         XCTAssertEqual(relays.map(\.threadID), ["main"])
     }
 
+    func testTwoThreadsThatOnceWroteToEachOtherDontPassReportsBackAndForthForever() async {
+        backend.said["m"] = [
+            Exchange(id: "launch", asker: .agent(threadID: "main"), askedAt: clock.addingTimeInterval(-900), ask: "Fix the routing."),
+            Exchange(id: "theirs", asker: .agent(threadID: "w"), askedAt: clock.addingTimeInterval(-600), ask: "Agreed, my branch is gone."),
+            Exchange(id: "note", asker: .you, askedAt: clock.addingTimeInterval(-310)),
+        ]
+        await endTurn(work("m", of: clawde, launchedBy: "main"), report: "Nothing to do here, and I'm not replying.", sorted: "NOTE: Nothing to do.")
+        XCTAssertEqual(relays.map(\.threadID), ["main"], "a turn The Kitty Litter's note opened goes to the thread's own launcher, not back to the thread whose report the note passed on")
+
+        backend.said["y"] = [
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-900), ask: "Look after the site."),
+            Exchange(id: "theirs", asker: .agent(threadID: "w"), askedAt: clock.addingTimeInterval(-600), ask: "Which branch?"),
+            Exchange(id: "note", asker: .you, askedAt: clock.addingTimeInterval(-310)),
+        ]
+        await endTurn(work("y", of: site), report: "Saw the other thread's report. Merge it?", sorted: "DECISION: Merge it?")
+        XCTAssertEqual(waiting.map(\.text), ["Merge it?"], "in a thread you started it comes to you")
+        XCTAssertEqual(relays.map(\.threadID), ["main"])
+    }
+
     func testAWorkerTheCatsThreadLaunchedIsYoursEvenBeforeItPassesWorkOn() async {
         var inbox = Inbox(since: .distantPast)
         inbox.startedForYou("cats", at: clock)
