@@ -287,7 +287,7 @@ Where an app you use every day has a settled way of doing something, do it that 
 - Don't mix kitten colours with status colours.
 - Don't use violet for words. Use lilac.
 - Don't put dim words on a control, a hovered row or a selected one.
-- Don't add a colour outside this page. Add it here first, and to `DesignTests`.
+- Don't add a colour or a text size outside this page. Add it here first, and to `DesignTests`. `OpalRoleTests` fails on a hex, an `NSColor` of its own or a literal `ofSize:` anywhere else.
 - Don't follow the system's light appearance. Opal is dark only, and `NSApp.appearance` stays dark.
 
 ## In code
@@ -299,5 +299,6 @@ Where an app you use every day has a settled way of doing something, do it that 
 - `Sources/Shades/UI/SettingsControls.swift`: Settings' underlined tab, segmented control, switch and field.
 - `Sources/Shades/UI/Motion.swift`: the curve, the durations, and Reduce Motion.
 - `Tests/ShadesTests/SelectionTests.swift`: fails on selected words under 4.5:1 or hard to see on any surface, and on a selection drawn differently without the keyboard.
+- `Tests/RepoChecks/OpalRoleTests.swift`: fails on a colour or text size drawn outside `Opal.swift`, `OpalLight.swift` and `MessagesInk.swift`: a hex, an `NSColor` of its own, a literal `ofSize:`, or a hex on the phone page outside its roles. What's left is counted file by file, and can only go down.
 - `Tests/ShadesTests/DesignTests.swift`: fails on any orange in `Sources/`, on any word role under 4.5:1 on a surface it sits on, on a kitten colour that's too loud, too pale, too close to another or to a status, and on a token that drifts from Opal's value.
 - `swift run shades --demo --no-script --commands .agents/skills/verify-shades/journeys/opal.txt` draws a sheet of every primitive to `.verify/shades/opal/`.

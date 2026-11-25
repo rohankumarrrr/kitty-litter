@@ -55,4 +55,15 @@ final class LexerTests: XCTestCase {
         XCTAssertEqual(ShellLexer(source).comments.map(\.text), ["# one", "# two"])
         XCTAssertEqual(ShellLexer(source).comments.map(\.line), [2, 3])
     }
+
+    func testMatchesSayTheirLineAndLookOnlyWhereTheyreAsked() throws {
+        let source = [
+            #"let a = "0x111111""#,
+            "let b = 0x222222 /* 0x333333 */",
+            ##"let c = "#444444""##,
+        ].joined(separator: "\n")
+        let hex = try NSRegularExpression(pattern: "0x[0-9a-f]{6}|#[0-9a-f]{6}")
+        XCTAssertEqual(SwiftLexer(source).matches(of: hex, in: .code), [Match(line: 2, text: "0x222222")])
+        XCTAssertEqual(SwiftLexer(source).matches(of: hex, in: .literal).map(\.line), [1, 3])
+    }
 }

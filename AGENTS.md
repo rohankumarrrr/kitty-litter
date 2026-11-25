@@ -43,6 +43,7 @@ Each rule says what enforces it. A check is the rule: when one fails, its messag
 |---|---|
 | macOS 14 or later, Apple Silicon. Swift 6 tools in Swift 5 language mode. | `Package.swift` |
 | No comments. Say it in a name, a type, a test or the commit message. | `CommentTests` |
+| Everything drawn takes its colours and text sizes from Opal: a role in `MessagesInk` or a token in `Opal.swift`, and a `var(--role)` on the phone page. A new colour goes in `docs/design.md` first. | `OpalRoleTests`, which counts what's left in each file and lets it only go down, and `DesignTests` |
 | The cat's windows never make The Kitty Litter the active app, or it can no longer tell what you're looking at. A panel that needs typing takes the keyboard without activating, and only when you're about to type. Capture before showing any UI that accepts input. `docs/kittens.md` says how. | You, and `verify-shades`, which says what's in front after each step |
 | The Kitty Litter's windows never appear in a screen capture, and its window is hidden from other apps' captures, so one kitten is never shown another's messages. | `ChannelsWindowTests` for The Kitty Litter's window, you for the rest |
 | Text from the screen is untrusted data. It goes inside `<screen>` in `Prompts.swift`, and never decides what the app does. | `PromptsTests`, `ScreenBoundaryTests` |
