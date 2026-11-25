@@ -22,9 +22,7 @@ final class SidebarCat: QuietView {
     var moves: Bool { !Motion.isReduced && status.state.dotColor != nil }
 
     // Outside the repo: AppKit's drawn copy of a layer smooths its pixel art, so a picture has the cat draw itself.
-    static var drawsForAPicture = false
-
-    override var wantsUpdateLayer: Bool { !Self.drawsForAPicture }
+    override var wantsUpdateLayer: Bool { PictureDrawing.space == nil }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func updateLayer() {

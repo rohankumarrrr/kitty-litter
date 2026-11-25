@@ -264,7 +264,7 @@ final class DesignTests: XCTestCase {
         let canvas = Canvas(flipped: flipped, work: work)
         let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 640, pixelsHigh: 640, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
         rep.size = canvas.bounds.size
-        canvas.cacheDisplay(in: canvas.bounds, to: rep)
+        PictureDrawing.into(rep) { canvas.cacheDisplay(in: canvas.bounds, to: rep) }
         return rep
     }
 
@@ -280,7 +280,7 @@ final class DesignTests: XCTestCase {
         }
         Ink.hex(Opal.page).setFill()
         NSRect(origin: .zero, size: rep.size).fill()
-        work()
+        PictureDrawing.into(rep, work)
         NSGraphicsContext.restoreGraphicsState()
         return rep
     }
