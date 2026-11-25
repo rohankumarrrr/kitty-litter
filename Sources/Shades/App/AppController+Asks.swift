@@ -21,6 +21,7 @@ extension AppController {
         let text = Prompts.askAnswered(ask, outcome)
         forwardTask = Task {
             do {
+                inbox.appWillWrite(to: entry.threadID, at: now())
                 for try await _ in backend.forward(threadID: entry.threadID, text: text, attachments: [], behavior: .queue) {}
             } catch {
                 say(CatWords.problem(error, while: .agents))

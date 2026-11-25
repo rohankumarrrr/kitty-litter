@@ -15,7 +15,7 @@ description: Check that a row stays in The Kitty Litter's Waiting on you only wh
 swift test --filter WaitingOnYouModelTests
 ```
 
-Run `swift` on its own, with no pipe and no `cd`. It takes about a second and passes with `Executed 4 tests, with 0 failures`.
+Run `swift` on its own, with no pipe and no `cd`. It takes about a second and passes with `Executed 5 tests, with 0 failures`.
 
 ## How it works
 
@@ -23,8 +23,9 @@ Run `swift` on its own, with no pipe and no `cd`. It takes about a second and pa
 
 | Event | What it stands for in the code |
 |---|---|
-| `a ends with decision`, `decisionHeld`, `note`, `shipped`, `failed` | A turn ending and `Inbox.file` filing what the sorter said. `decisionHeld` ends it while it watches its open pull request, `turnEnded` |
-| `a is woken by something else` | A run starting with `latestRunStartedAt` later than the row, such as a check waking it |
+| `a ends with decision`, `decisionHeld`, `note`, `shipped`, `failed`, `silent` | A turn ending and `Inbox.file` filing what the sorter said, or `skip` for a report with nothing in it. `decisionHeld` ends it while it watches its open pull request, `turnEnded` |
+| `another thread or a check starts a turn in a` | A run starting with `latestRunStartedAt` and `latestUserMessageAt` later than the row, such as a worker's line or a check waking it |
+| `The Kitty Litter's note starts a turn in a` | `appWillWrite`, then `latestUserAuthoredMessageAt` moving as T3 marks the app's note as the user's, then a run starting |
 | `you write to a in T3` | `latestUserAuthoredMessageAt`, then a run starting |
 | `you reply to a's row`, then `your reply reaches a` or `fails` | `reply` in `AppController+Inbox.swift`: `markReplied(at:)`, then the run, or `markReplied(at: nil)` |
 | `a settles`, `a's pull request merges`, `a is archived` | `settledAt`, `pullRequests` state, the thread leaving the list |
@@ -34,7 +35,8 @@ Run `swift` on its own, with no pipe and no `cd`. It takes about a second and pa
 
 After every event it checks:
 
-- **Rows match the threads.** Each thread has exactly one row waiting on you when the reference says it's stopped on you, and none otherwise. The reference, `Expected`, is the rule written plainly: a decision or failure stops it on you. Shipped, a turn you didn't start, settling, its pull request merging, archiving or Done clear that. Your words dim the row, and the next note answers you only if your words started that turn.
+- **Rows match the threads.** Each thread has exactly one row waiting on you when the reference says it's stopped on you, and none otherwise. The reference, `Expected`, is the rule written plainly: a decision or failure stops it on you. Shipped, a note, settling, its pull request merging, archiving or Done clear that. A turn you didn't start never does. Your words dim the row, and the next note answers you only if no turn you didn't start ran in between.
+- **A turn you didn't start never takes a row out**, and **a second decision updates the row it has**, keeping its ID, rather than adding one.
 - **The record matches the rows.** The rows open in `inbox.record` are exactly the rows waiting on you, none is open twice, and none left before it came.
 
 ## Proving it can fail
@@ -43,6 +45,7 @@ After every event it checks:
 |---|---|
 | `Inbox.follow` returning at once | All three tests: the exhaustive walk on its first paths, such as "a ends with decision, a is woken by something else: a has 1 rows waiting on you, but it's not stopped on you", and both replays |
 | The note path in `Inbox.file` keeping the thread's open decision | Nothing here, since `follow` closes the row as the turn starts. `InboxTests.testFilingRules` catches it, which covers T3 not sending a run's start |
+| `Inbox.moved` closing a row on any turn you didn't start, as before the coordinator fix | `testACoordinatorsQuestionWaitsThroughTurnsItsWorkersAndTheAppStart`: "a turn a didn't get from you took a row out" on its second step, and `WaitingOnYouTests.testACoordinatorsQuestionWaitsUntilYouAnswerThroughAnAppNotesTurn` |
 
 The two replays are the audit's bugs: `testTheReRaiseFromTheAuditIsCaught` (a note from a turn you didn't start brought back a row you'd replied to) and `testAStaleRowFromTheAuditIsCaught` (a row stayed after its pull request merged).
 

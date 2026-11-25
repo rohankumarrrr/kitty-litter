@@ -44,6 +44,17 @@ final class WaitingOnYouModelTests: XCTestCase {
         XCTAssertEqual(world.inbox.entries.filter(\.needsYou), [])
     }
 
+    func testACoordinatorsQuestionWaitsThroughTurnsItsWorkersAndTheAppStart() {
+        var world = World()
+        for event: Event in [.end(.a, .decision), .appNote(.a), .end(.a, .decision), .wake(.a), .end(.a, .silent), .youWrite(.a)] {
+            world.apply(event)
+            XCTAssertNil(world.broken(), world.trace.joined(separator: ", "))
+        }
+        XCTAssertEqual(world.inbox.record.visits.count, 1, "one row the whole way")
+        XCTAssertEqual(world.inbox.record.visits.first?.exit, .replied, "and it left when you answered")
+        XCTAssertEqual(world.inbox.record.visits.first?.updates, 1)
+    }
+
     func testAStaleRowFromTheAuditIsCaught() {
         var world = World()
         for event: Event in [.end(.a, .decisionHeld), .merge(.a)] { world.apply(event) }
@@ -64,6 +75,7 @@ private enum Ending: String {
 private enum Event: CustomStringConvertible {
     case end(Worker, Ending)
     case wake(Worker)
+    case appNote(Worker)
     case youWrite(Worker)
     case replyInApp(Worker)
     case sendLands(Worker)
@@ -76,7 +88,8 @@ private enum Event: CustomStringConvertible {
     var description: String {
         switch self {
         case .end(let thread, let ending): "\(thread) ends with \(ending)"
-        case .wake(let thread): "\(thread) is woken by something else"
+        case .wake(let thread): "another thread or a check starts a turn in \(thread)"
+        case .appNote(let thread): "The Kitty Litter's note starts a turn in \(thread)"
         case .youWrite(let thread): "you write to \(thread) in T3"
         case .replyInApp(let thread): "you reply to \(thread)'s row"
         case .sendLands(let thread): "your reply reaches \(thread)"
@@ -92,7 +105,6 @@ private enum Event: CustomStringConvertible {
 private struct Expected {
     var asking = false
     var repliedRow = false
-    var runIsYours = false
 }
 
 private struct World {
@@ -101,6 +113,7 @@ private struct World {
     var running: Set<Worker> = [.a, .b]
     var sending: Worker?
     var sendingRow: String?
+    var violation: String?
     var expected: [Worker: Expected] = [.a: Expected(), .b: Expected()]
     var clock = Date(timeIntervalSince1970: 1_000)
     var runs = 0
@@ -130,7 +143,7 @@ private struct World {
                 events += endings.map { .end(thread, $0) }
             } else {
                 events.append(.wake(thread))
-                if thread == .a { events += [.youWrite(.a), .replyInApp(.a), .done(.a)] }
+                if thread == .a { events += [.appNote(.a), .youWrite(.a), .replyInApp(.a), .done(.a)] }
             }
             if thread == .a { events += [.settle(.a), .merge(.a), .archive(.a)] }
         }
@@ -159,10 +172,15 @@ private struct World {
             case .silent: SortedReport()
             }
             let runs = runs
+            let openBefore = inbox.entries.first { $0.threadID == thread.rawValue && $0.followsItsThread && $0.needsYou }?.id
             if ending == .silent {
                 inbox.skip(shown)
             } else {
                 inbox.file(sorted, from: shown, startedBy: .you, at: clock) { "row-\(runs)" }
+            }
+            let openAfter = inbox.entries.first { $0.threadID == thread.rawValue && $0.followsItsThread && $0.needsYou }?.id
+            if let openBefore, [.decision, .decisionHeld, .failed].contains(ending), openAfter != openBefore {
+                violation = "a second decision made a new row instead of updating \(openBefore)"
             }
             var hope = expected[thread]!
             switch ending {
@@ -173,7 +191,7 @@ private struct World {
                 hope.asking = false
                 hope.repliedRow = false
             case .note:
-                hope.asking = hope.repliedRow && hope.runIsYours
+                hope.asking = hope.repliedRow
                 hope.repliedRow = false
             case .silent:
                 break
@@ -181,6 +199,9 @@ private struct World {
             expected[thread] = hope
         case .wake(let thread):
             start(thread, yours: false)
+        case .appNote(let thread):
+            inbox.appWillWrite(to: thread.rawValue, at: clock)
+            start(thread, yours: false, wordsMarkedYours: true)
         case .youWrite(let thread):
             start(thread, yours: true)
         case .replyInApp(let thread):
@@ -200,12 +221,12 @@ private struct World {
         case .settle(let thread):
             threads[thread]?.settledAt = clock
             follow()
-            expected[thread] = Expected(runIsYours: expected[thread]!.runIsYours)
+            expected[thread] = Expected()
         case .merge(let thread):
             let open = threads[thread]?.pullRequest?.isOpen == true
             threads[thread]?.pullRequest?.state = "merged"
             follow()
-            if open { expected[thread] = Expected(runIsYours: expected[thread]!.runIsYours) }
+            if open { expected[thread] = Expected() }
         case .archive(let thread):
             threads[thread] = nil
             running.remove(thread)
@@ -215,12 +236,13 @@ private struct World {
             if let row = inbox.entries.last(where: { $0.threadID == thread.rawValue && $0.followsItsThread }) {
                 inbox.remove(row.id, because: .done, at: clock)
             }
-            expected[thread] = Expected(runIsYours: expected[thread]!.runIsYours)
+            expected[thread] = Expected()
         }
     }
 
-    private mutating func start(_ thread: Worker, yours: Bool) {
-        if yours { threads[thread]?.lastWordsFromYouAt = clock }
+    private mutating func start(_ thread: Worker, yours: Bool, wordsMarkedYours: Bool = false) {
+        let waitingBefore = inbox.entries.filter { $0.threadID == thread.rawValue && $0.needsYou }.count
+        if yours || wordsMarkedYours { threads[thread]?.lastWordsFromYouAt = clock }
         threads[thread]?.lastMessageAt = clock
         threads[thread]?.lastRunStartedAt = clock.addingTimeInterval(1)
         threads[thread]?.status = .running
@@ -230,11 +252,13 @@ private struct World {
         var hope = expected[thread]!
         if yours {
             hope.repliedRow = hope.asking || hope.repliedRow
+            hope.asking = false
         } else {
             hope.repliedRow = false
+            if inbox.entries.filter({ $0.threadID == thread.rawValue && $0.needsYou }).count < waitingBefore {
+                violation = "a turn \(thread) didn't get from you took a row out"
+            }
         }
-        hope.asking = false
-        hope.runIsYours = yours
         expected[thread] = hope
     }
 
@@ -243,6 +267,7 @@ private struct World {
     }
 
     func broken() -> String? {
+        if let violation { return violation }
         for thread in Worker.allCases {
             let waiting = inbox.entries.filter { $0.threadID == thread.rawValue && $0.followsItsThread && $0.needsYou }.count
             let hope = expected[thread]!

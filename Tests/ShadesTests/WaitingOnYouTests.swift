@@ -10,6 +10,7 @@ final class WaitingOnYouTests: XCTestCase {
     private var controller: AppController!
     private var savedInbox: Inbox?
     private var health: [[HealthFinding]] = []
+    private var notified: [NeedsYouAlert] = []
     private var sorts: [String: String] = [:]
     private var clock = Date(timeIntervalSince1970: 100_000)
     private let clawde = Kitten(name: "Clawde", role: "The system", covers: "", folder: "/k/clawde", seesScreen: false, usesInbox: true)
@@ -40,7 +41,8 @@ final class WaitingOnYouTests: XCTestCase {
                 routerFolder: { "/shades/router" },
                 reportHealth: { [unowned self] findings, _ in self.health.append(findings) },
                 inbox: inbox,
-                saveInbox: { [unowned self] in self.savedInbox = $0 }
+                saveInbox: { [unowned self] in self.savedInbox = $0 },
+                notify: { [unowned self] in self.notified.append($0) }
             ),
             stage: FakeStage(log: Log()),
             now: { [unowned self] in self.clock }
@@ -467,7 +469,7 @@ final class WaitingOnYouTests: XCTestCase {
         XCTAssertTrue(relays.isEmpty, "it can't say there was no report")
     }
 
-    func testAQuietKittensRowFiledWhileItsThreadIsWokenGoesAtOnce() async {
+    func testAQuietKittensRowStaysWhenItsChecksWakeIt() async {
         let quiet = Kitten(name: "Quinn", role: "", covers: "", folder: "/k/quinn")
         controller = AppController(
             dependencies: AppDependencies(
@@ -497,8 +499,8 @@ final class WaitingOnYouTests: XCTestCase {
         let read = await until { self.controller.readRuns["q"] != nil && self.sortsRun > 0 && self.controller.reportTask != nil }
         await controller.reportTask?.value
         XCTAssertTrue(read)
-        XCTAssertEqual(controller.inbox.entries.filter(\.needsYou), [], "its checks woke it before the row was filed")
-        XCTAssertEqual(controller.inbox.record.visits.map(\.exit), [.turnWithoutYou])
+        XCTAssertEqual(controller.inbox.entries.filter(\.needsYou).map(\.text), ["Pick A or B?"], "its checks waking it don't answer you")
+        XCTAssertEqual(controller.inbox.record.visits.map(\.exit), [nil])
     }
 
     func testADelegatedThreadIsntToldToItsParentTwice() async {
@@ -523,25 +525,51 @@ final class WaitingOnYouTests: XCTestCase {
         XCTAssertTrue(relays.isEmpty, "no thread the app doesn't own gets a note")
     }
 
-    func testTheLaunchersRowGoesWhenTheAppPassesItAReport() async throws {
-        await endTurn(work("main", of: clawde), report: "Pick plan A or plan B?", sorted: "DECISION: Pick plan A or plan B?")
+    func testACoordinatorsQuestionWaitsUntilYouAnswerThroughAnAppNotesTurn() async throws {
+        clock = Date(timeIntervalSince1970: 1_795_000_000)
+        await endTurn(work("main", of: clawde), report: "Choose 1, 2, 3 or 4 for the site previews.", sorted: "DECISION: Choose 1, 2, 3 or 4 for the site previews.")
         XCTAssertEqual(waiting.count, 1)
-        clock = clock.addingTimeInterval(60)
+
+        clock = clock.addingTimeInterval(206)
         await endTurn(work("w", of: clawde, launchedBy: "main"), report: "PR #4 is up.")
         XCTAssertEqual(relays.map(\.threadID), ["main"])
-        XCTAssertEqual(waiting, [], "another thread wrote to it, so it's moved on")
-        XCTAssertEqual(controller.inbox.record.visits.first?.exit, .turnWithoutYou)
-
         var main = try XCTUnwrap(listed.first { $0.id == "main" })
         main.lastWordsFromYouAt = clock
+        main.lastMessageAt = clock
         main.lastRunStartedAt = clock.addingTimeInterval(1)
-        main.lastRunID = "run-main-2"
-        main.lastRunEndedAt = clock.addingTimeInterval(30)
-        await endTurn(main, report: "The worker's PR #4 waits on CI.", sorted: "NOTE: The worker's PR #4 waits on CI.")
-        XCTAssertEqual(waiting, [], "the note isn't an answer to you")
+        main.status = .running
+        show(listed.filter { $0.id != "main" } + [main])
+        XCTAssertEqual(waiting.map(\.text), ["Choose 1, 2, 3 or 4 for the site previews."], "The Kitty Litter's note started that turn, not you")
+
+        clock = clock.addingTimeInterval(36)
+        main.lastWordsFromYouAt = clock
+        main.lastMessageAt = clock
+        show(listed.filter { $0.id != "main" } + [main])
+        XCTAssertEqual(waiting, [], "you answered it")
+        XCTAssertEqual(controller.inbox.record.visits.map(\.exit), [.replied])
+        XCTAssertEqual(notified.filter { $0.kind == .decision }.count, 1)
+        await controller.runHealthCheck()
+        XCTAssertEqual(health.last?.first { $0.check == "waiting on you" }?.ok, true)
     }
 
-    func testARowFiledWhileItsThreadIsWokenAgainGoesAtOnce() async {
+    func testAThreadsNextDecisionUpdatesItsRowWithNoSecondNotice() async throws {
+        await endTurn(work("main", of: clawde), report: "Pick plan A or plan B?", sorted: "DECISION: Pick plan A or plan B?")
+        let first = try XCTUnwrap(waiting.first)
+        var main = try XCTUnwrap(listed.first { $0.id == "main" })
+        clock = clock.addingTimeInterval(60)
+        main.lastRunID = "run-main-2"
+        main.lastRunStartedAt = clock.addingTimeInterval(-30)
+        main.lastRunEndedAt = clock
+        await endTurn(main, report: "Plan C came up too. Pick A, B or C?", sorted: "DECISION: Pick A, B or C?")
+        XCTAssertEqual(waiting.map(\.id), [first.id])
+        XCTAssertEqual(waiting.map(\.text), ["Pick A, B or C?"])
+        XCTAssertEqual(waiting.map(\.at), [first.at])
+        XCTAssertEqual(notified.filter { $0.kind == .decision }.count, 1)
+        XCTAssertEqual(controller.inbox.record.visits.map(\.updates), [1])
+        XCTAssertEqual(controller.inbox.record.visits.map(\.text), ["Pick A, B or C?"])
+    }
+
+    func testARowStaysWhenItsChecksWakeIt() async {
         let thread = work("w", of: clawde, held: true, pullRequest: ThreadPullRequest(number: 2, state: "open", watched: true))
         backend.whileReadingAReport = { @MainActor [unowned self] in
             var woken = thread
@@ -551,8 +579,8 @@ final class WaitingOnYouTests: XCTestCase {
             self.clock = self.clock.addingTimeInterval(10)
         }
         await endTurn(thread, report: "Pick A or B?", sorted: "DECISION: Pick A or B?")
-        XCTAssertEqual(waiting, [], "its checks woke it before the row was filed")
-        XCTAssertEqual(controller.inbox.record.visits.map(\.exit), [.turnWithoutYou])
+        XCTAssertEqual(waiting.map(\.text), ["Pick A or B?"], "its checks waking it don't answer you")
+        XCTAssertEqual(controller.inbox.record.visits.map(\.exit), [nil])
     }
 
     func testIfTheLauncherCantBeReachedTheReportComesToYou() async {
@@ -605,7 +633,7 @@ final class WaitingOnYouTests: XCTestCase {
         XCTAssertEqual(savedInbox?.record, controller.inbox.record, "kept with the inbox")
     }
 
-    func testARowGoesWhenItsThreadMovesOnWithoutYou() async throws {
+    func testARowGoesWhenItsThreadSettlesMergesOrIsArchivedOrYouAnswer() async throws {
         let pull = ThreadPullRequest(number: 2, state: "open", checks: "pending", watched: true)
         for id in ["woken", "merged", "settled", "archived", "yours"] {
             await endTurn(work(id, of: clawde, held: true, pullRequest: pull), report: "Pick A or B for \(id)?", sorted: "DECISION: Pick A or B for \(id)?")
@@ -625,10 +653,10 @@ final class WaitingOnYouTests: XCTestCase {
         change("yours") { $0.lastWordsFromYouAt = self.clock; $0.lastRunStartedAt = self.clock.addingTimeInterval(1); $0.turnEnded = false }
         show(threads)
 
-        XCTAssertEqual(waiting, [])
-        XCTAssertEqual(controller.inbox.entries.map(\.threadID), ["yours"], "the one you answered in T3 stays, dimmed")
+        XCTAssertEqual(waiting.map(\.threadID), ["woken"], "a turn you didn't start leaves it waiting")
+        XCTAssertEqual(Set(controller.inbox.entries.map(\.threadID)), ["woken", "yours"], "the one you answered in T3 stays, dimmed")
         let exits = Dictionary(uniqueKeysWithValues: controller.inbox.record.visits.map { ($0.threadID, $0.exit) })
-        XCTAssertEqual(exits, ["woken": .turnWithoutYou, "merged": .pullRequestMerged, "settled": .settled, "archived": .archived, "yours": .replied])
+        XCTAssertEqual(exits, ["woken": nil, "merged": .pullRequestMerged, "settled": .settled, "archived": .archived, "yours": .replied])
         XCTAssertEqual(savedInbox?.entries, controller.inbox.entries)
     }
 
@@ -641,10 +669,14 @@ final class WaitingOnYouTests: XCTestCase {
 
         controller.inboxAction(.done(id: try XCTUnwrap(waiting.first { $0.threadID == "a" }).id))
         clock = clock.addingTimeInterval(60)
-        show(listed.filter { $0.id == "a" })
+        show(listed.map { thread in
+            var settled = thread
+            if thread.id != "a" { settled.settledAt = clock }
+            return settled
+        })
         await controller.runHealthCheck()
         let finding = try XCTUnwrap(health.last?.first { $0.check == "waiting on you" })
         XCTAssertFalse(finding.ok)
-        XCTAssertEqual(finding.problem, "3 of the 4 things that left Waiting on you this week went without you, so it's asking you about things that sort themselves out.")
+        XCTAssertEqual(finding.problem, "3 of the 4 things that left Waiting on you this week went with no answer from you, so it's asking you about things that sort themselves out.")
     }
 }

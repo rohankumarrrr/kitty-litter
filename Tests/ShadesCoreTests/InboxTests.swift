@@ -60,32 +60,68 @@ final class InboxTests: XCTestCase {
         return (inbox, asking)
     }
 
-    func testAWakeFirstSeenAfterYourTurnWasMissedIsntYours() {
+    func testATurnYouDidntStartLeavesTheRowWaiting() {
+        var (inbox, thread) = asked(at: start)
+        thread.lastMessageAt = start.addingTimeInterval(30)
+        thread.lastRunStartedAt = start.addingTimeInterval(30)
+        inbox.follow([thread], at: start.addingTimeInterval(40))
+        XCTAssertEqual(inbox.entries.map(\.needsYou), [true], "a worker's line or a check doesn't answer you")
+        XCTAssertEqual(inbox.record.visits.map(\.exit), [nil])
+    }
+
+    func testYourWordsAnswerARowEvenIfAWakeCameAfter() {
         var (inbox, thread) = asked(at: start)
         thread.lastWordsFromYouAt = start.addingTimeInterval(10)
         thread.lastMessageAt = start.addingTimeInterval(30)
         thread.lastRunStartedAt = start.addingTimeInterval(30)
         inbox.follow([thread], at: start.addingTimeInterval(40))
-        XCTAssertEqual(inbox.entries, [], "the newest turn was started by something after your words")
-        XCTAssertEqual(inbox.record.visits.map(\.exit), [.turnWithoutYou])
+        XCTAssertEqual(inbox.entries.map(\.needsYou), [false])
+        XCTAssertEqual(inbox.record.visits.map(\.exit), [.replied])
+        inbox.follow([thread], at: start.addingTimeInterval(41))
+        XCTAssertEqual(inbox.entries, [], "and the wake after your words isn't the answer you're waiting for")
+        XCTAssertEqual(inbox.record.visits.map(\.exit), [.replied])
     }
 
-    func testTheAppsOwnNoteIsntYourReplyWhicheverArrivesFirst() {
+    func testTheAppsOwnNoteIsntYourAnswerWhicheverArrivesFirst() {
         var (inbox, thread) = asked(at: start)
         inbox.appWillWrite(to: thread.id, at: start.addingTimeInterval(10))
         thread.lastWordsFromYouAt = start.addingTimeInterval(11)
         thread.lastMessageAt = start.addingTimeInterval(11)
         thread.lastRunStartedAt = start.addingTimeInterval(12)
         inbox.follow([thread], at: start.addingTimeInterval(13))
-        inbox.anotherThreadWrote(to: thread.id, at: start.addingTimeInterval(14))
-        XCTAssertEqual(inbox.entries, [])
-        XCTAssertEqual(inbox.record.visits.map(\.exit), [.turnWithoutYou])
+        inbox.follow([thread], at: start.addingTimeInterval(14))
+        XCTAssertEqual(inbox.entries.map(\.needsYou), [true])
+        XCTAssertEqual(inbox.record.visits.map(\.exit), [nil])
+    }
+
+    func testAnotherDecisionFromTheSameThreadUpdatesItsRow() {
+        var (inbox, thread) = asked(at: start)
+        thread.lastRunID = "run-2"
+        XCTAssertFalse(inbox.file(SortedReport(decision: "Pick one of four?"), from: thread, startedBy: .you, at: start.addingTimeInterval(20), id: { "new" }), "no second notice")
+        XCTAssertEqual(inbox.entries.map(\.id), ["row"])
+        XCTAssertEqual(inbox.entries.map(\.text), ["Pick one of four?"])
+        XCTAssertEqual(inbox.entries.map(\.at), [start], "it came when it first asked")
+        XCTAssertEqual(inbox.record.visits.map(\.text), ["Pick one of four?"])
+        XCTAssertEqual(inbox.record.visits.map(\.updates), [1])
+    }
+
+    func testARecordFromBeforeTextsLoadsAndOldExitsDontCount() throws {
+        let old = #"{"visits":[{"row":"r","threadID":"t","threadTitle":"T","startedBy":"you","held":false,"source":"sorter","enteredAt":"2026-11-25T07:34:00Z","leftAt":"2026-11-25T07:36:00Z","exit":"turnWithoutYou"}]}"#
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try Data(old.utf8).write(to: folder.appendingPathComponent(WaitingRecord.fileName))
+        let record = WaitingRecord.load(beside: folder.appendingPathComponent("inbox.json"))
+        XCTAssertEqual(record.visits.map(\.exit), [.turnWithoutYou])
+        XCTAssertNil(record.visits.first?.text)
+        let left = record.leftSince(.distantPast)
+        XCTAssertEqual(left.all, 0, "a turn you didn't start isn't counted either way")
+        XCTAssertEqual(left.withoutYou, 0)
     }
 
     func testAnotherThreadWritingLeavesARowYouRepliedOnForItsAnswer() {
         var (inbox, thread) = asked(at: start)
         inbox.markReplied("row", at: start.addingTimeInterval(5))
-        inbox.anotherThreadWrote(to: thread.id, at: start.addingTimeInterval(6))
         XCTAssertEqual(inbox.entries.map(\.id), ["row"])
         thread.lastRunID = "run-2"
         XCTAssertTrue(inbox.file(SortedReport(note: "Going with A."), from: thread, startedBy: .you, at: start.addingTimeInterval(20), id: { "n" }))
@@ -172,8 +208,8 @@ final class InboxTests: XCTestCase {
                  kept: ["old shipped", "other decision", "New?"], stillDim: []),
             Case(name: "shipped does too", sorted: SortedReport(shipped: "New."), replied: false,
                  kept: ["old shipped", "other decision", "New."], stillDim: []),
-            Case(name: "both come through", sorted: SortedReport(shipped: "New.", decision: "New?"), replied: false,
-                 kept: ["old shipped", "other decision", "New?", "New."], stillDim: []),
+            Case(name: "both come through, the decision in its old row's place", sorted: SortedReport(shipped: "New.", decision: "New?"), replied: false,
+                 kept: ["New?", "old shipped", "other decision", "New."], stillDim: []),
             Case(name: "a note goes on the row you replied on", sorted: SortedReport(note: "Because."), replied: true,
                  kept: ["old decision", "old shipped", "other decision"], answerOn: "old decision", stillDim: []),
             Case(name: "a note you didn't ask for takes the thread's decision away", sorted: SortedReport(note: "Because."), replied: false,
