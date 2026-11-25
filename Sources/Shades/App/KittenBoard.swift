@@ -89,10 +89,12 @@ enum KittenBoard {
     }
 
     static func statuses(kittens: [Kitten], threads: [AgentThread]) -> [KittenStatus] {
-        let owners = threads.map(Owners(kittens).of)
-        let working = kittens.filter { !$0.planned }.map { kitten in
-            status(of: kitten, own: zip(threads, owners).filter { $0.1 == kitten }.map(\.0))
-        }
+        let owners = Owners(kittens)
+        return statuses(kittens: kittens, byOwner: Dictionary(grouping: threads) { owners.of($0)?.id })
+    }
+
+    static func statuses(kittens: [Kitten], byOwner: [String?: [AgentThread]]) -> [KittenStatus] {
+        let working = kittens.filter { !$0.planned }.map { status(of: $0, own: byOwner[$0.id] ?? []) }
         let planned = kittens.filter(\.planned).map { KittenStatus(kitten: $0, state: .notSetUp) }
         return working + planned
     }
