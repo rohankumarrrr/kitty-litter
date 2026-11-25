@@ -380,7 +380,22 @@ extension AppController {
 
     var frontierName: String { ModelNames.friendly(settings.frontierModel) }
 
+    func frontierMode(carrying snapshot: ScreenSnapshot?) -> RuntimeMode {
+        settings.frontierMode.carrying(screen: carriesScreen(snapshot))
+    }
+
     func handOff(task: String, question: String, snapshot: ScreenSnapshot?, asked: Int? = nil, onStarted: ((Landing) -> Void)? = nil) {
+        guard frontierMode(carrying: snapshot).takesScreen else {
+            startFrontier(
+                title: question,
+                text: Prompts.frontier(request: question, snapshot: nil, screenshotPath: nil),
+                snapshot: nil,
+                missesScreen: ScreenWords.pointAtScreen(question),
+                asked: asked,
+                onStarted: onStarted
+            )
+            return
+        }
         let path = saveScreenshot(of: snapshot)
         let request = "\(task)\n\n\(Prompts.ownWordsLabel)\(question)"
         startFrontier(
@@ -438,7 +453,7 @@ extension AppController {
             text: text,
             attachments: attachments(for: snapshot),
             model: settings.frontierModel,
-            runtimeMode: settings.frontierMode.carrying(screen: carriesScreen(snapshot)),
+            runtimeMode: frontierMode(carrying: snapshot),
             projectID: projectID
         )
         if errand != .correctionCopy, !youPicked { say(CatWords.handingOff(modelName: name)) }

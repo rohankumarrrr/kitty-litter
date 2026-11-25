@@ -20,12 +20,15 @@ extension AppController {
         let capture = await startLook(CaptureOptions(includeElements: false, focusRegion: region)).value
         let snapshot = capture.snapshot ?? ScreenSnapshot(focusRegion: region)
 
-        let canSee = !snapshot.isPrivate && snapshot.screenshotJPEG != nil
+        let leftOut = lockdownLeavesScreenOut
+        let canSee = !leftOut && !snapshot.isPrivate && snapshot.screenshotJPEG != nil
         let caption: String
         if let error = capture.error {
             caption = CatWords.problem(error, while: .seeing)
         } else if snapshot.isPrivate {
             caption = CatWords.privateApp
+        } else if leftOut {
+            caption = CatWords.cantSeeYourScreen(lockedDownKitten?.name ?? frontierName)
         } else if !canSee {
             caption = screenBlockedBy ?? CatWords.needsScreenRecording
         } else {
@@ -47,16 +50,21 @@ extension AppController {
         ))
     }
 
+    var lockdownLeavesScreenOut: Bool {
+        settings.lockdown != nil && !takesFiles(.router)
+    }
+
     func sendFix(_ description: String, snapshot: ScreenSnapshot, onOwnWindow: Bool = false) {
         defer { catGoesHomeSoon() }
-        guard settings.lockdown == nil else { return sendLockedDown(description.isEmpty ? CatWords.fixThis : description, snapshot: snapshot) }
+        let shared = lockdownLeavesScreenOut || snapshot.isEmpty ? nil : snapshot
+        guard settings.lockdown == nil else { return sendLockedDown(description.isEmpty ? CatWords.fixThis : description, snapshot: shared) }
         let said = description.isEmpty ? nil : description
-        let path = saveScreenshot(of: snapshot)
-        let what = said ?? snapshot.appName.map { "Something in \($0)" } ?? "Something on screen"
+        let path = saveScreenshot(of: shared)
+        let what = said ?? shared?.appName.map { "Something in \($0)" } ?? "Something on screen"
         startFrontier(
             title: "\(Self.fixTitle)\(what)",
-            text: Prompts.fix(description: said, snapshot: snapshot, screenshotPath: path, onOwnWindow: onOwnWindow),
-            snapshot: snapshot
+            text: Prompts.fix(description: said, snapshot: shared, screenshotPath: path, onOwnWindow: onOwnWindow),
+            snapshot: shared
         )
     }
 

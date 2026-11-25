@@ -50,6 +50,12 @@ public struct ScreenSnapshot: Sendable {
     }
 
     public var isDropped: Bool { !droppedNames.isEmpty }
+
+    public var isEmpty: Bool {
+        screenshotJPEG == nil && appName == nil && windowTitle == nil && url == nil
+            && selectedText?.isEmpty != false && pageText?.isEmpty != false
+            && elements.isEmpty && droppedNames.isEmpty && pictures.isEmpty
+    }
 }
 
 public struct ScreenElement: Sendable, Equatable {

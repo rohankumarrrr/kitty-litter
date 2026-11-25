@@ -7,9 +7,8 @@ final class FrontierModeTests: XCTestCase {
             for match in SwiftLexer(try Repo.read(file)).matches(of: reading, in: .code) {
                 XCTFail("""
                 \(file):\(match.line) reads Frontier's mode as it is. A thread that carries your screen has to run in a \
-                mode that takes it, and full access never does. Start the thread with `startFrontier`, which picks \
-                `settings.frontierMode.carrying(screen: carriesScreen(snapshot))`, so its mode and its screen come from \
-                one place.
+                mode that takes it, and full access never does. Ask `frontierMode(carrying:)` in `AppController+Ask.swift`, which \
+                `startFrontier` uses too, so a thread's mode and its screen come from one place.
                 """)
             }
         }

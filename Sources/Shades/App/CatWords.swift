@@ -304,6 +304,8 @@ enum CatWords {
     static let earlierMessageFailed = "It didn't get through. Mind saying it again?"
     static func sentTo(_ thread: AgentThread) -> String { sentTo(thread.title) }
     static func sentTo(_ title: String) -> String { "Sent that to \(title)." }
+    static func cantSeeYourScreen(_ name: String) -> String { "\(name) can't see your screen, so tell me what's wrong." }
+    static let passedOnWithoutFile = "I passed your words on to the work it carries on from, but not the file, since it can't see your screen."
     static func sentWithoutFile(_ thread: AgentThread) -> String { "Sent your words to \(thread.title), but not the file, since it can't see your screen." }
     static func sentToBusy(_ thread: AgentThread) -> String { "Sent that to \(thread.title). It'll get to it once it's done with what it's on." }
     static let sendTheLink = "It can't see your screen, so send the link or paste the text."

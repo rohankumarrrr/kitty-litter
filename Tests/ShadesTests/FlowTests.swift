@@ -1287,6 +1287,36 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.sent.count, 1, "and nothing went anywhere")
     }
 
+    func testAFixWhoseCaptureFailedStaysInFrontiersModeAndIsntPointedAtAScreenshot() async throws {
+        useFullAccess(frontier: true)
+        context.snapshotError = URLError(.cannotLoadFromNetwork)
+        await controller.beginFix()
+        XCTAssertEqual(stage.input?.allowsEmpty, false, "with nothing seen, it needs your words")
+        stage.type("the total is wrong")
+        await settle()
+        await controller.frontierTask?.value
+        let fix = try XCTUnwrap(backend.sent.first).prompt
+        XCTAssertEqual(fix.runtimeMode, .fullAccess, "nothing from your screen went with it")
+        XCTAssertFalse(fix.text.contains("red rectangle"))
+        XCTAssertTrue(fix.text.contains("<screen>Not captured.</screen>"))
+        XCTAssertEqual(context.saved, 0)
+    }
+
+    func testAFileMessagesPassesToAThreadThatCantSeeYourScreenSaysTheFileStayedOut() async throws {
+        kittens = [steve]
+        controller.threadsChanged([AgentThread(id: "w", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, runtimeMode: .fullAccess, projectPath: "/k/steve")])
+        backend.routerSays = ["use this one": "SEND TO: 1"]
+        controller.channelsPressed()
+        controller.messagesAction(.send("use this one", to: .router, shownIn: .shades, files: [picture]))
+        await settle()
+        await controller.messagesTurn?.value
+        await settle()
+        let forwarded = try XCTUnwrap(backend.sent.last { $0.mode == .forward })
+        XCTAssertEqual(forwarded.threadID, "w")
+        XCTAssertTrue(forwarded.prompt.attachments.isEmpty)
+        XCTAssertEqual(shadesSaid.last, CatWords.passedOnWithoutFile, "Messages says the file stayed out, not just that it was passed on")
+    }
+
     func testADropReachesTheKittenItsMeantForInANewAutoThread() async {
         useFullAccess(frontier: true)
         kittens = [steve]
