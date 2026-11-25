@@ -3,11 +3,9 @@ import XCTest
 final class CommentTests: XCTestCase {
     static let outsideNote = "Outside the repo: "
     static let allowedOpenings = ["// ", "/* ", "# "].map { $0 + outsideNote }
-    static let notSweptYet: Set<String> = ["scripts/install-kitten-skills.sh"]
 
     func testNothingInTheCodeIsAComment() throws {
-        for file in try Repo.files(under: ["Sources", "Tests", "scripts", "Package.swift"], endingIn: [".swift", ".sh"])
-        where !Self.notSweptYet.contains(file) {
+        for file in try Repo.files(under: ["Sources", "Tests", "scripts", "Package.swift"], endingIn: [".swift", ".sh"]) {
             for comment in try Self.comments(in: file) where !Self.allowed(comment, in: file) {
                 XCTFail("""
                 \(file):\(comment.line) has a comment: \(comment.text.prefix(80))
