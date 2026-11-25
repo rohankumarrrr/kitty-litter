@@ -52,6 +52,47 @@ final class InboxTests: XCTestCase {
         XCTAssertEqual(saved.entries.first { $0.id == "c" }?.change, inbox.entries.first { $0.id == "c" }?.change)
     }
 
+    private func asked(at raised: Date) -> (Inbox, AgentThread) {
+        var inbox = Inbox(since: start)
+        var asking = thread()
+        asking.lastRunEndedAt = raised
+        inbox.file(SortedReport(decision: "Pick one?"), from: asking, startedBy: .you, at: raised, id: { "row" })
+        return (inbox, asking)
+    }
+
+    func testAWakeFirstSeenAfterYourTurnWasMissedIsntYours() {
+        var (inbox, thread) = asked(at: start)
+        thread.lastWordsFromYouAt = start.addingTimeInterval(10)
+        thread.lastMessageAt = start.addingTimeInterval(30)
+        thread.lastRunStartedAt = start.addingTimeInterval(30)
+        inbox.follow([thread], at: start.addingTimeInterval(40))
+        XCTAssertEqual(inbox.entries, [], "the newest turn was started by something after your words")
+        XCTAssertEqual(inbox.record.visits.map(\.exit), [.turnWithoutYou])
+    }
+
+    func testTheAppsOwnNoteIsntYourReplyWhicheverArrivesFirst() {
+        var (inbox, thread) = asked(at: start)
+        inbox.appWillWrite(to: thread.id, at: start.addingTimeInterval(10))
+        thread.lastWordsFromYouAt = start.addingTimeInterval(11)
+        thread.lastMessageAt = start.addingTimeInterval(11)
+        thread.lastRunStartedAt = start.addingTimeInterval(12)
+        inbox.follow([thread], at: start.addingTimeInterval(13))
+        inbox.anotherThreadWrote(to: thread.id, at: start.addingTimeInterval(14))
+        XCTAssertEqual(inbox.entries, [])
+        XCTAssertEqual(inbox.record.visits.map(\.exit), [.turnWithoutYou])
+    }
+
+    func testAnotherThreadWritingLeavesARowYouRepliedOnForItsAnswer() {
+        var (inbox, thread) = asked(at: start)
+        inbox.markReplied("row", at: start.addingTimeInterval(5))
+        inbox.anotherThreadWrote(to: thread.id, at: start.addingTimeInterval(6))
+        XCTAssertEqual(inbox.entries.map(\.id), ["row"])
+        thread.lastRunID = "run-2"
+        XCTAssertTrue(inbox.file(SortedReport(note: "Going with A."), from: thread, startedBy: .you, at: start.addingTimeInterval(20), id: { "n" }))
+        XCTAssertEqual(inbox.entries.first?.answer, "Going with A.")
+        XCTAssertTrue(inbox.entries.first?.needsYou == true)
+    }
+
     func testTheSameCardAskedAgainStaysOneVisitWaitingOnYou() {
         var inbox = Inbox(since: start)
         for turn in 1...5 {

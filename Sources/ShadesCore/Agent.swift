@@ -206,6 +206,7 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var isDelegated: Bool
     public var lastRunStartedAt: Date?
     public var lastWordsFromYouAt: Date?
+    public var lastMessageAt: Date?
     public var isLiveTest: Bool { Self.isLiveTest(title: title) }
     public static func isLiveTest(title: String) -> Bool { title.hasPrefix("Shades test:") }
     public var wasSeenInT3: Bool {
@@ -237,7 +238,8 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         startedByAgent: Bool = false,
         isDelegated: Bool = false,
         lastRunStartedAt: Date? = nil,
-        lastWordsFromYouAt: Date? = nil
+        lastWordsFromYouAt: Date? = nil,
+        lastMessageAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -259,6 +261,7 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         self.isDelegated = isDelegated
         self.lastRunStartedAt = lastRunStartedAt
         self.lastWordsFromYouAt = lastWordsFromYouAt
+        self.lastMessageAt = lastMessageAt
     }
 }
 

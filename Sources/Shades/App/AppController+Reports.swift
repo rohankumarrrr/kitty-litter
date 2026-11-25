@@ -23,14 +23,16 @@ extension AppController {
             if !toInbox, let run = current.lastRunID { readRuns[thread.id] = (run, done) }
             let firstRead = wasRead == nil
             let report: String?
+            var readFailed = false
             do {
                 report = try await backend.report(threadID: thread.id, run: toInbox ? current.lastRunID : nil)
             } catch {
                 unread = toInbox
                 if toInbox { return }
                 report = nil
+                readFailed = true
             }
-            if let asker = await reportsTo(current) {
+            if !readFailed, let asker = await reportsTo(current) {
                 let told = toInbox || firstRead ? await tell(asker, about: current, report: report) : true
                 if told {
                     if toInbox || firstRead, current.status != .failed, let report { fileChangeRequests(in: report, of: current) }
@@ -79,17 +81,21 @@ extension AppController {
     }
 
     func reportsTo(_ thread: AgentThread) async -> String? {
-        guard kitten(of: thread) != nil, !dispatchers.contains(thread.id), !inbox.wasStartedForYou(thread.id) else { return nil }
+        guard kitten(of: thread) != nil, !isForYou(thread.id) else { return nil }
         let started = thread.lastRunStartedAt ?? .distantFuture
         switch await backend.exchanges(threadID: thread.id)?.last(where: { $0.askedAt <= started })?.asker {
         case .you?, .schedule?:
             return nil
         case .agent(let sender?)? where sender != thread.id:
-            guard await mayPass(thread, to: sender) else { return nil }
+            guard !isForYou(sender), await mayPass(thread, to: sender) else { return nil }
             return sender
         default:
-            return await launcher(of: thread)
+            return await launcher(of: thread).flatMap { isForYou($0) ? nil : $0 }
         }
+    }
+
+    private func isForYou(_ threadID: String) -> Bool {
+        dispatchers.contains(threadID) || inbox.wasStartedForYou(threadID)
     }
 
     private func mayPass(_ thread: AgentThread, to other: String) async -> Bool {
@@ -117,6 +123,7 @@ extension AppController {
            said.contains(where: { $0.asker == .agent(threadID: thread.id) && $0.askedAt >= started }) {
             return true
         }
+        inbox.appWillWrite(to: asker, at: now())
         do {
             try await backend.deliver(threadID: asker, text: Prompts.launchedReport(readable(report), of: thread))
             inbox.anotherThreadWrote(to: asker, at: now())
@@ -124,6 +131,7 @@ extension AppController {
             inboxChanged()
             return true
         } catch {
+            inbox.appDidntWrite(to: asker)
             return false
         }
     }

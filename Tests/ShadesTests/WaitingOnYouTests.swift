@@ -162,6 +162,73 @@ final class WaitingOnYouTests: XCTestCase {
         XCTAssertEqual(waiting.map(\.text), ["Left or right?"], "a turn your words started is yours")
     }
 
+    func testAWorkerTheCatsThreadLaunchedIsYoursEvenBeforeItPassesWorkOn() async {
+        var inbox = Inbox(since: .distantPast)
+        inbox.startedForYou("cats", at: clock)
+        controller = makeController(inbox: inbox)
+        await endTurn(work("w", of: clawde, launchedBy: "cats"), report: "Pick A or B?", sorted: "DECISION: Pick A or B?")
+        XCTAssertEqual(waiting.map(\.text), ["Pick A or B?"])
+        XCTAssertTrue(relays.isEmpty)
+    }
+
+    func testALaunchedThreadYouWroteToAnswersYou() async {
+        backend.said["w"] = [
+            Exchange(id: "launch", asker: .agent(threadID: "main"), askedAt: clock.addingTimeInterval(-900), ask: "Do it."),
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-310), ask: "Use plan B instead."),
+        ]
+        await endTurn(work("w", of: clawde, launchedBy: "main"), report: "Plan B needs a paid key. Buy one, or stay on A?", sorted: "DECISION: Buy a key, or stay on A?")
+        XCTAssertEqual(waiting.map(\.text), ["Buy a key, or stay on A?"])
+        XCTAssertTrue(relays.isEmpty)
+    }
+
+    func testAReportThatCantBeReadIsntPassedOnAsNoReport() async {
+        let quiet = Kitten(name: "Quinn", role: "", covers: "", folder: "/k/quinn")
+        backend.readFails = true
+        let thread = work("q", of: quiet, launchedBy: "main")
+        var running = thread
+        running.status = .running
+        show([running])
+        show([thread])
+        let read = await until { self.controller.readRuns["q"] != nil && self.controller.filing.isEmpty }
+        await controller.reportTask?.value
+        XCTAssertTrue(read)
+        XCTAssertTrue(relays.isEmpty, "it can't say there was no report")
+    }
+
+    func testAQuietKittensRowFiledWhileItsThreadIsWokenGoesAtOnce() async {
+        let quiet = Kitten(name: "Quinn", role: "", covers: "", folder: "/k/quinn")
+        controller = AppController(
+            dependencies: AppDependencies(
+                backend: backend, context: FakeContext(log: Log()), voice: FakeVoice(), inserter: FakeInserter(), keys: FakeKeys(),
+                settings: Settings(), saveSettings: { _ in }, kittens: { [quiet] }, home: NSTemporaryDirectory(),
+                routerFolder: { "/shades/router" }, inbox: Inbox(since: .distantPast), saveInbox: { [unowned self] in self.savedInbox = $0 }
+            ),
+            stage: FakeStage(log: Log()),
+            now: { [unowned self] in self.clock }
+        )
+        controller.threadListWait = 0
+        controller.reportDelay = 0
+        let thread = work("q", of: quiet)
+        backend.reports["q"] = "Pick A or B?"
+        sorts["Pick A or B?"] = "DECISION: Pick A or B?"
+        backend.whileReadingAReport = { @MainActor [unowned self] in
+            var woken = thread
+            woken.status = .running
+            woken.lastRunStartedAt = self.clock.addingTimeInterval(5)
+            self.controller.latestThreads = [woken]
+            self.clock = self.clock.addingTimeInterval(10)
+        }
+        var running = thread
+        running.status = .running
+        show([running])
+        show([thread])
+        let read = await until { self.controller.readRuns["q"] != nil && self.sortsRun > 0 && self.controller.reportTask != nil }
+        await controller.reportTask?.value
+        XCTAssertTrue(read)
+        XCTAssertEqual(controller.inbox.entries.filter(\.needsYou), [], "its checks woke it before the row was filed")
+        XCTAssertEqual(controller.inbox.record.visits.map(\.exit), [.turnWithoutYou])
+    }
+
     func testADelegatedThreadIsntToldToItsParentTwice() async {
         var delegated = work("thread:delegated-task:c1", of: clawde, launchedBy: "main")
         delegated.isDelegated = true

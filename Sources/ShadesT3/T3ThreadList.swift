@@ -151,7 +151,8 @@ struct T3ThreadList {
                     startedByAgent: thread.createdBy == "agent",
                     isDelegated: thread.id.hasPrefix(Self.delegatedThreadPrefix),
                     lastRunStartedAt: thread.latestRunStartedAt,
-                    lastWordsFromYouAt: thread.latestUserAuthoredMessageAt
+                    lastWordsFromYouAt: thread.latestUserAuthoredMessageAt,
+                    lastMessageAt: thread.latestUserMessageAt
                 )
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }

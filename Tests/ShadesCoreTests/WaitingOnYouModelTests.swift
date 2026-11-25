@@ -221,6 +221,7 @@ private struct World {
 
     private mutating func start(_ thread: Worker, yours: Bool) {
         if yours { threads[thread]?.lastWordsFromYouAt = clock }
+        threads[thread]?.lastMessageAt = clock
         threads[thread]?.lastRunStartedAt = clock.addingTimeInterval(1)
         threads[thread]?.status = .running
         threads[thread]?.turnEnded = false

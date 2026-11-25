@@ -93,6 +93,7 @@ extension AppController {
     func flag(_ decision: String, of thread: AgentThread, report: String?) {
         let id = UUID().uuidString
         inbox.flag(decision, from: thread, startedBy: starter(of: thread), at: now(), id: id)
+        inbox.follow(latestThreads, at: now())
         keepInbox()
         inboxChanged()
         if ChangeRequests.cards(in: report ?? "").isEmpty { readDecision(id, decision: decision, of: thread) }

@@ -510,6 +510,7 @@ enum T3Wire {
         let latestRunStartedAt: Date?
         let latestRunCompletedAt: Date?
         let latestUserAuthoredMessageAt: Date?
+        let latestUserMessageAt: Date?
         let createdBy: String?
         let updatedAt: Date
         let archivedAt: Date?

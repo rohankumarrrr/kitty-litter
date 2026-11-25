@@ -89,6 +89,7 @@ public struct Inbox: Codable, Equatable, Sendable {
     private var reacted: [String: Reacted]?
     private var forYou: [String: Date]?
     public var record = WaitingRecord()
+    private var appWrites: [String: Date] = [:]
 
     private enum CodingKeys: String, CodingKey {
         case entries, since, handled, read, readTo, markedUnread, corrections, general, withShades, answeredInGeneral
@@ -335,7 +336,7 @@ public struct Inbox: Codable, Equatable, Sendable {
         var changed = false
         for index in entries.indices.reversed() where !entries[index].isStanding {
             let entry = entries[index]
-            let exit = listed[entry.threadID].map { Self.movedOn(entry, $0) } ?? .archived
+            let exit = listed[entry.threadID].map { Self.movedOn(entry, $0, appWroteAt: appWrites[entry.threadID]) } ?? .archived
             guard let exit else { continue }
             if exit == .replied {
                 entries[index].turnSeenAt = listed[entry.threadID]?.lastRunStartedAt
@@ -352,11 +353,14 @@ public struct Inbox: Codable, Equatable, Sendable {
             }
             changed = true
         }
+        for (threadID, wrote) in appWrites where (listed[threadID]?.lastRunStartedAt ?? .distantPast) > wrote {
+            appWrites[threadID] = nil
+        }
         log(since: before, at: date, leaving: .turnWithoutYou, exits: exits)
         return changed
     }
 
-    static func movedOn(_ entry: InboxEntry, _ thread: AgentThread) -> WaitingVisit.Exit? {
+    static func movedOn(_ entry: InboxEntry, _ thread: AgentThread, appWroteAt: Date? = nil) -> WaitingVisit.Exit? {
         let raised = entry.raisedAt ?? entry.at
         let since = max(raised, entry.turnSeenAt ?? raised)
         if let number = entry.pullRequest, let pull = thread.pullRequest, pull.number == number {
@@ -365,16 +369,23 @@ public struct Inbox: Codable, Equatable, Sendable {
         }
         if let settled = thread.settledAt, settled > raised { return .settled }
         guard let started = thread.lastRunStartedAt, started > since else { return nil }
-        if let words = thread.lastWordsFromYouAt, words > since { return .replied }
-        return .turnWithoutYou
+        guard let words = thread.lastWordsFromYouAt, words > since else { return .turnWithoutYou }
+        if let wrote = appWroteAt, words >= wrote { return .turnWithoutYou }
+        if let latest = thread.lastMessageAt, latest > words { return .turnWithoutYou }
+        return .replied
+    }
+
+    public mutating func appWillWrite(to threadID: String, at date: Date) {
+        appWrites[threadID] = date
+    }
+
+    public mutating func appDidntWrite(to threadID: String) {
+        appWrites[threadID] = nil
     }
 
     public mutating func anotherThreadWrote(to threadID: String, at date: Date) {
         let before = waiting
-        entries.removeAll { $0.threadID == threadID && $0.followsItsThread }
-        for index in entries.indices where entries[index].threadID == threadID && !entries[index].isStanding {
-            entries[index].repliedAt = nil
-        }
+        entries.removeAll { $0.threadID == threadID && $0.followsItsThread && $0.repliedAt == nil }
         log(since: before, at: date, leaving: .turnWithoutYou)
     }
 
