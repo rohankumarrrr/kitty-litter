@@ -83,15 +83,54 @@ extension AppController {
     func reportsTo(_ thread: AgentThread) async -> String? {
         guard kitten(of: thread) != nil, !isForYou(thread.id) else { return nil }
         let started = thread.lastRunStartedAt ?? .distantFuture
-        switch await backend.exchanges(threadID: thread.id)?.last(where: { $0.askedAt <= started })?.asker {
-        case .you?, .schedule?:
-            return nil
-        case .agent(let sender?)? where sender != thread.id:
-            guard !isForYou(sender), await mayPass(thread, to: sender) else { return nil }
-            return sender
-        default:
-            return await launcher(of: thread).flatMap { isForYou($0) ? nil : $0 }
+        for exchange in (await backend.exchanges(threadID: thread.id) ?? []).reversed() where exchange.askedAt <= started && !exchange.isTheKittyLittersOwnNote {
+            switch exchange.asker {
+            case .you, .schedule:
+                return nil
+            case .agent(let sender?) where sender != thread.id:
+                switch await writer(sender, to: thread) {
+                case .itsOwnWorker:
+                    continue
+                case .another:
+                    guard !isForYou(sender), await mayPass(thread, to: sender) else { return nil }
+                    return sender
+                case .untraced:
+                    return nil
+                }
+            default:
+                return await ownLauncher(of: thread)
+            }
         }
+        return await ownLauncher(of: thread)
+    }
+
+    private enum Writer {
+        case itsOwnWorker, another, untraced
+    }
+
+    private func writer(_ sender: String, to thread: AgentThread) async -> Writer {
+        var next = sender
+        var seen: Set<String> = []
+        while seen.insert(next).inserted {
+            switch await starter(ofThread: next) {
+            case .thread(thread.id)?: return .itsOwnWorker
+            case .thread(let launcher)?: next = launcher
+            case .person?: return .another
+            case .unknown?, nil: return next == sender ? .untraced : .another
+            }
+        }
+        return .another
+    }
+
+    private func starter(ofThread id: String) async -> ThreadOrigin.Starter? {
+        if let known = launchers[id] { return .thread(known) }
+        let starter = await backend.origin(of: id)?.startedBy
+        if case .thread(let launcher)? = starter { launchers[id] = launcher }
+        return starter
+    }
+
+    private func ownLauncher(of thread: AgentThread) async -> String? {
+        await launcher(of: thread).flatMap { isForYou($0) ? nil : $0 }
     }
 
     private func isForYou(_ threadID: String) -> Bool {

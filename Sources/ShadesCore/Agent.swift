@@ -303,6 +303,8 @@ public struct Exchange: Sendable, Equatable, Identifiable {
         self.failure = failure
         self.files = files
     }
+
+    public var isTheKittyLittersOwnNote: Bool { asker == .you && ask == nil && files.isEmpty }
 }
 
 public struct ExchangeFile: Sendable, Equatable {
