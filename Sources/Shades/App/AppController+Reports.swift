@@ -84,9 +84,11 @@ extension AppController {
         guard kitten(of: thread) != nil, !isForYou(thread.id) else { return nil }
         let started = thread.lastRunStartedAt ?? .distantFuture
         var pastANote = false
+        var opener = true
         for exchange in (await backend.exchanges(threadID: thread.id) ?? []).reversed() where exchange.askedAt <= started {
+            defer { opener = false }
             if exchange.isTheKittyLittersOwnNote {
-                pastANote = true
+                if opener, let from = exchange.passesOnReportOf, await writer(from, to: thread) != .itsOwnWorker { pastANote = true }
                 continue
             }
             switch exchange.asker {
