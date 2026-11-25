@@ -52,8 +52,7 @@ public final class ParakeetVoiceEngine: VoiceEngine {
     private var isPrepared = false
     private var current: Take?
     private var isCapturing = false
-    private var pendingVocabulary: [String]?
-    private var vocabularyTask: Task<Void, Never>?
+    private var vocabulary = VocabularyQueue<Task<Void, Never>>()
     private let captureQueue = DispatchQueue(label: "shades.voice.begin", qos: .userInteractive)
 
     public init(
@@ -117,13 +116,7 @@ public final class ParakeetVoiceEngine: VoiceEngine {
     }
 
     private func queueVocabulary(_ words: [String]) -> Task<Void, Never> {
-        lock.withLock {
-            pendingVocabulary = words
-            if let vocabularyTask { return vocabularyTask }
-            let task = Task { await drainVocabulary() }
-            vocabularyTask = task
-            return task
-        }
+        lock.withLock { vocabulary.add(words) { Task { await drainVocabulary() } } }
     }
 
     private func drainVocabulary() async {
@@ -134,14 +127,7 @@ public final class ParakeetVoiceEngine: VoiceEngine {
     }
 
     private func nextVocabulary() -> [String]? {
-        lock.withLock {
-            guard let words = pendingVocabulary else {
-                vocabularyTask = nil
-                return nil
-            }
-            pendingVocabulary = nil
-            return words
-        }
+        lock.withLock { vocabulary.next() }
     }
 
     public func begin() throws {

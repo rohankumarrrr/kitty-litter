@@ -12,6 +12,7 @@ final class PhoneScript {
         let query: [String: String]
         let headers: [String: String]
         let body: String
+        let at: Double
 
         var json: [String: Any] {
             (try? JSONSerialization.jsonObject(with: Data(body.utf8))) as? [String: Any] ?? [:]
@@ -40,10 +41,12 @@ final class PhoneScript {
     private(set) var stored: [String: String]
     private(set) var scrolledTo: [String] = []
     private(set) var picking = 0
+    private(set) var closedByPage: [Int] = []
+    private static let machine = JSVirtualMachine()!
 
     init(at key: String = PhonePlace.home, hash: String = "", stored: [String: String] = ["shades.key": PhoneScript.pass], standalone: Bool = false) {
         self.stored = stored
-        context = JSContext()
+        context = JSContext(virtualMachine: Self.machine)
         context.exceptionHandler = { [weak self] _, error in
             MainActor.assumeIsolated { self?.errors.append(error?.toString() ?? "an error") }
         }
@@ -55,7 +58,7 @@ final class PhoneScript {
             MainActor.assumeIsolated { self?.asked(method, address, headers, body) ?? 0 }
         }
         let closed: @convention(block) (Int) -> Void = { [weak self] id in
-            MainActor.assumeIsolated { self?.forget(id) }
+            MainActor.assumeIsolated { self?.pageClosed(id) }
         }
         let stored: @convention(block) (String) -> Void = { [weak self] json in
             MainActor.assumeIsolated { self?.stored = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: String] ?? [:] }
@@ -102,25 +105,31 @@ final class PhoneScript {
     }
 
     var key: String { read("view && view.key") as? String ?? "" }
-    var now: Double { (read("__clock()") as? Double ?? 0) / 1000 }
+    var clock: Double { call("__clock")?.toDouble() ?? 0 }
+    var timers: String { call("__timers")?.toString() ?? "" }
+    var nextTimer: Double? { call("__nextTimerAt").map { $0.toDouble() }.flatMap { $0 >= 0 ? $0 : nil } }
 
     func tap(_ selector: String, _ text: String? = nil, file: StaticString = #filePath, line: UInt = #line) {
+        tick()
         XCTAssertEqual(call("__tap", selector, text ?? NSNull())?.toString(), "tapped", "tapping \(selector) \(text ?? "")", file: file, line: line)
         settle()
     }
 
     func type(_ text: String, into selector: String, file: StaticString = #filePath, line: UInt = #line) {
+        tick()
         XCTAssertEqual(call("__type", selector, text)?.toString(), "typed", "typing into \(selector)", file: file, line: line)
         settle()
     }
 
     func press(_ key: String, on selector: String, _ text: String? = nil, file: StaticString = #filePath, line: UInt = #line) {
+        tick()
         XCTAssertEqual(call("__press", selector, text ?? NSNull(), key)?.toString(), "pressed", "pressing \(key) on \(selector) \(text ?? "")", file: file, line: line)
         settle()
     }
 
     func answer(_ request: Request, _ reply: Reply) {
         pending.removeAll { $0.id == request.id }
+        tick()
         switch reply {
         case .status(let status):
             call("__answer", request.id, status, "")
@@ -168,7 +177,7 @@ final class PhoneScript {
         for _ in 0..<1000 {
             if let (next, reply) = pending.lazy.compactMap({ request in self.mac(request).map { (request, $0) } }).first {
                 answer(next, reply)
-            } else if (read("__timersDue()") as? Int ?? 0) > 0 {
+            } else if call("__timersDue")?.toInt32() ?? 0 > 0 {
                 call("__fireNextTimer")
             } else {
                 return
@@ -178,14 +187,18 @@ final class PhoneScript {
     }
 
     func advance(_ seconds: Double, file: StaticString = #filePath, line: UInt = #line) {
-        let until = (read("__clock()") as? Double ?? 0) + seconds * 1000
+        let until = clock + seconds * 1000
         settle(file: file, line: line)
-        while let next = read("__nextTimerAt()") as? Double, next >= 0, next <= until {
+        while let next = nextTimer, next <= until {
             call("__fireNextTimer")
             settle(file: file, line: line)
         }
         call("__setClock", until)
         settle(file: file, line: line)
+    }
+
+    private func tick() {
+        call("__setClock", clock + 1)
     }
 
     @discardableResult
@@ -197,13 +210,14 @@ final class PhoneScript {
         let parts = URLComponents(string: "https://mac.example\(address)")
         let query = (parts?.queryItems ?? []).reduce(into: [String: String]()) { $0[$1.name] = $1.value ?? "" }
         let heard = (try? JSONSerialization.jsonObject(with: Data(headers.utf8))) as? [String: String] ?? [:]
-        let request = Request(id: requests.count + 1, method: method, path: parts?.path ?? address, query: query, headers: heard, body: body)
+        let request = Request(id: requests.count + 1, method: method, path: parts?.path ?? address, query: query, headers: heard, body: body, at: clock)
         requests.append(request)
         pending.append(request)
         return request.id
     }
 
-    private func forget(_ id: Int) {
+    private func pageClosed(_ id: Int) {
+        closedByPage.append(id)
         pending.removeAll { $0.id == id }
         streams.removeAll { $0.id == id }
     }

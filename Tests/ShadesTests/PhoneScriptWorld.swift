@@ -9,13 +9,13 @@ enum PhoneScriptWorld {
           Date.now = () => native.startedAt + clock;
           globalThis.setTimeout = (fn, ms, ...args) => {
             timerCount += 1;
-            timers.set(timerCount, { at: clock + Math.max(0, Number(ms) || 0), fn: () => fn(...args), every: 0 });
+            timers.set(timerCount, { at: clock + Math.max(0, Number(ms) || 0), fn: () => fn(...args), every: 0, source: String(fn) });
             return timerCount;
           };
           globalThis.setInterval = (fn, ms, ...args) => {
             timerCount += 1;
             const every = Math.max(1, Number(ms) || 0);
-            timers.set(timerCount, { at: clock + every, fn: () => fn(...args), every });
+            timers.set(timerCount, { at: clock + every, fn: () => fn(...args), every, source: String(fn) });
             return timerCount;
           };
           globalThis.clearTimeout = (id) => { timers.delete(id); };
@@ -35,6 +35,7 @@ enum PhoneScriptWorld {
           };
           globalThis.__setClock = (at) => { clock = Math.max(clock, at); };
           globalThis.__timersDue = () => [...timers.values()].filter((timer) => timer.at <= clock).length;
+          globalThis.__timers = () => [...timers.values()].map((timer) => (timer.at - clock) + ' ' + timer.source.replace(/\s+/g, ' ').slice(0, 60)).sort().join(' | ');
 
           globalThis.console = { log: (...parts) => native.log(parts.map(String).join(' ')), error: (...parts) => native.log(parts.map(String).join(' ')) };
 
@@ -111,6 +112,7 @@ enum PhoneScriptWorld {
             return adopted;
           };
 
+          const named = new Map();
           const reflected = { id: 'id', className: 'class', type: 'type', placeholder: 'placeholder', src: 'src', alt: 'alt', href: 'href', htmlFor: 'for', name: 'name', accept: 'accept' };
           const voids = new Set(['meta', 'link', 'input', 'br', 'img', 'hr']);
 
@@ -155,6 +157,7 @@ enum PhoneScriptWorld {
             getAttribute(name) { return this.attrs.has(name) ? this.attrs.get(name) : null; }
             hasAttribute(name) { return this.attrs.has(name); }
             setAttribute(name, value) {
+              if (name === 'id') named.set(String(value), this);
               this.attrs.set(name, String(value));
               if (name.startsWith('data-')) this.dataset[name.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = String(value);
               if (name === 'disabled') this.disabled = true;
@@ -206,7 +209,16 @@ enum PhoneScriptWorld {
               this.append(...nodes);
             }
             get descendants() {
-              return this.children.flatMap((child) => [child, ...child.descendants]);
+              const found = [];
+              const walk = (node) => {
+                for (const child of node.childNodes) {
+                  if (!(child instanceof Element)) continue;
+                  found.push(child);
+                  walk(child);
+                }
+              };
+              walk(this);
+              return found;
             }
             querySelectorAll(selector) { return this.descendants.filter((node) => matches(node, selector)); }
             querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
@@ -215,7 +227,10 @@ enum PhoneScriptWorld {
               for (let node = this; node instanceof Element; node = node.parentNode) if (matches(node, selector)) return node;
               return null;
             }
-            getElementById(id) { return this.descendants.find((node) => node.id === id) || null; }
+            getElementById(id) {
+              const node = named.get(id);
+              return node && node !== this && this.contains(node) && node.id === id ? node : this.descendants.find((other) => other.id === id) || null;
+            }
             getBoundingClientRect() { return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0 }; }
             getClientRects() { return []; }
             scrollIntoView() { native.scrolledTo(this.dataset.id || this.id || ''); }
