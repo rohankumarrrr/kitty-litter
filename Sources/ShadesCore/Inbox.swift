@@ -46,6 +46,18 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
     public var needsYou: Bool { kind == .decision && repliedAt == nil }
 
     public var isStanding: Bool { change != nil || ask?.readFromWords == false }
+
+    func isAsked(by thread: String) -> Bool {
+        threadID == thread || change?.alsoAskedIn.contains(thread) == true
+    }
+
+    func asksForSame(as other: InboxEntry) -> Bool {
+        if let change, let asked = other.change {
+            return !change.file.isEmpty && (change.file, change.replace) == (asked.file, asked.replace)
+        }
+        guard let ask, let asked = other.ask else { return false }
+        return !ask.readFromWords && !asked.readFromWords && ask.ask == asked.ask
+    }
 }
 
 public struct Inbox: Codable, Equatable, Sendable {
@@ -179,8 +191,11 @@ public struct Inbox: Codable, Equatable, Sendable {
         entries.append(InboxEntry(id: id, kind: .decision, text: decision, threadID: thread.id, threadTitle: thread.title, at: at))
     }
 
-    public mutating func ask(_ entry: InboxEntry) {
+    public mutating func ask(_ entry: InboxEntry, title: (String) -> String? = { _ in nil }) {
         guard entry.isStanding, !entries.contains(where: { $0.id == entry.id }) else { return }
+        for index in entries.indices.reversed() where entries[index].isAsked(by: entry.threadID) && entries[index].asksForSame(as: entry) {
+            leave(index, by: entry.threadID, title: title)
+        }
         guard let change = entry.change else { return entries.append(entry) }
         let same = entries.firstIndex { other in
             guard let asked = other.change, asked.problem == nil, change.problem == nil else { return false }
@@ -190,6 +205,36 @@ public struct Inbox: Codable, Equatable, Sendable {
         if entries[same].threadID != entry.threadID, entries[same].change?.alsoAskedIn.contains(entry.threadID) == false {
             entries[same].change?.alsoAskedIn.append(entry.threadID)
         }
+    }
+
+    public mutating func withdraw(_ asked: String, file: String?, by thread: String, title: (String) -> String? = { _ in nil }) {
+        for index in entries.indices.reversed() where entries[index].isAsked(by: thread) {
+            let entry = entries[index]
+            let named = entry.change.map { !$0.file.isEmpty && ($0.file == asked || $0.file == file) } ?? (entry.isStanding && entry.ask?.ask == asked)
+            if named { leave(index, by: thread, title: title) }
+        }
+    }
+
+    public mutating func cantBeMade(_ id: String, because reason: String, row: String) {
+        guard let index = entries.firstIndex(where: { $0.id == id }), entries[index].change?.problem == nil else { return }
+        entries[index].change?.problem = reason
+        entries[index].change?.review = nil
+        entries[index].text = row
+    }
+
+    private mutating func leave(_ index: Int, by thread: String, title: (String) -> String?) {
+        guard var change = entries[index].change, !change.alsoAskedIn.isEmpty else {
+            entries.remove(at: index)
+            return
+        }
+        if let share = change.alsoAskedIn.firstIndex(of: thread) {
+            change.alsoAskedIn.remove(at: share)
+        } else {
+            let next = change.alsoAskedIn.removeFirst()
+            entries[index].threadID = next
+            entries[index].threadTitle = title(next) ?? entries[index].threadTitle
+        }
+        entries[index].change = change
     }
 
     @discardableResult

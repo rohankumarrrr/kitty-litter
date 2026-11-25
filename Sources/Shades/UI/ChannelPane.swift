@@ -822,8 +822,9 @@ final class ChannelPane: QuietView {
         if ApprovalPolicy.offersSessionAllow(request.kind) {
             buttons.append(CardRowView.Button(title: "Allow for this session") { [weak self] in self?.onAction?(.approval(request, .acceptForSession)) })
         }
+        buttons.append(CardRowView.Button(title: CatWords.ignore) { [weak self] in self?.onAction?(.ignore(request)) })
         buttons.append(openButton(book.thread(holding: request.id, else: request.threadID), in: book))
-        return CardRowView(look: look(kitten, in: book), heading: heading(kitten, title: request.threadTitle), at: request.createdAt, text: request.summary, buttons: buttons)
+        return CardRowView(look: look(kitten, in: book), heading: heading(kitten, title: request.threadTitle), at: request.createdAt, text: request.summary, footer: CatWords.ignoreLeavesItWaiting, buttons: buttons)
     }
 
     private func card(for question: AgentQuestion, in book: ChannelBook) -> CardRowView {
@@ -888,6 +889,7 @@ final class ChannelPane: QuietView {
         if change.problem == nil {
             buttons.append(CardRowView.Button(title: "Allow") { [weak self] in self?.onAction?(.inbox(.allow(id: entry.id))) })
         }
+        buttons.append(ignoreButton(entry))
         buttons.append(openButton(entry.threadID, in: book))
         return CardRowView(
             look: look(kitten, in: book),
@@ -905,6 +907,7 @@ final class ChannelPane: QuietView {
             CardRowView.Button(title: "Allow") { [weak self] in self?.onAction?(.inbox(.allow(id: entry.id))) },
         ]
         if ask.readFromWords { buttons.append(CardRowView.Button(title: "Reply") { [weak self] in self?.reply(to: entry) }) }
+        buttons.append(ignoreButton(entry))
         buttons.append(openButton(entry.threadID, in: book))
         return CardRowView(
             look: look(kitten, in: book),
@@ -915,6 +918,10 @@ final class ChannelPane: QuietView {
             footer: entry.repliedAt == nil ? nil : CatWords.inboxSent,
             buttons: buttons
         )
+    }
+
+    private func ignoreButton(_ entry: InboxEntry) -> CardRowView.Button {
+        CardRowView.Button(title: CatWords.ignore) { [weak self] in self?.onAction?(.inbox(.done(id: entry.id))) }
     }
 
     private func openButton(_ threadID: String, in book: ChannelBook) -> CardRowView.Button {

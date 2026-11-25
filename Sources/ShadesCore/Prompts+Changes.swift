@@ -2,6 +2,7 @@ import Foundation
 
 extension Prompts {
     public static let changeCardLine = "(A request it made, which they see as its own card with Allow and Deny.)"
+    public static let withdrawnLine = "(It took back a request it made before.)"
     public static let askMarker = "ASK:"
     public static let recommendMarker = "RECOMMEND:"
 

@@ -10,7 +10,8 @@ A kitten with `inbox: true` keeps its reports in one place instead of a bubble e
 - `inbox-done` takes a row away without telling any agent.
 - `inbox-asks` files what a kitten without an inbox needs you to do, and leaves the rest of its report to the bubble.
 - `inbox-scheduled` opens a report from a run a schedule started with the kitten's words in it, and takes your reply.
-- `inbox-change` shows a settings change a kitten asked for as a card with Shades' look at it, and Allow and Deny.
+- `inbox-change` shows a settings change a kitten asked for as a card with Shades' look at it, and Allow, Deny and Ignore.
+- `inbox-stale` takes away an approval or a request card with Ignore, replaces a card when the same thread asks again for the same place, stops offering Allow on a card whose file changed, and lets the thread that asked withdraw it.
 - `inbox-ask` shows what a kitten asks your yes for, in the form or read from a decision in plain words, and sends only The Kitty Litter's note on Allow or Deny.
 - `inbox-waiting` reads a run whose turn ended while it watches its pull request, and only calls it done once the watch is over.
 
@@ -46,6 +47,15 @@ Journey: `journeys/inbox-change.txt`.
 - **Cards.** `inbox`, then `wait 1`. `channels.png` in `0-cards` shows Activity with a count of 2. The first card, "Clawde · Fix the install", starts with **This widens what agents can do.** and two lines adding device tools to `permissions.allow`, then "Makes `~/.t3/worktrees/app/t3-demo/.claude/settings.local.json`:" over the new file with `+` on each line, "Clawde's reason: ...", "I looked into it. ..." in the reply's place, and Deny, Allow and Open in T3. Under it, the second card says "This widens what agents can do." and that it adds `Bash(swift build)` to `permissions.allow`, since Claude Code can't read the file while it has the comma, over a `-` and a `+` line for the comma.
 - **Allow.** `card Allow`, then `wait 2`. It presses the first card's Allow. The output has `[demo] took back 1 notification` and `[demo] forwarded to demo-settings with 0 attachments, to queue: --- / The Kitty Litter wrote this, not the user`. `channels.png` in `1-allowed` shows only the comma's card left, with a count of 1, and the new file is in the demo's home folder.
 - **Deny.** `card Deny`, then `wait 2`. The output has another forward to queue, saying they pressed Deny, and `channels.png` in `2-denied` shows no card left under Waiting on you. The comma is still in the demo's `shades/.claude/settings.json`.
+
+Journey: `journeys/inbox-stale.txt`.
+
+- **An approval.** `approval command npm test`, `wait 4`, `inbox`, then `wait 1`. `channels.png` in `0-approval` shows Steve's `npm test` card with "Ignore leaves it waiting in T3." under it, and Deny, Allow, Allow for this session, Ignore and View thread.
+- **Ignore it.** `card Ignore`, then `wait 1`. The output has `[demo] took back 1 notification` and no `[demo] accept:` or `[demo] decline:` line, since T3 is told nothing, and `1-approval-ignored` has no approval card.
+- **Ignore a request.** `report change`, `wait 8`, `card Ignore`, then `wait 2`. `2-cards` shows both of Clawde's cards with Deny, Allow, Ignore and Open in T3. The output has `[demo] took back 1 notification` and no forward, and `3-ignored` shows only the comma's card.
+- **Asked again.** `report again`, then `wait 10`. Clawde asks for the comma again, and to add `Bash(swift test)` at another place in the same file. `4-again` shows a count of 2, not 3: the new comma card took the old one's place, under the card adding `Bash(swift test)`.
+- **Stale.** `card Allow`, then `wait 2`. It allows the `Bash(swift test)` card, and the output has a forward to queue saying they pressed Allow. `5-stale` shows the comma's card saying **This can't be done as asked.** The file changed after it asked, with only Deny, Ignore and Open in T3.
+- **Withdrawn.** `report withdraw`, then `wait 8`. Clawde's next report has `{"withdraw": "~/shades/.claude/settings.json"}`. The output has the sorting and `[demo] took back 1 notification`, and no forward, and `6-withdrawn` says "Nothing needs you."
 
 Journey: `journeys/inbox-ask.txt`.
 

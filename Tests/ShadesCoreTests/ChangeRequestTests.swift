@@ -102,7 +102,7 @@ final class ChangeRequestTests: XCTestCase {
     func testTheSorterSeesALineInPlaceOfEachBlock() {
         let reply = request(encoded(["file": "x", "create": "{}"])) + "\n\n```swift\nlet a = 1\n```"
         XCTAssertEqual(
-            ChangeRequests.withoutBlocks(reply, saying: "(shown as a card)"),
+            ChangeRequests.withoutBlocks(reply, saying: "(shown as a card)", withdrawn: "(taken back)"),
             "Done with the rest. One thing I can't do:\n\n(shown as a card)\n\nThat's all.\n\n```swift\nlet a = 1\n```"
         )
     }

@@ -208,6 +208,7 @@ extension AppController {
         var holdback = ReplyHoldback()
         var thread: String?
         var finished = false
+        var raised: Set<String> = []
         do {
             for try await event in stream {
                 switch event {
@@ -225,11 +226,14 @@ extension AppController {
                     reply?.text = text
                     renderBubble()
                 case .needsApproval(let request):
+                    raised.insert(request.id)
                     addApproval(request)
                 case .finished(let fullText):
                     finished = true
+                    runEnded(asking: raised)
                     finish(holdback.read(fullText: fullText), turn: turn, thread: thread)
                 case .failed(let message):
+                    runEnded(asking: raised)
                     return .failed(message: message, error: nil, sawText: !holdback.text.isEmpty)
                 }
             }
@@ -440,6 +444,7 @@ extension AppController {
         frontierTask = Task {
             var startedThread: String?
             var warning: Int?
+            var raised: Set<String> = []
             do {
                 for try await event in backend.start(prompt) {
                     switch event {
@@ -455,11 +460,15 @@ extension AppController {
                             tell(said, threadID: threadID, as: errand, fades: true)
                         }
                     case .needsApproval(let request):
+                        raised.insert(request.id)
                         addApproval(request)
                     case .failed(let message):
+                        runEnded(asking: raised)
                         if let warning { takeBackNotice(warning) }
                         tell(message, as: errand, unasked: startedThread != nil)
-                    case .text, .finished:
+                    case .finished:
+                        runEnded(asking: raised)
+                    case .text:
                         break
                     }
                 }

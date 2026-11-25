@@ -6,6 +6,7 @@ enum MessagesAction: Equatable {
     case send(String, to: MessageTarget, shownIn: ChannelID?, alsoSent: Bool = false, files: [Drop] = [], alternate: Bool = false)
     case startTopic(String, with: Kitten, id: String, files: [Drop] = [])
     case approval(ApprovalRequest, ApprovalDecision)
+    case ignore(ApprovalRequest)
     case answer(AgentQuestion, [[String]])
     case inbox(InboxAction)
     case seen(ChannelSelection, keepingUnread: Set<String> = [])
@@ -121,6 +122,8 @@ extension AppController {
             send(words, to: .newThread(kitten), shownIn: .of(kitten), echoID: id, files: files)
         case .approval(let request, let decision):
             answer(request, decision)
+        case .ignore(let request):
+            ignore(request)
         case .answer(let question, let answers):
             answer(question, with: answers)
         case .inbox(let action):
@@ -370,6 +373,7 @@ extension AppController {
         var holdback = ReplyHoldback()
         var fullText: String?
         var thread: String?
+        var raised: Set<String> = []
         do {
             for try await event in stream {
                 switch event {
@@ -381,10 +385,13 @@ extension AppController {
                 case .text(let delta):
                     _ = holdback.add(delta)
                 case .needsApproval(let request):
+                    raised.insert(request.id)
                     addApproval(request)
                 case .finished(let text):
+                    runEnded(asking: raised)
                     fullText = text
                 case .failed:
+                    runEnded(asking: raised)
                     return nil
                 }
             }

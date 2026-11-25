@@ -312,6 +312,22 @@ final class ApprovalQueueTests: XCTestCase {
         XCTAssertTrue(queue.isEmpty)
     }
 
+    func testOnlyTheApprovalsAnEndedRunAskedForGoAndAStaleListCantBringThemBack() {
+        var queue = ApprovalQueue()
+        queue.add(request("a", at: 1))
+        queue.add(request("b", at: 2))
+        queue.add(request("c", at: 3))
+        queue.answer("a")
+        XCTAssertTrue(queue.runEnded(asking: ["b", "gone"]))
+        XCTAssertEqual(queue.pending.map(\.id), ["c"])
+        XCTAssertEqual(queue.total, 2, "it wasn't answered by you, so it doesn't count as one of yours")
+        queue.sync(with: [thread([request("b", at: 2)])])
+        XCTAssertEqual(queue.pending.map(\.id), ["c"])
+        XCTAssertFalse(queue.runEnded(asking: ["b"]))
+        XCTAssertTrue(queue.runEnded(asking: ["c"]))
+        XCTAssertEqual(queue.position, 1)
+    }
+
     func testARequestFromAStreamSurvivesAListThatHasntCaughtUp() {
         var queue = ApprovalQueue()
         queue.add(request("a"))

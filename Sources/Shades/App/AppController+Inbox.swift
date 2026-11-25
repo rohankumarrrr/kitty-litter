@@ -47,6 +47,7 @@ extension AppController {
         let readable = readable(report)
         let sorted = await sort(readable, of: thread, failed: failed)
         let changes = await asked
+        if !failed { withdrawRequests(in: report, of: thread) }
         if let next, !failed, changes.isEmpty, onlyPassedOn(sorted, report: readable, of: thread) {
             passedOn(thread, to: next)
             inbox.skip(thread)
@@ -56,7 +57,7 @@ extension AppController {
         let lines = sorted.flatMap { $0.hasLines ? $0 : nil } ?? unsorted(readable)
         let owed = inbox.owes(thread)
         if inbox.file(lines, from: thread, at: now(), id: { UUID().uuidString }) { nudgeInbox(about: [.thread(thread.id)]) }
-        changes.forEach { inbox.ask($0) }
+        changes.forEach { inbox.ask($0, title: title(ofThread:)) }
         keepInbox()
         inboxChanged()
         if owed, lines.decision == nil, !thread.turnEnded { notifyFinished(thread, by: kitten(of: thread)) }
@@ -93,7 +94,7 @@ extension AppController {
         inbox.flag(decision, from: thread, at: now(), id: id)
         keepInbox()
         inboxChanged()
-        if ChangeRequests.all(in: report ?? "").isEmpty { readDecision(id, decision: decision, of: thread) }
+        if ChangeRequests.cards(in: report ?? "").isEmpty { readDecision(id, decision: decision, of: thread) }
     }
 
     private func unsorted(_ report: String?) -> SortedReport {

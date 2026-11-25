@@ -1,6 +1,7 @@
 import Foundation
 @testable import Shades
 import ShadesCore
+import TestSupport
 import XCTest
 
 @MainActor
@@ -182,23 +183,112 @@ final class ChangeRequestFlowTests: XCTestCase {
 
     func testAllowMakesThePressedCardsChangeEvenWithoutRunIDs() async throws {
         let steveFile = "\(steve.folder)/.claude/settings.json"
-        let asks = ["{\"permissions\": {\"allow\": [\"Bash(rm:*)\"]}}", "{\"permissions\": {\"deny\": [\"WebFetch\"]}}"]
-        for (index, with) in asks.enumerated() {
+        try Data("{\"a\": {}, \"b\": {}}".utf8).write(to: URL(fileURLWithPath: steveFile))
+        let asks = [("\"a\": {}", "\"a\": {\"allow\": [\"Bash(rm:*)\"]}"), ("\"b\": {}", "\"b\": {\"deny\": [\"WebFetch\"]}")]
+        for (index, (replace, with)) in asks.enumerated() {
             var work = AgentThread(id: "s", title: "Steve: Work", projectTitle: nil, status: .running, model: "m", updatedAt: clock, projectPath: steve.folder)
             controller.threadsChanged([work])
-            backend.reports["s"] = reply(asking: ["file": steveFile, "replace": "{}", "with": with])
+            backend.reports["s"] = reply(asking: ["file": steveFile, "replace": replace, "with": with])
             work.status = .completed
             controller.threadsChanged([work])
             await controller.reportTask?.value
             for _ in 0..<200 where controller.inbox.entries.filter({ $0.change != nil }).count <= index { await Task.yield() }
         }
         let cards = controller.inbox.entries.filter { $0.change != nil }
-        XCTAssertEqual(cards.map(\.change?.with), asks)
+        XCTAssertEqual(cards.map(\.change?.with), asks.map(\.1))
         XCTAssertEqual(Set(cards.map(\.id)).count, 2, "each card is its own")
         controller.inboxAction(.allow(id: cards[1].id))
         await settle()
-        XCTAssertEqual(try String(contentsOfFile: steveFile, encoding: .utf8), asks[1])
+        XCTAssertEqual(try String(contentsOfFile: steveFile, encoding: .utf8), "{\"a\": {}, \(asks[1].1)}")
         XCTAssertEqual(controller.inbox.entries.filter { $0.change != nil }.map(\.id), [cards[0].id])
+        XCTAssertEqual(controller.inbox.entries.first { $0.id == cards[0].id }?.change?.problem, "The file changed after it asked.", "the file it was shown against is gone, so its Allow goes at once")
+    }
+
+    func testIgnoreTakesTheCardAwayTellsNoOneAndAllowCantComeAfter() async throws {
+        let entry = try await finishClawde(reply(asking: commaFix))
+        let sent = backend.sent.count
+        controller.inboxAction(.done(id: entry.id))
+        await settle()
+        XCTAssertFalse(controller.inbox.entries.contains { $0.id == entry.id })
+        XCTAssertFalse(savedInbox?.entries.contains { $0.id == entry.id } ?? true, "saved without it")
+        XCTAssertTrue(withdrawn.contains(entry.id), "its notification goes too")
+        controller.inboxAction(.allow(id: entry.id))
+        await settle()
+        XCTAssertEqual(contents, original)
+        XCTAssertEqual(backend.sent.count, sent, "the kitten hears nothing")
+    }
+
+    private func finishAgain(_ report: String, run: String) async throws {
+        backend.reports["w"] = report
+        var work = thread("w", of: clawde)
+        work.lastRunID = run
+        controller.threadsChanged([work])
+        await until { controller.filing.isEmpty }
+    }
+
+    private func withdrawing(_ asked: String) -> String {
+        "Found another way.\n\n```shades-request\n{\"withdraw\": \"\(asked)\"}\n```"
+    }
+
+    func testTheThreadThatAskedCanWithdrawItAndAllowCantComeAfter() async throws {
+        let entry = try await finishClawde(reply(asking: commaFix))
+        let sent = backend.sentApartFromLooks.filter { $0.mode == .forward }.count
+
+        var other = thread("s", of: steve, status: .running)
+        controller.threadsChanged([thread("w", of: clawde), other])
+        backend.reports["s"] = withdrawing(settingsFile) + "\n\n```shades-request\n{\"ask\": \"Send it.\"}\n```"
+        other.status = .completed
+        controller.threadsChanged([thread("w", of: clawde), other])
+        await until { controller.inbox.entries.contains { $0.ask?.ask == "Send it." } }
+        XCTAssertTrue(controller.inbox.entries.contains { $0.ask?.ask == "Send it." }, "Steve's report was filed")
+        XCTAssertTrue(controller.inbox.entries.contains { $0.id == entry.id }, "another thread can't take it back")
+
+        try await finishAgain(withdrawing(settingsFile), run: "run-w-2")
+        XCTAssertFalse(controller.inbox.entries.contains { $0.id == entry.id })
+        XCTAssertFalse(savedInbox?.entries.contains { $0.id == entry.id } ?? true)
+        let sorter = try XCTUnwrap(backend.sent.last { $0.prompt.text.hasPrefix("Below is the final report") })
+        XCTAssertTrue(sorter.prompt.text.contains(Prompts.withdrawnLine))
+        XCTAssertFalse(sorter.prompt.text.contains(Prompts.changeCardLine))
+        controller.inboxAction(.allow(id: entry.id))
+        await settle()
+        XCTAssertEqual(contents, original)
+        XCTAssertEqual(backend.sentApartFromLooks.filter { $0.mode == .forward }.count, sent, "the kitten hears nothing back")
+    }
+
+    func testAChangeWhoseFileChangedStopsOfferingAllowAndDenySaysWhy() async throws {
+        let entry = try await finishClawde(reply(asking: commaFix))
+        let meanwhile = original.replacingOccurrences(of: "allow", with: "deny")
+        try Data(meanwhile.utf8).write(to: URL(fileURLWithPath: settingsFile))
+        controller.threadsChanged([thread("w", of: clawde)])
+        let stale = try XCTUnwrap(controller.inbox.entries.first { $0.id == entry.id })
+        XCTAssertEqual(stale.change?.problem, "The file changed after it asked.")
+        XCTAssertNil(stale.change?.review)
+        XCTAssertTrue(stale.text.contains("It can't be done as asked. The file changed after it asked."), "the phone and bubble say so too")
+        XCTAssertEqual(savedInbox?.entries.first { $0.id == entry.id }?.change?.problem, stale.change?.problem)
+
+        controller.inboxAction(.allow(id: entry.id))
+        await settle()
+        XCTAssertEqual(contents, meanwhile)
+        XCTAssertTrue(controller.inbox.entries.contains { $0.id == entry.id }, "Allow does nothing")
+        XCTAssertFalse(backend.sent.contains { $0.prompt.text.contains("pressed Allow") })
+        controller.inboxAction(.deny(id: entry.id))
+        await settle()
+        XCTAssertTrue(backend.sent.last?.prompt.text.contains("pressed Deny") == true)
+        XCTAssertTrue(backend.sent.last?.prompt.text.contains("The file changed after it asked.") == true)
+    }
+
+    func testAChangeSomeoneAlreadyMadeGoesByItself() async throws {
+        let entry = try await finishClawde(reply(asking: commaFix))
+        let sent = backend.sent.count
+        let made = original.replacingOccurrences(of: "\"Bash(swift test)\",\n", with: "\"Bash(swift test)\"\n")
+        try Data(made.utf8).write(to: URL(fileURLWithPath: settingsFile))
+        controller.threadsChanged([thread("w", of: clawde)])
+        XCTAssertFalse(controller.inbox.entries.contains { $0.id == entry.id })
+        XCTAssertTrue(withdrawn.contains(entry.id))
+        controller.inboxAction(.allow(id: entry.id))
+        await settle()
+        XCTAssertEqual(contents, made)
+        XCTAssertEqual(backend.sent.count, sent)
     }
 
     func testEveryThreadThatAskedForTheSameChangeHearsWhatYouDecided() async throws {

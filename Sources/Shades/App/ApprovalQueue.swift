@@ -38,6 +38,14 @@ struct ApprovalQueue {
         answered = pending.isEmpty ? 0 : answered + 1
     }
 
+    mutating func runEnded(asking ids: Set<String>) -> Bool {
+        let ended = pending.filter { ids.contains($0.id) }.map(\.id)
+        pending.removeAll { ids.contains($0.id) }
+        answeredIDs.formUnion(ended)
+        if pending.isEmpty { answered = 0 }
+        return !ended.isEmpty
+    }
+
     mutating func restore(_ request: ApprovalRequest) {
         answeredIDs.remove(request.id)
         answered = max(0, answered - 1)

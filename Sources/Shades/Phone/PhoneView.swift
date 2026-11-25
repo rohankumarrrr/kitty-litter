@@ -532,9 +532,11 @@ struct PhoneView: Encodable, Equatable {
             if ApprovalPolicy.offersSessionAllow(request.kind) {
                 choices.append(Choice(label: "Allow for this session", value: ApprovalDecision.acceptForSession.rawValue))
             }
+            choices.append(Self.ignore)
             let title = Self.title(ofThread: book.thread(holding: request.id, else: request.threadID), request.threadTitle, in: book)
             return card("approval", id: request.id, kitten: kitten, title: title, text: request.summary, at: request.createdAt, in: book) {
                 $0.choices = choices
+                $0.footer = CatWords.ignoreLeavesItWaiting
             }
         case .question(let question):
             let kitten = book.kitten(of: question.id)
@@ -556,12 +558,13 @@ struct PhoneView: Encodable, Equatable {
                 $0.footer = entry.repliedAt == nil ? nil : CatWords.inboxSent
                 $0.open = ask.readFromWords ? PhonePlace.reply(to: entry) : nil
                 $0.choices = [Choice(label: "Deny", value: ApprovalDecision.decline.rawValue), Choice(label: "Allow", value: ApprovalDecision.accept.rawValue)]
-                    + (ask.readFromWords ? [Choice(label: "Reply", value: "reply")] : [])
+                    + (ask.readFromWords ? [Choice(label: "Reply", value: "reply")] : []) + [Self.ignore]
             }
         case .report(let entry) where entry.change != nil:
-            return card("report", id: entry.id, kitten: book.kitten(of: entry.id), title: entry.threadTitle, text: entry.text, at: entry.at, in: book) {
+            return card("change", id: entry.id, kitten: book.kitten(of: entry.id), title: entry.threadTitle, text: entry.text, at: entry.at, in: book) {
                 $0.answer = entry.change?.review
                 $0.footer = CatWords.allowChangeOnMac
+                $0.choices = [Self.ignore]
             }
         case .report(let entry):
             let kitten = book.kitten(of: entry.id)
@@ -584,6 +587,8 @@ struct PhoneView: Encodable, Equatable {
         guard let parent = book.threads[id]?.parent, parent.speaker == .you, let words = parent.text else { return CatWords.shades }
         return ChannelRows.firstWords(of: words)
     }
+
+    static let ignore = Choice(label: CatWords.ignore, value: "ignore")
 
     private static func card(_ kind: String, id: String, kitten: Kitten?, title: String, text: String, at: Date?, in book: ChannelBook, _ fill: (inout Row) -> Void) -> Row {
         let look = ChannelSpeakerLook(kitten.map { .kitten($0.id) } ?? .someoneElse, in: book)
