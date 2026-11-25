@@ -368,6 +368,33 @@ final class ChannelTextView: NSTextView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    private var hearsFrameChanges = false
+
+    // Outside the repo: each time its superview changes, an NSTextView starts hearing frame changes to follow a clip view, every view's when it has no superview, and a message's text sits in no clip view.
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        hearsFrameChanges = true
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if hearsFrameChanges { stopHearingFrameChanges() }
+    }
+
+    override func removeFromSuperview() {
+        super.removeFromSuperview()
+        stopHearingFrameChanges()
+    }
+
+    deinit {
+        if hearsFrameChanges { NotificationCenter.default.removeObserver(self, name: NSView.frameDidChangeNotification, object: nil) }
+    }
+
+    private func stopHearingFrameChanges() {
+        NotificationCenter.default.removeObserver(self, name: NSView.frameDidChangeNotification, object: nil)
+        hearsFrameChanges = false
+    }
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var needsPanelToBecomeKey: Bool { true }
     override var canBecomeKeyView: Bool { false }
