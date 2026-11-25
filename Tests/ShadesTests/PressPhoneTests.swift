@@ -764,6 +764,25 @@ final class PressPhoneTests: XCTestCase {
         try await did("react", .react("e1:reply", .heart))
     }
 
+    func testATapOnALinkUnderTheBarScrollsToItFirstAsAPersonWould() async throws {
+        try await open(at: threadKey)
+        let under = try await phone.run("""
+            const link = document.querySelector('.bubble .link');
+            const bar = document.getElementById('bartitle');
+            for (let i = 0; i < 40; i++) {
+                const l = link.getBoundingClientRect(), b = bar.getBoundingClientRect();
+                const delta = (l.top + l.height / 2) - (b.top + b.height / 2);
+                if (Math.abs(delta) < 1) break;
+                scrollBy(0, delta);
+            }
+            const l = link.getBoundingClientRect();
+            return document.elementFromPoint(l.left + l.width / 2, l.top + l.height / 2)?.id;
+            """) as? String
+        XCTAssertEqual(under, "bartitle", "the link starts under the bar")
+        try await phone.tap(".bubble .link")
+        try await expectOpen("linksheet", true)
+    }
+
     func testALinkAsksBeforeItOpens() async throws {
         try await open(at: threadKey)
         try await phone.tap(".bubble .link")
@@ -1102,9 +1121,12 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
         let box = node.getBoundingClientRect();
         if (!box.width || !box.height) return 'it takes up no room';
         if (!point && (box.top < 0 || box.bottom > innerHeight)) { node.scrollIntoView({ block: 'center' }); box = node.getBoundingClientRect(); }
-        const x = point ? point[0] : box.left + box.width / 2, y = point ? point[1] : box.top + box.height / 2;
-        const hit = document.elementFromPoint(x, y);
-        if (!hit || !(hit === node || node.contains(hit))) return 'covered by ' + (hit ? hit.outerHTML.slice(0, 160) : 'nothing');
+        const centre = () => { const b = node.getBoundingClientRect(); return point || [b.left + b.width / 2, b.top + b.height / 2]; };
+        let [x, y] = centre();
+        let hit = document.elementFromPoint(x, y);
+        const reached = () => hit && (hit === node || node.contains(hit));
+        if (!point && !reached()) { node.scrollIntoView({ block: 'center' }); [x, y] = centre(); hit = document.elementFromPoint(x, y); }
+        if (!reached()) return 'covered by ' + (hit ? hit.outerHTML.slice(0, 160) : 'nothing');
         const at = { bubbles: true, cancelable: true, composed: true, view: window, clientX: x, clientY: y, button: 0 };
         const touch = { ...at, pointerId: 1, pointerType: 'touch', isPrimary: true };
         hit.dispatchEvent(new PointerEvent('pointerdown', touch));

@@ -1,6 +1,7 @@
 import Foundation
 @testable import Shades
 import ShadesCore
+import TestSupport
 import XCTest
 
 @MainActor
@@ -79,10 +80,7 @@ final class StaleRequestFlowTests: XCTestCase {
         let dropCurl = ["file": clawdeFile, "replace": "      \"Bash(swift build)\",\n      \"Bash(curl *)\",\n", "with": "      \"Bash(swift build)\",\n", "why": "Curl can reach anywhere."]
         backend.reports["w"] = "Two changes.\n\n\(block(addLs))\n\n\(block(dropCurl))"
         controller.threadsChanged([thread("w", of: clawde, run: "run-1", status: .completed)])
-        for _ in 0..<50 where !controller.filing.isEmpty {
-            await controller.reportTask?.value
-            await Task.yield()
-        }
+        await until { controller.filing.isEmpty }
         let cards = controller.inbox.entries.filter { $0.change != nil }
         XCTAssertEqual(cards.count, 2)
         let add = try XCTUnwrap(cards.first { $0.change?.with.contains("Bash(ls)") == true })
@@ -91,7 +89,6 @@ final class StaleRequestFlowTests: XCTestCase {
 
         controller.inboxAction(.allow(id: add.id))
         await controller.forwardTask?.value
-        for _ in 0..<20 { await Task.yield() }
 
         XCTAssertTrue(clawdeContents.contains("\"Bash(curl *)\""), "curl is still allowed")
         let told = backend.sentApartFromLooks.filter { $0.mode == .forward }.map(\.prompt.text)
@@ -107,21 +104,17 @@ final class StaleRequestFlowTests: XCTestCase {
         controller.threadsChanged([thread("s", of: steve, run: "run-1", status: .running)])
         backend.reports["s"] = "Needs one setting.\n\n\(block(ask))"
         controller.threadsChanged([thread("s", of: steve, run: "run-1", status: .completed)])
-        for _ in 0..<500 where !backend.sent.contains(where: { $0.prompt.title?.hasPrefix(AppController.reviewTitle) == true }) { await Task.yield() }
+        await until { backend.sent.contains(where: { $0.prompt.title?.hasPrefix(AppController.reviewTitle) == true }) }
         XCTAssertTrue(backend.sent.contains { $0.prompt.title?.hasPrefix(AppController.reviewTitle) == true }, "the first request is being looked into")
 
         controller.threadsChanged([thread("s", of: steve, run: "run-2", status: .running)])
         backend.reports["s"] = "Found another way.\n\n\(block(["withdraw": steveFile]))"
         controller.threadsChanged([thread("s", of: steve, run: "run-2", status: .completed)])
-        let sorted = backend.sent.count
-        for _ in 0..<500 where backend.sent.count == sorted { await Task.yield() }
-        await controller.reportTask?.value
-        for _ in 0..<200 { await Task.yield() }
+        await until { backend.sent.filter { $0.prompt.text.hasPrefix("Below is the final report") }.count == 2 }
         XCTAssertTrue(controller.inbox.entries.filter { $0.change != nil }.isEmpty, "no card yet")
 
         backend.releaseHeld()
-        for _ in 0..<500 where controller.inbox.entries.filter({ $0.change != nil }).isEmpty { await Task.yield() }
-        for _ in 0..<500 { await Task.yield() }
+        await controller.changeFiling["s"]?.value
         XCTAssertTrue(controller.inbox.entries.filter { $0.change != nil }.isEmpty, "Steve took the request back in its next run, so no card should be waiting")
     }
 
@@ -130,13 +123,13 @@ final class StaleRequestFlowTests: XCTestCase {
         controller.threadsChanged([thread("s", of: steve, run: "run-1", status: .running)])
         backend.reports["s"] = "Needs one setting.\n\n\(block(ask))"
         controller.threadsChanged([thread("s", of: steve, run: "run-1", status: .completed)])
-        for _ in 0..<500 where controller.inbox.entries.filter({ $0.change != nil }).isEmpty { await Task.yield() }
+        await until { !controller.inbox.entries.filter({ $0.change != nil }).isEmpty }
         XCTAssertEqual(controller.inbox.entries.filter { $0.change != nil }.count, 1)
 
         controller.threadsChanged([thread("s", of: steve, run: "run-2", status: .running)])
         backend.reports["s"] = "Found another way.\n\n\(block(["withdraw": steveFile]))"
         controller.threadsChanged([thread("s", of: steve, run: "run-2", status: .completed)])
-        for _ in 0..<500 where !controller.inbox.entries.filter({ $0.change != nil }).isEmpty { await Task.yield() }
+        await until { controller.inbox.entries.filter({ $0.change != nil }).isEmpty }
         XCTAssertTrue(controller.inbox.entries.filter { $0.change != nil }.isEmpty)
     }
 
@@ -156,11 +149,8 @@ final class StaleRequestFlowTests: XCTestCase {
         decisionReplies()
         backend.reports["w"] = withdrawAndDecide
         controller.threadsChanged([thread("w", of: clawde, run: "run-1", status: .completed)])
-        for _ in 0..<50 where !controller.filing.isEmpty {
-            await controller.reportTask?.value
-            await Task.yield()
-        }
-        for _ in 0..<500 where !controller.inbox.entries.contains(where: { $0.ask != nil }) { await Task.yield() }
+        await until { controller.filing.isEmpty }
+        await until { controller.inbox.entries.contains(where: { $0.ask != nil }) }
         XCTAssertTrue(controller.inbox.entries.contains { $0.ask?.ask == "Merge pull request #3." })
     }
 
@@ -169,9 +159,9 @@ final class StaleRequestFlowTests: XCTestCase {
         controller.threadsChanged([thread("s", of: steve, run: "run-1", status: .running)])
         backend.reports["s"] = withdrawAndDecide
         controller.threadsChanged([thread("s", of: steve, run: "run-1", status: .completed)])
-        for _ in 0..<500 where !controller.inbox.entries.contains(where: { $0.kind == .decision }) { await Task.yield() }
+        await until { controller.inbox.entries.contains(where: { $0.kind == .decision }) }
         await controller.reportTask?.value
-        for _ in 0..<500 where !controller.inbox.entries.contains(where: { $0.ask != nil }) { await Task.yield() }
+        await until { controller.inbox.entries.contains(where: { $0.ask != nil }) }
         XCTAssertTrue(controller.inbox.entries.contains { $0.ask?.ask == "Merge pull request #3." }, "a withdraw makes no card, so the decision should still be read, as it is in the inbox")
     }
 
@@ -179,10 +169,7 @@ final class StaleRequestFlowTests: XCTestCase {
         let addLs = ["file": clawdeFile, "replace": "      \"Bash(swift build)\",\n", "with": "      \"Bash(swift build)\",\n      \"Bash(ls)\",\n", "why": "It lists folders."]
         backend.reports["w"] = "One change.\n\n\(block(addLs))"
         controller.threadsChanged([thread("w", of: clawde, run: "run-1", status: .completed)])
-        for _ in 0..<50 where !controller.filing.isEmpty {
-            await controller.reportTask?.value
-            await Task.yield()
-        }
+        await until { controller.filing.isEmpty }
         let card = try XCTUnwrap(controller.inbox.entries.first { $0.change != nil })
         XCTAssertNil(card.change?.problem)
 
@@ -193,9 +180,9 @@ final class StaleRequestFlowTests: XCTestCase {
 
         XCTAssertEqual(clawdeContents, listed, "the file never changed")
         let after = try XCTUnwrap(controller.inbox.entries.first { $0.id == card.id })
+        XCTAssertNil(after.change?.problem, "it still offers Allow")
         controller.inboxAction(.allow(id: card.id))
         await controller.forwardTask?.value
-        for _ in 0..<20 { await Task.yield() }
         XCTAssertTrue(clawdeContents.contains("\"Bash(ls)\""), "the file is byte for byte what the card was shown against, so Allow should still make it")
     }
 }

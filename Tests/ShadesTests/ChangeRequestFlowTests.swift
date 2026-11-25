@@ -1,6 +1,7 @@
 import Foundation
 @testable import Shades
 import ShadesCore
+import TestSupport
 import XCTest
 
 @MainActor
@@ -222,10 +223,7 @@ final class ChangeRequestFlowTests: XCTestCase {
         var work = thread("w", of: clawde)
         work.lastRunID = run
         controller.threadsChanged([work])
-        for _ in 0..<50 where !controller.filing.isEmpty {
-            await controller.reportTask?.value
-            await Task.yield()
-        }
+        await until { controller.filing.isEmpty }
     }
 
     private func withdrawing(_ asked: String) -> String {
@@ -241,7 +239,7 @@ final class ChangeRequestFlowTests: XCTestCase {
         backend.reports["s"] = withdrawing(settingsFile) + "\n\n```shades-request\n{\"ask\": \"Send it.\"}\n```"
         other.status = .completed
         controller.threadsChanged([thread("w", of: clawde), other])
-        for _ in 0..<500 where !controller.inbox.entries.contains(where: { $0.ask?.ask == "Send it." }) { await Task.yield() }
+        await until { controller.inbox.entries.contains { $0.ask?.ask == "Send it." } }
         XCTAssertTrue(controller.inbox.entries.contains { $0.ask?.ask == "Send it." }, "Steve's report was filed")
         XCTAssertTrue(controller.inbox.entries.contains { $0.id == entry.id }, "another thread can't take it back")
 
