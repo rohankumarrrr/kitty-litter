@@ -4,7 +4,7 @@ PATH=/usr/bin:/bin:/usr/sbin:/sbin
 export LC_ALL=C
 
 allowed=(codesign trustd securityd SecurityAgent syspolicyd amfid tccd runningboardd launchservicesd lsd Shades)
-build_steps=(install.sh bundle.sh codesign swift-build swift-frontend)
+build_steps=(install.sh bundle.sh codesign swift-build swift-package swift-frontend)
 max_lines=3000
 time_format='[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]'
 
@@ -46,7 +46,10 @@ logs() {
 processes() {
   (( $# == 0 )) || refuse "processes takes nothing after it."
   print "PID PPID ELAPSED NAME"
-  /bin/ps -axww -o pid=,ppid=,etime=,args= |
+  {
+    /bin/ps -axww -o pid=,args= | awk '{ print "args", $0 }'
+    /bin/ps -axww -o ucomm=,pid=,ppid=,etime= | awk '{ print "name", $0 }'
+  } |
     awk -v names="${allowed[*]} ${build_steps[*]}" '
       BEGIN {
         split(names, list, " ")
@@ -54,13 +57,20 @@ processes() {
         shell["zsh"] = shell["bash"] = shell["sh"] = 1
       }
       function base(path, parts) { return parts[split(path, parts, "/")] }
-      $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^([0-9]+-)?([0-9]+:)?[0-9]+:[0-9]+$/ {
-        name = base($4)
-        if (name in shell) {
-          for (i = 5; i <= NF && $i ~ /^-/; i++) ;
-          name = (i <= NF && base($i) ~ /^(install|bundle)\.sh$/) ? base($i) : ""
-        }
-        if (name in wanted) print $1, $2, $3, name
+      $1 == "args" && $2 ~ /^[0-9]+$/ {
+        for (i = 4; i <= NF && $i ~ /^-/; i++) ;
+        if (i <= NF && base($i) ~ /^(install|bundle)\.sh$/) script[$2] = base($i)
+        next
+      }
+      $1 == "name" {
+        if (NF < 4 || $NF !~ /^([0-9]+-)?([0-9]+:)?[0-9]+:[0-9]+$/ || $(NF - 1) !~ /^[0-9]+$/ || $(NF - 2) !~ /^[0-9]+$/) next
+        pid = $(NF - 2); ppid = $(NF - 1); elapsed = $NF
+        name = $0
+        sub(/^name +/, "", name)
+        sub(/ +[0-9]+ +[0-9]+ +[^ ]+ *$/, "", name)
+        sub(/ +$/, "", name)
+        if (name in shell) name = (pid in script) ? script[pid] : ""
+        if (name in wanted) print pid, ppid, elapsed, name
       }'
 }
 

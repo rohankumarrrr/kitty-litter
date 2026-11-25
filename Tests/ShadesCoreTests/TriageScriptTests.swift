@@ -34,8 +34,23 @@ final class TriageScriptTests: XCTestCase {
             """#, to: root.appendingPathComponent("log"))
         try write(#"""
             #!/bin/zsh -f
-            print -rl -- "$@" > "$STANDIN/ps-ran"
-            [[ -f "$STANDIN/ps-table" ]] && cat "$STANDIN/ps-table"
+            print -rl -- "$@" >> "$STANDIN/ps-ran"
+            [[ -f "$STANDIN/ps-table" ]] || exit 0
+            columns=(${(s:,:)${${@[(r)*=*]}//=/}})
+            newline=$'\n'
+            while IFS=$'\t' read -r pid ppid etime ucomm args; do
+              line=""
+              for column in $columns; do
+                case $column in
+                  pid) line+="$(printf '%5s' "$pid") " ;;
+                  ppid) line+="$(printf '%5s' "$ppid") " ;;
+                  etime) line+="$(printf '%11s' "$etime") " ;;
+                  ucomm) line+="$(printf '%-16s' "${ucomm//\\n/$newline}") " ;;
+                  args) line+="$args " ;;
+                esac
+              done
+              print -r -- "${line% }"
+            done < "$STANDIN/ps-table"
             """#, to: root.appendingPathComponent("ps"))
 
         let real = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -191,7 +206,7 @@ final class TriageScriptTests: XCTestCase {
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tools.appendingPathComponent(tool).path)
         }
         try given(".zshenv", "print -r -- startup file ran; exit 9\n")
-        try given("ps-table", "  101     1   01:02:03 /usr/libexec/trustd\n")
+        try given("ps-table", "101\t1\t01:02:03\ttrustd\t/usr/libexec/trustd\n")
         try given("log-lines", "1")
         let environment = ["PATH": tools.path + ":/usr/bin:/bin", "ZDOTDIR": root.path]
 
@@ -203,28 +218,32 @@ final class TriageScriptTests: XCTestCase {
         XCTAssertEqual(logged.output, "line 1\n")
     }
 
-    func testProcessesListsOnlyTheListAndTheBuildByName() throws {
-        try """
-              101     1   01:02:03 /usr/libexec/trustd
-              202   150      10:05 /bin/zsh /Users/someone/shades/scripts/install.sh --pull
-              203   202      09:59 /bin/zsh /Users/someone/shades/scripts/bundle.sh /tmp/next.abc
-              204   203      08:00 codesign --force --sign 1111 --identifier example.app /tmp/next.abc/Shades.app
-              205     1 2-03:04:05 /Applications/Shades.app/Contents/MacOS/Shades --ask what is on my screen
-              206   150      00:10 /usr/bin/grep codesign
-              207     1      00:10 /Applications/Notes.app/Contents/MacOS/Notes codesign
-              208   150      00:10 /usr/bin/python3 /tmp/install.sh
-              209   150      00:10 /bin/zsh -f /tmp/other.sh install.sh
-              210   150      00:10 /usr/bin/vim notes.txt
-            something private 00:10 codesign
-            private-words   150      00:10 codesign
-              215 private-words 00:10 codesign
-              216   150 private-words codesign
-              211   203      00:20 /usr/bin/swift-frontend -frontend -c a.swift
-              212     1      00:30 /usr/libexec/lsd
-              213   150      00:40 shades --demo
-              214   150      00:50 /bin/bash -x ./scripts/install.sh
+    private func table(_ rows: [(pid: String, ppid: String, elapsed: String, executable: String, arguments: String)]) throws {
+        try given("ps-table", rows.map { [$0.pid, $0.ppid, $0.elapsed, $0.executable, $0.arguments].joined(separator: "\t") + "\n" }.joined())
+    }
 
-            """.write(to: root.appendingPathComponent("ps-table"), atomically: true, encoding: .utf8)
+    func testProcessesListsOnlyTheListAndTheBuildByName() throws {
+        try table([
+            ("101", "1", "01:02:03", "trustd", "/usr/libexec/trustd"),
+            ("202", "150", "10:05", "zsh", "/bin/zsh /Users/someone/shades/scripts/install.sh --pull"),
+            ("203", "202", "09:59", "zsh", "/bin/zsh /Users/someone/shades/scripts/bundle.sh /tmp/next.abc"),
+            ("204", "203", "08:00", "codesign", "codesign --force --sign 1111 --identifier example.app /tmp/next.abc/Shades.app"),
+            ("205", "1", "2-03:04:05", "Shades", "/Applications/Shades.app/Contents/MacOS/Shades --ask what is on my screen"),
+            ("206", "150", "00:10", "grep", "/usr/bin/grep codesign"),
+            ("207", "1", "00:10", "Notes", "/Applications/Notes.app/Contents/MacOS/Notes codesign"),
+            ("208", "150", "00:10", "python3", "/usr/bin/python3 /tmp/install.sh"),
+            ("209", "150", "00:10", "zsh", "/bin/zsh -f /tmp/other.sh install.sh"),
+            ("210", "150", "00:10", "vim", "/usr/bin/vim notes.txt"),
+            ("something", "private", "00:10", "codesign", "codesign"),
+            ("private-words", "150", "00:10", "codesign", "codesign"),
+            ("215", "private-words", "00:10", "codesign", "codesign"),
+            ("216", "150", "private-words", "codesign", "codesign"),
+            ("211", "203", "00:20", "swift-frontend", "/usr/bin/swift-frontend -frontend -c a.swift"),
+            ("212", "1", "00:30", "lsd", "/usr/libexec/lsd"),
+            ("213", "150", "00:40", "shades", "shades --demo"),
+            ("214", "150", "00:50", "bash", "/bin/bash -x ./scripts/install.sh"),
+            ("217", "150", "00:10", "Google Chrome He", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        ])
         let result = try run("processes")
         XCTAssertEqual(result.status, 0, result.errors)
         XCTAssertEqual(result.output, """
@@ -239,15 +258,47 @@ final class TriageScriptTests: XCTestCase {
             214 150 00:50 install.sh
 
             """)
-        XCTAssertEqual(try String(contentsOf: psRan, encoding: .utf8), "-axww\n-o\npid=,ppid=,etime=,args=\n", "ps is asked for nothing more")
+        XCTAssertEqual(
+            try String(contentsOf: psRan, encoding: .utf8),
+            "-axww\n-o\npid=,args=\n-axww\n-o\nucomm=,pid=,ppid=,etime=\n",
+            "ps is asked for nothing more"
+        )
         XCTAssertFalse(logRan)
     }
 
+    func testAProgramThatOnlyCallsItselfAListedNameIsLeftOut() throws {
+        try table([
+            ("301", "1", "00:10", "sleep", "codesign 20"),
+            ("302", "1", "00:10", "python3", "trustd"),
+            ("303", "1", "00:10", "sleep", "/bin/zsh /tmp/install.sh"),
+            ("304", "1", "00:10", "codesign", "codesign --verify x"),
+        ])
+        let result = try run("processes")
+        XCTAssertEqual(result.output, "PID PPID ELAPSED NAME\n304 1 00:10 codesign\n", "only what the kernel says it runs counts, never the name it gives itself")
+    }
+
+    func testALineBreakInAProgramsNameCantMakeUpARow() throws {
+        try table([
+            ("401", "1", "00:01", "a\\n1 1 0:01 lsd", "/tmp/a 30"),
+            ("402", "1", "00:01", "x\\nlsd", "/tmp/x 30"),
+            ("403", "1", "00:01", "\\nlsd", "/tmp/y 30"),
+            ("404", "1", "00:01", "lsd", "/usr/libexec/lsd"),
+        ])
+        let result = try run("processes")
+        XCTAssertFalse(result.output.contains("1 1 0:01 lsd"), "a row it made up, for launchd's PID: \(result.output)")
+        XCTAssertEqual(result.output, "PID PPID ELAPSED NAME\n402 1 00:01 lsd\n403 1 00:01 lsd\n404 1 00:01 lsd\n", "every row's numbers are its own process's, as for a program saved as lsd")
+    }
+
+    func testARealSwiftBuildIsListedUnderTheProgramItRuns() throws {
+        try table([("501", "203", "00:05", "swift-package", "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-build -c release")])
+        XCTAssertEqual(try run("processes").output, "PID PPID ELAPSED NAME\n501 203 00:05 swift-package\n", "swift-build is a link to swift-package, which is what the kernel names")
+    }
+
     func testABrokenCharacterInAnArgumentNeitherShowsNorStopsTheList() throws {
-        var table = Data("  101   150      00:10 /bin/zsh -c ".utf8) + [0xFF] + Data("private-words\n".utf8)
-        table += Data("  102     1      00:10 note:".utf8) + [0xFF] + Data("private-words\n".utf8)
-        table += Data("  103   150      00:10 codesign --force\n".utf8)
-        try table.write(to: root.appendingPathComponent("ps-table"))
+        var rows = Data("101\t150\t00:10\tzsh\t/bin/zsh -c ".utf8) + [0xFF] + Data("private-words\n".utf8)
+        rows += Data("102\t1\t00:10\tnote:".utf8) + [0xFF] + Data("x\tnote:".utf8) + [0xFF] + Data("private-words\n".utf8)
+        rows += Data("103\t150\t00:10\tcodesign\tcodesign --force\n".utf8)
+        try rows.write(to: root.appendingPathComponent("ps-table"))
         let result = try run("processes", environment: ["LC_ALL": "en_US.UTF-8"])
         XCTAssertEqual(result.errors, "")
         XCTAssertEqual(result.status, 0)
@@ -256,7 +307,11 @@ final class TriageScriptTests: XCTestCase {
 
     func testALongArgumentDoesntHoldUpTheList() throws {
         let long = String(repeating: "a", count: 80_000)
-        try given("ps-table", "  101   150      00:10 /bin/zsh \(long)\n  102     1      00:10 \(long)\n  103   150      00:10 codesign --force\n")
+        try table([
+            ("101", "150", "00:10", "zsh", "/bin/zsh \(long)"),
+            ("102", "1", "00:10", "a", long),
+            ("103", "150", "00:10", "codesign", "codesign --force"),
+        ])
         let started = Date()
         let result = try run("processes")
         XCTAssertLessThan(Date().timeIntervalSince(started), 2)
