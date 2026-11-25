@@ -13,6 +13,11 @@ enum DevFlags {
         return tryingOut && !arguments.contains("--show")
     }
 
+    static func staysBehind(_ arguments: [String] = CommandLine.arguments) -> Bool {
+        ["--demo", "--channels-check"].contains(where: arguments.contains)
+            || ["--ask", "--hand-off", "--fix", "--picture", "--draw-icon"].contains { value(after: $0, in: arguments) != nil }
+    }
+
     static func signInService(bundlePath: String = Bundle.main.bundlePath, isTryingAFlow: Bool? = nil) -> String {
         isInstalledApp(bundlePath: bundlePath, isTryingAFlow: isTryingAFlow) ? KeychainCredentialStore.defaultService : KeychainCredentialStore.defaultService + ".trial"
     }
@@ -173,8 +178,7 @@ enum DevFlags {
         return Task { AppController.Capture(snapshot: snapshot, error: nil) }
     }
 
-    private static func value(after flag: String) -> String? {
-        let arguments = CommandLine.arguments
+    private static func value(after flag: String, in arguments: [String] = CommandLine.arguments) -> String? {
         guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
         return arguments[index + 1]
     }

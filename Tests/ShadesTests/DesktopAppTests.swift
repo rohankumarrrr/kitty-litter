@@ -137,6 +137,22 @@ final class DesktopAppTests: XCTestCase {
         XCTAssertTrue(ChannelsWindow().window is ChannelsMainWindow, "what the installed app opens")
     }
 
+    func testTheInstalledAppAlwaysLaunchesAsARegularAppAndOnlyCopiesTryingItOutStayBehind() {
+        let installed = "/Applications/Shades.app/Contents/MacOS/Shades"
+        XCTAssertFalse(DevFlags.staysBehind([installed]), "opened from the Dock, Finder, an install or a login, it's a regular app with its Dock icon, ⌘Tab and menus")
+        XCTAssertFalse(DevFlags.staysBehind([installed, "-psn_0_12345"]), "as LaunchServices can open it")
+        XCTAssertFalse(DevFlags.staysBehind([installed, "--channels"]), "a flag that only opens a window")
+        XCTAssertFalse(DevFlags.staysBehind([installed, "--ask"]), "a flow needs its words, so a flag on its own launches the app as usual")
+        XCTAssertTrue(DevFlags.staysBehind(["shades", "--demo"]))
+        XCTAssertTrue(DevFlags.staysBehind(["shades", "--demo", "--show"]), "a person watching the demo still keeps their own app in front")
+        XCTAssertTrue(DevFlags.staysBehind(["Shades", "--ask", "What is this?", "--image", "made-up.png"]))
+        XCTAssertTrue(DevFlags.staysBehind(["Shades", "--hand-off", "Tidy up"]))
+        XCTAssertTrue(DevFlags.staysBehind(["Shades", "--fix", "The button"]))
+        XCTAssertTrue(DevFlags.staysBehind(["shades", "--channels-check"]))
+        XCTAssertTrue(DevFlags.staysBehind(["shades", "--picture", "made-up.png"]))
+        XCTAssertTrue(DevFlags.staysBehind(["shades", "--draw-icon", "assets"]))
+    }
+
     func testWhatFloatsWithTheCatStaysOnEveryStageAndNeverHidesOrActivates() throws {
         let screen = try XCTUnwrap(NSScreen.screens.first)
         let floating: [NSPanel] = [QuietPanel(), QuietPanel(allowsKey: true), QuietPanel(shadow: false), RegionPanel(screen: screen, look: .opal)]
