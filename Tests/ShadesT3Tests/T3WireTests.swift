@@ -310,13 +310,20 @@ final class T3WireTests: XCTestCase {
     }
 
     func testAThreadAnAgentStartedNamesTheThreadOfItsFirstMessage() throws {
-        let sent = try turnItem(#"{"id":"m","type":"user_message","status":"completed","createdBy":"agent","senderThreadId":"first"}"#)
+        let sent = try turnItem(#"{"id":"m","type":"user_message","status":"completed","createdBy":"agent","senderThreadId":"first","inputIntent":"turn_start"}"#)
         XCTAssertEqual(try projection(createdBy: "agent").startedBy(firstMessage: sent), .thread("first"))
+    }
+
+    func testAMessageThatRestartedTheFirstRunDidntStartTheThread() throws {
+        let restart = try turnItem(#"{"id":"m","type":"user_message","status":"completed","createdBy":"agent","senderThreadId":"restarter","inputIntent":"steer"}"#)
+        let unmarked = try turnItem(#"{"id":"m","type":"user_message","status":"completed","createdBy":"agent","senderThreadId":"someone"}"#)
+        XCTAssertEqual(try projection(createdBy: "agent").startedBy(firstMessage: restart), .unknown, "a thread with no launch message falls back to run 1, which a restart points at its own message")
+        XCTAssertEqual(try projection(createdBy: "agent").startedBy(firstMessage: unmarked), .unknown)
     }
 
     func testAnAgentsThreadWithNoSenderCantBeTraced() throws {
         let scheduled = try turnItem(#"{"id":"m","type":"user_message","status":"completed","createdBy":"agent","scheduledTaskId":"daily"}"#)
-        let wake = try turnItem(#"{"id":"m","type":"notification","status":"completed","createdBy":"agent","senderThreadId":"watcher"}"#)
+        let wake = try turnItem(#"{"id":"m","type":"notification","status":"completed","createdBy":"agent","senderThreadId":"watcher","inputIntent":"turn_start"}"#)
         XCTAssertEqual(try projection(createdBy: "agent").startedBy(firstMessage: scheduled), .unknown)
         XCTAssertEqual(try projection(createdBy: "agent").startedBy(firstMessage: wake), .unknown, "only a message counts as the one that started it")
         XCTAssertEqual(try projection(createdBy: "agent").startedBy(firstMessage: nil), .unknown)
