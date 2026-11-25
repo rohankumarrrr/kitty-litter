@@ -859,19 +859,6 @@ extension PhoneTests {
         XCTAssertFalse(PhonePage.script.contains("'banner', "), "nor with what pairing hides")
     }
 
-    func testOnlyWhatYouDoTakesAnErrorAway() throws {
-        let page = try Self.page(["banner", "reached"])
-        page.evaluateScript("let writes = 0, shown = ''; const strip = { get textContent() { return shown; }, set textContent(text) { writes += 1; shown = text; } }; const $ = () => strip;")
-        page.evaluateScript("banner(words.tooBig); reached();")
-        XCTAssertEqual(page.evaluateScript("shown")?.toString(), "That's too big to send. Try something under 10 MB.")
-        page.evaluateScript("banner(words.unreachable); banner(words.unreachable);")
-        XCTAssertEqual(page.evaluateScript("writes")?.toInt32(), 2, "trying again every few seconds doesn't say it again")
-        page.evaluateScript("reached();")
-        XCTAssertEqual(page.evaluateScript("shown")?.toString(), "", "until the Mac answers")
-        XCTAssertTrue(PhonePage.script.contains("if (line.startsWith('data: ')) { reached();"), "what the Mac sends")
-        XCTAssertTrue(PhonePage.script.contains("if (quiet) reached(); else banner('');"), "and what the page marks seen by itself")
-    }
-
     func testALinksSheetIsModalOverADimmedPageWithTheKeyboardOnCancel() throws {
         let html = PhonePage.html
         XCTAssertTrue(html.contains(#"<dialog id="linksheet" class="sheet" aria-labelledby="linktitle">"#))

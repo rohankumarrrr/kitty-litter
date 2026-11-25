@@ -92,3 +92,5 @@ This is open source, and people learn it from the docs, so they change in the sa
 ## Testing
 
 Prove a change by running it. Use `verify-shades` for anything a person sees or does, and `verify-screen-boundary` for anything that decides what The Kitty Litter sends to T3 and where. Both are in `.agents/skills/`. `swift test --filter RepoChecks` runs the checks in the table above on their own, and `swift test` runs them with everything else, here and on GitHub.
+
+The phone page's own script runs in two places inside `swift test`. `PressPhoneTests` loads it in WebKit to lay it out and tap it. `PhoneScript` runs it in JavaScriptCore against a stand-in browser and Mac, with a clock the test moves and requests the test answers one at a time, for what it does over time and in whatever order things arrive.
