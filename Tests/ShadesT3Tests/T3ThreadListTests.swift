@@ -65,6 +65,30 @@ final class T3ThreadListTests: XCTestCase {
         XCTAssertNil(listed.first { $0.id == "never" }?.lastVisitedAt)
     }
 
+    func testWhoStartedAThreadAndWhatItWaitsOnAreRead() throws {
+        let launched = thread(id: "launched", status: "completed")
+            .replacingOccurrences(of: #""createdBy":"user","creationSource":"web""#, with: #""createdBy":"agent","creationSource":"mcp""#)
+            .replacingOccurrences(of: #""pullRequests":[]"#, with: #"""
+            "pullRequests":[{"number":12,"url":"https://example.com/12","snapshot":{"state":"open","checksState":"pending","reviewDecision":"review-required"},"watch":{"startedAt":"2026-11-02T19:10:00.000Z"}}]
+            """#)
+        let yours = thread(id: "yours", status: "completed")
+            .replacingOccurrences(of: #""pullRequests":[]"#, with: #""pullRequests":[{"number":3,"snapshot":{"state":"merged"},"watch":null}]"#)
+        XCTAssertTrue(launched.contains(#""createdBy":"agent""#))
+        var list = T3ThreadList()
+        list.apply(try snapshot(threads: [launched, yours]))
+        let listed = list.agentThreads(summaries: [:])
+
+        let agents = try XCTUnwrap(listed.first { $0.id == "launched" })
+        XCTAssertTrue(agents.startedByAgent)
+        XCTAssertEqual(agents.lastRunStartedAt, T3Wire.parseDate("2026-11-02T19:05:59.784Z"))
+        XCTAssertEqual(agents.lastWordsFromYouAt, T3Wire.parseDate("2026-11-02T19:05:59.731Z"))
+        XCTAssertEqual(agents.settledAt, T3Wire.parseDate("2026-11-02T19:16:42.734Z"))
+        XCTAssertEqual(agents.pullRequest, ThreadPullRequest(number: 12, state: "open", url: "https://example.com/12", checks: "pending", review: "review-required", watched: true))
+        let mine = try XCTUnwrap(listed.first { $0.id == "yours" })
+        XCTAssertFalse(mine.startedByAgent)
+        XCTAssertEqual(mine.pullRequest, ThreadPullRequest(number: 3, state: "merged"))
+    }
+
     func testAThreadWaitingOnASubagentIsStillWorking() throws {
         var list = T3ThreadList()
         let parent = thread(id: "parent", status: "completed")

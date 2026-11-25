@@ -80,7 +80,7 @@ final class RunFilingModelTests: XCTestCase {
         guard let thread = try listed(world), inbox.owes(thread), !(thread.status.isActive && !thread.turnEnded) else { return nil }
         let waiting = world.leftRunning == .awaited || world.reviewerWorking
         if !thread.turnEnded, waiting { world.filedAsDoneWhileWaiting = world.run }
-        inbox.file(SortedReport(note: "Run \(world.run)"), from: thread, at: .distantPast, id: { "entry-\(world.run)" })
+        inbox.file(SortedReport(note: "Run \(world.run)"), from: thread, startedBy: .you, at: .distantPast, id: { "entry-\(world.run)" })
         world.filed[world.run, default: 0] += 1
         world.inbox = try encoder.encode(inbox)
         return world

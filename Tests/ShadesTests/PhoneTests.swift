@@ -236,7 +236,7 @@ final class PhoneTests: XCTestCase {
         for value in ["accept", "decline", "acceptForSession"] {
             XCTAssertNil(ask("ask", id: "c", value: value).action(in: book) { "x" }, value)
         }
-        XCTAssertEqual(ask("ask", id: "c", value: "ignore").action(in: book) { "x" }?.action, .inbox(.done(id: "c")))
+        XCTAssertEqual(ask("ask", id: "c", value: "ignore").action(in: book) { "x" }?.action, .inbox(.ignore(id: "c")))
         XCTAssertNil(ask("send", key: PhonePlace.reply(to: change), text: "yes").action(in: book) { "x" }, "nor a reply that would stand in for it")
     }
 
@@ -258,7 +258,7 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(ask("ask", id: "a1", value: "accept").action(in: book) { "x" }?.action, .inbox(.allow(id: "a1")))
         XCTAssertEqual(ask("ask", id: "a2", value: "decline").action(in: book) { "x" }?.action, .inbox(.deny(id: "a2")))
         XCTAssertNil(ask("ask", id: "a1", value: "acceptForSession").action(in: book) { "x" })
-        XCTAssertEqual(ask("ask", id: "a2", value: "ignore").action(in: book) { "x" }?.action, .inbox(.done(id: "a2")))
+        XCTAssertEqual(ask("ask", id: "a2", value: "ignore").action(in: book) { "x" }?.action, .inbox(.ignore(id: "a2")))
         XCTAssertNil(ask("ask", id: "d", value: "ignore").action(in: book) { "x" }, "a plain decision takes Done")
         XCTAssertNil(ask("ask", id: "c", value: "accept").action(in: book) { "x" }, "a settings change is only answered on the Mac")
         XCTAssertNil(ask("ask", id: "d", value: "accept").action(in: book) { "x" }, "a decision with nothing to say yes to")

@@ -171,12 +171,20 @@ public struct ThreadPullRequest: Sendable, Hashable {
     public var number: Int
     public var state: String
     public var url: String?
+    public var checks: String?
+    public var review: String?
+    public var watched: Bool
 
-    public init(number: Int, state: String, url: String? = nil) {
+    public init(number: Int, state: String, url: String? = nil, checks: String? = nil, review: String? = nil, watched: Bool = false) {
         self.number = number
         self.state = state
         self.url = url
+        self.checks = checks
+        self.review = review
+        self.watched = watched
     }
+
+    public var isOpen: Bool { state == "open" }
 }
 
 public struct AgentThread: Identifiable, Sendable, Hashable {
@@ -191,8 +199,14 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var pendingApprovals: [ApprovalRequest]
     public var pendingQuestion: AgentQuestion?
     public var runtimeMode: RuntimeMode?
-    public var isSettled: Bool
+    public var settledAt: Date?
+    public var isSettled: Bool { settledAt != nil }
     public var pullRequest: ThreadPullRequest?
+    public var startedByAgent: Bool
+    public var isDelegated: Bool
+    public var lastRunStartedAt: Date?
+    public var lastWordsFromYouAt: Date?
+    public var lastMessageAt: Date?
     public var isLiveTest: Bool { Self.isLiveTest(title: title) }
     public static func isLiveTest(title: String) -> Bool { title.hasPrefix("Shades test:") }
     public var wasSeenInT3: Bool {
@@ -215,11 +229,17 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         pendingQuestion: AgentQuestion? = nil,
         runtimeMode: RuntimeMode? = nil,
         isSettled: Bool = false,
+        settledAt: Date? = nil,
         pullRequest: ThreadPullRequest? = nil,
         projectPath: String? = nil,
         lastRunID: String? = nil,
         lastRunEndedAt: Date? = nil,
-        lastVisitedAt: Date? = nil
+        lastVisitedAt: Date? = nil,
+        startedByAgent: Bool = false,
+        isDelegated: Bool = false,
+        lastRunStartedAt: Date? = nil,
+        lastWordsFromYouAt: Date? = nil,
+        lastMessageAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -235,8 +255,13 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         self.lastRunID = lastRunID
         self.lastRunEndedAt = lastRunEndedAt
         self.lastVisitedAt = lastVisitedAt
-        self.isSettled = isSettled
+        self.settledAt = settledAt ?? (isSettled ? .distantPast : nil)
         self.pullRequest = pullRequest
+        self.startedByAgent = startedByAgent
+        self.isDelegated = isDelegated
+        self.lastRunStartedAt = lastRunStartedAt
+        self.lastWordsFromYouAt = lastWordsFromYouAt
+        self.lastMessageAt = lastMessageAt
     }
 }
 
@@ -326,6 +351,7 @@ public protocol AgentBackend: AnyObject, Sendable {
     func allThreads() async -> [AgentThread]?
     func exchanges(threadID: String) async -> [Exchange]?
     func origin(of threadID: String) async -> ThreadOrigin?
+    func deliver(threadID: String, text: String) async throws
     func threads(matching words: String) async -> [String]?
     func picture(attachmentID: String) async -> Data?
     func picture(threadID: String, path: String) async -> Data?
@@ -346,6 +372,7 @@ public extension AgentBackend {
     func report(threadID: String, run: String?) async throws -> String? { nil }
     func finalReport(threadID: String) async -> String? { (try? await report(threadID: threadID, run: nil)) ?? nil }
     func origin(of threadID: String) async -> ThreadOrigin? { nil }
+    func deliver(threadID: String, text: String) async throws { throw CocoaError(.featureUnsupported) }
     func threads(matching words: String) async -> [String]? { nil }
     func picture(attachmentID: String) async -> Data? { nil }
     func picture(threadID: String, path: String) async -> Data? { nil }

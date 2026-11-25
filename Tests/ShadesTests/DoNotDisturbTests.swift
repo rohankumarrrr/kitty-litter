@@ -180,7 +180,7 @@ final class DoNotDisturbTests: XCTestCase {
     func testWhatWasWaitingAtLaunchDoesntPopUp() async {
         kittens = [clawde]
         var inbox = Inbox(since: .distantPast)
-        inbox.file(SortedReport(decision: "Ship it?"), from: work("c"), at: clock) { "row" }
+        inbox.file(SortedReport(decision: "Ship it?"), from: work("c"), startedBy: .you, at: clock) { "row" }
         controller = makeController(settings: Settings(doNotDisturb: true), inbox: inbox)
         controller.start()
         XCTAssertNil(stage.bubble)

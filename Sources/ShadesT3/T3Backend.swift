@@ -106,6 +106,19 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         }
     }
 
+    public func deliver(threadID: String, text: String) async throws {
+        try await connect()
+        let message = T3Wire.DispatchMessage(
+            commandId: Self.newID(),
+            threadId: threadID,
+            messageId: Self.newID(),
+            text: text,
+            attachments: [],
+            modelSelection: nil
+        )
+        let _: T3Wire.DispatchResult = try await socket.call(T3Wire.Method.dispatchCommand, message)
+    }
+
     private func send(
         _ text: String,
         attachments: [T3Wire.ImageAttachment],

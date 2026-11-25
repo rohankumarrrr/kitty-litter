@@ -274,7 +274,7 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
             "note": ("demo-login", "Clawde: Fix login", "\(Prompts.noteMarker) The risk is low, since nothing else uses that page."),
             "long": ("demo-login", "Clawde: Fix login", "\(Prompts.decisionMarker) \(String(repeating: "Should the sign-in page keep its old layout for now? ", count: 12))"),
             "scheduled": ("demo-morning", "Clawde: Morning check", "\(Prompts.decisionMarker) Merge the package updates? The tests pass with both."),
-            "asks": ("demo-budget", "Pepper: Tidy the budget", "\(Prompts.shippedMarker) The budget page is tidied and merged.\n\(Prompts.decisionMarker) Run git pull in your checkout yourself, since the sandbox can't."),
+            "asks": ("demo-budget", "Pepper: Tidy the budget", "\(Prompts.shippedMarker) The budget page is tidied and merged.\n\(Prompts.decisionMarker) Sign in to the bank again, since it logged me out."),
         ]
         let asks = [
             "change": ("demo-settings", "Clawde: Fix the install", "\(Prompts.noteMarker) The install's fixed, apart from two settings it can't change itself.", Demo.changeReport),

@@ -921,7 +921,7 @@ final class ChannelPane: QuietView {
     }
 
     private func ignoreButton(_ entry: InboxEntry) -> CardRowView.Button {
-        CardRowView.Button(title: CatWords.ignore) { [weak self] in self?.onAction?(.inbox(.done(id: entry.id))) }
+        CardRowView.Button(title: CatWords.ignore) { [weak self] in self?.onAction?(.inbox(.ignore(id: entry.id))) }
     }
 
     private func openButton(_ threadID: String, in book: ChannelBook) -> CardRowView.Button {

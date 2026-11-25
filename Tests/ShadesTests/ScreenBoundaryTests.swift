@@ -78,6 +78,60 @@ final class ScreenBoundaryTests: XCTestCase {
         XCTAssertGreaterThan(reachedAllowed, 0, "the screen never reached anything it may, so this can't tell when it's there")
     }
 
+    func testALaunchedThreadsReportReachesItsLauncherOnlyWhereYourScreenCouldGo() async {
+        var reachedAllowed = 0
+        var relayed = 0
+        let launchers: [String: Bool] = ["c": true, "m": true, "h": false]
+        for clawdeProject in [nil, "/code/shades"] {
+            for folder in Destination.Folder.allCases {
+                for starter in [Destination.Starter.clawdeThread, .threadNamedForClawde, .twoDeepFromClawde, .someoneClear] {
+                    for route in [Pass.askThread, .threadReply, .dropThread] {
+                        let clawde = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", project: clawdeProject, seesScreen: false)
+                        let destination = Destination(mode: .autoAcceptEdits, folder: folder, namedForClawde: false, startedBy: starter)
+                        let world = World(kittens: [clawde])
+                        world.add(destination, clawde: clawde)
+                        await world.run(route)
+                        await world.endLaunchedTurn()
+                        relayed += world.relays
+                        let scene = "\(route) to \(destination), then its report to its launcher, Clawde in \(clawde.project)"
+                        reachedAllowed += world.check(scene, threads: launchers.merging(["w": destination.mightBeScreenless]) { $1 })
+                    }
+                }
+            }
+        }
+        XCTAssertGreaterThan(relayed, 0, "no launcher ever heard, so this can't tell where a report goes")
+        XCTAssertGreaterThan(reachedAllowed, 0, "the screen never reached anything it may, so this can't tell when it's there")
+    }
+
+    func testAReportGoesBackToWhoeverWroteOnlyWhereYourScreenCouldGo() async {
+        var reachedAllowed = 0
+        var passedBack = 0
+        let writers: [String: Bool] = ["c": true, "m": true, "h": false]
+        for clawdeProject in [nil, "/code/shades"] {
+            for folder in Destination.Folder.allCases {
+                for writer in ["c", "m", "h"] {
+                    for route in [Pass.askThread, .threadReply, .dropThread] {
+                        let clawde = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", project: clawdeProject, seesScreen: false)
+                        let destination = Destination(mode: .autoAcceptEdits, folder: folder, namedForClawde: false, startedBy: .you)
+                        let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "their career", folder: "/code/site")
+                        let world = World(kittens: [clawde, steve])
+                        world.add(destination, clawde: clawde)
+                        world.backend.origins["c"] = ThreadOrigin(title: "Change the rules", projectPath: clawde.folder, startedBy: .person)
+                        world.backend.origins["m"] = ThreadOrigin(title: "Helper", projectPath: "/code/app", startedBy: .thread("c"))
+                        world.backend.origins["h"] = ThreadOrigin(title: "Helper", projectPath: "/code/app", startedBy: .person)
+                        await world.run(route)
+                        await world.endTurn(writtenBy: writer)
+                        passedBack += world.relays
+                        let scene = "\(route) to \(destination), then a turn \(writer) started, Clawde in \(clawde.project)"
+                        reachedAllowed += world.check(scene, threads: writers.merging(["w": destination.mightBeScreenless]) { $1 })
+                    }
+                }
+            }
+        }
+        XCTAssertGreaterThan(passedBack, 0, "no report ever went back, so this can't tell where one goes")
+        XCTAssertGreaterThan(reachedAllowed, 0, "the screen never reached anything it may, so this can't tell when it's there")
+    }
+
     func testTheRouterHasNoToolThatReachesAnotherThread() throws {
         let (denied, turnedAway) = try Self.routerRules()
         for tool in Self.waysToAnotherThread {
@@ -261,6 +315,7 @@ private final class World {
     let kittens: [Kitten]
     private var asks = 0
     private var askedIn: [String: String] = [:]
+    private var added: AgentThread?
 
     init(kittens: [Kitten], frontierMode: RuntimeMode = .autoAcceptEdits) {
         self.kittens = kittens
@@ -328,7 +383,40 @@ private final class World {
             backend.origins["o"] = ThreadOrigin(title: "Other", projectPath: "/code/app", startedBy: .thread("w"))
         }
         backend.reports["w"] = "Worked on the page that said Page-5ad1."
-        controller.threadsChanged([AgentThread(id: "w", title: title, projectTitle: nil, status: .completed, model: "m", updatedAt: clock.addingTimeInterval(-60), runtimeMode: destination.mode, projectPath: path)])
+        added = AgentThread(id: "w", title: title, projectTitle: nil, status: .completed, model: "m", updatedAt: clock.addingTimeInterval(-60), runtimeMode: destination.mode, projectPath: path)
+        controller.threadsChanged([added!])
+    }
+
+    func endLaunchedTurn() async {
+        let gotScreen = sends.contains { $0.place == .thread("w") && ScreenBoundaryTests.carriesScreen($0.prompt) }
+        backend.reports["w"] = gotScreen ? "Worked on the page that said Page-5ad1." : "Worked on the page."
+        guard var thread = added else { return }
+        thread.startedByAgent = true
+        thread.lastRunID = "run-launched"
+        thread.lastRunStartedAt = clock.addingTimeInterval(-30)
+        thread.status = .running
+        controller.threadsChanged([thread])
+        thread.status = .completed
+        controller.threadsChanged([thread])
+        await settle()
+    }
+
+    func endTurn(writtenBy writer: String) async {
+        let gotScreen = sends.contains { $0.place == .thread("w") && ScreenBoundaryTests.carriesScreen($0.prompt) }
+        backend.reports["w"] = gotScreen ? "Worked on the page that said Page-5ad1." : "Worked on the page."
+        backend.said["w"] = [Exchange(id: "from-\(writer)", asker: .agent(threadID: writer), askedAt: clock.addingTimeInterval(-40), ask: "Can you check?")]
+        guard var thread = added else { return }
+        thread.lastRunID = "run-written"
+        thread.lastRunStartedAt = clock.addingTimeInterval(-30)
+        thread.status = .running
+        controller.threadsChanged([thread])
+        thread.status = .completed
+        controller.threadsChanged([thread])
+        await settle()
+    }
+
+    var relays: Int {
+        backend.sent.filter { $0.mode == .forward && $0.prompt.text.hasPrefix("---\nThe Kitty Litter wrote this") }.count
     }
 
     func run(_ route: Give, to target: String) async {

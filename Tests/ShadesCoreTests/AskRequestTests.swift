@@ -85,32 +85,34 @@ final class AskRequestTests: XCTestCase {
     func testAWrittenAskWaitsWhateverTheThreadSaysNextAndAReadOneGoesWithItsDecision() {
         var inbox = Inbox(since: start)
         let written = InboxEntry(id: "a", kind: .decision, text: "Asks for your yes.", threadID: "t", threadTitle: "Clawde: Work", at: start, ask: AskRequest(ask: "Merge #12.", readFromWords: false))
-        inbox.ask(written)
-        inbox.flag("Ship it?", from: thread(), at: start, id: "d")
+        inbox.ask(written, startedBy: .you, held: false)
+        inbox.flag("Ship it?", from: thread(), startedBy: .you, at: start, id: "d")
         XCTAssertTrue(inbox.attach(AskRequest(ask: "Ship it.", readFromWords: true), to: "d"))
         XCTAssertFalse(inbox.attach(AskRequest(ask: "Ship it again.", readFromWords: true), to: "d"), "once")
         XCTAssertFalse(inbox.attach(AskRequest(ask: "Merge.", readFromWords: true), to: "a"), "never onto a request it wrote")
         XCTAssertEqual(inbox.entries.map(\.id), ["a", "d"])
 
-        inbox.file(SortedReport(decision: "Roll it back?"), from: thread(run: "run-2"), at: start, id: { "r" })
+        inbox.file(SortedReport(decision: "Roll it back?"), from: thread(run: "run-2"), startedBy: .you, at: start, id: { "r" })
         XCTAssertEqual(inbox.entries.map(\.id), ["a", "r"], "a newer decision replaces the one Shades read an ask from, and not the one the kitten wrote")
 
         inbox.markReplied("r", at: start)
         XCTAssertFalse(inbox.attach(AskRequest(ask: "Roll it back.", readFromWords: true), to: "r"), "you've answered it in your own words")
-        inbox.file(SortedReport(note: "Okay, I'll wait."), from: thread(run: "run-3"), at: start, id: { "n" })
+        inbox.file(SortedReport(note: "Okay, I'll wait."), from: thread(run: "run-3"), startedBy: .you, at: start, id: { "n" })
         XCTAssertNil(inbox.entries.first { $0.id == "r" }?.repliedAt, "its answer came")
         XCTAssertFalse(inbox.attach(AskRequest(ask: "Roll it back.", readFromWords: true), to: "r"), "nor once the thread has answered you")
         XCTAssertFalse(inbox.attach(AskRequest(ask: "Anything.", readFromWords: true), to: "gone"))
     }
 
-    func testNothingGoesUnderAnAskAndYourReplyTakesAReadOneAway() {
+    func testAReportThatDoesntAskTakesAReadAskAwayAndYourReplyDoesToo() {
         var inbox = Inbox(since: start)
-        inbox.flag("Merge it?", from: thread(), at: start, id: "d")
+        inbox.flag("Merge it?", from: thread(), startedBy: .you, at: start, id: "d")
         inbox.attach(AskRequest(ask: "Merge pull request #12.", review: "I'd deny it.", readFromWords: true), to: "d")
-        inbox.file(SortedReport(note: "If you allow it, I'll only merge."), from: thread(run: "run-2"), at: start, id: { "n" })
-        XCTAssertNil(inbox.entries.first { $0.id == "d" }?.answer)
-        XCTAssertEqual(inbox.entries.first { $0.id == "d" }?.ask?.review, "I'd deny it.")
-        XCTAssertEqual(inbox.entries.first { $0.id == "n" }?.text, "If you allow it, I'll only merge.", "it's a row of its own")
+        inbox.file(SortedReport(note: "Merged it myself."), from: thread(run: "run-2"), startedBy: .you, at: start, id: { "n" })
+        XCTAssertEqual(inbox.entries.map(\.id), ["n"], "nothing waits on your yes any more")
+        XCTAssertEqual(inbox.entries.first?.kind, .note)
+
+        inbox.flag("Merge it?", from: thread(run: "run-3"), startedBy: .you, at: start, id: "d")
+        inbox.attach(AskRequest(ask: "Merge pull request #12.", review: "I'd deny it.", readFromWords: true), to: "d")
         inbox.markReplied("d", at: start)
         XCTAssertNil(inbox.entries.first { $0.id == "d" }?.ask, "your words answered it")
         XCTAssertFalse(inbox.attach(AskRequest(ask: "Anything.", readFromWords: true), to: "gone"))

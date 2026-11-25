@@ -52,7 +52,7 @@ struct PhoneAsk: Decodable {
             return (.inbox(.done(id: entry.id)), nil)
         case "ask":
             guard let entry = book.waiting.reports.first(where: { $0.id == id }), entry.change != nil || entry.ask != nil else { return nil }
-            if value == PhoneView.ignore.value { return (.inbox(.done(id: entry.id)), nil) }
+            if value == PhoneView.ignore.value { return (.inbox(.ignore(id: entry.id)), nil) }
             guard entry.change == nil, let decision = value.flatMap(ApprovalDecision.init(rawValue:)), [.accept, .decline].contains(decision)
             else { return nil }
             return (.inbox(decision == .accept ? .allow(id: entry.id) : .deny(id: entry.id)), nil)

@@ -58,6 +58,8 @@ probe-t3 settle                          # settles a finished thread, then check
 probe-t3 steer                           # steers a running turn on Codex and Claude, then one that hasn't started
 probe-t3 report <thread>                 # how fast a thread's last report can be read, and how long it is
 probe-t3 router                          # what the router decides for made-up kittens and sessions, and nothing past that
+probe-t3 sort                            # the real summary model sorting seven made-up reports, five of them the kind that never wait on you, and archives each
+
 probe-t3 search <words>                  # how many threads T3's search names for those words, and how fast
 probe-t3 picture [<thread> <path>]       # a made-up picture sent and read back, or a picture in a thread's folder
 ```

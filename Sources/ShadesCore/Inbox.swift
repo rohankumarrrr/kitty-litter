@@ -16,6 +16,9 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
     public var questionID: String?
     public var change: ChangeRequest?
     public var ask: AskRequest?
+    public var raisedAt: Date?
+    public var turnSeenAt: Date?
+    public var pullRequest: Int?
 
     public init(
         id: String,
@@ -28,7 +31,10 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
         answer: String? = nil,
         questionID: String? = nil,
         change: ChangeRequest? = nil,
-        ask: AskRequest? = nil
+        ask: AskRequest? = nil,
+        raisedAt: Date? = nil,
+        turnSeenAt: Date? = nil,
+        pullRequest: Int? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -41,6 +47,9 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
         self.questionID = questionID
         self.change = change
         self.ask = ask
+        self.raisedAt = raisedAt
+        self.turnSeenAt = turnSeenAt
+        self.pullRequest = pullRequest
     }
 
     public var needsYou: Bool { kind == .decision && repliedAt == nil }
@@ -58,6 +67,8 @@ public struct InboxEntry: Codable, Equatable, Sendable, Identifiable {
         guard let ask, let asked = other.ask else { return false }
         return !ask.readFromWords && !asked.readFromWords && ask.ask == asked.ask
     }
+
+    var followsItsThread: Bool { kind == .decision && !isStanding }
 }
 
 public struct Inbox: Codable, Equatable, Sendable {
@@ -76,6 +87,14 @@ public struct Inbox: Codable, Equatable, Sendable {
     private var alsoShown: [String: Date]?
     private var shownOnPhone: [String: Date]?
     private var reacted: [String: Reacted]?
+    private var forYou: [String: Date]?
+    public var record = WaitingRecord()
+    private var appWrites: [String: Date] = [:]
+
+    private enum CodingKeys: String, CodingKey {
+        case entries, since, handled, read, readTo, markedUnread, corrections, general, withShades, answeredInGeneral
+        case alsoShownInGeneral, missed, alsoShown, shownOnPhone, reacted, forYou
+    }
 
     public static let placesKept = 300
 
@@ -156,42 +175,97 @@ public struct Inbox: Codable, Equatable, Sendable {
         return (thread.lastRunEndedAt ?? thread.updatedAt) >= since
     }
 
+    private var waiting: [InboxEntry] { entries.filter(\.needsYou) }
+
+    private mutating func log(
+        since before: [InboxEntry],
+        at date: Date,
+        leaving exit: WaitingVisit.Exit,
+        exits: [String: WaitingVisit.Exit] = [:],
+        entering: (startedBy: WaitingVisit.Starter, held: Bool, source: WaitingVisit.Source)? = nil
+    ) {
+        let now = waiting
+        let still = Set(now.map(\.id))
+        let was = Set(before.map(\.id))
+        for entry in before where !still.contains(entry.id) { record.left(entry.id, exits[entry.id] ?? exit, at: date) }
+        guard let entering else { return }
+        for entry in now where !was.contains(entry.id) {
+            record.entered(entry, startedBy: entering.startedBy, held: entering.held, source: entering.source, at: date)
+        }
+    }
+
+    private static func raised(_ thread: AgentThread, filedAt date: Date) -> Date {
+        min(date, thread.lastRunEndedAt ?? date)
+    }
+
+    private static func openPullRequest(of thread: AgentThread) -> Int? {
+        thread.pullRequest.flatMap { $0.isOpen ? $0.number : nil }
+    }
+
     @discardableResult
-    public mutating func file(_ sorted: SortedReport, from thread: AgentThread, at: Date, id: () -> String) -> Bool {
+    public mutating func file(_ sorted: SortedReport, from thread: AgentThread, startedBy: WaitingVisit.Starter, at: Date, id: () -> String) -> Bool {
         guard let run = thread.lastRunID, handled[thread.id] != run else { return false }
         handled[thread.id] = run
+        let before = waiting
 
         func add(_ kind: InboxEntry.Kind, _ text: String) {
-            entries.append(InboxEntry(id: id(), kind: kind, text: text, threadID: thread.id, threadTitle: thread.title, at: at))
+            entries.append(InboxEntry(
+                id: id(), kind: kind, text: text, threadID: thread.id, threadTitle: thread.title, at: at,
+                raisedAt: Self.raised(thread, filedAt: at), pullRequest: Self.openPullRequest(of: thread)
+            ))
         }
         guard sorted.decision != nil || sorted.shipped != nil else {
             guard let note = sorted.note else { return false }
-            guard let row = rowForNote(from: thread.id) else {
-                add(.note, note)
-                return false
+            if let row = rowYouAskedOn(from: thread.id) {
+                entries[row].answer = note
+                entries[row].repliedAt = nil
+                entries[row].raisedAt = Self.raised(thread, filedAt: at)
+                log(since: before, at: at, leaving: .reportDidntAsk, entering: (startedBy, thread.turnEnded, .answerToYou))
+                return true
             }
-            let asked = entries[row].repliedAt != nil
-            let earlier = asked ? nil : entries[row].answer
-            entries[row].answer = [earlier, note].compactMap { $0 }.joined(separator: "\n\n")
-            entries[row].repliedAt = nil
-            return asked
+            if !sorted.isOpening { entries.removeAll { $0.threadID == thread.id && $0.followsItsThread } }
+            if let row = entries.lastIndex(where: { $0.threadID == thread.id && $0.kind != .decision && !$0.isStanding && $0.ask == nil }) {
+                entries[row].answer = [entries[row].answer, note].compactMap { $0 }.joined(separator: "\n\n")
+            } else {
+                add(.note, note)
+            }
+            log(since: before, at: at, leaving: .reportDidntAsk)
+            return false
         }
 
-        entries.removeAll { $0.threadID == thread.id && $0.kind == .decision && !$0.isStanding }
+        entries.removeAll { $0.threadID == thread.id && $0.followsItsThread }
         for index in entries.indices where entries[index].threadID == thread.id {
             entries[index].repliedAt = nil
         }
         if let decision = sorted.decision { add(.decision, [decision, sorted.note].compactMap { $0 }.joined(separator: " ")) }
         if let shipped = sorted.shipped { add(.shipped, [shipped, sorted.decision == nil ? sorted.note : nil].compactMap { $0 }.joined(separator: " ")) }
+        let source: WaitingVisit.Source = thread.status == .failed ? .failedRun : .sorter
+        log(since: before, at: at, leaving: .superseded, entering: (startedBy, thread.turnEnded, source))
         return true
     }
 
-    public mutating func flag(_ decision: String, from thread: AgentThread, at: Date, id: String) {
-        entries.removeAll { $0.threadID == thread.id && $0.kind == .decision && !$0.isStanding }
-        entries.append(InboxEntry(id: id, kind: .decision, text: decision, threadID: thread.id, threadTitle: thread.title, at: at))
+    public mutating func flag(_ decision: String, from thread: AgentThread, startedBy: WaitingVisit.Starter, at: Date, id: String) {
+        let before = waiting
+        entries.removeAll { $0.threadID == thread.id && $0.followsItsThread }
+        entries.append(InboxEntry(
+            id: id, kind: .decision, text: decision, threadID: thread.id, threadTitle: thread.title, at: at,
+            raisedAt: Self.raised(thread, filedAt: at), pullRequest: Self.openPullRequest(of: thread)
+        ))
+        log(since: before, at: at, leaving: .superseded, entering: (startedBy, thread.turnEnded, .sorter))
     }
 
-    public mutating func ask(_ entry: InboxEntry, title: (String) -> String? = { _ in nil }) {
+    public mutating func ask(_ entry: InboxEntry, startedBy: WaitingVisit.Starter, held: Bool, title: (String) -> String? = { _ in nil }) {
+        var before = waiting
+        let again = entries.first { $0.needsYou && $0.threadID == entry.threadID && $0.asksForSame(as: entry) }?.id
+        add(asked: entry, title: title)
+        if let again, !entries.contains(where: { $0.id == again }), entries.contains(where: { $0.id == entry.id && $0.needsYou }) {
+            record.renamed(again, to: entry.id)
+            before = before.map { $0.id == again ? entry : $0 }
+        }
+        log(since: before, at: entry.at, leaving: .superseded, entering: (startedBy, held, .requestCard))
+    }
+
+    private mutating func add(asked entry: InboxEntry, title: (String) -> String?) {
         guard entry.isStanding, !entries.contains(where: { $0.id == entry.id }) else { return }
         for index in entries.indices.reversed() where entries[index].isAsked(by: entry.threadID) && entries[index].asksForSame(as: entry) {
             leave(index, by: entry.threadID, title: title)
@@ -207,12 +281,14 @@ public struct Inbox: Codable, Equatable, Sendable {
         }
     }
 
-    public mutating func withdraw(_ asked: String, file: String?, by thread: String, title: (String) -> String? = { _ in nil }) {
+    public mutating func withdraw(_ asked: String, file: String?, by thread: String, at date: Date, title: (String) -> String? = { _ in nil }) {
+        let before = waiting
         for index in entries.indices.reversed() where entries[index].isAsked(by: thread) {
             let entry = entries[index]
             let named = entry.change.map { !$0.file.isEmpty && ($0.file == asked || $0.file == file) } ?? (entry.isStanding && entry.ask?.ask == asked)
             if named { leave(index, by: thread, title: title) }
         }
+        log(since: before, at: date, leaving: .withdrawn)
     }
 
     public mutating func cantBeMade(_ id: String, because reason: String, row: String) {
@@ -245,11 +321,82 @@ public struct Inbox: Codable, Equatable, Sendable {
         return true
     }
 
-    private func rowForNote(from threadID: String) -> Int? {
-        let own = entries.indices.filter { entries[$0].threadID == threadID && !entries[$0].isStanding && entries[$0].ask == nil }
-        return own.filter { entries[$0].repliedAt != nil }.max { entries[$0].repliedAt! < entries[$1].repliedAt! }
-            ?? own.last { entries[$0].kind == .decision }
-            ?? own.last
+    private func rowYouAskedOn(from threadID: String) -> Int? {
+        entries.indices
+            .filter { entries[$0].threadID == threadID && !entries[$0].isStanding && entries[$0].ask == nil && entries[$0].repliedAt != nil }
+            .max { entries[$0].repliedAt! < entries[$1].repliedAt! }
+    }
+
+    @discardableResult
+    public mutating func follow(_ threads: [AgentThread], at date: Date) -> Bool {
+        guard !threads.isEmpty else { return false }
+        let listed = Dictionary(threads.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let before = waiting
+        var exits: [String: WaitingVisit.Exit] = [:]
+        var changed = false
+        for index in entries.indices.reversed() where !entries[index].isStanding {
+            let entry = entries[index]
+            let exit = listed[entry.threadID].map { Self.movedOn(entry, $0, appWroteAt: appWrites[entry.threadID]) } ?? .archived
+            guard let exit else { continue }
+            if exit == .replied {
+                entries[index].turnSeenAt = listed[entry.threadID]?.lastRunStartedAt
+                if entry.followsItsThread, entry.repliedAt == nil {
+                    entries[index].repliedAt = date
+                    exits[entry.id] = .replied
+                }
+            } else if entry.followsItsThread {
+                entries.remove(at: index)
+                exits[entry.id] = exit
+            } else {
+                guard entry.repliedAt != nil else { continue }
+                entries[index].repliedAt = nil
+            }
+            changed = true
+        }
+        for (threadID, wrote) in appWrites where (listed[threadID]?.lastRunStartedAt ?? .distantPast) > wrote {
+            appWrites[threadID] = nil
+        }
+        log(since: before, at: date, leaving: .turnWithoutYou, exits: exits)
+        return changed
+    }
+
+    static func movedOn(_ entry: InboxEntry, _ thread: AgentThread, appWroteAt: Date? = nil) -> WaitingVisit.Exit? {
+        let raised = entry.raisedAt ?? entry.at
+        let since = max(raised, entry.turnSeenAt ?? raised)
+        if let number = entry.pullRequest, let pull = thread.pullRequest, pull.number == number {
+            if pull.state == "merged" { return .pullRequestMerged }
+            if pull.state == "closed" { return .pullRequestClosed }
+        }
+        if let settled = thread.settledAt, settled > raised { return .settled }
+        guard let started = thread.lastRunStartedAt, started > since else { return nil }
+        guard let words = thread.lastWordsFromYouAt, words > since else { return .turnWithoutYou }
+        if let wrote = appWroteAt, words >= wrote { return .turnWithoutYou }
+        if let latest = thread.lastMessageAt, latest > words { return .turnWithoutYou }
+        return .replied
+    }
+
+    public mutating func appWillWrite(to threadID: String, at date: Date) {
+        appWrites[threadID] = date
+    }
+
+    public mutating func appDidntWrite(to threadID: String) {
+        appWrites[threadID] = nil
+    }
+
+    public mutating func anotherThreadWrote(to threadID: String, at date: Date) {
+        let before = waiting
+        entries.removeAll { $0.threadID == threadID && $0.followsItsThread && $0.repliedAt == nil }
+        log(since: before, at: date, leaving: .turnWithoutYou)
+    }
+
+    public mutating func startedForYou(_ threadID: String, at date: Date) {
+        var marks = forYou ?? [:]
+        marks[threadID] = date
+        forYou = Self.newest(marks)
+    }
+
+    public func wasStartedForYou(_ threadID: String) -> Bool {
+        forYou?[threadID] != nil
     }
 
     public func isUnread(_ thread: AgentThread) -> Bool {
@@ -324,16 +471,26 @@ public struct Inbox: Codable, Equatable, Sendable {
 
     public mutating func markReplied(_ id: String, at date: Date?) {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        let before = waiting
         entries[index].repliedAt = date
         if date != nil, entries[index].ask?.readFromWords == true { entries[index].ask = nil }
+        if let date {
+            log(since: before, at: date, leaving: .replied)
+        } else if entries[index].needsYou {
+            record.cameBack(id)
+        }
     }
 
-    public mutating func remove(_ id: String) {
+    public mutating func remove(_ id: String, because exit: WaitingVisit.Exit, at date: Date) {
+        let before = waiting
         entries.removeAll { $0.id == id }
+        log(since: before, at: date, leaving: exit)
     }
 
-    public mutating func clear(_ kind: InboxEntry.Kind) {
+    public mutating func clear(_ kind: InboxEntry.Kind, at date: Date) {
+        let before = waiting
         entries.removeAll { $0.kind == kind }
+        log(since: before, at: date, leaving: .done)
     }
 
     public static func panelOrder(_ entries: [InboxEntry]) -> [InboxEntry] {
@@ -350,6 +507,12 @@ public struct Inbox: Codable, Equatable, Sendable {
     }
 
     public static func load(from file: URL, now: Date) -> Inbox {
+        var inbox = read(from: file, now: now)
+        inbox.record = WaitingRecord.load(beside: file)
+        return inbox
+    }
+
+    private static func read(from file: URL, now: Date) -> Inbox {
         let manager = FileManager.default
         guard manager.fileExists(atPath: file.path) else { return Inbox(since: now) }
         if let data = try? Data(contentsOf: file), let inbox = try? JSONDecoder().decode(Inbox.self, from: data) { return inbox }
@@ -362,19 +525,10 @@ public struct Inbox: Codable, Equatable, Sendable {
     }
 
     public func save(to file: URL) throws {
-        let manager = FileManager.default
-        try manager.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(self)
-        let temp = file.deletingLastPathComponent().appendingPathComponent(".\(file.lastPathComponent).\(UUID().uuidString)")
-        let descriptor = open(temp.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
-        guard descriptor >= 0 else { throw CocoaError(.fileWriteUnknown) }
-        defer { try? manager.removeItem(at: temp) }
-        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
-        try handle.write(contentsOf: data)
-        try handle.close()
-        guard rename(temp.path, file.path) == 0 else { throw CocoaError(.fileWriteUnknown) }
+        try PrivateFile.write(try encoder.encode(self), to: file)
+        try record.save(beside: file)
     }
 }
 
@@ -385,12 +539,14 @@ public struct SortedReport: Equatable, Sendable {
     public var decision: String?
     public var note: String?
     public var passedOn: Bool
+    public var isOpening: Bool
 
-    public init(shipped: String? = nil, decision: String? = nil, note: String? = nil, passedOn: Bool = false) {
+    public init(shipped: String? = nil, decision: String? = nil, note: String? = nil, passedOn: Bool = false, isOpening: Bool = false) {
         self.shipped = shipped
         self.decision = decision
         self.note = note
         self.passedOn = passedOn
+        self.isOpening = isOpening
     }
 
     public var hasLines: Bool { shipped != nil || decision != nil || note != nil }

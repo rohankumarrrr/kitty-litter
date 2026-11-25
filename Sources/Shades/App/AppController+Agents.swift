@@ -56,6 +56,10 @@ extension AppController {
             }
         }
         dropScreenWarnings(forFailuresIn: threads)
+        if inbox.follow(threads, at: now()) {
+            keepInbox()
+            inboxChanged()
+        }
         fileOwedReports()
         retireStaleChanges()
     }

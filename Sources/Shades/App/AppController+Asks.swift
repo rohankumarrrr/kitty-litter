@@ -15,7 +15,7 @@ extension AppController {
 
     func answerAsk(_ entry: InboxEntry, _ outcome: Prompts.AskOutcome) {
         guard let ask = entry.ask else { return }
-        inbox.remove(entry.id)
+        inbox.remove(entry.id, because: outcome == .denied ? .denied : .allowed, at: now())
         keepInbox()
         inboxChanged()
         let text = Prompts.askAnswered(ask, outcome)

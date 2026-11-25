@@ -220,7 +220,7 @@ final class DesktopAppTests: XCTestCase {
         var inbox = Inbox(since: .distantPast)
         for (id, decision) in [("d1", "Ship it?"), ("d2", "Merge it?")] {
             let thread = AgentThread(id: "t-\(id)", title: "Work", projectTitle: steve.name, status: .completed, model: "m", updatedAt: at, projectPath: steve.folder)
-            inbox.flag(decision, from: thread, at: at, id: id)
+            inbox.flag(decision, from: thread, startedBy: .you, at: at, id: id)
         }
         controller = makeController(inbox: inbox)
         controller.startInbox()

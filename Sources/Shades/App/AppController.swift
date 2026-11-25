@@ -89,6 +89,7 @@ final class AppController {
     var notices: [Notice] = []
     var hiddenThreads: Set<String> = []
     var dispatchers: Set<String> = []
+    var launchers: [String: String] = [:]
     var correctionSends = CorrectionSends()
     var inbox: Inbox
     var filing: Set<String> = []

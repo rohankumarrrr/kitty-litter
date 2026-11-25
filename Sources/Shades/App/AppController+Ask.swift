@@ -450,7 +450,12 @@ extension AppController {
                     switch event {
                     case .started(let threadID):
                         startedThread = threadID
-                        if errand == .work { dispatchers.insert(threadID) } else { noteCorrection(in: threadID) }
+                        if errand == .work {
+                            dispatchers.insert(threadID)
+                            inbox.startedForYou(threadID, at: now())
+                        } else {
+                            noteCorrection(in: threadID)
+                        }
                         onStarted?(threadID)
                         if errand == .work, projectID == nil, messagesThreads[threadID] == nil { catsWork[threadID] = now() }
                         let said = errand == .correctionCopy ? CatWords.correctionSent(to: name) : CatWords.onIt(modelName: name)

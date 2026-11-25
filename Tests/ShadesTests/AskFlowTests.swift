@@ -211,8 +211,8 @@ final class AskFlowTests: XCTestCase {
 
     func testADecisionWithNothingForTheKittenToDoStaysAsItWas() async throws {
         reading = "NONE"
-        sorted = "DECISION: Run git pull in your checkout, since the sandbox can't."
-        await finishClawde("Done. Run git pull in your checkout yourself, since my sandbox can't.")
+        sorted = "DECISION: Sign in to the bank again, since it logged me out."
+        await finishClawde("Done. Sign in to the bank again, since it logged me out.")
         let entry = try XCTUnwrap(controller.inbox.entries.first { $0.kind == .decision })
         XCTAssertNil(entry.ask)
         controller.inboxAction(.allow(id: entry.id))

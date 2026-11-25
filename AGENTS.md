@@ -14,7 +14,7 @@ A desktop app for macOS whose cat, Shades, sees your screen when you ask, answer
 - `docs/ROADMAP.md`: ideas saved for later. Version one stays small, so new ideas go there first.
 - `Tests/RepoChecks`: checks over the repo's own files, each enforcing a rule in the table below.
 - `Tests/TestSupport`: the one way a test waits for something, and `explore`, which tries every order of a model's steps, for every test target.
-- `.agents/skills/`: how to prove a change here. `verify-shades` drives the app in demo mode and has its windows draw themselves to pictures, `verify-screen-boundary` checks that nothing from your screen reaches a kitten that isn't allowed to see it, and `verify-run-filing` checks every order of a kitten's run against the inbox.
+- `.agents/skills/`: how to prove a change here. `verify-shades` drives the app in demo mode and has its windows draw themselves to pictures, `verify-screen-boundary` checks that nothing from your screen reaches a kitten that isn't allowed to see it, `verify-run-filing` checks every order of a kitten's run against the inbox, and `verify-waiting-on-you` checks every order of thread events against Waiting on you.
 
 ## Commands
 
@@ -54,6 +54,7 @@ Each rule says what enforces it. A check is the rule: when one fails, its messag
 | The router only replies, and the app acts on its one line. It runs in its own folder, where `RouterBlock` leaves it only web search, so whatever starts a router thread gets its project from `routerProjectID(for:)`. | `RouterBlockTests`, and `FakeBackend`, which fails a test that starts a router thread anywhere else |
 | Every run a kitten ends reaches the inbox once, and never as done while a pull request it watches or a reviewer it started still works. | `RunFilingModelTests`, which tries every order of a run's steps on the real code, and `verify-run-filing` |
 | An inbox row is data, and a reply is only what you typed or said. It goes straight to the thread, with no capture and no canned answer. | `ScreenBoundaryTests` (`inboxReply`) |
+| Waiting on you holds only what waits on you and nobody else. A thread another agent launched reports to that agent, and a row goes once its thread moves on without you. | `WaitingOnYouTests`, `WaitingOnYouModelTests`, and `verify-waiting-on-you` |
 | A kitten's request card offers Allow only while its file is exactly as the card showed it. Ignore and a kitten's withdraw only ever take a card away, and a withdraw only takes back the asking thread's own share. | `StaleRequestTests`, `ChangeRequestFlowTests` |
 | The router only picks numbers, only your own words get passed on, and an extra copy of a correction never carries screen text. | `ScreenBoundaryTests` |
 | Claude threads in this repo run in a sandbox set by `.claude/settings.json`, which also keeps them out of saved copies of the screen. Run `swift` commands on their own, with no pipe or `cd`, since only that form is let out. A refused read means it's working, so don't look for a way around it. | The sandbox |

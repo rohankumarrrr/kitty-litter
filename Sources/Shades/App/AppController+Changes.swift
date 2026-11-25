@@ -20,7 +20,7 @@ extension AppController {
             let asked = await changeRequests(in: report, of: thread)
             let withdrew = withdrawRequests(in: report, of: thread)
             guard withdrew || !asked.isEmpty else { return }
-            asked.forEach { inbox.ask($0, title: title(ofThread:)) }
+            asked.forEach { inbox.ask($0, startedBy: starter(of: thread), held: thread.turnEnded, title: title(ofThread:)) }
             keepInbox()
             inboxChanged()
         }
@@ -34,7 +34,7 @@ extension AppController {
         let files = settingsFiles
         let before = inbox.entries
         for asked in withdrawn {
-            inbox.withdraw(asked, file: files.shown(listed: asked), by: thread.id, title: title(ofThread:))
+            inbox.withdraw(asked, file: files.shown(listed: asked), by: thread.id, at: now(), title: title(ofThread:))
         }
         return inbox.entries != before
     }
@@ -52,7 +52,7 @@ extension AppController {
             guard var change = entry.change, let staleness = files.staleness(of: change) else { continue }
             switch staleness {
             case .alreadyMade:
-                inbox.remove(entry.id)
+                inbox.remove(entry.id, because: .alreadyMade, at: now())
             case .cantBeMade(let reason):
                 change.problem = reason
                 inbox.cantBeMade(entry.id, because: reason, row: CatWords.changeRow(change))
@@ -133,7 +133,7 @@ extension AppController {
 
     private func answer(_ entry: InboxEntry, _ outcome: Prompts.ChangeOutcome) {
         guard let change = entry.change else { return }
-        inbox.remove(entry.id)
+        inbox.remove(entry.id, because: outcome == .denied ? .denied : .allowed, at: now())
         keepInbox()
         inboxChanged()
         let text = Prompts.changeAnswered(change, outcome)
