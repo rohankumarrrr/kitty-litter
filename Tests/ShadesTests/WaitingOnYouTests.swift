@@ -162,6 +162,28 @@ final class WaitingOnYouTests: XCTestCase {
         XCTAssertEqual(waiting.map(\.text), ["Left or right?"], "a turn your words started is yours")
     }
 
+    func testAThreadYouStartedStillReportsToYouWhenItsOwnWorkerWokeIt() async {
+        backend.origins["worker"] = ThreadOrigin(title: "Clawde: The change", projectPath: "/k/app", startedBy: .thread("clawde"))
+        backend.said["clawde"] = [
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-900), ask: "Make the reports go to whoever launched them."),
+            Exchange(id: "relay", asker: .agent(threadID: "worker"), askedAt: clock.addingTimeInterval(-310), ask: "Report relay: merged, and CI on main passes."),
+        ]
+        await endTurn(work("clawde", of: clawde), report: "It's merged. Install main now, or wait for the other worker?", sorted: "DECISION: Install main now, or wait?")
+        XCTAssertEqual(waiting.map(\.text), ["Install main now, or wait?"], "a worker reporting to the thread that launched it doesn't make that thread's turn the worker's")
+        XCTAssertTrue(relays.isEmpty, "the worker doesn't get its launcher's report")
+    }
+
+    func testAThreadAnAgentStartedStillReportsToItsStarterWhenItsOwnWorkerWokeIt() async {
+        backend.origins["part"] = ThreadOrigin(title: "Clawde: Part one", projectPath: "/k/clawde", startedBy: .thread("w"))
+        backend.said["w"] = [
+            Exchange(id: "launch", asker: .agent(threadID: "main"), askedAt: clock.addingTimeInterval(-900), ask: "Do both parts."),
+            Exchange(id: "part", asker: .agent(threadID: "part"), askedAt: clock.addingTimeInterval(-310), ask: "Report relay: part one is done."),
+        ]
+        await endTurn(work("w", of: clawde, launchedBy: "main"), report: "Both parts are done. Merge them?", sorted: "DECISION: Merge both parts?")
+        XCTAssertEqual(relays.map(\.threadID), ["main"], "its starter hears, not the worker that woke it")
+        XCTAssertEqual(waiting, [])
+    }
+
     func testAWorkerTheCatsThreadLaunchedIsYoursEvenBeforeItPassesWorkOn() async {
         var inbox = Inbox(since: .distantPast)
         inbox.startedForYou("cats", at: clock)

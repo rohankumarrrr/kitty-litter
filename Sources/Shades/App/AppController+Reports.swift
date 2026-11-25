@@ -87,11 +87,16 @@ extension AppController {
         case .you?, .schedule?:
             return nil
         case .agent(let sender?)? where sender != thread.id:
+            if await backend.origin(of: sender)?.startedBy == .thread(thread.id) { return await ownLauncher(of: thread) }
             guard !isForYou(sender), await mayPass(thread, to: sender) else { return nil }
             return sender
         default:
-            return await launcher(of: thread).flatMap { isForYou($0) ? nil : $0 }
+            return await ownLauncher(of: thread)
         }
+    }
+
+    private func ownLauncher(of thread: AgentThread) async -> String? {
+        await launcher(of: thread).flatMap { isForYou($0) ? nil : $0 }
     }
 
     private func isForYou(_ threadID: String) -> Bool {
