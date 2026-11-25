@@ -34,20 +34,20 @@ final class InboxTests: XCTestCase {
         var inbox = Inbox(since: start)
         let change = ChangeRequest(file: "/k/c/.claude/settings.json", replace: "a", with: "b", why: nil)
         let entry = InboxEntry(id: "c", kind: .decision, text: "Asks to change it.", threadID: "t", threadTitle: "Clawde: Work", at: start, change: change)
-        inbox.ask(entry)
-        inbox.ask(InboxEntry(id: "c2", kind: .decision, text: "Again.", threadID: "u", threadTitle: "Clawde: Other", at: start, change: change))
+        inbox.ask(entry, startedBy: .you, held: false)
+        inbox.ask(InboxEntry(id: "c2", kind: .decision, text: "Again.", threadID: "u", threadTitle: "Clawde: Other", at: start, change: change), startedBy: .you, held: false)
         XCTAssertEqual(inbox.entries.map(\.id), ["c"], "the same change isn't asked twice, from any thread")
         XCTAssertEqual(inbox.entries.first?.change?.alsoAskedIn, ["u"], "but the other thread that asked hears what you decided")
-        inbox.ask(InboxEntry(id: "c3", kind: .decision, text: "Again.", threadID: "u", threadTitle: "Clawde: Other", at: start, change: change))
+        inbox.ask(InboxEntry(id: "c3", kind: .decision, text: "Again.", threadID: "u", threadTitle: "Clawde: Other", at: start, change: change), startedBy: .you, held: false)
         XCTAssertEqual(inbox.entries.first?.change?.alsoAskedIn, ["u"], "once")
 
-        inbox.flag("Merge it?", from: thread(), at: start, id: "f")
-        inbox.file(SortedReport(decision: "Ship it?"), from: thread(), at: start, id: counter())
-        inbox.file(SortedReport(note: "By the way."), from: thread(run: "run-2"), at: start, id: counter())
+        inbox.flag("Merge it?", from: thread(), startedBy: .you, at: start, id: "f")
+        inbox.file(SortedReport(decision: "Ship it?"), from: thread(), startedBy: .you, at: start, id: counter())
+        inbox.file(SortedReport(note: "By the way."), from: thread(run: "run-2"), startedBy: .you, at: start, id: counter())
         XCTAssertEqual(inbox.entries.first { $0.id == "c" }?.text, entry.text, "still there, with nothing under it")
         XCTAssertNil(inbox.entries.first { $0.id == "c" }?.answer)
-        XCTAssertEqual(inbox.entries.filter { $0.change == nil }.map(\.text), ["Ship it?"])
-        XCTAssertEqual(inbox.entries.first { $0.change == nil }?.answer, "By the way.")
+        XCTAssertEqual(inbox.entries.filter { $0.change == nil }.map(\.text), ["By the way."], "a report that doesn't ask takes its decision away")
+        XCTAssertEqual(inbox.entries.filter { $0.change == nil }.map(\.kind), [.note])
         let saved = try JSONDecoder().decode(Inbox.self, from: JSONEncoder().encode(inbox))
         XCTAssertEqual(saved.entries.first { $0.id == "c" }?.change, inbox.entries.first { $0.id == "c" }?.change)
     }
@@ -56,7 +56,7 @@ final class InboxTests: XCTestCase {
         var inbox = Inbox(since: start)
         XCTAssertTrue(inbox.owes(thread()))
         XCTAssertTrue(inbox.owes(thread(status: .failed)))
-        inbox.file(SortedReport(shipped: "Done."), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(shipped: "Done."), from: thread(), startedBy: .you, at: start, id: counter())
         XCTAssertFalse(inbox.owes(thread()))
         XCTAssertTrue(inbox.owes(thread(run: "run-2")))
     }
@@ -124,18 +124,20 @@ final class InboxTests: XCTestCase {
                  kept: ["old shipped", "other decision", "New?", "New."], stillDim: []),
             Case(name: "a note goes on the row you replied on", sorted: SortedReport(note: "Because."), replied: true,
                  kept: ["old decision", "old shipped", "other decision"], answerOn: "old decision", stillDim: []),
-            Case(name: "a note you didn't ask for goes under the thread's decision", sorted: SortedReport(note: "Because."), replied: false,
-                 kept: ["old decision", "old shipped", "other decision"], answerOn: "old decision", stillDim: []),
+            Case(name: "a note you didn't ask for takes the thread's decision away", sorted: SortedReport(note: "Because."), replied: false,
+                 kept: ["old shipped", "other decision"], answerOn: "old shipped", stillDim: []),
+            Case(name: "an opening read when sorting failed leaves the decision where it is", sorted: SortedReport(note: "It went.", isOpening: true), replied: false,
+                 kept: ["old decision", "old shipped", "other decision"], answerOn: "old shipped", stillDim: []),
         ]
         for test in cases {
             var inbox = Inbox(since: start)
-            inbox.file(SortedReport(shipped: "old shipped", decision: "old decision"), from: thread(), at: start, id: counter())
+            inbox.file(SortedReport(shipped: "old shipped", decision: "old decision"), from: thread(), startedBy: .you, at: start, id: counter())
             let otherID: () -> String = { "other" }
-            inbox.file(SortedReport(decision: "other decision"), from: thread("o"), at: start, id: otherID)
+            inbox.file(SortedReport(decision: "other decision"), from: thread("o"), startedBy: .you, at: start, id: otherID)
             if test.replied { inbox.markReplied("row-1", at: start) }
 
             var nextID = 10
-            inbox.file(test.sorted, from: thread(run: "run-2"), at: start) {
+            inbox.file(test.sorted, from: thread(run: "run-2"), startedBy: .you, at: start) {
                 nextID += 1
                 return "row-\(nextID)"
             }
@@ -148,10 +150,10 @@ final class InboxTests: XCTestCase {
 
     func testAnAnswerGoesOnTheNewestRowYouRepliedOn() {
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(shipped: "A.", decision: "B?"), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(shipped: "A.", decision: "B?"), from: thread(), startedBy: .you, at: start, id: counter())
         inbox.markReplied("row-2", at: start.addingTimeInterval(5))
         inbox.markReplied("row-1", at: start.addingTimeInterval(1))
-        inbox.file(SortedReport(note: "Because."), from: thread(run: "run-2"), at: start, id: counter())
+        inbox.file(SortedReport(note: "Because."), from: thread(run: "run-2"), startedBy: .you, at: start, id: counter())
         XCTAssertEqual(inbox.entries.first { $0.id == "row-2" }?.answer, "Because.")
         XCTAssertNil(inbox.entries.first { $0.id == "row-1" }?.answer)
         XCTAssertNotNil(inbox.entries.first { $0.id == "row-1" }?.repliedAt)
@@ -159,35 +161,35 @@ final class InboxTests: XCTestCase {
 
     func testAFreshAnswerReplacesTheLastOneAndOtherNotesWaitWithIt() {
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(decision: "B?"), from: thread(), at: start, id: counter())
-        inbox.file(SortedReport(note: "One."), from: thread(run: "r2"), at: start, id: counter())
-        inbox.file(SortedReport(note: "Two."), from: thread(run: "r3"), at: start, id: counter())
+        inbox.file(SortedReport(shipped: "B."), from: thread(), startedBy: .you, at: start, id: counter())
+        inbox.file(SortedReport(note: "One."), from: thread(run: "r2"), startedBy: .you, at: start, id: counter())
+        inbox.file(SortedReport(note: "Two."), from: thread(run: "r3"), startedBy: .you, at: start, id: counter())
         XCTAssertEqual(inbox.entries[0].answer, "One.\n\nTwo.")
         inbox.markReplied("row-1", at: start)
-        inbox.file(SortedReport(note: "Three."), from: thread(run: "r4"), at: start, id: counter())
+        inbox.file(SortedReport(note: "Three."), from: thread(run: "r4"), startedBy: .you, at: start, id: counter())
         XCTAssertEqual(inbox.entries[0].answer, "Three.")
     }
 
     func testAnAnsweredDecisionNeedsYouAgain() {
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(decision: "B?"), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(decision: "B?"), from: thread(), startedBy: .you, at: start, id: counter())
         inbox.markReplied("row-1", at: start)
         XCTAssertFalse(inbox.entries[0].needsYou)
-        inbox.file(SortedReport(note: "Because."), from: thread(run: "run-2"), at: start, id: counter())
+        inbox.file(SortedReport(note: "Because."), from: thread(run: "run-2"), startedBy: .you, at: start, id: counter())
         XCTAssertTrue(inbox.entries[0].needsYou)
     }
 
     func testANoteGoesUnderTheThreadsLatestRowIfThatsAllItHas() {
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(shipped: "A."), from: thread(), at: start, id: counter())
-        inbox.file(SortedReport(note: "Because."), from: thread(run: "run-2"), at: start, id: counter())
+        inbox.file(SortedReport(shipped: "A."), from: thread(), startedBy: .you, at: start, id: counter())
+        inbox.file(SortedReport(note: "Because."), from: thread(run: "run-2"), startedBy: .you, at: start, id: counter())
         XCTAssertEqual(inbox.entries.map(\.text), ["A."])
         XCTAssertEqual(inbox.entries.map(\.answer), ["Because."])
     }
 
     func testANoteWithNoRowIsKeptWithoutBeingCalledShipped() {
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(note: "Nothing to report."), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(note: "Nothing to report."), from: thread(), startedBy: .you, at: start, id: counter())
         XCTAssertEqual(inbox.entries.map(\.kind), [.note])
         XCTAssertEqual(inbox.entries.map(\.text), ["Nothing to report."])
         XCTAssertFalse(inbox.entries[0].needsYou)
@@ -196,58 +198,58 @@ final class InboxTests: XCTestCase {
     func testFilingSaysWhetherItsWorthTellingYou() {
         var inbox = Inbox(since: start)
         let ids = counter()
-        XCTAssertFalse(inbox.file(SortedReport(note: "A."), from: thread("n"), at: start, id: ids), "a note can wait")
-        XCTAssertTrue(inbox.file(SortedReport(shipped: "B."), from: thread("s"), at: start, id: ids))
-        XCTAssertFalse(inbox.file(SortedReport(note: "C."), from: thread("s", run: "r2"), at: start, id: ids), "nor one under a row")
-        XCTAssertTrue(inbox.file(SortedReport(decision: "D?"), from: thread("d"), at: start, id: ids))
-        XCTAssertFalse(inbox.file(SortedReport(decision: "D?"), from: thread("d"), at: start, id: ids), "already filed")
+        XCTAssertFalse(inbox.file(SortedReport(note: "A."), from: thread("n"), startedBy: .you, at: start, id: ids), "a note can wait")
+        XCTAssertTrue(inbox.file(SortedReport(shipped: "B."), from: thread("s"), startedBy: .you, at: start, id: ids))
+        XCTAssertFalse(inbox.file(SortedReport(note: "C."), from: thread("s", run: "r2"), startedBy: .you, at: start, id: ids), "nor one under a row")
+        XCTAssertTrue(inbox.file(SortedReport(decision: "D?"), from: thread("d"), startedBy: .you, at: start, id: ids))
+        XCTAssertFalse(inbox.file(SortedReport(decision: "D?"), from: thread("d"), startedBy: .you, at: start, id: ids), "already filed")
 
         let shipped = inbox.entries.first { $0.threadID == "s" }!
         inbox.markReplied(shipped.id, at: start)
-        XCTAssertTrue(inbox.file(SortedReport(note: "E."), from: thread("s", run: "r3"), at: start, id: ids), "you asked, so you hear")
+        XCTAssertTrue(inbox.file(SortedReport(note: "E."), from: thread("s", run: "r3"), startedBy: .you, at: start, id: ids), "you asked, so you hear")
     }
 
     func testClearingOneKindLeavesTheOthers() {
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(shipped: "A."), from: thread("s"), at: start, id: counter())
-        inbox.file(SortedReport(note: "B."), from: thread("n"), at: start, id: counter())
-        inbox.clear(.shipped)
+        inbox.file(SortedReport(shipped: "A."), from: thread("s"), startedBy: .you, at: start, id: counter())
+        inbox.file(SortedReport(note: "B."), from: thread("n"), startedBy: .you, at: start, id: counter())
+        inbox.clear(.shipped, at: start)
         XCTAssertEqual(inbox.entries.map(\.kind), [.note])
-        inbox.clear(.note)
+        inbox.clear(.note, at: start)
         XCTAssertTrue(inbox.entries.isEmpty)
     }
 
     func testANoteAlongsideRowsIsntLostOrSaidTwice() {
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(shipped: "A.", note: "Also this."), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(shipped: "A.", note: "Also this."), from: thread(), startedBy: .you, at: start, id: counter())
         XCTAssertEqual(inbox.entries.map(\.text), ["A. Also this."])
 
         var both = Inbox(since: start)
-        both.file(SortedReport(shipped: "A.", decision: "B?", note: "Also this."), from: thread(), at: start, id: counter())
+        both.file(SortedReport(shipped: "A.", decision: "B?", note: "Also this."), from: thread(), startedBy: .you, at: start, id: counter())
         XCTAssertEqual(both.entries.map(\.text), ["B? Also this.", "A."])
     }
 
     func testFilingTheSameRunTwiceChangesNothing() {
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(decision: "First?"), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(decision: "First?"), from: thread(), startedBy: .you, at: start, id: counter())
         let before = inbox
-        inbox.file(SortedReport(shipped: "Again.", note: "Again."), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(shipped: "Again.", note: "Again."), from: thread(), startedBy: .you, at: start, id: counter())
         XCTAssertEqual(inbox, before)
     }
 
     func testRemovingOneAndClearingShipped() {
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(shipped: "A.", decision: "B?"), from: thread(), at: start, id: counter())
-        inbox.file(SortedReport(decision: "C?"), from: thread("o"), at: start, id: { "other" })
-        inbox.remove("other")
+        inbox.file(SortedReport(shipped: "A.", decision: "B?"), from: thread(), startedBy: .you, at: start, id: counter())
+        inbox.file(SortedReport(decision: "C?"), from: thread("o"), startedBy: .you, at: start, id: { "other" })
+        inbox.remove("other", because: .done, at: start)
         XCTAssertEqual(inbox.entries.map(\.text), ["B?", "A."])
-        inbox.clear(.shipped)
+        inbox.clear(.shipped, at: start)
         XCTAssertEqual(inbox.entries.map(\.text), ["B?"])
     }
 
     func testASendThatFailedPutsTheRowBack() {
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(decision: "B?"), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(decision: "B?"), from: thread(), startedBy: .you, at: start, id: counter())
         inbox.markReplied("row-1", at: start)
         inbox.markReplied("row-1", at: nil)
         XCTAssertTrue(inbox.entries[0].needsYou)
@@ -351,7 +353,7 @@ final class InboxTests: XCTestCase {
     func testSavingAndLoadingKeepsEverything() throws {
         let file = try folder().appendingPathComponent("deep/inbox.json")
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(shipped: "A.", decision: "B?"), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(shipped: "A.", decision: "B?"), from: thread(), startedBy: .you, at: start, id: counter())
         inbox.markReplied("row-1", at: start)
         try inbox.save(to: file)
 
@@ -657,7 +659,7 @@ final class InboxTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: folder) }
         let file = folder.appendingPathComponent("inbox.json")
         var inbox = Inbox(since: start)
-        inbox.file(SortedReport(decision: String(repeating: "private ", count: 50)), from: thread(), at: start, id: counter())
+        inbox.file(SortedReport(decision: String(repeating: "private ", count: 50)), from: thread(), startedBy: .you, at: start, id: counter())
 
         let modes = Modes()
         let watcher = Thread {

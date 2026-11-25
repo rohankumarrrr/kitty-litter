@@ -38,8 +38,8 @@ Journey: `journeys/inbox.txt`.
 
 Journey: `journeys/inbox-asks.txt`.
 
-- **Asks.** `report asks`, then `wait 7`. Pepper, who has no inbox, finishes "Tidy the budget" with a report that asks you to run a command. `[demo] started ... Below is the final report` is the sorting, with no summary after it. The output has one `[demo] notified:` line for Pepper needing you, and none saying it finished. `bubble.png` in `0-bubble` shows "Pepper: Tidy the budget" over the demo's report, "Moved the pricing page...", as it was written, since it's short.
-- **Open.** `inbox`, then `wait 1`. `channels.png` in `1-open` shows Activity with "Run git pull in your checkout yourself, since the sandbox can't." from "Pepper · Tidy the budget" under Waiting on you, and nothing under Shipped.
+- **Asks.** `report asks`, then `wait 7`. Pepper, who has no inbox, finishes "Tidy the budget" with a report that asks you to sign in again. `[demo] started ... Below is the final report` is the sorting, with no summary after it. The output has one `[demo] notified:` line for Pepper needing you, and none saying it finished. `bubble.png` in `0-bubble` shows "Pepper: Tidy the budget" over the demo's report, "Moved the pricing page...", as it was written, since it's short.
+- **Open.** `inbox`, then `wait 1`. `channels.png` in `1-open` shows Activity with "Sign in to the bank again, since it logged me out." from "Pepper · Tidy the budget" under Waiting on you, and nothing under Shipped.
 
 Journey: `journeys/inbox-change.txt`.
 
@@ -69,7 +69,7 @@ Journey: `journeys/inbox-waiting.txt`.
 - **Waiting.** `notify-finished on`, `report asks waiting`, then `wait 7`. Pepper's turn ends on "Tidy the budget" while it watches its pull request. The output has the sorting and `[demo] notified: Pepper needs a decision`, and no line saying it finished. `0-waiting` draws only the cat, since no bubble is up.
 - **Still working.** `kittens`, then `wait 1`. `kittens.png` in `1-kittens` shows Pepper as Working.
 - **Done.** `finish demo-budget`, then `wait 7`, which is the watch ending in the same run. The output has `[demo] notified: Pepper finished` and no second sorting, and `bubble.png` in `2-done` shows "Pepper: Tidy the budget" over "Moved the pricing page...".
-- **Filed while waiting.** `report ask waiting`, `wait 9`, `inbox`, then `wait 3`. Clawde's turn ends on "Invite the tester" the same way. The output has a look at its ask and `[demo] notified: Clawde needs a decision`, and no line saying it finished. `channels.png` in `3-activity` shows its card with Deny and Allow under Waiting on you, beside Pepper's "Run git pull..." decision.
+- **Filed while waiting.** `report ask waiting`, `wait 9`, `inbox`, then `wait 3`. Clawde's turn ends on "Invite the tester" the same way. The output has a look at its ask and `[demo] notified: Clawde needs a decision`, and no line saying it finished. `channels.png` in `3-activity` shows its card with Deny and Allow under Waiting on you, beside Pepper's "Sign in to the bank again..." decision.
 
 ## Gotchas
 

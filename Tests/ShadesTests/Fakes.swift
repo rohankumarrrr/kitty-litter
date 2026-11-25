@@ -330,6 +330,12 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         return play(threadID: threadID, prompt: prompt)
     }
 
+    @MainActor func deliver(threadID: String, text: String) async throws {
+        if let forwardError { throw forwardError }
+        let prompt = AgentPrompt(text: text, model: .quick, runtimeMode: .auto)
+        lock.withLock { _sent.append(Sent(mode: .forward, threadID: threadID, prompt: prompt, behavior: .queue)) }
+    }
+
     func watchThreads() -> AsyncStream<[AgentThread]> {
         AsyncStream { continuation in watcher = continuation }
     }

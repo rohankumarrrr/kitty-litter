@@ -925,6 +925,55 @@ func probeRouter() async throws {
     await backend.disconnect()
 }
 
+struct SortCase {
+    var name: String
+    var report: String
+    var turnEnded: Bool
+    var pullRequest: ThreadPullRequest?
+    var asksYou: Bool
+}
+
+let sortCases = [
+    SortCase(name: "merge it yourself", report: "Set up the kitten's folder and opened PR #3. I'll fast-forward the checkout once it lands. Merge PR #3 yourself, or allow the merge in this session.", turnEnded: true, pullRequest: ThreadPullRequest(number: 3, state: "open", checks: "pending", watched: true), asksYou: false),
+    SortCase(name: "optional idea", report: "PR #16 is up and waits on its preview and two reviewers. Separately, you could decide on a build-time footer date if you want one; nothing needs it.", turnEnded: true, pullRequest: ThreadPullRequest(number: 16, state: "open", checks: "pending", review: "review-required", watched: true), asksYou: false),
+    SortCase(name: "decide later", report: "Opened #33, which waits on CI. It lists two holes in what agents can reach. Decide later whether to fix them.", turnEnded: true, pullRequest: ThreadPullRequest(number: 33, state: "open", checks: "pending", watched: true), asksYou: false),
+    SortCase(name: "for the launcher", report: "Review done. Raise Block 1 and Block 3 from your thread, since they need settings cards.", turnEnded: false, pullRequest: nil, asksYou: false),
+    SortCase(name: "run a command", report: "Merged. Run git merge --ff-only origin/main and push in your checkout.", turnEnded: false, pullRequest: nil, asksYou: false),
+    SortCase(name: "pick one", report: "There are two ways to do the export. A is faster but drops old rows, B keeps them but takes a day. Which do you want?", turnEnded: false, pullRequest: nil, asksYou: true),
+    SortCase(name: "your approval", report: "PR #7 is green, but the repo needs your approval before it can merge, and only you can give it. Please approve it.", turnEnded: true, pullRequest: ThreadPullRequest(number: 7, state: "open", checks: "passing", review: "review-required", watched: true), asksYou: true),
+]
+
+func probeSort() async throws {
+    let backend = makeBackend()
+    try await backend.connect()
+    let model = Settings.load().summaryModel
+    var passed = 0
+    for test in sortCases {
+        var thread = AgentThread(id: "probe", title: "Shades test: sort \(test.name)", projectTitle: nil, status: test.turnEnded ? .running : .completed, model: model.model, updatedAt: Date(), pullRequest: test.pullRequest)
+        thread.turnEnded = test.turnEnded
+        let turn = AgentPrompt(title: thread.title, text: Prompts.sortReport(test.report, of: thread), model: model, runtimeMode: .approvalRequired)
+        var threadID: String?
+        var reply: String?
+        for try await event in backend.start(turn) {
+            switch event {
+            case let .started(id): threadID = id
+            case let .needsApproval(request): try? await backend.respond(to: request, with: .decline)
+            case let .finished(text): reply = text
+            case .text, .failed: break
+            }
+        }
+        if let threadID { try? await backend.archive(threadID: threadID) }
+        let sorted = reply.flatMap(SortedReport.init(reply:))
+        let right = sorted != nil && (sorted?.decision != nil) == test.asksYou
+        if right { passed += 1 }
+        say("\(right ? "pass" : "FAIL") \(test.name): expected \(test.asksYou ? "a decision" : "no decision")")
+        say("  reply: \(reply.map { $0.split(whereSeparator: \.isNewline).joined(separator: " / ").prefix(220) } ?? "none")")
+    }
+    say("\(passed) of \(sortCases.count) passed")
+    await backend.signOut()
+    await backend.disconnect()
+}
+
 let probes: [String: () async throws -> Void] = [
     "connect": probeConnect,
     "keychain": probeKeychain,
@@ -942,6 +991,7 @@ let probes: [String: () async throws -> Void] = [
     "report": probeReport,
     "origin": probeOrigin,
     "router": probeRouter,
+    "sort": probeSort,
     "search": probeSearch,
     "picture": probePicture,
 ]

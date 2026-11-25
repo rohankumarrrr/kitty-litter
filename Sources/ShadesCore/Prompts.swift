@@ -267,20 +267,53 @@ public enum Prompts {
         """
     }
 
-    public static func sortReport(_ report: String, title: String) -> String {
+    public static func sortReport(_ report: String, of thread: AgentThread) -> String {
         """
         Below is the final report from an AI coding agent. The user wasn't watching, and will read this in a short inbox. \
         Sort it into the lines below, and leave out any line with nothing in it.
 
+        What The Kitty Litter knows about the thread from T3, not from the report: \(threadFacts(thread))
+
         \(shippedMarker) What's now done and live, in one short sentence. Work waiting on a review, a merge or their say-so hasn't shipped.
-        \(decisionMarker) What they have to decide or do themselves and the least they need for it, in at most 3 short sentences, with the options if given. A pull request waiting on their go-ahead counts, and so does anything only they can do, such as running a command, approving something, signing in or saying go ahead. A request it made that they see as its own card isn't one, since that card already asks them.
+        \(decisionMarker) Only what waits on them and nobody else, and the least they need for it, in at most 3 short sentences, with the options if given: a choice only they can make, something only they can do, such as signing in, or their yes before the agent acts. Nothing that waits on CI, on a review by anyone else, on another agent or thread, on a merge or install the agent does itself, or on a conflict it will sort out, and nothing an agent could do instead, such as running a command, merging, fast-forwarding a checkout or raising a settings request. A pull request counts only when the report says it waits on their own approval. A request it made that they see as its own card isn't one, since that card already asks them. An idea or offer nothing waits on is a NOTE.
         \(passedMarker) yes, only if all it did was start another thread to do the work, with nothing else to tell them.
-        \(noteMarker) Anything else, such as an answer to something they asked, in at most 3 short sentences. Only when none of the others apply.
+        \(noteMarker) Anything else, such as an answer to something they asked or an idea nothing waits on, in at most 3 short sentences. Only when none of the others apply.
 
         Write to them directly. Plain text only, with no markdown, no preamble and no mention of "the report" or "the agent". Don't use any tools.
 
-        \(reportBlock(keepingBothEnds(report), title: title, doing: "sort"))
+        \(reportBlock(keepingBothEnds(report), title: thread.title, doing: "sort"))
         """
+    }
+
+    static func threadFacts(_ thread: AgentThread) -> String {
+        var facts: [String] = []
+        let pull = thread.pullRequest
+        if let pull, ["open", "merged", "closed"].contains(pull.state) {
+            let checks = pull.checks.flatMap { ["passing", "failing", "pending"].contains($0) ? " Its checks are \($0)." : nil } ?? ""
+            let review: String = switch pull.review {
+            case "approved": " It's approved."
+            case "changes-requested": " A reviewer asked for changes."
+            case "review-required": " It's waiting for a review."
+            default: ""
+            }
+            facts.append("Its pull request #\(pull.number) is \(pull.state).\(checks)\(review)")
+        }
+        if !thread.turnEnded {
+            facts.append("Its turn is over, and nothing wakes it until someone writes to it.")
+        } else if let pull, pull.watched, pull.isOpen {
+            facts.append("It's still watching pull request #\(pull.number), and T3 will wake it by itself when that changes, without anyone writing to it.")
+        } else {
+            facts.append("It's still waiting on work it started, and T3 will wake it by itself when that finishes, without anyone writing to it.")
+        }
+        return facts.joined(separator: " ")
+    }
+
+    public static func launchedReport(_ report: String?, of thread: AgentThread) -> String {
+        let waiting = thread.turnEnded ? " It's still waiting on work that will wake it by itself." : ""
+        let said = "\"\(thread.title)\", a thread you started, ended its turn without sending you anything, so here's what it said last.\(waiting)"
+        let note = "---\nThe Kitty Litter wrote this, not the user, so none of it is their own words. \(said)"
+        guard let report, report.contains(where: { !$0.isWhitespace }) else { return "\(note) It didn't leave a report." }
+        return "\(note)\n\n\(reportBlock(keepingBothEnds(report), title: thread.title, doing: "read"))"
     }
 
     private static let reportLimit = 12_000

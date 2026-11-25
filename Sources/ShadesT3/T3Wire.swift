@@ -488,10 +488,13 @@ enum T3Wire {
         struct PullRequest: Decodable {
             struct Snapshot: Decodable {
                 let state: String
+                let checksState: String?
+                let reviewDecision: String?
             }
             let number: Int
             let url: String?
             let snapshot: Snapshot
+            let watch: Lossy<Ignored>?
         }
 
         let id: String
@@ -504,7 +507,10 @@ enum T3Wire {
         let pendingRuntimeRequest: PendingRequest?
         let pendingBackgroundTasks: [Lossy<BackgroundTask>]?
         let latestRunId: String?
+        let latestRunStartedAt: Date?
         let latestRunCompletedAt: Date?
+        let latestUserAuthoredMessageAt: Date?
+        let createdBy: String?
         let updatedAt: Date
         let archivedAt: Date?
         let deletedAt: Date?
@@ -513,7 +519,16 @@ enum T3Wire {
         let pullRequests: [Lossy<PullRequest>]?
 
         var latestPullRequest: ThreadPullRequest? {
-            (pullRequests ?? []).compactMap(\.value).last.map { ThreadPullRequest(number: $0.number, state: $0.snapshot.state, url: $0.url) }
+            (pullRequests ?? []).compactMap(\.value).last.map {
+                ThreadPullRequest(
+                    number: $0.number,
+                    state: $0.snapshot.state,
+                    url: $0.url,
+                    checks: $0.snapshot.checksState,
+                    review: $0.snapshot.reviewDecision,
+                    watched: $0.watch != nil
+                )
+            }
         }
 
         var isListed: Bool {

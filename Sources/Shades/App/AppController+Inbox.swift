@@ -38,7 +38,7 @@ extension AppController {
 
     func file(_ report: String?, of thread: AgentThread, failed: Bool, startedAnother next: String?) async {
         let saidNothing = report?.contains(where: { !$0.isWhitespace }) != true
-        if saidNothing, !failed, inbox.entries.contains(where: { $0.threadID == thread.id }) {
+        if saidNothing, !failed {
             inbox.skip(thread)
             keepInbox()
             return
@@ -56,8 +56,9 @@ extension AppController {
         }
         let lines = sorted.flatMap { $0.hasLines ? $0 : nil } ?? unsorted(readable)
         let owed = inbox.owes(thread)
-        if inbox.file(lines, from: thread, at: now(), id: { UUID().uuidString }) { nudgeInbox(about: [.thread(thread.id)]) }
-        changes.forEach { inbox.ask($0, title: title(ofThread:)) }
+        let starter = starter(of: thread)
+        if inbox.file(lines, from: thread, startedBy: starter, at: now(), id: { UUID().uuidString }) { nudgeInbox(about: [.thread(thread.id)]) }
+        changes.forEach { inbox.ask($0, startedBy: starter, held: thread.turnEnded, title: title(ofThread:)) }
         keepInbox()
         inboxChanged()
         if owed, lines.decision == nil, !thread.turnEnded { notifyFinished(thread, by: kitten(of: thread)) }
@@ -77,28 +78,27 @@ extension AppController {
 
     private func sort(_ report: String?, of thread: AgentThread, failed: Bool) async -> SortedReport? {
         if failed { return SortedReport(decision: opening(of: report).map(CatWords.failedRow) ?? CatWords.failedWithoutReport) }
-        guard let report, report.contains(where: { !$0.isWhitespace }) else {
-            return SortedReport(decision: CatWords.finishedWithoutReport)
-        }
+        guard let report, report.contains(where: { !$0.isWhitespace }) else { return nil }
+        if let sorted = await sorted(report, of: thread) { return sorted }
         return await sorted(report, of: thread)
     }
 
     func sorted(_ report: String, of thread: AgentThread) async -> SortedReport? {
-        let prompt = summaryPrompt(Prompts.sortReport(report, title: thread.title), about: thread)
+        let prompt = summaryPrompt(Prompts.sortReport(report, of: thread), about: thread)
         let reply = await firstOf(seconds: Self.summaryTimeout) { [self] in await summarize(prompt) }
         return (reply ?? nil).flatMap(SortedReport.init(reply:))
     }
 
     func flag(_ decision: String, of thread: AgentThread, report: String?) {
         let id = UUID().uuidString
-        inbox.flag(decision, from: thread, at: now(), id: id)
+        inbox.flag(decision, from: thread, startedBy: starter(of: thread), at: now(), id: id)
         keepInbox()
         inboxChanged()
         if ChangeRequests.cards(in: report ?? "").isEmpty { readDecision(id, decision: decision, of: thread) }
     }
 
     private func unsorted(_ report: String?) -> SortedReport {
-        SortedReport(decision: opening(of: report) ?? CatWords.finishedWithoutReport)
+        SortedReport(note: opening(of: report), isOpening: true)
     }
 
     private func opening(of report: String?) -> String? {
@@ -160,11 +160,15 @@ extension AppController {
         case .open(let threadID):
             openThread(threadID)
         case .done(let id):
-            inbox.remove(id)
+            inbox.remove(id, because: .done, at: now())
+            keepInbox()
+            inboxChanged()
+        case .ignore(let id):
+            inbox.remove(id, because: .ignored, at: now())
             keepInbox()
             inboxChanged()
         case .clear(let kind):
-            inbox.clear(kind)
+            inbox.clear(kind, at: now())
             keepInbox()
             inboxChanged()
         case .allow(let id):

@@ -26,6 +26,7 @@ enum BubbleAction: Equatable {
 enum InboxAction: Equatable {
     case open(threadID: String)
     case done(id: String)
+    case ignore(id: String)
     case clear(InboxEntry.Kind)
     case allow(id: String)
     case deny(id: String)

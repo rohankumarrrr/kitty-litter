@@ -134,26 +134,26 @@ final class StaleRequestTests: XCTestCase {
         revised.with = "c"
         var elsewhere = first
         elsewhere.replace = "z"
-        inbox.ask(card("c1", "t", change: first))
-        inbox.ask(card("c2", "t", change: revised))
+        inbox.ask(card("c1", "t", change: first), startedBy: .you, held: false)
+        inbox.ask(card("c2", "t", change: revised), startedBy: .you, held: false)
         XCTAssertEqual(inbox.entries.map(\.id), ["c2"])
-        inbox.ask(card("c3", "t", change: elsewhere))
-        inbox.ask(card("c4", "u", change: first))
+        inbox.ask(card("c3", "t", change: elsewhere), startedBy: .you, held: false)
+        inbox.ask(card("c4", "u", change: first), startedBy: .you, held: false)
         XCTAssertEqual(inbox.entries.map(\.id), ["c2", "c3", "c4"], "another place in the file, or another thread, is a card of its own")
 
-        inbox.ask(card("a1", "t", ask: AskRequest(ask: "Merge it.", readFromWords: false)))
-        inbox.ask(card("a2", "t", ask: AskRequest(ask: "Merge it.", readFromWords: false)))
-        inbox.ask(card("a3", "t", ask: AskRequest(ask: "Send it.", readFromWords: false)))
-        inbox.ask(card("a4", "u", ask: AskRequest(ask: "Merge it.", readFromWords: false)))
+        inbox.ask(card("a1", "t", ask: AskRequest(ask: "Merge it.", readFromWords: false)), startedBy: .you, held: false)
+        inbox.ask(card("a2", "t", ask: AskRequest(ask: "Merge it.", readFromWords: false)), startedBy: .you, held: false)
+        inbox.ask(card("a3", "t", ask: AskRequest(ask: "Send it.", readFromWords: false)), startedBy: .you, held: false)
+        inbox.ask(card("a4", "u", ask: AskRequest(ask: "Merge it.", readFromWords: false)), startedBy: .you, held: false)
         XCTAssertEqual(inbox.entries.compactMap { $0.ask == nil ? nil : $0.id }, ["a2", "a3", "a4"])
     }
 
     func testANewerRequestReplacesAStaleOne() {
         var inbox = Inbox(since: at)
         let change = ChangeRequest(file: "~/k/.claude/settings.json", replace: "a", with: "b", why: nil)
-        inbox.ask(card("old", "t", change: change))
+        inbox.ask(card("old", "t", change: change), startedBy: .you, held: false)
         inbox.cantBeMade("old", because: "The file changed after it asked.", row: "Stale.")
-        inbox.ask(card("new", "t", change: change))
+        inbox.ask(card("new", "t", change: change), startedBy: .you, held: false)
         XCTAssertEqual(inbox.entries.map(\.id), ["new"])
         XCTAssertNil(inbox.entries.first?.change?.problem)
     }
@@ -163,22 +163,22 @@ final class StaleRequestTests: XCTestCase {
         let mine = ChangeRequest(file: "~/k/.claude/settings.json", replace: "a", with: "b", why: nil)
         var notListed = ChangeRequest(file: "~/.claude/settings.json", replace: "a", with: "b", why: nil)
         notListed.problem = "It isn't listed."
-        inbox.ask(card("c", "t", change: mine))
-        inbox.ask(card("n", "t", change: notListed))
-        inbox.ask(card("other", "u", change: ChangeRequest(file: "~/k/.claude/settings.json", replace: "x", with: "y", why: nil)))
-        inbox.ask(card("a", "t", ask: AskRequest(ask: "Merge it.", readFromWords: false)))
-        inbox.ask(card("theirs", "u", ask: AskRequest(ask: "Merge it.", readFromWords: false)))
-        inbox.file(SortedReport(decision: "Merge it?"), from: AgentThread(id: "t", title: "Work t", projectTitle: nil, status: .completed, model: "m", updatedAt: at, lastRunID: "r"), at: at, id: { "decision" })
+        inbox.ask(card("c", "t", change: mine), startedBy: .you, held: false)
+        inbox.ask(card("n", "t", change: notListed), startedBy: .you, held: false)
+        inbox.ask(card("other", "u", change: ChangeRequest(file: "~/k/.claude/settings.json", replace: "x", with: "y", why: nil)), startedBy: .you, held: false)
+        inbox.ask(card("a", "t", ask: AskRequest(ask: "Merge it.", readFromWords: false)), startedBy: .you, held: false)
+        inbox.ask(card("theirs", "u", ask: AskRequest(ask: "Merge it.", readFromWords: false)), startedBy: .you, held: false)
+        inbox.file(SortedReport(decision: "Merge it?"), from: AgentThread(id: "t", title: "Work t", projectTitle: nil, status: .completed, model: "m", updatedAt: at, lastRunID: "r"), startedBy: .you, at: at, id: { "decision" })
         _ = inbox.attach(AskRequest(ask: "Merge it.", readFromWords: true), to: "decision")
         let before = inbox.entries.map(\.id)
 
-        inbox.withdraw("~/k/.claude/settings.json", file: nil, by: "nobody")
-        inbox.withdraw("Merge it.", file: nil, by: "nobody")
+        inbox.withdraw("~/k/.claude/settings.json", file: nil, by: "nobody", at: Date())
+        inbox.withdraw("Merge it.", file: nil, by: "nobody", at: Date())
         XCTAssertEqual(inbox.entries.map(\.id), before, "a thread that didn't ask takes nothing back")
 
-        inbox.withdraw("/home/k/.claude/settings.json", file: "~/k/.claude/settings.json", by: "t")
-        inbox.withdraw("~/.claude/settings.json", file: nil, by: "t")
-        inbox.withdraw("Merge it.", file: nil, by: "t")
+        inbox.withdraw("/home/k/.claude/settings.json", file: "~/k/.claude/settings.json", by: "t", at: Date())
+        inbox.withdraw("~/.claude/settings.json", file: nil, by: "t", at: Date())
+        inbox.withdraw("Merge it.", file: nil, by: "t", at: Date())
         XCTAssertEqual(inbox.entries.map(\.id), ["other", "theirs", "decision"], "only its own, and never a decision's reading")
         XCTAssertNotNil(inbox.entries.first { $0.id == "decision" }?.ask)
     }
@@ -186,22 +186,22 @@ final class StaleRequestTests: XCTestCase {
     func testAShareOfACardIsTakenBackWithoutTakingTheCardFromAnotherThread() {
         var inbox = Inbox(since: at)
         let change = ChangeRequest(file: "~/k/.claude/settings.json", replace: "a", with: "b", why: nil)
-        inbox.ask(card("c", "t", change: change))
-        inbox.ask(card("c2", "u", change: change))
-        inbox.ask(card("c3", "v", change: change))
+        inbox.ask(card("c", "t", change: change), startedBy: .you, held: false)
+        inbox.ask(card("c2", "u", change: change), startedBy: .you, held: false)
+        inbox.ask(card("c3", "v", change: change), startedBy: .you, held: false)
         XCTAssertEqual(inbox.entries.first?.change?.alsoAskedIn, ["u", "v"])
 
-        inbox.withdraw("~/k/.claude/settings.json", file: nil, by: "v")
+        inbox.withdraw("~/k/.claude/settings.json", file: nil, by: "v", at: Date())
         XCTAssertEqual(inbox.entries.map(\.id), ["c"])
         XCTAssertEqual(inbox.entries.first?.change?.alsoAskedIn, ["u"])
 
-        inbox.withdraw("~/k/.claude/settings.json", file: nil, by: "t", title: { $0 == "u" ? "Steve: Simulator" : nil })
+        inbox.withdraw("~/k/.claude/settings.json", file: nil, by: "t", at: Date(), title: { $0 == "u" ? "Steve: Simulator" : nil })
         XCTAssertEqual(inbox.entries.map(\.id), ["c"], "the card stays for the thread still asking")
         XCTAssertEqual(inbox.entries.first?.threadID, "u")
         XCTAssertEqual(inbox.entries.first?.threadTitle, "Steve: Simulator")
         XCTAssertEqual(inbox.entries.first?.change?.alsoAskedIn, [])
 
-        inbox.withdraw("~/k/.claude/settings.json", file: nil, by: "u")
+        inbox.withdraw("~/k/.claude/settings.json", file: nil, by: "u", at: Date())
         XCTAssertTrue(inbox.entries.isEmpty)
     }
 
@@ -209,7 +209,7 @@ final class StaleRequestTests: XCTestCase {
         var inbox = Inbox(since: at)
         var change = ChangeRequest(file: "~/k/.claude/settings.json", replace: "a", with: "b", why: nil)
         change.review = "I'd allow it."
-        inbox.ask(card("c", "t", change: change))
+        inbox.ask(card("c", "t", change: change), startedBy: .you, held: false)
         inbox.cantBeMade("c", because: "The file changed after it asked.", row: "Can't be done.")
         XCTAssertEqual(inbox.entries.first?.change?.problem, "The file changed after it asked.")
         XCTAssertNil(inbox.entries.first?.change?.review, "no look at it that says to allow it")

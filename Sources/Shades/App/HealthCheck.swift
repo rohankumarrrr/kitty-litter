@@ -39,6 +39,8 @@ struct HealthFacts: Equatable {
     var frontDoorProblem: FrontDoorProblem?
     var frontDoorProjectTrouble: String?
     var inboxSaves = true
+    var waitingLeft = 0
+    var waitingLeftWithoutYou = 0
     var t3GivesRunIDs = true
     var shortcutsTaken: [String] = []
     var otherCopies: [Int32] = []
@@ -195,6 +197,7 @@ enum HealthCheck {
             problem: "I can't save your inbox, so a restart would lose what's in it.",
             fix: "Check that I can write to my folder in Application Support."
         ))
+        results.append(waitingFinding(facts))
         results.append(facts.t3GivesRunIDs ? .good("T3 run IDs") : HealthFinding(
             check: "T3 run IDs",
             ok: false,
@@ -221,6 +224,19 @@ enum HealthCheck {
             ))
         }
         return results
+    }
+
+    static let waitingRowsToJudge = 4
+
+    private static func waitingFinding(_ facts: HealthFacts) -> HealthFinding {
+        let (all, withoutYou) = (facts.waitingLeft, facts.waitingLeftWithoutYou)
+        guard all >= waitingRowsToJudge, withoutYou * 2 > all else { return .good("waiting on you") }
+        return HealthFinding(
+            check: "waiting on you",
+            ok: false,
+            problem: "\(withoutYou) of the \(all) things that left Waiting on you this week went without you, so it's asking you about things that sort themselves out.",
+            fix: "Ask Clawde to read \(WaitingRecord.fileName), next to inbox.json, which says where each one came from and how it left."
+        )
     }
 
     private static func shortcutsFinding(_ facts: HealthFacts) -> HealthFinding {

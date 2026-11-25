@@ -139,12 +139,15 @@ struct T3ThreadList {
                     pendingApprovals: approvals,
                     pendingQuestion: questionsByListedThread[thread.id],
                     runtimeMode: thread.runtimeMode.flatMap(RuntimeMode.init(rawValue:)),
-                    isSettled: thread.settledAt != nil,
+                    settledAt: thread.settledAt,
                     pullRequest: thread.latestPullRequest,
                     projectPath: projectsByID[thread.projectId].flatMap { isScratch($0) ? nil : $0.workspaceRoot },
                     lastRunID: thread.latestRunId,
                     lastRunEndedAt: thread.latestRunCompletedAt,
-                    lastVisitedAt: thread.lastVisitedAt
+                    lastVisitedAt: thread.lastVisitedAt,
+                    startedByAgent: thread.createdBy == "agent",
+                    lastRunStartedAt: thread.latestRunStartedAt,
+                    lastWordsFromYouAt: thread.latestUserAuthoredMessageAt
                 )
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }

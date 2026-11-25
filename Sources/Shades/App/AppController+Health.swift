@@ -77,6 +77,7 @@ extension AppController {
     private func report(_ t3: T3Answers, kittens: [Kitten], check: Int, each: (([HealthFinding]) -> Void)?) -> [HealthFinding] {
         var facts = systemFacts()
         facts.inboxSaves = !inboxSaveFailed
+        (facts.waitingLeft, facts.waitingLeftWithoutYou) = inbox.record.leftSince(now().addingTimeInterval(-7 * 24 * 3600))
         facts.shortcutsTaken = takenShortcuts
         facts.phoneNeedsPairingAgain = phone?.door.needsPairingAgain ?? false
         facts.t3Silence = t3.silence
