@@ -1,4 +1,5 @@
 front
+perf launch
 busy
 wait 1
 perf

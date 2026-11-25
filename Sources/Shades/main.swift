@@ -5,6 +5,7 @@ import ShadesT3
 import ShadesVoice
 
 MainActor.assumeIsolated {
+    Launch.began = .now()
     let app = NSApplication.shared
     app.appearance = NSAppearance(named: .darkAqua)
 
