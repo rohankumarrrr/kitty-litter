@@ -78,7 +78,7 @@ extension Opal {
         let box = context.convertToUserSpace(pixels)
         let inside = rect.offsetBy(dx: -box.minX, dy: -box.minY)
         let flipped = isFlipped
-        guard let space = context.colorSpace ?? NSScreen.main?.colorSpace?.cgColorSpace ?? CGColorSpace(name: CGColorSpace.sRGB) else { return draw(rect) }
+        guard let space = PictureDrawing.space ?? NSScreen.main?.colorSpace?.cgColorSpace ?? CGColorSpace(name: CGColorSpace.sRGB) else { return draw(rect) }
         let key = "\(kind) \(inside) \(pixels.size) \(light.rim) \(light.glow) \(flipped) \(space.name.map { $0 as String } ?? "")"
         guard let image = kept[key]?.image ?? keep(key, pixels: pixels, box: box, space: space, flipped: flipped, draw: { draw(inside) }) else { return draw(rect) }
         context.saveGState()
