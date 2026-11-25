@@ -251,7 +251,7 @@ enum PhoneScriptWorld {
               if (this.open) throw new DOMException('already open', 'InvalidStateError');
               this.open = true;
               this.modal = true;
-              const first = this.querySelector('[autofocus]');
+              const first = this.querySelector('[autofocus]') || this.querySelectorAll('button, input, textarea, a, [tabindex]').find((node) => !node.disabled && !node.hidden);
               if (first) first.focus();
             }
             close() {
