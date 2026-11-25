@@ -738,3 +738,17 @@ extension ChannelBookTests {
         return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000_000
     }
 }
+
+extension ChannelBookTests {
+    func testEachKittensStateInTheBookIsWhatItsOwnThreadsSay() {
+        let talks = Set(DemoBusy.threads.filter { $0.projectPath == DemoChannels.routerFolder }.map(\.id))
+        let book = ChannelBook.build(kittens: Demo.kittens, threads: DemoBusy.threads, transcripts: DemoBusy.transcripts, isReading: false, unreadable: 0, cantReachT3: false, withShades: talks, said: { $0 })
+        let others = DemoBusy.threads.filter { !talks.contains($0.id) }
+        XCTAssertEqual(book.statuses, KittenBoard.statuses(kittens: Demo.kittens, threads: others), "the same states as reading each kitten's threads on their own")
+        XCTAssertEqual(book.statuses.count, Demo.kittens.count)
+        let owners = KittenBoard.Owners(Demo.kittens)
+        for issues in book.issues {
+            XCTAssertTrue(issues.threads.allSatisfy { thread in others.contains { $0.id == thread.id && owners.of($0)?.id == issues.kitten.id } }, "\(issues.kitten.name)'s open threads are all its own")
+        }
+    }
+}

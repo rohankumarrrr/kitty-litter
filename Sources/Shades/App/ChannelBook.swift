@@ -194,7 +194,8 @@ struct ChannelBook: Equatable {
         let lookup = KittenBoard.Owners(kittens)
         let owners = Dictionary(threads.map { ($0.id, lookup.of($0)) }, uniquingKeysWith: { first, _ in first })
         let ownerOf = { (thread: AgentThread) in owners[thread.id] ?? nil }
-        let statuses = KittenBoard.statuses(kittens: kittens, threads: threads)
+        let byOwner = Dictionary(grouping: threads) { ownerOf($0)?.id }
+        let statuses = KittenBoard.statuses(kittens: kittens, byOwner: byOwner)
         let channelIDs = [ChannelID.shades] + statuses.map { .of($0.kitten) }
 
         var gathered: [String: Gathered] = [:]
@@ -324,7 +325,7 @@ struct ChannelBook: Equatable {
             channel(id, placed[id] ?? [], leavesOutThreads: !isReading && leftOut.contains(id), pages: olderPages[id] ?? 0, isLoadingOlder: loadingOlder.contains(id))
         }
         let issues = statuses.compactMap { status -> KittenIssues? in
-            let mine = owned(by: status.kitten, in: threads, owner: ownerOf)
+            let mine = owned(by: status.kitten, in: byOwner[status.kitten.id] ?? [])
             let open = mine.filter(isOpen).sorted { (urgency($0), $1.updatedAt, $0.id) < (urgency($1), $0.updatedAt, $1.id) }
             return status.state == .notSetUp && open.isEmpty ? nil : KittenIssues(kitten: status.kitten, threads: open)
         }
@@ -489,9 +490,8 @@ struct ChannelBook: Equatable {
         return said.speaker == message.speaker && said.text == message.text && said.at >= message.at.addingTimeInterval(-60)
     }
 
-    private static func owned(by kitten: Kitten, in threads: [AgentThread], owner: (AgentThread) -> Kitten?) -> [AgentThread] {
+    private static func owned(by kitten: Kitten, in threads: [AgentThread]) -> [AgentThread] {
         threads
-            .filter { owner($0) == kitten }
             .map { thread in
                 var thread = thread
                 thread.title = title(of: thread, owner: kitten)
