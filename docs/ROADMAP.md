@@ -37,7 +37,7 @@ A kitten for the system itself, a self-check, rollback, a window for reading wha
 - Leave a problem out of the bubble when The Kitty Litter already shows it under what you sent. A reply from Activity puts its report back but doesn't say why there yet, so for now the bubble says it too, and stays until you press Esc or click in another app.
 - Run the tests on GitHub's `xcode-27` runner too, macOS 27 with Xcode 27, still in preview. CI runs macOS 15, so a change in AppKit or the compiler on a newer system shows up today only on a Mac that's already updated.
 - Show each private app in Settings by its name and icon rather than as a bundle ID you type. Today the box shows the whole list, but as bundle IDs.
-- Hide Attach on the Mac where a file can't go, as the phone hides 📎 and 📷. Kittens run with full access by default now, so in a kitten's channel a file always comes back with "can't take files" under it.
+- Hide Attach on the Mac where a file can't go, as the phone hides 📎 and 📷, such as in a thread that runs with full access.
 - Answer an agent's question from the bubble. It shows the question and options now, and you answer in The Kitty Litter or T3.
 - Fold a busy conversation in The Kitty Litter down to one row per thread, with how many replies it has and the latest, the way a Slack channel shows a thread. Today every thread's messages are shown in order, and its title and project mark where each one starts.
 - Tell T3 when you read a thread in The Kitty Litter, with its `thread.visit`, so T3 Code's own sidebar agrees. Today a thread read in T3 counts as read here, but not the other way round.

@@ -21,6 +21,12 @@ public enum RuntimeMode: String, Codable, Sendable, CaseIterable {
     case autoAcceptEdits = "auto-accept-edits"
     case auto
     case fullAccess = "full-access"
+
+    public var takesScreen: Bool { self != .fullAccess }
+
+    public func carrying(screen: Bool) -> RuntimeMode {
+        screen && !takesScreen ? .auto : self
+    }
 }
 
 public enum AgentStatus: String, Codable, Sendable {

@@ -75,7 +75,7 @@ Each property was seen failing on a broken copy of the code it guards, then the 
 | Broken on purpose | What failed |
 |---|---|
 | `give` without `kitten.seesScreen` | Nothing, because `sharesWithScreenless` already counts the kitten itself. That's not a break, and it's why the next row drops both |
-| `give` without `kitten.seesScreen` and `sharesWithScreenless`, still leaving the screen out with full access | New threads, 27 failures, each an Ask to a kitten without full access |
+| `give` without `kitten.seesScreen` and `sharesWithScreenless` | New threads, every Ask, drop, attachment, lockdown and Fix to a screenless kitten's folder, with Frontier in full access as well as in another mode, since a thread that carries your screen runs in Auto either way |
 | `forward` without `isClearOfScreenlessKittens` | Existing threads, every one that is or might be Clawde's and runs in an ordinary mode |
 | `traceIsClear` treating `.unknown` as clear | Existing threads, 4 failures, all started by an unknown agent |
 | `RouterBlock.denied` without `mcp__t3-code` | The router's tools, 13 failures |

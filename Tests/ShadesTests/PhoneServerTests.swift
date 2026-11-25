@@ -360,12 +360,14 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(backend.sent.count, 1)
     }
 
-    func testAKittenRunningWithFullAccessOffersNoPhotos() async throws {
+    func testAKittensChannelOffersPhotosSinceAThreadCarryingOneRunsInAuto() async throws {
+        XCTAssertEqual(controller.settings.frontierMode, .fullAccess)
         let key = try await pair()
         let (first, stream) = try await watch(PhonePlace.key(.channel(.of(penny))), key: key)
         defer { stream.cancel() }
-        XCTAssertEqual((first["box"] as? [String: Any])?["files"] as? Bool, false, "so a photo doesn't go up only to be turned away")
+        XCTAssertEqual((first["box"] as? [String: Any])?["files"] as? Bool, true)
     }
+
 
     func testAPhotoFromAPhoneGoesWithItsWordsOnly() async throws {
         var auto = controller.settings

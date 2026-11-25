@@ -10,7 +10,6 @@ enum CatWords {
     static let listening = "listening"
     static let cantReachT3 = "Can't reach T3 Code"
     static let privateApp = "This app is private, so I didn't look."
-    static let fullAccessLeavesScreenOut = "Agents with full access don't get your screen, so tell me what's wrong."
     static let needsScreenRecording = "I can't see your screen. Turn on Screen Recording for me in System Settings."
     static let needsMicrophone = "I can't hear you. Turn on the Microphone for me in System Settings."
     static let needsAccessibility = "I couldn't type that here. Turn on Accessibility for me in System Settings."
@@ -305,6 +304,7 @@ enum CatWords {
     static let earlierMessageFailed = "It didn't get through. Mind saying it again?"
     static func sentTo(_ thread: AgentThread) -> String { sentTo(thread.title) }
     static func sentTo(_ title: String) -> String { "Sent that to \(title)." }
+    static func sentWithoutFile(_ thread: AgentThread) -> String { "Sent your words to \(thread.title), but not the file, since it can't see your screen." }
     static func sentToBusy(_ thread: AgentThread) -> String { "Sent that to \(thread.title). It'll get to it once it's done with what it's on." }
     static let sendTheLink = "It can't see your screen, so send the link or paste the text."
     static func passedOn(to title: String?) -> String {

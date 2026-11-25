@@ -1,6 +1,6 @@
 # Drop
 
-You drag a PDF, a picture or a link onto the cat. The Ask box opens with what you dropped in it, as a chip. You ask about it, or press Return for a summary, and it goes through the router like any question, with only what you dropped and no look at your screen. A kitten that doesn't see your screen can't take it, and the cat says so.
+You drag a PDF, a picture or a link onto the cat. The Ask box opens with what you dropped in it, as a chip. You ask about it, or press Return for a summary, and it goes through the router like any question, with only what you dropped and no look at your screen. A kitten that never sees your screen can't take it, and the cat says so. Any other kitten gets it in a new thread that runs in Auto.
 
 ## Sub-features
 
@@ -25,7 +25,7 @@ Journey: `journeys/drop.txt`. `drop` hands the cat a pasteboard the same way a d
 - **Ask box.** `drop pdf`, then `wait 1`. `input.png` in `1-ask-box` has a syllabus.pdf chip over "Ask about it, or just press Return", and `windows` shows `input ... key=true`.
 - **Summary.** `submit` with nothing, then `wait 4`. `[demo] started demo-1 with 0 attachments` is the router, and `bubble.png` in `2-summarized` has the syllabus summary with Open in T3 and Copy.
 - **Refused.** `drop pdf`, `submit Clawde should keep this`, then `wait 3`. Only `[demo] carried on in demo-1` is sent, and `bubble.png` in `3-cant-take-files` says "Clawde can't take files. Put a link or the text in your message instead."
-- **Link to a kitten.** `esc` puts the last bubble away. `drop https://jobs.example.com/listing/123`, then `wait 1`. `input.png` in `4-link` has a jobs.example.com chip. `submit I need help with my resume for this`, then `wait 3`. Kittens run with full access unless Frontier's mode says otherwise, so Steve can't take it either: only `[demo] carried on in demo-1` is sent, and `bubble.png` in `5-to-a-kitten` says "Steve Pawsniak can't take files. Put a link or the text in your message instead." With `settings`, `setting Frontier mode Auto` and `setting Done` first, `[demo] started demo-2 ... I need help with my resume for this / --- / Shades, the user's desktop cat, gave you this` is Steve's thread, and the bubble says "Steve Pawsniak has this."
+- **Link to a kitten.** `esc` puts the last bubble away. `drop https://jobs.example.com/listing/123`, then `wait 1`. `input.png` in `4-link` has a jobs.example.com chip. `submit I need help with my resume for this`, then `wait 3`. Steve sees your screen, so `[demo] started demo-2 ... I need help with my resume for this / --- / Shades, the user's desktop cat, gave you this` is Steve's thread, and `[demo] demo-2 runs in auto` though Frontier's mode is full access, and `bubble.png` in `5-to-a-kitten` says "Steve Pawsniak has this."
 - **Unreadable.** `drop /nowhere/notes.zip`, then `wait 1`. `bubble.png` in `6-cant-read` says "I can only read PDFs, pictures and links." After `esc`, `drop mailto:someone@example.com` prints `taken: false`, and `bubble.png` in `7-cant-read-link` says the same.
 
 ## Gotchas

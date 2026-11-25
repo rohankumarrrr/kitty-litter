@@ -543,7 +543,7 @@ final class FlowTests: XCTestCase {
         }
     }
 
-    func testAKittensThreadStartsWithFullAccessAndNoScreenUnlessYouPickAnotherMode() async {
+    func testAKittensThreadCarryingYourScreenRunsInAutoAndOneWithoutStaysInFullAccess() async {
         var fresh = settings
         fresh.frontierMode = Settings().frontierMode
         controller.apply(fresh)
@@ -553,15 +553,23 @@ final class FlowTests: XCTestCase {
         await ask("I need a tailored resume for this job")
         await controller.frontierTask?.value
 
-        XCTAssertTrue(backend.sent[0].prompt.text.contains("<screen>"), "the router still looks")
         let given = backend.sent[1].prompt
         XCTAssertEqual(given.projectID, "project-steve")
-        XCTAssertEqual(given.runtimeMode, .fullAccess)
+        XCTAssertEqual(given.runtimeMode, .auto, "it carries your screen, so it runs in Auto")
         XCTAssertTrue(given.text.hasPrefix("I need a tailored resume for this job"))
-        XCTAssertFalse(given.text.contains("<screen>"))
-        XCTAssertTrue(given.attachments.isEmpty)
-        XCTAssertEqual(context.saved, 0, "no screenshot kept for it either")
+        XCTAssertTrue(given.text.contains("<screen>"))
+        XCTAssertEqual(given.attachments.count, 1)
+
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        controller.ask("Write me a cover letter", snapshot: nil)
+        await settle()
+        await controller.frontierTask?.value
+        let wordsOnly = backend.sent.last { $0.prompt.projectID == "project-steve" }?.prompt
+        XCTAssertEqual(wordsOnly?.runtimeMode, .fullAccess, "with no screen it stays in Frontier's mode")
+        XCTAssertEqual(wordsOnly?.text.contains("<screen>"), false)
+        XCTAssertEqual(wordsOnly?.attachments.isEmpty, true)
     }
+
 
     private let clawde = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", seesScreen: false)
 
@@ -610,17 +618,19 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(given.attachments.isEmpty)
     }
 
-    func testAKittenWithFullAccessGetsTheSameWarning() async {
+    func testAKittenGivenNoScreenGetsTheSameWarning() async {
         kittens = [steve]
         backend.projects["/k/steve"] = "project-steve"
         useFullAccess(frontier: true)
         backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
-        await ask("Read this x thread")
+        controller.ask("Read this x thread", snapshot: nil)
+        await settle()
         await controller.frontierTask?.value
 
         XCTAssertEqual(stage.bubble, .notice(caption: "Steve Pawsniak has this.", text: sendTheLink, threadID: "thread-2"))
-        XCTAssertFalse(backend.sent[1].prompt.text.contains("<screen>"))
+        XCTAssertEqual(backend.sent[1].prompt.runtimeMode, .fullAccess)
     }
+
 
     func testAKittenThatSeesTheScreenGetsNoWarning() async {
         kittens = [steve]
@@ -885,15 +895,15 @@ final class FlowTests: XCTestCase {
         await ask("Read this x thread")
         await controller.frontierTask?.value
         let onIt = CatWords.onIt(modelName: controller.frontierName)
-        XCTAssertEqual(stage.bubble, .notice(caption: onIt, text: sendTheLink, threadID: "thread-2"))
+        XCTAssertEqual(stage.bubble, .line(onIt, threadID: "thread-2"), "your screen went with it, so there's nothing to warn about")
 
-        useFullAccess()
         backend.replies = [[.finished(fullText: "HANDOFF: Read the thread")], [.finished(fullText: "Started.")]]
         controller.ask("Read this x thread", snapshot: nil)
         await settle()
         await controller.frontierTask?.value
         guard case .notice(onIt, sendTheLink, _, _)? = stage.bubble else { return XCTFail("nothing was captured to send") }
     }
+
 
     func testAHandoffThatTakesTheScreenGetsNoWarning() async {
         backend.replies = [[.finished(fullText: "HANDOFF: Read the thread")], [.finished(fullText: "Started.")]]
@@ -1131,28 +1141,38 @@ final class FlowTests: XCTestCase {
         controller.apply(changed)
     }
 
-    func testAHandoffWithFullAccessGetsYourWordsButNotYourScreen() async {
+    func testAHandoffCarryingYourScreenRunsInAutoEvenWhenFrontierHasFullAccess() async {
         useFullAccess(frontier: true)
         backend.replies = [[.finished(fullText: "HANDOFF: Do what the page says")], [.finished(fullText: "Started.")]]
         await ask("deal with this")
         await controller.frontierTask?.value
         let frontier = backend.sent[1].prompt
-        assertLeftOut(frontier)
-        XCTAssertFalse(frontier.text.contains("Do what the page says"), "that's the router's reading of the page")
-        XCTAssertFalse(frontier.title?.contains("Do what the page says") == true)
+        XCTAssertEqual(frontier.runtimeMode, .auto, "a thread that carries your screen runs in Auto")
+        XCTAssertTrue(frontier.text.contains("App: Safari"))
+        XCTAssertEqual(frontier.attachments.count, 1)
         XCTAssertTrue(frontier.text.contains("deal with this"))
+
+        backend.replies = [[.finished(fullText: "HANDOFF: Do the chores")], [.finished(fullText: "Started.")]]
+        controller.ask("do the chores", snapshot: nil)
+        await settle()
+        await controller.frontierTask?.value
+        let wordsOnly = backend.sent.last { $0.prompt.model == settings.frontierModel && $0.prompt.text.contains("do the chores") }
+        XCTAssertEqual(wordsOnly?.prompt.runtimeMode, .fullAccess, "and one without it stays in Frontier's mode")
+        XCTAssertEqual(wordsOnly?.prompt.attachments.isEmpty, true)
     }
 
-    func testAFixWithFullAccessGetsYourWordsButNotYourScreen() async {
+
+    func testAFixCarriesYourScreenInAutoEvenWhenFrontierHasFullAccess() async {
         useFullAccess(frontier: true)
         controller.sendFix("the total is wrong", snapshot: context.snapshotValue)
         await controller.frontierTask?.value
         let frontier = backend.sent[0].prompt
-        assertLeftOut(frontier)
-        XCTAssertFalse(frontier.text.contains("red rectangle"))
-        XCTAssertFalse(frontier.title?.contains("Safari") == true)
+        XCTAssertEqual(frontier.runtimeMode, .auto)
+        XCTAssertTrue(frontier.text.contains("red rectangle"))
+        XCTAssertEqual(frontier.attachments.count, 1)
         XCTAssertTrue(frontier.text.contains("the total is wrong"))
     }
+
 
     func testAnOrdinaryFixStillSeesTheScreen() async {
         controller.sendFix("the total is wrong", snapshot: context.snapshotValue)
@@ -1220,24 +1240,33 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("Clawde can't take files. Put a link or the text in your message instead.", threadID: nil))
     }
 
-    func testAThreadThatMightBeAScreenlessKittensCantTakeADrop() async {
+    func testAThreadThatMightBeAScreenlessKittensGetsADropsWordsButNeverTheFile() async throws {
         kittens = [clawde]
-        controller.threadsChanged([session("w", "Clawde: Fix routing")])
+        let work = session("w", "Clawde: Fix routing")
+        controller.threadsChanged([work])
         backend.replies = [[.finished(fullText: "SEND TO: 1")]]
         await drop("and this?")
         await controller.forwardTask?.value
-        XCTAssertEqual(backend.sent.count, 1, "only the router's turn")
-        XCTAssertEqual(stage.bubble, .line("Clawde: Fix routing can't take files. Put a link or the text in your message instead.", threadID: nil))
+        let sent = try XCTUnwrap(backend.sent.last { $0.mode == .forward })
+        XCTAssertEqual(sent.threadID, "w")
+        XCTAssertTrue(sent.prompt.attachments.isEmpty)
+        XCTAssertFalse(sent.prompt.text.contains("syllabus"), "not the file, nor its name")
+        XCTAssertFalse(sent.prompt.text.contains("Week 1: Describing data"))
+        XCTAssertTrue(sent.prompt.text.hasPrefix("and this?"))
+        XCTAssertTrue(stage.bubbles.contains(.line(CatWords.sentWithoutFile(work), threadID: "w")), "and the cat says the file stayed out")
     }
 
-    func testAHandoffWithFullAccessCantTakeADrop() async {
+
+    func testADropHandedOffGoesWithItsFileInAuto() async throws {
         useFullAccess(frontier: true)
         backend.replies = [[.finished(fullText: "HANDOFF: Summarize the syllabus")]]
         await drop("")
         await controller.frontierTask?.value
-        XCTAssertEqual(backend.sent.count, 1, "only the router's turn")
-        XCTAssertEqual(stage.bubble, .line("Fable can't take files. Put a link or the text in your message instead.", threadID: nil))
+        let handedOff = try XCTUnwrap(backend.sent.dropFirst().first, "the router's turn, then the hand-off")
+        XCTAssertEqual(handedOff.prompt.runtimeMode, .auto)
+        XCTAssertTrue(handedOff.prompt.text.contains("Week 1: Describing data"))
     }
+
 
     func testAFrontDoorWithFullAccessCantTakeADrop() async {
         useFullAccess(quick: true)
@@ -1247,24 +1276,54 @@ final class FlowTests: XCTestCase {
     }
 
     func testADropNothingCanTakeKeepsTheCatsThreadAndSaysWhereItStopped() async {
+        kittens = [clawde]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.replies = [[.finished(fullText: "KITTEN: 1")]]
+        await drop("what's this about?")
+        XCTAssertEqual(stage.bubble, .line(CatWords.cantTakeFiles(clawde.name), threadID: nil))
+        let settled = await until { backend.settled.contains("thread-1") }
+        XCTAssertTrue(settled, "the cat's own thread stays, so nothing leads to one it archived")
+        XCTAssertFalse(backend.archived.contains("thread-1"))
+        XCTAssertEqual(backend.sent.count, 1, "and nothing went anywhere")
+    }
+
+    func testADropReachesTheKittenItsMeantForInANewAutoThread() async {
         useFullAccess(frontier: true)
         kittens = [steve]
         backend.projects["/k/steve"] = "project-steve"
-        controller.threadsChanged([session("w", "Fix the site", mode: .fullAccess)])
-        let routes = [("KITTEN: 1", steve.name), ("HANDOFF: Summarize the syllabus", controller.frontierName), ("SEND TO: 1", "Fix the site")]
-        for (number, (routed, refusedBy)) in routes.enumerated() {
-            let talk = "thread-\(number + 1)"
-            backend.replies = [[.finished(fullText: routed)]]
-            await drop("what's this about?")
-            await controller.frontierTask?.value
-            await controller.forwardTask?.value
-            XCTAssertEqual(stage.bubble, .line(CatWords.cantTakeFiles(refusedBy), threadID: nil), routed)
-            let settled = await until { backend.settled.contains(talk) }
-            XCTAssertTrue(settled, "\(routed): the cat's own thread stays, so nothing leads to one it archived")
-            XCTAssertFalse(backend.archived.contains(talk), routed)
-        }
-        XCTAssertEqual(backend.sent.filter { $0.prompt.projectID != "project-router" }.count, 0, "and nothing went anywhere")
+        backend.replies = [[.finished(fullText: "KITTEN: 1")], [.finished(fullText: "Started.")]]
+        await drop("is this for me?")
+        await controller.frontierTask?.value
+        let given = backend.sent.first { $0.prompt.projectID == "project-steve" }?.prompt
+        XCTAssertEqual(given?.runtimeMode, .auto)
+        XCTAssertEqual(given?.text.contains("Week 1: Describing data"), true)
+        XCTAssertEqual(stage.bubble, .line("Steve Pawsniak has this.", threadID: "thread-2"))
+        let archived = await until { backend.archived == ["thread-1"] }
+        XCTAssertTrue(archived, "the cat's own thread goes once the kitten has it")
     }
+
+    func testAForwardToARunningFullAccessThreadKeepsYourScreenOut() async throws {
+        kittens = [steve]
+        let running = AgentThread(id: "w", title: "Tidy the site", projectTitle: "Steve", status: .running, model: "m", updatedAt: clock, runtimeMode: .fullAccess, projectPath: "/k/steve")
+        controller.threadsChanged([running])
+        backend.replies = [[.finished(fullText: "SEND TO: 1")], [.finished(fullText: "Okay.")]]
+        await ask("and the footer too")
+        await controller.forwardTask?.value
+        let captured = try XCTUnwrap(backend.sent.last { $0.mode == .forward })
+        XCTAssertEqual(captured.threadID, "w")
+        XCTAssertTrue(captured.prompt.attachments.isEmpty)
+        XCTAssertFalse(captured.prompt.text.contains("App: Safari"))
+        XCTAssertTrue(captured.prompt.text.hasPrefix("and the footer too"))
+
+        backend.replies = [[.finished(fullText: "SEND TO: 1")], [.finished(fullText: "Okay.")]]
+        await drop("this one too")
+        await controller.forwardTask?.value
+        let dropped = try XCTUnwrap(backend.sent.last { $0.mode == .forward })
+        XCTAssertTrue(dropped.prompt.attachments.isEmpty)
+        XCTAssertFalse(dropped.prompt.text.contains("Week 1: Describing data"))
+        XCTAssertTrue(stage.bubbles.contains(.line(CatWords.sentWithoutFile(running), threadID: "w")))
+    }
+
 
     func testAQuestionTheCatPassesOnLeadsMessagesToTheThreadThatGotIt() async throws {
         kittens = [steve]
@@ -2294,14 +2353,13 @@ final class FlowTests: XCTestCase {
         XCTAssertNotNil(sentTo("project-steve"), "the owner gets its copy")
     }
 
-    func testTheOwnersOwnSessionRefusingADropStillGetsItsCopy() async {
+    func testTheOwnersOwnSessionTakingADropsWordsIsTheCorrectionItself() async {
         await dropOntoOwnersSession(inOwnersFolder: true)
-        XCTAssertNotNil(sentTo("project-steve"), "nothing reached the session, so the owner should still get its copy")
-        XCTAssertFalse(controller.inbox.wasCorrected("w"), "nothing reached the session, so it wasn't given a correction")
-        XCTAssertTrue(controller.dispatchers.contains("w"), "nothing reached the session, so it still only passes work on")
-
-        await laterPassesWorkOn("C-home-later")
+        XCTAssertNil(sentTo("project-steve"), "the session in its owner's folder got the correction, so no copy goes as well")
+        XCTAssertTrue(controller.inbox.wasCorrected("w"))
+        XCTAssertFalse(controller.dispatchers.contains("w"), "a corrected session is more than one that passes work on")
     }
+
 
     func testWithoutACorrectionASessionThatRefusedADropStillStepsAside() async {
         kittens = [steve]
@@ -2375,10 +2433,14 @@ final class FlowTests: XCTestCase {
         await laterPassesWorkOn("failed-forward")
     }
 
-    func testTheOwnersOwnSessionRefusingADropStillSaysSo() async {
+    func testTheOwnersOwnSessionWithFullAccessGetsADropsWordsAndTheCatSaysTheFileStayedOut() async throws {
         await dropOntoOwnersSession(inOwnersFolder: true)
-        XCTAssertTrue(stage.bubbles.contains(.line(CatWords.cantTakeFiles("Tailor resume"), threadID: nil)))
+        let sent = try XCTUnwrap(backend.sent.last { $0.mode == .forward })
+        XCTAssertEqual(sent.threadID, "w")
+        XCTAssertFalse(sent.prompt.text.contains("syllabus"))
+        XCTAssertTrue(stage.bubbles.contains { if case .line(let text, "w") = $0 { text.hasPrefix("Sent your words to Tailor resume") } else { false } })
     }
+
 
     func testAFrontDoorThatCantTakeADropSendsNothingAtAll() async {
         useFullAccess(quick: true)
@@ -2538,19 +2600,22 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.hiddenThreads.contains("w"))
     }
 
-    func testAHandoffThatCantTakeADropStillSendsTheOwnersCopy() async {
+    func testAHandoffThatTakesADropStillSendsTheOwnersCopy() async {
         useFullAccess(frontier: true)
         kittens = [steve]
         backend.projects["/k/steve"] = "project-steve"
         backend.replies = [[.finished(fullText: "CORRECTION: 1\nHANDOFF: Summarize the syllabus")]]
         await drop("Summarize this. By the way, \(wrong)")
-        await waitForSends(2)
+        await waitForSends(3)
         await controller.flow?.value
         await settle()
-        XCTAssertTrue(stage.bubbles.contains(.line(CatWords.cantTakeFiles(controller.frontierName), threadID: nil)))
+        let handedOff = backend.sent.first { $0.prompt.model == settings.frontierModel && $0.prompt.projectID == nil }
+        XCTAssertEqual(handedOff?.prompt.runtimeMode, .auto)
+        XCTAssertEqual(handedOff?.prompt.text.contains("syllabus.pdf"), true)
         XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains(note), true)
         XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains("syllabus.pdf"), false)
     }
+
 
     func testOnlyThreadsInTheRoutersFolderAreTalksWithTheCat() {
         let talk = AgentThread(id: "r", title: "Which plan?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: clock, projectPath: "/shades/router/")
@@ -4650,32 +4715,34 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.cantTakeFiles("Pepper"), "and it says why, not just that it didn't start")
     }
 
-    func testAFileTheRouterPassesOnToAKittenWithFullAccessSaysWhyUnderWhatYouSentAndKeepsTheCatsThread() async throws {
+    func testAFileTheRouterPassesOnInMessagesReachesTheKittenInAutoOrSaysWhyItStopped() async throws {
         var fresh = settings
         fresh.frontierMode = Settings().frontierMode
         controller.apply(fresh)
-        kittens = [steve]
+        kittens = [steve, clawde]
         backend.projects["/k/steve"] = "project-steve"
-        let handOff = "Fix the layout in the picture"
-        backend.routerSays = ["Tailor my resume to this": "KITTEN: 1", "Fix this layout": "HANDOFF: \(handOff)"]
+        backend.projects["/k/clawde"] = "project-clawde"
+        backend.routerSays = ["Tailor my resume to this": "KITTEN: 1", "Clawde should keep this": "KITTEN: 2"]
         controller.channelsPressed()
-        for (words, refusedBy) in [("Tailor my resume to this", steve.name), ("Fix this layout", controller.frontierName)] {
+        for words in ["Tailor my resume to this", "Clawde should keep this"] {
             controller.messagesAction(.send(words, to: .router, shownIn: .shades, files: [picture]))
             await settle()
             await controller.messagesTurn?.value
             await settle()
-            let shown = said(in: .shades, of: shownBook)
-            let mine = try XCTUnwrap(shown.lastIndex { $0.text == words && $0.speaker == .you })
-            XCTAssertEqual(shown[(mine + 1)...].map(\.text), [CatWords.cantTakeFiles(refusedBy)], "\(words): the cat says why, under what you sent")
+            await controller.frontierTask?.value
         }
-        let shown = said(in: .shades, of: shownBook).map(\.text)
-        XCTAssertFalse(shown.contains(CatWords.passedOnToKitten), "it wasn't passed on")
-        XCTAssertFalse(shown.contains(CatWords.handedOff(handOff)), "nor started on")
-        XCTAssertFalse(backend.sent.contains { $0.mode == .start && $0.prompt.model == settings.frontierModel })
-        let settled = await until { backend.settled.count == 2 }
+        let given = try XCTUnwrap(backend.sent.first { $0.prompt.projectID == "project-steve" }?.prompt)
+        XCTAssertEqual(given.runtimeMode, .auto, "the file goes to Steve in a thread that runs in Auto")
+        XCTAssertEqual(given.attachments.count, 1)
+        XCTAssertNil(backend.sent.first { $0.prompt.projectID == "project-clawde" }, "Clawde never sees your screen")
+        let shown = said(in: .shades, of: shownBook)
+        let mine = try XCTUnwrap(shown.lastIndex { $0.text == "Clawde should keep this" && $0.speaker == .you })
+        XCTAssertEqual(shown[(mine + 1)...].map(\.text), [CatWords.cantTakeFiles(clawde.name)], "the cat says why, under what you sent")
+        let settled = await until { backend.settled.contains("thread-3") }
         XCTAssertTrue(settled)
-        XCTAssertEqual(backend.archived, [], "the cat's threads stay, so nothing leads to one it archived")
+        XCTAssertEqual(backend.archived, ["thread-1"], "only the cat's thread whose question reached Steve")
     }
+
 
     func testAQuestionMessagesPassesToAKittenThatIsntSetUpKeepsTheCatsThreadAndSaysSo() async {
         kittens = [steve, penny]
@@ -4713,7 +4780,7 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(shadesSaid.last, CatWords.passedOnToBusySession, "it says the session gets it once it's done")
     }
 
-    func testTheHandOffFlagGoesTheWayAHandOffDoesSoFullAccessGetsNoScreen() async throws {
+    func testTheHandOffFlagGoesTheWayAHandOffDoesSoAPictureRunsInAuto() async throws {
         var fresh = settings
         fresh.frontierMode = Settings().frontierMode
         controller.apply(fresh)
@@ -4729,11 +4796,10 @@ final class FlowTests: XCTestCase {
         DevFlags.run(on: controller)
         await until { !backend.sent.isEmpty }
         let sent = try XCTUnwrap(backend.sent.first)
-        XCTAssertEqual(sent.prompt.runtimeMode, .fullAccess)
-        XCTAssertTrue(sent.prompt.attachments.isEmpty)
-        XCTAssertFalse(sent.prompt.text.contains("Test picture"), "nor what was on the screen")
-        XCTAssertEqual(context.saved, 0, "nor a copy to open")
+        XCTAssertEqual(sent.prompt.runtimeMode, .auto, "it carries the picture, so it runs in Auto")
+        XCTAssertEqual(sent.prompt.attachments.count, 1)
     }
+
 
     func testAFileIsOfferedOnlyWhereSendingItWouldGo() async throws {
         let steve = Kitten(name: "Steve", role: "Professional", covers: "work", folder: "/k/steve")
@@ -4769,7 +4835,7 @@ final class FlowTests: XCTestCase {
         settings.frontierMode = .fullAccess
         controller.apply(settings)
         XCTAssertFalse(controller.takesFiles(.router), "nor to a router with full access")
-        XCTAssertFalse(controller.takesFiles(.newThread(steve)), "nor to a new thread with full access")
+        XCTAssertTrue(controller.takesFiles(.newThread(steve)), "a new thread carrying it runs in Auto, even with full access")
     }
 
     func testAFileToTheCatGoesOnARouterThreadOfItsOwn() async throws {

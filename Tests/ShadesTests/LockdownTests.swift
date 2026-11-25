@@ -177,16 +177,20 @@ final class LockdownTests: XCTestCase {
         XCTAssertTrue(backend.sent[0].prompt.text.hasPrefix(CatWords.fixThis))
     }
 
-    func testAFixWithFullAccessLeavesTheScreenOutEvenForAThreadStartedInAnotherMode() async {
+    func testAFixIntoAPinnedThreadWithFullAccessLeavesTheScreenOut() async {
         controller = makeController(settings: Settings(lockdown: Lockdown(kitten: builder.id, thread: "t")))
-        controller.threadsChanged([thread("t", of: builder)])
+        var pinned = thread("t", of: builder)
+        pinned.runtimeMode = .fullAccess
+        controller.threadsChanged([pinned])
         controller.sendFix("The total is wrong", snapshot: screen)
         await settle()
         let sent = backend.sent.last
         XCTAssertEqual(sent?.mode, .forward)
         XCTAssertEqual(sent?.threadID, "t")
-        XCTAssertFalse(sent?.prompt.text.contains("let total = 0") == true, "the Fix box said your screen wouldn't go")
+        XCTAssertFalse(sent?.prompt.text.contains("let total = 0") == true, "screen text reached a thread running with full access")
+        XCTAssertTrue(sent?.prompt.text.contains("The total is wrong") == true)
     }
+
 
     func testItSurvivesARestartAndCarriesOnInTheSameThread() async throws {
         controller.lockdownPicked(builder)

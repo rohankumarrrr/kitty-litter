@@ -194,11 +194,11 @@ extension AppController {
         let sharesWithScreenless = loadKittens().contains {
             !$0.seesScreen && KittenBoard.belongs(title: "", projectPath: kitten.workspace, to: $0)
         }
-        return kitten.seesScreen && settings.frontierMode != .fullAccess && !sharesWithScreenless
+        return kitten.seesScreen && !sharesWithScreenless
     }
 
     static func mayHaveScreen(_ mode: RuntimeMode?) -> Bool {
-        mode != nil && mode != .fullAccess
+        mode?.takesScreen == true
     }
 
     func takesFiles(_ target: MessageTarget) -> Bool {
@@ -245,7 +245,8 @@ extension AppController {
                 landedAt = landing
                 landed?(landing)
             }
-            guard seesScreen || snapshot?.isDropped != true else {
+            let leavesOutFile = !seesScreen && snapshot?.isDropped == true
+            guard !leavesOutFile || !youPicked else {
                 say(CatWords.cantTakeFiles(thread.title))
                 refused?()
                 land(.stopped(CatWords.cantTakeFiles(thread.title)))
@@ -257,7 +258,7 @@ extension AppController {
                 noteCorrection(in: thread.id)
             }
             let waits = behavior == .queue && thread.status.isActive
-            if !youPicked { say(waits ? CatWords.sentToBusy(thread) : CatWords.sentTo(thread), threadID: thread.id, fades: true) }
+            if !youPicked { say(leavesOutFile ? CatWords.sentWithoutFile(thread) : waits ? CatWords.sentToBusy(thread) : CatWords.sentTo(thread), threadID: thread.id, fades: !leavesOutFile) }
             let shared = seesScreen ? snapshot : nil
             let text = Prompts.forwarded(
                 words: words,
