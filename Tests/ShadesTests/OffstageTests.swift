@@ -142,4 +142,22 @@ final class OffstageTests: XCTestCase {
         Offstage.isOn = true
         XCTAssertNil(MenuBar().item, "the menu bar shows this run's cat. \(fix)")
     }
+
+    func testALaunchedDemoNeverTakesTheActiveAppFromWhoeverIsTyping() throws {
+        let journey = FileManager.default.temporaryDirectory.appendingPathComponent("front-\(UUID().uuidString).txt")
+        try "front\nwait 3\nfront\nwindows\n".write(to: journey, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: journey) }
+        let demo = Process()
+        demo.executableURL = Bundle(for: Self.self).bundleURL.deletingLastPathComponent().appendingPathComponent("shades")
+        demo.arguments = ["--demo", "--no-script", "--commands", journey.path]
+        let printed = Pipe()
+        demo.standardOutput = printed
+        try demo.run()
+        let lines = String(decoding: printed.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).split(separator: "\n")
+        demo.waitUntilExit()
+        let fronts = lines.filter { $0.hasPrefix("front ") }
+        XCTAssertEqual(fronts.count, 2, "\(lines)")
+        XCTAssertFalse(fronts.contains("front \(CatWords.appName)"), "as it launched and 3 seconds later: \(fronts)")
+        XCTAssertTrue(lines.contains { $0.hasPrefix("state ") && $0.contains("active=false madeActive=0 ") }, "macOS never made it the active app, even for a moment: \(lines.filter { $0.hasPrefix("state ") })")
+    }
 }
