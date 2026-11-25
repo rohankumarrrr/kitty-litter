@@ -15,6 +15,7 @@ private struct T3Answers {
     var reached = false
     var frontDoorError: Error?
     var kittensNotInT3: [Kitten] = []
+    var routinesT3CanLose: [KittenRoutines] = []
 }
 
 extension AppController {
@@ -70,7 +71,22 @@ extension AppController {
         for kitten in kittens {
             if await backend.projectID(atPath: kitten.workspace) == nil { answers.kittensNotInT3.append(kitten) }
         }
+        answers.routinesT3CanLose = await routinesT3CanLose(of: kittens)
         return answers
+    }
+
+    private func routinesT3CanLose(of kittens: [Kitten]) async -> [KittenRoutines] {
+        guard let tasks = await backend.scheduledTasks()?.filter(\.canBeLost), !tasks.isEmpty else { return [] }
+        var found: [KittenRoutines] = []
+        for kitten in kittens {
+            var projects: Set<String> = []
+            for path in Set([kitten.folder, kitten.project]) {
+                if let id = await backend.projectID(atPath: path) { projects.insert(id) }
+            }
+            let lost = tasks.filter { projects.contains($0.projectID) }
+            if !lost.isEmpty { found.append(KittenRoutines(kitten: kitten.name, tasks: lost)) }
+        }
+        return found
     }
 
     @discardableResult
@@ -83,6 +99,7 @@ extension AppController {
         facts.t3Silence = t3.silence
         facts.reachedT3 = t3.reached
         facts.kittensNotInT3 = t3.kittensNotInT3
+        facts.routinesT3CanLose = t3.routinesT3CanLose
         facts.lockdownKittenGone = settings.lockdown != nil && lockedDownKitten == nil
         facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
         switch t3.frontDoorError {

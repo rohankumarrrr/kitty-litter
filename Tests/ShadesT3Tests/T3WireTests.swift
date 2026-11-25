@@ -235,6 +235,27 @@ final class T3WireTests: XCTestCase {
         }
     }
 
+    func testScheduledTasksSayWhetherTheyRunAtASetTimeAndWhichThreadTheyreBoundTo() throws {
+        let task = #"{"id":"scheduled-task:1","title":"%@","prompt":"Do the thing","enabled":%@,"schedule":%@,"projectId":"p","threadId":%@,"workspaceStrategy":{"type":"root"},"runtimeMode":"auto","interactionMode":"default","createdAt":"2026-11-20T08:00:00.000Z","updatedAt":"2026-11-20T08:00:00.000Z","nextRunAt":null,"lastRunAt":null,"lastRunStatus":"never","lastRunError":null,"runCount":0}"#
+        func entry(_ title: String, enabled: Bool = true, schedule: String, thread: String?) -> String {
+            String(format: task, title, enabled ? "true" : "false", schedule, thread.map { "\"\($0)\"" } ?? "null")
+        }
+        let tasks = [
+            entry("At eight", schedule: #"{"type":"fixed_time","timeOfDay":"08:00","weekdays":[1,2,3,4,5]}"#, thread: nil),
+            entry("Every hour", enabled: false, schedule: #"{"type":"interval","everyMs":3600000}"#, thread: "t"),
+            entry("On a push", schedule: #"{"type":"webhook","signature":null}"#, thread: nil),
+            #"{"title":"From the future"}"#,
+        ]
+        let frame = #"{"_tag":"Chunk","requestId":"1","values":[{"tasks":[\#(tasks.joined(separator: ","))]}]}"#
+        let chunk = try XCTUnwrap(T3Wire.frames(T3Wire.ChunkFrame<T3Wire.ScheduledTaskList>.self, in: Data(frame.utf8)).first)
+
+        XCTAssertEqual(chunk.items.first?.scheduledTasks, [
+            ScheduledTask(title: "At eight", projectID: "p", runsAtSetTime: true, threadID: nil),
+            ScheduledTask(title: "Every hour", projectID: "p", enabled: false, runsAtSetTime: false, threadID: "t"),
+            ScheduledTask(title: "On a push", projectID: "p", runsAtSetTime: false, threadID: nil),
+        ])
+    }
+
     func testDatesParseWithAndWithoutFractions() {
         XCTAssertNotNil(T3Wire.parseDate("2026-11-05T03:44:48.210Z"))
         XCTAssertNotNil(T3Wire.parseDate("2026-11-05T03:44:48Z"))

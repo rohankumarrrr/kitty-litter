@@ -242,6 +242,14 @@ public final class T3Backend: AgentBackend, @unchecked Sendable {
         return list.threadsWithoutWords
     }
 
+    public func scheduledTasks() async -> [ScheduledTask]? {
+        await firstSnapshot(
+            T3Wire.Method.subscribeScheduledTasks,
+            payload: T3Wire.encode(T3Wire.Empty()),
+            of: T3Wire.ScheduledTaskList.self
+        ) { lists in lists.first?.scheduledTasks }
+    }
+
     // Outside the repo: T3's getThreadProjection answers with only a thread's latest 75 or so rows.
     public func exchanges(threadID: String) async -> [Exchange]? {
         if !lock.withLock({ catalog.isLoaded }) { _ = await allThreads() }

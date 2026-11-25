@@ -187,6 +187,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     var heldProject: Task<Void, Never>?
     var reports: [String: String] = [:]
     var projects: [String: String] = [:]
+    var scheduled: [ScheduledTask]?
     private var _settled: [String] = []
     private var _archived: [String] = []
     var settled: [String] { lock.withLock { _settled } }
@@ -274,6 +275,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     var said: [String: [Exchange]] = [:]
     var unreadableTranscripts: Set<String> = []
     @MainActor func allThreads() async -> [AgentThread]? { listed }
+    @MainActor func scheduledTasks() async -> [ScheduledTask]? { scheduled }
     @MainActor func exchanges(threadID: String) async -> [Exchange]? { unreadableTranscripts.contains(threadID) ? nil : said[threadID] ?? [] }
 
     private func play(threadID: String, prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {

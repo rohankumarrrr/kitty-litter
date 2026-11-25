@@ -760,6 +760,19 @@ func probeOrigin() async throws {
     await backend.disconnect()
 }
 
+func probeRoutines() async throws {
+    let backend = makeBackend()
+    try await backend.connect()
+    if let tasks = await backend.scheduledTasks() {
+        let on = tasks.filter(\.enabled)
+        say("\(tasks.count) scheduled tasks, \(on.count) on: \(on.filter(\.runsAtSetTime).count) at a set time, \(on.filter { $0.threadID == nil }.count) with no thread")
+    } else {
+        say("T3 wouldn't list its scheduled tasks")
+    }
+    await backend.signOut()
+    await backend.disconnect()
+}
+
 func probeSearch() async throws {
     let words = CommandLine.arguments.dropFirst(2).joined(separator: " ")
     guard words.count >= 2 else { throw NSError(domain: "usage: search <words>", code: 2) }
@@ -993,6 +1006,7 @@ let probes: [String: () async throws -> Void] = [
     "router": probeRouter,
     "sort": probeSort,
     "search": probeSearch,
+    "routines": probeRoutines,
     "picture": probePicture,
 ]
 

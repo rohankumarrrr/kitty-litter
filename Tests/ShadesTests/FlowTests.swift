@@ -3082,6 +3082,49 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(findings.first { !$0.ok && $0.check == "kitten: Pepper" }?.fix, "Add /code/app as a project in T3.")
     }
 
+    func testTheSelfCheckNamesEveryRoutineAtASetTimeOrWithNoThreadInAKittensProjects() async {
+        kittens = [steve, pepper]
+        backend.projects = ["/k/steve": "project-steve", "/k/pepper": "project-pepper", "/code/app": "project-app"]
+        backend.scheduled = [
+            ScheduledTask(title: "Check the site", projectID: "project-steve", runsAtSetTime: true, threadID: nil),
+            ScheduledTask(title: "Post the weekly note", projectID: "project-steve", runsAtSetTime: true, threadID: nil),
+            ScheduledTask(title: "Tidy the inbox", projectID: "project-steve", runsAtSetTime: false, threadID: "thread-steve"),
+            ScheduledTask(title: "Old reminder", projectID: "project-steve", enabled: false, runsAtSetTime: true, threadID: nil),
+            ScheduledTask(title: "Nightly build", projectID: "project-app", runsAtSetTime: false, threadID: nil),
+            ScheduledTask(title: "Someone else's", projectID: "project-other", runsAtSetTime: true, threadID: nil),
+        ]
+        controller.threadListArrived = true
+
+        let findings = await controller.runHealthCheck().filter { $0.check.hasPrefix("routines:") }
+
+        XCTAssertEqual(findings, [
+            HealthFinding(
+                check: "routines: Steve Pawsniak",
+                ok: false,
+                problem: "Steve Pawsniak has routines T3 can lose. It skips “Check the site” and “Post the weekly note” if your Mac is asleep at their set times. “Check the site” and “Post the weekly note” have no thread, so T3 runs them in a new worktree from main, away from Steve Pawsniak's folder.",
+                fix: "Make each an interval that every run re-aims at its next time, bound to a thread in Steve Pawsniak's own folder."
+            ),
+            HealthFinding(
+                check: "routines: Pepper",
+                ok: false,
+                problem: "Pepper has routines T3 can lose. “Nightly build” has no thread, so T3 runs it in a new worktree from main, away from Pepper's folder.",
+                fix: "Make it an interval that every run re-aims at its next time, bound to a thread in Pepper's own folder."
+            ),
+        ])
+    }
+
+    func testTheSelfCheckIsQuietAboutAnIntervalBoundToAThread() async {
+        kittens = [steve]
+        backend.projects = ["/k/steve": "project-steve"]
+        backend.scheduled = [ScheduledTask(title: "Check the site", projectID: "project-steve", runsAtSetTime: false, threadID: "thread-steve")]
+        controller.threadListArrived = true
+
+        let findings = await controller.runHealthCheck()
+
+        XCTAssertFalse(findings.isEmpty)
+        XCTAssertFalse(findings.contains { $0.check.hasPrefix("routines:") })
+    }
+
     func testAKittenWorkingInTheFolderOfOneThatDoesntSeeTheScreenDoesntSeeItEither() async {
         let visitor = Kitten(name: "Pepper", role: "Finance", covers: "the app", folder: "/k/pepper", project: clawde.folder)
         kittens = [clawde, visitor]
