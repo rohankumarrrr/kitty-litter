@@ -390,6 +390,7 @@ final class ChannelsWindowTests: XCTestCase {
 
         pane.scrollOffset -= 100
         XCTAssertGreaterThan(pane.shownMessageRows.count, laidOut, "the page before it is laid out")
+        XCTAssertLessThanOrEqual(pane.shownMessageRows.count - laidOut, ChannelPane.page / 4, "a quarter of a page at a time, since a whole page in one step of a scroll took 17 to 27 ms")
         XCTAssertEqual(pane.scrollOffset - reading.frame.minY, above - 100, accuracy: 0.5, "and what you were reading moved only as far as you scrolled")
 
         for _ in 0..<20 { pane.scrollOffset = 0 }
