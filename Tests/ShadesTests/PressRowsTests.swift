@@ -140,6 +140,21 @@ final class PressRowsTests: XCTestCase {
         return (window, view, heard, row)
     }
 
+    func testOpenInT3OnWordsTheCatPassedOnOpensTheThreadThatGotThem() throws {
+        let work = AgentThread(id: "n", title: "Dock", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: steve.folder)
+        let mine = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "What's this?", at: at, threadID: "talk", threadTitle: "")
+        let book = ChannelBook.build(kittens: [steve], threads: [work], transcripts: ["n": [exchange("n0", 1, ask: "What's this?", reply: "A Dock setting.")]], isReading: false, unreadable: 0, cantReachT3: false, sent: [SentMessage(channel: .shades, message: mine, alsoSent: true)], passedOn: ["talk": "n"])
+        let (_, view, heard) = messages(width: 1100)
+        view.show(book)
+        view.select(.channel(.shades))
+        view.layoutSubtreeIfNeeded()
+        let row = try row("sent-1:ask", in: view.pane)
+        row.hovering = true
+        let button = try XCTUnwrap(row.toolbar?.button(CatWords.openInT3), "the cat archived its own thread, so it opens where your words went")
+        XCTAssertTrue(try Press.click(button) === button)
+        XCTAssertEqual(heard.openedInT3, ["n"])
+    }
+
     func testEachButtonInAMessagesBarDoesWhatItSaysWhereverTheMessageIs() throws {
         for c in cases {
             for width: CGFloat in [1100, 820] {

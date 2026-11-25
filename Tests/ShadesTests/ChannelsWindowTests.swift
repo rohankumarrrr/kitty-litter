@@ -1277,6 +1277,20 @@ final class ChannelsWindowTests: XCTestCase {
         XCTAssertEqual(sent.last, .send("Keep it to one page", to: .thread(id: "n", title: "Write a cover letter"), shownIn: .of(steve)))
     }
 
+    func testAPaneOnTheCatsThreadFollowsTheQuestionToTheThreadThatGotItOnceTheCatArchivesItsOwn() {
+        let talk = AgentThread(id: "talk", title: "What's this?", projectTitle: "Shades router", status: .running, model: "m", updatedAt: at, projectPath: "/shades/router")
+        let asked = Exchange(id: "a", asker: .you, askedAt: at, ask: "What's this?", reply: nil, repliedAt: nil)
+        let view = view()
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [talk], transcripts: ["talk": [asked]], isReading: false, unreadable: 0, cantReachT3: false, withShades: ["talk"]))
+        view.select(.thread("talk", in: .channel(.shades)))
+
+        let work = work("n", title: "What's this?")
+        view.show(ChannelBook.build(kittens: [steve, pepper], threads: [work], transcripts: ["n": [said("e", ask: "What's this?", reply: "A Dock setting.", at: 1)]], isReading: false, unreadable: 0, cantReachT3: false, passedOn: ["talk": "n"]))
+        XCTAssertEqual(view.selection.thread, "n")
+        XCTAssertFalse(view.threadPane.shown.contains(.note(CatWords.threadNotListed)), "never archived or deleted")
+        XCTAssertTrue(view.threadPane.shown.contains { if case .message(let message) = $0 { message.text == "A Dock setting." } else { false } })
+    }
+
     func testANewTopicHoldsTheBoxEvenIfAnotherThreadAnswersFirst() {
         var threads = [AgentThread(id: "t", title: "Resume", projectTitle: "Steve", status: .running, model: "m", updatedAt: at, projectPath: "/k/steve")]
         var transcripts = ["t": [Exchange(id: "e", asker: .you, askedAt: at, ask: "Tidy my resume", reply: nil, repliedAt: nil)]]

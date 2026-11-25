@@ -137,6 +137,14 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         return "demo-project"
     }
 
+    func archive(threadID: String) async throws {
+        print("[demo] archived \(threadID)")
+    }
+
+    func settle(threadID: String) async throws {
+        print("[demo] settled \(threadID)")
+    }
+
     func report(threadID: String, run: String?) async throws -> String? {
         try? await Task.sleep(nanoseconds: 800_000_000)
         if let report = lock.withLock({ reports[threadID] }) { return report }

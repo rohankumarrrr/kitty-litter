@@ -18,7 +18,7 @@ final class TimedWaitTests: XCTestCase {
         "Tests/ShadesTests/DemoRecorderTests.swift": 1,
         "Tests/ShadesTests/DoNotDisturbTests.swift": 1,
         "Tests/ShadesTests/Fakes.swift": 1,
-        "Tests/ShadesTests/FlowTests.swift": 95,
+        "Tests/ShadesTests/FlowTests.swift": 93,
         "Tests/ShadesTests/LockdownEdgeTests.swift": 2,
         "Tests/ShadesTests/LockdownTests.swift": 1,
         "Tests/ShadesTests/MessagesShortcutsTests.swift": 1,
