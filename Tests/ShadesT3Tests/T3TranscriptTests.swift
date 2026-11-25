@@ -45,6 +45,16 @@ final class T3TranscriptTests: XCTestCase {
         XCTAssertFalse(String(describing: exchanges).contains(sentinel))
     }
 
+    func testANoteThatPassesOnAReportSaysWhoseItIsAndNothingElse() throws {
+        let worker = AgentThread(id: "mcp:launch:abc", title: "Clawde: Look it up", projectTitle: nil, status: .completed, model: "m", updatedAt: Date())
+        let note = Prompts.launchedReport("It's on main.", of: worker)
+        let exchanges = fold([try user(note, at: 0), try user("Use plan B. Thread mcp:launch:abc, which was working for you", id: "u2", at: 1)])
+        XCTAssertEqual(exchanges.map(\.passesOnReportOf), ["mcp:launch:abc", nil], "only The Kitty Litter's own note names the thread it passes on")
+        XCTAssertEqual(exchanges.first?.ask, nil)
+        XCTAssertTrue(exchanges.first?.isTheKittyLittersOwnNote == true)
+        XCTAssertNil(fold([try user(note, at: 0, extra: ["createdBy": "agent", "senderThreadId": "s"])]).first?.passesOnReportOf, "an agent can't pass for The Kitty Litter")
+    }
+
     func testWorkTheCatStartedShowsOnlyYourWordsAndItsReply() throws {
         let frontier = Prompts.frontier(request: "do this", snapshot: ScreenSnapshot(pageText: sentinel), screenshotPath: nil)
         let exchanges = fold([try user(frontier, at: 0), try spoken("Done.", at: 1)])

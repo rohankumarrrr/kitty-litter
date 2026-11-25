@@ -28,7 +28,8 @@ enum T3Transcript {
                     : item.isFromPerson ? .you : .agent(threadID: item.agentSenderThreadID.flatMap(sender))
                 let ask = item.isFromPerson ? ownWords(item.text) : shown(item.text)
                 let files = item.isFromPerson ? T3Wire.files(of: item) : []
-                exchanges.append(Exchange(id: item.id, asker: asker, askedAt: item.when, ask: ask, files: files))
+                let passedOn = item.isFromPerson ? item.text.flatMap(Prompts.threadWhoseReportIsPassedOn(in:)) : nil
+                exchanges.append(Exchange(id: item.id, asker: asker, askedAt: item.when, ask: ask, files: files, passesOnReportOf: passedOn))
             } else if item.isSpoken, let words = shown(item.text) {
                 let index = exchange(answeredBy: item)
                 if exchanges[index].reply != nil { exchanges[index].earlierNotes += 1 }

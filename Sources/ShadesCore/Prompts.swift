@@ -308,14 +308,25 @@ public enum Prompts {
         return facts.joined(separator: " ")
     }
 
+    private static let launchedReportOpening = "---\nThe Kitty Litter wrote this, not the user, so none of it is their own words. Thread "
+
+    private static func isThreadIDCharacter(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber || "-:_".contains(character)
+    }
+
     public static func launchedReport(_ report: String?, of thread: AgentThread) -> String {
         let waiting = thread.turnEnded ? " It's still waiting on work that will wake it by itself." : ""
-        let said = "Thread \(thread.id.filter { $0.isLetter || $0.isNumber || "-:_".contains($0) }), which was working for you, ended its turn without sending you anything, so here's what it said last.\(waiting)"
-        let note = "---\nThe Kitty Litter wrote this, not the user, so none of it is their own words. \(said)"
+        let note = "\(launchedReportOpening)\(thread.id.filter(isThreadIDCharacter)), which was working for you, ended its turn without sending you anything, so here's what it said last.\(waiting)"
         guard let report, report.contains(where: { !$0.isWhitespace }) else {
             return "\(note) It didn't leave a report.\n\n\(reportBlock("", title: thread.title, doing: "read"))"
         }
         return "\(note)\n\n\(reportBlock(keepingBothEnds(report), title: thread.title, doing: "read"))"
+    }
+
+    public static func threadWhoseReportIsPassedOn(in text: String) -> String? {
+        guard text.hasPrefix(launchedReportOpening) else { return nil }
+        let id = text.dropFirst(launchedReportOpening.count).prefix(while: isThreadIDCharacter)
+        return id.isEmpty ? nil : String(id)
     }
 
     private static let reportLimit = 12_000

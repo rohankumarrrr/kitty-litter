@@ -83,11 +83,19 @@ extension AppController {
     func reportsTo(_ thread: AgentThread) async -> String? {
         guard kitten(of: thread) != nil, !isForYou(thread.id) else { return nil }
         let started = thread.lastRunStartedAt ?? .distantFuture
-        for exchange in (await backend.exchanges(threadID: thread.id) ?? []).reversed() where exchange.askedAt <= started && !exchange.isTheKittyLittersOwnNote {
+        var pastANote = false
+        var opener = true
+        for exchange in (await backend.exchanges(threadID: thread.id) ?? []).reversed() where exchange.askedAt <= started {
+            defer { opener = false }
+            if exchange.isTheKittyLittersOwnNote {
+                if opener, let from = exchange.passesOnReportOf, await writer(from, to: thread) != .itsOwnWorker { pastANote = true }
+                continue
+            }
             switch exchange.asker {
             case .you, .schedule:
                 return nil
             case .agent(let sender?) where sender != thread.id:
+                if pastANote { continue }
                 switch await writer(sender, to: thread) {
                 case .itsOwnWorker:
                     continue
