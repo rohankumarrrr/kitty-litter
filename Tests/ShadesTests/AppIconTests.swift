@@ -67,13 +67,12 @@ final class AppIconTests: XCTestCase {
     }
 
     func testTheRunningAppShowsItsIconInTheDockWithTheBadgeOnTop() throws {
-        defer { NSApp.applicationIconImage = nil }
+        let stage = AppStage()
+        defer { stage.showNeedsYou(0) }
         let controller = AppController(dependencies: AppDependencies(backend: FakeBackend(), context: FakeContext(log: Log()), voice: FakeVoice(), inserter: FakeInserter(), keys: FakeKeys(), settings: Settings(), saveSettings: { _ in }, kittens: { [] }, inbox: Inbox(since: .distantPast)), stage: FakeStage(log: Log()))
         AppDelegate(controller: controller, menuBar: MenuBar()).applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
         let shown = try XCTUnwrap(NSApp.applicationIconImage?.cgImage(forProposedRect: nil, context: nil, hints: nil).map(NSBitmapImageRep.init(cgImage:)))
-        assertTheCatOnARimlightTile(shown, tileFrom: 100 / 1024, to: 924 / 1024, "the Dock while it runs, which macOS's tinted icon styles leave in colour")
-        let stage = AppStage()
-        defer { stage.showNeedsYou(0) }
+        assertTheCatOnARimlightTile(shown, tileFrom: 100 / 1024, to: 924 / 1024, "the Dock while it runs")
         stage.showNeedsYou(2)
         XCTAssertEqual(NSApp.dockTile.badgeLabel, "2", "the badge goes on top of it")
         stage.showNeedsYou(0)
