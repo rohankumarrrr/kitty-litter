@@ -29,7 +29,7 @@ The harm it guards against: a paired phone logged out by an old pairing link, as
 | the page's request doesn't get through | A network error on the oldest waiting request. Once |
 | N seconds pass | The page's next timer, such as its retry after it couldn't reach the Mac. Once |
 
-After every event it checks that a key the Mac took before the event is still taken after it, that a page asking for a code shows nothing else (`top`, `head`, `rows`, `box`, `search`, `found` all hidden), that the page threw nothing, and that no code is left in the address once the page has nothing more to do. Then the Mac answers everything at once for 30 seconds. After that, the page holds a key the Mac takes and shows its thread, or it holds no key and asks for one. Every code you gave it was sent to `/pair`, and a key the Mac took is still taken.
+After every event it checks that a key the Mac took before the event is still taken after it, that a page asking for a code shows nothing else (`top`, `head`, `rows`, `box`, `search`, `found` all hidden, and no sheet open), that a code you give a page asking for one never goes with the key the Mac refused, that the page threw nothing, and that no code is left in the address once the page has nothing more to do. Then the Mac answers everything at once for 30 seconds. After that, the page holds a key the Mac takes and shows its thread, or it holds no key and asks for one. Every code you gave it was sent to `/pair`, and a key the Mac took is still taken.
 
 ## Run it
 
@@ -37,7 +37,7 @@ After every event it checks that a key the Mac took before the event is still ta
 swift test --filter PhonePairingModelTests
 ```
 
-Run `swift` on its own, with no pipe and no `cd`. It takes about 30 seconds and passes with `Executed 5 tests, with 0 failures`. The walk sees about 2,400 states.
+Run `swift` on its own, with no pipe and no `cd`. It takes about 30 seconds and passes with `Executed 7 tests, with 0 failures`. The walk sees about 2,400 states.
 
 ## Proving it can fail
 
@@ -47,6 +47,9 @@ Run `swift` on its own, with no pipe and no `cd`. It takes about 30 seconds and 
 | `PhonePage.swift` from before #123 (`git show 03e5f120^:…`), which drops its key whenever a code doesn't work | The walk: "1. you scan the code showing into the page that's open 2. you scan an old code into the page that's open 3. the Mac answers the page's /pair with 200. Then, with the network fine from here on: the page lost a key the Mac takes". `testAnOldPairingLinkLeavesAPairedPhonePaired`: "the page lost a key the Mac takes" |
 | The page before the interrogate round's fix, where any 401 called `pairing()` | The walk: "1. you come back to a page that still holds a key the Mac has since forgotten 2. you scan the code showing into the page that's open 3. the Mac answers the page's /pair with 200. Then, with the network fine from here on: the page lost a key the Mac takes". `testARefusalOfTheKeyBeforeLeavesTheKeyTheMacJustGaveAlone` failed the same way |
 | `pairing()` without `'box'` in what it hides | "1. you scan the code showing … 2. the Mac answers everything waiting, in order 3. the Mac restarts as a build that can't read its pairing … Then: the page asks for a code with ["box"] still showing" |
+| `pairing()` without `pass = null`, so the page keeps the refused key in memory | "1. you come back to a page that still holds a key the Mac has since forgotten 2. the Mac answers the page's /hello with 401 3. you type the code showing and press Pair. Then: the page asking for a code sent the key the Mac had refused along with the code you gave it" |
+| `pairing()` without closing the sheets | `testALinksSheetGoesWithThePageWhenItAsksForACode`: "the page asks for a code with ["linksheet"] still open over it", and the Pair button "is covered by a sheet" |
+| `pairing()` removing the stored key whatever it is, so one tab's refusal wipes another's new key | `testAnotherTabsNewKeySurvivesTheOldTabHearingItsKeyWasForgotten`: the shared key was `nil` |
 | Today's `pairing()` without `localStorage.removeItem('shades.key')` | "1. you scan the code showing … 2. the Mac answers the page's /pair with 200 3. the Mac restarts as a build that can't read its pairing … Then: the page keeps a key the Mac refuses" |
 
 To repeat one, copy the old `PhonePage.swift` over the current one, run the command, and restore it with `git checkout Sources/Shades/Phone/PhonePage.swift`.
@@ -60,6 +63,7 @@ A failure prints the shortest order that breaks it, as numbered steps in the wor
 - **Codes running out.** Ten minutes and five wrong tries are `PhoneTests`' `testGuessingUsesTheCodeUpAndItRunsOut`, on the real `PhoneDoor`.
 - **Search.** The walk never opens Search, so `search` and `found` are always hidden in it. What a page found going with its pairing is checked apart from this, in `PhoneTests`.
 - **The stream.** Pairing only needs the stream to open. Every order of a stream's events is `verify-phone-stream`.
+- **Sheets and tabs.** No event in the walk opens a sheet or a second tab. `testALinksSheetGoesWithThePageWhenItAsksForACode` and `testAnotherTabsNewKeySurvivesTheOldTabHearingItsKeyWasForgotten` replay those, and the second copies the new tab's key into the old tab's storage by hand, as a browser's shared storage would.
 - **Bounds.** Two codes, one of each event above, four events deep, which holds both bugs it replays.
 
 ## Sync

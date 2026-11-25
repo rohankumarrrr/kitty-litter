@@ -176,7 +176,7 @@ final class PhoneScript {
 
     func settle(file: StaticString = #filePath, line: UInt = #line) {
         for _ in 0..<1000 {
-            if let (next, reply) = pending.lazy.compactMap({ request in self.mac(request).map { (request, $0) } }).first {
+            if let (next, reply) = firstAnswer() {
                 answer(next, reply)
             } else if timersDue > 0 {
                 call("__fireNextTimer")
@@ -196,6 +196,13 @@ final class PhoneScript {
         }
         call("__setClock", until)
         settle(file: file, line: line)
+    }
+
+    private func firstAnswer() -> (Request, Reply)? {
+        for request in pending {
+            if let reply = mac(request) { return (request, reply) }
+        }
+        return nil
     }
 
     private func tick() {

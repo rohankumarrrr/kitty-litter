@@ -564,6 +564,12 @@ enum PhonePage {
 
         function refused(holding) {
           if (holding !== pass) return false;
+          const stored = localStorage.getItem('shades.key');
+          if (stored && stored !== holding) {
+            pass = stored;
+            start();
+            return false;
+          }
           pairing();
           return true;
         }
@@ -571,8 +577,9 @@ enum PhonePage {
         function pairing() {
           if (stream) stream.abort();
           stream = null;
+          if (localStorage.getItem('shades.key') === pass) localStorage.removeItem('shades.key');
           pass = null;
-          localStorage.removeItem('shades.key');
+          for (const sheet of document.querySelectorAll('dialog')) if (sheet.open) sheet.close();
           $('found').replaceChildren();
           $('bar').hidden = false;
           banner('');
