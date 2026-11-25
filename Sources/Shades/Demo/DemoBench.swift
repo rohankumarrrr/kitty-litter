@@ -213,20 +213,26 @@ enum DemoBench {
 
         let frame = window.frame
         var resizes: [Double] = []
+        view.viewWillStartLiveResize()
         for step in 1...10 {
             var wider = frame
             wider.size.width += CGFloat(step * 8)
             resizes.append(time(window) { window.setFrame(wider, display: false) })
         }
+        let resized = time(window) { view.viewDidEndLiveResize() }
         window.setFrame(frame, display: true)
         report("resize", resizes, budget: .frame)
+        report("resize-end", [resized], budget: .instant)
 
         var drags: [Double] = []
+        view.sidebarEdge.onResizing?(true)
         for step in 1...10 {
             drags.append(time(window) { view.dragSidebarEdge(to: ChannelSidebar.width - CGFloat(step * 4)) })
         }
+        let dragged = time(window) { view.sidebarEdge.onResizing?(false) }
         view.chosenSidebarWidth = nil
         report("drag-sidebar", drags, budget: .frame)
+        report("drag-sidebar-end", [dragged], budget: .instant)
         var hides: [Double] = []
         for _ in 0..<rounds * 2 {
             hides.append(time(window) { view.perform(.toggleSidebar) })

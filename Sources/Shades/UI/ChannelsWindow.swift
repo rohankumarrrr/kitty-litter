@@ -161,6 +161,8 @@ final class ChannelsView: QuietView {
         threadEdge.isHidden = true
         sidebarEdge.onDrag = { [weak self] x in self?.dragSidebarEdge(to: x) }
         threadEdge.onDrag = { [weak self] x in self?.dragThreadEdge(to: x) }
+        sidebarEdge.onResizing = { [weak self] in self?.isResizing = $0 }
+        threadEdge.onResizing = { [weak self] in self?.isResizing = $0 }
         threadPane.parts = pane.parts
         jumpBox.isHidden = true
         cheatsheet.isHidden = true
@@ -212,6 +214,23 @@ final class ChannelsView: QuietView {
         let wanted = min(max(chosen ?? ChannelSidebar.width, sidebarWidths.lowerBound), sidebarWidths.upperBound)
         let room = width - Opal.Space.inset - narrowestPlace - threadWidths.lowerBound
         return min(wanted, max(room, ChannelSidebar.width))
+    }
+
+    var isResizing = false {
+        didSet {
+            pane.isResizing = isResizing
+            threadPane.isResizing = isResizing
+        }
+    }
+
+    override func viewWillStartLiveResize() {
+        super.viewWillStartLiveResize()
+        isResizing = true
+    }
+
+    override func viewDidEndLiveResize() {
+        super.viewDidEndLiveResize()
+        isResizing = false
     }
 
     func dragThreadEdge(to x: CGFloat) {
@@ -401,6 +420,7 @@ final class ResizeEdge: QuietView {
     static let lineInset: CGFloat = 2
 
     var onDrag: ((CGFloat) -> Void)?
+    var onResizing: ((Bool) -> Void)?
     private var grab: CGFloat = 0
 
     override var mouseDownCanMoveWindow: Bool { false }
@@ -411,6 +431,11 @@ final class ResizeEdge: QuietView {
 
     override func mouseDown(with event: NSEvent) {
         grab = convert(event.locationInWindow, from: nil).x - Self.lineInset
+        onResizing?(true)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        onResizing?(false)
     }
 
     override func mouseDragged(with event: NSEvent) {

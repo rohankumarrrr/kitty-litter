@@ -1949,3 +1949,63 @@ extension ChannelsWindowTests {
         XCTAssertEqual(try edge().redComponent, violet.redComponent, accuracy: 0.05)
     }
 }
+
+extension ChannelsWindowTests {
+    private func longThread(width: CGFloat = 820) -> ChannelsView {
+        let view = ChannelsView(frame: NSRect(x: 0, y: 0, width: width, height: 560))
+        let said = (1...6).map { "Paragraph \($0) says what changed on the pricing page, which plan moved where, and why the button reads better now." }
+        view.show(book(exchanges: 300, text: said.joined(separator: "\n\n")))
+        view.select(inThread)
+        view.layoutSubtreeIfNeeded()
+        return view
+    }
+
+    func testALiveResizeLaysOutOnlyWhatsInSightAndEndsWhereAFreshLayoutWould() throws {
+        let live = longThread()
+        let pane = live.threadPane
+        let outOfSight = try XCTUnwrap(pane.shownMessageRows.first { $0.superview != nil && $0.frame.maxY < pane.scrollOffset }, "a message above what you can see")
+        let before = outOfSight.frame.height
+        live.viewWillStartLiveResize()
+        live.setFrameSize(NSSize(width: 1100, height: 560))
+        live.layoutSubtreeIfNeeded()
+        XCTAssertEqual(outOfSight.frame.height, before, "while resizing, a message out of sight isn't measured again")
+        XCTAssertNotEqual(outOfSight.fit(width: pane.frame.width), before, "though at that width its words wrap differently")
+        live.viewDidEndLiveResize()
+        live.layoutSubtreeIfNeeded()
+        let fresh = longThread(width: live.frame.width)
+        let attached = { (view: ChannelsView) in view.threadPane.shownMessageRows.filter { $0.superview != nil }.map(\.frame) }
+        XCTAssertFalse(attached(live).isEmpty)
+        XCTAssertEqual(attached(live), attached(fresh), "once it ends, every row is where a fresh layout puts it")
+        XCTAssertEqual(live.threadPane.scrollOffset, fresh.threadPane.scrollOffset, "still at the newest")
+    }
+
+    func testResizingKeepsTheMessageYoureReadingWhereItWas() throws {
+        let view = longThread()
+        let pane = view.threadPane
+        pane.scrollOffset = pane.scrollOffset / 2
+        view.layoutSubtreeIfNeeded()
+        let reading = try XCTUnwrap(pane.shownMessageRows.first { $0.superview != nil && $0.frame.maxY > pane.scrollOffset }, "the message at the top of what you can see")
+        let below = reading.frame.minY - pane.scrollOffset
+        view.setFrameSize(NSSize(width: 980, height: 560))
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(reading.frame.minY - pane.scrollOffset, below, accuracy: 1, "the same message stays at the same place in the pane as the words rewrap")
+    }
+
+    func testDraggingAnEdgeIsAResizeUntilYouLetGoAndDrawsQuicklyMeanwhile() throws {
+        let view = longThread()
+        let window = NSWindow(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: true)
+        window.contentView = view
+        let rows = view.threadPane.shownMessageRows
+        XCTAssertFalse(rows.isEmpty)
+        let at = view.convert(NSPoint(x: view.threadPane.frame.minX, y: 200), to: nil)
+        let edge = try XCTUnwrap(window.contentView?.hitTest(at) as? ResizeEdge, "the pointer meets the thread's edge")
+        let down = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: at, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        edge.mouseDown(with: down)
+        XCTAssertTrue(view.threadPane.isResizing && view.pane.isResizing, "pressing the edge starts a resize")
+        XCTAssertTrue(rows.allSatisfy(\.drawsQuickly), "and its messages draw quickly while it lasts")
+        let up = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseUp, location: at, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        edge.mouseUp(with: up)
+        XCTAssertFalse(view.threadPane.isResizing || view.pane.isResizing, "letting go ends it")
+        XCTAssertFalse(rows.contains(where: \.drawsQuickly), "and they draw in full once more")
+    }
+}
