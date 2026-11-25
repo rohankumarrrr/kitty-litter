@@ -63,7 +63,6 @@ final class ChannelSidebar: QuietView {
     private let scroll = QuietScrollView()
     private let list = QuietView()
     private var shownGroups: [[ChannelSidebarItem]] = []
-    private var tick = 0
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -107,9 +106,8 @@ final class ChannelSidebar: QuietView {
         needsDisplay = true
     }
 
-    func advance(tick: Int) {
-        self.tick = tick
-        rows.forEach { $0.update(tick: tick) }
+    func motionChanged() {
+        rows.forEach { $0.motionChanged() }
     }
 
     private func rebuild(_ groups: [(heading: String?, items: [ChannelSidebarItem])]) {
@@ -128,7 +126,6 @@ final class ChannelSidebar: QuietView {
                 row.onPress = { [weak self] in self?.onSelect?(item.place) }
                 row.onMarkRead = { [weak self] in self?.onMarkRead?(item.place) }
                 if anyUnread { row.onMarkAllRead = { [weak self] in self?.onMarkAllRead?() } }
-                row.update(tick: tick)
                 row.frame = NSRect(x: 8, y: y, width: bounds.width - 16, height: Self.rowHeight)
                 list.addSubview(row)
                 rows.append(row)
@@ -222,14 +219,24 @@ final class ChannelSidebarRow: ChannelRowView {
             setAccessibilityValue(isSelected ? 1 : 0)
             NSAccessibility.post(element: self, notification: .valueChanged)
             needsDisplay = true
+            dot?.ground = ground
         }
     }
-    private var tick = 0
+    private let cat: SidebarCat?
+    private let dot: SidebarDot?
 
     init(item: ChannelSidebarItem, light: Opal.Light = .drifting(0, of: 1)) {
         self.item = item
         self.light = light
+        if case .kitten(let status) = item.icon {
+            cat = SidebarCat(status: status, jacket: ChannelSpeakerLook.color(of: status.kitten))
+            dot = item.badge == 0 ? status.state.dotColor.map { SidebarDot(color: $0, ground: MessagesInk.sidebar) } : nil
+        } else {
+            cat = nil
+            dot = nil
+        }
         super.init(frame: .zero)
+        [cat, dot].compactMap { $0 }.forEach(addSubview)
         setAccessibilityElement(true)
         setAccessibilityRole(.radioButton)
         setAccessibilityValue(0)
@@ -258,17 +265,29 @@ final class ChannelSidebarRow: ChannelRowView {
         return all.compactMap { action in action.run.map { (action.name, $0) } }
     }
 
-    var isLive: Bool {
-        guard !Motion.isReduced, case .kitten(let status) = item.icon else { return false }
-        return status.state.dotColor != nil
-    }
+    var isLive: Bool { cat?.moves ?? false }
 
-    func update(tick: Int) {
-        self.tick = tick
-        if isLive { needsDisplay = true }
+    func motionChanged() {
+        cat?.needsDisplay = true
     }
 
     private var ground: NSColor { isSelected ? MessagesInk.press : hovering ? MessagesInk.hover : MessagesInk.sidebar }
+
+    private var tile: NSRect {
+        NSRect(x: Self.tileInset, y: ((bounds.height - Self.tileSide) / 2).rounded(), width: Self.tileSide, height: Self.tileSide)
+    }
+
+    override func hoverChanged() {
+        super.hoverChanged()
+        dot?.ground = ground
+    }
+
+    override func layout() {
+        super.layout()
+        let tile = tile
+        cat?.frame = tile.insetBy(dx: (Self.tileSide - Self.catSide) / 2, dy: (Self.tileSide - Self.catSide) / 2)
+        dot?.frame = NSRect(x: tile.maxX - Self.dotSide + 2, y: tile.maxY - Self.dotSide + 2, width: Self.dotSide, height: Self.dotSide).insetBy(dx: -2, dy: -2)
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         if isSelected || hovering {
@@ -276,15 +295,11 @@ final class ChannelSidebarRow: ChannelRowView {
             NSBezierPath(roundedRect: bounds, xRadius: Opal.Corner.control, yRadius: Opal.Corner.control).fill()
         }
 
-        let side = Self.tileSide
-        let tile = NSRect(x: Self.tileInset, y: ((bounds.height - side) / 2).rounded(), width: side, height: side)
-        let cat = tile.insetBy(dx: (side - Self.catSide) / 2, dy: (side - Self.catSide) / 2)
+        let tile = tile
+        let cat = tile.insetBy(dx: (Self.tileSide - Self.catSide) / 2, dy: (Self.tileSide - Self.catSide) / 2)
         switch item.icon {
         case .kitten(let status):
-            let color = ChannelSpeakerLook.color(of: status.kitten)
-            Opal.tile(in: tile, light: color.map(Opal.Light.of) ?? .shades)
-            CatStamp.draw(status.pose(tick: isLive ? tick : 0), jacket: color, in: cat, on: self)
-            if item.badge == 0, let dot = status.state.dotColor { drawDot(dot, on: tile) }
+            Opal.tile(in: tile, light: ChannelSpeakerLook.color(of: status.kitten).map(Opal.Light.of) ?? .shades)
         case .shades:
             Opal.tile(in: tile, light: .shades)
             CatStamp.draw(CatPose(frame: .sit), jacket: nil, in: cat, on: self)
@@ -322,15 +337,6 @@ final class ChannelSidebarRow: ChannelRowView {
         ])
         let height = ceil(name.size().height)
         name.draw(in: NSRect(x: left, y: ((bounds.height - height) / 2).rounded(), width: max(right - left, 0), height: height))
-    }
-
-    private func drawDot(_ color: NSColor, on tile: NSRect) {
-        let side = Self.dotSide
-        let dot = NSRect(x: tile.maxX - side + 2, y: tile.maxY - side + 2, width: side, height: side)
-        ground.setFill()
-        NSBezierPath(ovalIn: dot.insetBy(dx: -2, dy: -2)).fill()
-        color.setFill()
-        NSBezierPath(ovalIn: dot).fill()
     }
 
     private func drawGlyph(_ name: String, on tile: NSRect) {
