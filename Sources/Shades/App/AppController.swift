@@ -113,6 +113,7 @@ final class AppController {
     var messagesClosings = 0
     var inboxSaveFailed = false
     var knownRouterFolder: String?
+    var inRouterFolderByPath: [String: Bool] = [:]
     var takenShortcuts: [String] = []
     var answeredQuestions: Set<String> = []
     var messagesTurn: Task<Void, Never>?

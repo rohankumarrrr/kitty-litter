@@ -75,7 +75,12 @@ final class DemoDriver {
                 }
             }
             if file != nil {
-                DispatchQueue.main.async { NSApp.terminate(nil) }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        if DemoBench.missedABudget { exit(1) }
+                        NSApp.terminate(nil)
+                    }
+                }
             }
         }
     }

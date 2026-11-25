@@ -7,6 +7,16 @@ enum DemoBench {
     private static let scrollStep: CGFloat = 40
     private static let cycles = 10
 
+    private enum Budget: Double {
+        case frame = 8.3
+        case instant = 100
+    }
+
+    private static let idleBudget = 0.5
+    private static let triesForATail = 20
+    private static var missed: [String] = []
+    static var missedABudget: Bool { !missed.isEmpty }
+
     static func run(_ argument: String, controller: AppController, stage: AppStage) async {
         let started = Date()
         ClickAway.isPaused = true
@@ -28,6 +38,7 @@ enum DemoBench {
             await phone(controller: controller)
         }
         print(String(format: "perf done in %.0fs", Date().timeIntervalSince(started)))
+        print("perf budgets missed=\(missed.count)\(missed.isEmpty ? "" : " " + missed.joined(separator: " "))")
         fflush(stdout)
     }
 
@@ -38,7 +49,7 @@ enum DemoBench {
         let thread = view.threadPane
         let start = footprint()
         if !stage.isChannelsVisible {
-            report("open", [time(window) { controller.channelsPressed() }])
+            report("open", [time(window) { controller.channelsPressed() }], budget: .instant)
         }
         await finishReading(controller)
         guard let steve = Demo.kittens.first, let clawde = Demo.kittens.first(where: { $0.name == "Clawde" }) else { return }
@@ -50,7 +61,7 @@ enum DemoBench {
             settle(window)
             reopens.append(time(window) { controller.channelsPressed() })
         }
-        report("reopen", reopens, "reading=\(controller.channels.open(threads: []).isReading) rows=\(pane.shown.count)")
+        report("reopen", reopens, "reading=\(controller.channels.open(threads: []).isReading) rows=\(pane.shown.count)", budget: .instant)
         print(String(format: "perf memory-open before=%.1fMB after=%.1fMB", start, footprint()))
         await finishReading(controller)
 
@@ -62,7 +73,7 @@ enum DemoBench {
             settle(window)
             longOpens.append(time(window) { controller.channelsPressed() })
         }
-        report("reopen-long", longOpens, "rows=\(thread.shown.count) inWindow=\(rowViews(in: thread))")
+        report("reopen-long", longOpens, "rows=\(thread.shown.count) inWindow=\(rowViews(in: thread))", budget: .instant)
         view.closeThread()
 
         let places: [(String, ChannelSelection)] = [
@@ -79,7 +90,7 @@ enum DemoBench {
                 settle(window)
                 times.append(time(window) { view.select(selection) })
             }
-            report("switch-\(name)", times, "rows=\(pane.shown.count) inWindow=\(rowViews(in: pane))")
+            report("switch-\(name)", times, "rows=\(pane.shown.count) inWindow=\(rowViews(in: pane))", budget: .instant)
         }
 
         var opens: [Double] = []
@@ -95,24 +106,24 @@ enum DemoBench {
         }
         view.open(thread: DemoBusy.longThread)
         settle(window)
-        report("open-thread", opens, "rows=\(thread.shown.count) inWindow=\(rowViews(in: thread))")
-        report("switch-thread", nexts)
-        report("close-thread", closes)
+        report("open-thread", opens, "rows=\(thread.shown.count) inWindow=\(rowViews(in: thread))", budget: .instant)
+        report("switch-thread", nexts, budget: .instant)
+        report("close-thread", closes, budget: .instant)
 
         view.closeThread()
         view.select(.channel(.of(steve)))
         settle(window)
         var threadKeys: [Double] = []
         for _ in 0..<rounds * 2 { threadKeys.append(time(window) { view.perform(.previousThread) }) }
-        report("key-thread", threadKeys, "rows=\(thread.shown.count)")
+        report("key-thread", threadKeys, "rows=\(thread.shown.count)", budget: .instant)
         view.closeThread()
         settle(window)
         var placeKeys: [Double] = []
         for index in 0..<rounds * 2 { placeKeys.append(time(window) { view.perform(index % 2 == 0 ? .nextPlace : .previousPlace) }) }
-        report("key-place", placeKeys)
+        report("key-place", placeKeys, budget: .instant)
         var historyKeys: [Double] = []
         for index in 0..<rounds * 2 { historyKeys.append(time(window) { view.perform(index % 2 == 0 ? .back : .forward) }) }
-        report("key-back", historyKeys)
+        report("key-back", historyKeys, budget: .instant)
         var jumps: [Double] = []
         var filters: [Double] = []
         for _ in 0..<rounds {
@@ -120,8 +131,8 @@ enum DemoBench {
             filters.append(time(window) { view.jumpBox.query = "steve" })
             jumps.append(time(window) { view.jumpBox.open() })
         }
-        report("key-jump", jumps, "found=\(view.jumpBox.items.count)")
-        report("jump-filter", filters)
+        report("key-jump", jumps, "found=\(view.jumpBox.items.count)", budget: .instant)
+        report("jump-filter", filters, budget: .frame)
 
         view.select(.channel(.of(steve)))
         view.open(thread: DemoBusy.longThread)
@@ -145,7 +156,7 @@ enum DemoBench {
                 hovers.append(time(window) { row.hovering = true })
                 hovers.append(time(window) { row.hovering = false })
             }
-            report(name, hovers, "rows=\(hovers.count / 2)")
+            report(name, hovers, "rows=\(hovers.count / 2)", budget: .frame)
         }
 
         let threadText = thread.composer.textView
@@ -153,7 +164,7 @@ enum DemoBench {
         for letter in "the quick brown fox jumps over the lazy dog" {
             threadKeysTyped.append(time(window) { threadText.insertText(String(letter), replacementRange: threadText.selectedRange()) })
         }
-        report("type-thread", threadKeysTyped, "rows=\(thread.shown.count)")
+        report("type-thread", threadKeysTyped, "rows=\(thread.shown.count)", budget: .frame)
         threadText.string = ""
         thread.arrange(force: true)
         view.closeThread()
@@ -166,24 +177,24 @@ enum DemoBench {
             let message = ChannelMessage(exchangeID: "bench-\(index)-\(UUID().uuidString)", kind: .ask, speaker: .you, text: "Bench message \(index)", at: Date(), threadID: "", threadTitle: "")
             arrivals.append(time(window) { controller.channels.sent(message, in: .of(steve)) })
         }
-        report("arrive", arrivals)
+        report("arrive", arrivals, budget: .frame)
         var refreshes: [Double] = []
         for _ in 0..<rounds * 2 {
             refreshes.append(time(window) { controller.channels.refresh() })
         }
-        report("refresh-unchanged", refreshes)
+        report("refresh-unchanged", refreshes, budget: .frame)
 
         let text = pane.composer.textView
         var keys: [Double] = []
         for letter in "the quick brown fox jumps over the lazy dog" {
             keys.append(time(window) { text.insertText(String(letter), replacementRange: text.selectedRange()) })
         }
-        report("type", keys)
+        report("type", keys, budget: .frame)
         var lines: [Double] = []
         for _ in 0..<4 {
             lines.append(time(window) { text.insertText("\n", replacementRange: text.selectedRange()) })
         }
-        report("type-newline", lines)
+        report("type-newline", lines, budget: .frame)
         text.string = ""
         pane.arrange(force: true)
 
@@ -195,19 +206,19 @@ enum DemoBench {
             resizes.append(time(window) { window.setFrame(wider, display: false) })
         }
         window.setFrame(frame, display: true)
-        report("resize", resizes)
+        report("resize", resizes, budget: .frame)
 
         var drags: [Double] = []
         for step in 1...10 {
             drags.append(time(window) { view.dragSidebarEdge(to: ChannelSidebar.width - CGFloat(step * 4)) })
         }
         view.chosenSidebarWidth = nil
-        report("drag-sidebar", drags)
+        report("drag-sidebar", drags, budget: .frame)
         var hides: [Double] = []
         for _ in 0..<rounds * 2 {
             hides.append(time(window) { view.perform(.toggleSidebar) })
         }
-        report("key-sidebar", hides)
+        report("key-sidebar", hides, budget: .instant)
 
         let left = NSHashTable<NSView>.weakObjects()
         var footprints: [Double] = []
@@ -274,7 +285,7 @@ enum DemoBench {
             try? await Task.sleep(nanoseconds: 300_000_000)
             shows.append(time(bubble) { stage.showBubble(.reply(text: answer, done: true, threadID: nil, note: nil)) })
         }
-        report("bubble-long", shows, "size=\(Int(bubble.frame.width))x\(Int(bubble.frame.height))")
+        report("bubble-long", shows, "size=\(Int(bubble.frame.width))x\(Int(bubble.frame.height))", budget: .instant)
         stage.showBubble(nil)
         try? await Task.sleep(nanoseconds: 300_000_000)
         let words = answer.split(separator: " ")
@@ -282,7 +293,7 @@ enum DemoBench {
         for count in stride(from: 6, through: words.count, by: 6) {
             streams.append(time(bubble) { stage.showBubble(.reply(text: words.prefix(count).joined(separator: " "), done: false, threadID: nil, note: nil)) })
         }
-        report("bubble-stream", streams)
+        report("bubble-stream", streams, budget: .frame)
         stage.showBubble(nil)
         try? await Task.sleep(nanoseconds: 300_000_000)
 
@@ -293,7 +304,7 @@ enum DemoBench {
             stage.hideInput()
             try? await Task.sleep(nanoseconds: 300_000_000)
         }
-        report("ask-box", boxes)
+        report("ask-box", boxes, budget: .instant)
     }
 
     static let longAnswer = (0..<14).map { index in
@@ -394,7 +405,10 @@ enum DemoBench {
                 try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 let after = usage()
                 let elapsed = after.at - before.at
-                print(String(format: "perf idle-%@ reduceMotion=%@ cpu=%.2f%% wakeups=%.1f/s seconds=%.0f visible=%@", state.name, reduced ? "on" : "off", (after.cpu - before.cpu) / elapsed * 100, Double(after.wakeups - before.wakeups) / elapsed, elapsed, window.occlusionState.contains(.visible) ? "yes" : "no"))
+                let cpu = (after.cpu - before.cpu) / elapsed * 100
+                let name = "idle-\(state.name)\(reduced ? "-reduced" : "")"
+                if cpu > idleBudget { missed.append(name) }
+                print(String(format: "perf %@ cpu=%.2f%% wakeups=%.1f/s seconds=%.0f visible=%@ budget=%.1f%%%@", name, cpu, Double(after.wakeups - before.wakeups) / elapsed, elapsed, window.occlusionState.contains(.visible) ? "yes" : "no", idleBudget, cpu > idleBudget ? " missed" : ""))
                 fflush(stdout)
             }
         }
@@ -470,16 +484,21 @@ enum DemoBench {
         return result == KERN_SUCCESS ? Double(info.ledger_tag_graphics_footprint) / 1_048_576 : 0
     }
 
-    private static func report(_ name: String, _ times: [Double], _ extra: String = "") {
+    private static func report(_ name: String, _ times: [Double], _ extra: String = "", budget: Budget? = nil) {
         let sorted = times.sorted()
         guard !sorted.isEmpty else { return }
         let median = sorted[sorted.count / 2]
         let p95 = sorted[min(sorted.count - 1, Int(Double(sorted.count) * 0.95))]
-        print(String(format: "perf %@ median=%.1fms p95=%.1fms max=%.1fms n=%d %@", name, median, p95, sorted.last ?? 0, sorted.count, extra))
+        let judged = sorted.count >= triesForATail ? p95 : median
+        let over = budget.map { judged > $0.rawValue } ?? false
+        if over { missed.append(name) }
+        let limit = budget.map { String(format: " budget=%.1fms%@", $0.rawValue, over ? " missed" : "") } ?? ""
+        print(String(format: "perf %@ median=%.1fms p95=%.1fms max=%.1fms n=%d%@ %@", name, median, p95, sorted.last ?? 0, sorted.count, limit, extra))
         fflush(stdout)
     }
 
     private static func reportFrames(_ name: String, _ times: [Double]) {
-        report(name, times, String(format: "total=%.0fms over8ms=%d over16ms=%d", times.reduce(0, +), times.filter { $0 > 8.3 }.count, times.filter { $0 > 16.7 }.count))
+        report(name, times, String(format: "total=%.0fms over8ms=%d over16ms=%d", times.reduce(0, +), times.filter { $0 > Budget.frame.rawValue }.count, times.filter { $0 > 16.7 }.count), budget: .frame)
     }
+
 }

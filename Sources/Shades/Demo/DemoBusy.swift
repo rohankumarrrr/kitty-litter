@@ -4,7 +4,7 @@ import ShadesCore
 enum DemoBusy {
     private static let now = Date()
     private static let threadsPerKitten = 40
-    private static let otherThreads = 500
+    private static let otherThreads = 663
     private static let talks = 30
     static let longThread = "busy-steve-long"
     static let onlyInT3 = "busy-steve-\(threadsPerKitten - 1)"

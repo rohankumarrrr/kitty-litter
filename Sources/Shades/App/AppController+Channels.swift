@@ -61,9 +61,13 @@ extension AppController {
     }
 
     func inRouterFolder(_ thread: AgentThread) -> Bool {
+        guard let path = thread.projectPath else { return false }
+        if let known = inRouterFolderByPath[path] { return known }
         if knownRouterFolder == nil { knownRouterFolder = routerFolder().map(Self.standardized) }
-        guard let folder = knownRouterFolder, let path = thread.projectPath else { return false }
-        return Self.standardized(path) == folder
+        guard let folder = knownRouterFolder else { return false }
+        let inside = Self.standardized(path) == folder
+        inRouterFolderByPath[path] = inside
+        return inside
     }
 
     private static func standardized(_ path: String) -> String {

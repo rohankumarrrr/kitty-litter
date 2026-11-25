@@ -113,7 +113,7 @@ struct Markup: Equatable {
     }
 
     static func pictures(in text: String) -> [Picture] {
-        guard text.contains("!["), let parsed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)) else { return [] }
+        guard text.withCString({ strstr($0, "![") }) != nil, let parsed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)) else { return [] }
         let pictures = parsed.runs.compactMap { run in
             run.imageURL.map { url in
                 let said = String(parsed[run.range].characters).replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
