@@ -23,6 +23,33 @@ final class PhonePairingModelTests: XCTestCase {
         XCTAssertNil(world.finish())
     }
 
+    func testARefusalOfTheKeyBeforeLeavesTheKeyTheMacJustGaveAlone() {
+        var world = PairingWorld()
+        for event: PairingWorld.Event in [.oldKey, .scanShowing] {
+            XCTAssertTrue(world.enabled(event), "\(event)")
+            _ = world.apply(event)
+        }
+        XCTAssertEqual(world.phone.pending.map(\.path), ["/hello", "/pair"], "the old key's hello is still out when the code goes")
+        _ = world.apply(.answer(1))
+        XCTAssertNil(world.broken())
+        XCTAssertNil(world.finish(), "the Mac refusing the old key afterwards doesn't throw away the new one")
+        XCTAssertTrue(world.phone.isHidden("pair"))
+    }
+
+    func testComingBackFromTheCameraWithANewCodeKeepsTheKeyItGave() {
+        var world = PairingWorld()
+        for event: PairingWorld.Event in [.typeShowing, .settle, .forget, .wait, .settle, .show, .scanShowing] {
+            XCTAssertTrue(world.enabled(event), "\(event)")
+            _ = world.apply(event)
+        }
+        world.phone.visible(false)
+        world.phone.visible(true)
+        XCTAssertEqual(world.phone.pending.map(\.path), ["/pair", "/act"], "coming back marks the thread seen, with no key yet")
+        _ = world.apply(.answer(0))
+        XCTAssertNil(world.finish(), "and the Mac refusing that doesn't throw away the key the code just gave")
+        XCTAssertTrue(world.phone.isHidden("pair"))
+    }
+
     func testAnOldPairingLinkLeavesAPairedPhonePaired() {
         var world = PairingWorld()
         for event: PairingWorld.Event in [.typeShowing, .settle, .scanOld, .settle] {
@@ -38,17 +65,25 @@ final class PhonePairingModelTests: XCTestCase {
 @MainActor
 struct PairingWorld: PhoneModel {
     enum Event: Hashable {
-        case show, scanShowing, scanOld, openShowing, typeShowing, typeWrong, forget, answer(Int), drop, settle, wait
+        case show, scanShowing, scanOld, openShowing, typeShowing, typeWrong, forget, oldKey, answer(Int), drop, settle, wait
     }
 
-    static let events: [Event] = [.show, .scanShowing, .scanOld, .openShowing, .typeShowing, .typeWrong, .forget, .answer(0), .answer(1), .drop, .settle, .wait]
+    static let events: [Event] = [.show, .scanShowing, .scanOld, .openShowing, .typeShowing, .typeWrong, .forget, .oldKey, .answer(0), .answer(1), .drop, .settle, .wait]
+    private static let bounded: [Event] = [.show, .scanShowing, .scanOld, .openShowing, .typeShowing, .typeWrong, .forget, .oldKey, .drop, .wait]
     private static let noon = Date(timeIntervalSince1970: 1_000_000)
     private static let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
-    private static let book = ChannelBook.build(kittens: [steve], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
+    private static let book = ChannelBook.build(
+        kittens: [steve],
+        threads: [AgentThread(id: "a", title: "Work", projectTitle: steve.name, status: .completed, model: "m", updatedAt: noon, projectPath: steve.folder)],
+        transcripts: ["a": [Exchange(id: "e1", asker: .you, askedAt: noon, ask: "How's it going?", reply: "Fine.", repliedAt: noon)]],
+        isReading: false, unreadable: 0, cantReachT3: false
+    )
+    private static let place = PhonePlace.key(.thread("a", in: .channel(.of(steve))))
+    private static let forgotten = "a-key-from-before-the-mac-forgot-this-phone"
     private static let wrong = "WXYZ-2345"
     private static let used = "HJKM-NPQR"
 
-    private(set) var phone = PhoneScript(at: PhonePlace.home, stored: [:])
+    private(set) var phone = PhoneScript(at: PairingWorld.place, stored: [:])
     private let keys = MemoryPhoneKeys()
     private var link: PhoneLink
     private var codes: [PhoneDoor.Pairing] = []
@@ -88,6 +123,7 @@ struct PairingWorld: PhoneModel {
         case .typeShowing: return showing != nil && asking && count(.typeShowing) < 1
         case .typeWrong: return asking && count(.typeWrong) < 1
         case .forget: return count(.forget) < 1
+        case .oldKey: return count(.oldKey) < 1 && !admits(storedKey)
         case .answer(let index): return index < phone.pending.count
         case .drop: return !phone.pending.isEmpty && count(.drop) < 1
         case .settle: return !phone.pending.isEmpty
@@ -117,7 +153,7 @@ struct PairingWorld: PhoneModel {
             let code = showing!.shown
             handed.append(code)
             notePairs()
-            phone = PhoneScript(at: PhonePlace.home, hash: "#pair=\(code)", stored: phone.stored)
+            phone = PhoneScript(at: Self.place, hash: "#pair=\(code)", stored: phone.stored)
             phone.settle()
             return "you open the code showing as a new page"
         case .typeShowing:
@@ -138,6 +174,11 @@ struct PairingWorld: PhoneModel {
             link = Self.mac(keys)
             phone.settle()
             return "the Mac restarts as a build that can't read its pairing, so it forgets this phone"
+        case .oldKey:
+            notePairs()
+            phone = PhoneScript(at: Self.place, stored: ["shades.key": Self.forgotten])
+            phone.settle()
+            return "you come back to a page that still holds a key the Mac has since forgotten"
         case .answer(let index):
             let request = phone.pending[index]
             let reply = reply(to: request)
@@ -168,7 +209,7 @@ struct PairingWorld: PhoneModel {
         let key = storedKey.map { admits($0) ? "admitted" : "refused" } ?? "none"
         let door = "\(label(showing?.shown)) \(codes.count) \(keys.hashes.count)"
         return [pending.joined(separator: ";"), page, key, door, handed.map(label).joined(separator: ","),
-                Self.events.map { "\(count($0))" }.joined(separator: ","), phone.timers].joined(separator: "\n")
+                Self.bounded.map { "\(count($0))" }.joined(separator: ","), phone.timers].joined(separator: "\n")
     }
 
     func broken() -> String? {
@@ -195,11 +236,11 @@ struct PairingWorld: PhoneModel {
         for code in handed where !sentToPair.contains(code) { return "you gave the page \(label(code)), and it never sent it to the Mac" }
         if admits(storedKey) {
             if asking { return "the page asks for a code with a key the Mac takes" }
-            if phone.isHidden("rows") { return "the page doesn't show the places with a key the Mac takes" }
+            if phone.isHidden("rows") { return "the page shows nothing kittens said with a key the Mac takes" }
             if !phone.text("banner").isEmpty, phone.text("banner") != "That code didn't work, but this phone is still paired." { return "the page says \"\(phone.text("banner"))\"" }
         } else {
             if storedKey != nil { return "the page keeps a key the Mac refuses" }
-            if !asking { return "the page shows the places with no key the Mac takes" }
+            if !asking { return "the page shows what kittens said with no key the Mac takes" }
         }
         return nil
     }
@@ -223,7 +264,7 @@ struct PairingWorld: PhoneModel {
         let answer = link.respond(to: PhoneServer.Request(method: request.method, path: request.path, query: request.query, headers: headers, body: Data(request.body.utf8)))
         switch answer {
         case .stream:
-            let view = PhoneView(PhonePlace(request.query["key"] ?? PhonePlace.home, in: Self.book), in: Self.book, now: Self.noon)
+            let view = PhoneView(PhonePlace(request.query["key"] ?? Self.place, in: Self.book), in: Self.book, now: Self.noon)
             return .stream(String(decoding: (try? JSONEncoder().encode(view)) ?? Data(), as: UTF8.self))
         case .full(let status, _, let body):
             guard status == 200, let json = try? JSONSerialization.jsonObject(with: body) else { return .status(status) }

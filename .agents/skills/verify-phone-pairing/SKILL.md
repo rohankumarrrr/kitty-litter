@@ -13,7 +13,7 @@ The harm it guards against: a paired phone logged out by an old pairing link, as
 
 ## How
 
-`Tests/ShadesTests/PhonePairingModelTests.swift` loads the real `PhonePage.script` into `PhoneScript` (`Tests/ShadesTests/PhoneScript.swift`) with no key, on the list of places, while the Mac shows a code. The Mac is the real `PhoneLink`, so every answer to `/hello`, `/pair`, `/events` and `/act` comes from `PhoneLink.respond` and the real `PhoneDoor`. Only what a stream carries is made up, from the real `PhoneView`. `walkEveryOrder` in `Tests/ShadesTests/PhoneModel.swift` tries every order of these events, four deep, replaying each order from a fresh page and skipping orders that end where another already did:
+`Tests/ShadesTests/PhonePairingModelTests.swift` loads the real `PhonePage.script` into `PhoneScript` (`Tests/ShadesTests/PhoneScript.swift`) with no key, on a kitten's thread, so its box is there to hide, while the Mac shows a code. The Mac is the real `PhoneLink`, so every answer to `/hello`, `/pair`, `/events` and `/act` comes from `PhoneLink.respond` and the real `PhoneDoor`. Only what a stream carries is made up, from the real `PhoneView`. `walkEveryOrder` in `Tests/ShadesTests/PhoneModel.swift` tries every order of these events, four deep, replaying each order from a fresh page and skipping orders that end where another already did:
 
 | Event | What it stands for in the code |
 |---|---|
@@ -23,12 +23,13 @@ The harm it guards against: a paired phone logged out by an old pairing link, as
 | you open the code showing as a new page | The page loading with `#pair=…`, keeping its storage. Once |
 | you type the code showing, or a wrong code, and press Pair | The pair form's submit. Each once, while the page asks for a code |
 | the Mac restarts as a build that can't read its pairing | A new `PhoneLink` whose keys are empty, every stream ended. Once |
+| you come back to a page that still holds a key the Mac has since forgotten | The page loading with a stored key the Mac refuses, such as after the lock screen while the Mac was reinstalled. Once, and only while the page holds no key the Mac takes |
 | the Mac answers the page's first or second waiting request | One answer, so another event can come between a request and what it leads to |
 | the Mac answers everything waiting, in order | A Mac that answers at once |
 | the page's request doesn't get through | A network error on the oldest waiting request. Once |
 | N seconds pass | The page's next timer, such as its retry after it couldn't reach the Mac. Once |
 
-After every event it checks that a key the Mac took before the event is still taken after it, that a page asking for a code shows nothing else (`top`, `head`, `rows`, `box`, `search`, `found` all hidden), that the page threw nothing, and that no code is left in the address once the page has nothing more to do. Then the Mac answers everything at once for 30 seconds. After that, the page holds a key the Mac takes and shows the places, or it holds no key and asks for one. Every code you gave it was sent to `/pair`, and a key the Mac took is still taken.
+After every event it checks that a key the Mac took before the event is still taken after it, that a page asking for a code shows nothing else (`top`, `head`, `rows`, `box`, `search`, `found` all hidden), that the page threw nothing, and that no code is left in the address once the page has nothing more to do. Then the Mac answers everything at once for 30 seconds. After that, the page holds a key the Mac takes and shows its thread, or it holds no key and asks for one. Every code you gave it was sent to `/pair`, and a key the Mac took is still taken.
 
 ## Run it
 
@@ -36,7 +37,7 @@ After every event it checks that a key the Mac took before the event is still ta
 swift test --filter PhonePairingModelTests
 ```
 
-Run `swift` on its own, with no pipe and no `cd`. It takes about 15 seconds and passes with `Executed 3 tests, with 0 failures`. The walk sees about 2,000 states.
+Run `swift` on its own, with no pipe and no `cd`. It takes about 30 seconds and passes with `Executed 5 tests, with 0 failures`. The walk sees about 2,400 states.
 
 ## Proving it can fail
 
@@ -44,6 +45,8 @@ Run `swift` on its own, with no pipe and no `cd`. It takes about 15 seconds and 
 |---|---|
 | `PhonePage.swift` from before #120 (`git show 6259772b^:Sources/Shades/Phone/PhonePage.swift`), with no `hashchange` listener | The walk: "1. you scan the code showing into the page that's open. Then: the code stays in the page's address". `testACodeScannedIntoThePageAlreadyOpenPairsItAfterOneThatDidntWork`: "it's paired" was false |
 | `PhonePage.swift` from before #123 (`git show 03e5f120^:…`), which drops its key whenever a code doesn't work | The walk: "1. you scan the code showing into the page that's open 2. you scan an old code into the page that's open 3. the Mac answers the page's /pair with 200. Then, with the network fine from here on: the page lost a key the Mac takes". `testAnOldPairingLinkLeavesAPairedPhonePaired`: "the page lost a key the Mac takes" |
+| The page before the interrogate round's fix, where any 401 called `pairing()` | The walk: "1. you come back to a page that still holds a key the Mac has since forgotten 2. you scan the code showing into the page that's open 3. the Mac answers the page's /pair with 200. Then, with the network fine from here on: the page lost a key the Mac takes". `testARefusalOfTheKeyBeforeLeavesTheKeyTheMacJustGaveAlone` failed the same way |
+| `pairing()` without `'box'` in what it hides | "1. you scan the code showing … 2. the Mac answers everything waiting, in order 3. the Mac restarts as a build that can't read its pairing … Then: the page asks for a code with ["box"] still showing" |
 | Today's `pairing()` without `localStorage.removeItem('shades.key')` | "1. you scan the code showing … 2. the Mac answers the page's /pair with 200 3. the Mac restarts as a build that can't read its pairing … Then: the page keeps a key the Mac refuses" |
 
 To repeat one, copy the old `PhonePage.swift` over the current one, run the command, and restore it with `git checkout Sources/Shades/Phone/PhonePage.swift`.
@@ -55,7 +58,7 @@ A failure prints the shortest order that breaks it, as numbered steps in the wor
 ## What it leaves out
 
 - **Codes running out.** Ten minutes and five wrong tries are `PhoneTests`' `testGuessingUsesTheCodeUpAndItRunsOut`, on the real `PhoneDoor`.
-- **Search.** What a page found going with its pairing is checked apart from this, in `PhoneTests`.
+- **Search.** The walk never opens Search, so `search` and `found` are always hidden in it. What a page found going with its pairing is checked apart from this, in `PhoneTests`.
 - **The stream.** Pairing only needs the stream to open. Every order of a stream's events is `verify-phone-stream`.
 - **Bounds.** Two codes, one of each event above, four events deep, which holds both bugs it replays.
 
