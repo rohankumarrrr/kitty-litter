@@ -1,0 +1,26 @@
+front
+approval command npm test
+wait 4
+inbox
+wait 1
+draw .verify/shades/inbox-stale/0-approval
+card Ignore
+wait 1
+draw .verify/shades/inbox-stale/1-approval-ignored
+report change
+wait 8
+draw .verify/shades/inbox-stale/2-cards
+card Ignore
+wait 2
+draw .verify/shades/inbox-stale/3-ignored
+report again
+wait 10
+draw .verify/shades/inbox-stale/4-again
+card Allow
+wait 2
+draw .verify/shades/inbox-stale/5-stale
+report withdraw
+wait 8
+draw .verify/shades/inbox-stale/6-withdrawn
+front
+windows

@@ -278,6 +278,8 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         ]
         let asks = [
             "change": ("demo-settings", "Clawde: Fix the install", "\(Prompts.noteMarker) The install's fixed, apart from two settings it can't change itself.", Demo.changeReport),
+            "again": ("demo-settings", "Clawde: Fix the install", "\(Prompts.noteMarker) It asks again for the comma, and to run the tests.", Demo.againReport),
+            "withdraw": ("demo-settings", "Clawde: Fix the install", "\(Prompts.noteMarker) It found another way, so it took back its request.", Demo.withdrawReport),
             "ask": ("demo-invite", "Clawde: Invite the tester", "\(Prompts.noteMarker) The tester's invite is written.", Demo.askReport),
             "plain": ("demo-docs", "Clawde: Tidy the docs", "\(Prompts.decisionMarker) Merge pull request #12, which tidies the docs? Its tests pass.", "The docs are tidied in pull request #12, and its tests pass. Should I merge it?"),
         ]
@@ -638,17 +640,32 @@ enum Demo {
     }
 
     static var changeReport: String {
-        func block(_ request: [String: String]) -> String {
-            let json = (try? JSONSerialization.data(withJSONObject: request, options: [.prettyPrinted, .sortedKeys])).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
-            return "```\(ChangeRequests.fence)\n\(json)\n```"
-        }
-        return """
+        """
         The install's fixed, apart from two settings my sandbox won't let me change.
 
         \(block(["file": "~/shades/.claude/settings.json", "replace": "\"Bash(swift build)\",\n", "with": "\"Bash(swift build)\"\n", "why": "The trailing comma makes the install stop."]))
 
         \(block(["file": "~/.t3/worktrees/app/t3-demo/.claude/settings.local.json", "create": "{\n  \"permissions\": {\n    \"allow\": [\"mcp__t3-code__device_open\", \"mcp__t3-code__device_screenshot\"]\n  }\n}\n", "why": "So the tester can drive the simulator in its worktree."]))
         """
+    }
+
+    static var againReport: String {
+        """
+        The comma's still there, and the tests need running too.
+
+        \(block(["file": "~/shades/.claude/settings.json", "replace": "\"Bash(swift build)\",\n", "with": "\"Bash(swift build)\"\n", "why": "The trailing comma makes the install stop."]))
+
+        \(block(["file": "~/shades/.claude/settings.json", "replace": "\"Bash(swift build)\",\n    ]", "with": "\"Bash(swift build)\",\n      \"Bash(swift test)\"\n    ]", "why": "So it can run the tests as well."]))
+        """
+    }
+
+    static var withdrawReport: String {
+        "I found another way, so I don't need the settings change any more.\n\n\(block(["withdraw": "~/shades/.claude/settings.json"]))"
+    }
+
+    private static func block(_ request: [String: String]) -> String {
+        let json = (try? JSONSerialization.data(withJSONObject: request, options: [.prettyPrinted, .sortedKeys])).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+        return "```\(ChangeRequests.fence)\n\(json)\n```"
     }
 
     static func make() -> Parts {

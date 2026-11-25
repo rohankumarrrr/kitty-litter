@@ -22,7 +22,7 @@ final class PressPhoneTests: XCTestCase {
         AgentThread(id: id, title: "Work", projectTitle: kitten.name, status: status, model: "m", updatedAt: noon, projectPath: kitten.folder)
     }
 
-    private func book(reactions: [String: [Reaction]] = ["e1:reply": [.eyes]]) -> ChannelBook {
+    private func book(reactions: [String: [Reaction]] = ["e1:reply": [.eyes]], unread: Set<String> = []) -> ChannelBook {
         let command = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
         let font = AnswerForm(parts: [AnswerForm.Part(key: "font", text: "Which font?", options: ["Silkscreen", "System"], values: ["s", "y"], takesOwnWords: false)])
         let question = AgentQuestion(id: "q", threadID: "p", threadTitle: "Work", text: "Which font?", form: font)
@@ -34,7 +34,8 @@ final class PressPhoneTests: XCTestCase {
         let decision = InboxEntry(id: "r1", kind: .decision, text: "Ship it?", threadID: "p", threadTitle: "Work", at: noon)
         let shipped = InboxEntry(id: "s1", kind: .shipped, text: "Live.", threadID: "a", threadTitle: "Work", at: noon)
         let ask = InboxEntry(id: "k1", kind: .decision, text: "Asks for your yes to: Send it.", threadID: "a", threadTitle: "Work", at: noon, ask: AskRequest(ask: "Send it.", readFromWords: false))
-        var waiting = Waiting(approvals: [command], questions: [question, twoParts], reports: [decision, shipped, ask])
+        let change = InboxEntry(id: "c1", kind: .decision, text: "Asks to change ~/k/.claude/settings.json.", threadID: "settings", threadTitle: "Settings", at: noon, change: ChangeRequest(file: "~/k/.claude/settings.json", replace: "a", with: "b", why: nil))
+        var waiting = Waiting(approvals: [command], questions: [question, twoParts], reports: [decision, shipped, ask, change])
         waiting.owners = ["ap": steve.id, "q": pepper.id, "q2": pepper.id, "r1": pepper.id, "s1": steve.id]
         var failed = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "And then?", at: noon, threadID: "a", threadTitle: "Work")
         failed.failure = "I can't reach T3 Code. Open it and try again."
@@ -54,14 +55,15 @@ final class PressPhoneTests: XCTestCase {
         )
         if let steves = book.channels.firstIndex(where: { $0.id == .of(steve) }) { book.channels[steves].isCut = true }
         book.newFrom["p"] = "e2:reply"
+        book.unreadThreads = unread
         return book
     }
 
     private var steveKey: String { PhonePlace.key(.channel(.of(steve))) }
     private var threadKey: String { PhonePlace.key(.thread("a", in: .channel(.of(steve)))) }
 
-    private func open(at key: String = PhonePlace.home, paired: Bool = true, priorities: Priorities = Priorities()) async throws {
-        phone = Phone(book: book(), now: noon, paired: paired)
+    private func open(at key: String = PhonePlace.home, paired: Bool = true, priorities: Priorities = Priorities(), unread: Set<String> = []) async throws {
+        phone = Phone(book: book(unread: unread), now: noon, paired: paired)
         phone.priorities = priorities
         phone.open(key)
         if paired { try await shows(key) }
@@ -536,6 +538,14 @@ final class PressPhoneTests: XCTestCase {
         try await phone.press(.space, on: ".card.approval button", "Allow for this session")
         try await phone.until("Space allows it for the session") { asked("approval") == 3 }
         guard case .approval(_, .acceptForSession)? = phone.acts.last?.action else { return XCTFail("not for the session") }
+
+        phone.open("activity")
+        try await shows("activity")
+        try await phone.tap(".card.approval button", "Ignore")
+        try await phone.until("Ignore takes it away") { asked("approval") == 4 }
+        guard case .ignore(let ignored)? = phone.acts.last?.action else { return XCTFail("not ignored") }
+        XCTAssertEqual(ignored.id, "ap")
+        try await expect("[...document.querySelectorAll('.card.approval .footer')].map((p) => p.textContent).includes('\(CatWords.ignoreLeavesItWaiting)')", true)
     }
 
     func testAnAsksButtonsAnswerIt() async throws {
@@ -549,6 +559,20 @@ final class PressPhoneTests: XCTestCase {
         try await phone.press(.returnKey, on: ".card.ask button", "Deny")
         try await phone.until("Return denies it") { asked("ask") == 2 }
         XCTAssertEqual(phone.acts.last?.action, .inbox(.deny(id: "k1")))
+
+        phone.open("activity")
+        try await shows("activity")
+        try await phone.tap(".card.ask button", "Ignore")
+        try await phone.until("Ignore takes it away") { asked("ask") == 3 }
+        XCTAssertEqual(phone.acts.last?.action, .inbox(.done(id: "k1")))
+    }
+
+    func testASettingsChangeOnlyTakesIgnoreOnAPhone() async throws {
+        try await open(at: "activity")
+        try await expect("[...document.querySelectorAll('.card.change button')].map((b) => b.textContent)", ["Ignore"])
+        try await phone.tap(".card.change button", "Ignore")
+        try await did("ask", .inbox(.done(id: "c1")))
+        try await expect("[...document.querySelectorAll('.card.change button')].every((b) => b.disabled)", true)
     }
 
     func testAQuestionsChoiceAnswersItOnTheTap() async throws {
@@ -623,6 +647,22 @@ final class PressPhoneTests: XCTestCase {
         try await shows("threads")
         try await phone.press(.returnKey, on: ".digest")
         try await phone.until("Return opens it too") { (try await phone.read("view.key") as? String)?.hasPrefix("t:") == true }
+    }
+
+    func testMarkAsReadMarksAChannelsNewThreadsRead() async throws {
+        let pepperKey = PhonePlace.key(.channel(.of(pepper)))
+        try await open(at: pepperKey, unread: ["p"])
+        let count = try await phone.read("view.places.find((place) => place.key === '\(pepperKey)').unread") as? Int
+        XCTAssertEqual(count, 1, "the list says how much is new")
+        try await phone.until("Mark as read shows") { try await phone.read("$('read').hidden") as? Bool == false }
+        try await phone.tap("#read")
+        try await did("read", .markRead(["p"]))
+        try await phone.press(.returnKey, on: "#read")
+        try await phone.until("Return marks it too") { asked("read") == 2 }
+
+        try await open(at: steveKey, unread: ["p"])
+        let hidden = try await phone.read("$('read').hidden") as? Bool
+        XCTAssertEqual(hidden, true, "a channel with nothing new has nothing to mark")
     }
 
     func testMarkUnreadMarksTheLatestReplyNew() async throws {
@@ -722,6 +762,25 @@ final class PressPhoneTests: XCTestCase {
         try await phone.until("React opens the marks again") { try await isOpen("reactsheet") }
         try await phone.press(.returnKey, on: "#marks button", "❤️")
         try await did("react", .react("e1:reply", .heart))
+    }
+
+    func testATapOnALinkUnderTheBarScrollsToItFirstAsAPersonWould() async throws {
+        try await open(at: threadKey)
+        let under = try await phone.run("""
+            const link = document.querySelector('.bubble .link');
+            const bar = document.getElementById('bartitle');
+            for (let i = 0; i < 40; i++) {
+                const l = link.getBoundingClientRect(), b = bar.getBoundingClientRect();
+                const delta = (l.top + l.height / 2) - (b.top + b.height / 2);
+                if (Math.abs(delta) < 1) break;
+                scrollBy(0, delta);
+            }
+            const l = link.getBoundingClientRect();
+            return document.elementFromPoint(l.left + l.width / 2, l.top + l.height / 2)?.id;
+            """) as? String
+        XCTAssertEqual(under, "bartitle", "the link starts under the bar")
+        try await phone.tap(".bubble .link")
+        try await expectOpen("linksheet", true)
     }
 
     func testALinkAsksBeforeItOpens() async throws {
@@ -1062,9 +1121,12 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
         let box = node.getBoundingClientRect();
         if (!box.width || !box.height) return 'it takes up no room';
         if (!point && (box.top < 0 || box.bottom > innerHeight)) { node.scrollIntoView({ block: 'center' }); box = node.getBoundingClientRect(); }
-        const x = point ? point[0] : box.left + box.width / 2, y = point ? point[1] : box.top + box.height / 2;
-        const hit = document.elementFromPoint(x, y);
-        if (!hit || !(hit === node || node.contains(hit))) return 'covered by ' + (hit ? hit.outerHTML.slice(0, 160) : 'nothing');
+        const centre = () => { const b = node.getBoundingClientRect(); return point || [b.left + b.width / 2, b.top + b.height / 2]; };
+        let [x, y] = centre();
+        let hit = document.elementFromPoint(x, y);
+        const reached = () => hit && (hit === node || node.contains(hit));
+        if (!point && !reached()) { node.scrollIntoView({ block: 'center' }); [x, y] = centre(); hit = document.elementFromPoint(x, y); }
+        if (!reached()) return 'covered by ' + (hit ? hit.outerHTML.slice(0, 160) : 'nothing');
         const at = { bubbles: true, cancelable: true, composed: true, view: window, clientX: x, clientY: y, button: 0 };
         const touch = { ...at, pointerId: 1, pointerType: 'touch', isPrimary: true };
         hit.dispatchEvent(new PointerEvent('pointerdown', touch));

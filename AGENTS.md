@@ -51,8 +51,10 @@ Each rule says what enforces it. A check is the rule: when one fails, its messag
 | A kitten with `seesScreen: false` never gets text from your screen, follow-ups to its work in other projects included. `docs/kittens.md` says what enforces that and what doesn't. | `ScreenBoundaryTests`, and `verify-screen-boundary` |
 | The router only replies, and the app acts on its one line. It runs in its own folder, where `RouterBlock` leaves it only web search, so whatever starts a router thread gets its project from `routerProjectID(for:)`. | `RouterBlockTests`, and `FakeBackend`, which fails a test that starts a router thread anywhere else |
 | An inbox row is data, and a reply is only what you typed or said. It goes straight to the thread, with no capture and no canned answer. | `ScreenBoundaryTests` (`inboxReply`) |
+| A kitten's request card offers Allow only while its file is exactly as the card showed it. Ignore and a kitten's withdraw only ever take a card away, and a withdraw only takes back the asking thread's own share. | `StaleRequestTests`, `ChangeRequestFlowTests` |
 | The router only picks numbers, only your own words get passed on, and an extra copy of a correction never carries screen text. | `ScreenBoundaryTests` |
 | Claude threads in this repo run in a sandbox set by `.claude/settings.json`, which also keeps them out of saved copies of the screen. Run `swift` commands on their own, with no pipe or `cd`, since only that form is let out. A refused read means it's working, so don't look for a way around it. | The sandbox |
+| A place in The Kitty Litter is bold, and counts, only for unread threads it shows, so opening them or Mark as read always clears it. Its bold, its count and Mark as read all come from `ChannelBook.unreadThreads(in:)`. | `ChannelBookTests`, `PressMarkReadTests` |
 | When the self-check could have caught a problem, teach it to, in `HealthCheck.swift`, with a test. | You |
 | Never log or store tokens, transcripts, screenshots or page text beyond what a feature needs. | You |
 | Keep dependencies few, and permissively licensed only. Don't copy from GPL projects. | You |

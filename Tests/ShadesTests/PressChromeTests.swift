@@ -349,7 +349,13 @@ extension PressChromeTests {
     }
 
     private func card(_ text: String, in view: ChannelsView, file: StaticString = #filePath, line: UInt = #line) throws -> CardRowView {
-        let card = try XCTUnwrap(rows(in: view.pane).compactMap { $0 as? CardRowView }.first { $0.accessibilityLabel()?.contains(text) == true }, "a card saying \(text)", file: file, line: line)
+        let pane = view.pane
+        func shown() -> CardRowView? { rows(in: pane).compactMap { $0 as? CardRowView }.first { $0.accessibilityLabel()?.contains(text) == true } }
+        let end = pane.scrollOffset + pane.distanceFromBottom
+        for offset in stride(from: 0, through: end, by: pane.visibleHeight / 2) where shown() == nil {
+            pane.scrollOffset = offset
+        }
+        let card = try XCTUnwrap(shown(), "a card saying \(text)", file: file, line: line)
         card.scrollToVisible(card.bounds)
         return card
     }
@@ -386,6 +392,12 @@ extension PressChromeTests {
                 XCTAssertEqual(calls.actions, [.approval(approval, decision)], name)
             }
         }
+        try pressEveryWay(CatWords.ignore, on: "Run: ls") { _, calls, name in
+            XCTAssertEqual(calls.actions, [.ignore(approval)], name)
+        }
+        let (_, view, _) = messages(activityBook())
+        XCTAssertEqual(try card("Run: ls", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", "Allow", "Allow for this session", CatWords.ignore, CatWords.viewThread])
+        XCTAssertTrue(try card("Run: ls", in: view).accessibilityLabel()?.hasSuffix(CatWords.ignoreLeavesItWaiting) == true, "it says Ignore leaves the agent waiting")
         try pressEveryWay(CatWords.viewThread, on: "Run: ls") { view, calls, name in
             XCTAssertEqual(view.selection, .thread("s1", in: .channel(.of(steve))), name)
             XCTAssertEqual(calls.actions, [], name)
@@ -460,11 +472,17 @@ extension PressChromeTests {
             XCTAssertEqual(view.selection, .thread("s1", in: .channel(.of(steve))), name)
             XCTAssertEqual(calls.actions, [], name)
         }
+        try pressEveryWay(CatWords.ignore, on: "Only a comma.") { _, calls, name in
+            XCTAssertEqual(calls.actions, [.inbox(.done(id: "c"))], name)
+        }
         let (_, view, _) = messages(activityBook())
-        XCTAssertEqual(try card("Only a comma.", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", "Allow", CatWords.viewThread], "Deny comes first, and there's no Reply or Done")
-        XCTAssertEqual(try card("Mine too.", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", CatWords.viewThread], "one that can't be made only takes Deny")
+        XCTAssertEqual(try card("Only a comma.", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", "Allow", CatWords.ignore, CatWords.viewThread], "Deny comes first, and there's no Reply or Done")
+        XCTAssertEqual(try card("Mine too.", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", CatWords.ignore, CatWords.viewThread], "one that can't be made takes no Allow")
         try pressEveryWay("Deny", on: "Mine too.") { _, calls, name in
             XCTAssertEqual(calls.actions, [.inbox(.deny(id: "u"))], name)
+        }
+        try pressEveryWay(CatWords.ignore, on: "Mine too.") { _, calls, name in
+            XCTAssertEqual(calls.actions, [.inbox(.done(id: "u"))], name)
         }
     }
 
@@ -486,9 +504,14 @@ extension PressChromeTests {
             XCTAssertTrue(view.window?.firstResponder === view.threadPane.composer.textView, "\(name): ready to type")
             XCTAssertEqual(calls.actions, [], name)
         }
+        for (text, id) in [("Fine to send", "a1"), ("Safe to merge", "a2")] {
+            try pressEveryWay(CatWords.ignore, on: text) { _, calls, name in
+                XCTAssertEqual(calls.actions, [.inbox(.done(id: id))], name)
+            }
+        }
         let (_, view, _) = messages(activityBook())
-        XCTAssertEqual(try card("Fine to send", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", "Allow", CatWords.viewThread])
-        XCTAssertEqual(try card("Safe to merge", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", "Allow", "Reply", CatWords.viewThread])
+        XCTAssertEqual(try card("Fine to send", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", "Allow", CatWords.ignore, CatWords.viewThread])
+        XCTAssertEqual(try card("Safe to merge", in: view).buttons.map { $0.accessibilityLabel() ?? "" }, ["Deny", "Allow", "Reply", CatWords.ignore, CatWords.viewThread])
         XCTAssertTrue(try card("Safe to merge", in: view).accessibilityLabel()?.contains("If you allow it, Steve Pawsniak will: Merge pull request 12.") == true)
     }
 

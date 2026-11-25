@@ -180,7 +180,9 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(ask("approval", id: "ap", value: "acceptForSession").action(in: book) { "x" }?.action, .approval(command, .acceptForSession))
         XCTAssertEqual(ask("approval", id: "perm", value: "decline").action(in: book) { "x" }?.action, .approval(permission, .decline))
         XCTAssertNil(ask("approval", id: "perm", value: "acceptForSession").action(in: book) { "x" }, "the window doesn't offer it for this kind")
+        XCTAssertEqual(ask("approval", id: "perm", value: "ignore").action(in: book) { "x" }?.action, .ignore(permission))
         XCTAssertNil(ask("approval", id: "made-up", value: "accept").action(in: book) { "x" })
+        XCTAssertNil(ask("approval", id: "made-up", value: "ignore").action(in: book) { "x" })
         XCTAssertNil(ask("approval", id: "ap", value: "always").action(in: book) { "x" })
         XCTAssertNil(ask("approval", id: "ap").action(in: book) { "x" })
     }
@@ -225,11 +227,16 @@ final class PhoneTests: XCTestCase {
         XCTAssertEqual(card.text, "Asks to change it.")
         XCTAssertEqual(card.answer, "I'd allow it.")
         XCTAssertEqual(card.footer, CatWords.allowChangeOnMac)
-        XCTAssertNil(card.choices, "no Allow, Deny or Reply")
+        XCTAssertEqual(card.kind, "change")
+        XCTAssertEqual(card.choices, [PhoneView.ignore], "no Allow, Deny or Reply, only Ignore, which makes nothing")
         XCTAssertNotEqual(card.done, true, "no Done")
         for act in ["done", "approval", "allow", "deny"] {
             XCTAssertNil(ask(act, id: "c", value: "accept").action(in: book) { "x" }, act)
         }
+        for value in ["accept", "decline", "acceptForSession"] {
+            XCTAssertNil(ask("ask", id: "c", value: value).action(in: book) { "x" }, value)
+        }
+        XCTAssertEqual(ask("ask", id: "c", value: "ignore").action(in: book) { "x" }?.action, .inbox(.done(id: "c")))
         XCTAssertNil(ask("send", key: PhonePlace.reply(to: change), text: "yes").action(in: book) { "x" }, "nor a reply that would stand in for it")
     }
 
@@ -242,15 +249,17 @@ final class PhoneTests: XCTestCase {
         let rows = PhoneView(PhonePlace("activity", in: book), in: book, now: noon).rows
         let writtenCard = try XCTUnwrap(rows.first { $0.id == "a1" })
         XCTAssertEqual(writtenCard.kind, "ask")
-        XCTAssertEqual(writtenCard.choices?.map(\.label), ["Deny", "Allow"])
+        XCTAssertEqual(writtenCard.choices?.map(\.label), ["Deny", "Allow", "Ignore"])
         XCTAssertEqual(writtenCard.answer, "Fine.")
         let readCard = try XCTUnwrap(rows.first { $0.id == "a2" })
-        XCTAssertEqual(readCard.choices?.map(\.label), ["Deny", "Allow", "Reply"])
+        XCTAssertEqual(readCard.choices?.map(\.label), ["Deny", "Allow", "Reply", "Ignore"])
         XCTAssertEqual(readCard.text, "If you allow it, Steve Pawsniak will:\nMerge pull request 12.\n\nIts report said: “Merge it?”", "what Allow says yes to comes first, on lines of its own")
 
         XCTAssertEqual(ask("ask", id: "a1", value: "accept").action(in: book) { "x" }?.action, .inbox(.allow(id: "a1")))
         XCTAssertEqual(ask("ask", id: "a2", value: "decline").action(in: book) { "x" }?.action, .inbox(.deny(id: "a2")))
         XCTAssertNil(ask("ask", id: "a1", value: "acceptForSession").action(in: book) { "x" })
+        XCTAssertEqual(ask("ask", id: "a2", value: "ignore").action(in: book) { "x" }?.action, .inbox(.done(id: "a2")))
+        XCTAssertNil(ask("ask", id: "d", value: "ignore").action(in: book) { "x" }, "a plain decision takes Done")
         XCTAssertNil(ask("ask", id: "c", value: "accept").action(in: book) { "x" }, "a settings change is only answered on the Mac")
         XCTAssertNil(ask("ask", id: "d", value: "accept").action(in: book) { "x" }, "a decision with nothing to say yes to")
         XCTAssertNil(ask("done", id: "a2").action(in: book) { "x" }, "Deny is how you say no to one")
@@ -275,6 +284,24 @@ final class PhoneTests: XCTestCase {
         XCTAssertNil(ask("unread", key: key, id: "e2:reply").action(in: book) { "x" }, "not a message from another thread")
         XCTAssertNil(ask("unread", key: PhonePlace.key(.channel(.of(steve))), id: "e1:reply").action(in: book) { "x" }, "only on a thread's page")
         XCTAssertNil(ask("unread", key: key).action(in: book) { "x" })
+    }
+
+    func testMarkAsReadOnlyMarksAPlaceAndWhatThePhoneCanSeeThere() {
+        let said = [Exchange(id: "f", asker: .you, askedAt: noon, ask: "Fix the total", reply: "Fixed.", repliedAt: noon)]
+        let fix = AgentThread(id: "fix", title: "Fix", projectTitle: nil, status: .completed, model: "m", updatedAt: noon)
+        let hidden = AgentThread(id: "hidden", title: "Tidy", projectTitle: nil, status: .completed, model: "m", updatedAt: noon)
+        let book = ChannelBook.build(
+            kittens: [steve], threads: [thread("a", of: steve), fix, hidden], transcripts: ["a": said, "fix": said, "hidden": said],
+            isReading: false, unreadable: 0, cantReachT3: false, isUnread: { _ in true }, catsWork: ["fix", "hidden"], onPhone: ["fix"]
+        )
+        XCTAssertEqual(ask("read", key: PhonePlace.key(.channel(.of(steve)))).action(in: book) { "x" }?.action, .markRead(["a"]))
+        XCTAssertEqual(ask("read", key: PhonePlace.key(.channel(.shades))).action(in: book) { "x" }?.action, .markRead(["fix"]), "the cat's own work you didn't show here stays as it was")
+        XCTAssertNil(ask("read", key: PhonePlace.key(.thread("a", in: .channel(.of(steve))))).action(in: book) { "x" }, "a thread's page has Mark unread")
+        XCTAssertNil(ask("read", key: PhonePlace.key(.activity)).action(in: book) { "x" }, "nothing there to mark")
+
+        let places = PhoneView(PhonePlace(PhonePlace.key(.channel(.of(steve))), in: book), in: book, now: noon).places
+        XCTAssertEqual(places.first { $0.key == PhonePlace.key(.channel(.shades)) }?.unread, 1)
+        XCTAssertEqual(places.first { $0.key == PhonePlace.key(.channel(.of(steve))) }?.unread, 1)
     }
 
     func testAThreadsPageShowsItsNewLineAndWhatMarkUnreadMakesNew() throws {
@@ -478,7 +505,7 @@ final class PhoneTests: XCTestCase {
         let thread = PhoneView(PhonePlace(PhonePlace.key(.thread("a", in: .channel(.of(steve)))), in: book), in: book, now: noon)
         XCTAssertEqual(thread.rows.map(\.kind), ChannelRows.thread("a", in: book).map(Self.kind))
         XCTAssertEqual(thread.rows.compactMap(\.text).filter { $0 == "Fine." || $0 == "How's it going?" }, ["How's it going?", "Fine."])
-        XCTAssertEqual(thread.rows.last?.choices?.map(\.value), ["decline", "accept", "acceptForSession"], "Deny first, as in the window")
+        XCTAssertEqual(thread.rows.last?.choices?.map(\.value), ["decline", "accept", "acceptForSession", "ignore"], "Deny first, as in the window")
         XCTAssertEqual(thread.box?.also, "Also send to Steve Pawsniak")
         XCTAssertEqual(thread.title, CatWords.threadTitle)
         XCTAssertEqual(thread.back, PhonePlace.key(.channel(.of(steve))))
@@ -808,9 +835,10 @@ extension PhoneTests {
         let cards = rows.filter { ["approval", "report"].contains($0.kind) }
         XCTAssertEqual(cards.map(\.cat), [cat(.alert, pepper), cat(.alert, pepper)], "a card's cat has its eyes lit")
         XCTAssertEqual(cards.map(\.choices), [
-            [PhoneView.Choice(label: "Deny", value: "decline"), PhoneView.Choice(label: "Allow", value: "accept"), PhoneView.Choice(label: "Allow for this session", value: "acceptForSession")],
+            [PhoneView.Choice(label: "Deny", value: "decline"), PhoneView.Choice(label: "Allow", value: "accept"), PhoneView.Choice(label: "Allow for this session", value: "acceptForSession"), PhoneView.ignore],
             [PhoneView.Choice(label: "Reply", value: "reply")],
         ], "the window's buttons, but Open in T3")
+        XCTAssertEqual(cards.first?.footer, CatWords.ignoreLeavesItWaiting)
         XCTAssertEqual(cards.last?.done, true, "and Done on a decision")
     }
 
@@ -1081,7 +1109,7 @@ extension PhoneTests {
         let page = try Self.page(["el", "button", "lit", "card", "question", "chosen", "mark"])
         let json = String(decoding: try JSONEncoder().encode(row), as: UTF8.self)
         page.evaluateScript("const node = card(\(json)); const buttons = node.children.find((child) => child.className === 'buttons').children;")
-        XCTAssertEqual(page.evaluateScript("buttons.map((b) => b.textContent + ':' + (b.className || 'quiet')).join(', ')")?.toString(), "Deny:quiet, Allow:go, Allow for this session:quiet")
+        XCTAssertEqual(page.evaluateScript("buttons.map((b) => b.textContent + ':' + (b.className || 'quiet')).join(', ')")?.toString(), "Deny:quiet, Allow:go, Allow for this session:quiet, Ignore:quiet")
         XCTAssertEqual(page.evaluateScript("node.style.props['--light']")?.toString(), Opal.hex(ChannelSpeakerLook.color(of: steve)!))
     }
 

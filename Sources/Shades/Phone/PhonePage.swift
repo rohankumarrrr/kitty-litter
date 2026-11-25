@@ -26,6 +26,7 @@ enum PhonePage {
             <p id="bartitle" aria-hidden="true"></p>
             <div id="actions">
               <button id="unread" class="symbolic" type="button" hidden><svg class="symbol" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7"/><path d="M3 7l9 6 3-2"/><circle class="fill" cx="19" cy="5" r="3"/></svg><span class="unseen">Mark unread</span></button>
+              <button id="read" class="symbolic" type="button" hidden><svg class="symbol" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10l9-6 9 6v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3 10l9 6 9-6"/></svg><span class="unseen">Mark as read</span></button>
               <button id="find" class="symbolic" type="button" hidden><svg class="symbol" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg><span class="unseen">Search</span></button>
             </div>
           </nav>
@@ -174,6 +175,7 @@ enum PhonePage {
         .place .name { flex: 1; color: var(--body); }
         .place.unread .name { color: var(--white); font-weight: 600; }
         .count { background: var(--error); color: var(--page); border-radius: 999px; padding: 1px 8px; font-size: calc(13em / 17); font-weight: 700; font-variant-numeric: tabular-nums; }
+        .unreadcount { color: var(--secondary); font-size: calc(13em / 17); font-variant-numeric: tabular-nums; }
         .dot { width: 8px; height: 8px; flex: none; background: var(--secondary); }
         .cat { width: 32px; height: 32px; flex: none; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
         .cat.small { width: 16px; height: 16px; }
@@ -239,6 +241,7 @@ enum PhonePage {
           white-space: nowrap; text-align: left; }
         .replybar b { color: var(--lilac); }
         .replybar .waiting { color: var(--error-text); font-weight: 600; }
+        .replybar .unread { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--violet); }
         .replybar span { color: var(--secondary); }
         .replies { display: flex; align-items: center; gap: 10px; color: var(--secondary); font-size: calc(13em / 17); margin: 14px 4px 4px; }
         .replies::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
@@ -246,7 +249,7 @@ enum PhonePage {
         .new::before { content: ''; flex: 1; height: 1px; background: var(--rim-line); }
         .digest { display: block; width: 100%; text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--border); }
         .digest h3 { margin: 0 0 6px; color: var(--white); font-size: calc(15em / 17); font-weight: 600; }
-        .digest.unread h3::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--error); margin-right: 6px; }
+        .digest.unread h3::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--violet); margin-right: 6px; }
         .digest p { margin: 2px 0 6px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         .digest small { color: var(--secondary); font-size: calc(13em / 17); }
         .digest .who { display: flex; align-items: center; gap: 6px; }
@@ -384,7 +387,7 @@ enum PhonePage {
           pairHomeScreen: "Turn on The Kitty Litter on my phone in Settings on your Mac, and it shows a code. Type it here, since scanning it opens Safari rather than this app.",
           stillPaired: "That code didn't work, but this phone is still paired.",
           answer: 'Send answer', openInT3: 'Open in T3', more: 'Show more', less: 'Show less', done: 'Done', clear: 'Clear', copy: 'Copy', copied: 'Copied', react: 'React', openThread: 'Open thread',
-          waiting: (count) => count + ' waiting', unread: 'unread',
+          waiting: (count) => count + ' waiting', unread: (count) => count + ' unread',
           openLink: (host) => 'Open a link to ' + host + '?',
           showPicture: (host) => 'Show a picture from ' + host + '?', pictureFrom: (host) => '🖼 Picture from ' + host,
           couldntShow: "Couldn't show it.", tooMany: 'One message takes up to 10 files.',
@@ -639,7 +642,7 @@ enum PhonePage {
           if (!$('search').hidden) searching(false);
           key = next;
           banner('');
-          for (const id of ['back', 'headcat', 'link', 't3', 'backlog', 'unread']) $(id).hidden = true;
+          for (const id of ['back', 'headcat', 'link', 't3', 'backlog', 'unread', 'read']) $(id).hidden = true;
           for (const id of ['title', 'subtitle', 'bartitle']) $(id).textContent = '';
           keptUnread = null;
           jumped = false;
@@ -707,6 +710,7 @@ enum PhonePage {
           $('back').hidden = !next.back;
           $('backtitle').textContent = next.back ? next.backTitle : '';
           $('unread').hidden = !next.unread;
+          $('read').hidden = !(next.places.find((place) => place.key === next.key) || {}).unread;
           $('box').hidden = !next.box || !$('search').hidden;
           if (fresh || !next.box || !next.box.files) unattach();
           if (next.box) {
@@ -818,6 +822,7 @@ enum PhonePage {
           jumped = true;
           window.scrollBy(0, line.getBoundingClientRect().top - $('top').getBoundingClientRect().bottom - 8);
         };
+        $('read').onclick = () => act({ act: 'read', key });
         $('unread').onclick = () => {
           if (!view || !view.unread) return;
           keptUnread = key;
@@ -957,8 +962,9 @@ enum PhonePage {
             button.append(lights);
             button.append(el('span', 'name', place.title));
             if (place.count) button.append(el('span', 'count', String(place.count)));
+            else if (place.unread) button.append(el('span', 'unreadcount', String(place.unread)));
             if (place.dot) button.append(dot(place.dot));
-            button.setAttribute('aria-label', [place.title, place.state, place.count && words.waiting(place.count), place.unread && words.unread].filter(Boolean).join(', '));
+            button.setAttribute('aria-label', [place.title, place.state, place.count && words.waiting(place.count), place.unread && words.unread(place.unread)].filter(Boolean).join(', '));
             button.onclick = () => go(place.key);
             nodes.push(button);
           }
@@ -972,6 +978,7 @@ enum PhonePage {
           const bar = el('button', 'replybar');
           bar.type = 'button';
           for (const person of item.faces || []) bar.append(person.cat ? cat(person.cat, true) : face(person.color));
+          if (item.unread) bar.append(el('span', 'unread'));
           if (item.waiting) bar.append(el('span', 'waiting', 'Needs you'));
           if (item.replies) bar.append(el('b', null, item.replies === 1 ? '1 reply' : item.replies + ' replies'));
           if (item.lastReply) bar.append(el('span', null, item.lastReply));
@@ -1240,7 +1247,7 @@ enum PhonePage {
               }, choice.value === 'accept' ? 'go' : null));
             }
           }
-          if (item.kind === 'ask') {
+          if (item.kind === 'ask' || item.kind === 'change') {
             for (const choice of item.choices) {
               if (choice.value === 'reply') { buttons.append(button(choice.label, () => go(item.open))); continue; }
               buttons.append(button(choice.label, () => {

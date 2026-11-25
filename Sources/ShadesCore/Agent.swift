@@ -195,8 +195,13 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var pullRequest: ThreadPullRequest?
     public var isLiveTest: Bool { Self.isLiveTest(title: title) }
     public static func isLiveTest(title: String) -> Bool { title.hasPrefix("Shades test:") }
+    public var wasSeenInT3: Bool {
+        guard let visited = lastVisitedAt, let ended = lastRunEndedAt else { return false }
+        return visited >= ended
+    }
     public var lastRunID: String?
     public var lastRunEndedAt: Date?
+    public var lastVisitedAt: Date?
 
     public init(
         id: String,
@@ -213,7 +218,8 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         pullRequest: ThreadPullRequest? = nil,
         projectPath: String? = nil,
         lastRunID: String? = nil,
-        lastRunEndedAt: Date? = nil
+        lastRunEndedAt: Date? = nil,
+        lastVisitedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -228,6 +234,7 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         self.runtimeMode = runtimeMode
         self.lastRunID = lastRunID
         self.lastRunEndedAt = lastRunEndedAt
+        self.lastVisitedAt = lastVisitedAt
         self.isSettled = isSettled
         self.pullRequest = pullRequest
     }

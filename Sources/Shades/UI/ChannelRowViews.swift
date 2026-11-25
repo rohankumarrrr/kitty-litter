@@ -188,6 +188,36 @@ class ChannelRowView: QuietView, TabGate {
     var isPressable: Bool { false }
     func hoverChanged() { needsDisplay = true }
 
+    var actions: [(name: String, run: () -> Void)] { [] }
+
+    override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
+        actions.map { action in
+            NSAccessibilityCustomAction(name: action.name) {
+                action.run()
+                return true
+            }
+        }
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? { actionsMenu() }
+
+    func actionsMenu() -> NSMenu? {
+        let actions = actions
+        guard !actions.isEmpty else { return nil }
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        for action in actions {
+            let item = NSMenuItem(title: action.name, action: #selector(choseAction(_:)), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
+        return menu
+    }
+
+    @objc private func choseAction(_ item: NSMenuItem) {
+        actions.first { $0.name == item.title }?.run()
+    }
+
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.forEach(removeTrackingArea)
@@ -293,6 +323,8 @@ struct ReplyBar {
     var lastReply: Date?
     var isGoing: Bool
     var needsYou: Bool
+    var isUnread: Bool
+    private static let unreadDot: CGFloat = 8
 
     init(_ post: ThreadPost, in book: ChannelBook) {
         count = post.replies
@@ -302,6 +334,7 @@ struct ReplyBar {
         lastReply = post.lastReply
         isGoing = post.isGoing
         needsYou = post.needsYou
+        isUnread = post.isUnread
     }
 
     var isEmpty: Bool { count == 0 && !isGoing && !needsYou }
@@ -315,12 +348,13 @@ struct ReplyBar {
 
     func accessibilityWords(now: Date) -> String {
         let (strong, soft) = words(now: now)
-        return [needsYou ? CatWords.needsYouLabel : nil, strong, soft].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        return [needsYou ? CatWords.needsYouLabel : nil, isUnread ? CatWords.unreadLabel : nil, strong, soft].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
     func width(now: Date) -> CGFloat {
         let (strong, soft) = words(now: now)
         var width = CGFloat(faces.count) * (Self.face + 3) + 8
+        if isUnread { width += Self.unreadDot + 6 }
         if needsYou { width += ceil(Self.attributed(CatWords.needsYouLabel, color: MessagesInk.badge, bold: true).size().width) + 10 }
         if !strong.isEmpty { width += ceil(Self.attributed(strong, color: MessagesInk.link, bold: true).size().width) + 8 }
         if !soft.isEmpty { width += ceil(Self.attributed(soft, color: MessagesInk.soft, bold: false).size().width) }
@@ -346,6 +380,11 @@ struct ReplyBar {
             x += Self.face + 3
         }
         if !faces.isEmpty { x += 5 }
+        if isUnread {
+            MessagesInk.accent.setFill()
+            NSBezierPath(ovalIn: NSRect(x: x, y: (rect.midY - Self.unreadDot / 2).rounded(), width: Self.unreadDot, height: Self.unreadDot)).fill()
+            x += Self.unreadDot + 6
+        }
         let (strong, soft) = words(now: now)
         for (text, color, bold) in [
             (needsYou ? CatWords.needsYouLabel : "", MessagesInk.badge, true),
@@ -503,6 +542,7 @@ final class MessageRowView: ChannelRowView {
     var onShowPicture: ((URL) -> Void)?
     var onPress: (() -> Void)?
     var onMarkUnread: (() -> Void)?
+    var onMarkRead: (() -> Void)?
     var isExpanded = false
     var replyBar: ReplyBar? { didSet { fitted = nil } }
     var context: String? { didSet { fitted = nil } }
@@ -555,12 +595,13 @@ final class MessageRowView: ChannelRowView {
     override func press() { onPress?() }
     override var takesFocus: Bool { true }
 
-    private var actions: [(name: String, run: () -> Void)] {
+    override var actions: [(name: String, run: () -> Void)] {
         let all: [(name: String, run: (() -> Void)?)] = [
             (CatWords.threadTitle, onPress),
             ("Try again", onTryAgain),
             ("Reply", onReply),
             (CatWords.openInT3, onOpen),
+            (CatWords.markRead, onMarkRead),
             (CatWords.markUnread, onMarkUnread),
             ("Copy", message.text == nil ? nil : { [weak self] in self?.copyPressed() }),
             (CatWords.react, onReact == nil ? nil : { [weak self] in self?.showReactions() }),
@@ -568,33 +609,10 @@ final class MessageRowView: ChannelRowView {
         return all.compactMap { action in action.run.map { (action.name, $0) } }
     }
 
-    override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
-        actions.map { action in
-            NSAccessibilityCustomAction(name: action.name) {
-                action.run()
-                return true
-            }
-        }
-    }
-
-    override func menu(for event: NSEvent) -> NSMenu? { actionsMenu() }
-
-    private func actionsMenu() -> NSMenu? {
-        let actions = actions
-        guard !actions.isEmpty else { return nil }
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        for action in actions {
-            let item = NSMenuItem(title: action.name, action: #selector(chose(_:)), keyEquivalent: "")
-            item.target = self
-            if action.name == CatWords.react { item.submenu = reactionsMenu() }
-            menu.addItem(item)
-        }
+    override func actionsMenu() -> NSMenu? {
+        let menu = super.actionsMenu()
+        menu?.item(withTitle: CatWords.react)?.submenu = reactionsMenu()
         return menu
-    }
-
-    @objc private func chose(_ item: NSMenuItem) {
-        actions.first { $0.name == item.title }?.run()
     }
 
     override var textBlocks: [ChannelTextBlock] { [words, failure].compactMap { $0 } }
@@ -1081,6 +1099,8 @@ final class ThreadDigestRowView: ChannelRowView {
     private static let lines = 2
 
     var onPress: (() -> Void)?
+    var onMarkRead: (() -> Void)?
+    var onMarkUnread: (() -> Void)?
     private let digest: ThreadDigest
     private let channel: String
     private let said: [(look: ChannelSpeakerLook, message: ChannelMessage)]
@@ -1104,6 +1124,15 @@ final class ThreadDigestRowView: ChannelRowView {
 
     override var isPressable: Bool { true }
     override func press() { onPress?() }
+
+    override var actions: [(name: String, run: () -> Void)] {
+        let all: [(name: String, run: (() -> Void)?)] = [
+            (CatWords.threadTitle, onPress),
+            (CatWords.markRead, onMarkRead),
+            (CatWords.markUnread, onMarkUnread),
+        ]
+        return all.compactMap { action in action.run.map { (action.name, $0) } }
+    }
 
     private static var textFont: NSFont { MessagesInk.font(ofSize: MessagesInk.body) }
     private static var headHeight: CGFloat { MessagesInk.meta + 7 }

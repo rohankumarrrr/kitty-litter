@@ -6,10 +6,12 @@ enum MessagesAction: Equatable {
     case send(String, to: MessageTarget, shownIn: ChannelID?, alsoSent: Bool = false, files: [Drop] = [], alternate: Bool = false)
     case startTopic(String, with: Kitten, id: String, files: [Drop] = [])
     case approval(ApprovalRequest, ApprovalDecision)
+    case ignore(ApprovalRequest)
     case answer(AgentQuestion, [[String]])
     case inbox(InboxAction)
     case seen(ChannelSelection, keepingUnread: Set<String> = [])
     case markUnread(String, from: String)
+    case markRead([String])
     case tryAgain(String)
     case doNotDisturb
     case older(ChannelID)
@@ -120,6 +122,8 @@ extension AppController {
             send(words, to: .newThread(kitten), shownIn: .of(kitten), echoID: id, files: files)
         case .approval(let request, let decision):
             answer(request, decision)
+        case .ignore(let request):
+            ignore(request)
         case .answer(let question, let answers):
             answer(question, with: answers)
         case .inbox(let action):
@@ -129,12 +133,9 @@ extension AppController {
         case .seen(let selection, let kept):
             if selection.place == .activity, !away.isEmpty { awaySeen = true }
             channels.lookingAt = selection
-            let seen = channels.threads(in: selection).filter { !kept.contains($0.id) }
-            let last = { [channels] in channels.messages(in: $0).last { !$0.isStillGoing && !$0.isSending }?.id }
-            if inbox.markRead(seen, upTo: last) {
-                keepInbox()
-                channels.refresh()
-            }
+            markRead(channels.threads(in: selection).filter { !kept.contains($0.id) })
+        case .markRead(let threads):
+            markRead(threads.compactMap(channels.listed))
         case .markUnread(let thread, let message):
             inbox.markUnread(thread, from: message, of: channels.messages(in: thread).map(\.id))
             keepInbox()
@@ -155,6 +156,13 @@ extension AppController {
         case .showPicture(let url):
             channels.pictures.show(url)
         }
+    }
+
+    private func markRead(_ threads: [AgentThread]) {
+        let lastSaid = { [channels] in channels.messages(in: $0).last { !$0.isStillGoing && !$0.isSending }?.id }
+        guard inbox.markRead(threads, upTo: lastSaid) else { return }
+        keepInbox()
+        channels.refresh()
     }
 
     func keepAlsoSent(_ heard: [String: ChannelBook.HeardAlsoSent]) {
@@ -365,6 +373,7 @@ extension AppController {
         var holdback = ReplyHoldback()
         var fullText: String?
         var thread: String?
+        var raised: Set<String> = []
         do {
             for try await event in stream {
                 switch event {
@@ -376,10 +385,13 @@ extension AppController {
                 case .text(let delta):
                     _ = holdback.add(delta)
                 case .needsApproval(let request):
+                    raised.insert(request.id)
                     addApproval(request)
                 case .finished(let text):
+                    runEnded(asking: raised)
                     fullText = text
                 case .failed:
+                    runEnded(asking: raised)
                     return nil
                 }
             }

@@ -38,8 +38,9 @@ struct ThreadPost: Equatable {
     var lastReply: Date?
     var isGoing: Bool
     var needsYou: Bool
+    var isUnread: Bool
 
-    init(_ thread: ChannelThread, needsYou: Bool) {
+    init(_ thread: ChannelThread, needsYou: Bool, isUnread: Bool) {
         threadID = thread.id
         parent = thread.parent
         replies = thread.replyCount
@@ -47,6 +48,7 @@ struct ThreadPost: Equatable {
         lastReply = thread.replies.last { !($0.isStillGoing && $0.text == nil) }?.at
         isGoing = thread.isGoing
         self.needsYou = needsYou
+        self.isUnread = isUnread
     }
 }
 
@@ -298,7 +300,7 @@ enum ChannelRows {
             switch post {
             case .thread(let threadID):
                 guard let thread = book.threads[threadID] else { continue }
-                row = .parent(ThreadPost(thread, needsYou: needsYou(threadID, in: book)))
+                row = .parent(ThreadPost(thread, needsYou: needsYou(threadID, in: book), isUnread: book.unreadThreads.contains(threadID)))
                 at = thread.parent.at
             case .message(let message):
                 row = .message(message)

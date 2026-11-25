@@ -509,6 +509,7 @@ enum T3Wire {
         let archivedAt: Date?
         let deletedAt: Date?
         let settledAt: Date?
+        let lastVisitedAt: Date?
         let pullRequests: [Lossy<PullRequest>]?
 
         var latestPullRequest: ThreadPullRequest? {

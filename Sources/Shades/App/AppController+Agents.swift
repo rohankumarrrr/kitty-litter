@@ -54,6 +54,7 @@ extension AppController {
         }
         dropScreenWarnings(forFailuresIn: threads)
         fileOwedReports()
+        retireStaleChanges()
     }
 
     private func hideTestThreads(_ threads: [AgentThread]) {
@@ -136,5 +137,16 @@ extension AppController {
                 say(CatWords.approvalFailed)
             }
         }
+    }
+
+    func ignore(_ request: ApprovalRequest) {
+        let hadApprovals = !approvals.isEmpty
+        approvals.answer(request.id)
+        approvalsChanged(hadApprovals: hadApprovals)
+    }
+
+    func runEnded(asking ids: Set<String>) {
+        let hadApprovals = !approvals.isEmpty
+        if approvals.runEnded(asking: ids) { approvalsChanged(hadApprovals: hadApprovals) }
     }
 }

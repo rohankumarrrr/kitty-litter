@@ -159,7 +159,7 @@ struct PhoneView: Encodable, Equatable {
         var title: String
         var group: String?
         var count: Int?
-        var unread: Bool
+        var unread: Int?
         var cat: String?
         var state: String?
         var dot: String?
@@ -381,6 +381,10 @@ struct PhoneView: Encodable, Equatable {
         return rows
     }
 
+    static func unreadThreads(in place: ChannelPlace, of book: ChannelBook) -> [String] {
+        book.unreadThreads(in: place).filter { book.home(ofThread: $0) != .shades || book.onPhone.contains($0) }
+    }
+
     private static func places(in book: ChannelBook) -> [Place] {
         ChannelSidebarItem.groups(in: book).flatMap { group in
             group.items.filter { $0.place.channelID != .shades || !book.onPhone.isEmpty }.map { item in
@@ -388,6 +392,7 @@ struct PhoneView: Encodable, Equatable {
                 var state: String?
                 var dot: UInt32?
                 var icon: String?
+                let unread = unreadThreads(in: item.place, of: book).count
                 switch item.icon {
                 case .kitten(let status):
                     cat = PhoneCat.key(PhoneCat.Pose(status.state), jacket: ChannelSpeakerLook.color(of: status.kitten))
@@ -402,7 +407,7 @@ struct PhoneView: Encodable, Equatable {
                     title: item.title,
                     group: group.heading,
                     count: item.badge > 0 ? item.badge : nil,
-                    unread: item.place == .channel(.shades) ? !book.unreadThreads.isDisjoint(with: book.onPhone) : item.isUnread,
+                    unread: unread > 0 ? unread : nil,
                     cat: cat,
                     state: state,
                     dot: dot.map(hex),
@@ -470,6 +475,7 @@ struct PhoneView: Encodable, Equatable {
                 return Face(cat: cat(of: look), color: look.hasCat ? nil : look.bubble.map(hex))
             }
             row.waiting = post.needsYou ? true : nil
+            row.unread = post.isUnread ? true : nil
             row.going = post.isGoing
             return row
         case .alsoSent(let message, let threadID, let parent):
@@ -526,9 +532,11 @@ struct PhoneView: Encodable, Equatable {
             if ApprovalPolicy.offersSessionAllow(request.kind) {
                 choices.append(Choice(label: "Allow for this session", value: ApprovalDecision.acceptForSession.rawValue))
             }
+            choices.append(Self.ignore)
             let title = Self.title(ofThread: book.thread(holding: request.id, else: request.threadID), request.threadTitle, in: book)
             return card("approval", id: request.id, kitten: kitten, title: title, text: request.summary, at: request.createdAt, in: book) {
                 $0.choices = choices
+                $0.footer = CatWords.ignoreLeavesItWaiting
             }
         case .question(let question):
             let kitten = book.kitten(of: question.id)
@@ -550,12 +558,13 @@ struct PhoneView: Encodable, Equatable {
                 $0.footer = entry.repliedAt == nil ? nil : CatWords.inboxSent
                 $0.open = ask.readFromWords ? PhonePlace.reply(to: entry) : nil
                 $0.choices = [Choice(label: "Deny", value: ApprovalDecision.decline.rawValue), Choice(label: "Allow", value: ApprovalDecision.accept.rawValue)]
-                    + (ask.readFromWords ? [Choice(label: "Reply", value: "reply")] : [])
+                    + (ask.readFromWords ? [Choice(label: "Reply", value: "reply")] : []) + [Self.ignore]
             }
         case .report(let entry) where entry.change != nil:
-            return card("report", id: entry.id, kitten: book.kitten(of: entry.id), title: entry.threadTitle, text: entry.text, at: entry.at, in: book) {
+            return card("change", id: entry.id, kitten: book.kitten(of: entry.id), title: entry.threadTitle, text: entry.text, at: entry.at, in: book) {
                 $0.answer = entry.change?.review
                 $0.footer = CatWords.allowChangeOnMac
+                $0.choices = [Self.ignore]
             }
         case .report(let entry):
             let kitten = book.kitten(of: entry.id)
@@ -578,6 +587,8 @@ struct PhoneView: Encodable, Equatable {
         guard let parent = book.threads[id]?.parent, parent.speaker == .you, let words = parent.text else { return CatWords.shades }
         return ChannelRows.firstWords(of: words)
     }
+
+    static let ignore = Choice(label: CatWords.ignore, value: "ignore")
 
     private static func card(_ kind: String, id: String, kitten: Kitten?, title: String, text: String, at: Date?, in book: ChannelBook, _ fill: (inout Row) -> Void) -> Row {
         let look = ChannelSpeakerLook(kitten.map { .kitten($0.id) } ?? .someoneElse, in: book)
