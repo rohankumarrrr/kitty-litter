@@ -23,6 +23,7 @@ final class FlowTests: XCTestCase {
     private var clock = Date(timeIntervalSince1970: 100_000)
     private var kittens: [Kitten] = []
     private var facts = HealthFacts()
+    private var factsHeld: (() async -> Void)?
     private var missingFiles: Set<String> = []
     private var screenBlockGaps: [String: [String]] = [:]
     private var routerFolder: String? = "/shades/router"
@@ -64,7 +65,10 @@ final class FlowTests: XCTestCase {
                 settings: settings,
                 saveSettings: { _ in },
                 kittens: { [unowned self] in self.kittens },
-                systemFacts: { [unowned self] in self.facts },
+                systemFacts: { [unowned self] in
+                    await self.factsHeld?()
+                    return self.facts
+                },
                 fileExists: { [unowned self] in !self.missingFiles.contains($0) },
                 screenBlockGaps: { [unowned self] in self.screenBlockGaps[$0] ?? [] },
                 routerFolder: { [unowned self] in self.routerFolder },
@@ -2654,6 +2658,26 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(controller.isWithShades(talk))
         XCTAssertFalse(controller.isWithShades(work))
         XCTAssertFalse(controller.isWithShades(nowhere))
+    }
+
+    func testNothingIsReportedUntilTheSignatureIsCheckedAndABadOneIsNeverReportedAsUp() async {
+        var letGo: CheckedContinuation<Void, Never>?
+        factsHeld = { [unowned self] in
+            self.factsHeld = nil
+            await withCheckedContinuation { letGo = $0 }
+        }
+        facts.isBundled = true
+        facts.signatureIsValid = false
+        let check = Task { await controller.runHealthCheck() }
+        await until { letGo != nil }
+        XCTAssertTrue(reportedHealth.isEmpty, "nothing reaches health.json while the signature is still being checked")
+        letGo?.resume()
+        _ = await check.value
+        XCTAssertFalse(reportedHealth.isEmpty)
+        for findings in reportedHealth {
+            XCTAssertTrue(findings.contains { $0.check == HealthCheck.signature && !$0.ok }, "every report carries the failed signature")
+            XCTAssertFalse(HealthCheck.report(findings, pid: 1, version: "v", at: clock).ok, "so install.sh never sees a badly signed copy as up")
+        }
     }
 
     func testAShortcutAnotherAppHasShowsInTheSelfCheck() async {
