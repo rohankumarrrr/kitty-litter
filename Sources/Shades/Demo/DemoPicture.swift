@@ -1,6 +1,5 @@
 import AppKit
 
-/// A drawn stand-in for your picture, in Opal's violet, so the demo and tests never need anyone's photo.
 enum DemoPicture {
     static let jpeg: Data = {
         let side: CGFloat = 128

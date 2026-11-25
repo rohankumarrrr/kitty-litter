@@ -1,31 +1,18 @@
 import Foundation
 
-/// A specialist agent. It's a folder registered as a T3 project: instructions and notes in there
-/// load by themselves in every thread it starts, which is how it already knows what you'd
-/// otherwise have to explain. See docs/kittens.md.
 public struct Kitten: Sendable, Equatable, Identifiable {
     public var name: String
     public var role: String
-    /// What it looks after, in the words Shades reads to decide what goes to it.
     public var covers: String
     public var folder: String
-    /// The folder of the T3 project it works in. That's its own folder, unless it looks after an
-    /// app that already has a project. Threads in either count as its own.
     public var project: String
-    /// Not taking work yet. It shows up with the others, but nothing gets sent to it.
     public var planned: Bool
-    /// The colour of its jacket, as 0xRRGGBB, or `nil` for the black one Shades wears.
     public var color: UInt32?
-    /// Whether text from your screen can reach it. Off for a kitten that can change the rules
-    /// everyone else works by, because a page shouldn't get a say in those.
     public var seesScreen: Bool
-    /// Whether its reports wait in the inbox, rather than each taking a turn in the bubble.
     public var usesInbox: Bool
 
     public var id: String { folder }
 
-    /// Where its new threads start. One that isn't meant to see your screen keeps them in its own
-    /// folder, so a change to its `project` can't leave them counting as nobody's.
     public var workspace: String { seesScreen ? project : folder }
 
     public init(
@@ -56,21 +43,17 @@ public enum Kittens {
         let name: String
         let role: String
         let covers: String
-        /// Like "~/code/app". A relative path starts from the kitten's folder.
         var project: String?
         var planned: Bool?
-        /// Like "#b3261e".
         var color: String?
         var seesScreen: Bool?
         var inbox: Bool?
     }
 
-    /// Where kittens live. Their contents are personal, so they stay out of this repo.
     public static var defaultFolder: URL {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("kittens", isDirectory: true)
     }
 
-    /// Every folder with a `kitten.json`. One that can't be read is skipped, so it can't take the rest with it.
     public static func load(from folder: URL = defaultFolder) -> [Kitten] {
         let folders = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
         return folders.compactMap { home -> Kitten? in
@@ -84,8 +67,7 @@ public enum Kittens {
                 covers: profile.covers,
                 folder: home.standardizedFileURL.path,
                 project: profile.project.map {
-                    // A kitten folder that's a link comes without its trailing slash, which would
-                    // make a relative path start one folder up.
+                    // Outside the repo: Foundation resolves a relative path from the base's parent unless the base ends in a slash, which a linked folder's URL lacks.
                     URL(
                         fileURLWithPath: NSString(string: $0).expandingTildeInPath,
                         relativeTo: URL(fileURLWithPath: home.path, isDirectory: true)

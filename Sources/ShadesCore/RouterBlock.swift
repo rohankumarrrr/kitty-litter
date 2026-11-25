@@ -1,16 +1,8 @@
 import Foundation
 
-/// What keeps the router to its one job, which is replying. It sees your screen first, and T3 allows all of
-/// its tools in every thread, so being told not to send things was all that stood in the way. The folder it
-/// runs in holds settings that Claude Code enforces, and nothing else.
 public enum RouterBlock {
-    /// Everything it can still use. Each only reads, and anything else, including tools Claude Code adds later,
-    /// is turned away by a hook. Naming what's allowed matters, since the shell also comes as `Monitor`, and
-    /// `SendMessage` reaches other Claude sessions without T3. Reading files is out too. Your screen comes in its
-    /// message, and your home folder has secrets in plain text that a page could have it read and search for.
     static let allowed = ["WebSearch", "ToolSearch"]
-    /// Taken out of the list altogether, which still holds if hooks are ever turned off. It also stops an `@path` in
-    /// the prompt, which Claude Code reads without calling a tool, so the hook never sees it.
+    // Outside the repo: Claude Code reads an @path in a prompt without calling a tool, so the hook never sees it and only a deny stops it.
     static let denied = ["mcp__t3-code", "Bash", "Monitor", "Edit", "Write", "NotebookEdit", "Read", "Glob", "Grep"]
 
     static let settings = try! JSONSerialization.data(
@@ -24,8 +16,6 @@ public enum RouterBlock {
         options: [.prettyPrinted, .sortedKeys]
     )
 
-    /// Leaves the folder holding these settings and nothing else, and gives back its path. Anything else could
-    /// load too, such as a hook in `settings.local.json`, which would be handed every prompt, screen and all.
     public static func prepare(_ folder: URL) throws -> String {
         let claude = folder.appendingPathComponent(".claude")
         try keepOnly(".claude", in: folder)
@@ -33,8 +23,7 @@ public enum RouterBlock {
         let file = claude.appendingPathComponent("settings.json")
         let files = FileManager.default
         let found = try? files.attributesOfItem(atPath: file.path)
-        // A link, or a second name for the same file, could change it later from somewhere else, and Claude Code
-        // has to be able to read it. Writing over it would keep its permissions, so it's replaced with a new file.
+        // Outside the repo: a file reached through a link or a second name can be changed from there, and writing over a file keeps its permissions.
         let ownFile = found?[.type] as? FileAttributeType == .typeRegular
             && found?[.referenceCount] as? Int == 1
             && found?[.posixPermissions] as? Int == 0o644
@@ -50,7 +39,6 @@ public enum RouterBlock {
         return folder.path
     }
 
-    /// Makes this a real folder with nothing in it but `name`. A link found here is removed, not followed.
     private static func keepOnly(_ name: String, in folder: URL) throws {
         let files = FileManager.default
         if kind(of: folder) != .typeDirectory {

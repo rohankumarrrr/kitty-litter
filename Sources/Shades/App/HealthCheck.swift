@@ -1,7 +1,6 @@
 import Foundation
 import ShadesCore
 
-/// One thing the cat checked about itself.
 struct HealthFinding: Codable, Equatable {
     var check: String
     var ok: Bool
@@ -13,24 +12,19 @@ struct HealthFinding: Codable, Equatable {
     }
 }
 
-/// What the running app last found. It's written to a file, so the install script can tell the
-/// app really came up, and an agent can look at how it's doing. There's nothing private in it.
 struct HealthReport: Codable, Equatable {
     var pid: Int32
     var version: String
     var checkedAt: Date
     var ok: Bool
     var findings: [HealthFinding]
-    /// The kitten Lockdown pins every ask to, by name, while it's on.
     var lockdown: String?
 }
 
-/// What the cat can find out about its own situation. Gathered elsewhere, so what it means can be tested.
 struct HealthFacts: Equatable {
     var isBundled = true
     var isSignedWithIdentity = true
     var signatureIsValid = true
-    /// Signed by an Apple developer team, so the next build can read what this one saved in the Keychain.
     var isSignedByTeam = true
     var hasScreenRecording = true
     var hasAccessibility = true
@@ -38,49 +32,33 @@ struct HealthFacts: Equatable {
     var microphoneDenied = false
     var skillsInstalled = true
     var reachedT3 = true
-    /// Whether T3 hasn't answered the self-check yet, and if so how long it's been.
     var t3Silence: T3Silence?
-    /// Kittens taking work whose folders aren't T3 projects, or have no instructions.
     var kittensNotInT3: [Kitten] = []
     var kittensWithoutInstructions: [String] = []
-    /// Kittens that aren't meant to see your screen, with nothing to stop them.
     var kittensOffScreenInNameOnly: [String] = []
-    /// Why the router won't run, if it won't: no folder to keep it from passing your screen on, a model that
-    /// doesn't read it, or what T3 said when asked for the folder's project.
     var frontDoorProblem: FrontDoorProblem?
     var frontDoorProjectTrouble: String?
     var inboxSaves = true
-    /// Whether finished threads say which run they last finished, which is how the inbox tells reports apart.
     var t3GivesRunIDs = true
-    /// Shortcuts another app already had when Shades asked for them, such as "⌃⌘B".
     var shortcutsTaken: [String] = []
-    /// Other copies of Shades running, by process ID, such as one built from source and left running.
     var otherCopies: [Int32] = []
-    /// The phone page is on, but the phone paired with it can't get in, since this build can't read its pairing.
     var phoneNeedsPairingAgain = false
-    /// Lockdown is on for a kitten that isn't set up any more, so nothing you ask goes anywhere.
     var lockdownKittenGone = false
 }
 
-/// T3 not answering the self-check. Every step of connecting gives up after a while except a Keychain call, which
-/// waits on its dialog, and T3 sending its first list, so a dialog is only named once it's been longer than the rest.
 enum T3Silence: Equatable {
-    /// Still within what connecting can take, as when a new build can't read the last one's sign-in and signs in again.
     case connecting
-    /// Long past that.
     case stuck
 }
 
 enum HealthCheck {
     static let signature = "signature"
-    /// macOS ignores the permissions of a copy signed like this.
     static let badSignature = HealthFinding(
         check: signature,
         ok: false,
         problem: "This copy of me isn't signed properly, so macOS ignores my permissions, whatever System Settings shows.",
         fix: "Run scripts/install.sh."
     )
-    /// Without a team, macOS ties what a build saves in the Keychain to that exact build.
     static let noTeam = HealthFinding(
         check: signature,
         ok: false,
@@ -91,9 +69,7 @@ enum HealthCheck {
     static func findings(from facts: HealthFacts) -> [HealthFinding] {
         var results: [HealthFinding] = []
 
-        // macOS ties permissions to a signature, so with a bad one every permission looks off, whatever
-        // System Settings shows. Saying "turn it on" would send you after the wrong thing, so this
-        // gets said instead of those. A copy that isn't a bundle gets its permissions some other way.
+        // Outside the repo: macOS ignores a badly signed app's permissions, and a copy that isn't a bundle gets those of whatever started it.
         let signatureGood = !facts.isBundled || (facts.isSignedWithIdentity && facts.signatureIsValid)
         if signatureGood {
             results.append((!facts.isBundled || facts.isSignedByTeam) ? .good(signature) : noTeam)
@@ -235,7 +211,6 @@ enum HealthCheck {
         return results
     }
 
-    /// Another copy of Shades that was up first holds all of them, so when one's running it's the likely holder.
     private static func shortcutsFinding(_ facts: HealthFacts) -> HealthFinding {
         guard !facts.shortcutsTaken.isEmpty else { return .good("shortcuts") }
         let taken = facts.shortcutsTaken.joined(separator: " and ")

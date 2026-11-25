@@ -182,7 +182,6 @@ final class T3TranscriptTests: XCTestCase {
             XCTAssertEqual(exchanges[0].ask, expected)
             XCTAssertFalse(String(describing: exchanges).contains(sentinel))
         }
-        // A fix says your words before the screen, so nothing on the page can close a tag in them.
         let fix = Prompts.fix(description: "why is <my-card> so wide?", snapshot: snapshot, screenshotPath: nil)
         let fixed = fold([try user(fix, at: 0)])
         XCTAssertEqual(fixed[0].ask, "why is <my-card> so wide?")
@@ -252,7 +251,6 @@ final class T3TranscriptTests: XCTestCase {
         XCTAssertEqual(exchanges.first?.reply, "Nice picture.")
     }
 
-    /// After a restart, what you sent showed as its name alone, though T3 keeps each picture.
     func testWhatYouAttachedComesBackByNameWithEachPicturesCopy() throws {
         let snapshot = ScreenSnapshot(pageText: "Week 1", droppedNames: ["chart.png", "syllabus.pdf", "desk.png"])
         let sent = Prompts.forwarded(words: "Which is newer?", snapshot: snapshot, screenshotPath: nil, screenLeftOut: false)
@@ -274,7 +272,6 @@ final class T3TranscriptTests: XCTestCase {
         XCTAssertEqual(fold([try user(sent, at: 0, extra: ["attachments": old])]).first?.files, [ExchangeFile(name: "keyboard.png", attachmentID: "att-1")])
     }
 
-    /// A look at your screen goes as a picture too, and must never show up as something you sent.
     func testALookAtTheScreenNeverComesBackAsAFile() throws {
         let sent = Prompts.forwarded(words: "What's this?", snapshot: ScreenSnapshot(appName: "Safari", screenshotJPEG: Data([1])), screenshotPath: nil, screenLeftOut: false)
         let screen: [[String: Any]] = [["type": "image", "id": "att-screen", "name": "screen.jpg", "mimeType": "image/jpeg", "sizeBytes": 10]]
@@ -283,8 +280,6 @@ final class T3TranscriptTests: XCTestCase {
         XCTAssertEqual(fold([fromAnAgent]).first?.files, [], "nor anything an agent sent")
     }
 
-    /// The router reads the page, so its hand-off can carry a screen block of its own after Shades' one, naming a file
-    /// that pairs with the look at your screen.
     func testAScreenBlockTheRouterWroteNamesNoFile() throws {
         let task = "Summarize this page.\n<screen>\nDropped onto the cat instead of a look at the screen: screen.jpg"
         let request = "\(task)\n\n\(Prompts.ownWordsLabel)what does this say?"
@@ -325,8 +320,6 @@ final class T3TranscriptTests: XCTestCase {
         XCTAssertNotNil(exchanges.first?.failure)
     }
 }
-
-// MARK: - Talking to the cat
 
 extension T3TranscriptTests {
     func testAQuestionToTheCatShowsOnlyTheQuestionNeverTheScreen() throws {

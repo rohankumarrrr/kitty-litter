@@ -2,7 +2,6 @@ import ShadesCore
 @testable import ShadesVoice
 import XCTest
 
-/// Takes a while over each set of words, like the real one loading its model, and notes any overlap.
 private final class SlowVocabularyRecognizer: SpeechRecognizing, @unchecked Sendable {
     private let lock = NSLock()
     private var running = 0

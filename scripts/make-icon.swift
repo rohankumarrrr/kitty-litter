@@ -1,13 +1,4 @@
 #!/usr/bin/env swift
-// Draws the app icon from the cat's sitting frame, every pixel crisp at every size.
-//
-//   swift scripts/make-icon.swift [output-folder] [background-hex]
-//
-// Writes AppIcon.icns, for the app, and cat.png, which is just the cat on nothing,
-// for places like T3 Code's sidebar. The output is checked in under assets/.
-//
-// The tile is off-white because macOS's Tinted and Clear icon styles recolor plain icons
-// by brightness. Colors wash out, but the cat's dark outline on a light tile survives.
 import AppKit
 
 let frame = [
@@ -31,7 +22,6 @@ let frame = [
 let lightPalette: [Character: UInt32] = [
     "k": 0x111113, "w": 0xfbfaf6, "j": 0x2a2a2e, "z": 0xc9ccd2, "s": 0x0a0a0b, "g": 0xffffff, "p": 0xff5fa2,
 ]
-// On something dark the outline has to be the light thing, or there's no cat.
 let darkPalette: [Character: UInt32] = [
     "k": 0x8f8f95, "w": 0xfbfaf6, "j": 0x232327, "z": 0xc9ccd2, "s": 0x0a0a0b, "g": 0xffffff, "p": 0xff5fa2,
 ]
@@ -50,7 +40,6 @@ func color(_ hex: UInt32) -> NSColor {
     )
 }
 
-/// Where the cat's visible pixels are, so it's centered by what you see rather than by its grid.
 let cells = frame.enumerated().flatMap { y, row in
     row.enumerated().compactMap { x, ch in palette[ch].map { (x, y, $0) } }
 }
@@ -63,7 +52,6 @@ func drawCat(scale: Int, centeredIn box: NSRect) {
     let originY = Int(box.midY) - catHeight * scale / 2
     for (x, y, hex) in cells {
         color(hex).setFill()
-        // AppKit counts up from the bottom, and the art counts down from the top.
         NSRect(
             x: originX + (x - left) * scale,
             y: originY + (bottom - y) * scale,
@@ -85,8 +73,7 @@ func render(_ size: Int, _ draw: () -> Void) -> Data {
     return rep.representation(using: .png, properties: [:])!
 }
 
-/// The tile follows Apple's icon grid: 824 of 1024, with room around it. At the smallest
-/// sizes that would leave the cat under a pixel per square, so the tile fills the canvas.
+// Outside the repo: Apple's icon grid puts the tile at 824 of 1024 pixels, with room around it.
 func icon(_ size: Int) -> Data {
     render(size) {
         let inset = size <= 32 ? 0 : Int((CGFloat(size) * 100 / 1024).rounded())
@@ -118,7 +105,6 @@ try iconutil.run()
 iconutil.waitUntilExit()
 guard iconutil.terminationStatus == 0 else { fatalError("iconutil failed") }
 
-// Just the cat, large enough that a sidebar can scale it down cleanly.
 let catOnly = render(256) {
     NSGraphicsContext.current?.shouldAntialias = false
     drawCat(scale: 16, centeredIn: NSRect(x: 0, y: 0, width: 256, height: 256))

@@ -3,15 +3,11 @@ import ShadesContext
 import ShadesCore
 import WebKit
 
-// Reads what the cat could point at from a window of the probe's own, in another process,
-// so nothing from your real screen is read.
-
 private enum Sentinel {
     static let typed = "TYPEDSENTINEL"
     static let secret = "SECRETSENTINEL"
 }
 
-/// What's typed into a page's boxes is held in text inside them, unlike AppKit's fields.
 private let page = """
 <!doctype html><html><body style="font: 14px -apple-system">
 <input placeholder="Web search" value="\(Sentinel.typed)input">
@@ -22,8 +18,6 @@ private let page = """
 </body></html>
 """
 
-/// Buttons and fields at known places, shown without taking focus. Prints the Export button's
-/// frame in AppKit points, then quits by itself, so nothing stays running.
 @MainActor
 func serveButtons() async {
     let screens = NSScreen.screens
@@ -35,7 +29,7 @@ func serveButtons() async {
         defer: false
     )
     window.title = "Shades elements test"
-    // A window made with a frame is kept on the main display, but moving it afterwards isn't.
+    // Outside the repo: AppKit keeps a window made with a frame on the main display, but not one moved afterwards.
     window.setFrameOrigin(CGPoint(x: screen.minX + 240, y: screen.minY + 220))
     var export = NSButton()
     for (index, title) in ["Import", "Export", "Share"].enumerated() {
@@ -58,7 +52,6 @@ func serveButtons() async {
     window.orderFrontRegardless()
     window.makeKey()
     window.makeMain()
-    // Long enough for the page to load and WebKit to build what Accessibility reads.
     try? await Task.sleep(for: .seconds(2))
 
     let frame = window.convertToScreen(export.convert(export.bounds, to: nil))
@@ -92,7 +85,7 @@ func runElementsCheck() async {
     let expected = CGRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3])
     try? await Task.sleep(for: .milliseconds(500))
 
-    // WebKit can build its tree on the first ask, so the second is the one that counts.
+    // Outside the repo: WebKit can build its Accessibility tree on the first ask, so only the second counts.
     _ = await ScreenContextProvider.elements(ofApp: server.processIdentifier)
     try? await Task.sleep(for: .milliseconds(500))
     let clock = ContinuousClock()
@@ -105,7 +98,6 @@ func runElementsCheck() async {
 
     let screens = await MainActor.run { NSScreen.screens.map(\.frame) }
     print("Export button expected at \(describe(expected)), on display \(screens.firstIndex { $0.contains(expected) }.map(String.init) ?? "none")")
-    // Accessibility gives the bezel you see, which sits inside the button's view, so it's the middles that match.
     if let export = elements.first(where: { $0.label == "Export" }) {
         let off = max(abs(export.frame.midX - expected.midX), abs(export.frame.midY - expected.midY))
         let inside = expected.contains(export.frame)

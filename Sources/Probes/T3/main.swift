@@ -5,28 +5,6 @@ import ImageIO
 import ShadesCore
 import ShadesT3
 
-// Tries each capability against the real T3 server. Every thread it makes is titled "Shades test:"
-// and gets archived, and every sign-in it makes gets revoked. It never prints a token, and never uses the
-// installed app's Keychain entry, which a build like this one can't read and would only replace.
-//
-//   probe-t3 connect    sign in, list threads and projects
-//   probe-t3 keychain   first run and second run against a throwaway Keychain entry
-//   probe-t3 keychain-launch <service> [forget]   one launch, for testing across rebuilds
-//   probe-t3 ask        new thread, streaming, follow-up, follow-up with an image
-//   probe-t3 project    a thread bound to a project
-//   probe-t3 watch      the live thread list following one thread
-//   probe-t3 approval   one approval-required thread, answered in code within a moment
-//   probe-t3 question   one thread that asks two questions at once, one taking several choices, answered as Messages would
-//   probe-t3 open       shows a thread in T3 Code and checks T3 navigated to it
-//   probe-t3 restart    runs its own throwaway T3 server, restarts it mid-turn, and checks recovery
-//   probe-t3 timing     how much time this client adds to a turn
-//   probe-t3 settle     settles a finished thread, then checks a follow-up still works
-//   probe-t3 steer      steers a turn that's going, on Codex and Claude, then steers one that hasn't started yet
-//   probe-t3 report <thread>   how fast a thread's last report can be read, and how long it is
-//   probe-t3 router     what the router decides for made-up kittens and sessions, and nothing past that
-//   probe-t3 search <words>   how many threads T3's search names for those words, and how fast, and nothing they say
-//   probe-t3 picture [<thread> <path>]   a made-up picture sent and read back as after a restart, or a picture in a thread's folder
-
 let sol = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "low")
 let clock = ContinuousClock()
 
@@ -48,7 +26,6 @@ func prompt(_ title: String, _ text: String, attachments: [AgentAttachment] = []
     AgentPrompt(title: "Shades test: \(title)", text: text, attachments: attachments, model: sol, runtimeMode: mode, projectID: projectID)
 }
 
-/// Runs a turn and prints what happened. Returns the thread and the whole reply.
 @discardableResult
 func runTurn(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>) async throws -> (threadID: String, reply: String) {
     let began = clock.now
@@ -95,7 +72,6 @@ func sessions(labeled label: String) -> [String] {
     }
 }
 
-/// A red square, so the model has something to look at.
 let redSquarePNG: Data = {
     let context = CGContext(data: nil, width: 64, height: 64, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
     context.setFillColor(red: 1, green: 0, blue: 0, alpha: 1)
@@ -107,7 +83,6 @@ let redSquarePNG: Data = {
     return data as Data
 }()
 
-/// Asks the server directly, for checks the backend has no reason to offer.
 func serverJSON(_ path: String, credentials: MemoryCredentialStore) async -> [String: Any]? {
     let runtime = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".t3/userdata/server-runtime.json")
     guard let info = (try? JSONSerialization.jsonObject(with: Data(contentsOf: runtime))) as? [String: Any],
@@ -122,7 +97,6 @@ func serverJSON(_ path: String, credentials: MemoryCredentialStore) async -> [St
     return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
 }
 
-/// About the size of a real screenshot. Noise, because that's what doesn't compress.
 func noisyJPEG() -> Data {
     let width = 900, height = 600
     let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -139,8 +113,6 @@ func noisyJPEG() -> Data {
     CGImageDestinationFinalize(destination)
     return data as Data
 }
-
-// MARK: Probes
 
 func probeConnect() async throws {
     let backend = makeBackend()
@@ -170,7 +142,6 @@ func statusCounts(_ threads: [AgentThread]) -> String {
 }
 
 func probeKeychain() async throws {
-    // A throwaway entry, so the real first run still really is the first run.
     let service = "dev.shades.t3-session.probe.\(UUID().uuidString)"
     let store = KeychainCredentialStore(service: service)
     let label = "Shades probe"
@@ -194,8 +165,6 @@ func probeKeychain() async throws {
     say("after sign-out, in Keychain: \((try store.load()) != nil), sessions left: \(sessions(labeled: label).count - before)")
 }
 
-/// One app launch against a named Keychain entry, for checking what happens across rebuilds.
-/// Pass "forget" as well to sign out and clear what this build owns.
 func probeKeychainLaunch() async throws {
     guard CommandLine.arguments.count > 2 else {
         say("usage: probe-t3 keychain-launch <service> [forget]")
@@ -207,7 +176,6 @@ func probeKeychainLaunch() async throws {
     say("connected in \(milliseconds(clock.now - began))")
     if CommandLine.arguments.contains("forget") { await backend.signOut() }
     await backend.disconnect()
-    // Replaced sessions get revoked in the background, so give that a moment.
     try await Task.sleep(for: .seconds(2))
 }
 
@@ -287,7 +255,6 @@ func probeWatch() async throws {
     await backend.disconnect()
 }
 
-/// Whichever path sees the request first answers it, so a thread can't be left waiting.
 actor ApprovalAnswerer {
     private var answered: Set<String> = []
     let backend: T3Backend
@@ -321,7 +288,6 @@ func probeApproval() async throws {
             for thread in threads where thread.title.hasPrefix("Shades test: approval") {
                 if let request = thread.pendingApprovals.first {
                     await listSawIt.note(status: thread.status, summary: request.summary)
-                    // Only a backstop: the stream should have answered this already.
                     try? await Task.sleep(for: .milliseconds(1500))
                     await answerer.answer(request, seenBy: "list")
                 }
@@ -339,7 +305,6 @@ func probeApproval() async throws {
                 threadID = id
                 say("  started")
             case let .needsApproval(request):
-                // A short wait, so the list has time to show it too. T3 shows the prompt until this answers.
                 try? await Task.sleep(for: .milliseconds(700))
                 await answerer.answer(request, seenBy: "stream")
             case let .finished(text):
@@ -352,7 +317,6 @@ func probeApproval() async throws {
         }
     }
 
-    // Never leave a test thread waiting, whatever goes wrong above.
     let finished = await withTaskGroup(of: Bool.self) { group -> Bool in
         group.addTask { (try? await run.value) != nil }
         group.addTask {
@@ -461,7 +425,6 @@ func probeOpen() async throws {
     await backend.disconnect()
 }
 
-/// A separate T3 server with its own data folder and port, so the real one is never touched.
 final class ThrowawayServer {
     let home: URL
     private var process: Process?
@@ -536,7 +499,6 @@ func probeRestart() async throws {
     while await updates.threads == nil { try await Task.sleep(for: .milliseconds(50)) }
     say("thread list is live, \(await updates.threads?.count ?? 0) threads")
 
-    // Start a turn that's still going when the server goes away.
     let began = clock.now
     let turn = Task { () -> String in
         var outcome = "ended without a final event"
@@ -567,7 +529,6 @@ func probeRestart() async throws {
         say("connect while down: \(error.localizedDescription)")
     }
 
-    // Revoke while it's down, so coming back also has to sign in again.
     server.revoke(sessionID: firstSession)
     try await server.start(port: 39872)
     let backUp = clock.now
@@ -628,7 +589,6 @@ func probeTiming() async throws {
         var finished: Duration?
         var threadID = ""
         var finishedAt = Date()
-        // The last round carries a screenshot, so the time to start includes uploading it.
         let attachments = round == 4 ? [screenshot] : []
         for try await event in backend.start(prompt("timing \(round)", "Reply with exactly: ok", attachments: attachments)) {
             switch event {
@@ -693,13 +653,10 @@ func probeSettle() async throws {
     await backend.disconnect()
 }
 
-/// A steer joins the run that's going and is answered there, and the forward hears that run end. One sent before the
-/// run has a turn going can't be steered, so it waits its turn instead.
 func probeSteer() async throws {
     let backend = makeBackend()
     try await backend.connect()
     struct Turn { var text = ""; var failed: String?; var threw: String?; var ended: Duration? }
-    /// `onStarted` hears the thread.
     func follow(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>, from began: ContinuousClock.Instant, onStarted: ((String) -> Void)? = nil) async -> Turn {
         var turn = Turn()
         do {
@@ -746,7 +703,6 @@ func probeSteer() async throws {
             continue
         }
         threads.append(threadID)
-        // Steered once T3 lists it as running and it's been at it a moment, as when you reply to a kitten mid-task.
         while await backend.allThreads()?.first(where: { $0.id == threadID })?.status != .running, clock.now - began < .seconds(60) {
             try await Task.sleep(for: .milliseconds(500))
         }
@@ -818,9 +774,6 @@ func probeSearch() async throws {
     await backend.disconnect()
 }
 
-/// With a path, asks T3 for that picture in the thread's own folder, which T3 should refuse for anything outside it.
-/// With none, sends a made-up picture to a new test thread, reads it back as T3 keeps it after a restart, and fetches
-/// its copy. Prints only sizes, never what's in a picture.
 func probePicture() async throws {
     let backend = makeBackend()
     try await backend.connect()
@@ -852,7 +805,6 @@ func probePicture() async throws {
     await backend.disconnect()
 }
 
-/// What a router's reply can come to, below any correction lines.
 enum RouterRest: String {
     case nothing
     case route = "a route to session 1"
@@ -870,8 +822,6 @@ enum RouterRest: String {
     }
 }
 
-/// One message for the router, and what it should make of it. Everything's made up, because
-/// a correction can't be told from a real one, so no real kitten can be near this.
 struct RouterCase: Sendable {
     let name: String
     let question: String
@@ -879,7 +829,6 @@ struct RouterCase: Sendable {
     var lastSaid = "Fixed the login bug and opened a pull request."
     var kittens = [routerRex, routerSys]
     let owners: [Int]
-    /// Empty means anything will do, as long as it doesn't pick a kitten off the list.
     var rest: [RouterRest] = []
 }
 
@@ -930,7 +879,6 @@ func routerReply(_ test: RouterCase, backend: T3Backend) async -> String? {
         }
         return (threadID, reply)
     }
-    // Never leave a test thread behind, whatever the model does.
     let limit = Task {
         try await Task.sleep(for: .seconds(180))
         run.cancel()
@@ -976,8 +924,6 @@ func probeRouter() async throws {
     await backend.signOut()
     await backend.disconnect()
 }
-
-// MARK: Running
 
 let probes: [String: () async throws -> Void] = [
     "connect": probeConnect,

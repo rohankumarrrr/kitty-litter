@@ -2,25 +2,17 @@ import Foundation
 import ShadesContext
 import ShadesCore
 
-/// What a phone asks Messages to do, as it arrives. None of it is trusted: the phone names a place by its key and
-/// things by their IDs, and where words go, what's being answered and what choices there are all come from the book.
 struct PhoneAsk: Decodable {
     var act: String
     var key: String?
     var text: String?
     var id: String?
     var value: String?
-    /// One for each part: the values of the choices picked, or your own words alone.
     var answers: [[String]]?
     var kind: String?
-    /// A thread's "Also send to #channel".
     var also: Bool?
-    /// Photos and files the page sent ahead, by the IDs the Mac gave them.
     var files: [String]?
 
-    /// The same action the window would take, and the key of where the phone goes next, or `nil` if the window
-    /// couldn't do it either.
-    /// `file` finds what the page sent ahead, which is only ever something it uploaded itself.
     func action(in book: ChannelBook, newTopic: () -> String, file uploaded: (String) -> Drop? = { _ in nil }) -> (action: MessagesAction, opens: String?)? {
         switch act {
         case "send":
@@ -34,7 +26,6 @@ struct PhoneAsk: Decodable {
             case .router:
                 return (.send(words, to: target, shownIn: place.selection?.channelID, files: attached), nil)
             case .thread(let id, _, _):
-                // A thread Messages doesn't place still shows what you sent on its page.
                 let home = book.home(ofThread: id) ?? .shades
                 return (.send(words, to: target, shownIn: home, alsoSent: also == true && place.alsoSendTo(in: book) != nil, files: attached), nil)
             case .newThread(let kitten):
@@ -59,7 +50,6 @@ struct PhoneAsk: Decodable {
             guard let entry = book.waiting.reports.first(where: { $0.id == id }), entry.kind == .decision, entry.change == nil, entry.ask == nil else { return nil }
             return (.inbox(.done(id: entry.id)), nil)
         case "ask":
-            // Never a settings change, which only the Mac's own buttons answer.
             guard let entry = book.waiting.reports.first(where: { $0.id == id }), entry.change == nil, entry.ask != nil,
                   let decision = value.flatMap(ApprovalDecision.init(rawValue:)), [.accept, .decline].contains(decision)
             else { return nil }
@@ -69,14 +59,12 @@ struct PhoneAsk: Decodable {
             return (.inbox(.clear(kind)), nil)
         case "seen":
             guard var selection = key.flatMap({ PhonePlace($0, in: book).selection }) else { return nil }
-            // A phone shows only some of the cat's DM, so all it's seen there is the thread it's on.
             if selection.channelID == .shades {
                 guard let thread = selection.thread else { return nil }
                 selection = .thread(thread, in: .threads)
             }
             return (.seen(selection), nil)
         case "unread":
-            // Only a message in the thread this page shows, and one Messages can mark.
             guard let thread = key.flatMap({ PhonePlace($0, in: book).selection?.thread }), book.canMarkUnread(thread),
                   let id, book.threads[thread]?.messages.contains(where: { $0.id == id }) == true
             else { return nil }
@@ -91,9 +79,6 @@ struct PhoneAsk: Decodable {
             guard let channel = key.flatMap({ PhonePlace($0, in: book).selection?.channelID }), channel != .shades else { return nil }
             return (.older(channel), nil)
         case "picture":
-            // The address the page showed, and only if it's a web picture on a message the phone is shown, which is never
-            // the cat's own work, so a phone can't have the Mac fetch any other address, and pictures moving on the
-            // message can't make it fetch another.
             guard let message = id.flatMap(book.message), book.home(ofThread: message.threadID) != .shades,
                   let url = message.files.lazy.compactMap(\.source?.webAddress).first(where: { $0.absoluteString == value })
             else { return nil }

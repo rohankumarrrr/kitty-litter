@@ -2,24 +2,6 @@ import AppKit
 import ShadesContext
 import ShadesCore
 
-// Tries the context module without the app. It only ever prints timings, sizes, lengths,
-// hostnames and permission status, because your screen may hold private things.
-//
-//   probe-context                    one snapshot of whatever's in front
-//   probe-context --runs 10          several, with min, median and max
-//   probe-context --front <pid>      brings that app forward first, then gives focus back
-//   probe-context --front <pid> --freeze   the same, with that app stopped, to see how a hang goes
-//   probe-context --has <text>       says whether the page text contains this (test pages only)
-//   probe-context --permissions      permission status
-//   probe-context --ask <bundle id>  shows the automation dialog for a browser
-//   probe-context --pick             the real region picker, for you to drag
-//   probe-context --synthetic <dir>  capture checks against a window of its own (see Fixture.swift)
-//                                    (add --screen 1 for the second display)
-//   probe-context --elements          reads what the cat could point at in a window of its own
-//                                    (add --screen 1 for the second display)
-//   probe-context --picker-test <dir>  drives the picker with events handed to its own windows
-//                                      (add --real-mouse for one real drag through the window server)
-
 let arguments = Array(CommandLine.arguments.dropFirst())
 
 func value(after flag: String) -> String? {
@@ -131,7 +113,6 @@ func runPick() async {
     print(region.map { "picked \(describe($0))" } ?? "cancelled")
 }
 
-/// AppKit's events need the main run loop, so the work happens beside it.
 NSApplication.shared.setActivationPolicy(.accessory)
 Task {
     if arguments.contains("--permissions") {

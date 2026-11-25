@@ -5,29 +5,20 @@ import Foundation
 import ShadesCore
 import ShadesT3
 
-// `swift run shades --demo`: pretend versions of everything, so the whole app runs
-// without T3, permissions or a microphone. Nothing here leaves this process.
-
 private struct DemoError: LocalizedError {
     var errorDescription: String?
 }
 
-/// A fake T3: canned streaming replies, a running thread, an agent that asks permission and a kitten with an inbox.
 final class DemoBackend: AgentBackend, @unchecked Sendable {
     private let lock = NSLock()
     private var threads: [AgentThread]
     private var watchers: [UUID: AsyncStream<[AgentThread]>.Continuation] = [:]
     private var counter = 0
-    /// What sorting a thread's report comes to, by the thread's title.
     private var sortedReplies: [String: String] = [:]
-    /// A thread's whole report, for one that says more than the usual canned one.
     private var reports: [String: String] = [:]
-    /// What was said in the threads it started, and in any you replied in, as T3 keeps it.
     private var said: [String: [Exchange]] = [:]
-    /// When each canned thread last moved, which a reply into it does.
     private var moved: [String: Date] = [:]
     var connectFails = false
-    /// T3 doesn't answer until `t3 on`, as when signing in again takes a while, or waits on a Keychain dialog.
     var stuck = false
     var onOpen: ((String) -> Void)?
 
@@ -97,8 +88,6 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
             return AsyncThrowingStream { $0.finish(throwing: DemoError(errorDescription: CatWords.cantReachT3Yet)) }
         }
         print("[demo] forwarded to \(threadID) with \(attachments.count) attachments, to \(behavior.rawValue): \(Self.oneLine(text))")
-        // Kept as T3 keeps it, so Messages reads your words back from the thread once it's moved.
-        // T3 keeps what was attached by name, as a real echo does.
         let asked = Exchange(id: UUID().uuidString, asker: .you, askedAt: Date(), ask: Prompts.ownWords(in: text), files: Prompts.droppedNames(in: text).map { ExchangeFile(name: $0) })
         lock.withLock {
             said[threadID, default: DemoChannels.transcripts[threadID] ?? DemoBusy.transcripts[threadID] ?? []].append(asked)
@@ -168,15 +157,12 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    /// Who started each thread, so passing a file on can check it, as T3 can. The ones a kitten asked another
-    /// kitten in were started by that kitten's thread.
     func origin(of threadID: String) async -> ThreadOrigin? {
         guard let thread = await allThreads()?.first(where: { $0.id == threadID }) else { return nil }
         let askedBy = ["demo-steve-from-clawde": "demo-clawde-main", "demo-clawde-from-steve": "demo-steve-fonts", "demo-steve-from-pepper": "demo-pepper-plans"]
         return ThreadOrigin(title: thread.title, projectPath: thread.projectPath, startedBy: askedBy[threadID].map(ThreadOrigin.Starter.thread) ?? .person)
     }
 
-    /// Made-up pictures, as T3 would give them: the one you sent in the logo thread, and the one in Steve's folder.
     func picture(attachmentID: String) async -> Data? {
         attachmentID == DemoChannels.sentPicture ? Demo.samplePicture() : nil
     }
@@ -189,8 +175,6 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         lock.withLock { said[threadID] } ?? DemoChannels.transcripts[threadID] ?? DemoBusy.transcripts[threadID] ?? []
     }
 
-    /// As T3's search does: every thread with a message that has all the words, including threads Messages hasn't read.
-    /// It takes a moment, as T3's does, so Messages can be seen looking.
     func threads(matching words: String) async -> [String]? {
         if connectFails { return nil }
         try? await Task.sleep(for: .seconds(1))
@@ -203,7 +187,6 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         return found
     }
 
-    /// Hundreds more threads, with long conversations, as T3 would list them for someone who uses it all day.
     func makeBusy() {
         update { threads in
             guard !threads.contains(where: { $0.id == DemoBusy.longThread }) else { return }
@@ -211,7 +194,6 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    /// An agent stops to ask you something, which then shows on the dashboard too.
     func askQuestion(threadID: String) {
         update { threads in
             guard let index = threads.firstIndex(where: { $0.id == threadID }) else { return }
@@ -249,13 +231,10 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     }
 
     func open(threadID: String) async throws {
-        // As the real one can't, with no word from T3 of which environment it is.
         if connectFails { throw T3Error.noEnvironment }
         print("[demo] would open \(threadID) in T3")
         DispatchQueue.main.async { self.onOpen?(threadID) }
     }
-
-    // MARK: - Canned behaviour
 
     func requestApproval(threadID: String = "demo-tidy", kind: ApprovalKind = .command, summary: String = "npm run build && npm test") {
         let id = nextID()
@@ -272,8 +251,6 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    /// `waiting` ends its turn while it watches its pull request, and finishing it after that is the watch ending, in the
-    /// same run.
     func finish(threadID: String, status: AgentStatus = .completed, waiting: Bool = false) {
         update { threads in
             guard let index = threads.firstIndex(where: { $0.id == threadID }) else { return }
@@ -288,9 +265,6 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    /// A kitten finishes a run, the one with an inbox except for `asks`, which is one without that needs you to do
-    /// something. Its report comes to what's asked for here once it's sorted. `<kind> waiting` ends its turn while it
-    /// watches its pull request instead.
     func report(_ request: String) {
         let kind = request.split(separator: " ").first.map(String.init) ?? ""
         let waiting = request.hasSuffix(" waiting")
@@ -312,7 +286,6 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         }
         guard let (threadID, title, reply) = asks[kind].map({ ($0.0, $0.1, $0.2) }) ?? replies[kind] else { return }
         sortedReplies[title] = reply
-        // A schedule starts a thread of its own each time it runs, so it isn't listed until then.
         update { threads in
             guard !threads.contains(where: { $0.id == threadID }) else { return }
             threads.append(AgentThread(id: threadID, title: title, projectTitle: nil, status: .running, model: "claude-opus-5-5", updatedAt: Date(), runtimeMode: .auto))
@@ -419,7 +392,6 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
         if lower.hasPrefix("summarize") {
             return "It's a one-page syllabus for Intro to Statistics. Week 1 covers describing data, week 2 is probability, and the final is on December 12."
         }
-        // Before the hand-off words, since "where do I change this?" is a question about the screen.
         if lower.contains("where") {
             if lower.contains("logo") { return "It's at the top left.\n\(Prompts.pointMarker) 9" }
             if lower.contains("share") { return "It's in Safari's toolbar, top right.\n\(Prompts.pointMarker) 4" }
@@ -440,12 +412,10 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
     }
 }
 
-/// What the self-check finds about this copy of the demo: all good, unless a journey says otherwise.
 final class DemoFacts {
     var found = HealthFacts()
 }
 
-/// A fake pair of eyes that always sees the same pricing page.
 final class DemoContext: ScreenContextProviding, @unchecked Sendable {
     var isPrivate = false
     var fails = false
@@ -454,7 +424,6 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
     func snapshot(_ options: CaptureOptions) async throws -> ScreenSnapshot {
         print("[demo] looked at the screen")
         try await Task.sleep(nanoseconds: 80_000_000)
-        // Missing permissions mean missing fields rather than errors, as with the real thing.
         if fails { return ScreenSnapshot(appName: "Safari", bundleID: "com.apple.Safari", windowTitle: "Pricing") }
         if isPrivate {
             return ScreenSnapshot(isPrivate: true)
@@ -473,8 +442,6 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
         )
     }
 
-    /// The pricing page's heading, its trial button and its plan, and Safari's Share button just under
-    /// the menu bar, where they'd sit on the main display.
     static func elements(on screen: CGRect) -> [ScreenElement] {
         func at(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> CGRect {
             CGRect(x: screen.minX + screen.width * x, y: screen.maxY - screen.height * y - height, width: width, height: height)
@@ -507,7 +474,6 @@ final class DemoContext: ScreenContextProviding, @unchecked Sendable {
     }()
 }
 
-/// A fake pair of ears that always hears the same sentence.
 final class DemoVoice: VoiceEngine {
     let partials: AsyncStream<String>
     let levels: AsyncStream<Float>
@@ -517,11 +483,9 @@ final class DemoVoice: VoiceEngine {
     private let words = ["what's", "this", "button", "for"]
     private var startedAt = Date()
     var downloading = false
-    /// As if the Microphone were off for the app in System Settings.
     var denied = false
 
     init() {
-        // One pair of streams for the life of the engine, the same as the real one.
         (partials, partialsContinuation) = AsyncStream.makeStream(of: String.self, bufferingPolicy: .bufferingNewest(1))
         (levels, levelsContinuation) = AsyncStream.makeStream(of: Float.self, bufferingPolicy: .bufferingNewest(1))
     }
@@ -565,7 +529,6 @@ final class DemoVoice: VoiceEngine {
 
 final class DemoInserter: TextInserting {
     var onInsert: ((String) -> Void)?
-    /// What's selected in the pretend app right now.
     var selection: String?
 
     func insert(_ text: String) async throws {
@@ -602,8 +565,6 @@ enum Demo {
         var facts: DemoFacts
     }
 
-    /// A made-up one-page syllabus in a temporary file, for dropping onto the cat.
-    /// A made-up picture to attach: a keyboard, drawn.
     static func samplePicture() -> Data? {
         let image = NSImage(size: NSSize(width: 800, height: 500), flipped: false) { rect in
             NSColor(srgbRed: 0.18, green: 0.44, blue: 0.37, alpha: 1).setFill()
@@ -622,7 +583,6 @@ enum Demo {
         return bitmap.representation(using: .png, properties: [:])
     }
 
-    /// The same picture as a file, as one you'd have opened lately.
     static func samplePictureFile() -> URL? {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("keyboard.png")
         guard let data = samplePicture(), (try? data.write(to: url)) != nil else { return nil }
@@ -647,8 +607,6 @@ enum Demo {
         return url
     }
 
-    /// Enough of a team to show every state in the kitten view.
-    /// A phone's half of a push subscription, which `phone subscribe` hands the page.
     static let phone = P256.KeyAgreement.PrivateKey()
     static let phoneAuth = Data((0..<16).map { _ in UInt8.random(in: .min ... .max) })
     static var phoneSubscription: WebPush.Subscription {
@@ -663,7 +621,6 @@ enum Demo {
         Kitten(name: "Furbit", role: "Health", covers: "Their health.", folder: "/demo/furbit", planned: true, color: Opal.kittens[7]),
     ]
 
-    /// A made-up home folder, fresh each run, so pressing Allow on a demo's change never touches a real settings file.
     static let home: String = {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent("shades-demo-home", isDirectory: true)
         try? FileManager.default.removeItem(at: home)
@@ -675,13 +632,11 @@ enum Demo {
         return home.path
     }()
 
-    /// What Clawde says once the tester's invite is written, asking for your yes to send it.
     static var askReport: String {
         let json = (try? JSONSerialization.data(withJSONObject: ["ask": "Email the invite to tester@example.com.", "why": "They asked to try the app this week."], options: [.prettyPrinted, .sortedKeys])).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
         return "The tester's invite is written.\n\n```\(ChangeRequests.fence)\n\(json)\n```"
     }
 
-    /// What Clawde says once the install's fixed, asking for the two settings changes its sandbox won't let it make.
     static var changeReport: String {
         func block(_ request: [String: String]) -> String {
             let json = (try? JSONSerialization.data(withJSONObject: request, options: [.prettyPrinted, .sortedKeys])).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
@@ -715,24 +670,20 @@ enum Demo {
             systemFacts: { facts.found },
             home: Demo.home,
             routerFolder: { DemoChannels.routerFolder },
-            // Nothing's written, so a journey can see each report the real app would write to health.json.
             reportHealth: { findings, lockdown in
                 let problems = findings.filter { !$0.ok }.map { "\($0.check): \($0.problem ?? "")" }
                 print("[demo] health.json would say \(problems.isEmpty ? "ok" : problems.joined(separator: " | "))\(lockdown.map { ", lockdown: \($0)" } ?? "")")
             },
             notify: { print("[demo] notified: \(CatWords.notification($0)), which opens \($0.threadID)") },
             withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") },
-            // The page stays on loopback, on a free port, so it's never on your tailnet or in the real app's way.
             servePhone: { "http://127.0.0.1:\($0)" },
             stopServingPhone: { print("[demo] phone page off") },
-            // Nothing leaves the Mac. The stand-in phone opens what it's sent, to show what a real one would get.
             sendPush: { request in
                 let opened = request.httpBody.flatMap { try? WebPush.decrypt($0, with: Demo.phone, auth: Demo.phoneAuth) }
                 print("[demo] pushed to \(request.url?.host ?? "?"): \(opened.map { String(decoding: $0, as: UTF8.self) } ?? "nothing it could open")")
                 return 201
             },
             recentFiles: { [Demo.samplePictureFile(), Demo.samplePDF()].compactMap { $0 } },
-            // Nothing leaves the Mac, so a web picture you press Show on is a made-up one.
             webPicture: { url in
                 print("[demo] would fetch the picture at \(url.absoluteString)")
                 return Demo.samplePicture()

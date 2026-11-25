@@ -1,12 +1,10 @@
 import Foundation
 
-/// A word with whatever punctuation was stuck to it, so edits can keep or move the punctuation.
 struct SpokenWord: Equatable {
     var leading: String
     var text: String
     var trailing: String
 
-    /// Lowercase with curly quotes straightened, for comparing.
     var key: String {
         text.lowercased().replacingOccurrences(of: "’", with: "'")
     }

@@ -4,12 +4,8 @@ import XCTest
 import ShadesContext
 import AppKit
 
-/// The promise: nothing that came from your screen reaches the thread of a kitten with `seesScreen: false`.
-/// Each test runs the real flows over every route and kitten setting in its scope, then reads everything Shades
-/// sent. How to run it, read it and keep it true: `.agents/skills/verify-screen-boundary/SKILL.md`.
 @MainActor
 final class ScreenBoundaryTests: XCTestCase {
-    /// Every part of this screen carries a word that can't turn up by chance, so a prompt with it got it from the screen.
     static let mark = "5ad1"
     static let screen = ScreenSnapshot(
         appName: "App-5ad1",
@@ -21,7 +17,6 @@ final class ScreenBoundaryTests: XCTestCase {
         screenshotArea: CGRect(x: 0, y: 0, width: 1440, height: 900),
         elements: [ScreenElement(role: "button", label: "Element-5ad1", frame: CGRect(x: 10, y: 10, width: 80, height: 24))]
     )
-    /// A file dropped onto the cat, which could as well be a screenshot, so it's held to the same promise.
     static let dropped = ScreenSnapshot(
         url: URL(fileURLWithPath: "/files/statement-5ad1.pdf"),
         pageText: "Statement-5ad1",
@@ -29,10 +24,7 @@ final class ScreenBoundaryTests: XCTestCase {
         droppedNames: ["statement-5ad1.pdf"]
     )
 
-    /// A picture attached in Messages, from the Mac or a phone, which is held to the same promise. Its name carries the
-    /// mark, and so does whatever goes with it.
     static let attached: Drop = picture(named: "statement-5ad1.png")
-    /// Several attached together go as one, so each route carries two.
     static let attachedFiles = [attached, picture(named: "receipt-5ad1.png")]
 
     private static func picture(named name: String) -> Drop {
@@ -40,9 +32,6 @@ final class ScreenBoundaryTests: XCTestCase {
         return .bytes(bitmap.representation(using: .png, properties: [:])!, name: name)
     }
 
-    // MARK: - Your words, wherever they go
-
-    /// Every way your words reach a kitten's new thread, for every way two kittens can share a folder.
     func testNoNewThreadOfAScreenlessKittenGetsYourScreen() async {
         var reachedAllowed = 0
         for clawdeProject in [nil, "/code/shades"] {
@@ -66,7 +55,6 @@ final class ScreenBoundaryTests: XCTestCase {
         XCTAssertGreaterThan(reachedAllowed, 0, "the screen never reached anything it may, so this can't tell when it's there")
     }
 
-    /// Every way your words reach a thread that already exists, whoever's it is or might be.
     func testNoThreadThatIsOrMightBeAScreenlessKittensGetsYourScreen() async {
         var reachedAllowed = 0
         for clawdeProject in [nil, "/code/shades"] {
@@ -90,10 +78,6 @@ final class ScreenBoundaryTests: XCTestCase {
         XCTAssertGreaterThan(reachedAllowed, 0, "the screen never reached anything it may, so this can't tell when it's there")
     }
 
-    // MARK: - Sessions that only reply
-
-    /// The router reads your screen before anyone else does. A page can try to steer it, so nothing it can call may
-    /// put text where another thread reads it. This is the way the leak that led to its folder went.
     func testTheRouterHasNoToolThatReachesAnotherThread() throws {
         let (denied, turnedAway) = try Self.routerRules()
         for tool in Self.waysToAnotherThread {
@@ -108,9 +92,7 @@ final class ScreenBoundaryTests: XCTestCase {
         }
     }
 
-    /// Files anything running as you can read hold secrets in plain text, such as Claude Code's prompt history,
-    /// `~/.git-credentials`, `~/.ssh` and Notes' store. A page could steer the router into reading one and carrying
-    /// it out in a search, and it needs no file, since your screen comes in its message. `Monitor` is the shell too.
+    // Outside the repo: Claude Code's Monitor tool runs shell commands, so it can read files too.
     func testTheRouterCantReadYourFiles() throws {
         let (denied, turnedAway) = try Self.routerRules()
         for tool in ["Read", "Glob", "Grep", "Monitor"] {
@@ -119,8 +101,6 @@ final class ScreenBoundaryTests: XCTestCase {
         }
     }
 
-    /// A summary or the inbox's sorting reads a thread's report, and a report can quote your screen. All either has to
-    /// do is write words, so like the router it runs where it can't send any.
     func testSessionsThatOnlyWriteWordsRunWhereTheyCantSendAny() async {
         let quoted = "Done. The page said: Page-5ad1. " + String(repeating: "More about the work. ", count: 30)
 
@@ -140,8 +120,6 @@ final class ScreenBoundaryTests: XCTestCase {
         }
     }
 
-    /// A thread whose title starts with a screenless kitten's name counts as that kitten's, wherever it runs. Shades sets
-    /// that title from the router's hand-off, or T3 takes it from your first line, before anyone knows what's in it.
     func testANewThreadNamedForAScreenlessKittenGetsNoScreen() async {
         let clawde = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", seesScreen: false)
         let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "their career", folder: "/k/steve")
@@ -161,8 +139,6 @@ final class ScreenBoundaryTests: XCTestCase {
         }
     }
 
-    /// Everything a page could ask the router to use to put text where another thread reads it, as of T3 Code and
-    /// Claude Code on 2026-11-05, and names standing in for tools that don't exist yet.
     static let waysToAnotherThread = [
         "mcp__t3-code__t3_thread_send", "mcp__t3-code__t3_thread_send_attachments", "mcp__t3-code__t3_thread_launch",
         "mcp__t3-code__create_threads", "mcp__t3-code__delegate_task", "mcp__t3-code__t3_queue",
@@ -173,10 +149,8 @@ final class ScreenBoundaryTests: XCTestCase {
         "mcp__t3-code__t3_thread_reply", "mcp__t3__t3_thread_send", "mcp__t3code__thread_send", "SomethingNew",
     ]
 
-    /// Tools that only read, and no file, so a page that steers the router can't make them put text anywhere a thread reads.
     static let onlyRead: Set = ["WebSearch", "ToolSearch"]
 
-    /// What the router's settings deny outright, and whether its hook turns a tool away.
     static func routerRules() throws -> (denied: [String], turnedAway: (String) -> Bool) {
         let settings = try XCTUnwrap(JSONSerialization.jsonObject(with: RouterBlock.settings) as? [String: Any])
         let denied = try XCTUnwrap((settings["permissions"] as? [String: Any])?["deny"] as? [String])
@@ -185,7 +159,7 @@ final class ScreenBoundaryTests: XCTestCase {
         return (denied, { tool in hook.firstMatch(in: tool, range: NSRange(tool.startIndex..., in: tool)) != nil })
     }
 
-    /// How Claude Code reads a deny rule: a tool's own name, or `mcp__<server>` for every tool that server has.
+    // Outside the repo: a Claude Code deny rule names one tool, or `mcp__<server>` for every tool on that server.
     static func denies(_ rule: String, _ tool: String) -> Bool {
         rule == tool || (rule.hasPrefix("mcp__") && !rule.dropFirst(5).contains("__") && tool.hasPrefix(rule + "__"))
     }
@@ -195,87 +169,48 @@ final class ScreenBoundaryTests: XCTestCase {
             || prompt.attachments.contains { String(decoding: $0.data, as: UTF8.self).contains(mark) || $0.name.contains(mark) || attachedPictures.contains($0.data) }
     }
 
-    /// A picture attached in Messages goes as a JPEG made from it, which can't carry the mark in its bytes, though its
-    /// name does.
     private static let attachedPictures = Set(attachedFiles.compactMap { $0.snapshot()?.screenshotJPEG })
 }
 
-// MARK: - Routes
-
-/// Ways your words start a new thread.
 private enum Give: CaseIterable {
-    /// Ask, and the router picks a kitten.
     case askKitten
-    /// The cat's DM in Messages, which goes through the router the same way, and it picks a kitten.
     case shadesKitten
-    /// The box under a kitten's channel in Messages, which starts a new thread.
     case newThread
-    /// Ask, and the router hands it to the frontier agent, with its own reading of the page as the task.
     case handOff
-    /// Point at something broken.
     case fix
-    /// Drop a file onto the cat, and the router picks a kitten.
     case dropKitten
-    /// Drop a file onto the cat, and the router hands it to the frontier agent.
     case dropHandOff
-    /// The cat's DM in Messages, and the router hands it to the frontier agent.
     case shadesHandOff
-    /// A file attached in the cat's box in Messages, and the router picks a kitten.
     case attachKitten
-    /// A file attached in the box under a kitten's channel, which starts a new thread.
     case attachTopic
-    /// A file attached in the cat's box, and the router hands it to the frontier agent.
     case attachHandOff
-    /// The cat's box in Messages, with an @ naming the kitten, which the window starts a thread with instead of asking
-    /// the router.
     case mentionKitten
-    /// A file attached in the cat's box, with an @ naming the kitten.
     case attachMention
-    /// Ask with Lockdown on the kitten, which skips the router.
     case lockdownAsk
-    /// Ask again with Lockdown, carrying on in the thread it started before T3 lists it.
     case lockdownAskAgain
-    /// The cat's box in Messages with Lockdown on the kitten.
     case lockdownShades
-    /// A file attached in the cat's box with Lockdown on the kitten.
     case lockdownAttach
-    /// A file dropped onto the cat with Lockdown on the kitten.
     case lockdownDrop
-    /// Point at something broken with Lockdown on the kitten.
     case lockdownFix
 
     var picksAKitten: Bool { ![.handOff, .fix, .dropHandOff, .shadesHandOff, .attachHandOff].contains(self) }
 }
 
-/// Ways your words reach a thread that's already there.
 private enum Pass: CaseIterable {
-    /// Ask, and the router says it carries on from that thread.
     case askThread
-    /// The cat's DM in Messages, and the router says the same.
     case shadesThread
-    /// Typing in a thread's pane in Messages, opened from its channel, Threads, Activity or Reply on a message.
     case threadReply
-    /// The same, with "Also send to #channel" ticked, which only changes what Messages shows.
     case threadReplyAlsoSent
-    /// Reply or Ask on an inbox row, which opens its thread with the box ready.
     case inboxReply
-    /// Answering a question that thread asked, in Messages.
     case answerQuestion
-    /// Drop a file onto the cat, and the router says it carries on from that thread.
     case dropThread
-    /// A file attached in a thread's pane in Messages.
     case attachThread
-    /// A file attached in the cat's box, and the router says it carries on from that thread.
     case attachShadesThread
-    /// Ask with Lockdown carrying on in that thread.
     case lockdownThread
-    /// The cat's box in Messages with Lockdown carrying on in that thread.
     case lockdownShadesThread
-    /// A file dropped onto the cat with Lockdown carrying on in that thread.
     case lockdownDropThread
 }
 
-/// A thread your words can be passed to, described by what decides whose it is.
 private struct Destination: CustomStringConvertible {
     enum Folder: CaseIterable { case clawdeFolder, clawdeProject, elsewhere, noProject }
     enum Starter: CaseIterable { case you, clawdeThread, threadNamedForClawde, twoDeepFromClawde, someoneClear, unknown, unreadable, loop }
@@ -285,7 +220,6 @@ private struct Destination: CustomStringConvertible {
     var namedForClawde: Bool
     var startedBy: Starter
 
-    /// Worked out from how it was set up, not by asking the app, so the app can't mark its own homework.
     var mightBeScreenless: Bool {
         folder == .clawdeFolder || folder == .clawdeProject || namedForClawde || ![.you, .someoneClear].contains(startedBy)
     }
@@ -295,7 +229,6 @@ private struct Destination: CustomStringConvertible {
     }
 }
 
-/// Where something Shades sent ends up.
 private enum Place: Equatable, CustomStringConvertible {
     case router, scratch
     case project(String)
@@ -311,13 +244,10 @@ private enum Place: Equatable, CustomStringConvertible {
     }
 }
 
-// MARK: - The app, faked
-
 @MainActor
 private final class World {
     struct Send {
         var place: Place
-        /// The title of the thread it went to, which is how far T3 has got when it starts: the one Shades gave, or the first line.
         var title: String
         var prompt: AgentPrompt
     }
@@ -401,7 +331,6 @@ private final class World {
         controller.threadsChanged([AgentThread(id: "w", title: title, projectTitle: nil, status: .completed, model: "m", updatedAt: clock.addingTimeInterval(-60), runtimeMode: destination.mode, projectPath: path)])
     }
 
-    /// Everything happens after the app has seen the screen once, so nothing can carry it over by accident.
     func run(_ route: Give, to target: String) async {
         let number = kittens.firstIndex { $0.name == target }.map { $0 + 1 } ?? 0
         switch route {
@@ -503,7 +432,6 @@ private final class World {
         }
     }
 
-    /// Lockdown on the first kitten, as if its asks had been carrying on in `thread`.
     private func lockDown(carryingOnIn thread: String) {
         var settings = controller.settings
         settings.lockdown = Lockdown(kitten: kittens[0].id, thread: thread)
@@ -523,7 +451,6 @@ private final class World {
         await settle()
     }
 
-    /// A drop takes no look at the screen, so it isn't counted as an ask.
     func drop(_ question: String, routerSays: String) async {
         backend.routerSays[question] = routerSays
         controller.dropped(ScreenBoundaryTests.dropped)
@@ -540,7 +467,6 @@ private final class World {
         await settle()
     }
 
-    /// An @ in the cat's box is read in the window, which sends it the way the box in the kitten's own channel does.
     private func mention(_ words: String, files: [Drop] = []) async {
         guard let kitten = MessageTarget.mentioned(in: words, among: kittens.filter { !$0.planned }) else { return XCTFail("no kitten in \(words)") }
         controller.messagesAction(.startTopic(words, with: kitten, id: "sent-mention", files: files))
@@ -567,7 +493,6 @@ private final class World {
         }
     }
 
-    /// Where each prompt and answer went, by how it was sent. A new thread's ID says how many had started before it.
     var sends: [Send] {
         var started: [String: (place: Place, title: String)] = [:]
         let prompts = backend.sent.map { sent in
@@ -589,8 +514,6 @@ private final class World {
         return prompts + answers
     }
 
-    /// Fails for anything from the screen in a place that is, or might be, a screenless kitten's. `threads` says which
-    /// existing threads might be, from how they were set up. Gives back how many places the screen reached that may see it.
     func check(_ scene: String, threads: [String: Bool], file: StaticString = #filePath, line: UInt = #line) -> Int {
         let screenless = Set(kittens.filter { !$0.seesScreen }.flatMap { [$0.folder, $0.project] })
         let names = kittens.filter { !$0.seesScreen }.map { "\($0.name):" }

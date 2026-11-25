@@ -1,9 +1,7 @@
 import AppKit
 
-/// Dims one display, except for the box you're dragging on it.
 final class RegionOverlayView: NSView {
     var onDragStart: (() -> Void)?
-    /// A rect in view coordinates, or `nil` if you cancelled.
     var onFinish: ((CGRect?) -> Void)?
 
     private var selection: RegionSelection?
@@ -13,7 +11,6 @@ final class RegionOverlayView: NSView {
     private let hint = OverlayPill(text: "Drag around what you mean  ·  Esc to cancel", font: .systemFont(ofSize: 13, weight: .medium))
     private let sizeLabel = OverlayPill(text: "", font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium))
 
-    /// `hintArea` is the part of the display not under the menu bar or Dock.
     init(frame: CGRect, hintArea: CGRect) {
         super.init(frame: frame)
         wantsLayer = true
@@ -43,7 +40,6 @@ final class RegionOverlayView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
-    /// The first click on a display that isn't key has to count as the start of a drag.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func viewDidMoveToWindow() {
@@ -62,7 +58,6 @@ final class RegionOverlayView: NSView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.forEach(removeTrackingArea)
-        // Always active, because the app in front stays in front the whole time.
         addTrackingArea(NSTrackingArea(
             rect: .zero,
             options: [.activeAlways, .inVisibleRect, .mouseMoved, .mouseEnteredAndExited, .cursorUpdate],
@@ -114,7 +109,6 @@ final class RegionOverlayView: NSView {
         if let hole { path.addRect(hole) }
         dim.path = path
 
-        // Just outside the box, the same way the mark lands on the screenshot.
         let outline = hole.map { CGPath(rect: $0.insetBy(dx: -1, dy: -1), transform: nil) }
         halo.path = outline
         edge.path = outline
@@ -129,7 +123,6 @@ final class RegionOverlayView: NSView {
         sizeLabel.setText("\(Int(hole.width.rounded())) × \(Int(hole.height.rounded()))")
         let label = sizeLabel.frame.size
         let gap: CGFloat = 8
-        // Under the box's bottom right corner, or tucked inside it near the edge of the display.
         let x = min(max(hole.maxX - label.width, bounds.minX + gap), bounds.maxX - label.width - gap)
         let below = hole.minY - label.height - gap
         let y = below >= bounds.minY + gap ? below : hole.minY + gap
@@ -138,7 +131,6 @@ final class RegionOverlayView: NSView {
     }
 }
 
-/// A small dark label that reads on any screen.
 final class OverlayPill: NSView {
     private let label = NSTextField(labelWithString: "")
     private static let padding = CGSize(width: 12, height: 6)

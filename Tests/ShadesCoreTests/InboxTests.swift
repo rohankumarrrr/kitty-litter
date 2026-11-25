@@ -30,9 +30,6 @@ final class InboxTests: XCTestCase {
         }
     }
 
-    // MARK: - A change it asked for
-
-    /// Only Allow or Deny answers it, so a later report, decision or note from the same thread leaves it as it is.
     func testAChangeItAskedForWaitsWhateverTheThreadSaysNext() throws {
         var inbox = Inbox(since: start)
         let change = ChangeRequest(file: "/k/c/.claude/settings.json", replace: "a", with: "b", why: nil)
@@ -54,8 +51,6 @@ final class InboxTests: XCTestCase {
         let saved = try JSONDecoder().decode(Inbox.self, from: JSONEncoder().encode(inbox))
         XCTAssertEqual(saved.entries.first { $0.id == "c" }?.change, inbox.entries.first { $0.id == "c" }?.change)
     }
-
-    // MARK: - What's owed
 
     func testAFinishedRunIsOwedOnceWhetherItWorkedOrNot() {
         var inbox = Inbox(since: start)
@@ -79,7 +74,6 @@ final class InboxTests: XCTestCase {
         }
     }
 
-    /// Watching its pull request, say: still going, but what it said when its turn ended can be waiting on you.
     func testARunThatEndedWhileWorkItWaitsOnCarriesOnIsOwedAndUnread() {
         var waiting = thread(status: .running)
         waiting.turnEnded = true
@@ -112,9 +106,6 @@ final class InboxTests: XCTestCase {
         XCTAssertTrue(inbox.entries.isEmpty)
     }
 
-    // MARK: - Filing
-
-    /// The rules for what a report does to the rows already there, as a table.
     func testFilingRules() {
         struct Case {
             var name: String
@@ -289,8 +280,6 @@ final class InboxTests: XCTestCase {
         XCTAssertEqual(Inbox.panelOrder(rows).map(\.id), ["b", "a"])
     }
 
-    // MARK: - Reading a sorted reply
-
     func testTheMarkersAreRead() {
         let sorted = SortedReport(reply: """
         SHIPPED: The icon is live.
@@ -353,8 +342,6 @@ final class InboxTests: XCTestCase {
         XCTAssertEqual(sorted?.note?.count, 400)
     }
 
-    // MARK: - Saving
-
     private func folder() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("inbox-\(UUID().uuidString)")
         addTeardownBlock { try? FileManager.default.removeItem(at: root) }
@@ -373,8 +360,6 @@ final class InboxTests: XCTestCase {
         XCTAssertFalse(loaded.owes(thread()), "what's handled stays handled")
         XCTAssertTrue(loaded.owes(thread(run: "run-2")), "and since stays where it was")
     }
-
-    // MARK: - What you've read
 
     func testAFinishedRunIsUnreadUntilYouveSeenIt() {
         var inbox = Inbox(since: start)
@@ -405,8 +390,6 @@ final class InboxTests: XCTestCase {
         XCTAssertTrue(loaded.isUnread(thread()))
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
     }
-
-    // MARK: - Where what's new starts
 
     private let said: [(id: String, isYours: Bool)] = [("ask-1", true), ("reply-1", false), ("ask-2", true), ("reply-2", false)]
 
@@ -492,7 +475,6 @@ final class InboxTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
     }
 
-    /// Messages kept where things lived only while the app ran, so every restart emptied #general.
     func testWhereMessagesPutThingsIsSavedAsIDsAndAFileFromBeforeItStillLoads() throws {
         let file = try folder().appendingPathComponent("inbox.json")
         var inbox = Inbox(since: start)
@@ -518,8 +500,6 @@ final class InboxTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.deletingLastPathComponent().appendingPathComponent("inbox.broken.json").path))
     }
 
-    /// #general went into the cat's conversation, but an inbox from a build that had it has to load whole, and keep
-    /// what it saved about #general, so going back to that build loses nothing.
     func testAnInboxFromWhenGeneralWasThereLoadsWholeAndKeepsWhatItSavedAboutIt() throws {
         let file = try folder().appendingPathComponent("inbox.json")
         let older = #"""
@@ -548,7 +528,6 @@ final class InboxTests: XCTestCase {
         }
     }
 
-    /// A reaction is a mark and never words, so all that's kept is which message, by T3's ID, and which mark.
     func testReactionsAreSavedAsIDsAndPressingOneAgainTakesItOff() throws {
         let file = try folder().appendingPathComponent("inbox.json")
         var inbox = Inbox(since: start)
@@ -562,7 +541,6 @@ final class InboxTests: XCTestCase {
         XCTAssertTrue(saved.contains("\"thumbsUp\""))
         XCTAssertFalse(saved.contains("👍"), "by its name")
 
-        // One a later Shades added isn't lost by this one, or read as something it isn't.
         let later = saved.replacingOccurrences(of: "\"eyes\"", with: "\"rocket\"")
         try later.write(to: file, atomically: true, encoding: .utf8)
         var loaded = Inbox.load(from: file, now: start)

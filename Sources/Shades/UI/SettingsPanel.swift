@@ -1,10 +1,6 @@
 import AppKit
 import ShadesCore
 
-/// Every setting in one place, a page at a time, from the menu or from Messages. A change takes as you make it, so
-/// there's nothing to save, and the file itself stays easy to edit by hand. Do Not Disturb and each channel's
-/// notifications go through the same switch and menus they do everywhere else. It's Opal's floating glass, laid out as
-/// macOS's own Settings is, with underlined tabs, and every choice from a menu is the same quiet button.
 @MainActor
 final class SettingsPanel: NSObject, NSWindowDelegate {
     enum Page: Int, CaseIterable {
@@ -24,21 +20,17 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     static let width: CGFloat = 480
     private static let padding: CGFloat = 24
     private static var contentWidth: CGFloat { width - padding * 2 }
-    /// A box beside its setting's name.
     private static let fieldWidth: CGFloat = 230
 
-    /// Its window, which tests give one that never reaches the screen.
     let panel: QuietPanel
     var onChange: ((Settings) -> Void)?
     var onDoNotDisturb: (() -> Void)?
     var onNotifications: ((ChannelID, ChannelNotifications) -> Void)?
     var onPairPhone: (() -> Void)?
-    /// Where Open settings folder shows the folder. Tests stand in for Finder.
     var openFolder: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
     private(set) var page = Page.agents
     private(set) var form: SettingsForm?
-    /// Where its top right corner stays, whichever page is showing.
     private var corner = NSPoint.zero
     private var handlers: [Handler] = []
     private let notificationsMenu = NotificationsMenu()
@@ -57,7 +49,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
     }
 
-    /// Shows a change made anywhere. Its own changes are already showing, so they don't build it again under your typing.
     func update(_ form: SettingsForm) {
         guard isVisible, form != self.form else { return }
         self.form = form
@@ -76,7 +67,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         panel.orderOut(nil)
     }
 
-    /// A box you're typing in keeps what's typed.
     private func endEditing() {
         if panel.isVisible { panel.makeFirstResponder(nil) }
     }
@@ -89,9 +79,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         onChange?(form.settings)
     }
 
-    // MARK: - Pages
-
-    /// Settings that go together, under small capitals if they need them.
     private struct Group {
         var label: String?
         var rows: [NSView]
@@ -131,7 +118,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             let finished = toggle(Self.finishedTitle, settings.notifyFinished) { [weak self] on in
                 self?.edit { $0.notifyFinished = on }
             }
-            // shortcut: a row a channel, so dozens of kittens would make it taller than the screen. Scroll them then.
             let channels = form.channels.map { channel in
                 let current = settings.notifications(for: channel.id.settingsKey)
                 let button = menuButton(Self.summary(current, phone: settings.phone)) { [weak self] anchor in
@@ -152,13 +138,11 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             let font = menuButton(settings.messagesFont ?? MessagesInk.systemFaces[0].name) { [weak self] anchor in
                 self?.fontMenu.show(current: settings.messagesFont, under: anchor) { [weak self] picked in
                     self?.edit { $0.messagesFont = picked }
-                    // Its button says the font, and its own change doesn't make the page again by itself.
                     self?.build()
                 }
             }
             let phone = toggle(Self.phoneTitle, settings.phone) { [weak self] on in
                 self?.edit { $0.phone = on }
-                // Pairing a phone comes and goes with it.
                 self?.build()
             }
             var phoneRows = [row(Self.phoneTitle, note: "In your phone's browser, over Tailscale.", phone, id: "Phone")]
@@ -188,15 +172,10 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     private static let opens: [(String, Bool)] = [(CatWords.appName, true), ("T3", false)]
     private static let followUps: [(String, FollowUpBehavior)] = [("Steer", .steer), ("Queue", .queue)]
 
-    // MARK: - Building
-
     private func build() {
-        // A control Tab reached still has the keyboard once its pick makes the page again.
         let focused = (panel.firstResponder as? NSView)?.accessibilityIdentifier() ?? ""
-        // What's typed so far goes in before the page is made again from what's set.
         endEditing()
         guard let form else { return }
-        // A control can build the page again from its own action, so the page it was on lives out this turn.
         let retired = (panel.contentView, handlers)
         DispatchQueue.main.async { withExtendedLifetime(retired) {} }
         handlers = []
@@ -230,7 +209,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             }
         }
 
-        // Done on the right, as macOS puts the button that finishes, and the folder on the left.
         let reveal = plainButton("Open settings folder", style: .text) { [weak self] in self?.openFolder(Settings.directory) }
         let done = plainButton("Done", style: .filled) { [weak self] in self?.hide() }
         let gap = NSView()
@@ -252,7 +230,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         panel.setContentSize(root.fittingSize)
         place()
         panel.invalidateShadow()
-        // No box has the keyboard until you click into one, so a stray key can't type over a model.
         panel.initialFirstResponder = root
         panel.recalculateKeyViewLoop()
         func all(_ view: NSView) -> [NSView] { view.subviews + view.subviews.flatMap(all) }
@@ -260,7 +237,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         panel.makeFirstResponder(again ?? root)
     }
 
-    /// Each page's name, underlined while it's open.
     private func tabs() -> NSView {
         let tabs = Page.allCases.map { page in
             let tab = SettingsTab(page.title)
@@ -286,7 +262,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         return line
     }
 
-    /// Hangs from its corner, kept on the screen.
     private func place() {
         let size = panel.frame.size
         var origin = NSPoint(x: corner.x - size.width, y: corner.y - size.height)
@@ -297,8 +272,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         panel.setFrameOrigin(origin)
     }
 
-    /// One setting as macOS's own Settings lays it out: its name, and a line on what it does if it needs one, on the
-    /// left, and its control on the right. `id` is what the demo and VoiceOver call it, where its name needs its group.
     private func row(_ title: String, note: String? = nil, _ control: NSView, id: String? = nil) -> NSView {
         name(control, id ?? title)
         let controlWidth = control.constraints.first { $0.firstAttribute == .width }?.constant ?? control.frame.width
@@ -314,7 +287,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         return line
     }
 
-    /// A setting whose control needs the whole width, such as a long list, under its name.
     private func stacked(_ title: String, note: String?, _ control: NSView, id: String? = nil) -> NSView {
         name(control, id ?? title)
         let line = NSStackView(views: [words(title, note, width: Self.contentWidth), control])
@@ -325,14 +297,11 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         return line
     }
 
-    /// The demo finds a control by what its row is called, and VoiceOver says it before what's picked. A switch says
-    /// its own words.
     private func name(_ control: NSView, _ id: String) {
         control.setAccessibilityIdentifier(id)
         if !(control is QuietSwitch) { control.setAccessibilityLabel(id) }
     }
 
-    /// A setting's name in the body's size and colour, with what it does under it in a quieter line.
     private func words(_ title: String, _ note: String?, width: CGFloat) -> NSView {
         let name = NSTextField(labelWithString: title)
         name.font = MessagesInk.font(ofSize: MessagesInk.body)
@@ -354,9 +323,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         field("\(model.provider) / \(model.model) / \(model.effort)", "provider / model / effort", wide: true, onEnd: onEnd)
     }
 
-    /// Takes what's typed when you press Return or move on, and when Settings closes. A wide one takes the whole width
-    /// under its name, and one of more than one line also grows to fit what's in it, with a line spare for the next, so
-    /// nothing in it hides past its edge.
     private func field(_ value: String, _ placeholder: String, lines: Int = 1, wide: Bool = false, onEnd: @escaping (inout Settings, String) -> Void) -> NSTextField {
         let field = OpalField(value, placeholder: placeholder)
         let width = lines > 1 || wide ? Self.contentWidth : Self.fieldWidth
@@ -367,8 +333,7 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             field.lineBreakMode = .byWordWrapping
             field.cell?.wraps = true
             field.cell?.isScrollable = false
-            // Its words laid out as a text view does, which wraps a little sooner than the box draws them, where the
-            // cell's own measure of itself can come up a line short.
+            // Outside the repo: an NSTextField cell's own measure of wrapped words can come up a line short.
             let edge = NSRect(x: 0, y: 0, width: width, height: 1000)
             let inside = field.cell?.drawingRect(forBounds: edge) ?? edge
             let words = NSTextStorage(attributedString: field.attributedStringValue)
@@ -394,7 +359,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         return field
     }
 
-    /// Choices with the one that's set ticked, opening over the button the way a pop-up's menu does.
     private func popup<T: Equatable>(_ choices: [(String, T)], _ selected: T, onPick: @escaping (inout Settings, T) -> Void) -> QuietButton {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -403,7 +367,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
             item.state = value == selected ? .on : .off
             item.target = handler { [weak self] in
                 self?.edit { onPick(&$0, value) }
-                // Its button says the choice, and its own change doesn't make the page again by itself.
                 self?.build()
             }
             menu.addItem(item)
@@ -412,17 +375,14 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         let button = menuButton(picked.title) { anchor in
             menu.popUp(positioning: picked, at: NSPoint(x: 0, y: anchor.bounds.height), in: anchor)
         }
-        // Where a right-click, VoiceOver's show menu and the demo find it too.
         button.menu = menu
         return button
     }
 
-    /// A few close choices side by side, the way Opal picks one of a handful.
     private func segments<T: Equatable>(_ choices: [(String, T)], _ selected: T, onPick: @escaping (inout Settings, T) -> Void) -> QuietSegments {
         let segments = QuietSegments(choices.map(\.0), selected: choices.firstIndex { $0.1 == selected } ?? 0)
         segments.onPick = { [weak self] index in
             self?.edit { onPick(&$0, choices[index].1) }
-            // A new text size reaches Settings' own words too.
             self?.build()
         }
         segments.widthAnchor.constraint(equalToConstant: segments.frame.width).isActive = true
@@ -430,7 +390,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         return segments
     }
 
-    /// On or off, for a whole row.
     private func toggle(_ title: String, _ on: Bool, onToggle: @escaping (Bool) -> Void) -> QuietSwitch {
         let toggle = QuietSwitch()
         toggle.title = title
@@ -441,7 +400,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         return toggle
     }
 
-    /// A button that opens a menu, saying what's picked, with a pop-up's chevrons.
     private func menuButton(_ title: String, onPress: @escaping (NSView) -> Void) -> QuietButton {
         let button = QuietButton(title, style: .plain)
         button.showsChevrons = true
@@ -474,9 +432,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         return handler
     }
 
-    // MARK: - Words
-
-    /// What a channel's button says it tells you. The phone only shows once it's on, and only where it differs.
     static func summary(_ notifications: ChannelNotifications, phone: Bool) -> String {
         if notifications.muted { return CatWords.muted }
         guard phone, notifications.phone != notifications.mac else { return CatWords.notifyLevel(notifications.mac) }
@@ -487,7 +442,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
         text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }
 
-    /// Reads "provider / model / effort". Anything else keeps what was there.
     nonisolated static func model(_ text: String, fallback: ModelChoice) -> ModelChoice {
         let parts = text.split(separator: "/").map { $0.trimmingCharacters(in: .whitespaces) }
         guard parts.count == 3, parts.allSatisfy({ !$0.isEmpty }) else { return fallback }
@@ -504,7 +458,6 @@ final class SettingsPanel: NSObject, NSWindowDelegate {
     }
 }
 
-/// A control's action as a closure, kept for as long as the page it's on.
 private final class Handler: NSObject {
     private let run: () -> Void
 
@@ -528,7 +481,6 @@ private final class SettingsRootView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override func cancelOperation(_ sender: Any?) { onCancel() }
-    /// ⌘W closes it, as it does any window on the Mac, from a box too. There's no menu of ours for it to come through.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command, event.charactersIgnoringModifiers == "w" else {
             return super.performKeyEquivalent(with: event)
@@ -538,11 +490,9 @@ private final class SettingsRootView: NSView {
     }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var acceptsFirstResponder: Bool { true }
-    /// It holds the keyboard as Settings opens, but shows no ring, so Tab goes round without stopping on it.
     override var canBecomeKeyView: Bool { false }
-    /// Esc closes it, while no box has the keyboard too.
     override func keyDown(with event: NSEvent) { interpretKeyEvents([event]) }
-    /// Tab still goes round the page from here, which nothing else in the chain does once a key is read this way.
+    // Outside the repo: once interpretKeyEvents reads Tab, nothing else in the responder chain moves to the next view.
     override func insertTab(_ sender: Any?) { window?.selectNextKeyView(sender) }
     override func insertBacktab(_ sender: Any?) { window?.selectPreviousKeyView(sender) }
 
@@ -551,7 +501,6 @@ private final class SettingsRootView: NSView {
     }
 }
 
-/// A 1-point line between settings, in Opal's border.
 private final class SettingsHairline: NSView {
     override func draw(_ dirtyRect: NSRect) {
         MessagesInk.line.setFill()

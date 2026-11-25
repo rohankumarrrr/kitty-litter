@@ -1,8 +1,6 @@
 import Foundation
 import ShadesCore
 
-/// The page a phone opens. It only draws what the Mac sends and says what you did, and every word on it is put there
-/// as text, never as markup, since it's what kittens said.
 enum PhonePage {
     static let html = """
         <!doctype html>
@@ -93,24 +91,18 @@ enum PhonePage {
         </html>
         """
 
-    /// Opal on an iPhone, as its Home Screen and widgets are: pure black, SF Pro, and white words at 100, 80 and 62%.
-    /// Colour comes in only as light along an edge, and every colour is a token in `colors`.
     static let style = """
         :root {
-          /* The phone's own text size, 17px where it's left alone. Every size the page writes is in em, as the pixels it
-             comes to at 17, so it grows with it, and with the Mac's, which /app.css sets in --size. */
           font: 106.25%/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
           -webkit-text-size-adjust: 100%;
         }
-        /* An iPhone's browser starts at 16px whatever its Text Size says, and only gives the setting here. */
+        /* Outside the repo: Safari on iPhone starts at 16px whatever its Text Size says, and only gives that setting through -apple-system-body. */
         @supports (-webkit-touch-callout: none) {
           :root { font: -apple-system-body; line-height: 1.35; }
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { background: var(--page); color: var(--body); }
         body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; font-size: var(--size, 100%); }
-        /* Big enough to tap, as Apple's 44 points. Where a row is tighter than that, a button reaches past it with
-           negative margins, so it can be tapped where it is without spreading the page out. */
         button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; min-width: 44px; min-height: 44px; }
         [hidden] { display: none !important; }
         .unseen { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -119,13 +111,11 @@ enum PhonePage {
         .symbolic { display: inline-grid; place-items: center; color: var(--lilac); border-radius: 999px; }
         .symbolic:active { background: var(--control); }
 
-        /* An iPhone's bar: the page's black over the large title, and glass with a hairline once the title goes under it. */
         #top { position: sticky; top: var(--above, 0px); z-index: 2; background: var(--page);
           padding: env(safe-area-inset-top) calc(env(safe-area-inset-right) + 8px) 0 calc(env(safe-area-inset-left) + 8px); }
         #top.collapsed { background: var(--glass); box-shadow: 0 1px var(--glass-edge); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
         #bar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; min-height: 44px; }
-        /* Once the sticky bar is drawn, an iPhone's browser doesn't always draw what changes in it (WebKit bug 244139),
-           which left Back blank on Activity and Threads. Each part is drawn on a layer of its own, which it does draw. */
+        /* Outside the repo: WebKit bug 244139: Safari on iPhone doesn't always redraw what changes in a sticky bar, but does redraw a part on a layer of its own. */
         #bar > * { will-change: transform; }
         #back { grid-column: 1; justify-self: start; display: flex; align-items: center; gap: 2px; max-width: 100%; padding-right: 8px;
           color: var(--lilac); white-space: nowrap; overflow: hidden; }
@@ -135,10 +125,9 @@ enum PhonePage {
           text-overflow: ellipsis; visibility: hidden; }
         #top.collapsed #bartitle { visibility: visible; }
         #actions { grid-column: 3; justify-self: end; display: flex; }
-        /* While Search is open it has the bar, with Cancel beside it, as on an iPhone. */
         #search { position: relative; display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 4px 0 4px 8px; }
         #search .symbol { position: absolute; left: 18px; width: 18px; height: 18px; color: var(--secondary); pointer-events: none; }
-        /* Never under 16px, or an iPhone zooms in on it as you type. */
+        /* Outside the repo: Safari on iPhone zooms in on a field under 16px as you type. */
         #query { flex: 1; min-width: 0; font: inherit; font-size: max(16px, 1em); color: var(--white); caret-color: var(--lilac); background: var(--raised);
           border: 1px solid var(--field-edge); border-radius: 12px; padding: 8px 12px 8px 36px; min-height: 44px; }
         #query::placeholder, #words::placeholder, #code::placeholder, .card input::placeholder { color: var(--secondary); }
@@ -146,14 +135,11 @@ enum PhonePage {
         #jumpnew { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap; padding: 0 16px;
           color: var(--lilac); background: var(--glass); box-shadow: inset 0 0 0 1px var(--glass-edge), 0 4px 16px rgba(0, 0, 0, .5);
           border-radius: 999px; font-size: calc(15em / 17); font-weight: 600; }
-        /* Across the bottom of the header, so it's in sight however far down you are. Always there, empty, so what it
-           says is read out. */
         #banner { color: var(--error-text); background: var(--error-surface); font-size: calc(15em / 17);
           margin: 0 calc(-8px - env(safe-area-inset-right)) 0 calc(-8px - env(safe-area-inset-left));
           padding: 10px calc(env(safe-area-inset-right) + 16px) 10px calc(env(safe-area-inset-left) + 16px); }
         #banner:empty { padding: 0; }
 
-        /* The large title, which scrolls up under the bar. */
         #head { display: flex; align-items: center; gap: 12px; padding: 2px calc(env(safe-area-inset-right) + 16px) 10px calc(env(safe-area-inset-left) + 16px); }
         #names { flex: 1; min-width: 0; }
         #title { margin: 0; color: var(--white); font-size: calc(32em / 17); font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
@@ -161,7 +147,6 @@ enum PhonePage {
         #subtitle:empty { display: none; }
         #link, #t3, #backlog { display: block; color: var(--lilac); font-size: calc(15em / 17); text-align: left; margin: -8px 0 -12px; }
 
-        /* The Home Screen's widget card: black glass lit only along its bottom edge, in its own light. */
         .card, .lit { --light: var(--shades); position: relative;
           background: radial-gradient(70% 64.8% at 50% 108.64%, color-mix(in srgb, var(--rim, var(--light)) 30%, transparent), transparent 72%),
             linear-gradient(var(--card-top), var(--card-bottom));
@@ -169,7 +154,6 @@ enum PhonePage {
         .card::after, .lit::after { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1.2px; pointer-events: none;
           background: linear-gradient(transparent 58%, color-mix(in srgb, var(--rim, var(--light)) 55%, transparent) 82%, var(--rim, var(--light)));
           -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
-        /* An Opal Dock icon: a black tile lit from below, for a kitten's cat or a place's glyph. */
         .tile { --light: var(--shades); position: relative; flex: none; width: 40px; height: 40px; border-radius: 22.5%; display: grid; place-items: center;
           color: var(--white);
           background: radial-gradient(100% 60% at 50% 100%, color-mix(in srgb, var(--light) 45%, transparent), transparent),
@@ -191,10 +175,8 @@ enum PhonePage {
         .place.unread .name { color: var(--white); font-weight: 600; }
         .count { background: var(--error); color: var(--page); border-radius: 999px; padding: 1px 8px; font-size: calc(13em / 17); font-weight: 700; font-variant-numeric: tabular-nums; }
         .dot { width: 8px; height: 8px; flex: none; background: var(--secondary); }
-        /* The window's pixel art, kept crisp: each of its pixels is a whole number of the phone's at 16 and 32. */
         .cat { width: 32px; height: 32px; flex: none; image-rendering: -webkit-optimize-contrast; image-rendering: pixelated; }
         .cat.small { width: 16px; height: 16px; }
-        /* Your colour is close to the page's black, so your square has an edge, at the 3:1 a shape needs, as in the window. */
         .face { width: 16px; height: 16px; flex: none; border-radius: 4px; background: var(--selected); box-shadow: inset 0 0 0 1px var(--dim); }
         .you { width: 32px; height: 32px; flex: none; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 .5px var(--border); }
         .you.small { width: 16px; height: 16px; }
@@ -209,8 +191,6 @@ enum PhonePage {
         .msg.withyou { padding-right: 40px; }
         .said .you { margin-right: -40px; }
         .meta { color: var(--secondary); font-size: calc(13em / 17); margin: 4px 12px 3px; }
-        /* A speaker's bubble is drawn here alone, from what the page puts on it: yours filled in your colour, and
-           anyone else's lit at its edge in theirs, as the window draws them. Still coming, either is at 55%. */
         .bubble { position: relative; max-width: 86%; padding: 9px 14px; border-radius: 18px; color: var(--body);
           white-space: pre-wrap; overflow-wrap: anywhere; }
         .mine .bubble { --under: var(--fill, var(--selected)); background: var(--under); }
@@ -231,30 +211,23 @@ enum PhonePage {
         .bubble .marker { flex: none; min-width: .8em; }
         .bubble .code { border-radius: 10px; background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
         .bubble pre { margin: 0; padding: 8px 10px; font: calc(14em / 17)/1.4 ui-monospace, Menlo, monospace; white-space: pre; overflow-x: auto; }
-        /* On top of the code's first line, so all of it can be tapped. */
         .bubble .copy { position: relative; display: block; margin: -8px 0 -18px auto; padding: 0 10px; color: var(--lilac); font-size: calc(13em / 17); }
         .bubble .table { overflow-x: auto; }
         .bubble table { border-collapse: collapse; font-size: calc(15em / 17); white-space: normal; }
         .bubble th, .bubble td { overflow-wrap: normal; border: 1px solid var(--field-edge); padding: 3px 8px; text-align: left; vertical-align: top; }
         .bubble th { color: var(--white); background: rgba(255, 255, 255, .04); }
         .bubble hr { border: 0; border-top: 1px solid var(--field-edge); margin: .6em 0; }
-        /* A pull request's state says itself in Opal's status colours, never a fill of its own. */
         .chip { display: inline-block; border-radius: 999px; padding: 0 8px; font-size: calc(14em / 17); font-weight: 600; color: var(--body);
           background: var(--control); box-shadow: inset 0 0 0 1px var(--field-edge); white-space: nowrap; }
         .chip[data-state=open] { color: var(--good); }
         .chip[data-state=merged] { color: var(--lilac); }
         .chip[data-state=closed] { color: var(--error-text); }
-        /* Thirty lines of 1.35em and the bubble's padding, as many as a long message shows on the Mac. What's cut fades
-           into the bubble's own colour, under its lit edge. */
         .bubble.cut { max-height: calc(40.5em + 18px); overflow: hidden; }
         .bubble.cut::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4em; pointer-events: none;
           background: linear-gradient(transparent, var(--under)); }
         .more { color: var(--secondary); font-size: calc(14em / 17); margin: -8px 12px -12px; }
         .failure { color: var(--error-text); font-size: calc(13em / 17); margin: 3px 12px 0; }
         .retry { color: var(--lilac); font-size: calc(14em / 17); font-weight: 600; margin: -8px 12px -12px; }
-        /* Tapping a message offers its reactions, and tapping a post opens its thread. A keyboard and VoiceOver get a
-           button for each, React, and Open thread where there's no reply bar to press, shown only while it has the
-           keyboard. */
         .open, .react { color: var(--lilac); font-size: calc(14em / 17); font-weight: 600; margin: -8px 12px -12px; }
         .open:not(:focus), .react:not(:focus) { position: absolute; width: 1px; min-width: 0; height: 1px; min-height: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
         .reactions { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 8px 0; }
@@ -269,7 +242,6 @@ enum PhonePage {
         .replybar span { color: var(--secondary); }
         .replies { display: flex; align-items: center; gap: 10px; color: var(--secondary); font-size: calc(13em / 17); margin: 14px 4px 4px; }
         .replies::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
-        /* Slack's New line, over what's new to you, in the rim's light. */
         .new { display: flex; align-items: center; gap: 10px; color: var(--error-text); font-size: calc(13em / 17); font-weight: 600; margin: 14px 4px 4px; }
         .new::before { content: ''; flex: 1; height: 1px; background: var(--rim-line); }
         .digest { display: block; width: 100%; text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--border); }
@@ -309,7 +281,6 @@ enum PhonePage {
         .card .footer { margin: 8px 0 0; color: var(--secondary); font-size: calc(13em / 17); }
         .card .part { margin: 14px 0 0; }
         .card header + .part { margin: 0; }
-        /* Quiet capsules, with one violet primary for what you most likely want, as everywhere in Opal. */
         .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
         .buttons button { color: var(--body); background: var(--control); box-shadow: inset 0 0 0 1px var(--field-edge); border-radius: 999px; padding: 0 18px; font-size: calc(15em / 17); }
         .buttons button:active { background: var(--control-hover); }
@@ -321,7 +292,6 @@ enum PhonePage {
         .card input, #pairform input { width: 100%; font: inherit; font-size: max(16px, 1em); color: var(--white); caret-color: var(--lilac); background: var(--raised);
           border: 1px solid var(--field-edge); border-radius: 12px; padding: 8px 12px; min-height: 44px; margin-top: 8px; }
 
-        /* The box at the foot, on the Dock's glass, as iMessage's: + for a photo or file, and the arrow inside the field. */
         #box { position: sticky; bottom: var(--below, 0px); background: var(--glass); box-shadow: 0 -1px var(--glass-edge); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
           padding: 8px calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px); }
         #label { display: block; color: var(--secondary); font-size: calc(13em / 17); margin: 0 4px 6px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -338,7 +308,6 @@ enum PhonePage {
         .attachment { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 8px; border-radius: 12px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--field-edge); max-width: 100%; min-width: 0; }
         .attachment img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex: none; }
         .attachment span { font-size: calc(14em / 17); white-space: nowrap; }
-        /* The name gives way, so how far it's got always reads whole. */
         .attachment .name { overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 40vw; }
         .attachment .state { flex: none; }
         .attachment button { color: var(--secondary); }
@@ -352,9 +321,7 @@ enum PhonePage {
         .file { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 8px 12px; border-radius: 12px; color: var(--body);
           background: var(--raised); box-shadow: inset 0 0 0 1px var(--field-edge); font-size: calc(14em / 17); max-width: 86%; overflow-wrap: anywhere; }
 
-        /* A sheet floats over a dimmed page, on glass with 24-point corners. However long a link's address, the sheet
-           stays on screen and the address scrolls inside it. Only while it's open, since a closed dialog is hidden by
-           the browser's own rule. */
+        /* Outside the repo: a closed dialog is hidden only by the browser's own rule, which a display set here would override. */
         .sheet[open] { position: fixed; margin: 0; width: auto; max-width: none; display: flex; flex-direction: column;
           inset: auto calc(env(safe-area-inset-right) + 8px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px);
           max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);
@@ -379,7 +346,6 @@ enum PhonePage {
 
         """
 
-    /// Opal's tokens, on a phone's pure black, with words in white at the opacities the Home Screen's widgets use.
     static let colors: String = {
         let hex = Opal.hex
         let rgba = { (color: UInt32, alpha: CGFloat) in
@@ -402,7 +368,6 @@ enum PhonePage {
             """
     }()
 
-    /// The text size you picked for Messages on the Mac, on top of the phone's own, grown by as much as the window's is.
     static func size(_ size: TextSize) -> String {
         guard size != .standard else { return "" }
         return "\n:root { --size: calc(100% * \(Int(MessagesInk.body(at: size))) / \(Int(MessagesInk.body(at: .standard)))); }\n"
@@ -436,28 +401,19 @@ enum PhonePage {
         };
 
         let key = new URLSearchParams(location.search).get('key') || 'home';
-        // Kept for this address and port only, and sent only by this page. A cookie would go to every port on the name.
         let pass = localStorage.getItem('shades.key');
         let stream = null;
-        // What the Mac last sent on this stream. A row that's just as it was comes again as only its ID.
         let received = null;
-        // When the stream last said anything, pings included. The Mac says something every 10 seconds.
         let heard = 0;
-        // A new one each time the page loads, so the Mac can end the stream this page left behind when it starts another.
         const page = Math.random().toString(36).slice(2);
         let view = null;
         let retry = null;
-        // A page where you've marked something unread stops saying it's seen it, until you go somewhere else.
         let keptUnread = null;
-        // Jumped up to the New line, so what comes in doesn't take the page back down until you scroll there yourself.
         let jumped = false;
-        // At the foot of a conversation, so a picture that comes in after it's drawn keeps it there, as iMessage does.
-        // Only scrolling up leaves it, since the page growing under you moves nothing.
         let atFoot = false;
         let footY = 0;
         const expanded = new Set();
         const answers = new Map();
-        // The message a search led to, until its page shows and scrolls to it.
         let landing = null;
 
         function el(tag, className, text) {
@@ -467,12 +423,10 @@ enum PhonePage {
           return node;
         }
 
-        // Written only when it changes, so trying again every few seconds doesn't say it again each time.
         function banner(text) {
           if ($('banner').textContent !== (text || '')) $('banner').textContent = text || '';
         }
 
-        // What the Mac sends on its own only shows it can be reached, so it takes away nothing else you were told.
         function reached() {
           if ($('banner').textContent === words.unreachable) banner('');
         }
@@ -493,9 +447,6 @@ enum PhonePage {
           }
         }
 
-        // The Mac only takes what a page asks while one of its streams holds The Kitty Litter open, and it can have let
-        // go of one the page still thinks it has. Then the page asks once more as soon as a stream has brought it
-        // something, starting one unless one's already on its way.
         let began = 0;
         let shownAt = 0;
         const waiting = [];
@@ -516,7 +467,6 @@ enum PhonePage {
           const response = await request('/act', body);
           if (response && response.ok) {
             if (quiet) reached(); else banner('');
-            // What you do shows on the Mac at once, so a stream that says nothing about it is one that's gone.
             if (!quiet) setTimeout(() => { if (stream && heard < asked) listen(); }, 3000);
             return response.json();
           }
@@ -537,7 +487,6 @@ enum PhonePage {
           try { hello = await fetch('/hello', { headers: headers(), cache: 'no-store' }); } catch (error) {}
           if (hello && hello.status === 401) {
             pairing();
-            // The code didn't work either.
             if (code) $('pairnote').textContent = words.wrongCode;
             return;
           }
@@ -549,21 +498,18 @@ enum PhonePage {
           notifications().catch(() => {});
         }
 
-        // Only who and what kind, as on the Mac. An iPhone only offers this to a page on its Home Screen.
         let pushKey = null;
         async function notifications() {
           if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
             return offer(words.homeScreen, false);
           }
           const registration = await navigator.serviceWorker.register('/sw.js');
-          // Opening the page is looking at what they were about.
           for (const shown of await registration.getNotifications()) shown.close();
           if (Notification.permission === 'denied') return offer(null);
           const response = await fetch('/push', { headers: headers(), cache: 'no-store' });
           if (!response.ok) return offer(null);
           pushKey = (await response.json()).key;
           let subscription = await registration.pushManager.getSubscription();
-          // Shades has a new signing key, such as after it was set up again, so this subscription goes nowhere now.
           if (subscription && encode(subscription.options.applicationServerKey) !== pushKey) {
             await subscription.unsubscribe();
             subscription = null;
@@ -571,7 +517,6 @@ enum PhonePage {
           if (subscription && Notification.permission === 'granted') {
             const kept = await keep(subscription);
             if (!kept || kept.ok) return offer(null);
-            // The Mac turns it away, so nothing would come, and Turn on is back.
           }
           offer(words.notifyAsk, true);
         }
@@ -589,8 +534,6 @@ enum PhonePage {
             const registration = await navigator.serviceWorker.ready;
             const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decode(pushKey) });
             const kept = await keep(subscription);
-            // Nothing would come, so it says so, and Turn on stays to try again. What the Mac turned away is left as it
-            // is, since unsubscribing the empty one a simulator gives ends the page.
             if (!kept || !kept.ok) return banner(kept ? words.notifyRefused : words.unreachable);
             offer(null);
           } catch (error) {
@@ -619,12 +562,10 @@ enum PhonePage {
           stream = null;
           pass = null;
           localStorage.removeItem('shades.key');
-          // What Search found is what kittens said, so it goes with everything else.
           $('found').replaceChildren();
           $('bar').hidden = false;
           banner('');
           for (const id of ['top', 'head', 'rows', 'box', 'search', 'found']) $(id).hidden = true;
-          // A Home Screen app keeps its own storage, and the camera opens a code's link in Safari, so here it's typed.
           if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) $('pairhow').textContent = words.pairHomeScreen;
           $('pair').hidden = false;
         }
@@ -637,7 +578,6 @@ enum PhonePage {
             $('pairnote').textContent = '';
             return true;
           }
-          // An old link with a code that's been used already leaves a phone that's paired as it was.
           if (pass) {
             banner(response ? words.stillPaired : words.unreachable);
             return false;
@@ -647,7 +587,7 @@ enum PhonePage {
           return false;
         }
 
-        // Server-sent events, read by hand, since EventSource can't send the key.
+        // Outside the repo: EventSource can't send headers.
         async function listen() {
           if (stream) stream.abort();
           const mine = new AbortController();
@@ -681,9 +621,7 @@ enum PhonePage {
           retry = setTimeout(start, 3000);
         }
 
-        // An iPhone can leave a stream open that never says anything again, after the lock screen, another app or a
-        // change of network, and nothing tells the page. So one that's been quiet for longer than a few pings is
-        // given up on, as is one that was quiet before the page went away and came back, and a new one takes its place.
+        // Outside the repo: after the lock screen, another app or a new network, an iPhone can leave a stream open that never says anything again, and nothing tells the page.
         setInterval(() => { if (stream && Date.now() - heard > 25000) listen(); }, 5000);
         function revive(quiet) { if (stream && Date.now() - heard > quiet) listen(); }
         window.addEventListener('pageshow', (event) => { if (event.persisted) revive(0); });
@@ -698,11 +636,9 @@ enum PhonePage {
 
         function go(next, push = true) {
           if (!next || next === key) return;
-          // Going anywhere, Back included, puts Search away, as an iPhone does.
           if (!$('search').hidden) searching(false);
           key = next;
           banner('');
-          // Nothing of the page you left stays over the one you're going to while it comes.
           for (const id of ['back', 'headcat', 'link', 't3', 'backlog', 'unread']) $(id).hidden = true;
           for (const id of ['title', 'subtitle', 'bartitle']) $(id).textContent = '';
           keptUnread = null;
@@ -715,7 +651,6 @@ enum PhonePage {
 
         window.addEventListener('popstate', (event) => go((event.state && event.state.key) || 'home', false));
 
-        // Drawing the rows again would take away what you're selecting, so what's new waits until you're done.
         let held = null;
         function selecting() {
           const selection = document.getSelection();
@@ -736,8 +671,6 @@ enum PhonePage {
           return seen ? { id: seen.dataset.id, top: seen.getBoundingClientRect().top } : null;
         }
 
-        // A row that didn't change comes from the stream as the same object it did before, so it keeps what was drawn
-        // for it, and only what changed is drawn and put in.
         let drawn = new WeakMap();
         function place(nodes) {
           const rows = $('rows');
@@ -775,7 +708,6 @@ enum PhonePage {
           $('backtitle').textContent = next.back ? next.backTitle : '';
           $('unread').hidden = !next.unread;
           $('box').hidden = !next.box || !$('search').hidden;
-          // A file is for where you attached it, so it never follows you anywhere else.
           if (fresh || !next.box || !next.box.files) unattach();
           if (next.box) {
             $('label').textContent = next.box.label;
@@ -786,10 +718,7 @@ enum PhonePage {
             $('alsotext').textContent = next.box.also || '';
             if (fresh) $('also').checked = false;
           }
-          // Older posts come in where each thread started, which can be among what you're reading, so the lowest
-          // message on the screen stays where it was.
           const kept = fresh || nearBottom || !conversation(key) ? null : lowestInSight();
-          // Your picture is in your rows, so a new one draws them all again.
           if (fresh || !before || before.you !== next.you) drawn = new WeakMap();
           place(key === 'home' ? places(next.places) : next.rows.map(item => {
             let node = drawn.get(item);
@@ -822,9 +751,6 @@ enum PhonePage {
           seen();
         }
 
-        // As on the Mac, a message is cut to 30 lines only once it's over 40, by how tall it really is, since a Show
-        // more that hides only a few lines is no help. Every height is read before any is cut, so it's laid out once.
-        // Only what's newly drawn is measured, since what was drawn before has its Show more already.
         function cutLong() {
           const fresh = [...$('rows').querySelectorAll('.msg > .said > .bubble:not(.measured)')];
           fresh.forEach((bubble) => bubble.classList.add('measured'));
@@ -844,12 +770,10 @@ enum PhonePage {
           }
         }
 
-        // A conversation counts as seen only while it's in front of you, not while Search covers it.
         function seen() {
           if (view && conversation(key) && $('search').hidden && document.visibilityState === 'visible' && keptUnread !== key) act({ act: 'seen', key }, true);
         }
 
-        // A way up to the New line, while it's above what you can see.
         function showJump() {
           const line = $('rows').querySelector('.new');
           $('jumpnew').hidden = !line || line.getBoundingClientRect().bottom > $('top').getBoundingClientRect().bottom;
@@ -866,12 +790,10 @@ enum PhonePage {
           if (atFoot && !jumped && $('search').hidden) window.scrollTo(0, document.body.scrollHeight);
         }
 
-        // As an iPhone's large title: once it's scrolled up under the bar, the bar takes it, small, on its glass.
         function collapse() {
           $('top').classList.toggle('collapsed', $('head').hidden || $('title').getBoundingClientRect().top < $('bar').getBoundingClientRect().bottom);
         }
-        // With the keyboard up, an iPhone slides what you see down the page rather than making the page shorter, which
-        // left the bar above the screen. The bar and the box keep to what you see, as iMessage's do, unless you've zoomed in.
+        // Outside the repo: with the keyboard up, Safari on iPhone slides the visual viewport down the page instead of making the page shorter.
         function followKeyboard() {
           const seen = window.visualViewport;
           const zoomed = seen.scale > 1.01;
@@ -902,8 +824,6 @@ enum PhonePage {
           act({ act: 'unread', key, id: view.unread });
         };
 
-        // Search, over what Messages on your Mac has read and this phone can open. Nothing typed or found is kept.
-        // While it's open its field has the bar, with Cancel beside it, and covers the page, as on an iPhone.
         let finding = null;
         function searching(open) {
           for (const id of ['search', 'found']) $(id).hidden = !open;
@@ -949,7 +869,6 @@ enum PhonePage {
           $('found').replaceChildren(...hits);
         }
 
-        // The words you typed in bold, as nodes, never markup, since the rest is what kittens said.
         function marked(text, marks) {
           const node = el('p');
           let at = 0;
@@ -962,7 +881,6 @@ enum PhonePage {
           return node;
         }
 
-        // The window's own cats, drawn on the Mac, with the light outline it draws on a dark page.
         function cat(key, small) {
           const node = el('img', small ? 'cat small' : 'cat');
           node.alt = '';
@@ -970,8 +888,6 @@ enum PhonePage {
           return node;
         }
 
-        // A kitten's light is its jacket's colour, which its cat's address carries, as `sit/56afb3`. The cat's own black
-        // jacket has none, so what it's on keeps Shades' light.
         function lit(node, key) {
           const jacket = (key || '').split('/')[1];
           if (jacket && jacket !== 'shades') node.style.setProperty('--light', '#' + jacket);
@@ -979,7 +895,6 @@ enum PhonePage {
           return node;
         }
 
-        // A tile that isn't a kitten's takes a hue drifting teal to pink down the list, as in the window's sidebar.
         function drift(index, count) {
           return 'hsl(' + (172 + 172 * index / Math.max(count - 1, 1)) + ' 100% 68%)';
         }
@@ -990,7 +905,6 @@ enum PhonePage {
           return node;
         }
 
-        // You, where the window draws your picture, or a square in your colour.
         function you(small) {
           const node = el('img', small ? 'you small' : 'you');
           node.alt = '';
@@ -1004,7 +918,6 @@ enum PhonePage {
           return node;
         }
 
-        // Drawn to match the window's symbols for Activity and Threads.
         const icons = {
           activity: ['M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z', 'M10 21h4'],
           threads: ['M4 4h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z',
@@ -1038,7 +951,6 @@ enum PhonePage {
             group = place.group;
             const button = el('button', 'place' + (place.unread || place.count ? ' unread' : ''));
             button.type = 'button';
-            // Each on a tile, as the Home Screen's icons are: a kitten's in its own light, and the rest drifting.
             const art = place.icon ? icon(place.icon) : cat(place.cat);
             const lights = place.icon ? tile(art) : lit(tile(art), place.cat);
             if (place.icon) lights.style.setProperty('--light', drift(glyphs.indexOf(place), glyphs.length));
@@ -1046,7 +958,6 @@ enum PhonePage {
             button.append(el('span', 'name', place.title));
             if (place.count) button.append(el('span', 'count', String(place.count)));
             if (place.dot) button.append(dot(place.dot));
-            // What the cat's pose and the count show, in words, as VoiceOver says the window's sidebar.
             button.setAttribute('aria-label', [place.title, place.state, place.count && words.waiting(place.count), place.unread && words.unread].filter(Boolean).join(', '));
             button.onclick = () => go(place.key);
             nodes.push(button);
@@ -1056,7 +967,6 @@ enum PhonePage {
 
         const time = (at) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
-        // Slack's reply bar under a thread's parent: who replied, how many, and when the last one was.
         function replybar(item) {
           if (!item.replies && !item.going && !item.waiting) return null;
           const bar = el('button', 'replybar');
@@ -1074,7 +984,6 @@ enum PhonePage {
           switch (item.kind) {
             case 'day': return el('div', 'day', item.text);
             case 'note': return el('p', 'note', item.text);
-            // A kitten keeps its backlog, so on the phone, as in the window, it's only to read.
             case 'backlog': {
               const node = el('div', 'backlog');
               node.append(el('p', null, item.title));
@@ -1094,7 +1003,6 @@ enum PhonePage {
               const bar = replybar(item);
               if (bar) node.append(bar);
               else node.append(button(words.openThread, () => go(item.open), 'open'));
-              // A link or Copy in it does what it says, and only that.
               node.querySelector('.bubble')?.addEventListener('click', (event) => {
                 if (!selecting() && !event.target.closest('[role=link], button')) go(item.open);
               });
@@ -1146,7 +1054,6 @@ enum PhonePage {
           }
         }
 
-        // Who said something in Threads, with their cat, or your square.
         function who(item, at) {
           const node = el('small', 'who');
           node.append(item.cat ? cat(item.cat, true) : face(item.color), item.name + ' · ' + time(at));
@@ -1164,13 +1071,10 @@ enum PhonePage {
           }
           const meta = item.mine ? [item.sending ? words.sending : time(item.at)] : [item.name, item.detail, time(item.at)];
           node.append(el('div', 'meta', meta.filter(Boolean).join(' · ')));
-          // As in the window, their cat sits beside the bottom of what they said, and your picture beside yours.
           const said = el('div', 'said');
           if (item.cat) said.append(cat(item.cat));
           if (said.childElementCount || item.text || yours) node.append(said);
           if (item.text) {
-            // Yours is filled in your colour, and anyone else's lit at its edge in their jacket's. The stylesheet alone
-            // says how each looks, still coming included.
             const bubble = el('div', 'bubble' + (item.mine ? '' : ' lit') + (item.faded ? ' faded' : ''));
             bubble.append(...(item.markup ? markup(item.markup) : [item.text]));
             if (item.mine && item.color) bubble.style.setProperty('--fill', item.color);
@@ -1188,7 +1092,6 @@ enum PhonePage {
                 picture.alt = file.name;
                 pictures.append(picture);
               } else if (file.web) {
-                // Fetched by the Mac, and only once you've seen the whole address and tapped Show.
                 const host = new URL(file.web).host;
                 const label = file.failed ? file.name + ' · ' + words.couldntShow : words.pictureFrom(host);
                 pictures.append(button(label, () => ask(file.web, () => act({ act: 'picture', id: item.id, value: file.web })), 'file web'));
@@ -1210,7 +1113,6 @@ enum PhonePage {
             for (const reaction of item.reactions) marks.append(button(reaction.label, () => act({ act: 'react', id: item.id, value: reaction.value })));
             node.append(marks);
           }
-          // Tapping what it said offers the reactions, except on a thread's parent, where a tap opens the thread.
           const bubble = node.querySelector('.bubble');
           if (item.reactions && bubble && item.kind !== 'parent') {
             bubble.addEventListener('click', (event) => {
@@ -1222,8 +1124,6 @@ enum PhonePage {
           return node;
         }
 
-        // A reaction is only a mark, kept on the Mac, and never goes to an agent. The marks come up in a sheet from the
-        // foot, as Slack's do, so nothing on the page moves and nothing sits over the message.
         function react(item) {
           $('marks').replaceChildren(...view.marks.map((mark) => {
             const on = item.reactions.some((reaction) => reaction.value === mark.value);
@@ -1235,8 +1135,6 @@ enum PhonePage {
           $('marks').firstChild.focus();
         }
 
-        // A kitten's markdown as the Mac read it, built as nodes and never markup. Only web addresses are links, and
-        // tapping one shows where it goes, in full, before anything opens it.
         function markup(blocks) {
           return blocks.map((block) => {
             if (block.kind === 'code') return code(block.code);
@@ -1267,13 +1165,13 @@ enum PhonePage {
             node.dataset.state = part.pull.state || '';
           }
           if (!part.link || !/^https?:\/\//i.test(part.link)) return node;
-          // No href, so nothing but ask() can follow it: not a long press, a middle click or a second window.
+          // Outside the repo: a browser lets a long press, a middle click or a new window follow any href.
           const link = el('span', 'link');
           link.setAttribute('role', 'link');
           link.tabIndex = 0;
           link.append(node);
           link.onclick = () => ask(part.link);
-          // Held back, or the same Enter goes on to press whatever the sheet just put the keyboard on.
+          // Outside the repo: an Enter that isn't held back goes on to press whatever the sheet just put the keyboard on.
           link.onkeydown = (event) => { if (event.key === 'Enter') { event.preventDefault(); ask(part.link); } };
           return link;
         }
@@ -1305,7 +1203,6 @@ enum PhonePage {
           return node;
         }
 
-        // Only Open, a link you tap yourself, goes anywhere, and only Show fetches a picture on the web.
         let showing = null;
         function ask(link, show) {
           showing = show || null;
@@ -1315,7 +1212,6 @@ enum PhonePage {
           $('linkopen').hidden = !!show;
           $('linkshow').hidden = !show;
           if (show) $('linkopen').removeAttribute('href'); else $('linkopen').href = link;
-          // Over everything else, which can't be reached until it's gone, with the keyboard on Cancel and never on Open.
           if (!$('linksheet').open) $('linksheet').showModal();
         }
 
@@ -1327,20 +1223,17 @@ enum PhonePage {
         }
 
         function card(item) {
-          // Lit in the light of the kitten it's from.
           const node = lit(el('article', 'card ' + item.kind), item.cat);
           const header = el('header');
           header.append(cat(item.cat), el('span', 'title', item.title));
           if (item.at) header.append(el('time', null, time(item.at)));
           node.append(header);
-          // A question's text is its first part's, which that part says with its number, as the window does.
           if (!(item.parts || []).some((part) => part.text === item.text)) node.append(el('p', 'text', item.text));
           if (item.answer) node.append(el('p', 'answer', item.answer));
           if (item.kind === 'question') question(item, node);
           const buttons = el('div', 'buttons');
           if (item.kind === 'approval') {
             for (const choice of item.choices) {
-              // Allow is the one primary, as on the cat's own card.
               buttons.append(button(choice.label, (event) => {
                 buttons.querySelectorAll('button').forEach((b) => { b.disabled = true; });
                 act({ act: 'approval', id: item.id, value: choice.value });
@@ -1366,7 +1259,6 @@ enum PhonePage {
           return node;
         }
 
-        // Every part at once, since T3 takes them together. A single choice with nothing to type goes on the tap.
         function question(item, node) {
           const parts = item.parts || [];
           if (!parts.length) return;
@@ -1423,7 +1315,6 @@ enum PhonePage {
           }
         }
 
-        // What's picked of a part's choices, which is nothing while it holds your own words.
         function chosen(part, answer) {
           return answer.every((value) => part.choices.some((choice) => choice.value === value)) ? answer : [];
         }
@@ -1438,14 +1329,13 @@ enum PhonePage {
         $('t3').onclick = () => { if (view && view.t3) openInT3(view.t3); };
         $('backlog').onclick = () => { if (view && view.backlog) go(view.backlog.open); };
 
-        // T3 Code's own page on your tailnet, at this page's address on the usual port, where it asks you to sign in
-        // itself. Nothing of this page goes with it.
+        // Outside the repo: T3 Code's own page is at this host on the usual HTTPS port, and asks you to sign in itself.
         function openInT3(path) {
           window.open('https://' + location.hostname + path, '_blank', 'noopener,noreferrer');
         }
         $('linkcancel').onclick = () => $('linksheet').close();
         $('linkopen').onclick = () => $('linksheet').close();
-        // A tap on the dimmed page lands on the sheet itself, outside its box, and puts it away as Cancel does.
+        // Outside the repo: a tap on a dialog's backdrop lands on the dialog itself, outside its box.
         for (const sheet of document.querySelectorAll('dialog')) {
           sheet.onclick = (event) => {
             const box = sheet.getBoundingClientRect();
@@ -1468,23 +1358,17 @@ enum PhonePage {
           if (!done) return sendable();
           $('words').value = '';
           $('also').checked = false;
-          // The Mac used them up in sending, so there's nothing to forget.
           attached = [];
           chips();
           fit();
           if (done.open) return go(done.open);
-          // What you sent goes at the foot, and so does anything wrong with it, so the page goes there wherever you'd
-          // scrolled to, as iMessage does.
           jumped = false;
           window.scrollTo(0, document.body.scrollHeight);
           foot();
         };
 
-        // Photos and files go to the Mac first, one at a time, so the message itself stays small. A photo is made
-        // smaller here, since the Mac only ever sends a picture the size of a screenshot.
         let attached = [];
         let uploading = false;
-        // One + for a photo or a file, as in iMessage. An iPhone offers the camera from it too.
         $('attach').onclick = () => $('pick').click();
         $('pick').onchange = () => {
           const files = [...$('pick').files];
@@ -1508,8 +1392,6 @@ enum PhonePage {
               const isPicture = file.type.startsWith('image/');
               if (!isPicture && file.type !== 'application/pdf') { banner(words.cantRead); continue; }
               const name = isPicture ? (file.name || 'photo').replace(/\.[^.]*$/, '') + '.jpg' : file.name;
-              // It shows at once, faded as a message on its way is, and says how far it's got, so a photo going up a
-              // slow link doesn't look like nothing happened.
               const going = { name, picture: null, sent: 0 };
               attached.push(going);
               chips();
@@ -1518,7 +1400,6 @@ enum PhonePage {
               if (!attached.includes(going)) continue;
               if (blob.size > 10 * 1024 * 1024) { drop(going); banner(words.tooBig); continue; }
               const response = await upload(blob, name, going);
-              // Taken off while it went up.
               if (!attached.includes(going)) continue;
               if (response.status === 401) return pairing();
               if (!response.ok) { drop(going); banner(response.status === 413 ? words.tooBig : words.unreachable); continue; }
@@ -1534,7 +1415,7 @@ enum PhonePage {
           }
         }
 
-        // XMLHttpRequest says how much has gone, which fetch can't.
+        // Outside the repo: XMLHttpRequest reports upload progress, which fetch can't.
         function upload(blob, name, going) {
           return new Promise((resolve) => {
             const request = new XMLHttpRequest();
@@ -1562,7 +1443,6 @@ enum PhonePage {
           chips();
         }
 
-        // What's attached, over the box: each with a small picture or its name, and ✕ to take it off.
         function chips() {
           $('attached').replaceChildren(...attached.map((file) => {
             const chip = el('div', 'attachment' + (file.sent === undefined ? '' : ' going'));
@@ -1573,8 +1453,6 @@ enum PhonePage {
               chip.append(picture);
             }
             chip.append(el('span', 'name', file.name));
-            // A browser counts what it's handed to the network, which can be all of it long before the Mac has it, so
-            // a share shows only while it's moving.
             if (file.sent !== undefined) chip.append(el('span', 'state', file.sent > 0 && file.sent < 1 ? Math.round(file.sent * 100) + '%' : words.sending));
             const remove = button('✕', () => {
               drop(file);
@@ -1588,7 +1466,6 @@ enum PhonePage {
           sendable();
         }
 
-        // Send is armed only once there's something to send, as iMessage's arrow is.
         function sendable() {
           $('send').disabled = !(view && view.box && view.box.ready) || uploading || (!$('words').value.trim() && !attached.length);
         }
@@ -1608,8 +1485,6 @@ enum PhonePage {
           chips();
         }
 
-        // The Mac keeps only so many, so what's taken off goes there too, or it could push out one still attached. One
-        // still going up just stops.
         function forget(files) {
           for (const file of files) {
             if (file.sent !== undefined) file.cancel && file.cancel();
@@ -1617,8 +1492,7 @@ enum PhonePage {
           }
         }
 
-        // A model reads a picture at about 1.15 megapixels, and no more than 1568 pixels a side, scaling a bigger one
-        // down first, so anything more only takes longer to go up a phone's link.
+        // Outside the repo: a model scales a picture down to about 1.15 megapixels and 1568 pixels a side before reading it.
         async function shrink(file) {
           const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
           const scale = Math.min(1, 1568 / Math.max(bitmap.width, bitmap.height), Math.sqrt(1150000 / (bitmap.width * bitmap.height)));
@@ -1642,8 +1516,6 @@ enum PhonePage {
           if (await pair($('code').value)) start();
         };
 
-        // A new code scanned while the page is already open in Safari's tab only changes what's after the #, which
-        // doesn't load the page again.
         window.addEventListener('hashchange', () => {
           if (new URLSearchParams(location.hash.slice(1)).get('pair')) start();
         });
@@ -1662,8 +1534,6 @@ enum PhonePage {
          "background_color": "#000000", "theme_color": "#000000", "icons": [{"src": "/icon.png", "sizes": "180x180", "type": "image/png"}]}
         """
 
-    /// Runs on the phone even with the page closed. Each push says only who and what kind, and tapping it opens
-    /// the page of the thread it's about.
     static let worker = #"""
         'use strict';
         self.addEventListener('push', (event) => {

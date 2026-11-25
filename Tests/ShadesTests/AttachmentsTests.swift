@@ -20,9 +20,6 @@ final class AttachmentsTests: XCTestCase {
         return ChannelBook.build(kittens: [steve], threads: [thread], transcripts: ["t": said], isReading: false, unreadable: 0, cantReachT3: false)
     }
 
-    // MARK: - What a reply can point at
-
-    /// A reply is untrusted, so the only paths it can name are asked of T3 as ones in its own thread's folder.
     func testAReplyCanOnlyPointAtAPictureInItsOwnFolderOrOnTheWeb() {
         func source(_ text: String) -> PictureSource? { PictureSource(URL(string: text)!, inThread: "t") }
         XCTAssertEqual(source("out/chart%20one.png"), .workspace(threadID: "t", path: "out/chart one.png"))
@@ -52,7 +49,6 @@ final class AttachmentsTests: XCTestCase {
         }
     }
 
-    /// A name anyone can register can lead to this Mac, so every address it leads to has to be on the web too.
     func testEveryAddressANameLeadsToHasToBeOnTheWeb() {
         XCTAssertTrue(WebPicture.isPublic(address: [93, 184, 215, 14]))
         for local in [[127, 0, 0, 1], [10, 1, 2, 3], [192, 168, 0, 9], [172, 16, 0, 1], [169, 254, 1, 1], [100, 100, 1, 1], [0, 0, 0, 0], [239, 1, 1, 1]] as [[UInt8]] {
@@ -78,9 +74,6 @@ final class AttachmentsTests: XCTestCase {
         XCTAssertFalse(words.contains("\u{FFFC}"), "a picture with no description leaves nothing in the words")
     }
 
-    // MARK: - The shelf
-
-    /// After a restart, what you sent was its name alone, though T3 keeps each picture.
     func testWhatYouSentComesBackFromT3AndAReplysPictureFromItsFolder() async throws {
         var asked: [PictureSource] = []
         let copy = png()
@@ -107,7 +100,6 @@ final class AttachmentsTests: XCTestCase {
         XCTAssertEqual(asked.count, 3, "each is asked for once")
     }
 
-    /// Past what the shelf keeps, it let go of a picture still on screen, fetched it again, and let go of the next.
     func testAShelfFullerThanItKeepsFetchesEachPictureOnce() async {
         let files = (0..<310).map { ExchangeFile(name: "\($0).png", attachmentID: "att-\($0)") }
         var fetches = 0
@@ -116,7 +108,6 @@ final class AttachmentsTests: XCTestCase {
             fetches += 1
             return copy
         }
-        // Each change publishes the book again, as the feed does.
         shelf.onChange = { [unowned shelf] in
             var again = self.book(files: files)
             shelf.fill(&again)
@@ -147,8 +138,6 @@ final class AttachmentsTests: XCTestCase {
         XCTAssertEqual(shown.threads["t"]?.replies.first?.files.first?.couldntShow, true)
     }
 
-    // MARK: - Sending several
-
     func testSeveralFilesGoAsOneWithEveryNameAndEachPictureByItsOwn() throws {
         let pdf = try XCTUnwrap(Demo.samplePDF())
         let snapshot = try XCTUnwrap(Drop.snapshot(of: [.bytes(png(), name: "keyboard.png"), .file(pdf), .bytes(png(16), name: "desk.png")]))
@@ -173,7 +162,6 @@ final class AttachmentsTests: XCTestCase {
         XCTAssertNil(ask(["a", "a"]), "nor the same one twice")
     }
 
-    /// Show named a picture by its place, which moves when a picture before it comes off, so another could be fetched.
     func testAPhoneCanOnlyAskForAWebPictureOnAMessageMessagesShowsByTheAddressItShowed() throws {
         let book = book(reply: "![chart](out/missing.png) ![a](https://a.example.com/a.png) ![c](https://c.example.com/c.png)")
         let reply = try XCTUnwrap(book.threads["t"]?.replies.first)
@@ -186,8 +174,6 @@ final class AttachmentsTests: XCTestCase {
         XCTAssertNil(ask("made-up", "https://a.example.com/a.png"))
     }
 
-    /// A thread of the cat's own work can be shown on the phone, but its folder can hold a copy of your screen, and what
-    /// you sent in it counts as your screen, so the phone gets only its words.
     func testTheCatsOwnWorkShownOnThePhoneHasNoPictures() throws {
         let work = AgentThread(id: "fix", title: "Fix: the logo", projectTitle: nil, status: .completed, model: "m", updatedAt: at)
         let said = [Exchange(id: "e", asker: .you, askedAt: at, ask: "Fix the logo", reply: "Done. ![after](shot.png) ![before](https://example.com/b.png)", repliedAt: at, files: [ExchangeFile(name: "logo.png", attachmentID: "att-1")])]
@@ -203,7 +189,6 @@ final class AttachmentsTests: XCTestCase {
         XCTAssertNil(PhoneAsk(act: "picture", id: reply.id, value: "https://example.com/b.png").action(in: book, newTopic: { "new" }), "nor can a phone have the Mac fetch one")
     }
 
-    /// Every photo from an iPhone's camera is called image.jpg, so two sent together both showed the first.
     func testEachPictureKeepsItsOwnSmallCopyWhenTwoShareAName() throws {
         let (red, blue) = (png(4), png(6))
         let thread = AgentThread(id: "t", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: at, projectPath: "/k/steve")
@@ -212,8 +197,6 @@ final class AttachmentsTests: XCTestCase {
         let book = ChannelBook.build(kittens: [steve], threads: [thread], transcripts: ["t": [heard]], isReading: false, unreadable: 0, cantReachT3: false, sent: [sent])
         XCTAssertEqual(book.threads["t"]?.messages.last?.files.map(\.thumbnail), [red, blue])
     }
-
-    // MARK: - On the Mac
 
     func testRecentFilesLeaveOutWhatsHiddenAndKeepTheNewest() {
         let home = URL(fileURLWithPath: "/Users/someone")

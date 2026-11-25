@@ -2,7 +2,6 @@ import CoreML
 import FluidAudio
 import Foundation
 
-/// NVIDIA's Parakeet on the Neural Engine, through FluidAudio.
 public final class ParakeetRecognizer: SpeechRecognizing {
     public enum Model: String, CaseIterable, Sendable {
         case ultra, v3, v2
@@ -17,12 +16,9 @@ public final class ParakeetRecognizer: SpeechRecognizing {
     }
 
     public struct VocabularySettings: Sendable {
-        /// How much a listed word's score is raised against what was heard. Zero means it has to win on sound alone.
         public var boost: Float
-        /// How close in spelling a heard word has to be before it can be replaced.
         public var minimumSimilarity: Float
 
-        /// Chosen by measurement. A boost of 3 also fixes everything this does, but swaps "code" for "Codex".
         public init(boost: Float = 1.5, minimumSimilarity: Float = 0.6) {
             self.boost = boost
             self.minimumSimilarity = minimumSimilarity
@@ -30,7 +26,6 @@ public final class ParakeetRecognizer: SpeechRecognizing {
     }
 
     public var vocabularySettings = VocabularySettings()
-    /// What the last final pass swapped, for checking how vocabulary behaves.
     public private(set) var lastVocabularyChanges: [String] = []
 
     private let model: Model
@@ -40,7 +35,6 @@ public final class ParakeetRecognizer: SpeechRecognizing {
     private let boosterLock = NSLock()
     private var booster: VocabularyBoostingSession?
 
-    /// Below this the model refuses the clip, so it gets padded with silence.
     private let minimumSamples = 16_000
 
     public init(model: Model = .ultra) {
@@ -56,7 +50,6 @@ public final class ParakeetRecognizer: SpeechRecognizing {
         try await manager.loadModels(models)
         decoderLayers = await manager.decoderLayerCount
         self.manager = manager
-        // The first call after loading builds the model's plan on the Neural Engine.
         _ = try await transcribe([Float](repeating: 0, count: minimumSamples))
     }
 
@@ -79,7 +72,6 @@ public final class ParakeetRecognizer: SpeechRecognizing {
                 thresholds: .init(cbw: vocabularySettings.boost, minSimilarity: vocabularySettings.minimumSimilarity)
             ))
         } catch {
-            // Speech recognition still works without the extra words.
             setBooster(nil)
         }
     }
@@ -102,7 +94,6 @@ public final class ParakeetRecognizer: SpeechRecognizing {
             guard item.shouldReplace, let term = item.replacementWord else { return nil }
             return (item.originalWord, term)
         }
-        // Nothing doubtful means the rescorer's own text, which is careful about punctuation.
         if replacements.allSatisfy({ VocabularyGate.allows(heard: $0.heard, term: $0.term) }) { return rescored.text }
         return VocabularyGate.apply(replacements: replacements, to: result.text)
     }

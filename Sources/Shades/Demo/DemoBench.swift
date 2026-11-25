@@ -1,10 +1,6 @@
 import AppKit
 import ShadesCore
 
-/// `perf` in the demo: times what you'd feel in Messages, the cat's bubble, the Ask box and the phone page, from inside
-/// the app, with no clicks, keys or screen capture. Each step is the same call the window makes, then the window lays
-/// out and draws before the clock stops. Run it after `busy` for a load like a real one. `perf messages`, `perf cat`
-/// and `perf phone` run one part, and `perf idle <seconds>` says what sitting still costs instead.
 @MainActor
 enum DemoBench {
     private static let rounds = 5
@@ -13,9 +9,7 @@ enum DemoBench {
 
     static func run(_ argument: String, controller: AppController, stage: AppStage) async {
         let started = Date()
-        // The person's own clicks go on around the demo, and mustn't close the bubble being timed.
         ClickAway.isPaused = true
-        // Nor does it print all VoiceOver would read of the long answer, each time it comes up.
         let announce = BubbleController.onAnnounce
         BubbleController.onAnnounce = nil
         defer {
@@ -56,12 +50,10 @@ enum DemoBench {
             settle(window)
             reopens.append(time(window) { controller.channelsPressed() })
         }
-        // What a reopen shows straight away: the conversation, or a note that it's still reading.
         report("reopen", reopens, "reading=\(controller.channels.open(threads: []).isReading) rows=\(pane.shown.count)")
         print(String(format: "perf memory-open before=%.1fMB after=%.1fMB", start, footprint()))
         await finishReading(controller)
 
-        // Messages opening again where you left it, on the long thread, to its first full draw.
         view.open(thread: DemoBusy.longThread)
         settle(window)
         var longOpens: [Double] = []
@@ -90,8 +82,6 @@ enum DemoBench {
             report("switch-\(name)", times, "rows=\(pane.shown.count) inWindow=\(rowViews(in: pane))")
         }
 
-        // Opening a thread beside its channel, as clicking its reply bar does, then closing it with ✕, then going from
-        // one thread to the next.
         var opens: [Double] = []
         var closes: [Double] = []
         var nexts: [Double] = []
@@ -109,8 +99,6 @@ enum DemoBench {
         report("switch-thread", nexts)
         report("close-thread", closes)
 
-        // The shortcuts, each the same call its key makes once Messages has the keyboard: up a channel's threads from
-        // the newest, down and up the sidebar, back and forward, and jumping to a kitten by name.
         view.closeThread()
         view.select(.channel(.of(steve)))
         settle(window)
@@ -135,8 +123,6 @@ enum DemoBench {
         report("key-jump", jumps, "found=\(view.jumpBox.items.count)")
         report("jump-filter", filters)
 
-        // The long thread end to end, a wheel's notch at a time, reading back each step, since rows laid out above as
-        // you go up move where you are.
         view.select(.channel(.of(steve)))
         view.open(thread: DemoBusy.longThread)
         settle(window)
@@ -153,7 +139,6 @@ enum DemoBench {
         }
         reportFrames("scroll-down", downs)
 
-        // Down a column of messages and off each again, as the pointer goes. The first time makes each one's buttons.
         for name in ["hover-first", "hover"] {
             var hovers: [Double] = []
             for row in thread.shownMessageRows where row.superview != nil && !row.visibleRect.isEmpty {
@@ -212,7 +197,6 @@ enum DemoBench {
         window.setFrame(frame, display: true)
         report("resize", resizes)
 
-        // Narrower, since the narrowest window has no room for a wider sidebar.
         var drags: [Double] = []
         for step in 1...10 {
             drags.append(time(window) { view.dragSidebarEdge(to: ChannelSidebar.width - CGFloat(step * 4)) })
@@ -225,8 +209,6 @@ enum DemoBench {
         }
         report("key-sidebar", hides)
 
-        // Opening and closing Messages over and over, on the long thread with each row hovered, keeps no more than it
-        // needs: what it holds settles, and the rows and buttons of a thread you've left go.
         let left = NSHashTable<NSView>.weakObjects()
         var footprints: [Double] = []
         for cycle in 0..<cycles {
@@ -252,7 +234,6 @@ enum DemoBench {
         var heap = malloc_statistics_t()
         malloc_zone_statistics(nil, &heap)
         print(String(format: "perf memory first=%.1fMB last=%.1fMB perCycle=%.2fMB cycles=%d kept=%d heap=%.1fMB graphics=%.1fMB", footprints.first ?? 0, footprints.last ?? 0, ((footprints.last ?? 0) - (footprints.first ?? 0)) / Double(max(cycles - 1, 1)), cycles, kept, Double(heap.size_in_use) / 1_048_576, graphics()))
-        // What the drawn cards and tiles hold while the long thread is open, then once Messages closes.
         view.select(.channel(.of(steve)))
         view.open(thread: DemoBusy.longThread)
         settle(window)
@@ -273,7 +254,6 @@ enum DemoBench {
         stage.hideChannels()
     }
 
-    /// Reactions on every third message of the long thread, as you'd leave them.
     private static func react(controller: AppController, view: ChannelsView) async {
         view.open(thread: DemoBusy.longThread)
         await finishReading(controller)
@@ -285,8 +265,6 @@ enum DemoBench {
         view.closeThread()
     }
 
-    /// The cat's bubble coming up with a long answer, then the same answer coming in a few words at a time, and the
-    /// Ask box opening.
     private static func cat(stage: AppStage) async {
         let bubble = stage.bubble.panel
         let answer = longAnswer
@@ -327,15 +305,12 @@ enum DemoBench {
         ][index % 4]
     }.joined(separator: "\n\n")
 
-    /// The phone page on a long thread: what it sends, how long its first draw takes, and what drawing it again and
-    /// scrolling it cost in the page, where its CSS is painted.
     private static func phone(controller: AppController) async {
         guard let steve = Demo.kittens.first else { return }
         var settings = controller.settings
         settings.phone = true
         controller.apply(settings)
         await controller.phoneTask?.value
-        // As long as `phone on` and `phone pair` are given in a journey, which is what a page needs to pair.
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         controller.pairPhone()
         try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -350,8 +325,6 @@ enum DemoBench {
         guard await until(phone, "document.querySelectorAll('#rows > *').length > 0") else { return print("perf phone didn't open") }
         _ = await phone.run("go(\(DemoPhone.quoted(key)))")
         guard await until(phone, "document.querySelectorAll('#rows .bubble').length > 50") else { return print("perf phone didn't show the thread") }
-        // Off every screen the page is hidden and gets no frames, so drawing the thread is timed to its layout in the
-        // page, and painting it, gradients, masks and all, to a picture of each screenful down it.
         print("perf phone-" + (await phone.run("""
             (() => {
                 const builds = [];
@@ -398,9 +371,6 @@ enum DemoBench {
         controller.apply(settings)
     }
 
-    /// Nothing changing for `seconds` at a time: Messages open on the long thread, then closed, then the cat's bubble up
-    /// with a long answer, each with Reduce Motion off and then on. Anything that keeps drawing shows as time and
-    /// wakeups.
     private static func idle(seconds: Double, controller: AppController, stage: AppStage) async {
         guard let steve = Demo.kittens.first else { return }
         let window = stage.channels.panel
@@ -432,7 +402,6 @@ enum DemoBench {
         stage.showBubble(nil)
     }
 
-    /// Whether the page comes to say yes to `check` within 20 seconds.
     private static func until(_ phone: DemoPhone, _ check: String) async -> Bool {
         for _ in 0..<400 {
             if await phone.run(check) == "1" { return true }
@@ -448,7 +417,6 @@ enum DemoBench {
         }
     }
 
-    /// Rows that are views in the window, rather than only in the list.
     private static func rowViews(in view: NSView) -> Int {
         view.subviews.reduce(0) { $0 + ($1 is ChannelRowView ? 1 : 0) + rowViews(in: $1) }
     }
@@ -472,7 +440,6 @@ enum DemoBench {
         }
     }
 
-    /// The app's CPU time so far, and how often it's been woken, as Activity Monitor counts them.
     private static func usage() -> (at: Double, cpu: Double, wakeups: UInt64) {
         var times = rusage()
         getrusage(RUSAGE_SELF, &times)
@@ -485,7 +452,6 @@ enum DemoBench {
         return (Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000_000, cpu, power.task_interrupt_wakeups)
     }
 
-    /// What the app holds in memory, as Activity Monitor's Memory column counts it.
     private static func footprint() -> Double {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
@@ -495,7 +461,6 @@ enum DemoBench {
         return result == KERN_SUCCESS ? Double(info.phys_footprint) / 1_048_576 : 0
     }
 
-    /// What of that is pictures the window server shows, such as each view's drawing.
     private static func graphics() -> Double {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
@@ -514,7 +479,6 @@ enum DemoBench {
         fflush(stdout)
     }
 
-    /// A scroll's steps, with the whole of it and how many missed a frame at 120 and 60 a second.
     private static func reportFrames(_ name: String, _ times: [Double]) {
         report(name, times, String(format: "total=%.0fms over8ms=%d over16ms=%d", times.reduce(0, +), times.filter { $0 > 8.3 }.count, times.filter { $0 > 16.7 }.count))
     }

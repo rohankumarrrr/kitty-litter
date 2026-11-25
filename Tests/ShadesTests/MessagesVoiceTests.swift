@@ -3,7 +3,6 @@ import AppKit
 import ShadesCore
 import XCTest
 
-/// Talking into Messages' box, where the box holds still while you speak.
 @MainActor
 final class MessagesVoiceTests: XCTestCase {
     private let steve = Kitten(name: "Steve", role: "Professional", covers: "", folder: "/k/steve")
@@ -111,7 +110,6 @@ final class MessagesVoiceTests: XCTestCase {
         view.show(book())
         view.select(.thread("t", in: .channel(.of(steve))))
         view.threadPane.startSpeaking()
-        // T3 stops listing the thread while you talk, as when it's archived.
         view.show(ChannelBook.build(kittens: [steve, pepper], threads: [thread("p", kitten: pepper)], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false))
         XCTAssertNotNil(view.threadPane.composer.target, "held while you talk")
 
@@ -123,7 +121,6 @@ final class MessagesVoiceTests: XCTestCase {
     }
 }
 
-/// Holds on to working out what was said until the test lets it go.
 private final class HeldVoice: VoiceEngine {
     let partials = AsyncStream<String> { $0.finish() }
     let levels = AsyncStream<Float> { $0.finish() }

@@ -1,7 +1,6 @@
 import AppKit
 import ShadesCore
 
-/// An Opal token as AppKit draws it.
 enum Ink {
     static func hex(_ value: UInt32) -> NSColor {
         NSColor(
@@ -20,10 +19,8 @@ extension NSAppearance {
 }
 
 extension AgentThread {
-    /// The same colours as the glint, so a status always looks the same.
     var dotColor: NSColor { dot.map(Ink.hex) ?? MessagesInk.soft }
 
-    /// As 0xRRGGBB, which a phone is sent. `nil` is the soft grey.
     var dot: UInt32? {
         if !pendingApprovals.isEmpty { return CatGlint.attention(bright: true).color }
         switch status {

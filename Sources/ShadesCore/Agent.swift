@@ -1,6 +1,5 @@
 import Foundation
 
-/// Which model a thread runs, in T3 Code's own terms.
 public struct ModelChoice: Codable, Sendable, Hashable {
     public var provider: String
     public var model: String
@@ -12,15 +11,11 @@ public struct ModelChoice: Codable, Sendable, Hashable {
         self.effort = effort
     }
 
-    /// The front door: answers what it can, and decides where everything else belongs.
     public static let quick = ModelChoice(provider: "claudeAgent", model: "claude-opus-5-5", effort: "xhigh")
-    /// Takes on anything that needs real work.
     public static let frontier = ModelChoice(provider: "claudeAgent", model: "claude-opus-5-5", effort: "xhigh")
-    /// Sums up how a session went.
     public static let summary = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "low")
 }
 
-/// T3 Code's permission modes, narrowest first.
 public enum RuntimeMode: String, Codable, Sendable, CaseIterable {
     case approvalRequired = "approval-required"
     case autoAcceptEdits = "auto-accept-edits"
@@ -31,7 +26,6 @@ public enum RuntimeMode: String, Codable, Sendable, CaseIterable {
 public enum AgentStatus: String, Codable, Sendable {
     case idle, starting, running, waitingForApproval, waitingForAnswer, completed, failed, interrupted
 
-    /// Whether the agent is still going, including when it's stopped to ask you something.
     public var isActive: Bool {
         switch self {
         case .starting, .running, .waitingForApproval, .waitingForAnswer: return true
@@ -52,14 +46,12 @@ public struct AgentAttachment: Sendable, Hashable {
     }
 }
 
-/// One message to an agent, starting a new thread or following up on one.
 public struct AgentPrompt: Sendable {
     public var title: String?
     public var text: String
     public var attachments: [AgentAttachment]
     public var model: ModelChoice
     public var runtimeMode: RuntimeMode
-    /// A T3 project to bind the thread to. `nil` starts a thread with no project.
     public var projectID: String?
 
     public init(
@@ -79,10 +71,8 @@ public struct AgentPrompt: Sendable {
     }
 }
 
-/// What happens during one agent turn, in order.
 public enum AgentReplyEvent: Sendable, Equatable {
     case started(threadID: String)
-    /// Text so far is the concatenation of every delta.
     case text(delta: String)
     case needsApproval(ApprovalRequest)
     case finished(fullText: String)
@@ -97,13 +87,11 @@ public enum ApprovalDecision: String, Codable, Sendable {
     case accept, acceptForSession, decline
 }
 
-/// An agent has stopped and is asking permission to do something.
 public struct ApprovalRequest: Identifiable, Sendable, Hashable {
     public var id: String
     public var threadID: String
     public var threadTitle: String
     public var kind: ApprovalKind
-    /// Plain words for the bubble, such as the command it wants to run.
     public var summary: String
     public var createdAt: Date
 
@@ -117,20 +105,14 @@ public struct ApprovalRequest: Identifiable, Sendable, Hashable {
     }
 }
 
-/// An agent has stopped to ask you something.
 public struct AgentQuestion: Identifiable, Sendable, Hashable {
-    /// The request this belongs to. It stays the same until you answer.
     public var id: String
     public var threadID: String
     public var threadTitle: String
-    /// Empty if the words couldn't be read.
     public var text: String
     public var options: [String]
-    /// How many more questions came with this one.
     public var moreCount: Int
-    /// What an answer from Shades needs, or `nil` if it can only be answered in T3.
     public var form: AnswerForm?
-    /// `nil` if the backend doesn't say.
     public var askedAt: Date?
 
     public init(
@@ -154,17 +136,13 @@ public struct AgentQuestion: Identifiable, Sendable, Hashable {
     }
 }
 
-/// How to answer a request: every one of its questions, each with its options' values or your own words where it takes them.
 public struct AnswerForm: Sendable, Hashable {
     public struct Part: Sendable, Hashable {
-        /// The question's own ID, which its answer is filed under.
         public var key: String
         public var text: String
         public var options: [String]
-        /// What each option sends, in the order of `options`.
         public var values: [String]
         public var takesOwnWords: Bool
-        /// It takes as many of its options as you pick.
         public var picksSeveral: Bool
 
         public init(key: String, text: String, options: [String], values: [String], takesOwnWords: Bool, picksSeveral: Bool = false) {
@@ -176,7 +154,6 @@ public struct AnswerForm: Sendable, Hashable {
             self.picksSeveral = picksSeveral
         }
 
-        /// One of its options, several where it picks several, or your own words where it takes them.
         public func takes(_ answer: [String]) -> Bool {
             if answer.count == 1, takesOwnWords, !answer[0].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
             return !answer.isEmpty && (answer.count == 1 || picksSeveral) && Set(answer).count == answer.count && answer.allSatisfy(values.contains)
@@ -190,11 +167,9 @@ public struct AnswerForm: Sendable, Hashable {
     }
 }
 
-/// The pull request a thread last opened. `state` is `open`, `merged` or `closed`.
 public struct ThreadPullRequest: Sendable, Hashable {
     public var number: Int
     public var state: String
-    /// Its address, which is how a link to it in a message finds its state.
     public var url: String?
 
     public init(number: Int, state: String, url: String? = nil) {
@@ -204,30 +179,22 @@ public struct ThreadPullRequest: Sendable, Hashable {
     }
 }
 
-/// A thread as the dashboard shows it.
 public struct AgentThread: Identifiable, Sendable, Hashable {
     public var id: String
     public var title: String
     public var projectTitle: String?
-    /// The folder of the project it's in. Titles can be renamed, so this is what says whose it is.
     public var projectPath: String?
     public var status: AgentStatus
-    /// Its turn has ended while something it'll wake up for carries on, such as a pull request it's watching. It's still
-    /// `.running`, since it isn't done, but what it said by then is there to read.
     public var turnEnded: Bool
     public var model: String
     public var updatedAt: Date
     public var pendingApprovals: [ApprovalRequest]
     public var pendingQuestion: AgentQuestion?
-    /// How much this thread is allowed to do. `nil` if the backend doesn't say.
     public var runtimeMode: RuntimeMode?
-    /// Marked as dealt with.
     public var isSettled: Bool
     public var pullRequest: ThreadPullRequest?
-    /// A live test of Shades itself, which is how those are named. Not work anyone's waiting on.
     public var isLiveTest: Bool { Self.isLiveTest(title: title) }
     public static func isLiveTest(title: String) -> Bool { title.hasPrefix("Shades test:") }
-    /// The thread's latest run, which tells one report from the next. `nil` if the backend doesn't say.
     public var lastRunID: String?
     public var lastRunEndedAt: Date?
 
@@ -266,27 +233,21 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     }
 }
 
-/// One thing someone asked a thread's agent, and what it last said back.
 public struct Exchange: Sendable, Equatable, Identifiable {
     public enum Asker: Sendable, Equatable {
         case you
-        /// The thread a person knows that agent by: its own, or the one that started a subagent. `nil` if T3 can't say.
         case agent(threadID: String?)
-        /// A schedule in T3, whoever set it up. Its run is the work of the thread's own agent.
         case schedule
     }
 
     public var id: String
     public var asker: Asker
     public var askedAt: Date
-    /// `nil`: nothing fit to show, so it gets no row.
     public var ask: String?
     public var reply: String?
     public var repliedAt: Date?
-    /// How many things it said on the way to that reply.
     public var earlierNotes: Int
     public var failure: String?
-    /// The files or pictures that came with what was asked, never what's in them.
     public var files: [ExchangeFile]
 
     public init(
@@ -312,7 +273,6 @@ public struct Exchange: Sendable, Equatable, Identifiable {
     }
 }
 
-/// A file or picture that came with a message: its name, and for a picture T3 keeps, T3's ID for it.
 public struct ExchangeFile: Sendable, Equatable {
     public var name: String
     public var attachmentID: String?
@@ -323,12 +283,10 @@ public struct ExchangeFile: Sendable, Equatable {
     }
 }
 
-/// Where a thread came from, so its work can be traced back to whoever started it.
 public struct ThreadOrigin: Sendable, Equatable {
     public enum Starter: Sendable, Equatable {
         case person
         case thread(String)
-        /// An agent started it, and nothing says which one.
         case unknown
     }
 
@@ -343,50 +301,26 @@ public struct ThreadOrigin: Sendable, Equatable {
     }
 }
 
-/// Everything the cat needs from whatever runs its agents.
 public protocol AgentBackend: AnyObject, Sendable {
-    /// Connects, signing in the first time if needed.
     func connect() async throws
-    /// Starts a new thread and streams its first turn.
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error>
-    /// Sends another message to an existing thread and streams that turn.
     func followUp(threadID: String, _ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error>
-    /// Sends a message into a thread that's someone else's, leaving its model and permissions as they are. `behavior`
-    /// is what it does while that thread is working, and the stream follows the run it joins or the one it gets.
     func forward(threadID: String, text: String, attachments: [AgentAttachment], behavior: FollowUpBehavior) -> AsyncThrowingStream<AgentReplyEvent, Error>
-    /// The current threads, sent again whenever anything changes.
     func watchThreads() -> AsyncStream<[AgentThread]>
     func respond(to request: ApprovalRequest, with decision: ApprovalDecision) async throws
-    /// Answers a question that has a `form`, with one answer for each of its parts, in order: the values of the
-    /// options picked, or your own words alone.
     func answer(_ question: AgentQuestion, with answers: [[String]]) async throws
-    /// Shows the thread in T3 Code, or throws which step went wrong.
     func open(threadID: String) async throws
-    /// What T3 Code's own page calls this Mac, first in the address of each thread, or `nil` if it can't be read.
     func environmentID() async -> String?
-    /// The project registered at this folder, if any.
     func projectID(atPath path: String) async -> String?
-    /// Registers this folder as a project, and gives back its ID.
     func addProject(atPath path: String, title: String) async throws -> String
-    /// Takes a thread out of T3 Code's lists. It can still be read there.
     func archive(threadID: String) async throws
-    /// Marks a finished thread as dealt with, without hiding it.
     func settle(threadID: String) async throws
-    /// What the agent last said in this thread, or in that run if it's given. `nil` means it said nothing,
-    /// and not being able to read it throws, because that's not the same thing.
     func report(threadID: String, run: String?) async throws -> String?
-    /// Every thread a person can see, finished ones too. `nil` if T3 can't be reached.
     func allThreads() async -> [AgentThread]?
-    /// What's been said in a thread, oldest first. `nil` if it can't be read.
     func exchanges(threadID: String) async -> [Exchange]?
-    /// Where this thread came from, or `nil` if that can't be read.
     func origin(of threadID: String) async -> ThreadOrigin?
-    /// The threads whose messages have these words, best first. `nil` if T3 can't be asked.
     func threads(matching words: String) async -> [String]?
-    /// A picture sent with a message, by the ID of the copy T3 keeps, or `nil` if T3 won't give it.
     func picture(attachmentID: String) async -> Data?
-    /// A picture in the folder a thread works in, by its path there, or `nil` if T3 won't give it. T3 never lets the
-    /// path out of that folder, symbolic links and all, so a reply naming one can't reach anything else.
     func picture(threadID: String, path: String) async -> Data?
 }
 
@@ -403,7 +337,6 @@ public extension AgentBackend {
     func allThreads() async -> [AgentThread]? { nil }
     func exchanges(threadID: String) async -> [Exchange]? { nil }
     func report(threadID: String, run: String?) async throws -> String? { nil }
-    /// What the agent last said in this thread, or `nil` if it can't be read.
     func finalReport(threadID: String) async -> String? { (try? await report(threadID: threadID, run: nil)) ?? nil }
     func origin(of threadID: String) async -> ThreadOrigin? { nil }
     func threads(matching words: String) async -> [String]? { nil }

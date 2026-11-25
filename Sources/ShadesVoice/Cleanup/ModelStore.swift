@@ -2,13 +2,11 @@ import CryptoKit
 import Foundation
 import ShadesCore
 
-/// Downloads models the first time they're needed. They never ship in the repo.
 public enum ModelStore {
     public static var folder: URL {
         Settings.directory.appendingPathComponent("models", isDirectory: true)
     }
 
-    /// Fetches a file unless it's already here, checking its size and checksum before anyone trusts it.
     static func fetch(
         from url: URL,
         to destination: URL,
@@ -47,7 +45,6 @@ public enum ModelStore {
     }
 }
 
-/// One download with progress, because URLSession only reports progress to a delegate.
 private final class FileDownload: NSObject, URLSessionDownloadDelegate {
     private let progress: @Sendable (Double) -> Void
     private var continuation: CheckedContinuation<URL, Error>?
@@ -77,7 +74,6 @@ private final class FileDownload: NSObject, URLSessionDownloadDelegate {
     }
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        // The system deletes `location` as soon as this returns, so it has to move right here.
         let kept = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         do {
             guard (downloadTask.response as? HTTPURLResponse)?.statusCode == 200 else {

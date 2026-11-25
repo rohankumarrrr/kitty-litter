@@ -2,12 +2,10 @@ import CZlib
 @testable import Shades
 import XCTest
 
-/// The phone's stream packed as its browser reads it. How well words pack depends on what they are, so someone who
-/// could get words of their own into a view and see its size could guess at words beside them, one byte at a time.
 final class GzipTests: XCTestCase {
     private func unpacked(_ data: Data) -> String {
         var stream = z_stream()
-        // 32 more bits of window takes gzip's wrapping, as a browser does.
+        // Outside the repo: zlib reads a gzip header when 32 is added to the window bits.
         XCTAssertEqual(inflateInit2_(&stream, 15 + 32, zlibVersion(), Int32(MemoryLayout<z_stream>.size)), Z_OK)
         defer { inflateEnd(&stream) }
         var input = data
@@ -29,7 +27,6 @@ final class GzipTests: XCTestCase {
         return String(decoding: output, as: UTF8.self)
     }
 
-    /// Letters that never repeat in the same order, so they barely pack, unlike the same letter over and over.
     private func event(_ count: Int, seed: UInt64 = 1) -> String {
         var next = seed
         let letters = (0..<count).map { _ -> Character in
@@ -52,12 +49,9 @@ final class GzipTests: XCTestCase {
         XCTAssertEqual(unpacked(packed), said, "the page reads every event as it was, with nothing padding it out")
     }
 
-    /// Padding to a few sizes didn't help: words tuned to sit at the edge of a size told a right guess from a wrong one
-    /// every time. What stops it is that a row is never packed against another row, or anything sent before.
     func testAGuessInOneRowDoesntPackAgainstWordsInAnother() {
         let yours = Data(#"{"rows":[{"text":"Your code for the bank is 4F7QPL2K9X, and nobody else should see it."}"#.utf8)
         func kittens(_ guess: String) -> Data { Data(#",{"text":"A page said your code for the bank is \#(guess)."}]}"#.utf8) }
-        // The same letters backwards, so the two only differ in whether they repeat your words.
         let right = kittens("4F7QPL2K9X"), wrong = kittens("X9K2LPQ7F4")
         func packed(_ parts: [Data]) -> Int {
             let gzip = Gzip()
@@ -83,8 +77,6 @@ final class GzipTests: XCTestCase {
         XCTAssertEqual(Set(after).count, 1, "\(after)")
     }
 
-    /// Swift drops the empty pieces when it splits, and indexing into nothing used to stop the app, from a header any
-    /// browser or script that reached the page could send, before its key was ever looked at.
     func testAnyAcceptEncodingIsReadWithoutStoppingTheApp() {
         func takes(_ value: String) -> Bool {
             PhoneServer.Request(method: "GET", path: "/", query: [:], headers: ["accept-encoding": value], body: Data()).takesGzip

@@ -1,11 +1,8 @@
 import AppKit
 import ShadesCore
 
-/// Notifications, in a channel's header: mute it, or say what it tells you on this Mac and on your phone. A menu opens
-/// without making Shades the active app, the way Theme's does.
 @MainActor
 final class NotificationsMenu: NSObject {
-    /// Opens a menu under its button. Tests stand in for it, since a real menu holds them in its own loop.
     static var popUp: (NSMenu, NSView) -> Void = { menu, anchor in
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.isFlipped ? anchor.bounds.height : 0), in: anchor)
     }
@@ -20,8 +17,6 @@ final class NotificationsMenu: NSObject {
         Self.popUp(menu, anchor)
     }
 
-    /// Each item carries what picking it makes the channel's notifications. Picking a level unmutes it, since that's
-    /// asking to hear from it. The phone only shows once it's turned on.
     func items(_ current: ChannelNotifications, phone: Bool) -> [NSMenuItem] {
         var muted = current
         muted.muted.toggle()

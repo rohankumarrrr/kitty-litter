@@ -1,15 +1,11 @@
 import AppKit
 import ShadesCore
 
-/// A kitten's backlog over the window, as Slack shows a channel's pins: what it's doing, then what's next and what can
-/// wait, each with when you asked and your words. It only reads `backlog.md`, so changing it is asking the kitten. It's
-/// drawn in the window rather than as a popover or menu, which are windows of their own that a screen share would show.
 final class BacklogSheet: QuietView {
     private static let width: CGFloat = 520
     private static let top: CGFloat = 70
 
     var onClose: (() -> Void)?
-    /// Whose it is, by the kitten's ID, while it's open.
     private(set) var kitten: String?
     let close = MessageToolbar.button(CatWords.closeThread, symbol: "xmark")
     private let scroll = QuietScrollView()
@@ -71,8 +67,6 @@ final class BacklogSheet: QuietView {
     }
 }
 
-/// The items under small-capital headings for their levels, with a hairline between rows, as Opal's tables have. Drawn
-/// rather than made of views, and measured at the sheet's width.
 final class BacklogList: QuietView {
     private static let inset: CGFloat = 22
     private static let headingHeight: CGFloat = 30
@@ -86,7 +80,6 @@ final class BacklogList: QuietView {
         case empty
     }
 
-    /// The level's own word, then what, when and your words, for VoiceOver.
     static func spoken(_ item: Backlog.Item) -> String {
         [item.level.rawValue, item.what, item.date, item.words].compactMap { $0 }.joined(separator: ", ")
     }
@@ -103,7 +96,6 @@ final class BacklogList: QuietView {
         NSAttributedString(string: text, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.body), .foregroundColor: color])
     }
 
-    /// When you asked and your words, in quotes, on at most two lines.
     private func about(_ item: Backlog.Item) -> NSAttributedString? {
         let line = [item.date, item.words.map { "\u{201C}\($0)\u{201D}" }].compactMap { $0 }.joined(separator: " · ")
         return line.isEmpty ? nil : NSAttributedString(string: line, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta), .foregroundColor: MessagesInk.soft])
@@ -115,7 +107,6 @@ final class BacklogList: QuietView {
         return min(needed, ceil(NSLayoutManager().defaultLineHeight(for: font) * lines))
     }
 
-    /// Each piece and where it goes, top to bottom, at `width`.
     private func laidOut(width: CGFloat) -> (pieces: [(Piece, NSRect)], height: CGFloat) {
         let room = max(width - Self.inset * 2, 0)
         var y: CGFloat = 0

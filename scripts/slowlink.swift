@@ -1,17 +1,4 @@
 #!/usr/bin/env swift
-// A phone's slow link in front of the demo's phone page, for timing what it's like away from home.
-//
-//   swift scripts/slowlink.swift <port> <page-port> [seconds-each-way] [bytes-a-second] [control-file]
-//
-// Listens on 127.0.0.1:<port> and passes everything to the page on <page-port>, each way after the delay, sharing the
-// bandwidth between connections as one phone's link does, and reading no faster than the link sends. The defaults are 0.15 seconds and 125000 bytes a second,
-// about 1 Mbps. It prints each connection as it closes, with what it asked for, how long the Mac took to answer, and
-// how much went each way.
-//
-// Write a word to the control file to change what the link does. Only a new line is read, so add a number after it.
-//   cut   every open connection goes silent without closing, as an iPhone leaves a stream after the lock screen
-//   half  the same, but the Mac's side closes, as it does once Tailscale gives up on the phone
-//   open  lists what's open
 import Foundation
 import Network
 
@@ -40,7 +27,6 @@ final class Link {
     var sent = ["up": 0, "down": 0]
     var ended = 0
     var silent = false
-    /// How long the Mac took to answer.
     var answered: TimeInterval?
 
     init(_ number: Int, phone: NWConnection, mac: NWConnection) {
@@ -54,7 +40,6 @@ final class Link {
 
 var links: [Int: Link] = [:]
 var count = 0
-/// When each direction is next free, since a phone's connections share one link.
 var free = ["up": Date.distantPast, "down": Date.distantPast]
 
 func pass(_ link: Link, from: NWConnection, to: NWConnection, way: String) {
@@ -73,12 +58,10 @@ func pass(_ link: Link, from: NWConnection, to: NWConnection, way: String) {
                 if !link.silent { to.send(content: data, completion: .idempotent) }
             }
         }
-        // Nothing more is read until the link has room, so a sender's own buffers fill and its progress is the link's,
-        // as on a phone, rather than all of it at once.
         guard done || error != nil else {
             return queue.asyncAfter(wallDeadline: .now() + max(free[way]!.timeIntervalSinceNow, 0)) { pass(link, from: from, to: to, way: way) }
         }
-        // Just after the last of what it sent, which the same deadline wouldn't promise.
+        // Outside the repo: Dispatch doesn't promise order between blocks due at the same deadline.
         queue.asyncAfter(wallDeadline: .now() + max(free[way]!.timeIntervalSinceNow, 0) + delay + 0.005) {
             guard !link.silent else { return }
             to.send(content: nil, contentContext: .finalMessage, isComplete: true, completion: .idempotent)

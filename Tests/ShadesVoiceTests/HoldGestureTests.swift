@@ -28,7 +28,6 @@ final class HoldGestureTests: XCTestCase {
     func testAKeySoonAfterPressingIsAShortcut() {
         _ = gesture.keyChanged(.rightOption, isDown: true, otherModifiers: false, at: 10)
         XCTAssertEqual(gesture.otherKeyPressed(at: 10.2), .cancel(.rightOption))
-        // Letting go afterwards doesn't fire anything else.
         XCTAssertNil(gesture.keyChanged(.rightOption, isDown: false, otherModifiers: false, at: 10.4))
         XCTAssertNil(gesture.activeKey)
     }
@@ -114,7 +113,6 @@ final class KeyCodesTests: XCTestCase {
     }
 
     func testRightOptionUsesItsDeviceBit() {
-        // Left Option held and right Option up: the shared flag is set, but the right one isn't down.
         let leftOnly = flags(CGEventFlags.maskAlternate.rawValue | 0x20)
         XCTAssertFalse(KeyCodes.isDown(.rightOption, flags: leftOnly))
         let right = flags(CGEventFlags.maskAlternate.rawValue | 0x40)
@@ -147,7 +145,6 @@ final class KeyCodesTests: XCTestCase {
     }
 }
 
-/// Runs real CGEvents through the monitor's handler, without a tap or any permission.
 final class KeyHoldMonitorEventTests: XCTestCase {
     private func flagsEvent(code: CGKeyCode, flags: UInt64) -> CGEvent {
         let event = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: true)!
@@ -164,13 +161,11 @@ final class KeyHoldMonitorEventTests: XCTestCase {
         monitor.onRelease = { released.append($0) }
         monitor.setKeysForTesting([.rightOption])
 
-        // Left Option does nothing.
         monitor.handle(type: .flagsChanged, event: flagsEvent(code: 58, flags: CGEventFlags.maskAlternate.rawValue | 0x20))
         monitor.handle(type: .flagsChanged, event: flagsEvent(code: 58, flags: 0))
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         XCTAssertTrue(pressed.isEmpty)
 
-        // Right Option presses.
         monitor.handle(type: .flagsChanged, event: flagsEvent(code: 61, flags: CGEventFlags.maskAlternate.rawValue | 0x40))
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         XCTAssertEqual(pressed, [.rightOption])

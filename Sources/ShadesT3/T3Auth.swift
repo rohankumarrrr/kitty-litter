@@ -1,9 +1,5 @@
 import Foundation
 
-/// Finds the running server and keeps a working sign-in for it.
-///
-/// Signing in means running T3's own `t3 auth session issue`, the way T3 documents for headless
-/// clients. Anyone who can run that as this user already has this access, so nobody has to click.
 actor T3Auth {
     private let home: URL
     private let store: T3CredentialStoring
@@ -15,7 +11,6 @@ actor T3Auth {
 
     private var credential: T3Credential?
     private var environment: T3Wire.Environment?
-    /// The sign-ins this run saved, the only ones it deletes.
     private var savedHere: Set<String> = []
 
     init(home: URL, store: T3CredentialStoring, label: String, ttl: String, renewBefore: TimeInterval, revokesWhatItCantRead: Bool = true, http: URLSession? = nil) {
@@ -37,7 +32,6 @@ actor T3Auth {
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".t3", isDirectory: true)
     }
 
-    /// The opening request for the socket, with a sign-in the server just accepted.
     func socketRequest(forceNewSession: Bool) async throws -> URLRequest {
         let origin = try await reachableOrigin()
         let token = try await token(origin: origin, forceNew: forceNewSession)
@@ -55,12 +49,10 @@ actor T3Auth {
         return request
     }
 
-    /// Where uploads go. Read fresh so a restart on another port is picked up.
     func currentOrigin() throws -> URL { try readOrigin() }
 
     var environmentID: String? { environment?.environmentId }
 
-    /// Asks the server to end this session and forgets it.
     func signOut() async {
         let current = credential ?? (try? store.load())
         credential = nil
@@ -68,8 +60,6 @@ actor T3Auth {
         try? store.delete(sessionID: current.sessionID)
         _ = try? await runCommandLine(["auth", "session", "revoke", current.sessionID])
     }
-
-    // MARK: Finding the server
 
     private func readOrigin() throws -> URL {
         let file = home.appendingPathComponent("userdata/server-runtime.json")
@@ -94,22 +84,17 @@ actor T3Auth {
         return origin
     }
 
-    // MARK: Signing in
-
     private func token(origin: URL, forceNew: Bool) async throws -> String {
         if !forceNew, let usable = try await usableCredential(origin: origin) { return usable.token }
 
         let previous = credential ?? (try? store.load())
         let leftByLastBuild = revokesWhatItCantRead ? try? store.newestUnreadableSessionID() : nil
         let issued = try await issueSession()
-        // A locked or broken Keychain shouldn't stop the cat. It just signs in again next launch.
         if (try? store.save(issued)) != nil { savedHere.insert(issued.sessionID) }
         credential = issued
 
-        // Deleting a Keychain item another build saved shows a dialog whatever prompts are set to, and waits on it,
-        // so one this run didn't save stays behind, revoked like the rest. Its build can still read it.
+        // Outside the repo: deleting a Keychain item another build saved shows a dialog and waits on it, even with prompts off.
         if let previous, savedHere.contains(previous.sessionID) { try? store.delete(sessionID: previous.sessionID) }
-        // Old sessions shouldn't linger in T3's list. Best effort: they expire on their own too.
         let replaced = [previous?.sessionID, leftByLastBuild].compactMap { $0 }
         if !replaced.isEmpty {
             Task {
@@ -129,7 +114,6 @@ actor T3Auth {
         guard let (data, response) = try? await http.data(for: request), let status = (response as? HTTPURLResponse)?.statusCode else {
             throw T3Error.notRunning
         }
-        // One T3 revoked, such as one a copy built from source replaced, only means signing in again.
         if status == 401 { return nil }
         guard status == 200 else { throw T3Error.notRunning }
         guard let state = try? T3Wire.decoder().decode(T3Wire.SessionState.self, from: data), state.isUsable else {
@@ -151,7 +135,6 @@ actor T3Auth {
         return T3Credential(sessionID: session.sessionId, token: session.token)
     }
 
-    /// Output can hold a token, so it goes nowhere but back to the caller, and errors never quote it.
     private func runCommandLine(_ arguments: [String]) async throws -> Data {
         let tool = home.appendingPathComponent("bin/t3")
         guard FileManager.default.isExecutableFile(atPath: tool.path) else {

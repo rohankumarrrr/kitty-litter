@@ -1,6 +1,5 @@
 import Foundation
 
-/// A browser we can script. The event codes come from each app's own dictionary (`sdef`).
 struct Browser: Equatable, Sendable {
     enum Family: Sendable { case chromium, safari }
 
@@ -8,7 +7,6 @@ struct Browser: Equatable, Sendable {
     let name: String
     let family: Family
     var windowClass = "cwin"
-    /// Where to find the setting that lets us read pages with JavaScript.
     var javaScriptSetting = "View > Developer > Allow JavaScript from Apple Events"
 
     static let known: [Browser] = [
@@ -21,7 +19,6 @@ struct Browser: Equatable, Sendable {
             family: .safari,
             javaScriptSetting: "Settings > Developer > Allow JavaScript from Apple Events"
         ),
-        // These share Chrome's dictionary, so incognito windows stay hidden in them too.
         Browser(bundleID: "com.brave.Browser", name: "Brave", family: .chromium),
         Browser(bundleID: "com.microsoft.edgemac", name: "Edge", family: .chromium),
         Browser(bundleID: "com.vivaldi.Vivaldi", name: "Vivaldi", family: .chromium),
@@ -45,14 +42,12 @@ struct Browser: Equatable, Sendable {
     }
 }
 
-/// What the browser says about its front window, before anything is read from it.
 struct BrowserLocation: Equatable, Sendable {
     var isPrivateWindow = false
     var url: URL?
     var failure: AppleEvents.Failure?
 }
 
-/// What a page gave up, and what went wrong if it didn't.
 struct PageRead: Equatable, Sendable {
     var text: String?
     var selection: String?
@@ -86,13 +81,10 @@ enum BrowserReader {
         }
     }
 
-    /// If a browser won't say whether a window is private because it's stuck, assume it is.
-    /// Being denied is different: that's lasting, and hiding every browser would make the cat useless.
     static func staysHidden(after failure: AppleEvents.Failure) -> Bool {
         failure == .timedOut
     }
 
-    /// Reads the page through JavaScript, which has no side effects on the browser.
     static func page(of browser: Browser, pid: pid_t, wantsText: Bool) -> PageRead {
         let script = pageScript(wantsText: wantsText)
         let event: NSAppleEventDescriptor
@@ -114,8 +106,6 @@ enum BrowserReader {
         }
     }
 
-    /// `innerText` leaves out what's typed into fields, so no password can come through it,
-    /// and a focused password field is the one place a selection could reveal one.
     static func pageScript(wantsText: Bool) -> String {
         let text = wantsText ? "document.body ? document.body.innerText.slice(0, \(ScreenText.pageLimit)) : ''" : "''"
         return """
@@ -147,7 +137,6 @@ enum BrowserReader {
     }
 }
 
-/// Private windows that only show themselves in their title, for browsers with no way to ask.
 enum PrivateWindows {
     private static let titleOnly = ["com.apple.Safari", "org.mozilla.firefox"]
 

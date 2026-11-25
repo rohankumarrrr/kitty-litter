@@ -2,54 +2,32 @@ import Foundation
 import ShadesContext
 import ShadesCore
 
-/// What Messages can ask for. Nothing in it can say anything for you: sending takes words you typed, and files only
-/// go with them if you attached them.
 enum MessagesAction: Equatable {
-    /// `alsoSent` is a thread's "Also send to #channel", which shows your reply in `shownIn` as well. `alternate` is
-    /// ⌘Return, which steers or queues the other way from Settings.
     case send(String, to: MessageTarget, shownIn: ChannelID?, alsoSent: Bool = false, files: [Drop] = [], alternate: Bool = false)
-    /// A new thread in the kitten's folder. `id` is what Messages calls it until T3 has its thread.
     case startTopic(String, with: Kitten, id: String, files: [Drop] = [])
     case approval(ApprovalRequest, ApprovalDecision)
-    /// Every part of a question's answer, in order: the options picked, or your own words alone.
     case answer(AgentQuestion, [[String]])
     case inbox(InboxAction)
-    /// `keepingUnread` are threads you marked unread while looking, which stay that way until you move on.
     case seen(ChannelSelection, keepingUnread: Set<String> = [])
-    /// That message in that thread, and everything after it, is new to you again, to come back to.
     case markUnread(String, from: String)
-    /// Words you sent that went nowhere, by their exchange ID, sent again as they were.
     case tryAgain(String)
     case doNotDisturb
-    /// You've scrolled back past the top of a channel.
     case older(ChannelID)
-    /// What a channel tells you, from its header.
     case notifications(ChannelID, ChannelNotifications)
-    /// Puts a reaction on a message, by its `ChannelMessage.id`, or takes it off. It's a mark kept on your Mac, and
-    /// tells no agent anything.
     case react(String, Reaction)
-    /// Words you're searching for, which T3 is asked about too, for threads Messages hasn't read.
     case find(String)
-    /// A picture on the web a reply points at, which you've seen the whole address of and pressed Show on.
     case showPicture(URL)
 }
 
-/// Messages, laid out like Slack: Activity, your threads, then the cat and a channel for each kitten. Each T3 session
-/// is a thread. Opening it captures nothing, and nothing typed in it takes your screen, since you're
-/// looking at Messages and not your work.
 extension AppController {
-    /// Opens it, at `selection` if it's given. Looking at it covers whatever the cat was nudging you about.
     func channelsPressed(selecting selection: ChannelSelection? = nil) {
         inboxNudge = false
         catchingUp = false
-        // Shown Activity, you've seen what came in while it was open, so closing it has nothing new to say.
         if selection == .activity { nudgeOnClose = false }
         stage.showChannels(channels.open(threads: latestThreads), selecting: selection)
         renderBubble()
     }
 
-    /// Where Messages shows a thread, if it does: its kitten's channel or the cat's. It's worked out from the live list,
-    /// so the bubble can offer it before Messages has read a word.
     func messagesHome(ofThread id: String) -> ChannelID? {
         guard let thread = latestThreads.first(where: { $0.id == id }) else { return messagesThreads[id] != nil ? .shades : nil }
         if isWithShades(thread) { return thread.isLiveTest ? nil : .shades }
@@ -57,13 +35,10 @@ extension AppController {
         return isCatsWork(thread) || messagesThreads[id] != nil ? .shades : nil
     }
 
-    /// Where Open goes: Messages, where it shows the thread, unless Settings says T3.
     func opensInMessages(_ threadID: String) -> Bool {
         settings.openInMessages && messagesHome(ofThread: threadID) != nil
     }
 
-    /// The bubble's Open: the thread beside where it lives, and the bubble's done with it. T3 is only for a thread
-    /// Messages doesn't show, or for every thread with Settings' Open set to T3.
     func showInMessages(_ threadID: String) {
         guard settings.openInMessages, let home = messagesHome(ofThread: threadID) else { return openThread(threadID) }
         if notices.first?.threadID == threadID, notices.first?.questionID == nil { notices.removeFirst() }
@@ -71,8 +46,6 @@ extension AppController {
         channelsPressed(selecting: .thread(threadID, in: .channel(home)))
     }
 
-    /// The hotkey brings it in front of you from anywhere, and closes it if it's already there. Open isn't enough,
-    /// since it can be behind your work, and closing it then would take a second press to see it.
     func messagesHotkeyPressed() {
         if stage.isChannelsInFront {
             stage.hideChannels()
@@ -81,8 +54,6 @@ extension AppController {
         }
     }
 
-    /// Only the Ask box and Messages start threads in the router's folder, so each one there is a talk with the cat,
-    /// except Shades' own look at a settings change, which is only read for its card.
     func isWithShades(_ thread: AgentThread) -> Bool {
         inRouterFolder(thread) && !thread.title.hasPrefix(Self.reviewTitle)
     }
@@ -97,8 +68,6 @@ extension AppController {
         URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL.path
     }
 
-    /// Work the cat started for you outside Messages, which lives with the cat. A fix from before Shades kept these is
-    /// known by the title it gave it, in T3's own folder for work with no project.
     func isCatsWork(_ thread: AgentThread) -> Bool {
         Self.isCatsWork(thread, kept: catsWork)
     }
@@ -108,10 +77,8 @@ extension AppController {
     }
 
     func channelsClosed() {
-        // A phone that's looking keeps it reading. Once it stops too, what's been read waits for the next look.
         if phone?.isHolding != true { channels.close() }
         messagesClosings += 1
-        // What you were saying into its box has nowhere to go now, so the mic needn't stay open for it.
         if listeningBox == .messages { cancelListening() }
         if awaySeen {
             awaySeen = false
@@ -119,19 +86,16 @@ extension AppController {
         }
         guard nudgeOnClose else { return }
         nudgeOnClose = false
-        // Only if something's still there to say. Otherwise a note later on would bring it up, which notes don't.
         guard CatWords.inboxSummary(inboxEntries) != nil else { return }
         inboxNudge = true
         renderBubble()
     }
 
-    /// From the live list, the one place that has the words of approvals and questions.
     var waiting: Waiting {
         let owners = KittenBoard.Owners(loadKittens())
         var waiting = Waiting(approvals: approvals.pending, reports: inbox.entries, away: away, doNotDisturb: settings.doNotDisturb)
         waiting.notifications = settings.channelNotifications
         waiting.phone = settings.phone
-        // What used to be the dashboard: work the cat started outside any kitten, while it's going or just finished.
         waiting.shadesWork = watch.rows(at: now()).filter { !hiddenThreads.contains($0.id) && owners.of($0) == nil }
         for thread in latestThreads where !hiddenThreads.contains(thread.id) {
             let owner = owners.of(thread)?.id
@@ -166,7 +130,6 @@ extension AppController {
             if selection.place == .activity, !away.isEmpty { awaySeen = true }
             channels.lookingAt = selection
             let seen = channels.threads(in: selection).filter { !kept.contains($0.id) }
-            // A reply still being written, or words on their way, haven't been seen as they'll be.
             let last = { [channels] in channels.messages(in: $0).last { !$0.isStillGoing && !$0.isSending }?.id }
             if inbox.markRead(seen, upTo: last) {
                 keepInbox()
@@ -194,8 +157,6 @@ extension AppController {
         }
     }
 
-    /// A reply also sent to a channel is only words while T3 doesn't have it, so it's kept once T3 does, as the ID of
-    /// T3's copy, and read back from its thread after a restart.
     func keepAlsoSent(_ heard: [String: ChannelBook.HeardAlsoSent]) {
         let new = heard.keys.filter { inbox.alsoSent[$0] == nil }
         guard !new.isEmpty else { return }
@@ -203,16 +164,11 @@ extension AppController {
         keepInbox()
     }
 
-    /// Each way of sending passes on your words and nothing else: no screen, and nothing anyone else said. What's shown
-    /// meanwhile is kept in memory only, and a reply also sent to a channel is too until T3 has it. Files you attached
-    /// go together the way one dropped onto the cat does, only where your screen may, and where they can't, nothing
-    /// goes and Messages says why.
     func send(_ words: String, to target: MessageTarget, shownIn channel: ChannelID?, alsoSent: Bool = false, echoID: String = "sent-\(UUID().uuidString)", files: [Drop] = [], alternate: Bool = false) {
         guard !files.isEmpty else { return send(words, to: target, shownIn: channel, alsoSent: alsoSent, echoID: echoID, snapshot: nil, alternate: alternate) }
         let words = words.isEmpty ? CatWords.summarize : words
         let files = Array(files.prefix(Drop.mostAtOnce))
         let shown = files.map { ChannelFile(name: $0.name, thumbnail: $0.thumbnail()) }
-        // They're read off the main thread, since a long PDF takes a moment.
         attachTask = Task {
             let snapshot = await Task.detached { Drop.snapshot(of: files) }.value
             guard let snapshot else {
@@ -223,7 +179,6 @@ extension AppController {
         }
     }
 
-    /// Files that couldn't be read still show where you sent them, with why they went nowhere.
     private func showSent(_ words: String, echoID: String, files: [ChannelFile], to target: MessageTarget, in channel: ChannelID?) {
         guard let channel else { return }
         var threadID = ""
@@ -244,10 +199,8 @@ extension AppController {
             sendLockedDown(words, echoID: echoID, file: snapshot)
         case .router:
             echo()
-            // One at a time, so each goes where it's meant to before the next is read.
             let previous = messagesTurn
             let sentAt = now()
-            // Asking the cat something while the router thinks moves on from this, as it would in the Ask box.
             let asked = questionsAsked
             messagesTurn = Task {
                 await previous?.value
@@ -255,7 +208,6 @@ extension AppController {
             }
         case .newThread(let kitten):
             echo(startsThread: true)
-            // The box waits for the new thread, so what you add next goes there too.
             let title = String(words.prefix { !$0.isNewline }.prefix(60))
             give(words, to: kitten, snapshot: snapshot, youPicked: true, onStarted: { [weak self] threadID in
                 self?.channels.started(echoID, in: threadID, title: title)
@@ -264,10 +216,8 @@ extension AppController {
             })
         case .thread(let id, let title, let report):
             echo(threadID: id, title: title, isReply: true)
-            // Only a thread you picked yourself is steered. Where the router picks, your words wait their turn.
             let behavior = alternate ? settings.followUpBehavior.other : settings.followUpBehavior
             guard let snapshot else { return reply(words, toThread: id, marking: report, echoID: echoID, behavior: behavior) }
-            // The same as carrying on in a thread from the Ask box, which only takes what you dropped where your screen may go.
             guard let thread = latestThreads.first(where: { $0.id == id }) ?? channels.listed(id) else {
                 return channels.failed(echoID, because: CatWords.cantTakeFiles(title))
             }
@@ -284,23 +234,15 @@ extension AppController {
         }
     }
 
-    /// The same prompt and model as the Ask box, on Messages' own conversation with the router, so nothing from
-    /// your screen is in what it can see, and asking the cat meanwhile can't cut it short. `echoID` is what Messages
-    /// shows of your words meanwhile, which goes with them into the talk.
-    /// A file goes on a router thread of its own, so Messages' conversation with it never holds one.
     private func route(_ words: String, sentAt: Date, asked: Int, echoID: String, file: ScreenSnapshot? = nil) async {
         var talk: String?
-        // The cat says where your words went, in the words it uses for the same thing once T3 has the thread.
         func passedOn(_ what: String) {
             catSays(what, thread: talk)
         }
-        // Your words say why under them, where they can go again, and the cat says it too if Messages has closed since.
         func notSent(_ why: String) {
             channels.failed(echoID, because: why)
             if !channels.isOpen { catSays(why) }
         }
-        // A new session is a thread under your words at once, with its kitten or with the cat, wherever it's passed after
-        // that.
         func started(in home: ChannelID) -> (String?) -> Void {
             { [weak self] started in
                 guard let self, let started else { return }
@@ -310,8 +252,6 @@ extension AppController {
         }
         await waitForThreadList()
         let current = file == nil ? messagesQuick.thread(at: now()) : nil
-        // Only Messages' own world: the kittens' threads, and work it passed your words to. Anything the Ask box
-        // started can hold your screen, and that has to hold after a restart too.
         let owners = loadKittens()
         let sessions = rosterThreads(excluding: current) { [messagesThreads] thread in
             messagesThreads[thread.id] != nil || KittenBoard.owner(of: thread, among: owners) != nil
@@ -319,7 +259,6 @@ extension AppController {
         let briefs = await briefs(for: sessions)
         let kittens = owners.filter { !$0.planned }
         let model = settings.quickModel
-        // As in the Ask box, a router with full access doesn't get what you dropped.
         if file != nil, settings.quickMode == .fullAccess {
             return channels.failed(echoID, because: CatWords.cantTakeFiles(ModelNames.friendly(model)))
         }
@@ -340,7 +279,6 @@ extension AppController {
         )
         var turn: (reading: ReplyHoldback.Reading, threadID: String)?
         if let current { turn = await routerTurn(backend.followUp(threadID: current, prompt), echoID: echoID) }
-        // The old thread might have gone, so it starts fresh.
         let isFresh = turn == nil
         if turn == nil {
             if file == nil { messagesQuick.reset() }
@@ -350,23 +288,19 @@ extension AppController {
             notSent(CatWords.noReply)
             return
         }
-        // What you said is part of the talk, and keeps showing with the cat as a reply also sent to it.
         talk = threadID
         channels.started(echoID, in: threadID, alsoSent: true)
-        // As in the Ask box: a correction reaches its owner, in a copy of its own if your words go somewhere else.
         let corrected = reading.corrections.compactMap { kittens.indices.contains($0 - 1) ? kittens[$0 - 1] : nil }
         if corrected.count < reading.corrections.count { catSays(CatWords.lostTheCorrection) }
         var copies = corrected
         defer { copies.forEach { give(words, to: $0, snapshot: nil, as: .correctionCopy) } }
         switch reading.outcome {
-        // There's nothing selected in Messages to replace, so a rewrite is only an answer here.
         case .answer(let text, _) where !text.isEmpty || reading.corrections.isEmpty, .rewrite(let text):
             catSays(text.isEmpty ? CatWords.noReply : text, thread: talk)
             Task { [backend] in try? await backend.settle(threadID: threadID) }
             return
         case .answer:
             if reading.wentNowhere {
-                // The rest was meant for somewhere else, so the owner only gets its copy.
                 catSays(CatWords.lostTheSession)
             } else if corrected.count == 1 {
                 give(words, to: corrected[0], snapshot: nil, as: .correction, asked: asked, onStarted: started(in: .of(corrected[0])))
@@ -382,7 +316,6 @@ extension AppController {
                 return
             }
             let thread = sessions[session - 1]
-            // From the first time, so what it said before shows too.
             if KittenBoard.owner(of: thread, among: owners) == nil { messagesThreads[thread.id] = messagesThreads[thread.id] ?? sentAt }
             let home = corrected.first { KittenBoard.isInFolder(thread.projectPath, of: $0) }
             forward(words, to: thread, snapshot: file, correction: home != nil, asked: asked) { [weak self] in
@@ -402,7 +335,6 @@ extension AppController {
             copies.removeAll { $0 == kitten }
             passedOn(CatWords.passedOnToKitten)
         }
-        // A new thread that only passed something on has nothing worth keeping.
         if isFresh {
             if file == nil { messagesQuick.reset() }
             Task { [backend] in try? await backend.archive(threadID: threadID) }
@@ -411,8 +343,6 @@ extension AppController {
         }
     }
 
-    /// Lockdown's way for what you say to the cat: straight to its kitten, saying so as the router's pick would, with
-    /// your words beside the thread they start.
     private func sendLockedDown(_ words: String, echoID: String, file: ScreenSnapshot?) {
         let sentAt = now()
         sendLockedDown(words, snapshot: file, youPicked: true, sent: { [weak self] id, starting in
@@ -431,10 +361,6 @@ extension AppController {
         })
     }
 
-    /// `nil` if the turn didn't work out. The thread is the one it ran in, since a turn that waited on an approval
-    /// can outlast the conversation, and its reply still counts.
-    /// `joins` makes it Messages' conversation with the router, which a turn carrying a file never does. Your words,
-    /// shown as `echoID`, count as delivered once the turn starts, since the cat has them while it thinks.
     private func routerTurn(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>, joins: Bool = true, echoID: String) async -> (reading: ReplyHoldback.Reading, threadID: String)? {
         var holdback = ReplyHoldback()
         var fullText: String?
@@ -458,15 +384,12 @@ extension AppController {
                 }
             }
         } catch {
-            // A reply that had finished is what it said, whatever broke after it.
             if fullText == nil { return nil }
         }
         guard let thread else { return nil }
         return (holdback.read(fullText: fullText), thread)
     }
 
-    /// The router's own words, with the cat, or over the cat if you've closed Messages since. They're a reply in the
-    /// talk, also sent to the cat's conversation.
     private func catSays(_ text: String, thread: String? = nil) {
         guard channels.isOpen else { return post(caption: CatWords.shades, text: text, threadID: nil) }
         let message = ChannelMessage(exchangeID: "cat-\(UUID().uuidString)", kind: .reply, speaker: .cat, text: text, at: now(), threadID: thread ?? "", threadTitle: "")

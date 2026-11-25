@@ -8,7 +8,6 @@ import ShadesContext
 import ShadesCore
 import XCTest
 
-/// How many bytes of a response came over the wire, before anything unpacked them.
 private final class Received: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var counted: Int64 = 0
@@ -19,7 +18,6 @@ private final class Received: NSObject, URLSessionTaskDelegate, @unchecked Senda
     }
 }
 
-/// The phone page for real: the server on a free loopback port, spoken to over HTTP the way the page does.
 @MainActor
 final class PhoneServerTests: XCTestCase {
     private var log: Log!
@@ -27,15 +25,12 @@ final class PhoneServerTests: XCTestCase {
     private var backend: FakeBackend!
     private var context: FakeContext!
     private var keys: MemoryPhoneKeys!
-    /// What Tailscale was asked, in order.
     private var tailscale: [String] = []
     private var serveTakes: UInt64 = 0
-    /// What was sent to phones' push services, and what they answer.
     private var pushed: [URLRequest] = []
     private var pushAnswer = 201
     private var controller: AppController!
     private var port: UInt16 = 0
-    /// How far ahead of the real time the controller's clock is.
     private var ahead: TimeInterval = 0
     private let penny = Kitten(name: "Penny", role: "Finance", covers: "their money", folder: "/k/penny")
     private let session: URLSession = {
@@ -122,7 +117,6 @@ final class PhoneServerTests: XCTestCase {
         return try XCTUnwrap((try JSONSerialization.jsonObject(with: body) as? [String: Any])?["key"] as? String)
     }
 
-    /// The first view a stream sends, and the task holding the stream open.
     private func watch(_ place: String, key: String, page: String? = nil) async throws -> (view: [String: Any], stream: Task<Void, Never>) {
         var request = URLRequest(url: URL(string: "/events?key=\(place.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)\(page.map { "&page=\($0)" } ?? "")", relativeTo: base)!)
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
@@ -135,7 +129,7 @@ final class PhoneServerTests: XCTestCase {
             first = try JSONSerialization.jsonObject(with: Data(line.dropFirst(6).utf8)) as! [String: Any]
             break
         }
-        // Holding the iterator keeps the connection open until the task is cancelled.
+        // Outside the repo: URLSession keeps a stream's connection open only while its bytes iterator is held.
         let stream = Task { [lines] in
             var lines = lines
             while (try? await lines.next()) != nil {}
@@ -148,9 +142,6 @@ final class PhoneServerTests: XCTestCase {
         for _ in 0..<2000 where !condition() { try? await Task.sleep(nanoseconds: 2_000_000) }
     }
 
-    /// It used to close without a word, and it's open for ten minutes, so you may well have looked away.
-    /// A new build can't read the pairing the last one saved, so the phone is locked out until it pairs again, and the
-    /// self-check said nothing about it.
     func testTheSelfCheckSaysWhenThePhoneNeedsPairingAgain() async {
         controller.threadListWait = 0
         let before = await controller.runHealthCheck()
@@ -172,7 +163,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("That pairing code ran out after 10 minutes. Choose Pair Phone… from my menu for a new one.", threadID: nil))
     }
 
-    /// Your face is yours, so unlike a cat it has no address of its own, and only comes in what a paired phone is sent.
     func testYourPictureGoesOnlyToAPairedPhone() async throws {
         MessagesInk.picture = DemoPicture.jpeg
         defer { MessagesInk.picture = nil }
@@ -187,8 +177,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(view["you"] as? String, "data:image/jpeg;base64,\(picture)")
     }
 
-    /// The page's words grow by as much as the window's for the text size picked on the Mac, from the next time it opens,
-    /// and still when the page is turned off and on again.
     func testThePageTakesTheMacsTextSize() async throws {
         let style = { String(decoding: try await self.send("GET", "/app.css").body, as: UTF8.self) }
         let standard = try await style()
@@ -238,7 +226,7 @@ final class PhoneServerTests: XCTestCase {
     }
 
     func testACatsAddressIsTheWindowsArtInThatColourAndSaysNothingElse() async throws {
-        // An image can't send the key, so like the icon it's served without one.
+        // Outside the repo: a browser can't send the Authorization header for an image.
         let (drawn, png) = try await send("GET", "/cat/dark/sit/7458e8.png")
         XCTAssertEqual(drawn.statusCode, 200)
         XCTAssertEqual(drawn.value(forHTTPHeaderField: "Content-Type"), "image/png")
@@ -274,7 +262,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(chunks.first, "IHDR")
         XCTAssertTrue(Set(chunks).isDisjoint(with: ["tEXt", "iTXt", "zTXt", "tIME"]), "no words or times in it: \(chunks)")
 
-        // Any colour gets a cat, so an address can't tell anyone which colours your kittens wear, or that you have any.
         let (stranger, _) = try await send("GET", "/cat/light/alert/123456.png")
         XCTAssertEqual(stranger.statusCode, 200)
         let (own, _) = try await send("GET", "/cat/light/sleep/shades.png")
@@ -296,8 +283,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertNotEqual(posted.statusCode, 200)
     }
 
-    /// What review found: anyone who can reach the page could fill the Mac's memory by asking for colours, and tell which
-    /// cats a phone had just loaded by how fast they came back.
     func testACatsAddressKeepsNothingSoStrangersCantFillMemoryOrTellWhatAPhoneLoaded() {
         let link = PhoneLink(keys: MemoryPhoneKeys(), grace: 0, hold: { nil }, release: {}, act: { _ in }, sendPush: { _ in nil }, now: { Date() })
         func get(_ path: String) -> (status: Int, body: Data, seconds: TimeInterval) {
@@ -310,15 +295,11 @@ final class PhoneServerTests: XCTestCase {
         func median(_ times: [TimeInterval]) -> TimeInterval { times.sorted()[times.count / 2] }
         let cat = { (n: Int) in "/cat/light/work/\(String(format: "%06x", n)).png" }
 
-        // Asked twice, with the first answer still held, the second is drawn again rather than handed back from a store.
         let first = get(cat(0x100000)).body
         let second = get(cat(0x100000)).body
         XCTAssertEqual(first, second, "the same picture")
         XCTAssertNotEqual(first.withUnsafeBytes { UInt(bitPattern: $0.baseAddress) }, second.withUnsafeBytes { UInt(bitPattern: $0.baseAddress) }, "drawn afresh, never kept")
 
-        // And it takes as long. A kept answer comes back in about a microsecond, where drawing one takes about 0.2 ms, so a
-        // cache would make the ones a phone loaded about 150 times faster. Taken in turns, so whatever else the machine is
-        // doing falls on both alike, and compared by medians against a quarter, which leaves room for a busy runner.
         let loaded = (0..<101).map { cat(0x200000 + $0) }
         loaded.forEach { _ = get($0) }
         var again: [TimeInterval] = []
@@ -336,7 +317,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertGreaterThan(median(again), median(fresh) / 4, "a cat a phone just loaded comes back no faster than one it didn't")
 
         let before = footprint()
-        // Each request drains its own autorelease pool, as the server's run loop does between requests.
         for n in 0..<20_000 { autoreleasepool { XCTAssertEqual(get("/cat/dark/sit/\(String(format: "%06x", 0x400000 + n)).png").status, 200) } }
         XCTAssertLessThan(footprint() - before, 4 << 20, "asking for colours doesn't fill memory")
     }
@@ -383,7 +363,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(backend.sent.count, 1)
     }
 
-    /// A phone's photo goes up first, to a paired phone's own request, then with its words to a new thread.
     func testAPhotoFromAPhoneGoesWithItsWordsOnly() async throws {
         let key = try await pair()
         let dm = PhonePlace.key(.channel(.of(penny)))
@@ -428,7 +407,6 @@ final class PhoneServerTests: XCTestCase {
         let (again, _) = try await page(#"{"act":"send","key":"\#(dm)","text":"And again","files":["\#(id)"]}"#, key: key)
         XCTAssertEqual(again, 409, "a file goes once")
 
-        // Taking one off and adding another used to push out one still attached, so none could go.
         var ids: [String] = []
         for _ in 0..<Drop.mostAtOnce {
             let uploaded = try await upload(photo, key: key)
@@ -458,8 +436,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertTrue(said.contains("How's December looking?"), "each place is its own stream, and moving between them mustn't forget what you sent: \(said)")
     }
 
-    /// Once the Mac lets go of a stream a phone left behind, a reply from that phone used to be told it had changed
-    /// since, which sent nothing however often it was tried. Nobody looking is said apart, so the page can look again.
     func testWhatAPhoneDoesWhileNobodysLookingIsToldSoRatherThanThatItChanged() async throws {
         let key = try await pair()
         let dm = PhonePlace.key(.channel(.of(penny)))
@@ -476,9 +452,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(changed, 409, "what's no longer there is still told apart")
     }
 
-    /// The simulator kept running the page in the background, and the demo's book always has its threads, so neither
-    /// showed whether a reply right after coming back past the grace is told it changed since. On the real path,
-    /// `ChannelFeed.open` after `close` gives back what it had read, so the reply goes.
     func testAReplyRightAfterComingBackPastTheGraceGoesToItsThread() async throws {
         let thread = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: Date(), runtimeMode: .auto, projectPath: penny.folder)
         backend.listed = [thread]
@@ -488,7 +461,6 @@ final class PhoneServerTests: XCTestCase {
         let place = PhonePlace.key(.thread("w", in: .channel(.of(penny))))
         let reply = #"{"act":"send","key":"\#(place)","text":"Keep it under 400"}"#
         let (_, first) = try await watch(place, key: key)
-        // The first time, Messages reads T3 before it knows the thread, as it does once at start.
         for _ in 0..<100 {
             if try await page(#"{"act":"seen","key":"\#(place)"}"#, key: key).status == 200 { break }
             try await Task.sleep(nanoseconds: 50_000_000)
@@ -512,8 +484,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertTrue(backend.sent.contains { $0.threadID == "w" && $0.prompt.text.hasPrefix("Keep it under 400") }, "and it reached its thread")
     }
 
-    /// Every change used to send every row of the place again, about 240 KB for a thread of 300 messages, so on a
-    /// phone's link a reply waited seconds behind its own thread.
     func testAChangeSendsOnlyTheRowsThatChanged() async throws {
         let key = try await pair()
         let budget = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: Date(), projectPath: penny.folder)
@@ -542,7 +512,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertLessThan(change.utf8.count, whole.utf8.count / 3, "\(change.utf8.count) bytes for the change, \(whole.utf8.count) for the whole thread")
     }
 
-    /// On a phone's link away from home, a long thread took seconds just to arrive, since nothing was packed.
     func testWordsGoGzippedToABrowserThatTakesItAndPicturesDont() async throws {
         let key = try await pair()
         let counted = Received()
@@ -558,7 +527,6 @@ final class PhoneServerTests: XCTestCase {
         let (cat, _) = try await send("GET", "/cat/dark/sit/7458e8.png")
         XCTAssertNil(cat.value(forHTTPHeaderField: "Content-Encoding"), "a picture is packed already")
 
-        // Each view has to come out of the stream as soon as it's sent, not when the stream ends.
         var request = URLRequest(url: URL(string: "/events?key=activity", relativeTo: base)!)
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         let (bytes, response) = try await session.bytes(for: request)
@@ -569,8 +537,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertTrue(first.contains(#""key":"activity""#), "the first view, while the stream's still open")
     }
 
-    /// What's said, and the key pairing sends, could be guessed at from how well it packs, so only the page's own files
-    /// and its stream, a row at a time, are.
     func testWhatsSaidNeverGoesPackedOutsideTheStream() async throws {
         let key = try await pair()
         let budget = AgentThread(id: "w", title: "Budget", projectTitle: "Penny", status: .completed, model: "m", updatedAt: Date(), projectPath: penny.folder)
@@ -589,13 +555,9 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertNil(found?.response.value(forHTTPHeaderField: "Content-Encoding"))
     }
 
-    /// A kitten's words that repeated words of yours packed smaller, so someone who could get words into a reply, and
-    /// see how big each event was on the way to your phone, could guess at yours a letter at a time. Padding didn't stop
-    /// it, so each row packs on its own, and what goes over the wire is the same size either way.
     func testAKittensWordsDontPackAgainstYoursOnTheStream() async throws {
         let key = try await pair()
         let day = Date(timeIntervalSince1970: 1_767_268_800)
-        // Held open, so each thread is read before its own stream starts, and comes whole in the first view.
         let (_, holding) = try await watch(PhonePlace.key(.channel(.of(penny))), key: key)
         defer { holding.cancel() }
         func packed(_ guess: String, in id: String) async throws -> Int {
@@ -608,17 +570,14 @@ final class PhoneServerTests: XCTestCase {
             let raw = try await rawStream("/events?key=\(place)", key: key, until: guess)
             let event = try XCTUnwrap(raw.first { $0.text.contains(guess) }, "the view with both rows")
             XCTAssertFalse(event.text.contains("\n\n:"), "with nothing padding it out")
-            // The first chunk has gzip's 10 bytes in front.
+            // Outside the repo: gzip puts a 10-byte header in front of the first chunk.
             return event.size - (event.first ? 10 : 0)
         }
-        // The same letters backwards, so the two only differ in whether they repeat your words.
         let right = try await packed("4F7QPL2K9X", in: "bank-ab")
         let wrong = try await packed("X9K2LPQ7F4", in: "bank-ba")
         XCTAssertEqual(right, wrong, "the right guess packs no smaller than the wrong one")
     }
 
-    /// Threads lists your message with its latest reply under it, so packed as one row, a reply that matched your
-    /// words packed smaller. Now the reply, an answer you gave on a card and a thread's title pack on their own.
     func testThreadsLatestReplyDoesntPackAgainstYourMessage() async throws {
         func packed(_ guess: String) async throws -> Int {
             try await tearDown()
@@ -641,8 +600,7 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(right, wrong, "the right guess packs no smaller than the wrong one")
     }
 
-    /// WebKit can hold back the end of a long packed view until more of the stream comes, and the next ping could be
-    /// 10 seconds away, so one follows a second after each view.
+    // Outside the repo: WebKit can hold back the end of a packed view until more of the stream arrives.
     func testAPingFollowsAPackedViewSoonAfter() async throws {
         let key = try await pair()
         let started = Date()
@@ -652,7 +610,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(started), 5, "then a ping within seconds")
     }
 
-    /// Each chunk of a raw gzip stream, unpacked as it comes, as a browser does, until one says `until`.
     private func rawStream(_ path: String, key: String, until: String) async throws -> [(size: Int, first: Bool, text: String)] {
         let connection = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
         connection.start(queue: .main)
@@ -699,8 +656,6 @@ final class PhoneServerTests: XCTestCase {
         return chunks
     }
 
-    /// The focus and backlogs go only into what a paired phone is sent, read from the files at most once a minute, as
-    /// the window reads them, and kept nowhere but in memory.
     func testAPairedPhonesViewsHaveTheFocusReadAtMostOnceAMinute() async throws {
         var reads = 0
         controller.readPriorities = { _ in
@@ -721,12 +676,8 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(reads, 2, "and again a minute later")
     }
 
-    /// Pages whose streams the Mac has ended.
     private var ended: Set<String> = []
 
-    /// A page starts a new stream once it's stopped reading its last one, which an iPhone back from the lock screen can
-    /// leave open behind Tailscale, still taking what's sent. Enough of those used up the server's connections, and
-    /// then no phone could reach it.
     func testAPagesNewStreamEndsTheOneItLeftBehind() async throws {
         let key = try await pair()
         let (_, left) = try await watch("home", key: key, page: "one")
@@ -792,7 +743,6 @@ final class PhoneServerTests: XCTestCase {
         var settings = controller.settings
         settings.phone = true
         controller.apply(settings)
-        // As if it couldn't start this time, while the page from the last run is still on your tailnet.
         controller.phone?.stop()
         controller.phone = nil
         tailscale = []
@@ -800,8 +750,6 @@ final class PhoneServerTests: XCTestCase {
         await until { !tailscale.isEmpty }
         XCTAssertEqual(tailscale, ["off"])
     }
-
-    // MARK: - Notifications
 
     private let phone = P256.KeyAgreement.PrivateKey()
     private let phoneAuth = Data(repeating: 9, count: 16)
@@ -845,7 +793,6 @@ final class PhoneServerTests: XCTestCase {
         XCTAssertEqual(pushed.count, 1, "once, as on the Mac")
     }
 
-    /// The cat's own work opens Activity on your phone, unless you've chosen to show it there, when it opens the thread.
     func testANotificationAboutTheCatsOwnWorkOpensItOnlyOnceItsSwitchIsOn() async throws {
         let key = try await pair()
         _ = try await subscribe(key: key)
@@ -934,7 +881,6 @@ final class PhoneServerTests: XCTestCase {
         _ = try await subscribe(key: key)
         backend.said["w"] = [Exchange(id: "turn", asker: .you, askedAt: Date(), ask: "Check the budget", reply: "On it.", repliedAt: Date())]
         approvalNow()
-        // Sent from Messages before it had read the thread, so the thread is known without anything leading to it.
         controller.messagesAction(.send("Use last month's numbers", to: .thread(id: "w", title: "Budget"), shownIn: .of(penny)))
         await until { !pushed.isEmpty }
         let opened = try WebPush.decrypt(XCTUnwrap(pushed.first?.httpBody), with: phone, auth: phoneAuth)
@@ -1029,7 +975,6 @@ final class PhoneServerTests: XCTestCase {
     func testTurningItOffAfterItCouldntStartStillForgetsEveryPhone() async throws {
         let key = try await pair()
         _ = try await subscribe(key: key)
-        // As if it couldn't start this time, with a phone paired and subscribed in an earlier run.
         controller.phone?.stop()
         controller.phone = nil
         turnOff()
@@ -1049,8 +994,6 @@ final class PhoneServerTests: XCTestCase {
         controller.apply(settings)
     }
 
-    /// Serve keeps forwarding after Shades stops, so whatever took its port would get what the phone sends. The page
-    /// has to come off when Shades stops, however it stops, which is when the system closes Shades' end of the pipe.
     func testThePageComesOffYourTailnetWhenShadesStops() async throws {
         let (tool, lines) = try fakeTailscale()
 
@@ -1078,7 +1021,6 @@ final class PhoneServerTests: XCTestCase {
         try serve.helper?.pipe.fileHandleForWriting.close()
     }
 
-    /// Stands in for the tailscale tool, and writes down what it's asked.
     private func fakeTailscale() throws -> (tool: String, said: () -> [String]) {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("shades-tailscale-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

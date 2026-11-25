@@ -52,7 +52,6 @@ final class FlowTests: XCTestCase {
         controller = makeController()
     }
 
-    /// The app as it comes up: a new one of these, with what the last one saved, is a restart.
     private func makeController(inbox: Inbox = Inbox(since: .distantPast), hidesTestThreads: Bool = true) -> AppController {
         let controller = AppController(
             dependencies: AppDependencies(
@@ -107,8 +106,6 @@ final class FlowTests: XCTestCase {
         ApprovalRequest(id: id, threadID: thread, threadTitle: "Work", kind: kind, summary: "npm test", createdAt: Date(timeIntervalSince1970: 1))
     }
 
-    // MARK: - Ask
-
     func testTheSnapshotComesBeforeThePanel() async {
         await controller.beginAsk()
         XCTAssertEqual(log.all, ["snapshot", "showInput"])
@@ -130,8 +127,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .reply(text: "Hi.", done: true, threadID: "thread-1", note: nil))
     }
 
-    /// What actually happened: a front door sent text from the screen into the thread of a kitten that isn't
-    /// meant to see it, with T3's own tools. Its folder is what stops that, so it only ever runs there.
     func testTheFrontDoorOnlyRunsInItsOwnFolder() async {
         await ask("first")
         await ask("and a follow-up")
@@ -150,7 +145,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(said, CatWords.frontDoorNoFolder)
     }
 
-    /// Only Claude Code reads the folder, and T3 gives other models its tools too.
     func testTheFrontDoorDoesntRunOnAModelThatIgnoresItsFolder() async {
         var changed = settings
         changed.quickModel = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "medium")
@@ -161,7 +155,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(said, CatWords.frontDoorNotClaude)
     }
 
-    /// A follow-up runs on whatever its folder says by then, so that has to be put right first too.
     func testWithoutItsFolderTheFrontDoorDoesntCarryOn() async {
         await ask("first")
         routerFolder = nil
@@ -169,7 +162,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.sent.map(\.mode), [.start])
     }
 
-    /// Settings can be saved while T3 is slow to answer, and the model that runs has to be the one checked.
     func testTheFrontDoorRunsOnTheModelItChecked() async {
         var changed = settings
         changed.quickModel = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "medium")
@@ -184,7 +176,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.sent.filter { $0.mode == .start }.map(\.prompt.model), [settings.quickModel, settings.quickModel])
     }
 
-    /// T3 not running is said as it always was, rather than blamed on the folder.
     func testIfT3WontTakeItsFolderTheFrontDoorDoesntRunAndSaysWhy() async {
         backend.addProjectError = Friendly(errorDescription: "I can't reach T3 Code. Open it and try again.")
         await ask("what's this?")
@@ -222,8 +213,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.sent.map(\.mode), [.start, .followUp, .start])
         XCTAssertEqual(stage.bubble, .reply(text: "Fresh.", done: true, threadID: "thread-2", note: nil))
     }
-
-    // MARK: - Rewriting
 
     private func askForARewrite(selected: String? = "We wanted to let you know that the new page is live.\n") async {
         context.snapshotValue.selectedText = selected
@@ -266,8 +255,6 @@ final class FlowTests: XCTestCase {
         await settle()
         XCTAssertTrue(inserter.replaced.isEmpty)
     }
-
-    // MARK: - Handing off
 
     func testAHandoffIsNeverShownAsAnAnswer() async {
         backend.replies = [
@@ -313,8 +300,6 @@ final class FlowTests: XCTestCase {
         await settle()
         XCTAssertLessThanOrEqual(backend.sent.count, 1)
     }
-
-    // MARK: - Pointing
 
     private let importButton = ScreenElement(role: "button", label: "Import", frame: CGRect(x: 10, y: 10, width: 80, height: 24))
     private let exportButton = ScreenElement(role: "button", label: "Export", frame: CGRect(x: 900, y: 700, width: 80, height: 24))
@@ -371,7 +356,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.wentHome, 1)
     }
 
-    /// An approval needs the cat with you, and then it goes back to what the answer points at.
     func testTheCatComesBackToWhatItPointsAtAfterAnApproval() async {
         context.snapshotValue.elements = [exportButton]
         backend.replies = [[.finished(fullText: "Top right.\nPOINT: 1")]]
@@ -408,7 +392,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(said, CatWords.cantPoint)
     }
 
-    /// The router can only point at what it was shown, and with full access it's shown nothing.
     func testARouterThatWasntShownTheScreenCantPointAtIt() async {
         var changed = settings
         changed.quickMode = .fullAccess
@@ -420,8 +403,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(backend.sent[0].prompt.text.contains(Prompts.pointMarker))
         XCTAssertNil(stage.ranTo)
     }
-
-    // MARK: - Settling
 
     func testASimpleAnswerSettlesItsThread() async {
         backend.replies = [[.finished(fullText: "Red.")]]
@@ -448,13 +429,10 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.archived, [])
     }
 
-    // MARK: - Routing
-
     private func session(_ id: String, _ title: String, status: AgentStatus = .completed, mode: RuntimeMode = .auto, age: TimeInterval = 60) -> AgentThread {
         AgentThread(id: id, title: title, projectTitle: nil, status: status, model: "claude-opus-5-5", updatedAt: clock.addingTimeInterval(-age), runtimeMode: mode)
     }
 
-    /// What really happened: a follow-up to Opus's report went to the Sol chat, which had never seen it.
     func testAFollowUpAfterAHandoffGoesToTheSessionDoingTheWork() async {
         backend.replies = [
             [.finished(fullText: "HANDOFF: Review the video")],
@@ -601,7 +579,6 @@ final class FlowTests: XCTestCase {
         await controller.frontierTask?.value
     }
 
-    /// What actually happened: the kitten could only ask for the link about a minute later.
     func testWordsThatPointAtAScreenAKittenWontGetSayWhatToDoAndStillGo() async {
         await askClawde("Read this x thread, and see what lessons we can take from it")
 
@@ -700,7 +677,6 @@ final class FlowTests: XCTestCase {
         XCTAssertNil(stage.bubble)
     }
 
-    /// The kitten has your words by then, and is working without your screen.
     func testLosingTheConnectionAfterAKittenStartedKeepsTheWarning() async {
         backend.projects["/k/clawde"] = "project-clawde"
         backend.droppedAfterReply = URLError(.networkConnectionLost)
@@ -795,7 +771,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, warning)
     }
 
-    /// The session has your words by then too, the same as a kitten that started.
     func testLosingTheConnectionDuringAFollowUpKeepsTheWarning() async {
         backend.replies = [[.text(delta: "Working on it.")]]
         backend.droppedAfterReply = URLError(.networkConnectionLost)
@@ -824,7 +799,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(controller.notices.filter { $0.text == sendTheLink }.count, 1, "only its own warning goes")
     }
 
-    /// T3 says a follow-up has started before it sends it, so failing before anything comes back means it never got there.
     func testAFollowUpThatFailsBeforeAnythingComesBackTakesTheWarningBack() async {
         backend.replies = [[]]
         backend.droppedAfterReply = URLError(.networkConnectionLost)
@@ -835,7 +809,6 @@ final class FlowTests: XCTestCase {
         XCTAssertNil(stage.bubble)
     }
 
-    /// Clicking an old answer away isn't asking anything, so it doesn't take back a warning.
     func testClosingAnOldAnswerKeepsAWarning() async {
         kittens = [steve]
         backend.projects["/k/steve"] = "project-steve"
@@ -843,7 +816,6 @@ final class FlowTests: XCTestCase {
         await ask("what's 2 + 2?")
         controller.channelsPressed()
         backend.routerSays = ["Read this x thread": "KITTEN: 1"]
-        // The router's folder is looked up first, then the kitten's, and the click comes while that's on its way.
         backend.whileFindingAProject = { [unowned self] in
             self.backend.whileFindingAProject = { [unowned self] in self.controller.bubbleDismissed(byClick: true) }
         }
@@ -851,7 +823,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.caption == "Steve Pawsniak has this." })
     }
 
-    /// Nothing was captured, so wherever your words go, the screen doesn't go with them.
     func testNoScreenToSendWarnsWhereverYourWordsGo() async {
         kittens = [clawde]
         controller.threadsChanged([session("w", "Clawde: Fix routing")])
@@ -925,7 +896,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
     }
 
-    /// The connection dropped after it started, and the first list after that already says it failed.
     func testAFailureFiledWithoutBeingSeenRunningTakesTheWarningBack() async {
         kittens = [inboxKitten]
         backend.projects["/k/clawde"] = "project-clawde"
@@ -941,7 +911,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
     }
 
-    /// The same for a kitten without the inbox, and for new work.
     func testAFailureTheListNeverSawRunningTakesTheWarningBack() async {
         backend.projects["/k/clawde"] = "project-clawde"
         backend.replies = [[]]
@@ -961,7 +930,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
     }
 
-    /// The run that failed was before your words, which are with the thread now and going without your screen.
     func testAFailureFromBeforeAFollowUpLeavesItsWarning() async {
         kittens = [inboxKitten]
         let old = work("k", title: "Clawde: Fix login", run: "run-1", status: .failed)
@@ -977,8 +945,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "k" })
     }
 
-    /// The list only names the run a thread last finished, so it can't say which run is carrying a follow-up's words,
-    /// whether the thread was busy or more words were queued behind it. Only the send's own turn failing counts.
     func testTheListLeavesAFollowUpsWarningToItsOwnTurn() async {
         let done = AgentThread(id: "f", title: "Work", projectTitle: nil, status: .completed, model: "m", updatedAt: clock, lastRunID: "run-1")
         controller.threadsChanged([done])
@@ -997,7 +963,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(controller.notices.filter { $0.text == sendTheLink }.count, 1, "its own turn took back only its own")
     }
 
-    /// The kitten's thread handed the work to another, so that's whose failure counts.
     func testWorkHandedOnTakesItsWarningWithIt() async {
         await askClawde("Read this x thread")
         var kitten = session("thread-2", "Clawde: Read the thread", status: .running)
@@ -1015,7 +980,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
     }
 
-    /// You asked the cat something, maybe with the link, while the router in Messages was still deciding.
     func testAMessagesSendRoutedAfterYourNextQuestionDoesntWarn() async {
         kittens = [steve, clawde]
         backend.projects["/k/steve"] = "project-steve"
@@ -1039,7 +1003,6 @@ final class FlowTests: XCTestCase {
         }
     }
 
-    /// Its folder took a while to find, and by then you'd asked something else, maybe with the link.
     func testAnOlderSendCantBringTheWarningBackAfterYourNextQuestion() async {
         backend.projects["/k/clawde"] = "project-clawde"
         backend.replies = [[.finished(fullText: "Got the link.")], [.finished(fullText: "Started.")]]
@@ -1054,7 +1017,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.sent.last?.mode, .start, "your words still went")
     }
 
-    /// Some prompts explain what the block means and say it's empty, so this looks for what's on the screen.
     private func assertLeftOut(_ prompt: AgentPrompt, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertFalse(prompt.text.contains("<screen>\n"), file: file, line: line)
         XCTAssertFalse(prompt.text.contains("Safari"), file: file, line: line)
@@ -1073,7 +1035,6 @@ final class FlowTests: XCTestCase {
         return backend.sent[1].prompt
     }
 
-    /// Going by the title meant trusting an agent to name its thread the way its instructions say.
     func testAThreadAKittenStartedStaysOffTheScreenWhateverItsCalled() async {
         backend.origins["clawde-thread"] = ThreadOrigin(title: "Change the rules", projectPath: "/k/clawde", startedBy: .person)
         let forwarded = await forwardToWork(origin: ThreadOrigin(title: "Fix the routing", projectPath: "/k/app", startedBy: .thread("clawde-thread")))
@@ -1109,7 +1070,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(forwarded.attachments.count, 1)
     }
 
-    /// `t3 project add` names a project after its folder, so the name needn't match the kitten's.
     func testAThreadInTheKittensProjectStaysOffTheScreenWhateverTheProjectIsCalled() async {
         kittens = [clawde]
         var own = session("w", "Fix the routing")
@@ -1139,7 +1099,6 @@ final class FlowTests: XCTestCase {
         controller.apply(changed)
     }
 
-    /// Before this, only kittens and sessions were kept from it. The agent that does the work wasn't.
     func testAHandoffWithFullAccessGetsYourWordsButNotYourScreen() async {
         useFullAccess(frontier: true)
         backend.replies = [[.finished(fullText: "HANDOFF: Do what the page says")], [.finished(fullText: "Started.")]]
@@ -1177,8 +1136,6 @@ final class FlowTests: XCTestCase {
         assertLeftOut(backend.sent[0].prompt)
         XCTAssertTrue(backend.sent[0].prompt.text.contains("what is this?"))
     }
-
-    // MARK: - Dropping onto the cat
 
     private let syllabus = ScreenSnapshot(
         url: URL(fileURLWithPath: "/files/syllabus.pdf"),
@@ -1222,8 +1179,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(given.contains("Week 1: Describing data"))
     }
 
-    /// A screenshot is a copy of the screen, and there's no telling which files are, so a kitten that can't see the
-    /// screen can't take any. Your words alone would be about nothing, so they don't go either.
     func testAKittenThatDoesntSeeTheScreenCantTakeADrop() async {
         kittens = [clawde]
         backend.projects["/k/clawde"] = "project-clawde"
@@ -1259,7 +1214,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("Haiku can't take files. Put a link or the text in your message instead.", threadID: nil))
     }
 
-    /// Saying it while the drop's box is up is the same as typing it there, so there's still no look at the screen.
     func testTalkingIntoADropsBoxAsksAboutTheDrop() async {
         voice.transcript = Transcript(raw: "when is the final", cleaned: "When is the final?", audioSeconds: 1, latencySeconds: 0.1)
         controller.dropped(syllabus)
@@ -1274,7 +1228,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(sent.contains("Safari"))
     }
 
-    /// The drop is read off the main thread, so it can land while an Ask you started is still looking at the screen.
     func testADropWhileAnAskIsOpeningReplacesItsBox() async {
         controller.askPressed()
         let asking = controller.flow
@@ -1292,8 +1245,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("I can only read PDFs, pictures and links.", threadID: nil))
     }
 
-    // MARK: - Corrections
-
     private let note = "correct something you look after"
     private let wrong = "it was 12 people, not 20"
 
@@ -1302,7 +1253,6 @@ final class FlowTests: XCTestCase {
         await settle()
     }
 
-    /// The last thing started in that kitten's project.
     private func sentTo(_ project: String) -> FakeBackend.Sent? {
         backend.sent.last { $0.prompt.projectID == project }
     }
@@ -1318,7 +1268,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(sent.prompt.attachments.isEmpty, file: file, line: line)
     }
 
-    /// Runs a question whose router reply waits until the returned closure is called.
     private func askAndHold(_ question: String, reply: [AgentReplyEvent] = [], then after: [AgentReplyEvent]) async -> () async -> Void {
         let (opened, open) = AsyncStream.makeStream(of: Void.self)
         backend.held = Task { for await _ in opened { break } }
@@ -1521,7 +1470,6 @@ final class FlowTests: XCTestCase {
         backend.projects["/k/steve"] = "project-steve"
         let release = await askAndHold(wrong, then: [.finished(fullText: "CORRECTION: 1\nKITTEN: 1")])
 
-        // Now there's a newer list, where 1 would be someone else.
         kittens = [clawde, steve]
         backend.projects["/k/clawde"] = "project-clawde"
         backend.replies = [[.finished(fullText: "Red.")]]
@@ -1583,7 +1531,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(router.contains("Its own thread"))
     }
 
-    /// Holds back the next follow-up's `.started`, until the returned closure is called.
     private func holdStarted() -> () -> Void {
         let (opened, open) = AsyncStream.makeStream(of: Void.self)
         backend.heldBeforeStarted = Task { for await _ in opened { break } }
@@ -1607,7 +1554,6 @@ final class FlowTests: XCTestCase {
         await older?.value
         await settle()
 
-        // Neither router conversation is ever listed, so what matters is it isn't hidden, which would drop what it asks you.
         XCTAssertFalse(controller.hiddenThreads.contains("thread-1"))
     }
 
@@ -1623,7 +1569,6 @@ final class FlowTests: XCTestCase {
         await older?.value
         await settle()
 
-        // Neither router conversation is ever listed, so what matters is it isn't hidden, which would drop what it asks you.
         XCTAssertFalse(controller.hiddenThreads.contains("thread-1"))
     }
 
@@ -1645,7 +1590,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.sent.count, 2, "the follow-up that was already on its way, and nothing after Esc")
     }
 
-    /// Runs a question whose router reply waits until the returned closure is called, keeping hold of its task.
     private func askHeld(_ question: String, reply: [AgentReplyEvent] = [], then after: [AgentReplyEvent]) async -> (Task<Void, Never>?, () -> Void) {
         let (opened, open) = AsyncStream.makeStream(of: Void.self)
         backend.held = Task { for await _ in opened { break } }
@@ -1668,7 +1612,6 @@ final class FlowTests: XCTestCase {
         let (follow, releaseFollow) = await askHeld("what colour?", then: [.finished(fullText: "Red.")])
         XCTAssertEqual(backend.sent.last?.threadID, "thread-1")
 
-        // An approval sat for more than ten minutes, with the follow-up queued behind it.
         clock.addTimeInterval(QuickSession.lifetime + 1)
         releaseFirst()
         await first?.value
@@ -1720,7 +1663,6 @@ final class FlowTests: XCTestCase {
         await settle()
         XCTAssertFalse(backend.archived.contains("thread-1"))
 
-        // Neither router conversation is ever listed, so what matters is it isn't hidden, which would drop what it asks you.
         XCTAssertFalse(controller.hiddenThreads.contains("thread-1"))
     }
 
@@ -1784,7 +1726,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(backend.archived.contains("thread-1"))
     }
 
-    /// Holds back finding a kitten's project, until the returned closure is called.
     private func holdProject() -> () -> Void {
         let (opened, open) = AsyncStream.makeStream(of: Void.self)
         backend.heldProject = Task { for await _ in opened { break } }
@@ -1965,7 +1906,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(controller.notices.map(\.text), ["Clawde has it."])
     }
 
-    /// Your message already warns if it needs to, so a copy of the correction doesn't add a second one.
     func testACorrectionCopyDoesntWarnAboutTheScreen() async {
         kittens = [clawde, steve]
         backend.projects["/k/clawde"] = "project-clawde"
@@ -2120,7 +2060,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(sentTo("project-clawde")?.prompt.text.contains(note), true)
     }
 
-    /// Passing the fix on is part of dealing with it, and what it says about that still has to reach you.
     func testACorrectionsReportReachesTheInboxEvenWhenItPassesWorkOn() async {
         await correctTheInboxKitten()
         await finish(work("thread-2", title: "Clawde: Team size"), report: passedTheFixOn, sorted: "PASSED: yes")
@@ -2145,7 +2084,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(rows.isEmpty)
     }
 
-    /// It named where the rest goes instead of numbering it, so that's lost, and the owner's is only a copy.
     func testACorrectionBesideADestinationThatWasntNumberedIsOnlyACopy() async {
         kittens = [steve, penny]
         backend.projects["/k/steve"] = "project-steve"
@@ -2168,7 +2106,6 @@ final class FlowTests: XCTestCase {
         }
     }
 
-    /// Its kitten's other thread passed it work, but it was given a correction since, so what it says still reaches you.
     func testACorrectedThreadsReportShowsEvenAfterWorkWasPassedToIt() async {
         kittens = [steve]
         backend.projects["/k/steve"] = "project-steve"
@@ -2200,8 +2137,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.hiddenThreads.contains("w2"))
     }
 
-    /// Its reply was read and its correction sent before the connection dropped, so it did get through, and saying
-    /// it again would send the kitten a second correction.
     func testAnOvertakenCorrectionThatGotThroughIsntCalledLost() async {
         kittens = [steve]
         backend.projects["/k/steve"] = "project-steve"
@@ -2215,8 +2150,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains(note), true)
         XCTAssertFalse(controller.notices.contains { $0.text == CatWords.earlierMessageFailed })
     }
-
-    // MARK: - Corrections beside pointing and dropped files
 
 
     private var saidCantPoint: Bool {
@@ -2315,7 +2248,6 @@ final class FlowTests: XCTestCase {
 
     private func laterPassesWorkOn(_ tag: String) async {
         controller.bubbleDismissed(byClick: true)
-        // Later, the session does what it always did, and passes its work on.
         var work = session("w", "Tailor resume", status: .running, mode: .fullAccess)
         work.projectPath = steve.folder
         controller.threadsChanged([work])
@@ -2360,7 +2292,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(stage.bubbles.contains(.line(CatWords.cantTakeFiles("Tailor resume"), threadID: nil)))
     }
 
-    /// The front door turns a drop away before it reads anything, so there's no correction found to send.
     func testAFrontDoorThatCantTakeADropSendsNothingAtAll() async {
         useFullAccess(quick: true)
         kittens = [steve]
@@ -2394,8 +2325,6 @@ final class FlowTests: XCTestCase {
         return running
     }
 
-    /// The session is busy, so T3 queues the correction behind its current run and nothing comes back yet.
-    /// Shades restarts (install.sh, a crash, a quit). The session then acts on the correction and passes work on.
     func testACorrectionQueuedBehindARunningSessionSurvivesARestart() async throws {
         var thread = await correctInboxSession(holdForward: true)
         XCTAssertTrue(controller.inbox.wasCorrected("w"), "marked as it goes")
@@ -2407,7 +2336,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.hiddenThreads.contains("w"))
     }
 
-    /// The same, except the session answered before the restart.
     func testACorrectionThatCameBackSurvivesARestart() async throws {
         var thread = await correctInboxSession(holdForward: false)
         XCTAssertTrue(controller.inbox.wasCorrected("w"))
@@ -2448,8 +2376,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.dispatchers.contains("w"))
     }
 
-    /// Two corrections to one session overlap. The first is still waiting when the second gets there, then the
-    /// first loses its connection before anything came back.
     func testAFailedCorrectionDoesNotUndoOneThatGotThere() async {
         kittens = [steve]
         backend.projects["/k/steve"] = "project-steve"
@@ -2490,7 +2416,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.hiddenThreads.contains("w"), "the session's report about the correction should reach you")
     }
 
-    /// The same with an inbox kitten and a restart: what the session says about the second correction gets lost.
     func testAFailedCorrectionDoesNotLoseTheInboxReportOfOneThatGotThere() async throws {
         kittens = [inboxKitten]
         backend.projects["/k/clawde"] = "project-clawde"
@@ -2523,7 +2448,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.hiddenThreads.contains("w"))
     }
 
-    /// Only the front door turning a drop away sends nothing at all. Past it, the owner gets its copy without the file.
     func testAHandoffThatCantTakeADropStillSendsTheOwnersCopy() async {
         useFullAccess(frontier: true)
         kittens = [steve]
@@ -2538,8 +2462,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(sentTo("project-steve")?.prompt.text.contains("syllabus.pdf"), false)
     }
 
-    // MARK: - Talking to the cat
-
     func testOnlyThreadsInTheRoutersFolderAreTalksWithTheCat() {
         let talk = AgentThread(id: "r", title: "Which plan?", projectTitle: "Shades router", status: .completed, model: "m", updatedAt: clock, projectPath: "/shades/router/")
         let work = AgentThread(id: "w", title: "Work", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, projectPath: steve.folder)
@@ -2548,8 +2470,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.isWithShades(work))
         XCTAssertFalse(controller.isWithShades(nowhere))
     }
-
-    // MARK: - Self-check
 
     func testAShortcutAnotherAppHasShowsInTheSelfCheck() async {
         controller.shortcutTaken("⌃⌘B")
@@ -2568,7 +2488,6 @@ final class FlowTests: XCTestCase {
         XCTAssertNil(findings.first { $0.check == "kitten: Steve Pawsniak" && !$0.ok })
     }
 
-    /// A Codex thread read a saved copy straight through the same settings.
     func testAKittenOnAModelThatIgnoresTheBlockIsFound() async {
         kittens = [clawde]
         var changed = settings
@@ -2587,8 +2506,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(finding?.fix, "Choose a Claude model for Front door model in my settings.")
     }
 
-    /// Signing in waited on a Keychain dialog, so the self-check never reported, the install rolled the new copy back,
-    /// and the copy put back waited the same way.
     func testTheSelfCheckReportsEvenWhileSigningInToT3NeverFinishes() async {
         backend.neverAnswers = true
         controller.t3Wait = 0.2
@@ -2605,7 +2522,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(t3?.problem, "I'm still connecting to T3 Code, so my agents can't run yet.")
     }
 
-    /// T3 had answered once, so Check Myself, which the finding says to press, waited on each kitten's project for good.
     func testCheckMyselfReportsWhileSigningInNeverFinishesAfterT3AnsweredOnce() async {
         kittens = [steve]
         controller.threadsChanged([session("w", "Work")])
@@ -2622,8 +2538,6 @@ final class FlowTests: XCTestCase {
         XCTAssertNil(findings.first { $0.check == "kitten: Steve Pawsniak" && !$0.ok }, "and no kitten is called missing from T3 for it")
     }
 
-    /// What two installs reported: a new build signing in again took T3 longer than the check waited, so health.json said
-    /// to answer a Keychain dialog that most likely wasn't there, and kept saying it after T3 answered.
     func testASlowSignInIsStillConnectingAndThenFineWithoutCheckingAgain() async {
         backend.whileFindingAProject = { [unowned self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
@@ -2641,7 +2555,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(reportedHealth.last?.first { $0.check == "T3 Code" }?.ok, true)
     }
 
-    /// You asked, so once T3 answers you hear how it went, rather than being left with "still connecting".
     func testCheckMyselfSaysAgainOnceT3Answers() async {
         backend.whileFindingAProject = { [unowned self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
@@ -2656,8 +2569,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
     }
 
-    /// Check Myself pressed again while the first was still waiting on T3 left the first one's follow-up going, so it
-    /// reported again once T3 answered, and could say stuck on its own, earlier clock.
     func testOnlyTheNewestOfOverlappingChecksIsReported() async {
         let (answered, answer) = AsyncStream<Void>.makeStream()
         backend.silentUntil = Task { for await _ in answered { break } }
@@ -2675,7 +2586,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
     }
 
-    /// T3 can still answer after the cat has said it's stuck, and then it says so.
     func testT3AnsweringAfterItWasCalledStuckIsReported() async {
         let (answered, answer) = AsyncStream<Void>.makeStream()
         backend.silentUntil = Task { for await _ in answered { break } }
@@ -2696,8 +2606,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .notice(caption: CatWords.selfCheckCaption, text: CatWords.allGood, threadID: nil))
     }
 
-    /// Once a newer check has its answer, an older one's follow-up says nothing, not even that T3 is stuck, and its own
-    /// answer, coming back last and different, doesn't replace the newer one's.
     func testAnOlderChecksFollowUpNeverReportsOverANewerCheck() async {
         let (answered, answer) = AsyncStream<Void>.makeStream()
         backend.silentUntil = Task { for await _ in answered { break } }
@@ -2716,7 +2624,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(controller.health, newest)
     }
 
-    /// Only a Keychain call can hold signing in for good, so a dialog is named once T3's been quiet past every other limit.
     func testT3ThatNeverAnswersIsCalledStuckAfterAWhile() async {
         backend.neverAnswers = true
         controller.t3Wait = 0.1
@@ -2729,7 +2636,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stuck?.fix, "If macOS is showing a Keychain dialog, answer it. If not, quit and reopen T3 Code.")
     }
 
-    /// A check that went out without T3 mustn't report over a newer one once T3 answers.
     func testANewerCheckTakesOverFromOneStillWaitingOnT3() async {
         backend.whileFindingAProject = { try? await Task.sleep(nanoseconds: 300_000_000) }
         controller.t3Wait = 0.1
@@ -2757,7 +2663,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(finding?.problem?.hasSuffix("That folder is taken.") == true)
     }
 
-    /// What two installs reported: T3 sent its first list a few seconds after launch, and the report said it couldn't be reached.
     func testAListThatComesWhileFindingTheFrontDoorCountsAsReachingT3() async {
         backend.whileFindingAProject = { [unowned self] in self.controller.threadsChanged([]) }
         let finding = await controller.runHealthCheck().first { $0.check == "T3 Code" }
@@ -2778,7 +2683,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(findings.filter { $0.check.hasPrefix("kitten:") }.allSatisfy(\.ok))
     }
 
-    /// What actually happened: an unsigned build made the cat say to turn on a setting that was already on.
     func testABadSignatureIsSaidPlainlyInsteadOfBlamingTheSetting() async {
         facts = HealthFacts(isSignedWithIdentity: false, hasScreenRecording: false)
         controller.threadListArrived = true
@@ -2794,7 +2698,6 @@ final class FlowTests: XCTestCase {
         XCTAssertNotEqual(stage.input?.caption, CatWords.needsScreenRecording)
     }
 
-    /// A self-signed build keeps its permissions, so the screen being off is still about Screen Recording.
     func testABuildWithoutATeamIsntAnnouncedOrBlamedForTheScreen() async {
         facts = HealthFacts(isSignedByTeam: false, hasScreenRecording: false)
         controller.threadListArrived = true
@@ -2958,7 +2861,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(findings.first { !$0.ok && $0.check == "kitten: Pepper" }?.fix, "Add /code/app as a project in T3.")
     }
 
-    /// Its thread would count as the other kitten's too, and a follow-up to it gets no screen.
     func testAKittenWorkingInTheFolderOfOneThatDoesntSeeTheScreenDoesntSeeItEither() async {
         let visitor = Kitten(name: "Pepper", role: "Finance", covers: "the app", folder: "/k/pepper", project: clawde.folder)
         kittens = [clawde, visitor]
@@ -2970,7 +2872,6 @@ final class FlowTests: XCTestCase {
         assertLeftOut(backend.sent[1].prompt)
     }
 
-    /// Otherwise moving it to another project would leave its earlier threads seeing the screen.
     func testAKittenThatDoesntSeeTheScreenStaysInItsOwnFolder() async {
         let screenless = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", project: "/code/app", seesScreen: false)
         XCTAssertEqual(screenless.workspace, "/k/clawde")
@@ -3097,8 +2998,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.settled, [])
     }
 
-    // MARK: - Session reports
-
     private func finishWork(report: String?, summary: [AgentReplyEvent]? = nil, status: AgentStatus = .completed) async {
         backend.reports["w"] = report
         if let summary { backend.replies = [summary] }
@@ -3193,7 +3092,6 @@ final class FlowTests: XCTestCase {
         work.title = "Work"
         controller.threadsChanged([work])
 
-        // The thread stops first, and the words follow a moment later.
         work.status = .waitingForAnswer
         controller.threadsChanged([work])
         XCTAssertNil(stage.bubble)
@@ -3208,7 +3106,6 @@ final class FlowTests: XCTestCase {
         )
         XCTAssertEqual(stage.bubble, expected)
 
-        // Only once, and a stray click doesn't lose it.
         controller.threadsChanged([work])
         controller.bubbleDismissed(byClick: true)
         XCTAssertEqual(stage.bubble, expected)
@@ -3218,8 +3115,6 @@ final class FlowTests: XCTestCase {
         controller.threadsChanged([work])
         XCTAssertNil(stage.bubble)
     }
-
-    // MARK: - The inbox
 
     private let inboxKitten = Kitten(name: "Clawde", role: "The system", covers: "Shades itself", folder: "/k/clawde", seesScreen: false, usesInbox: true)
 
@@ -3244,7 +3139,6 @@ final class FlowTests: XCTestCase {
         for _ in 0..<20 { await Task.yield() }
     }
 
-    /// A thread's report comes to this once it's sorted.
     private func finish(_ thread: AgentThread, report: String? = "The report.", sorted: String? = nil) async {
         backend.reports[thread.id] = report
         if let sorted { backend.replies.append([.finished(fullText: sorted)]) }
@@ -3388,7 +3282,6 @@ final class FlowTests: XCTestCase {
         return try XCTUnwrap(rows.first)
     }
 
-    /// What pressing Reply on a report in Messages and typing does.
     private func replyInMessages(_ words: String, to entry: InboxEntry) async {
         controller.messagesAction(.send(words, to: .thread(id: entry.threadID, title: entry.threadTitle), shownIn: nil))
         await settle()
@@ -3998,7 +3891,6 @@ final class FlowTests: XCTestCase {
         backend.reports = ["a": "One.", "b": "Two."]
         controller.threadsChanged([work("a", title: "Clawde: One"), work("b", title: "Clawde: Two")])
         await settleFiling()
-        // The two reports are filed at once, so either can land first.
         XCTAssertTrue([
             .inbox("Clawde needs a decision on “One”. Clawde shipped “Two”."),
             .inbox("Clawde needs a decision on “Two”. Clawde shipped “One”."),
@@ -4010,7 +3902,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(CatWords.inboxSummary([decision, decision]), "2 need you")
     }
 
-    /// It used to say "1 decision", where the notification for the same thing says whose.
     func testTheInboxBubbleSaysWhoAndWhatAbout() {
         func entry(_ kind: InboxEntry.Kind, _ title: String) -> InboxEntry {
             InboxEntry(id: title, kind: kind, text: "", threadID: title, threadTitle: title, at: Date())
@@ -4103,8 +3994,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(later.first { $0.check == "T3 run IDs" }?.ok, true, "a thread that hasn't finished anything has no run to name")
     }
 
-    // MARK: - Fix
-
     func testFixPicksThenLooksThenAsks() async {
         await controller.beginFix()
         XCTAssertEqual(log.all, ["pickRegion", "catRun", "snapshot", "showInput"])
@@ -4191,8 +4080,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(backend.sent[0].prompt.text.contains("What is this?"))
     }
 
-    // MARK: - Talk
-
     func testTalkingGoesThroughAskWithNoPanel() async {
         controller.start()
         await drainMainQueue()
@@ -4267,8 +4154,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line(CatWords.didntCatch, threadID: nil))
     }
 
-    // MARK: - Dictate
-
     func testDictationGoesOnlyToTheCursor() async {
         controller.start()
         keys.onPress?(settings.dictateKey)
@@ -4287,8 +4172,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.status, .none)
     }
 
-    // MARK: - Privacy
-
     func testAPrivateAppIsntSentButStillGetsAnAnswer() async {
         context.snapshotValue = ScreenSnapshot(isPrivate: true)
         backend.replies = [[.text(delta: "Sure."), .finished(fullText: "Sure.")]]
@@ -4301,8 +4184,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(sent.prompt.text.contains("Hidden"))
         XCTAssertEqual(stage.bubble, .reply(text: "Sure.", done: true, threadID: "thread-1", note: CatWords.privateApp))
     }
-
-    // MARK: - Problems
 
     func testNoT3GetsOneShortLine() async {
         backend.connectError = Friendly(errorDescription: "I can't reach T3 Code. Open it and try again.")
@@ -4357,8 +4238,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .line("Still getting my ears on. Give me a moment.", threadID: nil))
         XCTAssertNotEqual(stage.status, .listening)
     }
-
-    // MARK: - Approvals
 
     private func thread(_ status: AgentStatus, approvals: [ApprovalRequest] = []) -> AgentThread {
         AgentThread(id: "w", title: "Work", projectTitle: "site", status: status, model: "m", updatedAt: clock, pendingApprovals: approvals)
@@ -4440,8 +4319,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.bubble, .reply(text: "Hi.", done: true, threadID: "thread-1", note: nil))
     }
 
-    // MARK: - Mood
-
     func testAwakeWhileWorkingAndCelebratesWhenDone() async {
         controller.threadsChanged([thread(.running)])
         XCTAssertTrue(stage.busy)
@@ -4471,8 +4348,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(voice.vocabulary, ["site"])
     }
 
-    // MARK: - The bubble
-
     func testAThinkingBubbleSurvivesAClickElsewhereButNotEsc() async {
         await controller.beginAsk()
         stage.type("hello?")
@@ -4496,7 +4371,6 @@ final class FlowTests: XCTestCase {
         return .bytes(bitmap.representation(using: .png, properties: [:])!, name: "keyboard.png")
     }
 
-    /// Messages only took words, so a photo or file had to go through T3.
     func testAPictureAttachedInAThreadGoesWithYourWords() async throws {
         kittens = [steve]
         let thread = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/k/steve")
@@ -4517,7 +4391,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(log.all.contains("snapshot"), "and nothing looked at the screen")
     }
 
-    /// A reply into a working thread queued behind its run, where T3 Code's own composer steers it.
     func testWhatYouSendIntoAThreadSteersItUnlessSettingsOrCommandReturnSaysQueue() async throws {
         kittens = [steve]
         let thread = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .running, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/k/steve")
@@ -4546,7 +4419,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(behavior, .steer)
     }
 
-    /// Only a thread you picked is steered. The router's pick waits its turn, as the cat's own does.
     func testWordsTheRouterPassesToABusySessionStillWaitTheirTurn() async throws {
         let busy = AgentThread(id: "f", title: "Work", projectTitle: nil, status: .running, model: "m", updatedAt: clock, runtimeMode: .auto, lastRunID: "run-1")
         controller.threadsChanged([busy])
@@ -4557,7 +4429,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(sent.behavior, .queue)
     }
 
-    /// Messages took one file a message.
     func testSeveralFilesGoTogetherInOneMessage() async throws {
         kittens = [steve]
         let thread = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/k/steve")
@@ -4583,7 +4454,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(shownBook?.threads["s"]?.messages.last?.failure, CatWords.cantReadThat)
     }
 
-    /// A reply that never got to T3 only flashed the cat's bubble, so in Messages it looked delivered.
     func testAReplyThatNeverGotThereSaysSoUnderItAndGoesAgainWithOnePress() async throws {
         kittens = [steve]
         controller.threadsChanged([AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, runtimeMode: .auto, projectPath: "/k/steve")])
@@ -4636,7 +4506,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(shadesSaid, ["What day is it?", "It's Tuesday."])
     }
 
-    /// A file counts as your screen, so it only goes where your screen may, as one dropped onto the cat does.
     func testAFileForAKittenThatDoesntSeeYourScreenGoesNowhereAndSaysWhy() async {
         let pepper = Kitten(name: "Pepper", role: "Finance", covers: "their money", folder: "/k/pepper", seesScreen: false)
         kittens = [pepper]
@@ -4653,8 +4522,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.cantTakeFiles("Pepper"), "and it says why, not just that it didn't start")
     }
 
-    /// A phone offers + only where a photo would go, since one sent where it can't goes up first, and only then
-    /// fails. So what it's told always agrees with what sending decides.
     func testAFileIsOfferedOnlyWhereSendingItWouldGo() async throws {
         let steve = Kitten(name: "Steve", role: "Professional", covers: "work", folder: "/k/steve")
         let pepper = Kitten(name: "Pepper", role: "Finance", covers: "their money", folder: "/k/pepper", seesScreen: false)
@@ -4692,7 +4559,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.takesFiles(.newThread(steve)), "nor to a new thread with full access")
     }
 
-    /// Messages' talk with the router goes to your phone and never holds your screen, so a file gets a router thread of its own.
     func testAFileToTheCatGoesOnARouterThreadOfItsOwn() async throws {
         backend.routerSays = ["What day is it?": "It's Tuesday.", "What's this?": "A keyboard."]
         controller.channelsPressed()
@@ -4719,8 +4585,6 @@ final class FlowTests: XCTestCase {
         XCTAssertNotNil(shownBook?.channel(.shades)?.posts.last.flatMap { if case .message(let message) = $0 { message.failure } else { nil } })
     }
 
-    /// A report's only button used to be Open in T3. Messages comes first, and T3 is only for what it doesn't show.
-    /// "Turn on the Microphone for me in System Settings" left you to find it, where a macOS app takes you there.
     func testAnErrorThatNeedsASettingTakesYouThere() {
         controller.say(CatWords.needsMicrophone)
         controller.bubbleAction(.settings(.microphone))
@@ -4728,7 +4592,6 @@ final class FlowTests: XCTestCase {
         XCTAssertNil(stage.bubble, "and the bubble's done with it")
     }
 
-    /// The bubble is lit by whoever's speaking, so it asks which kitten a thread is.
     func testABubbleFromAKittensThreadIsLitInItsColour() {
         kittens = [steve]
         let steves = AgentThread(id: "s", title: "Tidy the site", projectTitle: "Steve", status: .completed, model: "m", updatedAt: clock, projectPath: "/k/steve")
@@ -4788,8 +4651,6 @@ final class FlowTests: XCTestCase {
         }
     }
 
-    // MARK: - Messages
-
     private let penny = Kitten(name: "Penny", role: "Finance", covers: "their money", folder: "/k/penny")
 
     private func messages(_ words: String, to target: MessageTarget, in channel: ChannelID? = .shades, alsoSent: Bool = false) async {
@@ -4801,7 +4662,6 @@ final class FlowTests: XCTestCase {
 
     private var shownBook: ChannelBook? { stage.channelsUpdated.last ?? stage.channelsShown.last }
 
-    /// Everything a channel shows or leads to: its own messages, and every message in the threads that live there.
     private func said(in channel: ChannelID, of book: ChannelBook?) -> [ChannelMessage] {
         guard let book else { return [] }
         return (book.channel(channel)?.posts ?? []).flatMap { post -> [ChannelMessage] in
@@ -4812,7 +4672,6 @@ final class FlowTests: XCTestCase {
         }
     }
 
-    /// What anyone but you said, with the cat or any kitten, in the threads that live there.
     private func answers(in book: ChannelBook) -> [String] {
         book.channels.flatMap { said(in: $0.id, of: book) }.filter { $0.speaker != .you }.compactMap(\.text)
     }
@@ -4862,7 +4721,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(stage.channelsUpdated.last?.started["sent-topic"], "thread-1", "so Messages can follow it into its thread")
     }
 
-    /// Each line the cat said over itself, and each notice's caption.
     private var catSaid: [String] {
         stage.bubbles.compactMap { bubble in
             switch bubble {
@@ -4873,8 +4731,6 @@ final class FlowTests: XCTestCase {
         }
     }
 
-    /// Replying in a kitten's thread in Messages brought the cat up to say "Sent that to…", when Messages already
-    /// showed where it went.
     func testTheCatDoesntSayWhereWordsWentWhenYouPickedWhereInMessages() async throws {
         kittens = [steve, penny]
         backend.projects["/k/penny"] = "project-penny"
@@ -4900,8 +4756,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(Array(catSaid.dropFirst()), ["Passing it to Penny…", "Penny has this."], "and where the cat picked, it says where")
     }
 
-    /// Work the cat gave a kitten from #general lived in #general. Now it lives in the kitten's channel, where the
-    /// kitten's own work is.
     func testWorkTheCatGivesAKittenLivesInThatKittensChannel() async throws {
         kittens = [steve, penny]
         backend.projects["/k/penny"] = "project-penny"
@@ -5042,7 +4896,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(controller.waiting.approvals.isEmpty)
     }
 
-    /// Asked after the app started.
     private func newRequest(_ id: String = "r1", thread: String = "w") -> ApprovalRequest {
         var request = request(id, thread: thread)
         request.createdAt = clock
@@ -5080,7 +4933,6 @@ final class FlowTests: XCTestCase {
     }
 
     func testWhatsAlreadyWaitingAtLaunchIsLeftToTheCatEvenWhenT3ListsItLate() async {
-        // T3 lists a thread as waiting before the words of what it's asking have been read.
         controller.threadsChanged([thread(.waitingForApproval)])
         var asking = thread(.waitingForApproval, approvals: [request()])
         asking.pendingQuestion = AgentQuestion(id: "q", threadID: "w", threadTitle: "Work", text: "Which month?", askedAt: clock.addingTimeInterval(-60))
@@ -5092,7 +4944,6 @@ final class FlowTests: XCTestCase {
     func testARestartTakesBackEveryNotificationFromBefore() async {
         controller.threadsChanged([thread(.waitingForApproval, approvals: [newRequest()])])
         XCTAssertEqual(cleared, 0)
-        // Answered in T3 while Shades was down, so nothing will be listed to take back.
         controller = makeController()
         controller.start()
         XCTAssertEqual(cleared, 1)
@@ -5365,7 +5216,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(book.threads[handedTo]?.replies.first?.speaker, .cat)
     }
 
-    /// What Messages started was only remembered while the app ran, so every restart, such as each install, lost it.
     func testWhatYouToldTheCatAndTheWorkItStartedAreThereAfterARestart() async throws {
         backend.routerSays = ["What day is it?": "It's Tuesday.", "Find me a cheaper flight": "HANDOFF: Search for cheaper flights"]
         let asked = Exchange(id: "turn-1", asker: .you, askedAt: clock, ask: "What day is it?", reply: "It's Tuesday.", repliedAt: clock)
@@ -5401,7 +5251,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(book?.threads[handedTo]?.home, .shades)
     }
 
-    /// A reply also sent to a channel was only remembered while the app ran, so every restart took it out of the channel.
     func testAReplyAlsoSentToAChannelIsStillThereAfterARestart() async throws {
         kittens = [steve]
         var work = AgentThread(id: "w", title: "Resume", projectTitle: "steve", status: .completed, model: "m", updatedAt: clock, projectPath: "/k/steve")
@@ -5445,7 +5294,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(restarted.channel(.of(steve))?.posts, [.thread("w"), .alsoSent(echoed, thread: "w")])
     }
 
-    /// A reaction is a mark and nothing more: no button says anything for you, so none reaches an agent as words.
     func testAReactionIsAMarkThatReachesNoAgentAndStaysAfterARestart() async throws {
         kittens = [steve]
         let work = AgentThread(id: "w", title: "Resume", projectTitle: "steve", status: .completed, model: "m", updatedAt: clock, projectPath: "/k/steve")
@@ -5490,7 +5338,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(restarted.threads["w"]?.replies.first?.reactions, [.thumbsUp])
     }
 
-    /// A fix showed nowhere in Messages, so a question asked with Fix left nothing in the cat's DM.
     func testWorkYouStartWithTheCatOutsideMessagesLivesInItsDM() async throws {
         await controller.beginFix()
         stage.type("Where could I find a keyboard like this?")
@@ -5500,7 +5347,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(controller.messagesThreads.isEmpty)
         let thread = AgentThread(id: fix, title: "Fix: Where could I find a keyboard like this?", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
         XCTAssertTrue(controller.isCatsWork(thread))
-        // A fix from before Shades kept these is known by its title, in T3's folder for work with no project.
         let older = AgentThread(id: "older", title: "Fix: the logo is squashed", projectTitle: nil, status: .completed, model: "m", updatedAt: clock)
         XCTAssertTrue(controller.isCatsWork(older))
         var elsewhere = older
@@ -5508,7 +5354,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(controller.isCatsWork(elsewhere), "only in T3's own folder")
     }
 
-    /// The DM shows work that can hold your screen, so Messages' router, whose talk goes to your phone, never sees it.
     func testWorkYouStartedWithTheCatIsntOfferedToMessagesRouter() async throws {
         await controller.beginFix()
         stage.type("Where could I find a keyboard like this?")
@@ -5522,7 +5367,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(routed.prompt.text.contains("keyboard"), "not in its sessions")
     }
 
-    /// The cat's own work only ever stayed on the Mac, even work you'd have liked to follow from your phone.
     func testOnlyItsSwitchShowsTheCatsOwnWorkOnYourPhoneOneThreadAtATime() async throws {
         kittens = [steve]
         await controller.beginFix()
@@ -5542,8 +5386,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(savedInbox?.onPhone, [:], "pressed again, it's off")
     }
 
-    /// Messages never sends your screen, so even a kitten that sees it can't tell what "this thread" is.
-    /// A reply straight to a thread is only what you typed.
     func testMessagesSaysWhenYourWordsPointAtAScreenItWontSend() async {
         kittens = [steve]
         backend.projects["/k/steve"] = "project-steve"
@@ -5593,7 +5435,6 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(shadesSaid.contains(CatWords.lostTheSession))
     }
 
-    /// The router's turn can wait on an approval past the conversation's ten minutes, and what it said still counts.
     func testACorrectionInEveryoneOutlastingItsConversationStillGoes() async {
         kittens = [steve, penny]
         backend.projects["/k/steve"] = "project-steve"
@@ -5618,7 +5459,6 @@ final class FlowTests: XCTestCase {
         XCTAssertFalse(shadesSaid.contains(CatWords.noReply))
     }
 
-    /// A correction in a planned kitten's area goes to whoever takes those, so the router has to see it there too.
     func testTheRouterInEveryoneSeesPlannedKittens() async {
         kittens = [clawde, Kitten(name: "Pepper", role: "Finance", covers: "money", folder: "/k/pepper", planned: true)]
         controller.channelsPressed()
@@ -5628,8 +5468,6 @@ final class FlowTests: XCTestCase {
     }
 }
 
-
-// MARK: - Messages, review round 2
 
 extension FlowTests {
     func testEveryoneNeverReachesTheAskChatThatHoldsYourScreen() async throws {
@@ -5744,10 +5582,7 @@ extension FlowTests {
 
 
 
-// MARK: - Review round 3 repros
-
 extension FlowTests {
-    /// Fix 6: passing on moves Everyone's record off the frontier thread, even when its report just mentions another thread.
     func testEveryoneKeepsTheFrontiersAnswerWhenItsReportLinksAThread() async throws {
         backend.routerSays = ["Fix the login bug": "HANDOFF: Fix the login bug"]
         controller.channelsPressed()
@@ -5772,7 +5607,6 @@ extension FlowTests {
         XCTAssertTrue(shadesSaid.contains(answer), "the frontier's own answer to what you asked in Everyone is gone from Everyone")
     }
 
-    /// Fix 6 again: a routed follow-up keeps its first time, but a link in the follow-up's report then throws the whole thread out of Everyone.
     func testEveryoneKeepsEarlierRepliesWhenAFollowUpsReportLinksAThread() async throws {
         let firstSent = clock
         backend.routerSays = ["Find a flight": "HANDOFF: Find a flight", "Check that flight's baggage": "SEND TO: 1"]
@@ -5800,7 +5634,6 @@ extension FlowTests {
         XCTAssertTrue(shadesSaid.contains(second), "the follow-up's own answer is gone too")
     }
 
-    /// Fix 1: which threads are the Ask box's is only remembered while the app runs.
     func testAfterARestartEveryoneStillNeverReachesTheAskChat() async throws {
         let answer = "That's Acme's pricing page, and the card on it ends 4242."
         backend.replies = [[.finished(fullText: answer)]]
@@ -5809,7 +5642,6 @@ extension FlowTests {
         let askChat = try XCTUnwrap(controller.quick.thread(at: clock))
         backend.reports[askChat] = answer
 
-        // The app restarts, as scripts/install.sh does, and the Ask chat is still in T3's list.
         controller = makeController()
         controller.threadsChanged([AgentThread(id: askChat, title: "what's this?", projectTitle: nil, status: .completed, model: "m", updatedAt: clock.addingTimeInterval(-60), runtimeMode: .approvalRequired, isSettled: true)])
         backend.routerSays = ["What was that card again?": "SEND TO: 1"]
@@ -5823,7 +5655,6 @@ extension FlowTests {
 }
 
 extension FlowTests {
-    /// Fix 1: the thread the Ask box hands your screen to isn't a quick one, so Everyone's router still lists it.
     func testEveryoneNeverListsWorkTheAskBoxHandedYourScreenTo() async throws {
         backend.replies = [[.finished(fullText: "HANDOFF: Summarise this page")]]
         await ask("summarise this")
@@ -5936,8 +5767,6 @@ extension FlowTests {
 }
 
 
-// MARK: - Messages as the one place to look
-
 extension FlowTests {
     func testTheHotkeyOpensMessagesAndClosesItWithoutLooking() async {
         controller.messagesHotkeyPressed()
@@ -5980,8 +5809,6 @@ extension FlowTests {
         XCTAssertEqual(controller.waiting.shadesWork.map(\.id), ["own"], "a kitten's work is under that kitten, and the cat's plumbing isn't work")
     }
 }
-
-// MARK: - Messages, review round 1
 
 extension FlowTests {
     func testAskingAboutWhatShippedAnswersThatRowAndLeavesTheDecision() async throws {
@@ -6071,8 +5898,6 @@ extension FlowTests {
         XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”."), "open isn't the same as looked at")
     }
 }
-
-// MARK: - Messages, review round 2
 
 extension FlowTests {
     func testEverythingYouSendAfterAskingAboutWhatShippedStaysWithThatRow() async throws {
@@ -6194,7 +6019,6 @@ extension FlowTests {
 }
 
 extension FlowTests {
-    /// The kitten's thread hands the reading to another, which fails before the kitten's report is read.
     func testHandedOnWorkThatHasAlreadyFailedTakesTheWarningBack() async {
         await askClawde("Read this x thread")
         var kitten = work("thread-2", title: "Clawde: Read the thread", run: "k-run-1", status: .running)
@@ -6210,7 +6034,6 @@ extension FlowTests {
         XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
     }
 
-    /// Words sent while an earlier turn is going still go without your screen, whatever happens to that turn.
     func testAnEarlierTurnFailingLeavesALaterWarning() async {
         let done = AgentThread(id: "f", title: "Work", projectTitle: nil, status: .completed, model: "m", updatedAt: clock, lastRunID: "run-1")
         controller.threadsChanged([done])
@@ -6219,7 +6042,7 @@ extension FlowTests {
         controller.forward("and that part?", to: done, snapshot: nil)
         for _ in 0..<20 { await Task.yield() }
         let earlier = controller.forwardTask
-        // The list names the run a thread last finished, so it still says run-1 while run-2 is going.
+        // Outside the repo: T3's list names the run a thread last finished, so it still says run-1 while run-2 runs.
         let running = done.with(status: .running)
         controller.threadsChanged([running])
 
@@ -6233,7 +6056,6 @@ extension FlowTests {
         XCTAssertTrue(controller.notices.contains { $0.text == sendTheLink && $0.threadID == "f" }, "your words wait behind run-2")
     }
 
-    /// The same for a new thread still on its first run, and the whole way from the Ask box to a busy session.
     func testWordsQueuedBehindABusyRunKeepTheirWarningWhenThatRunFails() async {
         let starting = AgentThread(id: "n", title: "Read the thread", projectTitle: nil, status: .running, model: "m", updatedAt: clock)
         controller.threadsChanged([starting])
@@ -6285,10 +6107,7 @@ private extension AgentThread {
     }
 }
 
-// MARK: - Messages with notifications, drops and the screen warning
-
 extension FlowTests {
-    /// Messages closed: the click covers the nudge, and closing again says nothing.
     func testANotificationClickWithMessagesClosedCoversTheNudge() async {
         kittens = [inboxKitten]
         await finish(work(), sorted: "DECISION: Ship the fix?")
@@ -6301,8 +6120,6 @@ extension FlowTests {
         XCTAssertNil(stage.bubble)
     }
 
-    /// Messages open behind your work: the click brings it up at the thread, and closing it again still nudges, as
-    /// the bubble's Open does, since the decision's still waiting.
     func testANotificationClickWithMessagesOpenStillNudgesOnClose() async {
         kittens = [inboxKitten]
         controller.channelsPressed()
@@ -6316,7 +6133,6 @@ extension FlowTests {
         XCTAssertEqual(stage.bubble, .inbox("Clawde needs a decision on “Fix login”."))
     }
 
-    /// One notification is one thread, so the others that came in while Messages sat open still get the bubble.
     func testClickingOneNotificationLeavesTheNudgeForTheOthers() async {
         kittens = [inboxKitten]
         controller.channelsPressed()
@@ -6330,7 +6146,6 @@ extension FlowTests {
         XCTAssertNotNil(stage.bubble, "you were shown w, and never w2's decision")
     }
 
-    /// #1 for #12's new topic: it warns, and asking the cat before it starts takes that back.
     func testANewTopicWarnsAndAskingMeanwhileTakesItBack() async {
         kittens = [steve]
         backend.projects["/k/steve"] = "project-steve"
@@ -6356,7 +6171,6 @@ extension FlowTests {
         XCTAssertFalse(controller.notices.contains { $0.text == sendTheLink })
     }
 
-    /// A drop's box takes what you say without a look, and Messages' box wins when you're typing in it.
     func testADropsBoxAndMessagesBoxTakeWhatYouSay() async {
         controller.start()
         await drainMainQueue()
@@ -6386,10 +6200,7 @@ extension FlowTests {
     }
 }
 
-// MARK: - Messages, laid out like Slack
-
 extension FlowTests {
-    /// Penny's thread, read by the feed, so routing into it shows where it lands.
     private func pennysThread() async -> AgentThread {
         kittens = [steve, penny]
         backend.projects["/k/penny"] = "project-penny"
@@ -6402,8 +6213,6 @@ extension FlowTests {
         return work
     }
 
-    /// Words the router sent on from #general also showed there, as Also send to #general does. With the cat, it says
-    /// where they went instead.
     func testWordsTheRouterSendsOnToASessionAreAReplyThere() async throws {
         _ = await pennysThread()
         backend.routerSays = ["And January?": "SEND TO: 1"]
@@ -6441,8 +6250,6 @@ extension FlowTests {
 }
 
 extension FlowTests {
-    /// Reply on a report about a thread Messages hasn't read, which a phone sends the same way, then a reply in
-    /// another project's thread that a question in Activity led to. Neither was also sent.
     func testAnUntickedReplyToAThreadMessagesHasntReadStaysOutOfEveryChannel() async throws {
         kittens = [steve, penny]
         backend.projects["/k/penny"] = "project-penny"
@@ -6467,7 +6274,6 @@ extension FlowTests {
     }
 }
 
-/// The mic in a box: it talks into that box, and only that box, and never looks at the screen.
 extension FlowTests {
     private func openBox(_ kind: String) async -> VoiceBox {
         switch kind {
@@ -6519,7 +6325,6 @@ extension FlowTests {
 
     func testClosingABoxShutsItsMicAndSendsNothing() async throws {
         for kind in ["ask", "fix", "drop", "messages"] {
-            // The talk key looks at the screen over a plain Ask box rather than talking into it.
             for byKey in kind == "ask" ? [false] : [false, true] {
                 try await setUp()
                 let box = await openBox(kind)
@@ -6537,7 +6342,6 @@ extension FlowTests {
                 XCTAssertNil(stage.listeningIn, kind)
                 XCTAssertNotEqual(stage.status, .listening, kind)
 
-                // Letting go of the key, or a mic somewhere else, has nothing left to finish.
                 controller.keyReleased(controller.settings.talkKey)
                 controller.micPressed(in: box)
                 await settle()
@@ -6599,9 +6403,7 @@ extension FlowTests {
     }
 }
 
-/// A take is worked out after you let go, and a tap of a hold key can cancel it and start another meanwhile.
 extension FlowTests {
-    /// Waits for what was said to be being worked out, failing rather than waiting for ever when nothing is.
     private func heldEnd() async -> Bool {
         for _ in 0..<1000 where voice.endsHeld == 0 { await Task.yield() }
         return voice.endsHeld > 0
@@ -6617,7 +6419,6 @@ extension FlowTests {
         let micTake = controller.voiceTask
         guard await heldEnd() else { return XCTFail("the mic's take never ended") }
 
-        // A tap of the talk key cancels, as the key monitor does, then holding it looks at another screen.
         let key = controller.settings.talkKey
         controller.keyPressed(key)
         controller.cancelListening()

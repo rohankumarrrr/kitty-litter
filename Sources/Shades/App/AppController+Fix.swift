@@ -2,7 +2,6 @@ import CoreGraphics
 import Foundation
 import ShadesCore
 
-/// Fix what I'm looking at: point, optionally say what's wrong, and an agent takes it from there.
 extension AppController {
     static let fixTitle = "Fix: "
 
@@ -16,14 +15,11 @@ extension AppController {
         defer { picking = false }
         stage.hideInput()
         guard let region = await context.pickRegion() else { return }
-        // Asked before the cat runs there, from where the windows are rather than anything captured.
         let onOwnWindow = stage.isOwnWindow(at: region)
         stage.catRun(toRegion: region) {}
-        // Nothing gets pointed at here, and the box waits on this look.
         let capture = await startLook(CaptureOptions(includeElements: false, focusRegion: region)).value
         let snapshot = capture.snapshot ?? ScreenSnapshot(focusRegion: region)
 
-        // With nothing to look at, a description is the only way it can help.
         let leftOut = settings.frontierMode == .fullAccess
         let canSee = !leftOut && !snapshot.isPrivate && snapshot.screenshotJPEG != nil
         let caption: String
@@ -58,7 +54,6 @@ extension AppController {
         defer { catGoesHomeSoon() }
         guard settings.lockdown == nil else { return sendLockedDown(description.isEmpty ? CatWords.fixThis : description, snapshot: snapshot) }
         let said = description.isEmpty ? nil : description
-        // An agent with full access can do anything, so text from a page doesn't get to reach it.
         let shared = settings.frontierMode == .fullAccess ? nil : snapshot
         let path = saveScreenshot(of: shared)
         let what = said ?? shared?.appName.map { "Something in \($0)" } ?? "Something on screen"
@@ -69,7 +64,6 @@ extension AppController {
         )
     }
 
-    /// A moment at the spot to say it's on it, then back home, unless it's needed elsewhere.
     private func catGoesHomeSoon() {
         Task {
             try? await Task.sleep(nanoseconds: UInt64(Self.settleSeconds * 1_000_000_000))

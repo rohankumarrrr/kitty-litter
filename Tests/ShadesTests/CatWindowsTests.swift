@@ -4,11 +4,8 @@ import ShadesContext
 import ShadesCore
 import XCTest
 
-/// The cat's own windows beside macOS's: a card on the desktop like its widgets, an alert's buttons, and a popover that
-/// comes and goes.
 @MainActor
 final class CatWindowsTests: XCTestCase {
-    /// Somewhere no screen reaches, so a window a test shows is never on yours.
     private let away = NSRect(x: -20_000, y: -20_000, width: 800, height: 600)
     private let request = ApprovalRequest(id: "r", threadID: "steve-1", threadTitle: "Tidy up", kind: .command, summary: "npm test", createdAt: Date(timeIntervalSince1970: 1_000_000))
     private let motion = Motion.forced
@@ -28,7 +25,6 @@ final class CatWindowsTests: XCTestCase {
         return bubble
     }
 
-    /// Every bubble was lit the same, whoever was speaking, where each card on the desktop is lit in its own hue.
     func testTheBubbleIsLitByWhoeverIsSpeaking() {
         let view = BubbleView(frame: .zero)
         view.kittenColor = { $0 == "steve-1" ? Opal.kittens[6] : nil }
@@ -42,7 +38,6 @@ final class CatWindowsTests: XCTestCase {
         XCTAssertEqual(view.look, .card(.shades), "a thread no kitten owns is lit in Shades' hue")
     }
 
-    /// Allow sat in the middle, and Allow for this session at the right, where a macOS alert puts what you most likely want.
     func testAnApprovalsAllowIsItsOnePrimaryAtTheRightAndAllowingMoreSitsApart() throws {
         let view = BubbleView(frame: .zero)
         _ = view.update(.approval(request, position: 1, total: 1), keepingWidth: false, limitHeight: 600)
@@ -53,7 +48,6 @@ final class CatWindowsTests: XCTestCase {
         XCTAssertGreaterThan(row[1].frame.minX - row[0].frame.maxX, 2 * (row[2].frame.minX - row[1].frame.maxX), "allowing more sits apart")
     }
 
-    /// A rewrite's Replace was quiet and first, though putting it in place is why you asked for it.
     func testAnAnswersButtonsSitAtTheRightWithAtMostOnePrimary() throws {
         let view = BubbleView(frame: .zero)
         _ = view.update(.reply(text: "Shorter.", done: true, threadID: "t", note: nil, canReplace: true), keepingWidth: false, limitHeight: 600)
@@ -67,7 +61,6 @@ final class CatWindowsTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(buttons(view).last).frame.maxX, view.body.maxX - 18, accuracy: 1)
     }
 
-    /// "Thinking." grew to the bubble's full width a moment after it showed, as its dots were drawn again.
     func testABubbleKeepsToItsWordsWidthWhenItsDrawnAgain() {
         let view = BubbleView(frame: .zero)
         let first = view.update(.thinking(note: nil), keepingWidth: false, limitHeight: 600)
@@ -77,7 +70,6 @@ final class CatWindowsTests: XCTestCase {
         XCTAssertEqual(again.width, first.width)
     }
 
-    /// The bubble popped in and vanished, where a popover or a notification comes and goes.
     func testTheBubbleFadesInAndOutUnlessReduceMotionIsOn() {
         Motion.forced = false
         let bubble = bubble()
@@ -97,7 +89,6 @@ final class CatWindowsTests: XCTestCase {
         XCTAssertFalse(bubble.panel.isVisible, "and gone at once")
     }
 
-    /// The pill came and went at once, as the bubble did.
     func testThePillFadesInAndOutUnlessReduceMotionIsOn() {
         Motion.forced = false
         let pill = SayPill()
@@ -116,7 +107,6 @@ final class CatWindowsTests: XCTestCase {
         XCTAssertFalse(pill.panel.isVisible)
     }
 
-    /// Esc put an approval away, and a click already on its way could still land on Allow while it went.
     func testABubbleOnItsWayOutTakesNoClicks() throws {
         Motion.forced = false
         let bubble = bubble()
@@ -140,7 +130,6 @@ final class CatWindowsTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
     }
 
-    /// An error asking you to turn something on in System Settings had no way there.
     func testAnErrorThatNeedsASettingOffersToOpenIt() throws {
         let view = BubbleView(frame: .zero)
         var actions: [BubbleAction] = []
@@ -156,7 +145,6 @@ final class CatWindowsTests: XCTestCase {
         XCTAssertEqual(actions.last, .settings(.inputMonitoring))
     }
 
-    /// Redo's ⇧⌘Z did nothing in the Ask box, though ⌘Z undid.
     func testTheBoxesRedoAsWellAsUndo() throws {
         func keys(_ modifiers: NSEvent.ModifierFlags, _ key: String) throws -> NSEvent {
             try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0, windowNumber: 0, context: nil, characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: 6))

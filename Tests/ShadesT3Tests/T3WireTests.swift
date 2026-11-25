@@ -12,8 +12,6 @@ final class T3WireTests: XCTestCase {
         try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
-    // MARK: Effort maps to each provider's own option
-
     func testCodexEffortUsesReasoningEffort() {
         let selection = T3Wire.ModelSelection(ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "medium"))
         XCTAssertEqual(selection.instanceId, "codex")
@@ -31,8 +29,6 @@ final class T3WireTests: XCTestCase {
         let selection = T3Wire.ModelSelection(ModelChoice(provider: "codex", model: "m", effort: ""))
         XCTAssertNil(selection.options)
     }
-
-    // MARK: What goes out
 
     func testRequestFrame() throws {
         let frame = T3Wire.request(id: "9", method: T3Wire.Method.dispatchCommand, payload: T3Wire.encode(T3Wire.ArchiveThread(commandId: "c", threadId: "t")))
@@ -80,7 +76,6 @@ final class T3WireTests: XCTestCase {
         XCTAssertNil(json["deliveryIntent"], "A delivery intent could steer a run already going")
     }
 
-    /// As T3 Code's composer sends a steer, which starts a run of its own on an idle thread.
     func testASteerJoinsTheRunThatsGoing() throws {
         let message = T3Wire.DispatchMessage(commandId: "c", threadId: "t", messageId: "m", text: "hi", attachments: [], modelSelection: nil, deliveryIntent: "steer")
         let json = try decoded(T3Wire.encode(message))
@@ -89,7 +84,6 @@ final class T3WireTests: XCTestCase {
         XCTAssertNil(json["modelSelection"], "the thread keeps its own model")
     }
 
-    // Kittens only believe a correction T3 shows as the user's.
     func testMessagesGoOutAsTheUser() throws {
         let message = T3Wire.DispatchMessage(commandId: "c", threadId: "t", messageId: "m", text: "hi", attachments: [], modelSelection: nil)
         XCTAssertEqual(try decoded(T3Wire.encode(message))["createdBy"] as? String, "user")
@@ -122,8 +116,6 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(json["answers"] as? NSDictionary, ["plan": "Starter", "extras": ["Support"]])
         XCTAssertNil(json["decision"])
     }
-
-    // MARK: IDs and links
 
     func testApprovalItemIDMatchesWhatTheServerBuilds() {
         XCTAssertEqual(T3Wire.approvalItemID(requestID: T3Fixtures.approvalRequestID), T3Fixtures.approvalItemID)
@@ -205,8 +197,6 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(link?.absoluteString, "t3code://threads/env-1/mcp%3Alaunch%3Aabc")
     }
 
-    // MARK: What comes back
-
     func testDispatchFailureCarriesTheServersReason() throws {
         let exit = try exit(T3Fixtures.dispatchFailure)
         XCTAssertFalse(exit.isSuccess)
@@ -251,8 +241,6 @@ final class T3WireTests: XCTestCase {
         XCTAssertNil(T3Wire.parseDate("yesterday"))
     }
 
-    // MARK: Compatibility and sign-in
-
     func testOnlyProtocolTwoIsCompatible() throws {
         func environment(_ version: Int?) throws -> T3Wire.Environment {
             let value = version.map(String.init) ?? "null"
@@ -264,7 +252,6 @@ final class T3WireTests: XCTestCase {
         XCTAssertFalse(try environment(nil).isCompatible)
     }
 
-    /// T3 lists only its older scopes under `scopes`, so a check of those alone would sign in again on every launch.
     func testSessionNeedsEveryScopeAsT3ListsThem() throws {
         func state(_ json: String) throws -> T3Wire.SessionState {
             try T3Wire.decoder().decode(T3Wire.SessionState.self, from: Data(json.utf8))
@@ -282,8 +269,6 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(session.sessionId, "s")
         XCTAssertNotNil(session.expiresAt)
     }
-
-    // MARK: Approval words
 
     func testCommandsLoseTheirShellWrapper() {
         XCTAssertEqual(T3Wire.unwrappedCommand("/bin/zsh -lc 'echo hi > /tmp/x'"), "echo hi > /tmp/x")

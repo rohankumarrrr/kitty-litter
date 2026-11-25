@@ -1,13 +1,9 @@
 @testable import ShadesT3
 import XCTest
 
-/// Signing in, with T3's server, its `t3` tool and the Keychain all stood in for, so nothing here signs in or touches
-/// the Keychain.
 final class T3AuthTests: XCTestCase {
-    /// Answers as T3's server would: who it is, and what it makes of each saved sign-in, by its token.
     final class FakeServer: URLProtocol {
         nonisolated(unsafe) static var sessions: [String: String] = [:]
-        /// Where the fake `t3` tool lists the sign-ins it issued and hasn't revoked.
         nonisolated(unsafe) static var issued: URL?
 
         override class func canInit(with request: URLRequest) -> Bool { true }
@@ -31,8 +27,6 @@ final class T3AuthTests: XCTestCase {
         }
     }
 
-    /// The login Keychain as builds signed with one certificate see it: each can read what any of them saved, newest
-    /// first, but deleting one another build saved shows a dialog and waits on it, which is what `prompts` counts.
     final class Keychain: T3CredentialStoring, @unchecked Sendable {
         private let lock = NSLock()
         private let build: String
@@ -65,8 +59,6 @@ final class T3AuthTests: XCTestCase {
         }
     }
 
-    /// One Keychain service shared by builds that can't read each other's items, as copies built from source are:
-    /// each lists every item, newest first, but reads only what its own build saved.
     final class Service: @unchecked Sendable {
         private let lock = NSLock()
         private var items: [(credential: T3Credential, build: String)] = []
@@ -103,7 +95,6 @@ final class T3AuthTests: XCTestCase {
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         try Data(#"{"origin":"http://t3.test"}"#.utf8).write(to: userdata.appendingPathComponent("server-runtime.json"))
         FakeServer.issued = bin.appendingPathComponent("issued")
-        // Each sign-in gets a session of its own, as T3's tool gives, which T3 accepts until it's revoked.
         let tool = """
         #!/bin/sh
         cd "$(dirname "$0")"
@@ -138,7 +129,6 @@ final class T3AuthTests: XCTestCase {
 
     private var issued: Int { Int(toolOutput("count").trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0 }
 
-    /// Revoking runs on its own after a sign-in, so this gives it a moment to.
     private func revoked() async throws -> [String] {
         let revoked = { self.toolOutput("calls").split(separator: "\n").filter { $0.hasPrefix("auth session revoke ") }.map { String($0.dropFirst(20)) } }
         for _ in 0..<10 where revoked().isEmpty { try await Task.sleep(for: .milliseconds(100)) }
@@ -149,8 +139,6 @@ final class T3AuthTests: XCTestCase {
         try await auth(keychain).socketRequest(forceNewSession: forceNew).value(forHTTPHeaderField: "Authorization")
     }
 
-    /// The scope fba7276 added sent its first launch to sign in again over 32d9263's sign-in, and then delete that
-    /// item, which waited on a Keychain dialog and held the whole launch.
     func testOverAnOlderBuildsSignInWithTheOldScopesItSignsInAgainAndDeletesNothing() async throws {
         FakeServer.sessions = ["t-old": Self.oldScopes]
         let keychain = Keychain(build: "fixed", items: [(fromOldBuild, "32d9263")])
@@ -170,7 +158,6 @@ final class T3AuthTests: XCTestCase {
         XCTAssertEqual(keychain.deleted, [])
     }
 
-    /// The Mac as fba7276 left it: 32d9263's item, then the one fba7276 saved before it waited on the dialog.
     func testOverBothItemsItUsesTheNewestAndDeletesNothing() async throws {
         FakeServer.sessions = ["t-old": Self.oldScopes, "t-fba": Self.newScopes]
         let keychain = Keychain(build: "fixed", items: [(fromOldBuild, "32d9263"), (fromBadBuild, "fba7276")])
@@ -178,7 +165,6 @@ final class T3AuthTests: XCTestCase {
         XCTAssertEqual(used, "Bearer t-fba")
         XCTAssertEqual(keychain.deleted, [])
 
-        // fba7276 never got to revoke anything, but if T3 had, it signs in again, and still deletes nothing.
         FakeServer.sessions = ["t-old": Self.oldScopes]
         let revoked = Keychain(build: "fixed", items: [(fromOldBuild, "32d9263"), (fromBadBuild, "fba7276")])
         let usedAgain = try await signedIn(revoked)
@@ -198,7 +184,6 @@ final class T3AuthTests: XCTestCase {
         XCTAssertEqual(keychain.prompts, [])
     }
 
-    /// A saved sign-in T3 had revoked read as T3 not running, so the cat never signed in again.
     func testASignInT3RevokedMeansSigningInAgain() async throws {
         let keychain = Keychain(build: "fixed", items: [(fromOldBuild, "32d9263")])
         let used = try await signedIn(keychain)
@@ -206,8 +191,6 @@ final class T3AuthTests: XCTestCase {
         XCTAssertEqual(keychain.saved, ["new-1"])
     }
 
-    /// Copies built from source share a service but can't read each other's sign-ins, so each took the other's for one
-    /// an older build left and revoked it, then signed in again over it on every reconnect.
     func testTwoCopiesRunningAtOnceKeepTheirOwnSignIns() async throws {
         let service = Service()
         let x = auth(service.seenBy("x"), revokesWhatItCantRead: false)
@@ -223,8 +206,6 @@ final class T3AuthTests: XCTestCase {
         XCTAssertEqual(issued, 2, "each signs in once")
     }
 
-    /// The installed app is the only copy on its service, so a sign-in there it can't read was left by a build signed
-    /// differently, and goes from T3's list.
     func testTheInstalledAppRevokesASignInItCantRead() async throws {
         let service = Service()
         try service.seenBy("signed differently").save(T3Credential(sessionID: "left", token: "t-left"))

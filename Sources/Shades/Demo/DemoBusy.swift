@@ -1,17 +1,12 @@
 import Foundation
 import ShadesCore
 
-/// `busy` in the demo: hundreds of threads and long conversations, so Messages can be timed under a load like a real
-/// one. It's all made up from a few plain lines, the same every run.
 enum DemoBusy {
     private static let now = Date()
     private static let threadsPerKitten = 40
     private static let otherThreads = 500
     private static let talks = 30
-    /// One of Steve's threads goes on and on.
     static let longThread = "busy-steve-long"
-    /// Steve's oldest, which Messages doesn't read until you scroll back, ends with words no other thread has, so
-    /// Search can only find it by asking T3.
     static let onlyInT3 = "busy-steve-\(threadsPerKitten - 1)"
     static let onlyInT3Words = "The coupon box sits under the order summary now, where people look for it."
 
@@ -111,7 +106,6 @@ enum DemoBusy {
         return transcripts
     }()
 
-    /// One to six paragraphs, and now and then a long one that's cut short until you ask for more.
     private static func reply(_ seed: Int) -> String {
         let paragraphs = seed % 11 == 0 ? 16 : 1 + seed % 6
         return (0..<paragraphs).map { lines[(seed + $0 * 3) % lines.count] }.joined(separator: "\n\n")

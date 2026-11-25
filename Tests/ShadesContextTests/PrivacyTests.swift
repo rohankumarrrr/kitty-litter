@@ -2,7 +2,6 @@
 import ShadesCore
 import XCTest
 
-/// Stands in for the system and remembers what got read, so a test can show what never was.
 final class FakeSources: ContextSources, @unchecked Sendable {
     private let lock = NSLock()
     private var calls: [String] = []
@@ -260,7 +259,6 @@ final class BrowserStatusTests: XCTestCase {
         )
         XCTAssertNil(provider.takeJavaScriptTip())
 
-        // Remembered across launches, not just within this one.
         _ = try await provider.snapshot(CaptureOptions())
         XCTAssertNil(self.provider(sources, defaults: defaults).takeJavaScriptTip())
     }

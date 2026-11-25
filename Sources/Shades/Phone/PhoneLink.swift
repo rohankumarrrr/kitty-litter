@@ -2,23 +2,16 @@ import AppKit
 import ShadesContext
 import ShadesCore
 
-/// Messages on your phone: the page, a stream of what one place in Messages shows, and what you do there, which goes
-/// through the same `messagesAction` as the window. Only a paired phone gets past the page itself.
 @MainActor
 final class PhoneLink {
-    /// Where the page is on your tailnet, beside T3's own. On loopback it's a free port, whichever Shades has this time.
     static let port: UInt16 = 4797
 
     private final class Watcher {
         let stream: PhoneStream
-        /// The page it's for, which is a different one each time the page loads.
         let page: String?
         var key: String
         var shown: PhoneView?
-        /// A notification can open a thread Messages hasn't read yet, so a stream asks for the thread it opened with
-        /// until it shows.
         var opening: Bool
-        /// Where each thread's New line was when this page opened, so it stays put once it's all been seen.
         var newFrom: [String: String] = [:]
 
         init(stream: PhoneStream, page: String?, key: String) {
@@ -32,32 +25,22 @@ final class PhoneLink {
     let door: PhoneDoor
     let pushes: PhonePushes
     var onPaired: (() -> Void)?
-    /// Messages' text size, which the page takes the next time it opens.
     var textSize = TextSize.standard
-    /// What T3 Code's own page calls this Mac, for Open in T3, once T3 has said.
     var t3: String?
-    /// Reads the focus and the kittens' backlogs, which go only into what a paired phone is sent.
     var readPriorities: ([Kitten]) -> Priorities = { _ in Priorities() }
-    /// Whether a file could go where a place's box sends, as sending would decide, so + shows only where one would.
     var takesFiles: (MessageTarget) -> Bool = { $0.takesFiles }
     private var priorities = Priorities()
     private var prioritiesRead: Date?
     private let server = PhoneServer()
-    /// Holds Messages open, and returns what it shows.
     private let hold: () -> ChannelBook?
-    /// Lets it go once nobody's looking.
     private let release: () -> Void
     private let act: (MessagesAction) -> Void
     private let now: () -> Date
-    /// How long Messages stays open after the last phone stops looking. Each place on the page is a stream of its
-    /// own, so moving from one to the next would otherwise close it in between, and forget what you'd just sent.
     private let grace: TimeInterval
     private var watchers: [Watcher] = []
     private var book: ChannelBook?
     private var letting: Task<Void, Never>?
-    /// Photos and files a phone sent ahead of its message, by the ID it was given, in memory only and briefly.
     private var files: [String: (file: Drop, at: Date)] = [:]
-    /// What Search has read of messages' words, while a phone is looking.
     private var plainWords = PlainWords()
     private static let filesKept = Drop.mostAtOnce
     private static let fileMinutes: TimeInterval = 10
@@ -81,7 +64,6 @@ final class PhoneLink {
         server.respond = { [weak self] in self?.respond(to: $0) ?? .status(404) }
     }
 
-    /// Returns the port it's listening on.
     func start(port: UInt16) async throws -> UInt16 {
         try await server.start(port: port)
     }
@@ -96,11 +78,9 @@ final class PhoneLink {
 
     var isWatched: Bool { !watchers.isEmpty }
 
-    /// Whether a phone is holding Messages open, because it's looking or has only just stopped.
     var isHolding: Bool { book != nil }
 
 
-    /// Messages changed, so each phone gets what its place shows now, if that's different.
     func publish(_ book: ChannelBook) {
         guard self.book != nil else { return }
         self.book = book
@@ -121,7 +101,6 @@ final class PhoneLink {
         watcher.stream.send(parts)
     }
 
-    /// As the window does, read again at most once a minute, and kept only in memory.
     private func priorities(for book: ChannelBook) -> Priorities {
         if prioritiesRead.map({ now().timeIntervalSince($0) >= 60 }) ?? true {
             priorities = readPriorities(book.statuses.map(\.kitten).filter { !$0.planned })
@@ -138,14 +117,13 @@ final class PhoneLink {
             return .full(status: 200, type: "text/javascript; charset=utf-8", body: Data(PhonePage.script.utf8))
         case ("GET", "/app.css"):
             return .full(status: 200, type: "text/css; charset=utf-8", body: Data((PhonePage.style + PhonePage.colors + PhonePage.size(textSize)).utf8))
-        // What a phone needs to keep the page on its Home Screen, and to show notifications while it's closed.
         case ("GET", "/manifest.json"):
             return .full(status: 200, type: "application/manifest+json", body: Data(PhonePage.manifest.utf8))
         case ("GET", "/sw.js"):
             return .full(status: 200, type: "text/javascript; charset=utf-8", body: Data(PhonePage.worker.utf8))
         case ("GET", "/icon.png"):
             return .full(status: 200, type: "image/png", body: Self.icon)
-        // Like the icon, an image can't carry the key, so these are only ever the art for the colour asked for.
+        // Outside the repo: a browser's image request can't carry the key's header.
         case ("GET", let path) where path.hasPrefix("/cat/"):
             return cat(at: path)
         case ("GET", "/hello"):
@@ -171,8 +149,7 @@ final class PhoneLink {
         }
     }
 
-    /// Only the page sends this header, and another site's page can't without asking first, which nothing here allows.
-    /// That keeps another site from using up a pairing code by guessing.
+    // Outside the repo: another site's page can't send this header or a JSON body without a CORS preflight, which this server never allows.
     private static func isFromPage(_ request: PhoneServer.Request) -> Bool {
         request.headers["x-shades"] == "1" && request.headers["content-type"]?.hasPrefix("application/json") == true
     }
@@ -193,8 +170,6 @@ final class PhoneLink {
     }
 
     private func watch(_ key: String, page: String?) -> PhoneServer.Response {
-        // A page only starts a stream once it's stopped reading the last one. One a phone left behind on the lock
-        // screen still takes what's sent to it, so nothing else would end it, and enough of them fill the server.
         if let page { watchers.filter { $0.page == page }.forEach { $0.stream.close() } }
         let stream = PhoneStream()
         let watcher = Watcher(stream: stream, page: page, key: key)
@@ -217,7 +192,6 @@ final class PhoneLink {
         return .stream(stream)
     }
 
-    /// As when the window closes, nothing that was said is kept once nobody's looking.
     private func forget() {
         guard book != nil else { return }
         book = nil
@@ -232,14 +206,11 @@ final class PhoneLink {
         return pushes.subscribe(subscription) ? .status(204) : .status(400)
     }
 
-    /// Drawn fresh every time and kept nowhere. Anyone who can reach the page can ask for any colour, so a cache would
-    /// grow with what strangers ask for, and answer faster for the cats a phone just loaded, which would give them away.
     private func cat(at path: String) -> PhoneServer.Response {
         guard let drawn = PhoneCat.png(at: path) else { return .status(404) }
         return .full(status: 200, type: "image/png", body: drawn)
     }
 
-    /// The app's own icon, at the size a Home Screen wants.
     private static let icon: Data = {
         let side = 180
         let image = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
@@ -258,13 +229,10 @@ final class PhoneLink {
 
     private func perform(_ request: PhoneServer.Request) -> PhoneServer.Response {
         guard Self.isFromPage(request), let ask = try? JSONDecoder().decode(PhoneAsk.self, from: request.body) else { return .status(400) }
-        // A photo or file taken off before sending goes now, so it can't push out one still attached.
         if ask.act == "unattach" {
             if let id = ask.id { files[id] = nil }
             return .status(204)
         }
-        // Messages is only open while a phone is looking, and what's done is checked against what it shows. Nobody
-        // looking isn't the same as something having changed, since the page can start looking again and ask once more.
         guard let book else { return .status(503) }
         guard let (action, opens) = ask.action(in: book, newTopic: { "sent-\(UUID().uuidString)" }, file: { [files] in files[$0]?.file }) else { return .status(409) }
         for id in ask.files ?? [] { files[id] = nil }
@@ -276,8 +244,6 @@ final class PhoneLink {
         var words: String
     }
 
-    /// Search over what Messages has read, kept to what a phone can open. As with `/act`, Messages is only open while
-    /// a phone is looking, and nothing it was asked or found is kept.
     private func search(_ request: PhoneServer.Request) -> PhoneServer.Response {
         guard Self.isFromPage(request), let search = try? JSONDecoder().decode(Search.self, from: request.body) else { return .status(400) }
         guard let book else { return .status(503) }
@@ -288,7 +254,6 @@ final class PhoneLink {
         var id: String
     }
 
-    /// A photo or file, sent ahead so the message itself stays small. Only the page sends the header, as with `/act`.
     private func keep(_ request: PhoneServer.Request) -> PhoneServer.Response {
         guard request.headers["x-shades"] == "1", !request.body.isEmpty else { return .status(400) }
         let named = request.headers["x-name"]?.removingPercentEncoding?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

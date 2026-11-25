@@ -4,7 +4,6 @@ import ShadesCore
 import UserNotifications
 import XCTest
 
-/// The kittens view, the pairing code and the notifications, held to how a Mac does the same things.
 @MainActor
 final class PanelsTests: XCTestCase {
     private let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "jobs", folder: "/k/steve")

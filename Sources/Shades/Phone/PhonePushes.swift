@@ -1,16 +1,11 @@
 import CryptoKit
 import Foundation
 
-/// Notifications on paired phones. Each says only who and what kind, as on the Mac, since a phone shows it on the
-/// lock screen and its push service carries it. Where each phone takes them, and the key Shades signs them with, are
-/// kept in the Keychain, since either would let something else send to your phone as Shades.
 @MainActor
 final class PhonePushes {
-    /// Enough for every phone and browser you'd pair, and no more for a phone to pile up.
     private static let most = 8
 
     private let keys: PhoneKeyStoring
-    /// Sends one request, and returns its status, or `nil` if it didn't get anywhere.
     private let send: (URLRequest) async -> Int?
     private var subscriptions: [WebPush.Subscription]
     private var signingKey: P256.Signing.PrivateKey?
@@ -21,15 +16,12 @@ final class PhonePushes {
         subscriptions = keys.load(PhoneKeys.pushes).compactMap { try? JSONDecoder().decode(WebPush.Subscription.self, from: Data($0.utf8)) }
     }
 
-    /// What a phone subscribes with, so its push service only takes notifications Shades signed.
     var publicKey: String {
         WebPush.string(signing.publicKey.x963Representation)
     }
 
-    /// Whether it's somewhere a phone's notifications can go. Subscribing again replaces the one before.
     func subscribe(_ subscription: WebPush.Subscription) -> Bool {
         guard subscription.isValid else { return false }
-        // A phone coming back posts the same one each time, which changes nothing, whatever order its JSON came in.
         guard subscriptions.last != subscription else { return true }
         subscriptions.removeAll { $0.endpoint == subscription.endpoint }
         subscriptions = Array((subscriptions + [subscription]).suffix(Self.most))
@@ -37,7 +29,6 @@ final class PhonePushes {
         return true
     }
 
-    /// Fire and forget, with the page a tap opens. A phone whose push service says it's gone stops getting them.
     @discardableResult
     func push(_ alert: NeedsYouAlert, opening key: String, now: Date) -> Task<Void, Never>? {
         guard !subscriptions.isEmpty else { return nil }

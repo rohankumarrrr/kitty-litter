@@ -2,12 +2,8 @@ import AppKit
 @testable import Shades
 import XCTest
 
-/// Words selected in Messages read on whatever they sit on, with or without the keyboard. Without it, which is most of
-/// the time since Messages never makes Shades the active app, AppKit used to swap in its own grey, and black words on a
-/// kitten's bubble went under it like a redaction.
 @MainActor
 final class SelectionTests: XCTestCase {
-    /// Every surface words sit on in Messages, with the words on it.
     private var surfaces: [(name: String, surface: UInt32, words: UInt32)] {
         let opal: [(String, UInt32, UInt32)] = [
             ("body on the page", Opal.page, Opal.body),
@@ -17,7 +13,6 @@ final class SelectionTests: XCTestCase {
             ("the cat's grey bubble", Opal.controlHover, Opal.body),
             ("a hovered row", Opal.raised, Opal.body),
         ]
-        // A kitten's bubble is in its colour, with whichever of black and white reads better on it.
         let kittens = Opal.kittens.map { ("a kitten's \(Opal.hex($0)) bubble", $0, Opal.contrast($0, 0x000000) >= Opal.contrast($0, 0xffffff) ? UInt32(0x000000) : 0xffffff) }
         return opal + kittens
     }
@@ -28,7 +23,6 @@ final class SelectionTests: XCTestCase {
             let fill = try Self.hex(XCTUnwrap(selection[.backgroundColor] as? NSColor))
             let selected = try Self.hex(XCTUnwrap(selection[.foregroundColor] as? NSColor))
             XCTAssertGreaterThanOrEqual(Opal.contrast(selected, fill), 4.5, "selected \(name) is \(Opal.hex(selected)) on \(Opal.hex(fill))")
-            // It has to look selected too: either the fill or the words stand out from what was there.
             let shows = max(Opal.contrast(fill, surface), Opal.contrast(selected, words))
             XCTAssertGreaterThanOrEqual(shows, 3, "a selection of \(name) hardly shows")
         }
@@ -59,7 +53,6 @@ final class SelectionTests: XCTestCase {
         return [srgb.redComponent, srgb.greenComponent, srgb.blueComponent].reduce(UInt32(0)) { $0 << 8 | UInt32((min(max($1, 0), 1) * 255).rounded()) }
     }
 
-    /// The colour most of `rect` is drawn in, which behind a few words is what's under them.
     private static func commonest(in rect: NSRect, of bitmap: NSBitmapImageRep) -> UInt32 {
         let scale = CGFloat(bitmap.pixelsWide) / bitmap.size.width
         var counts: [UInt32: Int] = [:]
@@ -71,7 +64,6 @@ final class SelectionTests: XCTestCase {
         return counts.max { $0.value < $1.value }?.key ?? 0
     }
 
-    /// The largest difference in any one channel, out of 255.
     private static func distance(_ a: UInt32, _ b: UInt32) -> Int {
         [16, 8, 0].map { abs(Int((a >> $0) & 0xff) - Int((b >> $0) & 0xff)) }.max() ?? 0
     }

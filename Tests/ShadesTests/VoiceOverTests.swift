@@ -60,7 +60,6 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertNil(BubbleContent.reply(text: "Half", done: false, threadID: nil, note: nil).spoken, "an answer is read once it's whole")
     }
 
-    /// Somewhere no screen reaches, so a window a test shows is never on yours.
     private let away = NSRect(x: -20_000, y: -20_000, width: 800, height: 600)
 
     func testTheBubbleSaysEachThingOnceAsItShows() {

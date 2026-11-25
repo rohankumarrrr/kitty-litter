@@ -15,14 +15,11 @@ enum Bench {
     }
 
     static func rawWords(_ utterance: Utterance, _ hypothesis: String) -> (reference: [String], hypothesis: [String]) {
-        // Scored against whichever way of writing it the transcript is closest to.
         let hyp = Metrics.words(hypothesis)
         let candidates = [utterance.verbatim, utterance.written].compactMap { $0 }.map(Metrics.words)
         let best = candidates.min { Metrics.edits($0, hyp) < Metrics.edits($1, hyp) } ?? candidates[0]
         return (best, hyp)
     }
-
-    // MARK: - Recognizers
 
     static func version(_ name: String) -> AsrModelVersion? {
         switch name {
@@ -80,9 +77,6 @@ enum Bench {
         }
     }
 
-    // MARK: - Cleanup
-
-    /// A transcript of every clip from one recognizer.
     static func transcribeAll(_ loaded: [Loaded], version: AsrModelVersion) async throws -> [String] {
         let models = try await AsrModels.downloadAndLoad(version: version)
         let manager = AsrManager(config: .default)
@@ -254,8 +248,6 @@ enum Bench {
         """
     }
 
-    // MARK: - Vocabulary
-
     static func compareVocabulary(_ args: [String]) async throws {
         let loaded = try loadClips()
         let technical = loaded.filter { $0.clip.utterance.kind == .technical }
@@ -269,7 +261,6 @@ enum Bench {
             ("boost 3, similarity 0.55", .init(boost: 3, minimumSimilarity: 0.55)),
             ("boost 4.5, similarity 0.5", .init(boost: 4.5, minimumSimilarity: 0.5)),
         ]
-        // Sound-alike names nobody says in these clips, to count wrong replacements.
         let words = args.contains("--distractors")
             ? ["Tuist", "Qualtrics", "Codex", "Sora", "Linear", "Notion", "Cursor", "Bun", "Deno", "Zed", "Vercel", "Supabase", "Rohan", "Karpathy", "Anthropic"]
             : Corpus.vocabulary
@@ -310,9 +301,6 @@ enum Bench {
         }
     }
 
-    // MARK: - Clipping
-
-    /// How much of the start of speech can be lost before the first word suffers.
     static func clipping(_ args: [String]) async throws {
         let loaded = try loadClips(voices: ["Samantha", "Daniel", "Karen"])
         let recognizer = ParakeetRecognizer(model: .ultra)
@@ -339,15 +327,11 @@ enum Bench {
         }
     }
 
-    /// Where the first real sound starts, skipping the silence `say` puts at the front.
     private static func firstSound(_ samples: [Float]) -> Int {
         let threshold: Float = 0.01
         return samples.firstIndex { abs($0) > threshold } ?? 0
     }
 
-    // MARK: - Partials
-
-    /// What live text costs: the batch model re-reading the growing audio, against a dedicated streaming model.
     static func partials(_ args: [String]) async throws {
         let loaded = try loadClips(voices: ["Samantha", "Daniel"])
         let memoryBefore = Metrics.footprintMB()
@@ -402,9 +386,6 @@ enum Bench {
         }
     }
 
-    // MARK: - Nothing said
-
-    /// Whether the recognizer imagines words in silence and room noise.
     static func silence(_ args: [String]) async throws {
         let recognizer = ParakeetRecognizer(model: .ultra)
         try await recognizer.load { _ in }
@@ -419,8 +400,6 @@ enum Bench {
             }
         }
     }
-
-    // MARK: - One file
 
     static func transcribe(_ args: [String]) async throws {
         guard let path = args.first else { return }

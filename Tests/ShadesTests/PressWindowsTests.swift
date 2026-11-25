@@ -4,12 +4,8 @@ import ShadesContext
 import ShadesCore
 import XCTest
 
-/// The cat's bubble, the Ask box, the kittens view, pairing, Settings and the menu bar, each control pressed the way a
-/// mouse and keyboard press it, through `Press`, in panels that never reach the screen.
 @MainActor
 final class PressWindowsTests: XCTestCase {
-    /// A panel that never reaches the screen. It says it's showing once it's asked to, and has the keyboard once a test
-    /// says it does, to AppKit too.
     private final class HiddenPanel: QuietPanel {
         var key = false {
             didSet { Press.keyWindow = key ? self : nil }
@@ -85,15 +81,11 @@ final class PressWindowsTests: XCTestCase {
         try XCTUnwrap(subviews(of: view).compactMap { $0 as? QuietButton }.first { $0.accessibilityLabel() == title }, "no button [\(title)]", file: file, line: line)
     }
 
-    /// Clicks it where it is, after checking that a click at its centre lands on it and not on something over it.
     private func click(_ control: NSView, _ name: String, file: StaticString = #filePath, line: UInt = #line) throws {
         XCTAssertTrue(try Press.hit(control, file: file, line: line) === control, "a click lands on \(name)", file: file, line: line)
         try Press.click(control, file: file, line: line)
     }
 
-    // MARK: - The bubble
-
-    /// The bubble as the app wires it to the controller, in a panel that never reaches the screen.
     private func bubble() -> (BubbleController, HiddenPanel) {
         let panel = HiddenPanel(allowsKey: true)
         let bubble = BubbleController(panel: panel)
@@ -104,7 +96,6 @@ final class PressWindowsTests: XCTestCase {
         return (bubble, panel)
     }
 
-    /// Until buttons that start, allow or change things take clicks, however long past their delay a busy runner holds that up.
     private func waitForArming(_ button: QuietButton) {
         runMainLoop { button.isArmed }
     }
@@ -178,7 +169,6 @@ final class PressWindowsTests: XCTestCase {
         XCTAssertEqual(stage.selections.last, .activity)
     }
 
-    /// What has the keyboard after each Tab from the bubble's words, once a click into them has given it the keyboard.
     private func tabs(through bubble: BubbleController, _ panel: HiddenPanel) throws -> [String] {
         panel.key = true
         XCTAssertTrue(panel.makeFirstResponder(bubble.view.textView), "a click into its words")
@@ -192,7 +182,6 @@ final class PressWindowsTests: XCTestCase {
         return reached
     }
 
-    /// Clicking into its words gives the bubble the keyboard, and from there Tab goes round its buttons and Space presses one.
     func testTabFromTheBubblesWordsReachesItsButtonsAndSpacePressesOne() async throws {
         QuietFocus.fullKeyboardAccess = { true }
         let (bubble, panel) = bubble()
@@ -236,16 +225,12 @@ final class PressWindowsTests: XCTestCase {
         XCTAssertEqual(backend.responses.map(\.1), [.accept], "Space on Allow allows")
     }
 
-    /// Words that can't be selected, such as what came in while you were away, never give the bubble the keyboard.
     func testABubbleWithNothingToSelectNeverTakesTheKeyboard() throws {
         let (bubble, _) = bubble()
         bubble.show(.inbox("Steve finished something."))
         XCTAssertFalse(bubble.view.textView.needsPanelToBecomeKey)
     }
 
-    // MARK: - The Ask box
-
-    /// The Ask box as the app wires it, in a panel that never reaches the screen, showing what the controller asked it to.
     private func askBox() async throws -> (InputPanel, HiddenPanel) {
         let panel = HiddenPanel(allowsKey: true)
         let input = InputPanel(panel: panel)
@@ -302,13 +287,12 @@ final class PressWindowsTests: XCTestCase {
         XCTAssertEqual(stage.listeningIn, .ask)
     }
 
-    /// Ctrl-Tab leaves the box for its mic, as it leaves a box anywhere on the Mac, and Space presses it.
     func testCtrlTabFromTheAskBoxReachesItsMicAndSpacePressesIt() async throws {
         QuietFocus.fullKeyboardAccess = { true }
         controller.askPressed()
         await controller.flow?.value
         let (input, panel) = try await askBox()
-        // AppKit works out Tab's way round a window as it first shows, which this one never does.
+        // Outside the repo: AppKit works out a window's Tab loop as it first shows, which this panel never does.
         panel.recalculateKeyViewLoop()
         try Press.key("\t", keyCode: 48, modifiers: .control, on: try field(panel))
         XCTAssertTrue(panel.firstResponder === input.mic, "Ctrl-Tab went to \(panel.firstResponder.map { "\(type(of: $0))" } ?? "nothing")")
@@ -316,7 +300,6 @@ final class PressWindowsTests: XCTestCase {
         XCTAssertEqual(voice.began, 1)
     }
 
-    /// A file dropped on the cat shows by its name in the box, and Return with nothing typed asks for a summary of it.
     func testADroppedFileShowsInTheAskBoxAndReturnAsksAboutIt() async throws {
         controller.dropped(ScreenSnapshot(pageText: "Week 1: cats.", droppedNames: ["syllabus.pdf"]))
         await controller.flow?.value
@@ -328,8 +311,6 @@ final class PressWindowsTests: XCTestCase {
         await settle()
         XCTAssertTrue(backend.sent.first?.prompt.text.contains("Week 1: cats.") == true, "it goes with the question: \(backend.sent.map(\.prompt.text))")
     }
-
-    // MARK: - The kittens
 
     func testEachKittensTileOpensWhereItsWorkIs() throws {
         kittens = [steve, pepper]
@@ -350,7 +331,6 @@ final class PressWindowsTests: XCTestCase {
         }
     }
 
-    /// The kittens view never takes the keyboard, so the app you're in keeps it. VoiceOver presses a tile the same way.
     func testVoiceOverPressesAKittensTileAndTabNeverReachesOne() throws {
         kittens = [steve]
         QuietFocus.fullKeyboardAccess = { true }
@@ -365,9 +345,6 @@ final class PressWindowsTests: XCTestCase {
         XCTAssertEqual(stage.selections.last, .channel(.of(steve)))
     }
 
-    // MARK: - Pairing
-
-    /// A controller with the phone page on, serving on a loopback port, as `PhoneServerTests` runs it.
     private func phoneController() async throws -> (AppController, FakeStage, UInt16) {
         let stage = FakeStage(log: Log())
         var settings = Settings()
@@ -397,7 +374,6 @@ final class PressWindowsTests: XCTestCase {
         for _ in 0..<2000 where !condition() { try? await Task.sleep(nanoseconds: 2_000_000) }
     }
 
-    /// What the phone page gets for typing this code, as it sends it.
     private func pairs(_ code: String, port: UInt16) async throws -> Int {
         var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/pair")!)
         request.httpMethod = "POST"
@@ -408,7 +384,6 @@ final class PressWindowsTests: XCTestCase {
         return (response as? HTTPURLResponse)?.statusCode ?? 0
     }
 
-    /// The pairing code shows, its picture scans to the page with the same code, and Cancel stops the code working.
     func testThePairingCodeShowsAndScansAndCancelStopsIt() async throws {
         let (controller, stage, port) = try await phoneController()
         let card = try XCTUnwrap(stage.pairings.last ?? nil)
@@ -433,8 +408,6 @@ final class PressWindowsTests: XCTestCase {
         XCTAssertNotEqual(status, 200, "the code stops working once it's gone")
     }
 
-    // MARK: - Settings
-
     private func settingsPanel(on page: SettingsPanel.Page = .agents) -> (SettingsPanel, HiddenPanel) {
         let panel = HiddenPanel(allowsKey: true)
         let settings = SettingsPanel(panel: panel)
@@ -455,7 +428,6 @@ final class PressWindowsTests: XCTestCase {
         try XCTUnwrap(subviews(of: settings.panel.contentView).first { $0.accessibilityIdentifier() == id || $0.accessibilityLabel() == id }, "no control [\(id)]", file: file, line: line)
     }
 
-    /// What a control is called, as the demo and VoiceOver find it, or a box's for its field editor.
     private func name(_ responder: NSResponder?) -> String {
         let view = (responder as? NSTextView).flatMap { $0.isFieldEditor ? $0.delegate as? NSView : nil } ?? responder as? NSView
         guard let view else { return "nothing" }
@@ -463,7 +435,6 @@ final class PressWindowsTests: XCTestCase {
         return view.accessibilityLabel() ?? "\(Swift.type(of: view))"
     }
 
-    /// Every control Tab reaches on the page, from where the keyboard is now, once round.
     private func tabRound(_ panel: HiddenPanel) throws -> [String] {
         var reached: [String] = []
         for _ in 0..<40 {
@@ -475,7 +446,6 @@ final class PressWindowsTests: XCTestCase {
         return reached
     }
 
-    /// Tab until this control has the keyboard.
     private func tab(to id: String, in panel: HiddenPanel, file: StaticString = #filePath, line: UInt = #line) throws {
         for _ in 0..<40 where name(panel.firstResponder) != id {
             try Press.key("\t", keyCode: 48, on: try XCTUnwrap(panel.firstResponder as? NSView, file: file, line: line))
@@ -517,7 +487,7 @@ final class PressWindowsTests: XCTestCase {
         }
     }
 
-    /// A menu waits in its own loop for a pick, so each is checked to take the click, then picked from straight.
+    // Outside the repo: an open NSMenu runs its own tracking loop, which would hold the test.
     func testEveryMenuInSettingsSetsWhatYouPick() throws {
         let menus: [(SettingsPanel.Page, String, [String], (Settings) -> String)] = [
             (.agents, "Front door mode", RuntimeMode.allCases.map { "\($0)" }, { "\($0.quickMode)" }),
@@ -539,8 +509,7 @@ final class PressWindowsTests: XCTestCase {
         }
     }
 
-    /// Clicking into a box would hold the test in the box's own loop while it selects, so the box is given the keyboard
-    /// the way that click gives it, after checking the click would land there.
+    // Outside the repo: a press on text starts AppKit's selection loop, which waits for a real mouse-up.
     func testEveryBoxInSettingsTakesWhatsTypedWhenReturnIsPressed() throws {
         let boxes: [(SettingsPanel.Page, String, String, (Settings) -> String)] = [
             (.agents, "Front door model", "claudeAgent / claude-sonnet-5-5 / low", { "\($0.quickModel.provider) / \($0.quickModel.model) / \($0.quickModel.effort)" }),
@@ -592,7 +561,6 @@ final class PressWindowsTests: XCTestCase {
         }
     }
 
-    /// Each choice side by side is picked where it's clicked, and with the arrow keys once Tab has reached it.
     func testEachSegmentInSettingsPicksItsChoiceByClickAndByArrow() throws {
         QuietFocus.fullKeyboardAccess = { true }
         let (settings, panel) = settingsPanel(on: .messages)
@@ -681,8 +649,6 @@ final class PressWindowsTests: XCTestCase {
         }
     }
 
-    /// Font and each channel's notifications make their menu as it opens, so there's no menu to pick from without
-    /// opening it, which a test can't do. This checks a click lands on each.
     func testAClickLandsOnFontAndEachChannelsNotifications() throws {
         kittens = [steve]
         let (settings, _) = settingsPanel(on: .notifications)
@@ -695,9 +661,6 @@ final class PressWindowsTests: XCTestCase {
         XCTAssertTrue(try Press.hit(font) === font)
     }
 
-    // MARK: - The menu bar
-
-    /// The menu bar's items, wired to the controller as the app wires them.
     private func menuBar() -> MenuBar {
         let bar = MenuBar()
         bar.onAsk = { [unowned controller] in controller!.askPressed() }
@@ -716,7 +679,6 @@ final class PressWindowsTests: XCTestCase {
         return bar
     }
 
-    /// An item runs once the menu has closed, so it's waited for.
     private func choose(_ title: String, in bar: MenuBar) async throws {
         let item = try XCTUnwrap(bar.shownItems.first { $0.title == title }, "no item [\(title)]")
         XCTAssertTrue(item.isEnabled, title)
@@ -753,7 +715,6 @@ final class PressWindowsTests: XCTestCase {
         XCTAssertEqual(ran, 1)
     }
 
-    /// Picked from Lockdown's submenu, the way a person moves into it and clicks.
     private func choose(_ title: String, under parent: String, in bar: MenuBar) async throws {
         let row = try XCTUnwrap(bar.shownItems.first { $0.title == parent }, "no item [\(parent)]")
         let submenu = try XCTUnwrap(row.submenu, "[\(parent)] has no submenu")
@@ -808,7 +769,6 @@ final class PressWindowsTests: XCTestCase {
         XCTAssertNotNil(stage.pairings.last ?? nil)
     }
 
-    /// While the menu is open, each shortcut it shows chooses its item.
     func testEachShortcutTheMenuShowsChoosesItsItem() async throws {
         let bar = menuBar()
         for (title, shortcut) in [(CatWords.appName, Shortcut.messages), ("Ask…", .ask), ("Fix What I'm Looking At", .fix)] {

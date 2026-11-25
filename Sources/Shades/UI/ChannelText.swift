@@ -1,17 +1,12 @@
 import AppKit
 
-/// A message's markdown as Messages draws it. A link is underlined and only says where it goes: pressing it asks
-/// before anything opens, in the pane's link bar.
 enum ChannelMarkdown {
     static var font: NSFont { MessagesInk.font(ofSize: MessagesInk.body) }
     private static var codeFont: NSFont { .monospacedSystemFont(ofSize: MessagesInk.body - 1, weight: .regular) }
     static let copyRoom: CGFloat = 22
-    /// More cells than this take seconds to lay out as a table, so a bigger one is drawn as text, the way code is.
     static let largestTable = 400
-    /// How many lists deep an item's indent goes, so a deep one still has room for its words.
     private static let deepestIndent = 3
 
-    /// GitHub's own colours for a pull request's state, which read the same on any bubble and any theme.
     static func chipColor(_ state: String?) -> NSColor {
         switch state {
         case "open": return Ink.hex(0x1f883d)
@@ -31,7 +26,6 @@ enum ChannelMarkdown {
             let style = NSMutableParagraphStyle()
             style.lineSpacing = 2
             style.paragraphSpacing = 6
-            // A table's own margin doesn't count, so what follows one keeps its distance itself.
             if index > 0, markup.blocks[index - 1].kind == .table { style.paragraphSpacingBefore = 8 }
             switch block.kind {
             case .paragraph:
@@ -76,14 +70,12 @@ enum ChannelMarkdown {
                 result.append(NSAttributedString(string: "\u{200B}\n", attributes: [.font: MessagesInk.font(ofSize: 4), .paragraphStyle: style]))
             }
         }
-        // Each block ends its own paragraph, and the last one ends the message.
         if result.string.hasSuffix("\n") { result.deleteCharacters(in: NSRange(location: result.length - 1, length: 1)) }
         return result
     }
 
     private static func code(_ code: String, color: NSColor, style: NSMutableParagraphStyle) -> NSAttributedString {
         let block = NSTextBlock(fill: color.withAlphaComponent(0.08), padding: 8, color: color)
-        // Room above the code for its Copy button.
         block.setWidth(copyRoom, type: .absoluteValueType, for: .padding, edge: .minY)
         style.textBlocks = [block]
         style.paragraphSpacing = 0
@@ -93,7 +85,6 @@ enum ChannelMarkdown {
         ])
     }
 
-    /// Words ending in a newline, so the next block starts a paragraph of its own.
     private static func line(_ spans: [Markup.Span], color: NSColor, style: NSParagraphStyle, font: NSFont = font) -> NSAttributedString {
         let result = NSMutableAttributedString()
         for span in spans { result.append(attributed(span, color: color, style: style, font: font)) }
@@ -116,7 +107,6 @@ enum ChannelMarkdown {
             attributes[.toolTip] = link.absoluteString
             attributes[.cursor] = NSCursor.pointingHand
             if let pull = span.pull {
-                // A chip, kept on one line, in its state's colour.
                 text = "\u{00A0}" + ([text] + [pull.state].compactMap { $0 }).joined(separator: " · ").replacingOccurrences(of: " ", with: "\u{00A0}") + "\u{00A0}"
                 runFont = MessagesInk.font(ofSize: font.pointSize - 1, weight: .semibold)
                 attributes[.foregroundColor] = NSColor.white
@@ -153,20 +143,16 @@ enum ChannelMarkdown {
 }
 
 extension NSAttributedString.Key {
-    /// On a code block's words: the code, for its Copy button.
     static let channelCode = NSAttributedString.Key("ShadesChannelCode")
-    /// On a pull request's chip: the colour it's drawn in.
     static let channelChip = NSAttributedString.Key("ShadesChannelChip")
 }
 
-/// One code block's code. Each is its own object, so two blocks with the same code are still two blocks.
 final class ChannelCode: NSObject {
     let text: String
     init(_ text: String) { self.text = text }
 }
 
 private extension NSTextBlock {
-    /// As wide as the words can go, which every block in a bubble is.
     convenience init(fill: NSColor?, padding: CGFloat, color: NSColor) {
         self.init()
         setValue(100, type: .percentageValueType, for: .width)
@@ -176,10 +162,8 @@ private extension NSTextBlock {
     }
 }
 
-/// Draws each pull request's chip as a pill behind its words, and a selection the same with or without the keyboard.
 private final class ChipLayoutManager: NSLayoutManager {
-    /// What AppKit fills a selection with while the window doesn't have the keyboard, which is most of the time, since
-    /// Messages never makes Shades the active app. Its grey hid words coloured for `MessagesInk.selection(on:)`.
+    // Outside the repo: AppKit fills a selection with these greys while its window isn't key.
     private static let systemSelection: [NSColor] = [.unemphasizedSelectedContentBackgroundColor, .unemphasizedSelectedTextBackgroundColor]
 
     override func fillBackgroundRectArray(_ rectArray: UnsafePointer<NSRect>, count rectCount: Int, forCharacterRange charRange: NSRange, color: NSColor) {
@@ -192,7 +176,6 @@ private final class ChipLayoutManager: NSLayoutManager {
     }
 
     override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
-        // Chips first, so a selection shows over them, as their words are coloured for it then.
         defer { super.drawBackground(forGlyphRange: glyphsToShow, at: origin) }
         guard let storage = textStorage, let container = textContainers.first else { return }
         let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
@@ -207,10 +190,6 @@ private final class ChipLayoutManager: NSLayoutManager {
     }
 }
 
-/// Some text laid out at one width, cut short to a number of lines if asked, in a text view you can select and copy
-/// from. Pressing in it gives Messages the keyboard, the way pressing in the box does, which still leaves your app in
-/// front, so Command-C has somewhere to go. It's measured without a view, and only gets one once the row it's in is
-/// shown, since most of a long conversation never is.
 final class ChannelTextBlock {
     private let layoutManager: NSLayoutManager = ChipLayoutManager()
     private let container = NSTextContainer()
@@ -219,14 +198,10 @@ final class ChannelTextBlock {
     private var origin = NSPoint.zero
     private var fitted: (width: CGFloat, maxLines: Int?)?
     private(set) var height: CGFloat = 0
-    /// The widest line, so a bubble can be no wider than its words.
     private(set) var width: CGFloat = 0
-    /// Where the words end, which for centred words is past `width`.
     private var right: CGFloat = 0
     private(set) var isCut = false
-    /// Code, a table or a quote, which take the whole width, as they would on a page.
     private let hasBlocks: Bool
-    /// Where words with blocks are cut, which their view stops drawing at.
     private var cutAt: CGFloat = 0
 
     init(_ text: NSAttributedString) {
@@ -244,23 +219,19 @@ final class ChannelTextBlock {
         self.hasBlocks = hasBlocks
     }
 
-    /// Lays the words out `width` wide, cut to `maxLines` once they're a third longer than that, since a Show more
-    /// that hides only a few lines is no help.
     @discardableResult
     func fit(width: CGFloat, maxLines: Int? = nil) -> CGFloat {
         if let fitted, fitted.width == width, fitted.maxLines == maxLines { return height }
         fitted = (width, maxLines)
         container.size = NSSize(width: width, height: .greatestFiniteMagnitude)
         let cutPast = maxLines.map { $0 + $0 / 3 }
-        // One line past the most it can show whole is enough to tell it's cut, however long it goes on. TextKit
-        // never finishes stopping partway through a code block or table, so words with those are laid out whole.
+        // Outside the repo: TextKit never finishes a layout that stops partway through a code block or table.
         container.maximumNumberOfLines = hasBlocks ? 0 : cutPast.map { $0 + 1 } ?? 0
         container.lineBreakMode = .byWordWrapping
         isCut = false
         let rects = lineRects
         let lines = rects.map(\.width)
         if let maxLines, let cutPast, lines.count > cutPast {
-            // A blank line at the end would look like the end of the message, so it stops short of one.
             let lastWithWords = lines.prefix(maxLines).lastIndex { $0 > 0 } ?? maxLines - 1
             if !hasBlocks {
                 container.maximumNumberOfLines = lastWithWords + 1
@@ -271,10 +242,8 @@ final class ChannelTextBlock {
         }
         layoutManager.ensureLayout(for: container)
         height = hasBlocks && isCut ? cutAt : ceil(layoutManager.usedRect(for: container).height)
-        // With a text view on it, the used rect is as wide as the container, so the lines say how wide the words are.
         let shown = lineRects
         right = hasBlocks ? width : ceil(shown.map(\.maxX).max() ?? 0)
-        // From the line that starts furthest left, so a list's indent counts and centred words don't.
         self.width = hasBlocks ? width : right - floor(shown.map(\.minX).min() ?? 0)
         return height
     }
@@ -283,34 +252,27 @@ final class ChannelTextBlock {
         if let textView { return textView }
         let view = ChannelTextView(frame: .zero, textContainer: container)
         view.selectedTextAttributes = Self.selection(on: wordsColor)
-        // Words with blocks are cut by their height, so nothing past it may show.
         view.clipsToBounds = true
         textView = view
         return view
     }
 
-    /// Puts the words in `superview` with their top left at `origin`, as wide as they are, so pressing beside them
-    /// doesn't start a selection. A row that isn't shown only remembers where they go.
     func place(at origin: NSPoint, in superview: NSView) {
         self.origin = origin
         if superview.superview != nil || textView?.superview === superview { show(in: superview) }
     }
 
     func show(in superview: NSView) {
-        // Under everything else in the row, such as a code block's Copy, which is made before the words have a view.
         if view.superview !== superview { superview.addSubview(view, positioned: .below, relativeTo: nil) }
         view.frame = NSRect(x: origin.x, y: origin.y, width: right, height: height)
     }
 
-    /// The same words drawn another way, such as in a theme's colours, without measuring them again.
     func restyle(_ text: NSAttributedString) {
         storage.setAttributedString(text)
-        // A new text size lays out to a new height.
         fitted = nil
         textView?.selectedTextAttributes = Self.selection(on: wordsColor)
     }
 
-    /// Each code block shown, by where it is from the words' top left, with its code, for a Copy button on it.
     var codeBlocks: [(frame: NSRect, code: String)] {
         var found: [(NSRect, String)] = []
         let shown = layoutManager.characterRange(forGlyphRange: layoutManager.glyphRange(for: container), actualGlyphRange: nil)
@@ -332,7 +294,6 @@ final class ChannelTextBlock {
         MessagesInk.selection(on: words ?? MessagesInk.text)
     }
 
-    /// What each line's words take up, with the cells side by side in a table's row as one line.
     private var lineRects: [NSRect] {
         layoutManager.ensureLayout(for: container)
         var rows: [CGFloat: NSRect] = [:]
@@ -343,14 +304,11 @@ final class ChannelTextBlock {
     }
 }
 
-/// Words in Messages, which you can select and copy but not change. Like the reply in the cat's bubble, pressing in
-/// them is what gives the window the keyboard, and only because you asked.
 final class ChannelTextView: NSTextView {
     override init(frame: NSRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
         isEditable = false
         isSelectable = true
-        // Plain words when copied, so pasting doesn't bring along a bubble's white text. What's shown keeps its look.
         isRichText = false
         drawsBackground = false
         textContainerInset = .zero
@@ -360,7 +318,6 @@ final class ChannelTextView: NSTextView {
         importsGraphics = false
         isAutomaticLinkDetectionEnabled = false
         isAutomaticDataDetectionEnabled = false
-        // Nothing to check in words you can't change, and a window full of them shouldn't wake the spelling service.
         isContinuousSpellCheckingEnabled = false
         isGrammarCheckingEnabled = false
         isAutomaticSpellingCorrectionEnabled = false
@@ -369,20 +326,17 @@ final class ChannelTextView: NSTextView {
         linkTextAttributes = [:]
     }
 
-    /// Pressing a link asks the pane to show where it goes, and opens nothing, as `ChannelPane.ask(toOpen:)` says.
     override func mouseDown(with event: NSEvent) {
         guard let link = link(at: convert(event.locationInWindow, from: nil)) else { return super.mouseDown(with: event) }
         clicked(onLink: link, at: 0)
     }
 
-    /// However else AppKit uses a link, such as VoiceOver pressing it, it only shows where it goes too.
     override func clicked(onLink link: Any, at charIndex: Int) {
         guard let link = link as? URL else { return }
         tryToPerform(#selector(ChannelPane.ask(toOpen:)), with: link)
     }
 
-    /// The menu of the message they're in, as a right-click beside them opens, with Copy taking what you've picked if
-    /// you have. Elsewhere Copy is all it offers. AppKit's own menu has Open Link and Open With, which open a link at once.
+    // Outside the repo: NSTextView's own menu has Open Link and Open With, which open a link at once.
     override func menu(for event: NSEvent) -> NSMenu? {
         guard let menu = superview?.menu(for: event) else {
             let menu = NSMenu()
@@ -396,7 +350,6 @@ final class ChannelTextView: NSTextView {
         return menu
     }
 
-    /// The link drawn at a point in the view, if there is one.
     func link(at point: NSPoint) -> URL? {
         guard let layoutManager, let textContainer, let textStorage, layoutManager.numberOfGlyphs > 0 else { return nil }
         let glyph = layoutManager.glyphIndex(for: point, in: textContainer)
@@ -409,17 +362,14 @@ final class ChannelTextView: NSTextView {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var needsPanelToBecomeKey: Bool { true }
-    // Pressing in them selects, but Tab passes them by: a message is one stop, in its list.
     override var canBecomeKeyView: Bool { false }
 
-    /// A right-click is about these words too, so Copy in its menu has them.
     override func rightMouseDown(with event: NSEvent) {
         window?.makeKey()
         window?.makeFirstResponder(self)
         super.rightMouseDown(with: event)
     }
 
-    /// Only one selection at a time, as there would be in one long page.
     override func resignFirstResponder() -> Bool {
         setSelectedRange(NSRange(location: 0, length: 0))
         return super.resignFirstResponder()

@@ -1,7 +1,6 @@
 import Foundation
 import ShadesCore
 
-/// Everything the cat says, in one place, so it keeps one voice: friendly and brief.
 enum CatWords {
     enum Doing {
         case agents, seeing, listening, typing, keys
@@ -87,7 +86,6 @@ enum CatWords {
     static func notification(_ alert: NeedsYouAlert) -> String {
         "\(alert.who ?? "An agent") \(notificationWhat(alert.kind))"
     }
-    /// What a notification says happened, after who.
     static func notificationWhat(_ kind: NeedsYouAlert.Kind) -> String {
         switch kind {
         case .approval: "needs an approval"
@@ -118,7 +116,6 @@ enum CatWords {
     static let phonePaired = "Your phone's paired. \(appName) is there now."
     static func phoneProblem(_ error: Error) -> String { "\(appName) on your phone isn't working. \(error.localizedDescription)" }
 
-    /// The app's name, which is also its window's. The cat is still Shades.
     static let appName = "The Kitty Litter"
     static let activityTitle = "Activity"
     static let activitySubtitle = "What's waiting on you, and what each kitten is on"
@@ -137,7 +134,6 @@ enum CatWords {
     static let passedOnToKitten = "I passed that to the kitten it's for."
     static let passedOnCorrection = "I passed that correction on."
     static let shades = "Shades"
-    /// What VoiceOver calls the cat: what pressing it does, then what it is.
     static let catLabel = "Ask \(shades)"
     static let catHelp = "A cat in sunglasses. Pressing it takes one look at your screen and opens the Ask box. Its menu has everything else."
     static let shadesRole = "Work I started for you"
@@ -150,7 +146,6 @@ enum CatWords {
     static let closeThread = "Close"
     static let quietThread = "Its messages are in T3."
     static let threadNotListed = "It's archived or deleted in T3, so I can't read it here."
-    /// Under a thread's title: where it is and how it's going.
     static func threadDetails(_ thread: AgentThread) -> String {
         [thread.projectTitle, status(thread), thread.pullRequest.map(pullRequest)].compactMap { $0 }.joined(separator: " · ")
     }
@@ -165,7 +160,6 @@ enum CatWords {
     static func moreReplies(_ count: Int) -> String { count == 1 ? "1 more reply" : "\(count) more replies" }
     static let new = "New"
     static func newMessages(_ count: Int) -> String { count == 1 ? "1 new message" : "\(count) new messages" }
-    /// The way up to the New line, when it's above what you can see.
     static func jumpToNew(_ count: Int) -> String { "↑  \(newMessages(count))" }
     static let markUnread = "Mark unread"
     static func alsoSendTo(_ channel: String) -> String { "Also send to \(channel)" }
@@ -192,7 +186,6 @@ enum CatWords {
     static let searchNothing = "No messages with those words."
     static let searchingT3 = "Looking through older threads in T3…"
     static func searchMore(_ count: Int) -> String { "The newest \(count). Add a word to narrow it down." }
-    /// What ⌘/ lists, grouped as Slack's list is. The keys are T3 Code's, the Claude app's and Slack's own.
     static let shortcutGroups: [(title: String, rows: [(keys: String, does: String)])] = [
         ("Moving around", [
             ("⌥↑  ⌥↓", "Place above or below"),
@@ -224,7 +217,6 @@ enum CatWords {
     static let loadOlder = "Load older messages"
     static let loadingOlder = "Loading older messages…"
     static let olderReplies = "Older replies are in T3."
-    /// What T3Error.notRunning says, so the bubble and Messages name it the same way.
     static let cantReachT3Yet = "I can't reach T3 Code. Open it and try again."
     static let stillGoing = "Still working on it…"
     static func noThreadsYet(_ name: String) -> String { "You and \(name) haven't started a thread yet." }
@@ -233,18 +225,14 @@ enum CatWords {
     }
     static func couldntRead(_ count: Int) -> String { "Couldn't read \(count) \(count == 1 ? "thread" : "threads"). I'll try again." }
     static func earlierNotes(_ count: Int) -> String { "\(count) earlier \(count == 1 ? "note" : "notes")" }
-    /// What pressing a reply's earlier notes does, since only T3 has them.
     static let seeEarlierNotes = "Open in T3 to see them"
-    /// Its threads still going, which is what Activity lists under In progress.
     static func issues(_ count: Int) -> String { "\(count) in progress" }
-    /// What a kitten has filed in its `backlog.md`, from the channel's header.
     static func backlog(_ count: Int) -> String { "\(count) in backlog" }
     static let backlogTitle = "Backlog"
     static func backlogKeeper(_ name: String) -> String { "\(name) keeps this. To change it, ask \(name)." }
     static let backlogEmpty = "Nothing waiting."
     static func reportsTitle(_ kind: InboxEntry.Kind) -> String { kind == .shipped ? "Shipped" : "Also" }
 
-    /// The line over the box, saying where what you type goes.
     static func target(_ target: MessageTarget) -> String {
         switch target {
         case .router: return "To me, without looking at your screen"
@@ -256,7 +244,6 @@ enum CatWords {
     }
 
     static func answering(_ text: String) -> String { "Answering: \(text.isEmpty ? "their question" : text)" }
-    /// The line over the cat's box once your words @ a kitten.
     static func mentioning(_ kitten: Kitten) -> String { "Straight to \(kitten.name), in a new thread" }
     static let react = "React"
 
@@ -317,7 +304,6 @@ enum CatWords {
         title.map { "Work's started in a new session: \($0)." } ?? "Work's started in a new session."
     }
 
-    /// A session's state and how long ago that was, for the router to read.
     static func sessionStatus(_ thread: AgentThread, now: Date) -> String {
         let minutes = Int(now.timeIntervalSince(thread.updatedAt) / 60)
         let when: String
@@ -346,7 +332,6 @@ enum CatWords {
     static let lockdownNewThread = "Start a New Thread"
     static let lockdownOff = "Turn Off"
     static let lockdownKittenGone = "Lockdown's kitten isn't set up any more, so I held on to that. Turn Lockdown off in my menu, or pick another kitten."
-    /// What a Fix with nothing said asks Lockdown's kitten, which only gets your words and the picture.
     static let fixThis = "Fix what I pointed at. It's marked in red in the screenshot."
 
     static let notifications = "Notifications"
@@ -365,7 +350,6 @@ enum CatWords {
         }
     }
 
-    /// What came in while Do Not Disturb was on, by kind, for the one bubble once it's off.
     static func whileAway(_ missed: [Missed]) -> String {
         var threads = 0, approvals = 0, questions = 0, lines = 0
         for item in missed {
@@ -385,9 +369,6 @@ enum CatWords {
         return "\(whileAwayTitle): \(parts.compactMap { $0 }.joined(separator: ", "))."
     }
 
-    /// Who needs what, as their notification says it, and what about when there's one. Notes don't count, so this
-    /// only says one's there when it's brought up the bubble by itself, which takes it being the answer to something
-    /// you asked.
     static func inboxBubble(_ entries: [InboxEntry], who: (InboxEntry) -> String?) -> String {
         let decisions = entries.filter(\.needsYou)
         let shipped = entries.filter { $0.kind == .shipped }
@@ -399,7 +380,6 @@ enum CatWords {
         ].compactMap { $0 }.joined(separator: " ")
     }
 
-    /// "Clawde needs a decision on “Fix login”." for one, and "2 decisions from Clawde and Pepper." for more.
     private static func inboxLine(_ entries: [InboxEntry], who: (InboxEntry) -> String?, one: String, many: String) -> String? {
         let names = entries.map { who($0) ?? "an agent" }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
         guard let name = names.first else { return nil }
@@ -416,7 +396,6 @@ enum CatWords {
     }
 
 
-    /// The question and what you can say to it. Answering happens in T3.
     static func question(_ question: AgentQuestion) -> String {
         guard !question.text.isEmpty else { return "It has a question for you." }
         var parts = [question.text]
@@ -450,8 +429,6 @@ enum CatWords {
         }
     }
 
-    /// One short helpful line for something going wrong. A module can give its own by
-    /// being a `LocalizedError`; otherwise the line depends on what the cat was doing.
     static func problem(_ error: Error, while doing: Doing) -> String {
         if let own = (error as? LocalizedError)?.errorDescription, !own.isEmpty, own.count <= 120 {
             return own
@@ -478,7 +455,6 @@ enum CatWords {
     }
 }
 
-/// Friendly names for whatever model is configured.
 enum ModelNames {
     static func friendly(_ choice: ModelChoice) -> String {
         friendly(model: choice.model)
@@ -487,9 +463,7 @@ enum ModelNames {
     static func friendly(model: String) -> String {
         let parts = model.split(separator: "-").map(String.init)
         guard let first = parts.first?.lowercased() else { return model }
-        // claude-opus-5-5 is Opus.
         if first == "claude", parts.count > 1 { return parts[1].capitalized }
-        // gpt-6.1-sol is GPT-6.1 Sol.
         if first == "gpt", parts.count > 1 {
             let rest = parts.dropFirst(2).map(\.capitalized).joined(separator: " ")
             return "GPT-\(parts[1])" + (rest.isEmpty ? "" : " \(rest)")

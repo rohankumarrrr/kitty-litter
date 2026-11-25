@@ -3,33 +3,26 @@ import ImageIO
 import ShadesCore
 import UniformTypeIdentifiers
 
-/// Records what the demo does as a looping GIF, for the README. Each frame is the chosen windows as they draw themselves,
-/// laid where they are on the screen over a drawn stand-in for the pricing page the demo pretends you're looking at,
-/// so nothing is ever read from the real screen.
 @MainActor
 final class DemoRecorder {
     private static let framesPerSecond = 8.0
     private static let margin: CGFloat = 24
-    /// Sharp on a Retina screen, which is where most people read the README.
     static let scale: CGFloat = 2
 
     private struct Shot {
         var windows: [(image: CGImage, frame: CGRect)]
         var phone: CGImage?
-        /// When it was taken, since a phone's page takes longer to draw than a frame lasts.
         var at: Date
     }
 
     private let file: URL
     private let windows: () -> [(CGImage, CGRect)]
-    /// Whether the cat's in it, out on the desktop, where the page it's looking at goes behind it.
     private let onPage: Bool
     private let phone: DemoPhone?
     private let now: () -> Date
     private var shots: [Shot] = []
     private var loop: Task<Void, Never>?
 
-    /// `windows` gives what each chosen window shows now, and where. A phone is recorded on its own.
     init(file: URL, windows: @escaping () -> [(CGImage, CGRect)], onPage: Bool, phone: DemoPhone?, now: @escaping () -> Date = Date.init) {
         self.file = file
         self.windows = windows
@@ -47,13 +40,11 @@ final class DemoRecorder {
         }
     }
 
-    /// Writes the GIF, and says how many frames it kept and how big it is.
     func stop() -> String {
         loop?.cancel()
         let images = phone == nil ? scene() : shots.map { $0.phone.map(Self.framed) }
         guard images.contains(where: { $0 != nil }) else { return "nothing to record" }
         var frames: [(image: CGImage, seconds: Double)] = []
-        // A frame lasts until the next was taken, and one that's the same as the one before only makes it last longer.
         for (index, image) in images.enumerated() {
             let seconds = index + 1 < shots.count ? shots[index + 1].at.timeIntervalSince(shots[index].at) : 1 / Self.framesPerSecond
             guard let image else {
@@ -66,7 +57,6 @@ final class DemoRecorder {
                 frames.append((image, seconds))
             }
         }
-        // The last frame holds a moment before it starts again.
         frames[frames.count - 1].seconds += 2
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard let destination = CGImageDestinationCreateWithURL(file as CFURL, UTType.gif.identifier as CFString, frames.count, nil) else {
@@ -78,7 +68,6 @@ final class DemoRecorder {
             CGImageDestinationAddImage(destination, frame.image, [kCGImagePropertyGIFDictionary: delay] as CFDictionary)
         }
         guard CGImageDestinationFinalize(destination) else { return "couldn't write \(file.path)" }
-        // Each frame as a picture too, so what the GIF holds can be looked at like any other demo picture.
         let pictures = URL(fileURLWithPath: ".verify/shades/record", isDirectory: true).appendingPathComponent(file.deletingPathExtension().lastPathComponent)
         try? FileManager.default.removeItem(at: pictures)
         try? FileManager.default.createDirectory(at: pictures, withIntermediateDirectories: true)
@@ -100,7 +89,6 @@ final class DemoRecorder {
         }
     }
 
-    /// Every frame cut to the same place: wherever the windows went, with a little room around them.
     private func scene() -> [CGImage?] {
         let screen = NSScreen.screens.first?.frame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         let seen = shots.flatMap { $0.windows.map(\.frame) }
@@ -130,8 +118,6 @@ final class DemoRecorder {
         }
     }
 
-    /// The pricing page in Safari that the demo's screen describes, with its heading, plan and trial button where the
-    /// demo says they are, so the cat lands on them when it points.
     private static func drawPage(on screen: CGRect, in context: CGContext) {
         let graphics = NSGraphicsContext(cgContext: context, flipped: false)
         NSGraphicsContext.saveGraphicsState()
@@ -151,7 +137,6 @@ final class DemoRecorder {
         NSBezierPath(roundedRect: frame("Share").insetBy(dx: 6, dy: 4), xRadius: 3, yRadius: 3).stroke()
         text("Pricing", in: frame("Pricing"), size: 30, weight: .bold, color: NSColor(white: 0.12, alpha: 1))
 
-        // Each plan as a card around its button, so its name and price sit just above where the cat lands.
         let trial = frame("Start free trial")
         let pro = CGRect(x: trial.minX - 40, y: trial.minY - 30, width: trial.width + 80, height: trial.height + 150)
         for (index, plan) in [("Free", "$0", "Choose Free"), ("Pro", "$12 a month", "Start free trial"), ("Team", "$30 a month", "Choose Team")].enumerated() {
@@ -181,7 +166,6 @@ final class DemoRecorder {
         ]).draw(in: rect)
     }
 
-    /// A phone's page with rounded corners on a plain ground, the way a phone frames it.
     private static func framed(_ page: CGImage) -> CGImage {
         let pad = Int(16 * scale)
         let width = page.width + pad * 2

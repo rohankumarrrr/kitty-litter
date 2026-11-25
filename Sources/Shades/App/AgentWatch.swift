@@ -1,17 +1,14 @@
 import Foundation
 import ShadesCore
 
-/// Reads the thread list for what the cat should feel about it.
 struct AgentWatch {
     enum Event: Equatable {
         case finished(AgentThread)
-        /// Its turn ended while something it'll wake up for carries on, so what it said is read, but it isn't done yet.
         case turnEnded(AgentThread)
         case failed(AgentThread)
         case hasQuestion(AgentQuestion)
     }
 
-    /// Finished threads stay on the dashboard for a little while.
     static let recentWindow: TimeInterval = 15 * 60
     private static let maxRows = 12
 
@@ -20,7 +17,6 @@ struct AgentWatch {
     private var announcedQuestions: Set<String> = []
     private(set) var threads: [AgentThread] = []
 
-    /// A quick question's thread isn't work, so it doesn't count as agents running.
     mutating func markQuick(_ threadID: String) {
         quickThreads.insert(threadID)
     }
@@ -29,12 +25,10 @@ struct AgentWatch {
         quickThreads.contains(threadID)
     }
 
-    /// Takes a new thread list, returning what just happened in it.
     mutating func update(_ threads: [AgentThread]) -> [Event] {
         let work = threads.filter { !quickThreads.contains($0.id) }
         var events: [Event] = []
         for thread in work {
-            // A question counts once its words arrive, which is a moment after the thread stops.
             if let question = thread.pendingQuestion, announcedQuestions.insert(question.id).inserted {
                 events.append(.hasQuestion(question))
             }
@@ -54,7 +48,6 @@ struct AgentWatch {
     }
     var isBusy: Bool { runningCount > 0 }
 
-    /// What the dashboard shows: anything still going, then whatever finished recently.
     func rows(at now: Date) -> [AgentThread] {
         let order: (AgentThread) -> Int = { thread in
             if !thread.pendingApprovals.isEmpty || thread.status == .waitingForApproval || thread.status == .waitingForAnswer { return 0 }

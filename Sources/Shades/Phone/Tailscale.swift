@@ -1,18 +1,12 @@
 import Foundation
 
-/// Puts the phone page on your tailnet with Tailscale Serve, the way T3 Code's own pairing does, so the phone gets a
-/// real certificate for your Mac's tailnet name. Only devices on your tailnet can reach it.
-///
-/// Serve keeps forwarding after Shades stops, and whatever took Shades' loopback port then would get what your phone
-/// sends, its key included. So while the page is on, a small helper waits on a pipe from Shades, and takes the page off
-/// once that pipe closes, which happens whenever Shades stops, a crash included.
+// Outside the repo: Tailscale Serve keeps forwarding after Shades stops, until something turns it off.
 @MainActor
 final class TailscaleServe {
     struct Problem: LocalizedError {
         var errorDescription: String?
     }
 
-    /// Wherever the command-line tool or the app is.
     nonisolated static let places = ["/usr/local/bin/tailscale", "/opt/homebrew/bin/tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale"]
 
     let port: UInt16
@@ -24,7 +18,6 @@ final class TailscaleServe {
         self.tool = tool
     }
 
-    /// Serves the loopback port over HTTPS on `port`, and returns the address to open.
     func serve(to local: UInt16) async throws -> String {
         guard let tool else { throw Problem(errorDescription: "Tailscale isn't installed.") }
         _ = try await Self.run(tool, ["serve", "--bg", "--https=\(port)", "http://127.0.0.1:\(local)"])
@@ -43,14 +36,12 @@ final class TailscaleServe {
     }
 
     func stop() async {
-        // Stopped first, so it can't take the page off after it's back on.
         helper?.process.terminate()
         helper = nil
         guard let tool else { return }
         _ = try? await Self.run(tool, ["serve", "--https=\(port)", "off"])
     }
 
-    /// Shades never writes to the pipe. The system closes it when Shades stops, however it stops.
     private func watch(_ tool: String) throws -> (process: Process, pipe: Pipe) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")

@@ -2,7 +2,6 @@
 import ShadesCore
 import XCTest
 
-/// A talk with the cat in Messages: never writable, never a kitten's, never on the phone, and read once.
 @MainActor
 final class ShadesConversationTests: XCTestCase {
     private let at = Date(timeIntervalSince1970: 1_000_000)
@@ -47,7 +46,6 @@ final class ShadesConversationTests: XCTestCase {
         PhoneAsk(act: "send", key: key, text: "and the yearly price?", id: nil, value: nil, answers: nil, kind: nil).action(in: book, newTopic: { "topic" })?.action
     }
 
-    /// T3 gives an assistant message's whole text so far, so a router turn that's still going is read half written.
     func testAReplyStillBeingWrittenReadsLikeTheBubble() {
         for partial in ["KITT", "SEND T", "REWR", "CORRECTION: 2\nKITTE", "It's the blue one.\nPOI"] {
             let built = ChannelBook.build(
@@ -56,15 +54,12 @@ final class ShadesConversationTests: XCTestCase {
             )
             let reply = built.shadesMessages.last
             XCTAssertEqual(reply?.kind, .reply, partial)
-            // What the bubble shows for the same text so far.
             var holdback = ReplyHoldback()
             let bubble = holdback.add(partial)
             XCTAssertEqual(reply?.text, bubble, "a half-written \(partial.debugDescription) isn't the cat's words")
         }
     }
 
-    /// Being the router's used to be remembered only while the app ran, so after a restart a talk with the cat was
-    /// work under Shades in Needs you, on the phone too, and opened writable.
     func testAfterARestartATalkWithTheCatIsntWorkOnThePhoneOrWritable() {
         let controller = makeController()
         let thread = talk()
@@ -84,7 +79,6 @@ final class ShadesConversationTests: XCTestCase {
         XCTAssertNil(send(opened.key, in: built), "and nothing goes into the router's thread")
     }
 
-    /// A fix can hold your screen, so in the DM it stays on the Mac, as every talk with the cat does.
     func testWorkYouStartedWithTheCatNeverReachesThePhone() {
         let fix = AgentThread(id: "fix", title: "Fix: Where could I find a keyboard like this?", projectTitle: nil, status: .completed, model: "m", updatedAt: at)
         let built = ChannelBook.build(
@@ -101,7 +95,6 @@ final class ShadesConversationTests: XCTestCase {
         }
     }
 
-    /// A router thread's title is the first line of your question, and "Name: ..." makes a thread that kitten's.
     func testATalkTitledForAKittenIsntThatKittens() {
         let question = "Steve: which font did you pick for my site?"
         let thread = talk(title: question)
@@ -120,8 +113,6 @@ final class ShadesConversationTests: XCTestCase {
 
     private var books: [ChannelBook] = []
 
-    /// A router thread titled "Name: ..." looked like that kitten's and the cat's, so it was read twice and the
-    /// second read counted as one that couldn't be done.
     func testATalkTitledForAKittenIsReadOnce() async throws {
         let backend = FakeBackend()
         let question = "Steve: which font did you pick for my site?"

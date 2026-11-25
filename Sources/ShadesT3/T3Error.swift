@@ -4,18 +4,14 @@ public enum T3Error: LocalizedError, Equatable {
     case notRunning
     case commandLineToolMissing
     case signInFailed
-    /// This T3 Code speaks a different protocol than the one The Kitty Litter was built against.
     case incompatibleServer(version: String?)
     case unauthorized
     case connectionLost
     case timedOut
-    /// The server said no, with its own reason.
     case rejected(String)
     case attachmentNotSupported(name: String, reason: String)
     case keychain(status: Int32)
-    /// Opening a thread in T3 before T3 has said which environment it is, which its links need.
     case noEnvironment
-    /// macOS didn't open a thread's link, with its error code.
     case couldntOpen(code: Int)
 
     public var errorDescription: String? {

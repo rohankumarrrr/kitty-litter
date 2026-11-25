@@ -1,47 +1,35 @@
 import AppKit
 import ShadesCore
 
-/// The speech bubble's window. It floats over the cat and follows it around. It doesn't
-/// take the keyboard unless you click into its text.
 @MainActor
 final class BubbleController {
-    /// Long enough to stop a click that was already on its way from landing on a new button.
     static let armDelay: TimeInterval = 0.7
     private static let clickAwayGrace: TimeInterval = 1
-    /// A notice turns up unasked, so a click that was already on its way shouldn't lose it unread.
     private static let noticeClickAwayGrace: TimeInterval = 6
 
-    /// Its window, which tests give one that never reaches the screen.
     let panel: QuietPanel
     let view = BubbleView(frame: .zero)
     private(set) var content: BubbleContent?
 
     var anchor: () -> (frame: NSRect, visible: NSRect) = { (.zero, .zero) }
-    /// Esc or a click somewhere else. The flag says which.
     var onDismiss: ((_ byClick: Bool) -> Void)?
-    /// Esc is only taken from other apps while the bubble's up.
     var onVisibilityChange: (() -> Void)?
 
     private var clickMonitor: Any?
     private var thinkingTimer: Timer?
     private var armTimer: Timer?
     private var shownAt = Date.distantPast
-    /// What VoiceOver has said since the bubble showed or you last asked, so an answer that comes back after
-    /// an approval isn't read twice.
     private var said: Set<String> = []
 
     init(panel: QuietPanel? = nil) {
         let panel = panel ?? QuietPanel(allowsKey: true)
         self.panel = panel
         panel.contentView = view
-        // Its buttons change with what it shows, so Tab's way round them is worked out each time.
         panel.autorecalculatesKeyViewLoop = true
     }
 
-    /// Up, or on its way. Once dismissed it isn't, though it takes a moment to fade.
     var isVisible: Bool { content != nil && panel.isVisible }
 
-    /// In the theme you just picked, even while it's up.
     func show(_ content: BubbleContent?) {
         guard let content else {
             hide()
@@ -78,7 +66,6 @@ final class BubbleController {
         updateThinkingTimer()
     }
 
-    /// Runs after the cat moves or a window's size changes.
     func reposition() {
         guard panel.isVisible, content != nil else { return }
         let (frame, visible) = anchor()
@@ -97,10 +84,8 @@ final class BubbleController {
         onVisibilityChange?()
     }
 
-    /// The demo listens in here, to print what VoiceOver was asked to say.
     static var onAnnounce: ((String, NSAccessibilityPriorityLevel) -> Void)?
 
-    /// Asks VoiceOver to say this. It's only spoken, never sent anywhere.
     static func announce(_ words: String, priority: NSAccessibilityPriorityLevel = .medium) {
         onAnnounce?(words, priority)
         NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested, userInfo: [
@@ -137,8 +122,6 @@ final class BubbleController {
         }
     }
 
-    /// Buttons that start, allow or change things wait a moment, so a click meant for something
-    /// else can't land on them as they appear under the pointer.
     private func armIfNeeded(_ content: BubbleContent) {
         switch content {
         case .approval, .reply(_, _, _, _, true): break

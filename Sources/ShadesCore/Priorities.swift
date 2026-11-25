@@ -1,12 +1,7 @@
 import Foundation
 
-/// What comes first right now, and what each kitten has waiting, from the plain files the kittens keep: the focus in
-/// `FOCUS.md` and each kitten's `backlog.md`. Only The Kitty Litter's window and a paired phone get them, since they're
-/// for you to see, so nothing here ever reaches a prompt, an agent or the cat. See docs/kittens.md.
 public struct Priorities: Equatable, Sendable {
-    /// The first line under "## Right now", bold taken off, or `nil` with no focus.
     public var focus: String?
-    /// Each kitten's backlog, by the kitten's ID.
     public var backlogs: [String: Backlog]
 
     public init(focus: String? = nil, backlogs: [String: Backlog] = [:]) {
@@ -14,7 +9,6 @@ public struct Priorities: Equatable, Sendable {
         self.backlogs = backlogs
     }
 
-    /// A file that's missing or can't be read is left out, so it can't take the rest with it.
     public static func read(for kittens: [Kitten], in folder: URL = Kittens.defaultFolder) -> Priorities {
         let text = { (url: URL) in try? String(contentsOf: url, encoding: .utf8) }
         var backlogs: [String: Backlog] = [:]
@@ -24,7 +18,6 @@ public struct Priorities: Equatable, Sendable {
         return Priorities(focus: text(folder.appendingPathComponent("FOCUS.md")).flatMap(focus(in:)), backlogs: backlogs)
     }
 
-    /// The line as written, or `nil` when the section is missing, empty or says there's no focus.
     public static func focus(in text: String) -> String? {
         let lines = text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }
         guard let heading = lines.firstIndex(where: { $0.lowercased() == "## right now" }),
@@ -35,8 +28,6 @@ public struct Priorities: Equatable, Sendable {
     }
 }
 
-/// A kitten's `backlog.md`: one line an item under Doing, Next and Later, each `date · what · "your words" · thread
-/// <id>`. A line in another form still shows, as it's written.
 public struct Backlog: Equatable, Sendable {
     public enum Level: String, CaseIterable, Sendable {
         case doing = "Doing"
@@ -48,7 +39,6 @@ public struct Backlog: Equatable, Sendable {
         public var level: Level
         public var date: String?
         public var what: String
-        /// Your own words, which approved it, without their quotes.
         public var words: String?
         public var thread: String?
 
@@ -60,7 +50,6 @@ public struct Backlog: Equatable, Sendable {
             self.thread = thread
         }
 
-        /// From the ends in, so a ` · ` in your words stays in them.
         init?(level: Level, line: String) {
             var parts = line.components(separatedBy: " · ").map { $0.trimmingCharacters(in: .whitespaces) }
             if parts.count > 1, let last = parts.last, last.hasPrefix("thread ") {
@@ -84,14 +73,12 @@ public struct Backlog: Equatable, Sendable {
         }
     }
 
-    /// Doing first, then Next and Later, each oldest first, as the file has them.
     public var items: [Item]
 
     public init(items: [Item] = []) {
         self.items = items
     }
 
-    /// Only items under a heading it knows count, so notes above them don't.
     public init(reading text: String) {
         var level: Level?
         var items: [Item] = []

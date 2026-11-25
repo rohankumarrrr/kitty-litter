@@ -1,11 +1,7 @@
 import AppKit
 
-/// When a quiet control may take the keyboard: with Full Keyboard Access on, in a window that already has it, and
-/// never from a click. So Tab reaches it, focus never makes a panel key or The Kitty Litter active, and pressing it
-/// with the mouse leaves the keyboard where it was.
 @MainActor
 enum QuietFocus {
-    /// The system's Keyboard navigation setting. Tests and the demo stand in for it.
     static var fullKeyboardAccess = { NSApplication.shared.isFullKeyboardAccessEnabled }
 
     static func allows(_ view: NSView) -> Bool {
@@ -18,8 +14,7 @@ enum QuietFocus {
         view.window?.isKeyWindow == true && view.window?.firstResponder === view
     }
 
-    /// When one takes the keyboard. From then on its window gaining or losing the keyboard redraws it too, which
-    /// AppKit doesn't do on its own, so the ring never stays on a window you've moved on from.
+    // Outside the repo: AppKit doesn't redraw a view when its window gains or loses the keyboard.
     static func took(_ view: NSView) {
         _ = keyChanges
         view.needsDisplay = true
@@ -34,7 +29,6 @@ enum QuietFocus {
         }
     }()
 
-    /// Just inside the shape, so nothing around it clips the ring. Opal's is violet.
     static func ring(_ rect: NSRect, radius: CGFloat, color: NSColor = MessagesInk.accent) {
         let ring = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: radius - 1, yRadius: radius - 1)
         ring.lineWidth = 2
@@ -44,7 +38,6 @@ enum QuietFocus {
 
     static func isSpace(_ event: NSEvent) -> Bool { event.charactersIgnoringModifiers == " " }
 
-    /// Whether every view it's inside lets Tab in.
     static func isOpen(_ view: NSView) -> Bool {
         var ancestor = view.superview
         while let next = ancestor {
@@ -55,33 +48,22 @@ enum QuietFocus {
     }
 }
 
-/// A view that keeps Tab out of the controls inside it until it lets it in, such as a message the arrow keys aren't on,
-/// so a list of them is one stop for Tab, as in Slack.
 @MainActor
 protocol TabGate: NSView {
     var letsTabIn: Bool { get }
 }
 
-/// A button you press with the mouse, or with Space once Tab has reached it. Only Space presses it, so a stray Return
-/// can't, whatever is on the screen. Every one is an Opal capsule.
 final class QuietButton: NSView {
     enum Style {
-        /// The violet primary, one a view at most.
         case filled
-        /// Quiet: on Opal's control colour with a faint hairline.
         case plain
-        /// Just its words, until you point at it.
         case text
     }
 
     var onPress: (() -> Void)?
-    /// A disarmed button shows dim and ignores clicks.
     var isArmed = true { didSet { needsDisplay = true } }
-    /// A symbol drawn in place of its words, which VoiceOver still reads.
     var symbol: String? { didSet { needsDisplay = true } }
-    /// Its symbol in the accent, while what it started is going.
     var isLit = false { didSet { needsDisplay = true } }
-    /// Up and down chevrons after its words, as macOS marks a button that picks from a menu.
     var showsChevrons = false { didSet { setFrameSize(NSSize(width: naturalWidth, height: Self.height)); needsDisplay = true } }
 
     let style: Style
@@ -111,7 +93,6 @@ final class QuietButton: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Says something else from now on, at the size that takes.
     func retitle(_ word: String) {
         guard word != title else { return }
         title = word
@@ -120,7 +101,6 @@ final class QuietButton: NSView {
         needsDisplay = true
     }
 
-    /// Says something else for a moment, keeping its size.
     func flash(_ word: String) {
         flashed = word
         flashTimer?.invalidate()
@@ -176,7 +156,6 @@ final class QuietButton: NSView {
             if showsChevrons { drawChevrons(rightOf: (room + size.width) / 2) }
         }
         if QuietFocus.shows(self) {
-            // The primary's ring goes inside it, in white, since its fill is violet already.
             if style == .filled {
                 QuietFocus.ring(bounds.insetBy(dx: 2, dy: 2), radius: radius - 2, color: MessagesInk.strong)
             } else {
@@ -197,8 +176,6 @@ final class QuietButton: NSView {
         image.draw(in: NSRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height))
     }
 
-    /// Each symbol in each colour, made once, since a long conversation draws the same few again on every step of a
-    /// scroll.
     private static var symbols: [String: NSImage] = [:]
 
     private static func symbol(_ name: String, size: CGFloat, weight: NSFont.Weight, color: NSColor) -> NSImage? {
@@ -218,11 +195,9 @@ final class QuietButton: NSView {
     }
 
     override var acceptsFirstResponder: Bool { QuietFocus.allows(self) }
-    // AppKit's own reads the system's setting itself, which the demo and tests stand in for.
     override var canBecomeKeyView: Bool { QuietFocus.allows(self) && !isHiddenOrHasHiddenAncestor && QuietFocus.isOpen(self) }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var needsPanelToBecomeKey: Bool { false }
-    // One under a window's title bar, such as a toolbar's, is pressed rather than dragging the window.
     override var mouseDownCanMoveWindow: Bool { false }
 
     override func updateTrackingAreas() {
@@ -244,7 +219,6 @@ final class QuietButton: NSView {
 
     override func becomeFirstResponder() -> Bool {
         QuietFocus.took(self)
-        // Tab can land on one that's scrolled away, such as a code block's Copy.
         scrollToVisible(bounds)
         return true
     }
@@ -275,7 +249,6 @@ final class QuietButton: NSView {
 extension QuietButton {
     static let micSide: CGFloat = 26
 
-    /// A box's mic, which talks into it in place of typing.
     static func mic() -> QuietButton {
         let mic = QuietButton(CatWords.speak, style: .text)
         mic.symbol = "mic"
@@ -283,7 +256,6 @@ extension QuietButton {
         return mic
     }
 
-    /// While it hears you it says so, and VoiceOver hears what pressing it does now.
     func showListening(_ listening: Bool) {
         guard listening != isLit else { return }
         isLit = listening

@@ -2,13 +2,9 @@ import CryptoKit
 @testable import Shades
 import XCTest
 
-/// The phone keys over what earlier builds left in the Keychain, with the Keychain stood in for, so nothing here
-/// touches it.
 @MainActor
 final class PhoneKeychainTests: XCTestCase {
-    /// The login Keychain as builds see it: newest first, each reading what another saved only if `readsOtherBuilds`, as
-    /// builds signed with a Team ID would, and deleting one another build saved shows a dialog and waits on it, on the
-    /// main thread, which `prompts` counts.
+    // Outside the repo: the Keychain shares items between builds only with a Team ID, and deleting another build's item waits on a dialog.
     final class Keychain: PhoneKeychain {
         var build: String
         var readsOtherBuilds = true
@@ -38,11 +34,8 @@ final class PhoneKeychainTests: XCTestCase {
     }
 
     private let subscription = WebPush.Subscription(endpoint: "https://web.push.apple.com/a-phone", p256dh: WebPush.string(P256.KeyAgreement.PrivateKey().publicKey.x963Representation), auth: WebPush.string(Data(repeating: 7, count: 16)))
-    /// With its keys in another order, which `JSONEncoder` doesn't keep the same on every macOS.
     private var saved: String { #"{"auth":"\#(subscription.auth)","p256dh":"\#(subscription.p256dh)","endpoint":"\#(subscription.endpoint)"}"# }
 
-    /// A paired phone coming back posts its subscription again, which replaced the last build's item on the main thread,
-    /// and that waited on a Keychain dialog, which held the whole app.
     func testAPhoneComingBackAfterAnInstallTouchesNothing() {
         let keychain = Keychain(build: "fixed", items: [("pushes", [saved], "32d9263"), ("paired", ["hash"], "32d9263")])
         let pushes = PhonePushes(keys: KeychainPhoneKeys(keychain: keychain)) { _ in 201 }
@@ -64,7 +57,6 @@ final class PhoneKeychainTests: XCTestCase {
         XCTAssertFalse(keychain.items().contains { $0.account == keychain.added[0] }, "the first one this run saved went")
     }
 
-    /// Without a Team ID a new build can't read the last one's pairing, so the phone has to pair again, which nothing said.
     func testAPairingThisBuildCantReadMeansPairingAgain() {
         let keychain = Keychain(build: "new", items: [("paired.a", ["hash"], "old")])
         keychain.readsOtherBuilds = false

@@ -2,8 +2,6 @@
 import ShadesCore
 import XCTest
 
-/// Do Not Disturb: every way something pops up by itself stays quiet while it's on, nothing it held is lost, and
-/// turning it off brings one catch-up.
 @MainActor
 final class DoNotDisturbTests: XCTestCase {
     private var stage: FakeStage!
@@ -23,7 +21,6 @@ final class DoNotDisturbTests: XCTestCase {
         controller = makeController()
     }
 
-    /// The app as it comes up: a new one of these, with what the last one saved, is a restart.
     private func makeController(settings: Settings = Settings(), inbox: Inbox = Inbox(since: .distantPast)) -> AppController {
         var settings = settings
         settings.quickMode = .approvalRequired
@@ -59,7 +56,6 @@ final class DoNotDisturbTests: XCTestCase {
         AgentThread(id: id, title: title, projectTitle: nil, status: status, model: "m", updatedAt: clock, projectPath: folder, lastRunID: run, lastRunEndedAt: clock)
     }
 
-    /// Runs, then finishes and says `report`.
     private func finish(_ thread: AgentThread, report: String, sorted: String? = nil) async {
         backend.reports[thread.id] = report
         if let sorted { backend.replies.append([.finished(fullText: sorted)]) }
@@ -88,8 +84,6 @@ final class DoNotDisturbTests: XCTestCase {
         asking.pendingQuestion = AgentQuestion(id: id, threadID: thread, threadTitle: "Work", text: "Which month?", askedAt: clock)
         return asking
     }
-
-    // MARK: - Nothing pops up
 
     func testAKittensReplyWaitsWithoutABubbleOrASummaryButWhatItNeedsFromYouIsKept() async {
         kittens = [steve]
@@ -226,8 +220,6 @@ final class DoNotDisturbTests: XCTestCase {
         XCTAssertTrue(controller.away.isEmpty)
     }
 
-    // MARK: - Catching up
-
     func testTurningItOffBringsOneCatchUpAndNothingLate() async {
         kittens = [steve]
         quiet()
@@ -290,8 +282,6 @@ final class DoNotDisturbTests: XCTestCase {
         XCTAssertTrue(controller.away.isEmpty)
         XCTAssertEqual(savedInbox?.away, [])
     }
-
-    // MARK: - Across a restart
 
     func testItStaysOnAndKeepsOnlyIDsAcrossARestart() async throws {
         quiet()

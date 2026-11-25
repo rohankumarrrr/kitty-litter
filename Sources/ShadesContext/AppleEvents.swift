@@ -1,14 +1,12 @@
 import CoreServices
 import Foundation
 
-/// Scripting through raw Apple Events. Going through osascript takes about 150 ms a call against
-/// about 8 ms here, can't be aimed at one process, and has to be killed to time out.
 enum AppleEvents {
     enum Failure: Error, Equatable, Sendable {
         case notAllowed, notAsked, timedOut, noWindow, appGone, javaScriptOff
         case other(Int)
 
-        /// Chromium answers 12 whatever language it's in. Safari's wording is the only sign it gives.
+        // Outside the repo: Chromium answers 12 in any language, and Safari only says JavaScript is off in its message.
         init(code: Int, message: String?) {
             let text = message ?? ""
             switch code {
@@ -24,8 +22,6 @@ enum AppleEvents {
         }
     }
 
-    /// Whether events may be sent, without ever asking. Nothing is sent unless this says yes,
-    /// which is what keeps a normal capture free of permission prompts.
     static func permissionFailure(pid: pid_t) -> Failure? {
         status(of: NSAppleEventDescriptor(processIdentifier: pid), askUser: false)
     }
@@ -36,7 +32,6 @@ enum AppleEvents {
         return result == noErr ? nil : Failure(code: Int(result), message: nil)
     }
 
-    /// `get <property>`, answering with its text.
     static func get(_ specifier: NSAppleEventDescriptor, pid: pid_t, timeout: TimeInterval) -> Result<String?, Failure> {
         let event = make("core", "getd", pid: pid)
         event.setParam(specifier, forKeyword: code("----"))
@@ -66,7 +61,6 @@ enum AppleEvents {
         )
     }
 
-    /// `window 1` of the application, in whichever class code the app's dictionary uses.
     static func frontWindow(classCode: String) -> NSAppleEventDescriptor {
         specifier(want: classCode, form: "indx", selector: NSAppleEventDescriptor(int32: 1), from: .null())
     }

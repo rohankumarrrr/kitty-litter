@@ -1,16 +1,12 @@
 import Foundation
 
-/// JSON exactly as RFC 8259 has it, read the way Claude Code's parser reads it: the last of a repeated key wins.
-/// Foundation's own reader lets a trailing comma through and keeps the first of a repeated key, so what it read could
-/// differ from what Claude Code uses, and a settings file Claude Code can't read loses every rule in it.
+// Outside the repo: Foundation's JSON reader allows a trailing comma and keeps the first repeated key, while Claude Code's refuses the comma and keeps the last.
 enum StrictJSON {
     enum Failure: Error, Equatable {
         case invalid
-        /// One object names a key twice.
         case repeatedKey
     }
 
-    /// Objects come back as `[String: Any]`, lists as `[Any]`, and the rest as Foundation's JSON values.
     static func parse(_ data: Data, allowingRepeats: Bool = true) throws -> Any {
         var reader = Reader(bytes: [UInt8](data), allowingRepeats: allowingRepeats)
         let value = try reader.value(depth: 0)
@@ -19,7 +15,6 @@ enum StrictJSON {
         return value
     }
 
-    /// For a file about to be written, where a repeated key is refused rather than read.
     static func validate(_ data: Data) throws {
         _ = try parse(data, allowingRepeats: false)
     }
@@ -89,7 +84,6 @@ enum StrictJSON {
             }
         }
 
-        /// What it says, worked out the way any reader would, so two keys written differently still match.
         private mutating func string() throws -> String {
             let start = at
             at += 1

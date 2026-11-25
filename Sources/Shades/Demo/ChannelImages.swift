@@ -1,8 +1,6 @@
 import AppKit
 import ShadesCore
 
-/// `--demo --channels-image`: draws every selection to PNGs from canned data
-/// and with no window on the screen. It stays in Demo so real messages can't reach an image.
 @MainActor
 enum ChannelImages {
     private struct Shot {
@@ -14,14 +12,10 @@ enum ChannelImages {
         var expandsLongMessage = false
         var hoversLastMessage = false
         var hoversLastReply = false
-        /// A message by its ID, in whichever pane shows it.
         var hovers: String?
-        /// How wide you've dragged a thread's pane.
         var threadWidth: CGFloat?
-        /// How wide you've dragged the sidebar, and whether ⌘B has hidden it.
         var sidebarWidth: CGFloat?
         var hidesSidebar = false
-        /// The channel's backlog open over the window, from its header.
         var opensBacklog = false
     }
 
@@ -56,7 +50,6 @@ enum ChannelImages {
                 SentMessage(channel: .of(Demo.kittens[0]), message: DemoChannels.alsoSentEcho, alsoSent: true),
             ],
             isUnread: { $0.id == "demo-steve-yesterday" || $0.id == "demo-steve-copy" },
-            // As if you'd asked the cat for the plan names, and it gave them to Pepper.
             messagesThreads: ["demo-pepper-plans": Date().addingTimeInterval(-1_300)],
             withShades: DemoChannels.talks,
             reactions: ["copy-2:reply": [.thumbsUp, .check]]
@@ -90,7 +83,6 @@ enum ChannelImages {
             shots.append(Shot(name: "channel-\(slug(status.kitten.name))", selection: .channel(.of(status.kitten)), book: full))
         }
 
-        // Each crowded kitten's thread has the kitten's own ID.
         let longNamed = crowded().statuses[0].kitten
         let thread = ChannelSelection.thread("demo-steve-copy", in: .channel(steve))
         shots += [
@@ -134,7 +126,6 @@ enum ChannelImages {
     }
 
     private static func render(_ shot: Shot) -> Data? {
-        // Drawn from the window's own frame, so the window's buttons are in the picture. It's never ordered in.
         let panel = ChannelsPanel()
         let view = ChannelsView(frame: .zero)
         panel.contentView = view
@@ -156,7 +147,6 @@ enum ChannelImages {
         return png(of: view.superview ?? view)
     }
 
-    /// The view as it draws itself, which reads nothing from the screen.
     static func png(of view: NSView, scale: CGFloat = 2) -> Data? {
         bitmap(of: view, scale: scale)?.representation(using: .png, properties: [:])
     }

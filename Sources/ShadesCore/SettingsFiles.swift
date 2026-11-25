@@ -1,11 +1,8 @@
 import CryptoKit
 import Foundation
 
-/// The settings files the app changes for a kitten once you press Allow. The app runs outside every sandbox, so the
-/// list is fixed, only the change you saw is made, and the file has to be valid JSON afterwards.
 public struct SettingsFiles: Sendable {
     public var home: String
-    /// Each listed kitten's folder, whose `.claude/settings.json` is on the list.
     public var kittenFolders: [String]
 
     public init(home: String, kittenFolders: [String]) {
@@ -15,20 +12,15 @@ public struct SettingsFiles: Sendable {
 
     public typealias Problem = ChangeRequests.Problem
 
-    /// Where a listed file is: a folder you keep, which can be reached through links of your own, then the folders
-    /// under it, ending with `.claude`, none of which is followed if it's a link, then the file.
     struct Place: Equatable {
         var anchor: String
         var folders: [String]
         var name: String
 
         var path: String { ([anchor] + folders + [name]).joined(separator: "/") }
-        /// The file Claude Code reads alongside this one in the same folder.
         var other: String { name == "settings.json" ? "settings.local.json" : "settings.json" }
     }
 
-    /// The request with its file worked out, what it does, and the file's hash as it is now. If it can't be done as
-    /// asked, `problem` says why, which leaves only Deny.
     public func check(_ request: ChangeRequest) -> ChangeRequest {
         var checked = request
         do {
@@ -48,7 +40,6 @@ public struct SettingsFiles: Sendable {
         return checked
     }
 
-    /// Makes the change, only if the file is still exactly as it was when you were shown it.
     public func apply(_ request: ChangeRequest) throws {
         let place = try allowed(request.file)
         try inFolder(place, creating: request.replace == nil) { claude in
@@ -60,7 +51,6 @@ public struct SettingsFiles: Sendable {
             let after = try result(of: request, on: current)
             var found = stat()
             let mode = fstatat(claude, place.name, &found, AT_SYMLINK_NOFOLLOW) == 0 ? found.st_mode & 0o777 : 0o644
-            // A new file renamed into place replaces whatever was there rather than writing through it.
             let temp = ".\(place.name).\(UUID().uuidString)"
             let descriptor = openat(claude, temp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, mode)
             guard descriptor >= 0 else { throw Problem("The Kitty Litter couldn't write next to the file.") }
@@ -73,20 +63,15 @@ public struct SettingsFiles: Sendable {
         }
     }
 
-    /// The file as it is now, for Shades to read when it looks into the request.
     public func current(_ request: ChangeRequest) -> String? {
         guard let place = try? allowed(request.file), let data = try? inFolder(place, creating: false, { try read(place.name, in: $0) }) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
-    /// `~` for your home folder, so a card says where in a way you'd write it.
     public func shown(_ path: String) -> String {
         path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
     }
 
-    // MARK: - Which files
-
-    /// Where the path it's written as is, if it's on the list.
     func allowed(_ written: String) throws -> Place {
         let expanded = written == "~" || written.hasPrefix("~/") ? home + written.dropFirst() : written
         guard expanded.hasPrefix("/") else { throw Problem("`\(written)` isn't a full path.") }
@@ -112,9 +97,6 @@ public struct SettingsFiles: Sendable {
         Problem("`\(written)` isn't one of the settings files The Kitty Litter changes.")
     }
 
-    /// Hands `body` the open `.claude` folder, or `nil` if it isn't there and isn't to be made. Each folder under the
-    /// anchor is opened from the one before without following a link, so a link that sends the write elsewhere, such
-    /// as to your own Claude settings, is refused, even one put in place while this runs.
     private func inFolder<Result>(_ place: Place, creating: Bool, _ body: (Int32?) throws -> Result) throws -> Result {
         var folder = open(place.anchor, O_RDONLY | O_DIRECTORY)
         guard folder >= 0 else { throw Problem("`\(shown(place.anchor))` isn't a folder.") }
@@ -137,7 +119,6 @@ public struct SettingsFiles: Sendable {
         return try body(folder)
     }
 
-    /// `nil` if there's no such file. Anything but a plain file, such as a link, is refused.
     private func read(_ name: String, in folder: Int32?) throws -> Data? {
         guard let folder else { return nil }
         let descriptor = openat(folder, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
@@ -150,8 +131,6 @@ public struct SettingsFiles: Sendable {
         guard fstat(descriptor, &found) == 0, found.st_mode & S_IFMT == S_IFREG else { throw Problem("`\(name)` there isn't a plain file.") }
         return try handle.readToEnd() ?? Data()
     }
-
-    // MARK: - The change
 
     private func result(of request: ChangeRequest, on current: Data?) throws -> Data {
         let after: String

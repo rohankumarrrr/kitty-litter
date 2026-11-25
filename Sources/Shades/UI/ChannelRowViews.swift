@@ -1,7 +1,6 @@
 import AppKit
 import ShadesCore
 
-/// Takes clicks in a window that isn't key, and never takes the keyboard.
 class QuietView: NSView {
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -26,13 +25,11 @@ final class QuietScrollView: NSScrollView {
     required init?(coder: NSCoder) { fatalError() }
 }
 
-/// Dragging it doesn't take the keyboard from the app you're in.
 final class QuietScroller: NSScroller {
     override var acceptsFirstResponder: Bool { false }
     override var needsPanelToBecomeKey: Bool { false }
 }
 
-/// The pixel cat, with no smoothing, in anyone's jacket.
 @MainActor
 enum CatStamp {
     private static let renderer = CatRenderer()
@@ -50,7 +47,6 @@ enum CatStamp {
         )
     }
 
-    /// The same cat as a PNG for the phone, each art pixel `scale` pixels square, so it scales up crisply there.
     @MainActor
     static func png(_ pose: CatPose, jacket: UInt32?, dark: Bool, scale: Int) -> Data? {
         let art = CatRenderer.uncached(for: pose, theme: dark ? .dark : .light, jacket: jacket)
@@ -63,7 +59,6 @@ enum CatStamp {
     }
 }
 
-/// Your picture as a circle, cropped to fill it, with a hairline so a pale photo keeps its edge on a pale window.
 @MainActor
 enum PictureStamp {
     static func draw(_ picture: NSImage, in rect: NSRect) {
@@ -80,11 +75,9 @@ enum PictureStamp {
     }
 }
 
-/// The same colours as the kitten view. An idle kitten has no dot, which keeps the sidebar calm.
 extension KittenStatus.State {
     var dotColor: NSColor? { dot.map(Ink.hex) }
 
-    /// As 0xRRGGBB, which a phone is sent.
     var dot: UInt32? {
         switch self {
         case .working: return CatGlint.thinking(bright: true).color
@@ -96,23 +89,16 @@ extension KittenStatus.State {
 
 struct ChannelSpeakerLook {
     static let otherJacket: UInt32 = 0x8f8f95
-    /// Yours, on Opal's selected violet-black.
     static let yours = Opal.selected
-    /// For a kitten with no colour of its own.
     static let palette = Opal.kittens
 
     var name: String
     var hasCat: Bool
     var isYou: Bool
-    /// Yours, where a kitten's cat goes, if you've given it one.
     var picture: NSImage?
     var jacket: UInt32?
-    /// Its colour, which a phone fills its bubble with. `nil` is the grey that the cat and anyone unknown get.
     var bubble: UInt32?
-    /// The words on `bubble`. `nil` is the window's own text colour.
     var words: UInt32?
-    /// What lights a kitten's bubble and tile on the Mac, in its colour, or the cat's in its own hue. Colour comes in
-    /// only as light, so their bubbles are dark. Yours, and anyone else's, aren't lit.
     var light: Opal.Light?
 
     init(_ speaker: Speaker, in book: ChannelBook) {
@@ -127,7 +113,6 @@ struct ChannelSpeakerLook {
         light = own.map(Opal.Light.of) ?? (speaker == .cat ? .shades : nil)
     }
 
-    /// Its colour from kitten.json, or one picked from its folder so it's the same every time. The cat keeps its black jacket.
     static func color(of kitten: Kitten) -> UInt32? {
         if let color = kitten.color { return color }
         guard kitten != KittenBoard.shades else { return nil }
@@ -137,12 +122,9 @@ struct ChannelSpeakerLook {
 
     static let grey = Ink.hex(Opal.controlHover)
 
-    /// What its words sit on: yours on Opal's selected, a lit bubble on the card's black, and anyone else's on the grey.
     var bubbleFill: NSColor { Ink.hex(body) }
     private var body: UInt32 { isYou ? Self.yours : light != nil ? Opal.cardTop : Opal.controlHover }
 
-    /// Where a kitten's cat goes, when you have no picture. Your colour is too close to the window to see, so it gets
-    /// an edge, at the 3:1 a shape needs.
     static func drawYourSquare(in rect: NSRect, radius: CGFloat) {
         Ink.hex(yours).setFill()
         NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
@@ -151,23 +133,18 @@ struct ChannelSpeakerLook {
         NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: radius - 0.5, yRadius: radius - 0.5).stroke()
     }
 
-    /// Every bubble on the Mac is dark, so its words are Opal's body.
     var bubbleText: NSColor { MessagesInk.text }
 
-    /// A reply that's still coming, or yours on its way, is drawn see-through, which comes to this over the page.
     func fill(fadedTo alpha: Double) -> NSColor {
         Ink.hex(Opal.mix(Opal.page, body, alpha))
     }
 
-    /// Quieter words, which still read on it.
     func text(fadedTo alpha: Double) -> NSColor { MessagesInk.soft }
 
-    /// The colour over the window at `alpha`. `nil` is the grey.
     static func faded(_ bubble: UInt32?, to alpha: Double) -> UInt32 {
         Opal.mix(Opal.page, bubble ?? Opal.controlHover, alpha)
     }
 
-    /// Whichever of black and white has more contrast with it.
     static func readable(on color: UInt32) -> NSColor {
         blackOrWhite(on: color) == 0x000000 ? .black : .white
     }
@@ -176,7 +153,6 @@ struct ChannelSpeakerLook {
         contrast(color, 0x000000) >= contrast(color, 0xffffff) ? 0x000000 : 0xffffff
     }
 
-    /// As WCAG measures it, from 1 to 21.
     static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
         Opal.contrast(a, b)
     }
@@ -186,36 +162,27 @@ struct ChannelSpeakerLook {
     }
 }
 
-/// One row of the pane. It lays itself out at a width and says how tall that makes it.
 class ChannelRowView: QuietView, TabGate {
     static let textLeft: CGFloat = 64
     static let catLeft: CGFloat = 20
     static let margin: CGFloat = 20
 
     var hovering = false { didSet { if hovering != oldValue { hoverChanged() } } }
-    /// The row the arrow keys are on in its list, whose buttons Tab goes into next, as Slack's messages work.
     var isCurrent = false { didSet { if isCurrent != oldValue { focusChanged() } } }
-    /// It's current and its list has the keyboard, so it draws a ring.
     var isFocused = false { didSet { if isFocused != oldValue { focusChanged() } } }
-    /// Whether the arrow keys stop on it.
     var takesFocus: Bool { isPressable }
     var letsTabIn: Bool { isCurrent }
     func focusChanged() { needsDisplay = true }
 
-    /// The ring round a row the arrow keys are on, the shape of its hover.
     func drawFocus() {
         if showsRing { QuietFocus.ring(bounds.insetBy(dx: 8, dy: 1), radius: Opal.Corner.control) }
     }
 
-    /// Only while its window has the keyboard, as any focus ring.
     var showsRing: Bool { isFocused && window?.isKeyWindow == true }
-    /// Held down on a row that does something when pressed, so it shows before you let go.
     private(set) var isPressed = false { didSet { if isPressed != oldValue { needsDisplay = true } } }
-    /// Hover's fill, or press's while it's held.
     var highlight: NSColor? { isPressed ? MessagesInk.press : hovering ? MessagesInk.hover : nil }
 
     func fit(width: CGFloat) -> CGFloat { 0 }
-    /// Words that only get their views once the row is shown.
     var textBlocks: [ChannelTextBlock] { [] }
     func press() {}
     var isPressable: Bool { false }
@@ -225,7 +192,7 @@ class ChannelRowView: QuietView, TabGate {
         super.updateTrackingAreas()
         trackingAreas.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
-        // A refresh can put a new row under a pointer that hasn't moved.
+        // Outside the repo: AppKit sends no mouseEntered to a view that appears under a pointer that hasn't moved.
         if let window { hovering = bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) }
     }
 
@@ -268,7 +235,6 @@ final class DayRowView: ChannelRowView {
 
     override func fit(width: CGFloat) -> CGFloat { 36 }
 
-    /// A hairline across, with the day in a capsule over its middle, as Slack marks one.
     override func draw(_ dirtyRect: NSRect) {
         let label = NSAttributedString(string: CatWords.day(date, now: now()), attributes: [
             .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .medium),
@@ -287,7 +253,6 @@ final class DayRowView: ChannelRowView {
     }
 }
 
-/// The line over what's new to you, as Slack's red New line.
 final class NewRowView: ChannelRowView {
     init(count: Int) {
         super.init(frame: .zero)
@@ -301,7 +266,6 @@ final class NewRowView: ChannelRowView {
 
     override func fit(width: CGFloat) -> CGFloat { 24 }
 
-    /// The line in the rim's light, with New at its end, as Slack has it.
     override func draw(_ dirtyRect: NSRect) {
         let label = NSAttributedString(string: CatWords.new, attributes: [
             .font: MessagesInk.font(ofSize: MessagesInk.meta, weight: .semibold),
@@ -314,7 +278,6 @@ final class NewRowView: ChannelRowView {
     }
 }
 
-/// What a thread's reply bar shows, as Slack draws it: who replied, how many replies, and when the last one was.
 @MainActor
 struct ReplyBar {
     enum Face {
@@ -355,7 +318,6 @@ struct ReplyBar {
         return [needsYou ? CatWords.needsYouLabel : nil, strong, soft].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
-    /// How wide it draws, so it can sit under yours on the right.
     func width(now: Date) -> CGFloat {
         let (strong, soft) = words(now: now)
         var width = CGFloat(faces.count) * (Self.face + 3) + 8
@@ -402,16 +364,12 @@ struct ReplyBar {
     }
 }
 
-/// A message's words, read from markdown and laid out once. Messages keeps them while it's open, so a message that's
-/// shown again, scrolled back to or kept through a refresh isn't read and measured again.
 final class MessageWords {
     let message: ChannelMessage
-    /// The state of each pull request it was drawn with, since a chip shows it.
     let pulls: [String: String]
     let words: ChannelTextBlock?
     let failure: ChannelTextBlock?
     private let markup: Markup?
-    /// The bubble, text size and font its words are drawn for.
     private var paint: (bubble: UInt32?, size: TextSize, font: String?)
 
     init(_ message: ChannelMessage, look: ChannelSpeakerLook, pulls: [String: String] = [:]) {
@@ -424,7 +382,6 @@ final class MessageWords {
         failure = message.failure.map { ChannelTextBlock(ChannelMarkdown.attributed($0, color: MessagesInk.danger)) }
     }
 
-    /// Draws the words for `look` as it is now, which a text size or font can change.
     func paint(for look: ChannelSpeakerLook) {
         let now = (look.bubble, MessagesInk.textSize, MessagesInk.fontFamily)
         guard paint != now, let markup else { return }
@@ -438,17 +395,13 @@ final class MessageWords {
     }
 }
 
-/// A message's actions as icons, floating over the top of its row while you hover or Tab to them, as Slack and Discord
-/// show them. It covers what's under it rather than moving anything, and what doesn't fit goes under More.
 final class MessageToolbar: QuietView {
     static let side: CGFloat = 26
     private static let inset: CGFloat = 1
     static var height: CGFloat { side + inset * 2 }
 
-    /// In the order they show, before any fold into More.
     let buttons: [QuietButton]
     let more: QuietButton
-    /// When one of its buttons takes the keyboard or gives it up.
     var onFocus: (() -> Void)?
     private var focus: NSKeyValueObservation?
 
@@ -461,7 +414,6 @@ final class MessageToolbar: QuietView {
         self.more = Self.button("More", symbol: "ellipsis", onPress: more)
         super.init(frame: .zero)
         (buttons + [self.more]).forEach(addSubview)
-        // The live window's shadow, which a picture the window draws of itself leaves out.
         let lift = NSShadow()
         lift.shadowColor = NSColor.black.withAlphaComponent(0.4)
         lift.shadowBlurRadius = 8
@@ -474,14 +426,12 @@ final class MessageToolbar: QuietView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Hidden by being see-through rather than `isHidden`, so Tab can still reach it.
+    // Outside the repo: Tab skips a view that's isHidden, but not one that's see-through.
     private func showOrHide() {
         alphaValue = isShowing ? 1 : 0
-        // Out of VoiceOver's way while it's hidden, since the message's own actions offer the same.
         (buttons + [more]).forEach { $0.setAccessibilityElement(isShowing) }
     }
 
-    /// An icon that says its name when you hover it, and to VoiceOver.
     static func button(_ name: String, symbol: String, style: QuietButton.Style = .text, onPress: (() -> Void)? = nil) -> QuietButton {
         let button = QuietButton(name, style: style, onPress: onPress)
         button.symbol = symbol
@@ -492,7 +442,6 @@ final class MessageToolbar: QuietView {
 
     func button(_ name: String) -> QuietButton? { buttons.first { $0.accessibilityLabel() == name } }
 
-    /// As many as fit in `room`, with the rest under More. With no room at all, More still shows.
     func fit(room: CGFloat) {
         let fits = Int((room - Self.inset * 2) / Self.side)
         let shown = fits >= buttons.count ? buttons.count : max(fits - 1, 0)
@@ -520,20 +469,15 @@ final class MessageToolbar: QuietView {
         }
     }
 
-    // A click between its buttons stays on it, rather than opening the message's thread.
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {}
 
-    /// Opal's floating glass, since it floats over the row.
     override func draw(_ dirtyRect: NSRect) {
         Opal.glass(NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: Opal.Corner.control, yRadius: Opal.Corner.control))
     }
 }
 
-/// One message as a bubble: yours on the right on Opal's selected violet-black, and everyone else's on the left, dark
-/// and lit at its edge in their own colour, beside their cat on its tile.
 final class MessageRowView: ChannelRowView {
-    /// About a screenful, which is all a long message shows until you press Show more.
     private static let clampedLines = 30
     private static let catSide: CGFloat = 32
     private static let pad: CGFloat = 5
@@ -541,39 +485,27 @@ final class MessageRowView: ChannelRowView {
     private static var contextHeight: CGFloat { MessagesInk.meta + 5 }
     private static let insetX: CGFloat = 12
     private static let insetY: CGFloat = 7
-    /// Of the pane's width, so a long message still reads as a bubble.
     private static let widest: CGFloat = 0.7
     static let stillGoingAlpha = 0.55
     private static let pictureSide: CGFloat = 180
-    /// Each of several pictures, cut square.
     private static let tileSide: CGFloat = 110
     private static let fileHeight: CGFloat = 36
     private static let fileGap: CGFloat = 4
-    /// Between who said it and when, and the toolbar beside it.
     private static let toolbarGap: CGFloat = 8
-    /// A reaction, as Opal's chips are.
     private static let chipHeight: CGFloat = 22
 
     var onOpen: (() -> Void)?
     var onReply: (() -> Void)?
     var onCopy: ((String) -> Void)?
     var onShowMore: (() -> Void)?
-    /// Sends your words again, under ones that went nowhere.
     var onTryAgain: (() -> Void)?
-    /// Puts a reaction on it or takes it off, only on one T3 has. It's a mark, and says nothing to anyone.
     var onReact: ((Reaction) -> Void)?
-    /// A web picture pressed, which only shows its address until you press Show.
     var onShowPicture: ((URL) -> Void)?
-    /// Opens its thread: a parent, or a reply also sent to the channel.
     var onPress: (() -> Void)?
-    /// Makes it, and everything after it in its thread, new to you again.
     var onMarkUnread: (() -> Void)?
     var isExpanded = false
-    /// Under a thread's parent, what's been said since.
     var replyBar: ReplyBar? { didSet { fitted = nil } }
-    /// Over a reply also sent to the channel, which thread it's in.
     var context: String? { didSet { fitted = nil } }
-    /// The message Search found, picked out for a moment so your eye lands on it.
     private(set) var isFound = false { didSet { needsDisplay = true } }
     private var foundTimer: Timer?
 
@@ -583,28 +515,19 @@ final class MessageRowView: ChannelRowView {
     private let failure: ChannelTextBlock?
     private var showMore: QuietButton?
     private var tryAgain: QuietButton?
-    /// Made the first time you hover, since most messages never are, or as it's shown if Tab can reach it.
     private(set) var toolbar: MessageToolbar?
-    /// Your reactions, under what it said. Pressing one takes it off.
     private var reactionChips: [QuietButton] = []
-    /// After your reactions, a way to add another, where Slack puts it.
     private var addReaction: QuietButton?
-    /// A Copy on each code block.
     private(set) var codeButtons: [QuietButton] = []
     private(set) var bubble = NSRect.zero
-    /// The files and pictures that came with it, or that its words point at, under its words.
     private var fileFrames: [NSRect] = []
     private lazy var pictures: [NSImage?] = message.files.map { $0.thumbnail.flatMap(NSImage.init(data:)) }
-    /// A web picture waiting on Show is a button of its own.
     private var webButtons: [Int: QuietButton] = [:]
-    /// The web pictures it shows that are waiting on Show.
     var webPictures: [URL] { message.files.compactMap { $0.thumbnail == nil ? $0.source?.webAddress : nil } }
     private var failureTop: CGFloat = 0
     private var replyBarFrame = NSRect.zero
-    /// "2 earlier notes" in its name line, which opens the thread in T3, where they are.
     private var notesFrame: NSRect?
     private var headTop: CGFloat { context == nil ? Self.pad : Self.pad + Self.contextHeight }
-    /// A row is laid out again each time the rows around it are, so it keeps its answer until something it depends on changes.
     private var fitted: (width: CGFloat, isExpanded: Bool, height: CGFloat)?
 
     init(message: ChannelMessage, look: ChannelSpeakerLook, words laidOut: MessageWords? = nil) {
@@ -621,7 +544,6 @@ final class MessageRowView: ChannelRowView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    // Worked out when VoiceOver asks, rather than for every row of a long conversation as it's laid out.
     override func accessibilityLabel() -> String? {
         let said = message.text ?? (message.isStillGoing ? CatWords.stillGoing : nil)
         let reactions = message.reactions?.map(\.emoji).joined(separator: " ")
@@ -633,7 +555,6 @@ final class MessageRowView: ChannelRowView {
     override func press() { onPress?() }
     override var takesFocus: Bool { true }
 
-    /// What you can do to it, which VoiceOver and a right-click both offer, in this order.
     private var actions: [(name: String, run: () -> Void)] {
         let all: [(name: String, run: (() -> Void)?)] = [
             (CatWords.threadTitle, onPress),
@@ -656,8 +577,6 @@ final class MessageRowView: ChannelRowView {
         }
     }
 
-    /// Everything its toolbar does, with React's marks as a menu inside it. A right-click menu opens without making
-    /// The Kitty Litter the active app.
     override func menu(for event: NSEvent) -> NSMenu? { actionsMenu() }
 
     private func actionsMenu() -> NSMenu? {
@@ -688,7 +607,6 @@ final class MessageRowView: ChannelRowView {
 
     private var time: String { message.isSending ? CatWords.sending : message.at.formatted(date: .omitted, time: .shortened) }
 
-    /// Where yours end on the right: at the margin, or short of your picture, as a kitten's start after its cat.
     private func end(in width: CGFloat) -> CGFloat {
         width - (look.picture == nil ? Self.margin : Self.textLeft)
     }
@@ -699,14 +617,12 @@ final class MessageRowView: ChannelRowView {
         toolbar?.button("Copy").map(Self.showCopied)
     }
 
-    /// ⌘C while the arrow keys are on it copies what it said. `false` if it said nothing.
     func copyMessage() -> Bool {
         guard message.text != nil else { return false }
         copyPressed()
         return true
     }
 
-    /// A tick in place of the copy mark for a moment, as GitHub's Copy does.
     private static func showCopied(_ button: QuietButton) {
         let symbol = button.symbol
         button.symbol = "checkmark"
@@ -715,7 +631,6 @@ final class MessageRowView: ChannelRowView {
         }
     }
 
-    /// Its buttons in the order Slack puts them, the most used first, so they're the last to fold into More.
     private var toolbarActions: [(name: String, symbol: String, run: () -> Void)] {
         let all: [(name: String, symbol: String, run: (() -> Void)?)] = [
             (CatWords.react, "face.smiling", onReact == nil ? nil : { [weak self] in self?.showReactions(from: self?.toolbar?.button(CatWords.react)) }),
@@ -733,7 +648,6 @@ final class MessageRowView: ChannelRowView {
         needsDisplay = true
     }
 
-    /// Tab only reaches buttons that are there, so they're made once the arrow keys come to it.
     override func focusChanged() {
         if isCurrent { makeToolbar() }
         showToolbar()
@@ -751,30 +665,25 @@ final class MessageRowView: ChannelRowView {
         placeToolbar(width: bounds.width)
     }
 
-    /// While you point at it, the arrow keys are on it, or Tab is on one of its buttons.
     private func showToolbar() {
         guard let toolbar else { return }
         let focused = toolbar.hasFocus || (window?.firstResponder as? NSView)?.isDescendant(of: self) == true
-        // Tab can land on a row that's scrolled away, so it comes into view.
         if focused, !toolbar.isShowing { toolbar.scrollToVisible(toolbar.bounds) }
         toolbar.isShowing = hovering || showsRing || focused
     }
 
-    /// Everything a right-click offers, under More, for what didn't fit.
     private func pressMore() {
         guard let menu = actionsMenu(), let more = toolbar?.more else { return }
         let anchor = convert(more.bounds, from: more)
         menu.popUp(positioning: nil, at: NSPoint(x: anchor.minX, y: anchor.maxY), in: self)
     }
 
-    /// A menu of the marks, under what opened it. A menu opens without making The Kitty Litter the active app.
     func showReactions(from opener: NSView? = nil) {
         guard onReact != nil, message.reactions != nil else { return }
         let anchor = opener.map { convert($0.bounds, from: $0) } ?? NSRect(x: bubble.minX, y: bubble.maxY, width: 0, height: 0)
         reactionsMenu().popUp(positioning: nil, at: NSPoint(x: anchor.minX, y: anchor.maxY), in: self)
     }
 
-    /// The marks, with the ones it has ticked.
     private func reactionsMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -793,7 +702,6 @@ final class MessageRowView: ChannelRowView {
         onReact?(reaction)
     }
 
-    /// At the top right of each code block, inside it. A block that a cut message stops before has none.
     private func placeCodeButtons() {
         guard let words else { return }
         let blocks = words.codeBlocks
@@ -814,8 +722,6 @@ final class MessageRowView: ChannelRowView {
         }
     }
 
-    /// Beside who said it and when, never over them: at the right end for a kitten's, as in Slack, and just short of
-    /// the time over yours. It sits between what's over the bubble and its words, so it covers neither.
     private func placeToolbar(width: CGFloat) {
         guard let toolbar else { return }
         let head = head(width: width).frame
@@ -879,7 +785,6 @@ final class MessageRowView: ChannelRowView {
         return height
     }
 
-    /// In a row under what it said, from the bubble's side.
     private func placeReactions(below top: CGFloat, right: CGFloat) -> CGFloat {
         let reactions = message.reactions ?? []
         guard !reactions.isEmpty else { return top }
@@ -908,7 +813,6 @@ final class MessageRowView: ChannelRowView {
         return top + 4 + (chips.first?.frame.height ?? 0)
     }
 
-    /// Each reveal gets the whole time, however soon after the last one it comes.
     func flash() {
         isFound = true
         foundTimer?.invalidate()
@@ -918,14 +822,12 @@ final class MessageRowView: ChannelRowView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        // Pointed at, it's tinted, as Slack and Discord tint a message, and picked out once Search finds it.
         let ground = isFound ? MessagesInk.accent.withAlphaComponent(0.16) : highlight
         if let ground {
             ground.setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1), xRadius: Opal.Corner.control, yRadius: Opal.Corner.control).fill()
         }
         if let context {
-            // Over the bubble it's about: yours on the right, everyone else's on the left.
             let paragraph = NSMutableParagraphStyle()
             paragraph.lineBreakMode = .byTruncatingTail
             paragraph.alignment = look.isYou ? .right : .left
@@ -956,8 +858,6 @@ final class MessageRowView: ChannelRowView {
         drawFocus()
     }
 
-    /// A kitten's, or the cat's, dark and lit at its edge, since colour comes in only as light, and yours filled on
-    /// Opal's selected. One still coming, or on its way, is see-through.
     private func drawBubble() {
         let radius = min(16, bubble.height / 2)
         let context = NSGraphicsContext.current?.cgContext
@@ -979,15 +879,12 @@ final class MessageRowView: ChannelRowView {
         }
     }
 
-    /// A file stays the size of the buttons beside it, whatever the text size.
     private static var fileFont: NSFont { MessagesInk.font(ofSize: 13) }
 
     private static func fileWidth(_ name: String) -> CGFloat {
         ceil(NSAttributedString(string: name, attributes: [.font: fileFont]).size().width) + 46
     }
 
-    /// Left to right, onto as many lines as they need: one picture as itself, several as squares, and anything else
-    /// as its name. A web picture waiting on Show is a button that asks first.
     private func layOutFiles(top: CGFloat, room: CGFloat, right: CGFloat) {
         let several = pictures.compactMap { $0 }.count > 1
         var lines: [[(index: Int, size: NSSize)]] = []
@@ -1026,7 +923,6 @@ final class MessageRowView: ChannelRowView {
         }
     }
 
-    /// A picture as itself, cut square when it's one of several, and any other file as its mark and name.
     private func drawFile(_ file: ChannelFile, picture: NSImage?, in fileFrame: NSRect) {
         let shape = NSBezierPath(roundedRect: fileFrame, xRadius: 10, yRadius: 10)
         if let picture {
@@ -1061,8 +957,6 @@ final class MessageRowView: ChannelRowView {
             .draw(in: NSRect(x: fileFrame.minX + 34, y: fileFrame.midY - 9, width: fileFrame.width - 42, height: 18))
     }
 
-    /// Who said it and when, over the bubble, and where it's drawn. Yours only needs the time. It's the same whether or
-    /// not the toolbar shows, and a kitten's leaves room at its end for the toolbar's More, so that never covers it.
     private func head(width: CGFloat) -> (label: NSAttributedString, frame: NSRect) {
         let top = headTop + 1
         let height = MessagesInk.meta + 4
@@ -1077,7 +971,6 @@ final class MessageRowView: ChannelRowView {
         let after = NSMutableAttributedString()
         if message.earlierNotes > 0 {
             after.append(NSAttributedString(string: "  ·  ", attributes: [.font: font, .foregroundColor: MessagesInk.soft]))
-            // Only T3 has what they said, so they're a way there.
             after.append(NSAttributedString(string: CatWords.earlierNotes(message.earlierNotes), attributes: [.font: font, .foregroundColor: onOpen == nil ? MessagesInk.soft : MessagesInk.link, .earlierNotes: true]))
         }
         after.append(NSAttributedString(string: "  ·  \(time)", attributes: [.font: font, .foregroundColor: MessagesInk.soft]))
@@ -1086,7 +979,6 @@ final class MessageRowView: ChannelRowView {
         label.append(after)
         var wide = ceil(label.size().width)
         if wide > room {
-            // Short of room, the name gives way, since its cat says who it is, and the notes stay whole to press.
             let name = Self.shortened(look.name, to: room - ceil(after.size().width), font: font)
             label.replaceCharacters(in: NSRange(location: 0, length: (look.name as NSString).length), with: name)
             wide = ceil(label.size().width)
@@ -1095,7 +987,6 @@ final class MessageRowView: ChannelRowView {
         return (label, NSRect(x: Self.textLeft + 2, y: top, width: max(min(wide, room), 0), height: height))
     }
 
-    /// `name` cut to fit in `width`, ending in an ellipsis, and never shorter than its first letter.
     private static func shortened(_ name: String, to width: CGFloat, font: NSFont) -> String {
         let fits = { (words: String) in ceil(NSAttributedString(string: words, attributes: [.font: font]).size().width) <= width }
         var kept = name
@@ -1108,7 +999,6 @@ final class MessageRowView: ChannelRowView {
         label.draw(in: frame)
     }
 
-    /// Where "2 earlier notes" is drawn, when pressing it can open the thread in T3.
     private func placeNotes(width: CGFloat) {
         removeAllToolTips()
         notesFrame = nil
@@ -1158,7 +1048,6 @@ private extension NSAttributedString.Key {
     static let earlierNotes = NSAttributedString.Key("ShadesEarlierNotes")
 }
 
-/// The line in a thread's pane between its parent and its replies.
 final class RepliesRowView: ChannelRowView {
     private let count: Int
 
@@ -1187,8 +1076,6 @@ final class RepliesRowView: ChannelRowView {
     }
 }
 
-/// One thread you're in, as Threads lists it: its channel, its parent, its latest reply and how many more there are.
-/// Clicking it opens the thread beside the list.
 final class ThreadDigestRowView: ChannelRowView {
     private static let catSide: CGFloat = 22
     private static let lines = 2
@@ -1219,7 +1106,6 @@ final class ThreadDigestRowView: ChannelRowView {
     override func press() { onPress?() }
 
     private static var textFont: NSFont { MessagesInk.font(ofSize: MessagesInk.body) }
-    /// Who said each and when, over its words.
     private static var headHeight: CGFloat { MessagesInk.meta + 7 }
 
     private func text(_ message: ChannelMessage) -> NSAttributedString {
@@ -1256,7 +1142,6 @@ final class ThreadDigestRowView: ChannelRowView {
             .font: MessagesInk.font(ofSize: MessagesInk.meta + 1, weight: digest.isUnread ? .bold : .semibold),
             .foregroundColor: digest.isUnread ? MessagesInk.strong : MessagesInk.text,
         ])
-        // Unread in Opal's violet, as its unread marks are, since rose says something needs you.
         if digest.isUnread {
             MessagesInk.accent.setFill()
             NSBezierPath(ovalIn: NSRect(x: x, y: 10 + (name.size().height - 8) / 2, width: 8, height: 8)).fill()
@@ -1334,7 +1219,6 @@ final class HeadingRowView: ChannelRowView {
     }
 }
 
-/// One thing a kitten is on. It only needs a title, a status and something to open.
 final class IssueRowView: ChannelRowView {
     private static let gap: CGFloat = 14
 
@@ -1422,7 +1306,6 @@ final class NoteRowView: ChannelRowView {
     }
 }
 
-/// The top of a channel with older posts. Scrolling back to it loads them, and so does pressing it.
 final class OlderRowView: ChannelRowView {
     private let button: QuietButton
 
@@ -1449,7 +1332,6 @@ final class OlderRowView: ChannelRowView {
     }
 }
 
-/// A heading in Needs you, with a way to clear a section of reports.
 final class SectionRowView: ChannelRowView {
     private let title: String
     let clear: QuietButton?
@@ -1472,7 +1354,6 @@ final class SectionRowView: ChannelRowView {
         return 36
     }
 
-    /// The arrow keys stop on a section only for its Clear.
     override var takesFocus: Bool { clear != nil }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -1481,14 +1362,10 @@ final class SectionRowView: ChannelRowView {
     }
 }
 
-/// Something waiting on you: an approval, a question or a report. The buttons only ever answer it as
-/// asked or take you somewhere, and none of them is the one Return would press.
 final class CardRowView: ChannelRowView {
     struct Button {
         var title: String
-        /// Somewhere else to go rather than an answer, so it stays quiet.
         var isWayOut = false
-        /// An option you can pick several of, and whether it's picked. `nil` for a button that just does something.
         var isPicked: Bool? = nil
         var isArmed = true
         var action: () -> Void
@@ -1531,7 +1408,6 @@ final class CardRowView: ChannelRowView {
         self.buttons.forEach(addSubview)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
-        // What it says as drawn, so VoiceOver never reads out Markdown's marks.
         setAccessibilityLabel([heading, drawn.string, answered?.string, footer].compactMap { $0 }.joined(separator: ", "))
     }
 

@@ -19,7 +19,6 @@ final class ScreenshotImageTests: XCTestCase {
         return context.makeImage()!
     }
 
-    /// Colour at a pixel, counted from the top left the way focus regions are.
     private func color(of image: CGImage, x: Int, y: Int) -> (red: UInt8, green: UInt8, blue: UInt8) {
         let context = CGContext(
             data: nil,
@@ -56,17 +55,14 @@ final class ScreenshotImageTests: XCTestCase {
         XCTAssertEqual(marked.width, 400)
         XCTAssertEqual(marked.height, 300)
 
-        // Just outside each of the four sides, which also proves the mark isn't upside down.
         assertRed(marked, x: 200, y: 48)
         assertRed(marked, x: 200, y: 151)
         assertRed(marked, x: 98, y: 100)
         assertRed(marked, x: 301, y: 100)
 
-        // What you pointed at stays exactly as it was, right up to the edge.
         assertUntouched(marked, x: 200, y: 100)
         assertUntouched(marked, x: 101, y: 51)
         assertUntouched(marked, x: 298, y: 148)
-        // And so does everything well away from it.
         assertUntouched(marked, x: 10, y: 10)
         assertUntouched(marked, x: 200, y: 280)
     }
@@ -135,8 +131,6 @@ final class RegionSelectionTests: XCTestCase {
 }
 
 final class RegionPanelTests: XCTestCase {
-    /// Anything lower leaves the menu bar and Dock undimmed and able to take your clicks.
-    /// `isFloatingPanel` is the trap here, as setting it quietly drops the level back down.
     @MainActor
     func testTheOverlaySitsAboveTheMenuBarAndDock() throws {
         let screen = try XCTUnwrap(NSScreen.screens.first)

@@ -2,7 +2,6 @@ import AppKit
 import ShadesContext
 import ShadesVoice
 
-/// Asks macOS for what the cat needs: once by itself on first launch, then from the menu.
 @MainActor
 enum Setup {
     private static let askedKey = "askedForPermissions"
@@ -20,7 +19,6 @@ enum Setup {
         }
     }
 
-    /// Screen Recording and the hold keys only take effect after a restart.
     static func restart() {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.createsNewApplicationInstance = true
@@ -29,8 +27,7 @@ enum Setup {
         }
     }
 
-    /// macOS only asks once, so after that the way to change an answer is System Settings.
-    /// Asking comes first anyway, because that's what puts the app in Settings' list.
+    // Outside the repo: macOS asks for each permission only once, and asking is what lists the app in System Settings.
     static func openSettingsForWhatsMissing() {
         if !Permissions.hasScreenRecording {
             Permissions.requestScreenRecording()

@@ -3,7 +3,6 @@ import ImageIO
 @testable import Shades
 import XCTest
 
-/// The recorder behind the README's GIFs: frames from the windows' own drawing, with repeats folded into one.
 @MainActor
 final class DemoRecorderTests: XCTestCase {
     private func square(_ white: CGFloat) -> CGImage {
@@ -19,7 +18,6 @@ final class DemoRecorderTests: XCTestCase {
         let frame = CGRect(x: 100, y: 100, width: 20, height: 20)
         let (before, after) = (square(0.2), square(0.8))
         var taken = 0
-        // A busy machine, where each frame is taken a quarter of a second after the last rather than the eighth asked for.
         let recorder = DemoRecorder(
             file: file,
             windows: { taken += 1; return [(taken <= 3 ? before : after, frame)] },

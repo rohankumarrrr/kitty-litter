@@ -2,10 +2,6 @@ import Accelerate
 import Foundation
 import llama
 
-/// A language model loaded through llama.cpp and kept in memory. One call at a time.
-///
-/// Decoding is always greedy. Output that follows the input closely is drafted from the input and
-/// checked in one batch, so cleanup, which mostly copies, runs several times faster with the same result.
 final class LlamaModel {
     enum Failure: Error {
         case load, context, tokenize, decode, tooLong, timedOut
@@ -15,7 +11,6 @@ final class LlamaModel {
         var text: String
         var promptTokens: Int
         var outputTokens: Int
-        /// Tokens that came from a draft and passed the model's check.
         var draftedTokens: Int
         var batches: Int
     }
@@ -26,11 +21,9 @@ final class LlamaModel {
     private var batch: llama_batch
     private let contextSize: Int32
     private let vocabSize: Int32
-    /// The tokens in the context's memory, reused when the next prompt starts the same way.
     private var cached: [llama_token] = []
     private var prefixTokens: [llama_token] = []
 
-    /// How many input tokens to try at once. More helps only until the first wrong guess.
     static let defaultDraftLength = 8
 
     init(path: String, contextSize: Int32 = 2048, threads: Int32 = 4) throws {
@@ -65,7 +58,6 @@ final class LlamaModel {
 
     private var released = false
 
-    /// llama.cpp's Metal backend aborts if a context is still alive at exit, so this has to run first.
     func release() {
         guard !released else { return }
         released = true
@@ -75,12 +67,6 @@ final class LlamaModel {
         llama_model_free(model)
     }
 
-    /// Runs the model on `prompt`, reusing whatever start of it is still in memory.
-    ///
-    /// - Parameters:
-    ///   - draftSource: Text the output is likely to copy from.
-    ///   - maxTokens: Stops here, for output that won't end on its own.
-    ///   - deadline: Gives up with `Failure.timedOut` rather than holding up the caller.
     func complete(
         prompt: String,
         draftSource: String? = nil,
@@ -114,7 +100,6 @@ final class LlamaModel {
             guard llama_decode(context, batch) == 0 else { throw Failure.decode }
             batches += 1
 
-            // Row i predicts what follows tokens[i]. Drafted tokens stand only while they match.
             var row: Int32 = 0
             var kept = 1
             while true {
@@ -145,7 +130,6 @@ final class LlamaModel {
         )
     }
 
-    /// Fills the cache with `prefix`, so every call that starts with it can skip it.
     func warm(prefix: String) throws {
         cached = []
         llama_memory_clear(llama_get_memory(context), true)
@@ -153,26 +137,20 @@ final class LlamaModel {
         try feed(prefixTokens)
     }
 
-    /// Runs one token through the GPU. It sleeps after a few idle minutes, and this
-    /// wakes it while you're still talking, so the cleanup itself doesn't pay for that.
     func wake() throws {
         guard !prefixTokens.isEmpty else { return }
         try feed(prefixTokens)
     }
 
-    /// Forgets everything after the shared prefix, so what you said doesn't sit in the model's memory.
     private func forgetAfterPrefix() {
         llama_memory_seq_rm(llama_get_memory(context), 0, Int32(prefixTokens.count), -1)
         cached = prefixTokens
     }
 
-    // MARK: - Decoding
-
-    /// Puts `tokens` in the context's memory, keeping any start they share with what's already there.
     private func feed(_ tokens: [llama_token]) throws {
         var shared = 0
         while shared < cached.count, shared < tokens.count, cached[shared] == tokens[shared] { shared += 1 }
-        // The last token always gets decoded again, for its logits.
+        // Outside the repo: llama.cpp only gives logits for a token it has just decoded.
         if shared == tokens.count { shared -= 1 }
         llama_memory_seq_rm(llama_get_memory(context), 0, Int32(shared), -1)
 
@@ -210,8 +188,6 @@ final class LlamaModel {
         return llama_token(index)
     }
 
-    /// The input tokens that follow the longest recent stretch of output found in the input.
-    /// `cursor` marks how far through the input the output has got, so repeated words don't send it backwards.
     static func draft(after output: [llama_token], from source: [llama_token], count: Int, cursor: inout Int) -> [llama_token] {
         guard !source.isEmpty, !output.isEmpty else { return [] }
         for length in stride(from: min(3, output.count), through: 1, by: -1) {
@@ -233,8 +209,6 @@ final class LlamaModel {
         return []
     }
 
-    // MARK: - Text
-
     private func tokenize(_ text: String, special: Bool) throws -> [llama_token] {
         let length = Int32(text.utf8.count)
         var tokens = [llama_token](repeating: 0, count: Int(length) + 8)
@@ -244,7 +218,6 @@ final class LlamaModel {
     }
 
     private func detokenize(_ tokens: [llama_token]) -> String {
-        // Bytes rather than strings, because one character can straddle two tokens.
         var bytes: [UInt8] = []
         var buffer = [CChar](repeating: 0, count: 128)
         for token in tokens {
@@ -253,8 +226,6 @@ final class LlamaModel {
         }
         return String(decoding: bytes, as: UTF8.self)
     }
-
-    // MARK: - Process-wide setup
 
     private static let lock = NSLock()
     private static var live: [Unmanaged<LlamaModel>] = []
@@ -266,13 +237,12 @@ final class LlamaModel {
         defer { lock.unlock() }
         guard !started else { return }
         started = true
-        // llama.cpp narrates to stderr by default. Nothing it says belongs in a log next to dictated text.
+        // Outside the repo: llama.cpp logs to stderr unless it's given a callback.
         llama_log_set({ _, _, _ in }, nil)
         llama_backend_init()
     }
 
-    /// Exit handlers run last-registered first, and loading a model registers some of llama.cpp's own.
-    /// Ours has to go in after those, so models are freed while the Metal backend is still alive.
+    // Outside the repo: llama.cpp's Metal backend aborts if a context outlives it, and exit handlers run last-registered first.
     private static func register(_ model: LlamaModel) {
         lock.lock()
         defer { lock.unlock() }

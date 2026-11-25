@@ -2,8 +2,6 @@
 import ShadesCore
 import XCTest
 
-/// Each channel's notifications: muted, or everything, only what needs you, or nothing, on the Mac and on the phone,
-/// all asked by the one gate Do Not Disturb uses.
 @MainActor
 final class ChannelNotificationsTests: XCTestCase {
     private var stage: FakeStage!

@@ -3,7 +3,6 @@ import Foundation
 import ShadesCore
 import ShadesVoice
 
-/// Tries the voice module from the command line. `probe-voice help` lists what it can do.
 @main
 struct Probe {
     static func main() {
@@ -18,7 +17,6 @@ struct Probe {
                 exit(1)
             }
         }
-        // Telling which app is in front takes a live event loop, the same as in the app.
         if ["insert-test", "insert", "dictate"].contains(args.first ?? "") {
             NSApplication.shared.setActivationPolicy(.prohibited)
             NSApplication.shared.run()

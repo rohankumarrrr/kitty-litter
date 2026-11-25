@@ -4,7 +4,6 @@ import ShadesCore
 import ShadesT3
 import XCTest
 
-/// Controls pressed the way a mouse and keyboard press them, through `Press`, in a window that's never shown.
 @MainActor
 final class PressTests: XCTestCase {
     private let steve = Kitten(name: "Steve Pawsniak", role: "Professional", covers: "", folder: "/k/steve")
@@ -33,7 +32,6 @@ final class PressTests: XCTestCase {
         return ChannelBook.build(kittens: [steve], threads: [thread], transcripts: [threadID: said], isReading: false, unreadable: 0, cantReachT3: false)
     }
 
-    /// Messages in a window that's never shown, opening threads through T3's client, which hands its links to `opened`.
     private func messages(width: CGFloat, opened: Opened) throws -> (NSWindow, ChannelsView) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: 560), styleMask: [.borderless], backing: .buffered, defer: true)
         window.isReleasedWhenClosed = false
@@ -67,8 +65,7 @@ final class PressTests: XCTestCase {
                     let toolbar = try XCTUnwrap(row.toolbar, name)
                     let open = try XCTUnwrap(toolbar.button(CatWords.openInT3), name)
                     if open.isHidden {
-                        // Folded under More, whose menu is the one a right-click opens. Pressing More would hold the
-                        // test in the menu's own loop, so its items are chosen straight from that menu.
+                        // Outside the repo: an open NSMenu runs its own tracking loop, which would hold the test.
                         XCTAssertTrue(try Press.hit(toolbar.more) === toolbar.more, "\(name): a click lands on More")
                         let menu = try XCTUnwrap(row.menu(for: NSEvent()), name)
                         menu.performActionForItem(at: menu.indexOfItem(withTitle: CatWords.openInT3))

@@ -3,7 +3,6 @@ import AppKit
 import ShadesCore
 import XCTest
 
-/// ⌘F and the phone's Search, over a book worked out the way Messages works it out.
 @MainActor
 final class MessageSearchTests: XCTestCase {
     private let steve = Kitten(name: "Steve", role: "Professional", covers: "", folder: "/k/steve")

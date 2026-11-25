@@ -2,21 +2,17 @@ import ApplicationServices
 import Foundation
 import ShadesCore
 
-/// The window title and selected text, read from the app through Accessibility.
 struct FocusedContext: Equatable, Sendable {
     var windowTitle: String?
     var selectedText: String?
 }
 
-/// Everything here blocks on the other app, so it stays off the main thread.
 enum AccessibilityReader {
-    /// A hung app would otherwise hold each of these calls for six seconds.
     private static let messageTimeout: Float = 0.2
     private static let searchLimit = 400
     private static let visitLimit = 2000
     private static let elementLimit = 150
     private static let labelLimit = 80
-    /// What's worth pointing at. Groups and other containers only matter for what's inside them.
     private static let pointableRoles: Set<String> = [
         "AXButton", "AXMenuButton", "AXPopUpButton", "AXCheckBox", "AXRadioButton", "AXLink", "AXTextField",
         "AXTextArea", "AXComboBox", "AXSlider", "AXIncrementor", "AXDisclosureTriangle", "AXMenuBarItem",
@@ -33,7 +29,6 @@ enum AccessibilityReader {
         return FocusedContext(windowTitle: title, selectedText: selectedText(in: app))
     }
 
-    /// Password fields never get asked for anything.
     static func isPasswordField(role: String?, subrole: String?) -> Bool {
         role == secureField || subrole == secureField
     }
@@ -46,9 +41,6 @@ enum AccessibilityReader {
         return string(focused, kAXSelectedTextAttribute)
     }
 
-    /// What the cat could point at: the menus in the menu bar, then the labelled things in the front
-    /// window, in AppKit global points. It stops at the deadline with what it has, nearest the window first.
-    /// What's typed into a field is never read, only its label or placeholder.
     static func elements(pid: pid_t, primaryHeight: CGFloat, until deadline: Date) -> [ScreenElement] {
         let app = AXUIElementCreateApplication(pid)
         let menus = element(app, kAXMenuBarAttribute).map(children) ?? []
@@ -61,14 +53,11 @@ enum AccessibilityReader {
                 next += 1
                 let node = read(candidate)
                 if isPasswordField(role: node.role, subrole: node.subrole) { continue }
-                // Scrolled out of sight, so nothing inside can be pointed at either.
                 if let frame = node.frame, !frame.isEmpty, !frame.intersects(bounds) { continue }
                 let item = pointable(node, candidate)
-                // A link's text repeats the link, and saying it twice only crowds the list.
                 if let item, item.label != parentLabel, bounds.contains(CGPoint(x: item.frame.midX, y: item.frame.midY)) {
                     found.append(item)
                 }
-                // A page's text box holds what you typed as text inside it, so nothing in a field is read.
                 if let role = node.role, fieldRoles.contains(role) { continue }
                 queue += node.children.map { ($0, item?.label) }
             }
@@ -84,12 +73,10 @@ enum AccessibilityReader {
         var roleDescription: String?
         var title: String?
         var description: String?
-        /// In Quartz points.
         var frame: CGRect?
         var children: [AXUIElement] = []
     }
 
-    /// One round trip per element, since a page can have thousands of them.
     private static func read(_ element: AXUIElement) -> Node {
         let names = [
             kAXRoleAttribute, kAXSubroleAttribute, kAXRoleDescriptionAttribute, kAXTitleAttribute,
@@ -100,7 +87,6 @@ enum AccessibilityReader {
         guard AXUIElementCopyMultipleAttributeValues(element, names as CFArray, [], &result) == .success,
               let values = result as? [AnyObject], values.count == names.count
         else { return Node() }
-        // A missing attribute comes back as an error in its place.
         let present = values.map { value -> AnyObject? in
             guard CFGetTypeID(value) == AXValueGetTypeID() else { return value }
             return AXValueGetType(value as! AXValue) == .axError ? nil : value
@@ -123,7 +109,6 @@ enum AccessibilityReader {
         )
     }
 
-    /// In Quartz points, like the node.
     private static func pointable(_ node: Node, _ element: AXUIElement) -> ScreenElement? {
         guard let role = node.role, pointableRoles.contains(role), let frame = node.frame, frame.width >= 2, frame.height >= 2 else { return nil }
         var text = label(node.title) ?? label(node.description)
@@ -133,15 +118,10 @@ enum AccessibilityReader {
         return ScreenElement(role: label(node.roleDescription) ?? String(role.dropFirst(2)).lowercased(), label: text, frame: frame)
     }
 
-    /// One line, so a label can't pass for another item in the list.
     private static func label(_ text: String?) -> String? {
         ScreenText.clean(text?.split(whereSeparator: \.isWhitespace).joined(separator: " "), limit: labelLimit)
     }
 
-    /// Reads a browser page without JavaScript, if the page is exposed at all. WebKit always does.
-    /// Chromium only builds its web tree for assistive tools, through `AXEnhancedUserInterface`,
-    /// and we leave that alone: the tree takes about two seconds to appear and goes the moment
-    /// the flag does, so it would mean keeping a browser in that slower mode all the time.
     static func page(pid: pid_t, wantsText: Bool) -> PageRead {
         let app = AXUIElementCreateApplication(pid)
         guard let window = frontWindow(of: app) else { return PageRead() }
@@ -155,8 +135,6 @@ enum AccessibilityReader {
         return read
     }
 
-    /// One call through text markers, far cheaper than walking the page. Browsers mask password
-    /// fields in what this returns.
     private static func fullText(of area: AXUIElement) -> String? {
         var range: CFTypeRef?
         guard AXUIElementCopyParameterizedAttributeValue(
@@ -169,7 +147,6 @@ enum AccessibilityReader {
         return text as? String
     }
 
-    /// The biggest one, so docked developer tools don't get read in place of the page.
     private static func largestWebArea(in window: AXUIElement) -> AXUIElement? {
         var queue = [window]
         var next = 0

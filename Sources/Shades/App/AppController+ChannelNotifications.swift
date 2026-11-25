@@ -1,11 +1,7 @@
 import Foundation
 import ShadesCore
 
-/// Each channel in Messages says what it tells you, on the Mac and on your phone: everything, only what needs you, or
-/// nothing, or it's muted. `mayPopUp` asks it before Do Not Disturb, so nothing pops up around it.
 extension AppController {
-    /// Something from no channel, such as the cat's own line or a thread Messages doesn't show, is only Do Not
-    /// Disturb's to hold.
     func channelAllows(_ missed: Missed, on device: NotifyDevice) -> Bool {
         guard let thread = listedThread(of: missed), let home = messagesHome(ofThread: thread) else { return true }
         return settings.notifications(for: home.settingsKey).allows(needsYou: needsYou(missed), on: device)
@@ -18,7 +14,6 @@ extension AppController {
         channels.refresh()
     }
 
-    /// The listed thread it's about, as Activity lists it, since a subagent's own thread lives nowhere in Messages.
     func listedThread(of missed: Missed) -> String? {
         switch missed {
         case .thread(let id):
@@ -45,7 +40,6 @@ extension AppController {
 }
 
 extension ChannelID {
-    /// What Settings calls it.
     var settingsKey: String {
         switch self {
         case .shades: "shades"

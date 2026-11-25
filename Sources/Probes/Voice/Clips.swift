@@ -1,6 +1,5 @@
 import Foundation
 
-/// Spoken test clips, made with `say` in a temp folder that's safe to delete.
 enum Clips {
     struct Clip {
         let utterance: Utterance

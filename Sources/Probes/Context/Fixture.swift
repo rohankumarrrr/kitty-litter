@@ -2,24 +2,18 @@ import AppKit
 import ShadesContext
 import ShadesCore
 
-// Capture checks against a window the probe makes itself. Images are captured with only that
-// window in them, so nothing from your real screen ever reaches the files this writes.
-
-/// A window of known colours at a known place, with a cyan block to point at.
 @MainActor
 final class FixtureWindow {
     static let background = NSColor(srgbRed: 0.12, green: 0.14, blue: 0.20, alpha: 1)
     static let target = NSColor(srgbRed: 0, green: 0.85, blue: 0.85, alpha: 1)
 
     let window: NSWindow
-    /// The cyan block, in AppKit global points.
     let targetRect: CGRect
 
     init(frame: CGRect, target local: CGRect) {
         window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.level = .floating
         window.isReleasedWhenClosed = false
-        // As Messages is, so the check below proves another app's capture can't see it.
         if arguments.contains("--unshared") { window.sharingType = .none }
         window.backgroundColor = Self.background
         let content = NSView(frame: CGRect(origin: .zero, size: frame.size))
@@ -39,9 +33,7 @@ final class FixtureWindow {
     func close() { window.orderOut(nil) }
 }
 
-/// Where the fixture goes, so that two processes can agree on it.
 private enum Layout {
-    /// `--screen 1` puts everything on the second display, whose coordinates are the hard case.
     static var screen: CGRect {
         let screens = NSScreen.screens
         let chosen = value(after: "--screen").flatMap(Int.init) ?? 0
@@ -52,7 +44,6 @@ private enum Layout {
     static var targetOnScreen: CGRect { target.offsetBy(dx: frame.minX, dy: frame.minY) }
 }
 
-/// Shows the fixture for another probe process to capture. Quits by itself, so nothing stays running.
 func serveFixture() async {
     let fixture = await MainActor.run { FixtureWindow(frame: Layout.frame, target: Layout.target) }
     print("ready")
@@ -61,8 +52,6 @@ func serveFixture() async {
     await MainActor.run { fixture.close() }
 }
 
-/// A real text field holding selected text, in a process of its own for another probe to read.
-/// Quits by itself, so nothing stays running.
 @MainActor
 func serveField(secure: Bool) async {
     NSApp.setActivationPolicy(.regular)
@@ -96,13 +85,11 @@ func runSyntheticChecks(in directory: URL) async {
     let chosen = await MainActor.run { Layout.screen }
     print("screen: \(describe(chosen)) in AppKit points, \(NSScreen.screens.count) display(s)")
 
-    // The normal path first, with the fixture in another process since it leaves out its own windows.
     await checkRealCapturePath()
 
     let (fixture, backdrop) = await MainActor.run {
         (FixtureWindow(frame: Layout.frame, target: Layout.target), Backdrop(screen: Layout.screen))
     }
-    // ScreenCaptureKit only lists a window once the system has it on screen.
     try? await Task.sleep(for: .milliseconds(400))
     let windows = await MainActor.run { [fixture.id, backdrop.id] }
 
@@ -118,7 +105,6 @@ func runSyntheticChecks(in directory: URL) async {
     checkSavingToTheRealStore()
 }
 
-/// Goes through the real captures folder, with made-up bytes so none of your screen gets stored.
 private func checkSavingToTheRealStore() {
     let provider = ScreenContextProvider()
     let bytes = Data([0xFF, 0xD8, 0xFF, 0xD9])
@@ -141,8 +127,7 @@ private func checkSavingToTheRealStore() {
     print("  private snapshots save nothing: \((try? provider.saveScreenshot(of: ScreenSnapshot(screenshotJPEG: bytes, isPrivate: true))) ?? nil == nil)")
 }
 
-/// An invisible window the size of the display. Captured alongside the fixture, it makes the
-/// picture cover the whole display while holding nothing from it.
+// Outside the repo: ScreenCaptureKit frames a capture of chosen windows to just those windows.
 @MainActor
 final class Backdrop {
     private let window: NSWindow
@@ -163,8 +148,6 @@ final class Backdrop {
     func close() { window.orderOut(nil) }
 }
 
-/// Another app's window that isn't for sharing, as Messages isn't, never shows up in a capture. The same window
-/// shared has to, or a fixture that never came up would pass.
 private func checkUnsharedWindowStaysOut() async {
     let shared = await cyanInAnotherAppsFixture(unshared: false)
     let unshared = await cyanInAnotherAppsFixture(unshared: true)
@@ -181,7 +164,6 @@ private func cyanInAnotherAppsFixture(unshared: Bool) async -> Int? {
     return count(in: inner, of: decode(result.jpeg)) { $0.red < 60 && $0.green > 170 && $0.blue > 170 }
 }
 
-/// The fixture in a process of its own, once it's on the screen.
 private func startFixture(unshared: Bool = false) async -> Process? {
     let server = Process()
     server.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
@@ -194,8 +176,6 @@ private func startFixture(unshared: Bool = false) async -> Process? {
     return server
 }
 
-/// A true full-display capture, with your real screen around the fixture. It only gets counted
-/// in memory here, never saved or shown.
 private func checkRealCapturePath() async {
     guard let server = await startFixture() else {
         print("real path: couldn't start the fixture")
@@ -213,7 +193,6 @@ private func checkRealCapturePath() async {
         let image = decode(result.jpeg)
         print("real path: full display \(image.width)x\(image.height), \(result.jpeg.count / 1024) KB")
         print("  reported region: \(describe(region))")
-        // Only near the region, as the rest of the picture is your screen.
         let near = region.insetBy(dx: -40, dy: -40)
         let cyan = extent(in: near, of: image) { $0.red < 70 && $0.green > 170 && $0.blue > 170 }
         print("  cyan found at:   \(describe(cyan))")
@@ -239,7 +218,6 @@ private func capture(_ windows: [CGWindowID], focus: CGRect?) async throws -> Sc
     try await ScreenCapture.capture(ScreenCapture.Request(focusRegion: focus, onlyWindows: windows))
 }
 
-/// Finds the cyan block in the picture by colour and compares it with the rect the code reported.
 private func checkMarkLandsOnTarget(_ windows: [CGWindowID], target: CGRect, in directory: URL) async {
     do {
         let result = try await capture(windows, focus: target)
@@ -269,7 +247,6 @@ private func checkMarkLandsOnTarget(_ windows: [CGWindowID], target: CGRect, in 
     }
 }
 
-/// Regions touching each corner of the fixture catch a flip that a centred region wouldn't.
 private func checkCornerRegions(_ windows: [CGWindowID], frame: CGRect, in directory: URL) async {
     let size = CGSize(width: 150, height: 90)
     let corners: [(String, CGPoint)] = [
@@ -288,7 +265,6 @@ private func checkCornerRegions(_ windows: [CGWindowID], frame: CGRect, in direc
             print("corner \(name): nothing found")
             continue
         }
-        // Inside the region must be the fixture's own dark background, on the side we asked for.
         let inner = region.insetBy(dx: 12, dy: 12)
         let dark = count(in: inner, of: image) { $0.red < 60 && $0.green < 60 && $0.blue > 25 && $0.blue < 80 }
         let total = Int(inner.width) * Int(inner.height)
@@ -296,8 +272,6 @@ private func checkCornerRegions(_ windows: [CGWindowID], frame: CGRect, in direc
     }
 }
 
-/// The normal capture path must leave the probe's own window out. The picture holds your real
-/// screen here, so it only gets counted in memory, never saved or shown.
 private func checkOwnWindowsStayOut(target: CGRect) async {
     guard let result = try? await ScreenCapture.capture(ScreenCapture.Request(focusRegion: target)),
           let region = result.focusRegion
@@ -305,7 +279,6 @@ private func checkOwnWindowsStayOut(target: CGRect) async {
         print("own window: capture failed")
         return
     }
-    // Sample inside the cyan block, away from the mark.
     let image = decode(result.jpeg)
     let inner = region.insetBy(dx: region.width * 0.2, dy: region.height * 0.2)
     let cyan = count(in: inner, of: image) { $0.red < 60 && $0.green > 170 && $0.blue > 170 }

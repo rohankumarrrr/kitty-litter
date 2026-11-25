@@ -1,8 +1,6 @@
 import CoreGraphics
 import Foundation
 
-/// Turns poses into 16×16 images. The layer scales them up with no smoothing, so
-/// every art pixel lands on a whole number of screen pixels.
 @MainActor
 final class CatRenderer {
     private struct Key: Hashable {
@@ -21,12 +19,10 @@ final class CatRenderer {
         return image
     }
 
-    /// Drawn fresh and kept nowhere, for a picture asked for by anyone, which no cache should grow by or answer faster from.
     nonisolated static func uncached(for pose: CatPose, theme: CatTheme, jacket: UInt32? = nil) -> CGImage {
         render(pixels(for: pose, theme: theme, jacket: jacket))
     }
 
-    /// Premultiplied RGBA, row by row from the top.
     nonisolated static func pixels(for pose: CatPose, theme: CatTheme, jacket: UInt32? = nil) -> [UInt8] {
         var palette = theme.palette
         if let eyes = pose.glint.color { palette["g"] = eyes }
@@ -61,7 +57,6 @@ final class CatRenderer {
         return bytes
     }
 
-    /// Whether the art has a pixel at this grid cell, counted from the top left.
     nonisolated static func isVisible(_ pose: CatPose, x: Int, y: Int) -> Bool {
         let size = CatArt.grid
         guard (0..<size).contains(x), (0..<size).contains(y) else { return false }
@@ -73,7 +68,6 @@ final class CatRenderer {
     }
 
     nonisolated private static let zGlyph = ["zzzz", "..z.", ".z..", "zzzz"]
-    // The empty rows above a sleeping cat. It floats up and fades, as on the site.
     nonisolated private static let sleepZ: [(x: Int, y: Int, alpha: Double)] = [
         (10, 1, 0.45), (11, 1, 1), (11, 0, 0.7), (12, 0, 0.3),
     ]

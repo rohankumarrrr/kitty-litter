@@ -1,8 +1,5 @@
 import Foundation
 
-/// A message's markdown, read once by Foundation's parser into blocks that Messages and the phone both draw. It's only
-/// ever words: a link is to an http or https address or it's plain words, and a picture is its description, so nothing
-/// in a message loads or runs by itself. The pictures it points at are found by `pictures(in:)`, and shown under it.
 struct Markup: Equatable {
     struct Span: Equatable, Encodable {
         var text: String
@@ -14,8 +11,6 @@ struct Markup: Equatable {
         var pull: Pull?
     }
 
-    /// A link to a pull request, with its state as T3 has it, `open`, `merged` or `closed`. `nil` when no thread T3
-    /// lists opened it, since a message is never followed anywhere to find out.
     struct Pull: Equatable, Encodable {
         var state: String?
     }
@@ -27,17 +22,14 @@ struct Markup: Equatable {
 
         var kind: Kind
         var spans: [Span]?
-        /// A list item's bullet or number, empty for its second paragraph on, and how many lists deep it is, from 1.
         var marker: String?
         var depth: Int?
         var code: String?
-        /// A table's cells, row by row, its header first.
         var rows: [[[Span]]]?
     }
 
     var blocks: [Block]
 
-    /// `pulls` is the state of each pull request T3 knows, by `pullKey`.
     init(_ text: String, pulls: [String: String] = [:]) {
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)
         guard let parsed = try? AttributedString(markdown: text, options: options) else {
@@ -45,7 +37,6 @@ struct Markup: Equatable {
             return
         }
         var blocks: [Block] = []
-        // Which of the parser's blocks the last run was in, so the next run knows whether it starts a new one.
         var inner: Int?
         var item: Int?
         var table: Int?
@@ -64,7 +55,6 @@ struct Markup: Equatable {
                 table = tableIntent.identity
                 guard case .table(let columns) = tableIntent.kind else { continue }
                 let rowIntent = intents.first { if case .tableRow = $0.kind { true } else { $0.kind == .tableHeaderRow } }
-                // Each cell goes in its own column, so an empty one keeps its place rather than letting the rest move left.
                 var column = 0
                 for intent in intents { if case .tableCell(let index) = intent.kind { column = index } }
                 if rows.isEmpty || row != rowIntent?.identity { rows.append(Array(repeating: [], count: columns.count)) }
@@ -111,19 +101,17 @@ struct Markup: Equatable {
         endTable()
         self.blocks = blocks.map { block in
             var block = block
-            // The parser keeps the newline that ends a code block, which would draw as a blank line.
+            // Outside the repo: Foundation's markdown parser keeps the newline that ends a code block.
             if block.kind == .code, block.code?.hasSuffix("\n") == true { block.code?.removeLast() }
             return block
         }
     }
 
-    /// A picture a message points at: its description, and the address or path it gave.
     struct Picture: Equatable {
         var name: String
         var url: URL
     }
 
-    /// The pictures written in markdown, in order, at most `Drop.mostAtOnce`.
     static func pictures(in text: String) -> [Picture] {
         guard text.contains("!["), let parsed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)) else { return [] }
         let pictures = parsed.runs.compactMap { run in
@@ -137,8 +125,7 @@ struct Markup: Equatable {
 
     private static func span(_ run: AttributedString.Runs.Run, _ text: String, pulls: [String: String]) -> Span {
         let intent = run.inlinePresentationIntent ?? []
-        // A line break in what was written stays one, as it was before markdown had blocks. A picture with no
-        // description is nothing here, since it shows under the message.
+        // Outside the repo: Foundation's markdown parser gives a picture with no description the text U+FFFC.
         let text = run.imageURL != nil ? text.replacingOccurrences(of: "\u{FFFC}", with: "") : text
         var span = Span(text: intent.contains(.softBreak) || intent.contains(.lineBreak) ? "\n" : text)
         if intent.contains(.stronglyEmphasized) { span.bold = true }
@@ -147,7 +134,6 @@ struct Markup: Equatable {
         if intent.contains(.strikethrough) { span.strike = true }
         guard let link = run.link, opens(link) else { return span }
         span.link = link
-        // Only a bare address is a chip, labelled from the address itself, so a link's own words can't pass for one.
         if text == link.absoluteString, let pull = pull(link) {
             span.pull = Pull(state: pulls[pull.key])
             span.text = pull.label
@@ -155,14 +141,10 @@ struct Markup: Equatable {
         return span
     }
 
-    /// Only web addresses open, so a message can't point at a file, a script or another app. One with a name before
-    /// its host, as in `https://github.com@example.com`, could hide where it goes, so it stays words too.
     static func opens(_ url: URL) -> Bool {
         ["http", "https"].contains(url.scheme?.lowercased()) && url.host?.isEmpty == false && url.user == nil && url.password == nil
     }
 
-    /// A link that's exactly a pull request on GitHub: `owner/repo#number` in lower case, which finds its state, and
-    /// `owner/repo #number` to show. Anything more on the path, such as `..`, could lead somewhere else.
     static func pull(_ url: URL) -> (key: String, label: String)? {
         guard url.host?.lowercased() == "github.com" else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }

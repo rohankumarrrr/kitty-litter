@@ -1,39 +1,22 @@
 import AppKit
 import ShadesCore
 
-/// The keys Messages answers to while it has the keyboard, taken from T3 Code's, the Claude app's and Slack's own.
-/// None of them is a global hotkey, so they do nothing while another app has the keyboard.
 enum MessagesShortcut: Hashable {
-    /// ⌘⇧[ and ⌘⇧], the thread above or below in the place you're looking at.
     case previousThread, nextThread
-    /// ⌥↑ and ⌥↓, the place above or below in the sidebar.
     case previousPlace, nextPlace
-    /// ⌥⇧↑ and ⌥⇧↓, the channel above or below that has something new.
     case previousUnread, nextUnread
-    /// ⌘[ and ⌘], through the places and threads you've looked at.
     case back, forward
-    /// ⌘1 to ⌘9, a row of the sidebar.
     case place(Int)
-    /// ⌘K, a box for jumping to a place or thread by name.
     case jump
-    /// ⌘F, the same box finding a message by its words.
     case search
-    /// Esc, which closes the jump box, the shortcuts, or a thread's pane.
     case escape
-    /// ⌘⇧T and ⌘⇧M.
     case threads, activity
-    /// ⌘N, the box of the place you're on.
     case compose
-    /// ⌘B, which hides the sidebar or shows it again, as in T3 Code.
     case toggleSidebar
-    /// ⌘W.
     case close
-    /// ⌘/, every shortcut.
     case cheatsheet
-    /// ⌘,, every setting, as in any Mac app.
     case settings
 
-    /// Physical keys, so they're where they are whatever the layout, as in T3 Code and Slack.
     private enum Key {
         static let leftBracket: UInt16 = 33
         static let rightBracket: UInt16 = 30
@@ -43,7 +26,6 @@ enum MessagesShortcut: Hashable {
         static let digits: [UInt16: Int] = [18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9]
     }
 
-    /// What a key means in Messages, or `nil` for one it leaves alone. Letters go by what the key types.
     init?(keyCode: UInt16, characters: String?, modifiers: NSEvent.ModifierFlags) {
         let held = modifiers.intersection([.command, .shift, .option, .control])
         let typed = characters?.lowercased() ?? ""
@@ -93,16 +75,13 @@ enum MessagesShortcut: Hashable {
         }
     }
 
-    /// One a text box would want for itself while it has words in it: ⌥ and the arrows move by paragraph there.
     var movesInText: Bool {
         [.previousPlace, .nextPlace, .previousUnread, .nextUnread].contains(self)
     }
 }
 
-/// Somewhere ⌘K can jump to: a place in the sidebar, or a thread. Or a message ⌘F found, which the pane scrolls to.
 struct JumpItem: Equatable {
     var title: String
-    /// Where a thread is, such as its channel.
     var detail: String?
     var selection: ChannelSelection
     var found: FoundMessage?
@@ -111,7 +90,6 @@ struct JumpItem: Equatable {
 extension JumpItem {
     static let limit = 8
 
-    /// Who said it, then where and when, with its words under them. A phone names some threads its own way.
     init(_ found: FoundMessage, in book: ChannelBook, now: Date, threadTitle: ((String) -> String)? = nil) {
         let channel = (found.selection.thread.flatMap(book.home(ofThread:)) ?? found.selection.channelID).map(book.name(of:))
         let thread = found.selection.thread.map(threadTitle ?? book.title(ofThread:))
@@ -119,7 +97,6 @@ extension JumpItem {
         self.init(title: book.name(of: found.message.speaker), detail: (place + [CatWords.age(of: found.message.at, now: now)]).joined(separator: " · "), selection: found.selection, found: found)
     }
 
-    /// Every place, then every thread you can open, newest first, worked out from what's in memory.
     static func all(in book: ChannelBook) -> [JumpItem] {
         let places = ChannelSidebarItem.groups(in: book).flatMap(\.items).map { item in
             JumpItem(title: item.title, detail: nil, selection: ChannelSelection(item.place))
@@ -133,8 +110,6 @@ extension JumpItem {
         return places + threads
     }
 
-    /// What's named by every word you've typed, those whose name starts with it first. With nothing typed, the places
-    /// and the newest threads.
     static func matching(_ query: String, in book: ChannelBook) -> [JumpItem] {
         let words = query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
         let all = all(in: book)
@@ -152,9 +127,6 @@ extension JumpItem {
     }
 }
 
-/// ⌘K: a box over the window that jumps to a place or thread by name, and ⌘F, the same box finding a message by its
-/// words. It's a view inside Messages, not a window of its own, so it can't make Shades the active app. The arrows
-/// move, Return opens and Esc closes.
 final class JumpBoxView: QuietView, NSTextFieldDelegate {
     enum Mode {
         case jump, search
@@ -163,18 +135,15 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
     private static let width: CGFloat = 520
     private static var fieldHeight: CGFloat { MessagesInk.title + 32 }
     private static let footerHeight: CGFloat = 26
-    /// How long typing pauses before T3 is asked, so it's asked about what you meant rather than every letter.
     private static let askAfter: TimeInterval = 0.35
 
     var onOpen: ((JumpItem) -> Void)?
     var onClose: (() -> Void)?
-    /// Words for T3 to look for, once typing pauses in Search.
     var onFind: ((String) -> Void)?
     let field = NSTextField()
     private(set) var mode = Mode.jump
     private(set) var items: [JumpItem] = []
     private(set) var highlighted = 0
-    /// Search found more than there's room for.
     private(set) var hasMore = false
     private var book: ChannelBook?
     private var asking: Timer?
@@ -207,7 +176,6 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         }
     }
 
-    /// Opens it as ⌘K's or ⌘F's, with whatever's typed in it.
     func show(_ book: ChannelBook, mode: Mode = .jump) {
         self.book = book
         self.mode = mode
@@ -220,12 +188,10 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         askSoon()
     }
 
-    /// Messages shows a new book, whose words Search reads ahead, open or not, so the first search seldom waits.
     func readAhead(_ book: ChannelBook) {
         plainWords.readAhead(book)
     }
 
-    /// What Messages has read changed while it's open, such as the threads T3 found. What's highlighted stays.
     func update(_ book: ChannelBook) {
         let current = items.indices.contains(highlighted) ? items[highlighted] : nil
         self.book = book
@@ -252,12 +218,10 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         needsDisplay = true
     }
 
-    /// As many as fit over the window, up to ⌘K's eight.
     private var searchLimit: Int {
         min(max(Int((bounds.height - 160) / rowHeight), 3), JumpItem.limit)
     }
 
-    /// Search asks T3 once typing pauses, for threads Messages hasn't read. No words asks it to stop looking.
     private func askSoon() {
         asking?.invalidate()
         asking = nil
@@ -273,14 +237,12 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         asking = timer
     }
 
-    /// Under the row when there's nothing to show: what to type, that T3 is still looking, or that nothing has it.
     private var nothing: String {
         guard mode == .search else { return CatWords.jumpNothing }
         if MessageSearch.words(in: query).isEmpty { return CatWords.searchHint }
         return book?.searchingT3 != nil ? CatWords.searchingT3 : CatWords.searchNothing
     }
 
-    /// Under Search's messages: that T3 is still looking, or that there are more than fit.
     private var footer: String? {
         guard mode == .search, !items.isEmpty else { return nil }
         if book?.searchingT3 != nil { return CatWords.searchingT3 }
@@ -304,7 +266,6 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
         return NSRect(x: (bounds.width - width) / 2, y: 70, width: width, height: height)
     }
 
-    /// Room before the field for its magnifying glass, as Spotlight has.
     private static let glassRoom: CGFloat = 26
 
     override func layout() {
@@ -393,7 +354,6 @@ final class JumpBoxView: QuietView, NSTextFieldDelegate {
     }
 }
 
-/// ⌘/: every shortcut, grouped, over the window, as Slack's list is. Like a menu, it stays one size whatever the text size.
 final class CheatsheetView: QuietView {
     private static let width: CGFloat = 460
     private static let rowHeight: CGFloat = 26
@@ -420,7 +380,6 @@ final class CheatsheetView: QuietView {
         56 + CGFloat(groups.count) * headingHeight + CGFloat(groups.reduce(0) { $0 + $1.rows.count }) * rowHeight + 16
     }
 
-    /// One column, or the first group beside the rest where one won't fit, as in a short window.
     private var columns: [Groups] {
         let groups = CatWords.shortcutGroups[...]
         return Self.height(of: groups) + 30 <= bounds.height ? [groups] : [groups.prefix(1), groups.dropFirst()]
@@ -442,7 +401,6 @@ final class CheatsheetView: QuietView {
         if !card.contains(convert(event.locationInWindow, from: nil)) { onClose?() }
     }
 
-    /// Floating glass, with each shortcut's keys on a chip.
     override func draw(_ dirtyRect: NSRect) {
         MessagesInk.sidebar.withAlphaComponent(0.55).setFill()
         bounds.fill(using: .sourceOver)
@@ -478,10 +436,7 @@ final class CheatsheetView: QuietView {
     }
 }
 
-/// What each shortcut does, all from what's in memory, so the window lays out in the same turn.
 extension ChannelsView {
-    /// The panel only calls this while Messages has the keyboard. `true` if the key did something, or was Messages'
-    /// own and had nowhere to go.
     @discardableResult
     func perform(_ shortcut: MessagesShortcut) -> Bool {
         guard let book else { return false }
@@ -532,7 +487,6 @@ extension ChannelsView {
             isSidebarHidden.toggle()
             return true
         case .compose:
-            // The place's own box, or the thread's where the place has none, such as Threads.
             guard let pane = [pane, threadPane].first(where: { !$0.isHidden && $0.composer.target != nil }) else { return false }
             pane.focusComposer()
             return true
@@ -550,7 +504,6 @@ extension ChannelsView {
         }
     }
 
-    /// The threads the place you're on leads to, top to bottom, which ⌘⇧[ and ⌘⇧] step through.
     func threadOrder(in book: ChannelBook) -> [String] {
         switch selection.place {
         case .channel(let id):
@@ -558,7 +511,6 @@ extension ChannelsView {
         case .threads:
             return book.yours.map(\.id)
         case .activity:
-            // Only those a click there opens beside a channel. Anything else opens in T3, so no key leads a box to it.
             return ChannelRows.activityThreads(in: book, answered: pane.parts.answers.mapValues(\.count))
         }
     }
@@ -571,7 +523,6 @@ extension ChannelsView {
             target = index + step
             guard order.indices.contains(target) else { return true }
         } else {
-            // With none open, the newest: a channel's is at the bottom, and Threads and Activity put theirs at the top.
             target = selection.channelID == nil ? 0 : order.count - 1
         }
         open(thread: order[target])
@@ -586,7 +537,6 @@ extension ChannelsView {
         return true
     }
 
-    /// Round from where you are to the next channel in bold, as Slack does.
     private func step(unread step: Int, in book: ChannelBook) -> Bool {
         let items = ChannelSidebarItem.groups(in: book).flatMap(\.items)
         let index = items.firstIndex { $0.place == selection.place } ?? 0
@@ -603,7 +553,6 @@ extension ChannelsView {
         let target = historyIndex + step
         guard history.indices.contains(target) else { return true }
         var selection = history[target]
-        // A new thread you started may have its own ID by now.
         if let thread = selection.thread, let started = book.started[thread] { selection.thread = started }
         historyIndex = target
         isTravelling = true
@@ -612,7 +561,6 @@ extension ChannelsView {
         return true
     }
 
-    /// ⌘K and ⌘F open the box, close it if it's already theirs, and turn it into the other's with what's typed in it.
     private func toggleBox(_ mode: JumpBoxView.Mode, _ book: ChannelBook) {
         if jumpBox.isHidden {
             openJump(book, mode: mode)
@@ -638,7 +586,6 @@ extension ChannelsView {
         if let responder = window?.firstResponder as? NSView, responder.isDescendant(of: jumpBox) { window?.makeFirstResponder(nil) }
     }
 
-    /// Opens what the box found, and for a message, scrolls the pane it's in to it.
     func jumped(to item: JumpItem) {
         closeJump()
         let selection = item.selection

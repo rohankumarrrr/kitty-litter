@@ -1,8 +1,5 @@
 import AppKit
 
-/// `opal <folder> [jacket...]` in the demo: every one of Opal's primitives on one sheet, drawn by the same helpers the
-/// windows use, to `<folder>/opal.png`. Jackets given as hex, such as a kitten's colour from before, get a row of
-/// cats of their own to set beside the palette's.
 @MainActor
 final class OpalSheet: NSView {
     static let width: CGFloat = 1180
@@ -28,7 +25,7 @@ final class OpalSheet: NSView {
         for (button, origin, ring) in buttons {
             button.frame.origin = origin
             addSubview(button)
-            // The ring a button shows once Tab reaches it, which only a window with the keyboard draws on its own.
+            // Outside the repo: AppKit only draws a focus ring in the window with the keyboard.
             if ring { addSubview(Ring(frame: button.frame)) }
         }
     }
@@ -120,8 +117,6 @@ final class OpalSheet: NSView {
             cats(jackets, y: 970)
         }
     }
-
-    // MARK: - Pieces
 
     private func heading(_ title: String, _ line: String, y: CGFloat) {
         NSAttributedString(string: title, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.toolbarTitle, weight: .semibold), .foregroundColor: MessagesInk.strong])

@@ -4,8 +4,6 @@ import ShadesContext
 import ShadesCore
 import XCTest
 
-// The app's parts, faked, so tests run the real flows with no windows, agents or microphone.
-
 final class Log: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [String] = []
@@ -47,7 +45,6 @@ final class FakeStage: CatStage {
     var arriveImmediately = true
     var isPointerOnBubble = false
     var pendingArrival: (() -> Void)?
-    /// One of the app's own windows is in front where a spot is marked.
     var ownWindowAt: CGRect?
 
     init(log: Log) { self.log = log }
@@ -101,7 +98,6 @@ final class FakeStage: CatStage {
     func showKittens(_ statuses: [KittenStatus]) { kittens = statuses }
     func hideKittens() { kittens = nil }
     var isChannelsVisible = false
-    /// Your work is over it, as clicking back into another app leaves it.
     var isChannelsCovered = false
     var isChannelsInFront: Bool { isChannelsVisible && !isChannelsCovered }
     var selections: [ChannelSelection?] = []
@@ -122,7 +118,6 @@ final class FakeStage: CatStage {
         messagesBoxHeld = false
     }
     func releaseMessagesBox() { messagesBoxHeld = false }
-    /// What Settings was opened with, and where, then what it's showing since.
     var settingsShown: [(form: SettingsForm, overMessages: Bool)] = []
     var settingsForms: [SettingsForm] = []
     func showSettings(_ form: SettingsForm, overMessages: Bool) {
@@ -145,21 +140,17 @@ final class FakeStage: CatStage {
     func copyToPasteboard(_ text: String) { copied = text }
     func openSettings(_ pane: Permissions.Pane) { openedSettings.append(pane) }
 
-    /// What a person does: types into the panel and presses Return.
     func type(_ text: String) {
         submitInput(text)
     }
 }
 
-/// The fakes answer on the main actor, as every test that settles by yielding takes for granted. Left nonisolated, each
-/// call went through Swift's thread pool and back, which a busy CI runner can hold up for over a second.
 final class FakeBackend: AgentBackend, @unchecked Sendable {
     enum Mode: String { case start, followUp, forward }
     struct Sent {
         var mode: Mode
         var threadID: String?
         var prompt: AgentPrompt
-        /// What a forward does while its thread is working.
         var behavior: FollowUpBehavior?
     }
 
@@ -169,19 +160,12 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     private var _opened: [String] = []
     private var watcher: AsyncStream<[AgentThread]>.Continuation?
     var replies: [[AgentReplyEvent]] = []
-    /// The router's reply to a question, whatever order things start in.
     var routerSays: [String: String] = [:]
-    /// Chooses by what was sent, for turns that overlap. Falls back on `replies`.
     var replyTo: ((AgentPrompt) -> [AgentReplyEvent]?)?
-    /// Holds a reply open partway, until this ends, then plays `afterHeld`.
     var held: Task<Void, Never>?
     var afterHeld: [AgentReplyEvent] = []
-    /// Holds back `.started` until this ends, the way a real follow-up does while it uploads the screenshot.
     var heldBeforeStarted: Task<Void, Never>?
-    /// A follow-up that fails only once this ends, as a thread that's gone does after the upload.
     var failFollowUpsAfter: Task<Void, Never>?
-    /// Holds back finding a kitten's project, the way a real lookup takes a trip to T3. Kittens' folders are all
-    /// in /k, and the router's own lookup isn't held, since the router has to run first.
     var heldProject: Task<Void, Never>?
     var reports: [String: String] = [:]
     var projects: [String: String] = [:]
@@ -193,7 +177,6 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     var failResponses = false
     var origins: [String: ThreadOrigin] = [:]
     var untraceable: Set<String> = []
-    /// New threads start, and then never finish.
     var holdStarts = false
     var whileReadingAReport: (() async -> Void)?
     var whileFindingAProject: (() async -> Void)?
@@ -209,7 +192,6 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     private var count = 0
 
     var sent: [Sent] { lock.withLock { _sent } }
-    /// What was sent apart from Shades' looks at what kittens ask for, which run beside every decision.
     var sentApartFromLooks: [Sent] { sent.filter { $0.prompt.title?.hasPrefix(AppController.reviewTitle) != true } }
     var responses: [(String, ApprovalDecision)] { lock.withLock { _responses } }
     var opened: [String] { lock.withLock { _opened } }
@@ -219,7 +201,6 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     }
 
     func start(_ prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
-        // The router sees your screen, so wherever it's started from, it can only start where it can't pass that on.
         if prompt.text.hasPrefix("You are Shades,") { XCTAssertEqual(prompt.projectID, "project-router") }
         let id = lock.withLock { () -> Int in
             count += 1
@@ -247,9 +228,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         return play(threadID: threadID, prompt: prompt)
     }
 
-    /// The router's turn for this question starts, then waits for `releaseHeld()`.
     var holdQuestion: String?
-    /// A new thread's first turn, or a follow-up, whose text starts with this starts, then waits for `releaseHeld()`.
     var holdTurn: String?
     private var heldTurns: [() -> Void] = []
     func releaseHeld() {
@@ -273,7 +252,6 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         }
     }
 
-    /// What Messages reads: every thread, and what was said in each.
     var listed: [AgentThread]?
     var said: [String: [Exchange]] = [:]
     @MainActor func allThreads() async -> [AgentThread]? { listed }
@@ -282,7 +260,6 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
     private func play(threadID: String, prompt: AgentPrompt) -> AsyncThrowingStream<AgentReplyEvent, Error> {
         let routed = routerSays.first { prompt.text.contains("Their question: \($0.key)") }?.value
         let chosen = routed.map { [AgentReplyEvent.finished(fullText: $0)] } ?? replyTo?(prompt)
-        // A look finds nothing to ask about unless a test says otherwise, and never takes a reply queued for something else.
         let looks = prompt.title?.hasPrefix(AppController.reviewTitle) == true
         let events = chosen ?? (looks ? [.finished(fullText: "NONE")] : lock.withLock { replies.isEmpty ? [AgentReplyEvent.finished(fullText: "Okay.")] : replies.removeFirst() })
         if let holdQuestion, prompt.text.contains("Their question: \(holdQuestion)") {
@@ -360,10 +337,7 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         lock.withLock { _answers.append((question.id, answers)) }
     }
 
-    // More than one is partway through at once when turns overlap, so what they share is locked.
-    /// T3 never answers, as when signing in waits on a Keychain dialog.
     var neverAnswers = false
-    /// T3 answers nothing until this ends, then everything at once, as when a new build has signed in again.
     var silentUntil: Task<Void, Never>?
 
     @MainActor func projectID(atPath path: String) async -> String? {
@@ -411,7 +385,6 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         return found.report
     }
 
-    /// Pictures T3 keeps, by attachment ID or by `thread:path`, and each one asked for, in the same form.
     var keptPictures: [String: Data] = [:]
     private var _picturesAsked: [String] = []
     var picturesAsked: [String] { lock.withLock { _picturesAsked } }
@@ -431,7 +404,6 @@ final class FakeBackend: AgentBackend, @unchecked Sendable {
         return origins[threadID] ?? ThreadOrigin(title: "Work", projectPath: nil, startedBy: .person)
     }
 
-    /// What opening a thread in T3 throws, standing in for a step that went wrong.
     var openFails: Error?
 
     @MainActor func open(threadID: String) async throws {
@@ -491,7 +463,6 @@ final class FakeVoice: VoiceEngine {
         if let beginError { throw beginError }
         began += 1
     }
-    /// Holds each `end()` until `finishEnd()`, as the real engine takes a moment to work out what you said.
     var holdsEnd = false
     private var heldEnds: [CheckedContinuation<Void, Never>] = []
     var endsHeld: Int { heldEnds.count }

@@ -9,7 +9,6 @@ final class HotkeysTests: XCTestCase {
     }
 
     func testADemoLeavesItsShortcutsToTheInstalledApp() {
-        // A key nobody has, so claiming it for a moment can't get in anyone's way.
         let key = (keyCode: kVK_F19, modifiers: controlKey | optionKey | cmdKey | shiftKey)
         let demo = Hotkeys()
         demo.claimsKeys = false

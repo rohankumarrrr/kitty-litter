@@ -2,8 +2,6 @@ import CoreGraphics
 import Foundation
 import ShadesCore
 
-/// The flows that tie the features together. Written only against the contracts in
-/// Core and the `CatStage`, so all of it can run without windows, T3 or a microphone.
 @MainActor
 final class AppController {
     struct Capture: Sendable {
@@ -11,9 +9,7 @@ final class AppController {
         var error: Error?
     }
 
-    /// How long the panel waits on a look at the screen before opening anyway.
     static let panelWait: TimeInterval = 1.5
-    /// How long anything waits on it at all. A stuck capture can't hold a question up.
     static let captureTimeout: TimeInterval = 4
     static let settleSeconds: TimeInterval = 2
     private static let longestLine = 200
@@ -52,7 +48,6 @@ final class AppController {
     var watch = AgentWatch()
     var approvals = ApprovalQueue()
     var vocabulary: [String] = []
-    /// Your T3 projects, which speech recognition should expect to hear.
     var projectNames: [String] = [] {
         didSet { updateVocabulary(watch.threads) }
     }
@@ -62,23 +57,16 @@ final class AppController {
         var done = false
         var threadID: String?
         var note: String?
-        /// What a finished rewrite would go in place of: the selection as it was read, and its app.
         var replacing: (text: String, bundleID: String?)?
-        /// Where the answer points, which the cat sits by for as long as the answer's up.
         var pointingAt: CGRect?
     }
-    /// Something an agent has to tell you, which stays until you've had a chance to read it.
     struct Notice {
         var id: Int
         var caption: String
         var text: String
         var threadID: String?
-        /// Set for a question, which goes away by itself once it's answered.
         var questionID: String?
-        /// For a screen warning on work handed to a thread that had already finished a run, that run, which isn't the work.
         var after: String?
-        /// A follow-up's warning. The list only names the run a thread last finished, so it can't say which run is
-        /// carrying your words, and only the send's own turn failing takes the warning back.
         var followUp = false
     }
     struct Line {
@@ -90,7 +78,6 @@ final class AppController {
     var heard: String?
     var approvalsOnShow = false
     var approvalsHidden = false
-    /// Whether the bubble had an approval it may ask about when they last changed.
     var hadAskable = false
     var catIsAway = false
     var reply: Reply? {
@@ -100,28 +87,17 @@ final class AppController {
     }
     var line: Line?
     var notices: [Notice] = []
-    /// Threads that are the cat's own plumbing, like writing a summary.
     var hiddenThreads: Set<String> = []
-    /// Threads the cat started to do real work, which may pass it on to another thread.
     var dispatchers: Set<String> = []
-    /// Corrections still on their way to a session, so one that fails can only take back a mark none of the others earned.
     var correctionSends = CorrectionSends()
     var inbox: Inbox
-    /// Threads whose report is being read and sorted, so each is only filed once.
     var filing: Set<String> = []
-    /// Each thread's last run read outside the inbox, and whether it was done by then. A run that ends while something
-    /// it'll wake up for carries on is read once then, and called done once that's over.
     var readRuns: [String: (run: String, done: Bool)] = [:]
-    /// Summaries that were already running when the app started, which nobody's following.
     var leftoverSummaries: Set<String> = []
-    /// Runs that don't belong to a kitten with an inbox, so nobody reads the kittens again for them.
     var notForInbox: Set<String> = []
     var notForInboxSince = Date.distantPast
-    /// Whether the bubble should mention the inbox.
     var inboxNudge = false
-    /// Something came in while Messages was open, so the bubble mentions it once it's closed.
     var nudgeOnClose = false
-    /// What Do Not Disturb kept from popping up, in order, saved with the inbox as IDs until you've caught up.
     var away: [Missed] = [] {
         didSet {
             inbox.away = away
@@ -129,35 +105,20 @@ final class AppController {
             channels.refresh()
         }
     }
-    /// Do Not Disturb just went off, so the bubble says what came in.
     var catchingUp = false
-    /// Activity's shown what came in, so closing Messages means you've caught up.
     var awaySeen = false
-    /// Counts the boxes that take what you say, so words meant for one can't land in the next.
     var boxesOpened = 0
-    /// The box what's being said belongs in, fixed when the key goes down.
     var talkBox: Int?
-    /// What's being said goes into Messages' box, fixed when the key goes down, as how many times Messages had
-    /// closed then. Closing it again means the box you were talking to is gone.
     var talkToMessages: Int?
     var messagesClosings = 0
     var inboxSaveFailed = false
-    /// Where the router's threads run, once it's known. Every thread there is a talk with the cat.
     var knownRouterFolder: String?
-    /// Shortcuts another app already had, for the self-check.
     var takenShortcuts: [String] = []
-    /// Questions answered from Messages, kept out of it until the list catches up.
     var answeredQuestions: Set<String> = []
-    /// The router's turn for what you said in Messages, so each waits for the one before.
     var messagesTurn: Task<Void, Never>?
-    /// Lockdown's last ask, so each waits for the one before.
     var lockdownTurn: Task<Void, Never>?
-    /// The thread Lockdown last started, which T3 may not have listed yet.
     var lockdownStarted: String?
-    /// Messages' own conversation with the router, apart from the Ask box's, which can hold your screen.
     var messagesQuick = QuickSession()
-    /// Sessions the router started for what you wrote in Messages, and threads no kitten owns that it passed your words
-    /// to, and when. Each shows with its kitten or the cat, kept as IDs with the inbox so a restart leaves it there.
     var messagesThreads: [String: Date] {
         get { inbox.messagesThreads }
         set {
@@ -165,8 +126,6 @@ final class AppController {
             keepInbox()
         }
     }
-    /// Work the cat started for you from the Ask box, out loud, a drop or Fix, which no kitten owns. Each is a thread
-    /// with the cat, kept as IDs with the inbox, like `messagesThreads`.
     var catsWork: [String: Date] {
         get { inbox.catsWork }
         set {
@@ -174,8 +133,6 @@ final class AppController {
             keepInbox()
         }
     }
-    /// The cat's own work you chose to show on your phone, kept as IDs with the inbox. Only the switch in its thread's
-    /// pane changes it.
     var onPhone: [String: Date] {
         get { inbox.onPhone }
         set {
@@ -185,57 +142,35 @@ final class AppController {
     }
     var latestThreads: [AgentThread] = []
     var threadListArrived = false
-    /// Everything that's had a notification since the app started, so an answer that didn't go through can't bring a second.
     var notified: Set<String> = []
-    /// Those that haven't been taken back.
     var showing: Set<String> = []
-    /// Messages on your phone, while it's on.
     var phone: PhoneLink?
-    /// Where the phone page is on your tailnet, once Tailscale has said.
     var phoneAddress: String?
-    /// The loopback port it's listening on.
     var phoneListening: UInt16?
     var phoneTask: Task<Void, Never>?
-    /// What was last asked of Tailscale, so each ask waits for the one before, and turning it off always comes last.
     var phoneTailscale: Task<Void, Never>?
-    /// How long Messages stays open after a phone stops looking, so going from place to place on it doesn't close it.
     var phoneGrace: TimeInterval = 20
-    /// Reads the focus and the kittens' backlogs, for the window and a paired phone, and nothing else.
     var readPriorities: ([Kitten]) -> Priorities = { _ in Priorities() }
-    /// A thread can stop for a moment and pick up again, as when a reviewer it started hands back.
-    /// Waiting a little before saying it's finished means that doesn't read as done.
+    // Outside the repo: a T3 thread can stop for a moment and pick up again, as when a reviewer it started hands back.
     var reportDelay: TimeInterval = 5
-    /// How long news stays up, and longer while the pointer's on it. A problem stays until you dismiss it.
     var lineSeconds: TimeInterval = 5
-    /// How long a question waits for the first list of sessions, so one asked right after launch can still be routed.
     var threadListWait: TimeInterval = 2
-    /// How long the self-check gives T3 to answer before reporting it's still connecting.
     var t3Wait: TimeInterval = 10
-    /// How much longer before it reports T3 stuck: past two tries at signing in, each cut off at 30 seconds.
     var t3StuckAfter: TimeInterval = 120
-    /// Reports again once T3 answers a self-check that went out without it.
     var t3Recheck: Task<Void, Never>?
-    /// Goes up with every self-check, so only the newest one's findings are written or said.
     var healthChecks = 0
-    /// How long after T3's first list Messages reads ahead, so it never competes with everything else a launch asks T3.
     var warmDelay: Duration = .seconds(15)
-    /// Whether the quick thread is on its first turn, with no conversation worth keeping yet.
     var quickIsFresh = false
     var lineCounter = 0
     var replyGeneration = 0
-    /// Only goes up when you ask something, unlike `replyGeneration`, which closing a reply moves on too.
     var questionsAsked = 0
-    /// Generations cancelled with Esc before the reply finished. Being overtaken isn't taking something back.
     var takenBack: Set<Int> = []
 
     enum VoiceMode {
         case talk, dictate
     }
     var voiceMode: VoiceMode?
-    /// Moves on with every take and every cancel, so one worked out after it was cancelled or overtaken can't act for
-    /// the take after it.
     var takes = 0
-    /// The voice engine's own limit on a take.
     var longestMicTake: TimeInterval = 300
     var hearing = false
     var voiceProblem: Error?
@@ -247,7 +182,6 @@ final class AppController {
     var fetchingEarsSince: Date?
     var fetchingEarsLine = false
 
-    // Exposed so tests can wait on a flow to finish.
     var flow: Task<Void, Never>?
     var replyTask: Task<Void, Never>?
     var frontierTask: Task<Void, Never>?
@@ -255,7 +189,6 @@ final class AppController {
     var healthTask: Task<Void, Never>?
     var health: [HealthFinding]?
     var forwardTask: Task<Void, Never>?
-    /// Reading a file attached in Messages before it goes anywhere.
     var attachTask: Task<Void, Never>?
     var voiceTask: Task<Void, Never>?
     private var listeners: [Task<Void, Never>] = []
@@ -309,10 +242,7 @@ final class AppController {
     }
 
     func start() {
-        // The list starts by itself whenever T3 does, so this only needs saying once.
         let updates = backend.watchThreads()
-        // The voice engine's streams last as long as it does, and cancelling a consumer
-        // would end them for good. So they're heard once, here, and never let go.
         let partials = voice.partials
         let levels = voice.levels
         listeners = [
@@ -338,11 +268,9 @@ final class AppController {
         }
         stage.showText(size: settings.textSize, font: settings.messagesFont)
         stage.catDoNotDisturb(settings.doNotDisturb)
-        // Turned off before you caught up, it still has that to say.
         catchingUp = !isHolding && !away.isEmpty
         startKeys()
         startInbox()
-        // Anything from before may have been answered since, and the cat says again whatever's still waiting.
         clearNotifications()
         if settings.phone { startPhone() }
     }
@@ -372,8 +300,6 @@ final class AppController {
         }
     }
 
-    // MARK: - The bubble
-
     func bubbleAction(_ action: BubbleAction) {
         switch action {
         case .open(let threadID):
@@ -395,8 +321,6 @@ final class AppController {
         }
     }
 
-    /// Esc means "not now" for anything. A click somewhere else is softer: it can't lose
-    /// an approval, and you may well be working while a reply is on the way.
     func bubbleDismissed(byClick: Bool) {
         guard let content = currentBubble else { return }
         switch content {
@@ -407,7 +331,6 @@ final class AppController {
             guard !byClick else { return }
             approvalsHidden = true
         case .notice:
-            // Clicking elsewhere shouldn't lose a question you haven't answered.
             guard let notice = notices.first, !(byClick && notice.questionID != nil) else { return }
             notices.removeFirst()
         case .thinking:
@@ -422,7 +345,6 @@ final class AppController {
         case .line:
             line = nil
         case .inbox:
-            // Clicking elsewhere shouldn't lose something that needs you, or the one word on what came in while you were away.
             guard !byClick || !catchingUp && !inboxEntries.contains(where: \.needsYou) else { return }
             inboxNudge = false
             catchingUp = false
@@ -476,9 +398,6 @@ final class AppController {
         stage.showListening(in: listeningBox)
     }
 
-    /// One short line from the cat. It stays until you dismiss it, since a problem often says what to do about it,
-    /// unless it `fades`, as news does. One that's `unasked` comes by itself rather than answering something you
-    /// did, so Do Not Disturb holds it.
     func say(_ text: String, threadID: String? = nil, fades: Bool = false, unasked: Bool = false) {
         if unasked, !mayPopUp(missed(thread: threadID, text: text)) { return }
         lineCounter += 1
@@ -497,9 +416,6 @@ final class AppController {
         }
     }
 
-    // MARK: - Settings
-
-    /// Every Open in T3. It says which step went wrong, since that's all there is to go on afterwards.
     func openThread(_ threadID: String) {
         Task {
             do { try await backend.open(threadID: threadID) } catch { say(CatWords.problem(error, while: .agents)) }
@@ -516,8 +432,6 @@ final class AppController {
         return SettingsForm(settings: settings, channels: channels)
     }
 
-    /// A change made in Settings. Do Not Disturb, Lockdown and each channel's notifications have their own way in, there and
-    /// elsewhere, so an edit there never sets them back to what they were when it opened.
     func settingsEdited(_ updated: Settings) {
         var updated = updated
         updated.doNotDisturb = settings.doNotDisturb
@@ -550,7 +464,6 @@ final class AppController {
             stage.showText(size: updated.textSize, font: updated.messagesFont)
             phone?.textSize = updated.textSize
         }
-        // A bubble's Open says where it goes.
         if openChanged { renderBubble() }
         stage.settingsChanged(settingsForm)
     }

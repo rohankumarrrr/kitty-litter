@@ -1,12 +1,9 @@
 import Foundation
 
-/// Agents' reports read well in a window but not in a small bubble. These decide when one can be
-/// shown as it is, and cut one down when no model is around to sum it up.
 public enum ReportDigest {
     private static let shortLimit = 320
     private static let cutLimit = 420
 
-    /// Three plain sentences or fewer: there's nothing to gain from summing this up.
     public static func isShort(_ report: String) -> Bool {
         let text = report.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, text.count <= shortLimit else { return false }
@@ -18,7 +15,6 @@ public enum ReportDigest {
         sentences(in: report).count <= 1
     }
 
-    /// The first few sentences, with the formatting taken out. Reports tend to lead with how it went.
     public static func firstSentences(of report: String, count: Int = 3) -> String {
         let prose = report
             .components(separatedBy: .newlines)
@@ -34,7 +30,6 @@ public enum ReportDigest {
         return String(kept.prefix(cutLimit)).trimmingCharacters(in: .whitespaces) + "…"
     }
 
-    /// The thread a report points to, when all an agent did was start another one.
     public static func linkedThreadID(in report: String) -> String? {
         guard let match = report.firstMatch(of: #/t3-thread://v2/[^/\s>]+/([^>\s)]+)/#) else { return nil }
         return String(match.1)

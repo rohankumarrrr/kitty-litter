@@ -1,6 +1,5 @@
 import Foundation
 
-/// Goes from raw transcript to final text, with a safe answer no matter what any step does.
 public final class CleanupPipeline {
     public enum Source: String, Sendable {
         case model, rules, raw
@@ -9,7 +8,6 @@ public final class CleanupPipeline {
     public struct Outcome: Sendable {
         public var text: String
         public var source: Source
-        /// Why the model's text was thrown out, if it was.
         public var rejection: String?
     }
 
@@ -34,8 +32,6 @@ public final class CleanupPipeline {
         guard !raw.isEmpty else { return Outcome(text: "", source: .raw, rejection: nil) }
         if RuleCleaner.isOnlyFillers(raw) { return Outcome(text: "", source: .rules, rejection: nil) }
 
-        // The rules go first because they're certain about fillers and clear corrections, which
-        // leaves the model only the punctuation, numbers and harder corrections it's good at.
         let tidied = rules.tidy(raw)
 
         var rejection: String?

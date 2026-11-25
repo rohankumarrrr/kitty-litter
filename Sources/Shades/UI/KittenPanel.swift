@@ -1,18 +1,14 @@
 import AppKit
 import ShadesCore
 
-/// All your kittens and what they're up to, over the cat. Only there when you ask for it. Each sits on a Rimlight tile
-/// in its own colour, with how it's doing in Opal's status colours.
 @MainActor
 final class KittenPanel {
     private static let width: CGFloat = 300
     private static let padding: CGFloat = 8
     private static let tickSeconds: TimeInterval = 0.2
 
-    /// Its window, which tests give one that never reaches the screen.
     let panel: QuietPanel
     private let balloon = BalloonView()
-    /// Each group's small capitals, then its kittens, top to bottom.
     private var parts: [NSView] = []
     private var rows: [KittenRow] { parts.compactMap { $0 as? KittenRow } }
     private var timer: Timer?
@@ -32,8 +28,6 @@ final class KittenPanel {
     var isVisible: Bool { panel.isVisible }
     var frame: NSRect { panel.frame }
 
-    /// Opens the panel, or brings it up to date if it's already open. The kittens taking work come first, and the
-    /// ones not set up yet are a group of their own.
     func show(_ statuses: [KittenStatus]) {
         parts.forEach { $0.removeFromSuperview() }
         let groups = [
@@ -56,7 +50,6 @@ final class KittenPanel {
 
         guard !panel.isVisible else { return }
         panel.orderFrontRegardless()
-        // Under Reduce Motion each kitten holds its first drawing.
         if !Motion.isReduced {
             let timer = Timer(timeInterval: Self.tickSeconds, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.advance() }
@@ -117,7 +110,6 @@ final class KittenPanel {
     }
 }
 
-/// Small capitals over a group of kittens.
 private final class KittenGroupLabel: NSView {
     static var height: CGFloat { ceil(MessagesInk.label * 1.3) + 16 }
     private let title: String
@@ -169,7 +161,6 @@ final class KittenRow: NSView {
 
     func update(tick: Int) {
         self.tick = tick
-        // A kitten that isn't set up doesn't move, so there's nothing to redraw.
         if status.state != .notSetUp { needsDisplay = true }
     }
 
@@ -191,7 +182,6 @@ final class KittenRow: NSView {
         return true
     }
 
-    /// Lilac while it works, rose when it needs you and mint once it's done, the same as the glint on its cat.
     static func color(for state: KittenStatus.State) -> UInt32? {
         switch state {
         case .working: Opal.lilac
@@ -236,7 +226,6 @@ final class KittenRow: NSView {
         line.draw(in: NSRect(x: lineLeft, y: lineTop, width: left + width - lineLeft, height: metaFont.lineHeight))
     }
 
-    /// Its cat on a tile lit in its colour. One that isn't set up yet is faded, tile and all.
     private func drawKitten(in tile: NSRect) {
         let jacket = ChannelSpeakerLook.color(of: status.kitten)
         let context = NSGraphicsContext.current?.cgContext

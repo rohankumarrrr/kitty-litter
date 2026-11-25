@@ -1,8 +1,6 @@
 import Foundation
 import ShadesCore
 
-/// Something to read in `--demo`, covering what a real channel can hold. The repo is public, so
-/// it's all made up: pricing pages and pixel fonts, never anything real.
 enum DemoChannels {
     private static let now = Date()
 
@@ -20,7 +18,6 @@ enum DemoChannels {
         AgentThread(id: id, title: title, projectTitle: project, status: status, model: "claude-opus-5-5", updatedAt: ago(minutes: minutes), isSettled: settled, pullRequest: pullRequest, projectPath: Demo.kittens.first { $0.name == project }?.folder)
     }
 
-    /// Where the demo's router runs, so these count as talks with the cat.
     static let routerFolder = "demo-router"
 
     private static func talk(_ id: String, _ title: String, minutes: Double) -> AgentThread {
@@ -34,7 +31,6 @@ enum DemoChannels {
     private static let steveAsksClawde = thread("demo-clawde-from-steve", "Steve Pawsniak asked about fonts", project: "Clawde", minutes: 40)
     private static let pepperAsksSteve = thread("demo-steve-from-pepper", "Plan names for the pricing page", project: "Steve Pawsniak", minutes: 25)
 
-    /// Threads you'd only find in the full list, on top of the live ones `DemoBackend` already has.
     static let threads: [AgentThread] = [
         clawdeMain,
         steveFonts,
@@ -53,8 +49,6 @@ enum DemoChannels {
 
     static var talks: Set<String> { Set(threads.filter { $0.projectPath == routerFolder }.map(\.id)) }
 
-    /// A focus, and two kittens' backlogs, written as their files would be and read the way real ones are. Clawde's has
-    /// a line in another form, which still shows.
     static func priorities(for kittens: [Kitten]) -> Priorities {
         let files = [
             Demo.kittens[0].id: """
@@ -85,7 +79,6 @@ enum DemoChannels {
         )
     }
 
-    /// What's waiting on you in the pictures: one of each kind, all made up.
     static let waiting = Waiting(
         approvals: [ApprovalRequest(id: "demo-approve", threadID: "demo-clawde-menu", threadTitle: "Clawde: Add a menu item for the new window", kind: .command, summary: "Run: swift test", createdAt: ago(minutes: 3))],
         questions: [AgentQuestion(
@@ -128,12 +121,9 @@ enum DemoChannels {
         )
     }
 
-    /// What T3 keeps of the picture you sent in the logo thread, and the one Steve made in his folder.
     static let sentPicture = "demo-attachment-logo"
     static let folderPicture = (thread: "demo-steve-yesterday", path: "screenshots/logo-480.png")
 
-    /// Your reply in Steve's pricing copy thread, which you also sent to his channel, as "Also send to" does. Messages
-    /// only keeps that in memory, so the demo starts with it there.
     static let alsoSent = "Keep the FAQ as it is for now."
 
     static var alsoSentEcho: ChannelMessage {

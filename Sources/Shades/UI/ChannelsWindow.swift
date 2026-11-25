@@ -2,10 +2,6 @@ import AppKit
 import ShadesContext
 import ShadesCore
 
-/// A window that stays open beside your work without ever activating Shades, so the app you were in
-/// stays in front and the cat can still tell what you're looking at. It takes the keyboard only when
-/// you click into the box at the bottom, the way the Ask box does, and nothing typed there takes your
-/// screen. It isn't a `QuietPanel`, because those float over everything, and this one is big enough to get in the way.
 class ChannelsPanel: NSPanel {
     init() {
         super.init(
@@ -24,11 +20,8 @@ class ChannelsPanel: NSPanel {
         backgroundColor = MessagesInk.sidebar
         animationBehavior = .none
         becomesKeyOnlyIfNeeded = true
-        // Rows come and go, so Tab works out its way round again whenever they do.
         autorecalculatesKeyViewLoop = true
         title = CatWords.appName
-        // Shades' own captures leave out all its windows. This keeps Messages out of anyone else's too, such as a
-        // kitten's own screen tools, so one kitten can't be shown another's messages.
         sharingType = .none
     }
 
@@ -39,20 +32,17 @@ class ChannelsPanel: NSPanel {
         QuietPanel.performEdit(event, from: self) || shortcut(event) || super.performKeyEquivalent(with: event)
     }
 
-    /// A click raises it and gives it the keyboard, since you've clicked into it, without activating anything, so
-    /// the app you were in stays the active one.
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown {
             orderFrontRegardless()
             if !isKeyWindow { makeKey() }
         }
-        // ⌥ with the arrows, and Esc, have no ⌘, so they'd otherwise go straight to whatever has the keyboard.
+        // Outside the repo: AppKit hands keys without ⌘ straight to whatever has the keyboard.
         if event.type == .keyDown, !event.modifierFlags.contains(.command), shortcut(event) || movesOn(event) { return }
         super.sendEvent(event)
     }
 
-    /// ⌃Tab on anything but a box moves on as Tab does, as on any Mac, rather than leaving no window with the keyboard.
-    /// In a box AppKit's own takes it out of the box.
+    // Outside the repo: AppKit's ⌃Tab moves out of a text view, but anywhere else here it leaves no window with the keyboard.
     private func movesOn(_ event: NSEvent) -> Bool {
         guard event.keyCode == 48, event.modifierFlags.contains(.control), !(firstResponder is NSTextView) else { return false }
         if event.modifierFlags.contains(.shift) { selectPreviousKeyView(nil) } else { selectNextKeyView(nil) }
@@ -61,15 +51,12 @@ class ChannelsPanel: NSPanel {
 
     private func shortcut(_ event: NSEvent) -> Bool {
         guard let shortcut = MessagesShortcut(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers, modifiers: event.modifierFlags) else { return false }
-        // A box with words in it keeps ⌥ and the arrows for moving through them, and Esc for itself, which in Messages'
-        // own boxes closes the thread's pane anyway.
         if let text = firstResponder as? NSTextView, text.isEditable, shortcut == .escape || (shortcut.movesInText && !text.string.isEmpty) {
             return false
         }
         return handle(shortcut)
     }
 
-    /// Does what a shortcut says, and only while Messages has the keyboard, so none of them is ever global.
     @discardableResult
     func handle(_ shortcut: MessagesShortcut) -> Bool {
         guard isKeyWindow, let view = contentView as? ChannelsView else { return false }
@@ -77,18 +64,11 @@ class ChannelsPanel: NSPanel {
     }
 }
 
-/// The sidebar flush on the window's chrome, then the pane for the place you're looking at and beside it a thread's pane
-/// when one is open, as Slack lays them out, together in one page panel inset from the window, as Opal lays out a main
-/// window. They're apart from the window so they can be drawn with no window on the screen.
 final class ChannelsView: QuietView {
-    /// How wide a thread's pane opens until you drag its edge, and the narrowest you can drag it.
     static let threadWidths: ClosedRange<CGFloat> = 320...460
-    /// The narrowest the place beside a thread's pane gets, however wide you drag the thread's.
     static let narrowestPlace: CGFloat = 360
-    /// The narrowest and widest you can drag the sidebar.
     static let sidebarWidths: ClosedRange<CGFloat> = 180...360
 
-    /// How many places and threads ⌘[ can go back through.
     static let historyKept = 50
 
     let sidebar = ChannelSidebar()
@@ -102,22 +82,15 @@ final class ChannelsView: QuietView {
     let backlogSheet = BacklogSheet()
     private(set) var selection: ChannelSelection = .activity
     private(set) var book: ChannelBook?
-    /// Reads the focus and the listed kittens' backlogs, and what it reads stays here. A paired phone reads its own.
     var readPriorities: ([Kitten]) -> Priorities = { _ in Priorities() }
     private(set) var priorities = Priorities()
-    /// The places and threads you've looked at, oldest first, for ⌘[ and ⌘].
     var history: [ChannelSelection] = [.activity]
     var historyIndex = 0
     var isTravelling = false
-    /// ⌘W, which closes the window.
     var onCloseWindow: (() -> Void)?
-    /// ⌘,, which opens Settings over the window.
     var onSettings: (() -> Void)?
-    /// You've seen what's there, which is what takes its unread dot away.
     var onSeen: ((ChannelSelection) -> Void)?
-    /// Threads you've marked unread since you came here, which stay unread while you're still looking.
     private(set) var keptUnread: Set<String> = []
-    /// How wide you've dragged a thread's pane, for every thread after it, or `nil` until you have.
     var chosenThreadWidth: CGFloat? {
         didSet {
             needsLayout = true
@@ -126,7 +99,6 @@ final class ChannelsView: QuietView {
         }
     }
     var onChooseThreadWidth: ((CGFloat?) -> Void)?
-    /// How wide you've dragged the sidebar, or `nil` until you have. It comes back this wide after ⌘B hides it.
     var chosenSidebarWidth: CGFloat? {
         didSet {
             needsLayout = true
@@ -135,7 +107,6 @@ final class ChannelsView: QuietView {
         }
     }
     var onChooseSidebarWidth: ((CGFloat?) -> Void)?
-    /// ⌘B, or the sidebar's edge dragged most of the way to the window's, hides it, as a Mac's sidebars hide.
     var isSidebarHidden = false {
         didSet {
             guard isSidebarHidden != oldValue else { return }
@@ -146,18 +117,14 @@ final class ChannelsView: QuietView {
         }
     }
     var onHideSidebar: ((Bool) -> Void)?
-    /// Opens a thread in T3.
     var onOpenThread: ((String) -> Void)? { didSet { panes.forEach { $0.onOpenThread = onOpenThread } } }
     var onCopy: ((String) -> Void)? { didSet { panes.forEach { $0.onCopy = onCopy } } }
     var onAction: ((MessagesAction) -> Void)? { didSet { panes.forEach { $0.onAction = onAction } } }
     var onOpenLink: ((URL) -> Void)? { didSet { panes.forEach { $0.onOpenLink = onOpenLink } } }
     var onShowOnPhone: ((String) -> Void)? { didSet { panes.forEach { $0.onShowOnPhone = onShowOnPhone } } }
-    /// Attach in a box, which offers recent files.
     var onAttach: ((ChannelComposer, NSView) -> Void)? { didSet { panes.forEach { $0.onAttach = onAttach } } }
-    /// A box's mic, pressed once its box has the keyboard, so what you say goes where its line says.
     var onMic: (() -> Void)?
     var onStopListening: (() -> Void)?
-    /// What the mics say when the pointer rests on them.
     var micTip = "" { didSet { panes.forEach { $0.composer.mic.toolTip = micTip } } }
 
     private var panes: [ChannelPane] { [pane, threadPane] }
@@ -213,35 +180,26 @@ final class ChannelsView: QuietView {
         arrange()
     }
 
-    /// How wide a thread's pane is in a panel `room` wide: as wide as you `chose` by dragging its edge, or 45% of the
-    /// room until you have, and never so wide that the place beside it is too narrow to read.
     static func threadWidth(in room: CGFloat, chosen: CGFloat? = nil) -> CGFloat {
         let wanted = chosen ?? min(max(room * 0.45, threadWidths.lowerBound), threadWidths.upperBound)
         return max(min(wanted, room - narrowestPlace), threadWidths.lowerBound)
     }
 
-    /// How wide the sidebar is in a window `width` wide: as wide as you `chose` by dragging its edge, or 220 until you
-    /// have. A narrower window takes it back towards 220, which always leaves a place and a thread's pane room to read.
     static func sidebarWidth(in width: CGFloat, chosen: CGFloat? = nil) -> CGFloat {
         let wanted = min(max(chosen ?? ChannelSidebar.width, sidebarWidths.lowerBound), sidebarWidths.upperBound)
         let room = width - Opal.Space.inset - narrowestPlace - threadWidths.lowerBound
         return min(wanted, max(room, ChannelSidebar.width))
     }
 
-    /// The edge let go of at `x`, which makes the thread's pane reach from there to the panel's right side, as far as
-    /// it can.
     func dragThreadEdge(to x: CGFloat) {
         chosenThreadWidth = Self.threadWidth(in: panel.width, chosen: panel.maxX - x)
     }
 
-    /// The sidebar's edge let go of at `x`. Past half its narrowest it hides, and back over that it shows again.
     func dragSidebarEdge(to x: CGFloat) {
         isSidebarHidden = x < Self.sidebarWidths.lowerBound / 2
         if !isSidebarHidden { chosenSidebarWidth = Self.sidebarWidth(in: bounds.width, chosen: x) }
     }
 
-    /// The page the place and its thread sit on: flush against the sidebar, and inset from the window on its other
-    /// sides, or on all four while the sidebar's hidden.
     var panel: NSRect {
         let inset = Opal.Space.inset
         let left = isSidebarHidden ? inset : Self.sidebarWidth(in: bounds.width, chosen: chosenSidebarWidth)
@@ -254,7 +212,6 @@ final class ChannelsView: QuietView {
         sidebarEdge.isHidden = isSidebarHidden
         if !isSidebarHidden {
             sidebar.frame = NSRect(x: 0, y: 0, width: panel.minX, height: bounds.height)
-            // Mostly over the panel, so the sidebar's scroller still takes its own drags.
             sidebarEdge.frame = NSRect(x: panel.minX - ResizeEdge.lineInset, y: panel.minY, width: 6, height: panel.height)
         }
         let thread = selection.thread == nil ? 0 : Self.threadWidth(in: panel.width, chosen: chosenThreadWidth)
@@ -263,7 +220,6 @@ final class ChannelsView: QuietView {
         pane.frame = NSRect(x: panel.minX, y: panel.minY, width: max(panel.width - thread, 0), height: panel.height)
         if thread > 0 {
             threadPane.frame = NSRect(x: panel.maxX - thread, y: panel.minY, width: thread, height: panel.height)
-            // Mostly over the thread's side, so the channel's scroller beside it still takes its own drags.
             threadEdge.frame = NSRect(x: threadPane.frame.minX - ResizeEdge.lineInset, y: panel.minY, width: 6, height: panel.height)
         }
         panelEdge.frame = panel
@@ -272,11 +228,9 @@ final class ChannelsView: QuietView {
         backlogSheet.frame = bounds
     }
 
-    /// Everything shows again from what's in memory, in the same turn.
     func show(_ book: ChannelBook) {
         let isFresh = self.book == nil
         self.book = book
-        // A new topic carries on in its own thread once T3 has one.
         if let thread = selection.thread, let started = book.started[thread] { selection.thread = started }
         arrange()
         sidebar.show(book, selection: selection.place)
@@ -287,8 +241,6 @@ final class ChannelsView: QuietView {
         onSeen?(selection)
     }
 
-    /// Reads the files again, which happens when the window opens, once a minute while it shows and when a backlog
-    /// opens, never for a message or a frame, and shows only what changed.
     func refreshPriorities() {
         guard let book else { return }
         let read = readPriorities(book.statuses.map(\.kitten))
@@ -315,7 +267,6 @@ final class ChannelsView: QuietView {
         self.selection = selection
         if selection.thread != old.thread { threadPane.leaveThread() }
         if selection != old { keptUnread = [] }
-        // A backlog is its channel's, so it goes with it.
         if selection.place != old.place { backlogSheet.isHidden = true }
         if !isTravelling, selection != history[historyIndex] {
             history = Array(history[...historyIndex].suffix(Self.historyKept - 1)) + [selection]
@@ -329,8 +280,6 @@ final class ChannelsView: QuietView {
         onSeen?(selection)
     }
 
-    /// Opens a thread in the pane beside `place`, or beside where you are. `typing` means you're about to type, so its
-    /// box takes the keyboard, and `report` is the inbox row whose Reply or Ask opened it.
     func open(thread id: String, from place: ChannelPlace? = nil, typing: Bool = false, replyingTo report: InboxEntry? = nil) {
         select(.thread(id, in: place ?? selection.place))
         threadPane.replying(to: report)
@@ -348,17 +297,14 @@ final class ChannelsView: QuietView {
         select(selection.closed)
     }
 
-    /// The pane whose box has the keyboard.
     var typingPane: ChannelPane? {
         panes.first { !$0.isHidden && window?.firstResponder === $0.composer.textView && $0.composer.target != nil }
     }
 
-    /// The mic in the box you're talking into shows it, or none does.
     func showListening(in listening: ChannelPane?) {
         panes.forEach { $0.composer.mic.showListening($0 === listening) }
     }
 
-    /// Draws everything again in the colours there are now, since a row keeps the colours it was made with.
     func restyle() {
         sidebar.restyle()
         panes.forEach { $0.restyle() }
@@ -371,7 +317,6 @@ final class ChannelsView: QuietView {
         needsDisplay = true
     }
 
-    /// A file or picture goes with what you type in the pane it's let go over, as Slack's does.
     private func box(for drag: NSDraggingInfo) -> ChannelComposer? {
         let point = convert(drag.draggingLocation, from: nil)
         let pane = [threadPane, pane].first { !$0.isHidden && $0.frame.contains(point) }
@@ -404,8 +349,6 @@ final class ChannelsView: QuietView {
     }
 }
 
-/// The panel's rounded corners and its edge, drawn over what scrolls in it, since the panes inside are square. It never
-/// takes a click.
 final class PanelEdge: QuietView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -421,15 +364,10 @@ final class PanelEdge: QuietView {
     }
 }
 
-/// The line between the sidebar and the panel, or between a place and its thread's pane, which you drag to make one
-/// wider or narrower, as in Slack. It draws nothing, since the panel's edge and `ChannelsView` draw the lines.
 final class ResizeEdge: QuietView {
-    /// How far into it the line is.
     static let lineInset: CGFloat = 2
 
-    /// Where the line goes, across the window.
     var onDrag: ((CGFloat) -> Void)?
-    /// How far from the line you took hold of it, so the line stays that far from the pointer rather than jumping to it.
     private var grab: CGFloat = 0
 
     override var mouseDownCanMoveWindow: Bool { false }
@@ -448,13 +386,9 @@ final class ResizeEdge: QuietView {
     }
 }
 
-/// The Messages window: Activity, your threads, the cat and a channel for each kitten, with a thread's pane beside
-/// them. Closing it keeps everything as it was, so it opens again just as you left it.
 @MainActor
 final class ChannelsWindow: NSObject, NSWindowDelegate {
     nonisolated static let size = NSSize(width: 1040, height: 620)
-    /// Room for the sidebar, then a channel and a thread's pane beside it at their narrowest, 360 and 320, in the panel
-    /// inset 8 from the window's edge.
     nonisolated static let minimumSize = NSSize(width: 908, height: 440)
     private static let frameName = "Channels"
     private static let threadWidthKey = "ChannelsThreadWidth"
@@ -483,14 +417,12 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         view.onHideSidebar = { defaults.set($0, forKey: Self.sidebarHiddenKey) }
     }
 
-    /// Opens it on the cat's screen the first time and where you left it after that, or brings it to the front.
     func show(_ book: ChannelBook, centeredIn visible: NSRect) {
         update(book)
         view.refreshPriorities()
         if !isPlaced {
             isPlaced = true
             if !panel.setFrameUsingName(Self.frameName) { panel.setFrame(Self.centered(in: visible), display: false) }
-            // A window left narrower than a thread's pane needs grows to fit it.
             if panel.frame.width < Self.minimumSize.width || panel.frame.height < Self.minimumSize.height {
                 var frame = panel.frame
                 frame.size = NSSize(width: max(frame.width, Self.minimumSize.width), height: max(frame.height, Self.minimumSize.height))
@@ -506,12 +438,10 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         view.show(book)
     }
 
-    /// Open where you can see it, since clicking back into your work leaves it open behind.
     var isInFront: Bool {
         panel.isVisible && panel.isOnActiveSpace && FrontWindow.isOnTop(panel.windowNumber)
     }
 
-    /// Messages' words at another size or in another font, where you were.
     func apply(_ size: TextSize, font: String?) {
         guard size != MessagesInk.textSize || font != MessagesInk.fontFamily else { return }
         MessagesInk.textSize = size
@@ -528,12 +458,9 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         )
     }
 
-    // MARK: NSWindowDelegate
-
     func windowWillClose(_ notification: Notification) {
         timer?.invalidate()
         timer = nil
-        // Its messages' cards are most of what's kept, and the next time it opens draws them again.
         Opal.forgetKept()
         onClose?()
     }
@@ -542,7 +469,6 @@ final class ChannelsWindow: NSObject, NSWindowDelegate {
         updateTimer()
     }
 
-    /// The cats only move while there's some of the window to see.
     private func updateTimer() {
         let wanted = panel.isVisible && panel.occlusionState.contains(.visible)
         if !wanted {

@@ -1,9 +1,7 @@
 import Foundation
 import ShadesCore
 
-/// Screenshots saved for agents to open. Only you can read them, and they don't stay around.
 struct CaptureStore: Sendable {
-    /// Long enough for an agent to pass one on and open it. Follow-ups get a fresh look.
     static let maxAge: TimeInterval = 24 * 60 * 60
     private static let prefix = "capture-"
     private static let suffix = ".jpg"
@@ -18,7 +16,6 @@ struct CaptureStore: Sendable {
 
         let name = "\(Self.prefix)\(Int(now.timeIntervalSince1970))-\(UUID().uuidString.prefix(8))\(Self.suffix)"
         let path = directory.appendingPathComponent(name).path
-        // Opened with its permissions in place, so it's never readable by others, even for a moment.
         let descriptor = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
         guard descriptor >= 0 else { throw CocoaError(.fileWriteUnknown) }
         let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
@@ -31,7 +28,6 @@ struct CaptureStore: Sendable {
         return path
     }
 
-    /// Leaves anything we didn't write alone.
     func removeOld(now: Date = Date()) {
         let files = FileManager.default
         let cutoff = now.addingTimeInterval(-Self.maxAge)

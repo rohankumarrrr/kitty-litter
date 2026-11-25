@@ -1,6 +1,5 @@
 import AppKit
 
-/// The one-word things the cat says, on a capsule of Opal's glass.
 @MainActor
 final class SayPill {
     let panel = QuietPanel()

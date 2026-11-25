@@ -1,14 +1,10 @@
 import AVFoundation
 import Foundation
 
-/// Plays a recording into the engine as if it were the microphone, for tests and benchmarks.
 public final class FileAudioSource: AudioSource {
     public var samples: [Float]
-    /// 1 feeds at the speed of speech, as the microphone would. 0 feeds it all at once.
     public var speed: Double
-    /// Pretends the microphone took this long to open, so the first words are lost.
     public var startDelay: TimeInterval
-    /// Called once the whole recording has been delivered.
     public var onFinished: (() -> Void)?
 
     private let chunkSeconds = 0.02
@@ -35,7 +31,6 @@ public final class FileAudioSource: AudioSource {
         lock.unlock()
 
         let chunk = Int(AudioFormat.sampleRate * chunkSeconds)
-        // Audio that would have played before the microphone opened is simply gone.
         let skip = Int(startDelay * AudioFormat.sampleRate)
         let samples = self.samples
         let speed = self.speed
@@ -76,7 +71,6 @@ public final class FileAudioSource: AudioSource {
         usleep(UInt32((time.uptimeNanoseconds - now.uptimeNanoseconds) / 1_000))
     }
 
-    /// Reads any audio file as 16 kHz mono.
     public static func load(_ url: URL) throws -> [Float] {
         let file = try AVAudioFile(forReading: url)
         let format = file.processingFormat

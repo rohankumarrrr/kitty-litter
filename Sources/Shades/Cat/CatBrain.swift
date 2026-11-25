@@ -1,24 +1,17 @@
 import CoreGraphics
 
-/// What the agents and the voice flows want the glint to show.
 enum CatStatus: Equatable {
     case none, listening, thinking, attention
 }
 
-/// One drawing of the cat.
 struct CatPose: Hashable {
     var frame: CatFrame
     var flip = false
-    /// Art pixels off the ground, for hops.
     var lift = 0
-    /// Which step of the floating z, while asleep.
     var z: Int?
     var glint: CatGlint = .plain
 }
 
-/// The cat's behaviour, following oneko: run at a choppy 10 ticks a second, then sit,
-/// scratch, and eventually fall asleep. Positions are the bottom-left corner of the
-/// cat in AppKit screen coordinates, so up is positive.
 struct CatBrain {
     enum State: Equatable {
         case sit, sleep, run, celebrate, held
@@ -26,19 +19,14 @@ struct CatBrain {
 
     static let pettingWords = ["mrrp", "mrow", "…", "prrr"]
 
-    // 15px a tick on the site at 3x, which is 20 at 4x.
     private static let speed: CGFloat = 20
-    // A long way to go means running faster, so nothing is left waiting. Desktops are
-    // far wider than a web column, so the speed starts climbing sooner than on the site.
     private static let reach: CGFloat = 200
     private static let scratchStart = 40
     private static let scratchEnd = 56
     private static let blinkEvery = 37
     private static let sleepAfter = 90
-    /// How soon it curls up again under Do Not Disturb, once you're done with it.
     private static let dozeAfter = 10
     private static let celebrateTicks = 20
-    /// Something that needs you blinks for five seconds, then holds, so it never flashes for hours.
     private static let attentionBlinks = 50
 
     private(set) var state: State = .sit
@@ -54,7 +42,6 @@ struct CatBrain {
     private var celebrateOnArrival = false
     private var statusAt = 0
     var level: Float = 0
-    /// Reduce Motion: it gets where it's going in one tick, and nothing else about it moves on its own.
     var still = false
 
     init(position: CGPoint) {
@@ -62,7 +49,6 @@ struct CatBrain {
         target = position
     }
 
-    /// Moves one tick, returning whether the cat just got where it was going.
     @discardableResult
     mutating func tick() -> Bool {
         count += 1
@@ -86,7 +72,6 @@ struct CatBrain {
         return arrived
     }
 
-    /// How many ticks can pass before anything changes, so the timer can sleep through them.
     func ticksUntilChange(limit: Int = 100) -> Int {
         if state == .held { return limit }
         if status == .listening { return 1 }
@@ -129,7 +114,6 @@ struct CatBrain {
 
     private mutating func sitStep() {
         if staysUp {
-            // Busy with you, so no scratching and no nodding off.
             if idle > Self.sleepAfter { idle = 0 }
             pose = CatPose(frame: blinking ? .blink : .sit, lift: hop, glint: glint)
             return
@@ -169,7 +153,6 @@ struct CatBrain {
         )
     }
 
-    /// Listening or thinking keeps it up. So does something needing you, unless Do Not Disturb says it can wait.
     private var staysUp: Bool {
         status != .none && !(doNotDisturb && status == .attention)
     }
@@ -182,7 +165,6 @@ struct CatBrain {
         !still && idle % Self.blinkEvery == 0
     }
 
-    /// What the drawings that loop by themselves count by. A still cat stays on the first of each.
     private var cycle: Int {
         still ? 0 : count
     }
@@ -196,8 +178,6 @@ struct CatBrain {
         }
     }
 
-    // MARK: - Things that happen to the cat
-
     mutating func go(to point: CGPoint) {
         target = point
         state = .run
@@ -205,7 +185,6 @@ struct CatBrain {
         celebrating = 0
     }
 
-    /// Being petted is the same as on the site: a word, and it sits up. Sleeping cats wake.
     mutating func pet(roll: Int) -> String {
         state = .sit
         idle = 0
@@ -232,7 +211,6 @@ struct CatBrain {
         if busy && !doNotDisturb { wake() }
     }
 
-    /// It curls up and sleeps through everything but you, and wakes when it's turned off.
     mutating func setDoNotDisturb(_ on: Bool) {
         doNotDisturb = on
         if !on {
@@ -248,7 +226,6 @@ struct CatBrain {
         case .held:
             return
         case .run:
-            // Not on the way anywhere: it gets there first.
             celebrateOnArrival = true
         case .sit, .sleep, .celebrate:
             startCelebrating()
@@ -260,7 +237,6 @@ struct CatBrain {
         celebrating = Self.celebrateTicks
     }
 
-    /// Picked up by the mouse. The legs dangle.
     mutating func pickUp() {
         state = .held
         pose = CatPose(frame: .down1, glint: glint)

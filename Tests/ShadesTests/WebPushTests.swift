@@ -2,13 +2,12 @@ import CryptoKit
 @testable import Shades
 import XCTest
 
-/// Web push as the RFCs say. The example and its values are RFC 8291's own, from its section 5 and appendix A.
+// Outside the repo: these values are RFC 8291's own example, from its section 5 and appendix A.
 final class WebPushTests: XCTestCase {
     private let plaintext = Data("When I grow up, I want to be a watermelon".utf8)
     private let auth = WebPush.data("BTBZMqHH6r4Tts7J_aSIgg")!
     private let salt = WebPush.data("DGv6ra1nlYgDCS1FRnbzlw")!
-    /// RFC 8291's own example keys, in hex rather than the RFC's base64url, which secret scanners take for a live key.
-    /// They're published in the RFC, so they unlock nothing.
+    // Outside the repo: secret scanners flag the RFC's base64url private key, so it's written in hex.
     private let phonePrivate = "ab5757a70dd4a53e553a6bbf71ffefea2874ec07a6b379e3c48f895a02dc33de"
     private let phonePublic = "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4"
     private let senderPrivate = "c9f58f89813e9f8e872e71f42aa64e1757c9254dcc62b72ddc010bb4043ea11c"
@@ -38,7 +37,6 @@ final class WebPushTests: XCTestCase {
     func testEveryNotificationIsTheSameSizeSoItsLengthSaysNothing() throws {
         let phone = P256.KeyAgreement.PrivateKey()
         let titles = ["Pepper needs an approval", "Pepper has a question", "Pepper needs a decision", "Steve Pawsniak needs an approval", "An agent needs an approval", "Steve Pawsniak finished"]
-        // As long as T3's thread IDs get, in the tag and in the page a tap opens, which names its kitten by folder.
         let thread = "mcp:launch:" + String(repeating: "f", count: 64)
         let page = PhonePlace.key(.thread(thread, in: .channel(.kitten("/Users/someone/kittens/steve-pawsniak"))))
         let sizes = try titles.flatMap { title in

@@ -1,7 +1,6 @@
 import Foundation
 import ShadesCore
 
-/// A T3 project, for binding a thread to it.
 public struct T3Project: Identifiable, Sendable, Hashable {
     public var id: String
     public var title: String
@@ -14,22 +13,18 @@ public struct T3Project: Identifiable, Sendable, Hashable {
     }
 }
 
-/// The server's list of threads, kept up to date from the shell stream. Pure, so it can be tested on recordings.
 struct T3ThreadList {
-    /// An approval the list knows about, whose words have to be fetched separately.
     struct PendingApproval: Equatable {
         let requestID: String
         let threadID: String
         let kind: ApprovalKind
     }
 
-    /// A question the list knows about, whose words have to be fetched separately.
     struct PendingQuestion: Equatable {
         let requestID: String
         let threadID: String
     }
 
-    /// The words of a question, as they'll be shown.
     struct QuestionWords: Equatable {
         var text: String
         var options: [String]
@@ -78,7 +73,6 @@ struct T3ThreadList {
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 
-    /// Approvals waiting anywhere, including in subagents that aren't listed themselves.
     var pendingApprovals: [PendingApproval] {
         threads.values.compactMap { thread in
             guard let pending = thread.pendingRuntimeRequest, let kind = T3Wire.approvalKind(pending.kind) else { return nil }
@@ -86,7 +80,6 @@ struct T3ThreadList {
         }
     }
 
-    /// Questions waiting anywhere, including in subagents that aren't listed themselves.
     var pendingQuestions: [PendingQuestion] {
         threads.values.compactMap { thread in
             guard let pending = thread.pendingRuntimeRequest, pending.kind == "user_input" else { return nil }
@@ -94,7 +87,6 @@ struct T3ThreadList {
         }
     }
 
-    /// The dashboard's view, newest first. `summaries` and `questions` hold the words by request ID.
     func agentThreads(summaries: [String: String], questions: [String: QuestionWords] = [:]) -> [AgentThread] {
         var approvalsByListedThread: [String: [ApprovalRequest]] = [:]
         var questionsByListedThread: [String: AgentQuestion] = [:]
@@ -157,7 +149,6 @@ struct T3ThreadList {
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }
     }
 
-    /// The same list for when only who's waiting matters, so nothing has to fetch the words of what they're waiting on.
     var threadsWithoutWords: [AgentThread] {
         let summaries = Dictionary(pendingApprovals.map { ($0.requestID, "") }, uniquingKeysWith: { first, _ in first })
         let questions = Dictionary(
@@ -167,14 +158,10 @@ struct T3ThreadList {
         return agentThreads(summaries: summaries, questions: questions)
     }
 
-    /// The thread a person knows this one by: itself, or the nearest one above a subagent.
     func listedThreadID(of id: String) -> String? {
         threads[id].flatMap(listedOwner)?.id
     }
 
-    /// A thread's turn can end while something it'll wake up for carries on: a subagent, a pull request it's watching, or
-    /// work it said it waits on. That isn't finished. Anything else T3 lists, like a dev server or a leftover from a
-    /// session that's gone, which can stay listed for good, doesn't keep it going.
     private func isWaitingOnWork(_ thread: T3Wire.ThreadShell) -> Bool {
         guard thread.agentStatus == .completed else { return false }
         let awaited = thread.pendingBackgroundTasks?.contains { $0.value?.awaited == true } == true
@@ -184,7 +171,6 @@ struct T3ThreadList {
         return awaited || childWorking
     }
 
-    /// The nearest thread a person can see, for a subagent that needs something.
     private func listedOwner(of thread: T3Wire.ThreadShell) -> T3Wire.ThreadShell? {
         var current = thread
         var seen: Set<String> = []

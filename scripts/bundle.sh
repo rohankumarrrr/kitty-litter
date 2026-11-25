@@ -1,20 +1,4 @@
 #!/bin/zsh
-# Builds a release Shades.app, which macOS permissions need: they attach to a signed
-# bundle, not to a bare binary.
-#
-#   scripts/bundle.sh [output-folder]        # defaults to build/
-#   scripts/bundle.sh /Applications          # installs it
-#
-# It signs with the first identity it finds, in this order:
-#   1. $SHADES_SIGN_IDENTITY, if you set it
-#   2. Your "Apple Development" or "Developer ID Application" certificate. With its Team ID,
-#      the next build can read what this one saved in the Keychain, so your phone stays paired
-#      and T3 Code stays signed in. Xcode makes a free one: add your Apple ID in Settings ›
-#      Accounts, then Manage Certificates › + › Apple Development.
-#   3. "Shades Dev", the self-signed certificate from scripts/make-dev-cert.sh. macOS keeps
-#      permissions across builds, but each build can only read its own Keychain items.
-#   4. Ad hoc, with a warning. An ad-hoc signature changes on every build, so macOS
-#      forgets its permissions each time. Run scripts/make-dev-cert.sh to stop that.
 set -euo pipefail
 
 root="${0:A:h:h}"
@@ -31,11 +15,9 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/shades" "$app/Contents/MacOS/Shades"
 cp assets/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 
-# The cleanup model's runtime. Without it the app won't launch.
 mkdir -p "$app/Contents/Frameworks"
 ditto "$bin/llama.framework" "$app/Contents/Frameworks/llama.framework"
 
-# Resources from dependencies, if they have any.
 for bundle in "$bin"/*.bundle(N); do
   cp -R "$bundle" "$app/Contents/Resources/"
 done

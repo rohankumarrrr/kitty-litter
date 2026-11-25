@@ -1,25 +1,18 @@
 import Foundation
 import Network
 
-/// A small HTTP server on 127.0.0.1, for Messages on your phone. Tailscale Serve is what puts it on your tailnet, with
-/// a real certificate. Each request gets one answer and the connection closes, except a stream of events, which stays
-/// open. It all runs on the main queue, since one phone makes very little traffic.
 @MainActor
 final class PhoneServer {
     struct Request {
         var method: String
         var path: String
         var query: [String: String]
-        /// By lowercased name.
         var headers: [String: String]
         var body: Data
 
-        /// Whether the browser takes gzip, as every phone's does. Anyone who can reach the page writes this header, so
-        /// whatever it says is read without assuming anything about it.
         var takesGzip: Bool {
             headers["accept-encoding"]?.split(separator: ",").contains { coding in
                 let parts = coding.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-                // `q=0` says it isn't wanted.
                 return parts.first == "gzip" && !parts.dropFirst().contains { $0.hasPrefix("q=") && Double($0.dropFirst(2)) == 0 }
             } == true
         }
@@ -27,7 +20,6 @@ final class PhoneServer {
 
     enum Response {
         case full(status: Int, type: String, body: Data)
-        /// Stays open, and gets each event sent to the stream.
         case stream(PhoneStream)
 
         static func status(_ status: Int) -> Response {
@@ -46,25 +38,19 @@ final class PhoneServer {
     }
 
     private static let biggestRequest = 64 * 1024
-    /// A photo or file a phone sends ahead of its message, which is the only request this big.
     static let biggestFile = 12 * 1024 * 1024
     private static let fileRequest = Data("POST /file ".utf8)
     private static let mostConnections = 32
-    /// Long enough for a slow phone, short enough that a half-sent request can't hold a connection.
     private static let requestSeconds: TimeInterval = 10
-    /// A file takes longer to send, so its request gets longer.
     private static let fileSeconds: TimeInterval = 90
 
     var respond: (Request) -> Response = { _ in .status(404) }
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: NWConnection] = [:]
-    /// Connections that have become a stream, which the request timeout leaves alone.
     private var streaming: Set<ObjectIdentifier> = []
-    /// Connections sending a file, which get `fileSeconds` instead.
     private var sendingFiles: Set<ObjectIdentifier> = []
     private var starting: CheckedContinuation<UInt16, Error>?
 
-    /// Listens on loopback only, and returns the port, which is a free one for 0.
     func start(port: UInt16) async throws -> UInt16 {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: NWEndpoint.Port(rawValue: port) ?? .any)
@@ -173,8 +159,6 @@ final class PhoneServer {
     private func send(_ response: Response, on connection: NWConnection, gzip: Bool = false) {
         guard case .full(let status, let type, var body) = response else { return }
         var head = "HTTP/1.1 \(status) \(Self.reason(status))\r\n"
-        // On a phone's link away from home, the page's own files are worth packing. Nothing else that answers it is,
-        // since what's said in it, or the key pairing sends, could be guessed from how well it packs.
         if gzip, body.count > 1024, type.hasPrefix("text/") {
             body = Gzip.whole(body)
             head += "Content-Encoding: gzip\r\n"
@@ -184,7 +168,6 @@ final class PhoneServer {
         connection.send(content: Data(head.utf8) + body, completion: .contentProcessed { _ in connection.cancel() })
     }
 
-    /// Nothing here is to be cached, framed, sniffed or followed back to where it came from.
     static let commonHeaders = """
         Cache-Control: no-store\r
         X-Content-Type-Options: nosniff\r
@@ -220,7 +203,6 @@ final class PhoneServer {
             guard let colon = line.firstIndex(of: ":") else { return .bad }
             headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
         }
-        // Only a body of a stated length, which is all the page ever sends.
         guard headers["transfer-encoding"] == nil else { return .bad }
         let length = headers["content-length"].map { Int($0) } ?? 0
         guard let length, length >= 0 else { return .bad }
@@ -232,10 +214,8 @@ final class PhoneServer {
     }
 }
 
-/// Server-sent events to one phone, for as long as it's looking. What's sent before the connection is ready waits.
 @MainActor
 final class PhoneStream {
-    /// Often enough that a page which hears nothing for a few of these knows its stream is gone.
     private static let pingSeconds: UInt64 = 10
 
     var onClose: (() -> Void)?
@@ -255,11 +235,9 @@ final class PhoneStream {
         connection.send(content: Data(head.utf8), completion: .idempotent)
         waiting.forEach(write)
         waiting = []
-        // The phone only ever reads from here, so anything at all, or nothing more, means it's gone.
         connection.receive(minimumIncompleteLength: 1, maximumLength: 1024) { [weak self] _, _, _, _ in
             MainActor.assumeIsolated { self?.close() }
         }
-        // Keeps the proxy in between from giving up on a quiet stream, and finds out when the phone's gone.
         pings = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: Self.pingSeconds * 1_000_000_000)
@@ -268,8 +246,6 @@ final class PhoneStream {
         }
     }
 
-    /// One event, in the parts its JSON was cut into, which are packed each on its own. JSON has no line breaks of its
-    /// own, so it fits on one `data:` line.
     func send(_ parts: [Data]) {
         guard !isClosed, !parts.isEmpty else { return }
         var event = parts
@@ -291,8 +267,7 @@ final class PhoneStream {
 
     private func write(_ parts: [Data]) {
         write(gzip.map { $0.packed(parts) } ?? parts.reduce(Data(), +))
-        // WebKit can hold back the end of a long packed event until more of the stream comes, so a ping follows soon
-        // after rather than in up to 10 seconds.
+        // Outside the repo: WebKit can hold back the end of a long gzipped event until more of the stream comes.
         guard gzip != nil else { return }
         nudge?.cancel()
         nudge = Task { [weak self] in
@@ -302,7 +277,6 @@ final class PhoneStream {
         }
     }
 
-    /// Packed on its own, a ping is the same size whatever came before it.
     private func ping() {
         let ping = Data(": ping\n\n".utf8)
         write(gzip.map { $0.flushed(ping) } ?? ping)

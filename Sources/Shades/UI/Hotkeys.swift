@@ -1,8 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 
-/// Global shortcuts through Carbon, which is still the one way that needs no permissions. Each is claimed for Shades
-/// alone, so a shortcut another app already has fails here and the cat says so, instead of both quietly firing.
+// Outside the repo: Carbon hot keys are still the one way to a global shortcut that needs no permissions.
 @MainActor
 final class Hotkeys {
     static let shared = Hotkeys()
@@ -12,12 +11,8 @@ final class Hotkeys {
     private var nextID: UInt32 = 1
     private var installed = false
 
-    private static let signature: OSType = 0x5348_4453 // SHDS
-    /// A shared claim on a shortcut another app holds still succeeds, and then only one of them gets the key.
-    /// Only an exclusive claim is refused, which is how Shades can tell you instead.
+    private static let signature: OSType = 0x5348_4453
     static let options = OptionBits(kEventHotKeyExclusive)
-    /// Off in a demo or a copy trying a flow out. Those press their keys through the controller, and a claim of theirs
-    /// would take the shortcuts from the installed app whenever it starts while they run.
     var claimsKeys = true
 
     @discardableResult
@@ -68,7 +63,6 @@ final class Hotkeys {
     }
 }
 
-/// The app's fixed shortcuts, as Carbon claims them and as a menu shows them.
 struct Shortcut: Equatable {
     let keyCode: Int
     let modifiers: Int
@@ -78,6 +72,5 @@ struct Shortcut: Equatable {
 
     static let ask = Shortcut(keyCode: kVK_Space, modifiers: optionKey, key: " ", keyModifiers: .option, label: "⌥Space")
     static let fix = Shortcut(keyCode: kVK_ANSI_F, modifiers: controlKey | optionKey, key: "f", keyModifiers: [.control, .option], label: "⌃⌥F")
-    /// ⌃⌘ like the shortcuts people often give their apps, on a letter they rarely take. M is often Messages.
     static let messages = Shortcut(keyCode: kVK_ANSI_B, modifiers: controlKey | cmdKey, key: "b", keyModifiers: [.control, .command], label: "⌃⌘B")
 }

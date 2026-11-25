@@ -1,7 +1,5 @@
 import Foundation
 
-/// Runs a blocking system call on a thread of its own and stops waiting when time is up,
-/// because an app that has hung can hold these calls for seconds.
 func blocking<T>(within seconds: TimeInterval, _ work: @escaping () -> T?) async -> T? {
     await withCheckedContinuation { continuation in
         let answer = FirstAnswer(continuation)
@@ -10,7 +8,6 @@ func blocking<T>(within seconds: TimeInterval, _ work: @escaping () -> T?) async
     }
 }
 
-/// The same for async work, which may never finish if the system service behind it stalls.
 func waiting<T>(within seconds: TimeInterval, _ work: @escaping () async -> T?) async -> T? {
     await withCheckedContinuation { continuation in
         let answer = FirstAnswer(continuation)

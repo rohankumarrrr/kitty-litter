@@ -1,7 +1,6 @@
 import AppKit
 
-/// Font, on Settings' Messages page: the system's own faces, then every family on this Mac, each drawn in itself. A
-/// menu opens without making Shades the active app, where the font panel wouldn't.
+// Outside the repo: the font panel makes the app active, and a menu doesn't.
 @MainActor
 final class FontMenu: NSObject {
     private var onPick: ((String?) -> Void)?
@@ -14,15 +13,12 @@ final class FontMenu: NSObject {
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.isFlipped ? anchor.bounds.height : 0), in: anchor)
     }
 
-    /// The system's faces first, then a submenu with every family, so the menu itself stays short. Each item carries
-    /// what picking it sets, with `nil` for the system's own.
     func items(current: String?, families: [String]) -> [NSMenuItem] {
         let faces = MessagesInk.systemFaces.map(\.name)
         var items = faces.enumerated().map { index, name in
             let picks = index == 0 ? nil : name
             return item(name, picks: picks, isOn: current == picks)
         }
-        // One written into the file by hand that isn't on this Mac, which draws in the system's.
         if let current, !faces.contains(current), !families.contains(current) {
             let missing = item(current, picks: current, isOn: true)
             missing.isEnabled = false
@@ -31,7 +27,7 @@ final class FontMenu: NSObject {
         items.append(.separator())
         let submenu = NSMenu(title: CatWords.allFonts)
         submenu.autoenablesItems = false
-        // A family starting with a dot is one macOS keeps for itself.
+        // Outside the repo: macOS keeps font families whose names start with a dot for itself.
         let shown = families.filter { !$0.hasPrefix(".") }.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
         shown.forEach { submenu.addItem(item($0, picks: $0, isOn: current == $0)) }
         let all = NSMenuItem(title: CatWords.allFonts, action: nil, keyEquivalent: "")

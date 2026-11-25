@@ -1,12 +1,9 @@
 import CoreGraphics
 
-/// Where a bubble goes: over the cat, pointing at it, and always fully on screen.
 enum BubbleLayout {
     struct Placement: Equatable {
         var frame: CGRect
-        /// Where the tail meets the bubble, from its left edge.
         var tailX: CGFloat
-        /// The bubble had no room above, so it hangs below with the tail on top.
         var below: Bool
     }
 
@@ -17,7 +14,6 @@ enum BubbleLayout {
 
     static func place(size: CGSize, over anchor: CGRect, in visible: CGRect) -> Placement {
         let center = anchor.midX
-        // Grow toward the middle of the screen so there's room to read.
         var x = center < visible.midX ? center - tailInset : center - size.width + tailInset
         x = min(max(x, visible.minX + margin), max(visible.minX + margin, visible.maxX - margin - size.width))
 
@@ -39,11 +35,7 @@ enum BubbleLayout {
     }
 }
 
-/// Keeps the cat on the screens you actually have.
 enum ScreenBounds {
-    /// Where the cat sits to show you a part of the screen: on top of it, the way it sits on bubbles on
-    /// the site. With no room above, as for a toolbar under the menu bar, it sits underneath instead
-    /// of covering what it means.
     static func perch(on region: CGRect, size: CGSize, screens: [CGRect]) -> CGPoint {
         let above = CGPoint(x: region.midX - size.width / 2, y: region.maxY - 3)
         guard clamp(above, size: size, to: screens).y < above.y else { return above }

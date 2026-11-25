@@ -1,7 +1,5 @@
 import AppKit
 
-/// What Settings' own controls share with `QuietButton`: a click leaves the keyboard where it was, Tab reaches one only
-/// with Keyboard navigation on, and Space presses it.
 class SettingsControl: NSView {
     var hovering = false { didSet { needsDisplay = true } }
 
@@ -47,14 +45,11 @@ class SettingsControl: NSView {
         return true
     }
 
-    /// A click there, or Space and VoiceOver's press with `nil`.
     func press(at point: NSPoint?) {}
 
     var showsFocus: Bool { QuietFocus.shows(self) }
 }
 
-/// A page's name at the top of Settings, underlined in the rim's light while it's open, as Opal's tabs are. Never a
-/// pill.
 final class SettingsTab: SettingsControl {
     static let height: CGFloat = 30
     private static let font = NSFont.systemFont(ofSize: 13, weight: .medium)
@@ -93,8 +88,6 @@ final class SettingsTab: SettingsControl {
     }
 }
 
-/// A few close choices side by side, the chosen one raised on the track, as Opal's segmented control is. The arrow
-/// keys move between them once Tab has reached it.
 final class QuietSegments: SettingsControl {
     static let height: CGFloat = 26
     private static let font = NSFont.systemFont(ofSize: 12, weight: .medium)
@@ -107,7 +100,6 @@ final class QuietSegments: SettingsControl {
         self.titles = titles
         self.selected = selected
         super.init(frame: .zero)
-        // Every segment as wide as the widest, as macOS draws them.
         let widest = titles.map { ceil(NSAttributedString(string: $0, attributes: [.font: Self.font]).size().width) }.max() ?? 0
         setFrameSize(NSSize(width: (widest + 24) * CGFloat(titles.count) + 4, height: Self.height))
         setAccessibilityElement(true)
@@ -118,7 +110,6 @@ final class QuietSegments: SettingsControl {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// The same as clicking the segment that says this.
     func pick(_ title: String) {
         titles.firstIndex(of: title).map(pick)
     }
@@ -181,7 +172,6 @@ final class QuietSegments: SettingsControl {
     }
 }
 
-/// One segment, as VoiceOver finds it: a radio button that picks it.
 private final class SegmentElement: NSAccessibilityElement {
     private let onPress: () -> Void
 
@@ -201,7 +191,6 @@ private final class SegmentElement: NSAccessibilityElement {
     }
 }
 
-/// On or off for a whole row, at its right, as macOS's own Settings has it. Violet when it's on.
 final class QuietSwitch: SettingsControl {
     private static let track = NSSize(width: 32, height: 18)
 
@@ -237,7 +226,6 @@ final class QuietSwitch: SettingsControl {
         } else {
             Ink.hex(Opal.control).setFill()
             shape.fill()
-            // An edge at the 3:1 a control needs, on glass.
             let edge = NSBezierPath(roundedRect: track.insetBy(dx: 0.6, dy: 0.6), xRadius: radius - 0.6, yRadius: radius - 0.6)
             edge.lineWidth = 1.2
             MessagesInk.dim.setStroke()
@@ -251,8 +239,6 @@ final class QuietSwitch: SettingsControl {
     }
 }
 
-/// A box you type in, as Opal's field: raised, with a hairline edge, and a violet ring and lilac insertion point while
-/// it has the keyboard.
 final class OpalField: NSTextField {
     override class var cellClass: AnyClass? {
         get { OpalFieldCell.self }
@@ -292,7 +278,6 @@ final class OpalField: NSTextField {
         needsDisplay = true
     }
 
-    /// The ring goes when its window gives up the keyboard, and comes back with it.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         NotificationCenter.default.removeObserver(self)
@@ -305,7 +290,6 @@ final class OpalField: NSTextField {
     @objc private func keyChanged() { needsDisplay = true }
 }
 
-/// Its words inset from the field's edge, the same while you type as while it draws.
 private final class OpalFieldCell: NSTextFieldCell {
     override func drawingRect(forBounds rect: NSRect) -> NSRect {
         super.drawingRect(forBounds: rect.insetBy(dx: 8, dy: 5))

@@ -1,6 +1,5 @@
 import Foundation
 
-/// Turns spoken layout into real layout: "new line", "bullet point", "first, second, third".
 enum SpokenFormatting {
     static func apply(to text: String) -> String {
         var result = applyEndMarks(text)
@@ -11,7 +10,6 @@ enum SpokenFormatting {
         return result
     }
 
-    /// List lines read better without a full stop, and a model tends to add one.
     static func tidyListLines(_ text: String) -> String {
         guard text.contains("\n") else { return text }
         return text.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
@@ -20,9 +18,6 @@ enum SpokenFormatting {
         }.joined(separator: "\n")
     }
 
-    // MARK: - Marks
-
-    /// Only at the very end, because "question mark" mid-sentence is usually about the mark itself.
     private static func applyEndMarks(_ text: String) -> String {
         var words = WordList.parse(text)
         guard words.count >= 3 else { return text }
@@ -39,7 +34,6 @@ enum SpokenFormatting {
         return WordList.render(words)
     }
 
-    /// Words that make "new line" or "new paragraph" part of a sentence rather than a command.
     private static let beforeRealPhrase: Set<String> = [
         "a", "an", "the", "this", "that", "each", "every", "one", "another", "any", "per", "my", "your", "our", "their",
         "add", "insert", "start", "for", "with", "and", "or", "of", "to",
@@ -81,9 +75,6 @@ enum SpokenFormatting {
         }
     }
 
-    // MARK: - Lists
-
-    /// A list needs at least this many items, so an ordinary "bullet point" or "first" stays in the sentence.
     private static let minimumItems = 2
 
     private static func bulletList(_ text: String) -> String? {
@@ -119,7 +110,6 @@ enum SpokenFormatting {
         let lastWords = ["finally", "lastly", "last"]
         var marks: [Int] = []
         for i in words.indices {
-            // Evidence that it opens a clause, unlike "the first thing".
             let opens = i == 0 || words[i - 1].hasPause
             guard opens, words[i].trailing == "," || i == 0 || words[i - 1].endsSentence else { continue }
             if marks.count < order.count, order[marks.count].contains(words[i].key) {
@@ -183,7 +173,6 @@ enum SpokenFormatting {
     private static func join(lead: String, items: [String]) -> String {
         guard !lead.isEmpty else { return items.joined(separator: "\n") }
         var words = WordList.parse(lead)
-        // "Here are the next steps." and "To set it up," both become a line ending in a colon.
         if let last = words.indices.last { words[last].trailing = ":" }
         words[0].capitalize()
         return WordList.render(words) + "\n" + items.joined(separator: "\n")

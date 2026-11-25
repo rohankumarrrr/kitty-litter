@@ -17,7 +17,6 @@ extension AppController {
     }
 }
 
-/// Runs `work`, giving up after a while. It keeps going in the background if it's late.
 func firstOf<T: Sendable>(seconds: TimeInterval, _ work: @escaping @Sendable () async -> T) async -> T? {
     await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
         let gate = OnceGate()

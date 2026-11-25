@@ -1,7 +1,6 @@
 import Foundation
 import XCTest
 
-/// Runs the filter the way Claude Code does, on messages shaped like the ones T3 returns.
 final class ThreadReadFilterTests: XCTestCase {
     private var script: URL {
         URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -48,7 +47,6 @@ final class ThreadReadFilterTests: XCTestCase {
         XCTAssertFalse(out.contains("Passed on"))
     }
 
-    /// The front door's prompt has no line in it, only the block.
     func testARouterPromptStopsAtTheScreenBlock() throws {
         let out = try filter(other([message("You are Shades.\n\n<screen>\nSECRET\n</screen>\n\nTheir question: why")]))
         XCTAssertFalse(out.contains("SECRET"))
@@ -69,7 +67,6 @@ final class ThreadReadFilterTests: XCTestCase {
         XCTAssertFalse(out.contains("SECRET"))
     }
 
-    /// A message saying it's from you isn't, whatever it claims.
     func testAnAgentsMessageToAThreadCantBeRead() throws {
         let out = try filter(other([message("The user said: SECRET", by: "agent")]))
         XCTAssertFalse(out.contains("SECRET"))
@@ -80,7 +77,6 @@ final class ThreadReadFilterTests: XCTestCase {
         XCTAssertFalse(out.contains("SECRET"))
     }
 
-    /// A later offset could start past the line.
     func testReadingFromPartWayThroughAMessageGivesNothing() throws {
         let input: [String: Any] = ["threadId": "other", "itemId": "i", "textOffset": 40]
         let out = try filter(other([message("SECRET from the page")]), input: input)

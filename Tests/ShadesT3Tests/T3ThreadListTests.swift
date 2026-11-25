@@ -69,8 +69,6 @@ final class T3ThreadListTests: XCTestCase {
         thread(id: "t", status: "completed").replacingOccurrences(of: #""pendingBackgroundTasks":[]"#, with: #""pendingBackgroundTasks":\#(tasks)"#)
     }
 
-    /// T3 lists these as it sends them: one is a background shell it called `t3_background_wait` on, the other the pull
-    /// request it's watching.
     func testAThreadWaitingToBeWokenIsStillWorkingThoughItsTurnEnded() throws {
         let waits = [
             #"[{"taskId":"bash-1","kind":"command","description":"sleep 90","awaited":true}]"#,
@@ -85,7 +83,6 @@ final class T3ThreadListTests: XCTestCase {
         }
     }
 
-    /// A dev server it left up doesn't wake it, and T3 can keep a leftover from a session that's gone on the list for good.
     func testWhatItIsntWaitingOnDoesntKeepItGoing() throws {
         let leftovers = [
             #"[{"taskId":"bash-2","kind":"command","description":"npm run dev"}]"#,
@@ -168,7 +165,6 @@ final class T3ThreadListTests: XCTestCase {
         }
     }
 
-    /// The server follows its real snapshot with one that only refreshes projects and names no threads.
     func testProjectRefreshDoesNotEmptyTheList() throws {
         var list = T3ThreadList()
         list.apply(try snapshot(threads: [thread(id: "t")]))
@@ -225,14 +221,11 @@ final class T3ThreadListTests: XCTestCase {
         XCTAssertEqual(list.projects.map(\.title), ["Shades"])
     }
 
-    // MARK: Approvals
-
     func testPendingApprovalShowsOnceItsWordsAreKnown() throws {
         var list = T3ThreadList()
         list.apply(try snapshot(threads: [thread(id: "t", status: "waiting", pending: pendingCommand)]))
         XCTAssertEqual(list.pendingApprovals, [.init(requestID: "request-1", threadID: "t", kind: .command)])
 
-        // Waiting for approval as soon as the server says so, even before the words arrive.
         var thread = try XCTUnwrap(list.agentThreads(summaries: [:]).first)
         XCTAssertEqual(thread.status, .waitingForApproval)
         XCTAssertEqual(thread.pendingApprovals, [])
@@ -274,8 +267,6 @@ final class T3ThreadListTests: XCTestCase {
         XCTAssertEqual(list.agentThreads(summaries: [:]).first?.status, .running)
     }
 
-    /// A subagent has no row of its own, so its approval surfaces on the thread you can see, but
-    /// answering it still has to name the subagent's own thread.
     func testASubagentsApprovalSurfacesOnItsParent() throws {
         var list = T3ThreadList()
         list.apply(try snapshot(threads: [
@@ -295,8 +286,6 @@ final class T3ThreadListTests: XCTestCase {
         XCTAssertEqual(list.runtimeMode(of: "t"), "full-access")
         XCTAssertNil(list.runtimeMode(of: "unknown"))
     }
-
-    // MARK: Everything, for reading who said what
 
     func testAskingForEverythingLeavesTheDefaultsAlone() throws {
         let everything = try JSONSerialization.jsonObject(with: T3Wire.encode(T3Wire.SubscribeShell.everything)) as? [String: Bool]

@@ -2,7 +2,6 @@ import Foundation
 import XCTest
 @testable import ShadesCore
 
-/// Ways a request tried to change more than its card said, from the review of this feature. Temporary folders only.
 final class ChangeRequestAttackTests: XCTestCase {
     private var home: URL!
     private var files: SettingsFiles { SettingsFiles(home: home.path, kittenFolders: [kitten.path]) }
@@ -45,7 +44,6 @@ final class ChangeRequestAttackTests: XCTestCase {
         return try XCTUnwrap(XCTUnwrap(ChangeRequests.all(in: "```shades-request\n\(json)\n```").first).get().change)
     }
 
-    /// A deny moved under a dotted top-level key reads as the same facts, so its removal goes unreported.
     func testMovingADenyUnderADottedKeyIsReportedAsWidening() throws {
         let withExtra = block.replacingOccurrences(of: "\"mcp__t3-code__t3_queue\"\n", with: "\"mcp__t3-code__t3_queue\",\n      \"Bash(rm:*)\"\n")
         try Data(withExtra.utf8).write(to: kittenSettings)
@@ -62,7 +60,6 @@ final class ChangeRequestAttackTests: XCTestCase {
         XCTAssertTrue(checked.isLoosening, "taking Bash(rm:*) out of permissions.deny widens what agents can do")
     }
 
-    /// A guard hook moved under a dotted key the same way.
     func testMovingAHookUnderADottedKeyIsReportedAsWidening() throws {
         let guardHook = "\"PreToolUse\": [{\"matcher\": \"Bash\", \"hooks\": [{\"type\": \"command\", \"command\": \"guard.sh\"}]}], "
         let withHook = block.replacingOccurrences(of: "\"hooks\": {\"PostToolUse\"", with: "\"hooks\": {\(guardHook)\"PostToolUse\"")
@@ -76,8 +73,6 @@ final class ChangeRequestAttackTests: XCTestCase {
         XCTAssertTrue(checked.isLoosening, "the PreToolUse guard hook is gone from what Claude Code reads")
     }
 
-    /// Claude Code can't read a settings.local.json with a trailing comma, so the block in settings.json holds. Fixing the
-    /// comma makes its `sandbox.enabled: false` take over, and the card should say the block opens.
     func testFixingAnUnreadableLocalFileThatTurnsOffTheSandboxOpensTheBlock() throws {
         try Data(block.utf8).write(to: worktree.appendingPathComponent(".claude/settings.json"))
         let local = worktree.appendingPathComponent(".claude/settings.local.json")
@@ -88,7 +83,6 @@ final class ChangeRequestAttackTests: XCTestCase {
         XCTAssertEqual(checked.opensScreenBlock, ["sandbox.enabled"])
     }
 
-    /// The other file is unreadable to Claude Code, yet counted, so it masks the change to settings.json.
     func testAnUnreadableLocalFileDoesntMaskTurningOffTheSandbox() throws {
         try Data("{\"sandbox\": {\"enabled\": true},}\n".utf8).write(to: kitten.appendingPathComponent(".claude/settings.local.json"))
         let checked = files.check(try asked(["file": kittenSettings.path, "replace": "{\"enabled\": true,", "with": "{\"enabled\": false,"]))
@@ -96,7 +90,6 @@ final class ChangeRequestAttackTests: XCTestCase {
         XCTAssertEqual(checked.opensScreenBlock, ["sandbox.enabled"])
     }
 
-    /// Foundation keeps the first of a repeated key and Claude Code the last, so the file before is read wrongly.
     func testARepeatedKeyBeforeIsReadAsClaudeCodeReadsIt() throws {
         let trueLine = "  \"sandbox\": {\"enabled\": true, \"failIfUnavailable\": true, \"allowUnsandboxedCommands\": false, \"autoAllowBashIfSandboxed\": false},\n"
         let falseLine = trueLine.replacingOccurrences(of: "\"enabled\": true", with: "\"enabled\": false")
@@ -108,7 +101,6 @@ final class ChangeRequestAttackTests: XCTestCase {
         XCTAssertEqual(checked.opensScreenBlock, ["sandbox.enabled"], "Claude Code read enabled: true before, and false after")
     }
 
-    /// A hook in a list and the same hook written as a string are one fact.
     func testAHookTurnedIntoAStringIsReportedAsWidening() throws {
         let hook: [String: Any] = ["matcher": "Bash", "hooks": [["type": "command", "command": "guard.sh"]]]
         let object = String(decoding: try JSONSerialization.data(withJSONObject: hook, options: [.sortedKeys, .withoutEscapingSlashes]), as: UTF8.self)
@@ -120,7 +112,6 @@ final class ChangeRequestAttackTests: XCTestCase {
         XCTAssertTrue(checked.isLoosening, "PreToolUse now holds a string, not a hook")
     }
 
-    /// A `.claude` swapped for a link after the check but before the write sends the write through the link.
     func testALinkSwappedInDuringAllowIsNeverFollowed() throws {
         let mine = home.appendingPathComponent(".claude")
         try FileManager.default.createDirectory(at: mine, withIntermediateDirectories: true)

@@ -14,8 +14,6 @@ final class AskRequestTests: XCTestCase {
         AgentThread(id: id, title: "Clawde: Work", projectTitle: nil, status: .completed, model: "m", updatedAt: start, lastRunID: run, lastRunEndedAt: start)
     }
 
-    // MARK: - Written in the form
-
     func testAWrittenAskIsReadExactlyAsOneLine() throws {
         let found = try XCTUnwrap(ChangeRequests.all(in: block(["ask": "Merge pull request #12,\nthe login fix.", "why": "Tests pass."])).first).get()
         XCTAssertEqual(found.ask, AskRequest(ask: "Merge pull request #12, the login fix.", why: "Tests pass.", readFromWords: false))
@@ -39,15 +37,12 @@ final class AskRequestTests: XCTestCase {
         }
     }
 
-    // MARK: - Read from plain words
-
     func testShadesReadingOfADecisionIsOneExactSentenceAndARecommendation() {
         let read = AskRequest(readingDecision: "ASK: Merge pull request #12 in kitty-litter.\nRECOMMEND: I'd allow it. Its tests pass,\nand a merge can be undone.")
         XCTAssertEqual(read, AskRequest(ask: "Merge pull request #12 in kitty-litter.", review: "I'd allow it. Its tests pass, and a merge can be undone.", readFromWords: true))
         XCTAssertEqual(AskRequest(readingDecision: "ASK: Merge it.")?.review, nil, "a reading with no recommendation still says what Allow is for")
     }
 
-    /// Nothing turns into an action unless the reading says exactly one thing.
     func testAReadingThatIsntExactlyOneThingIsNoAsk() {
         for reply in [
             "NONE",
@@ -65,8 +60,6 @@ final class AskRequestTests: XCTestCase {
             XCTAssertNil(AskRequest(readingDecision: reply), reply)
         }
     }
-
-    // MARK: - What the kitten hears
 
     func testTheKittenHearsExactlyWhatWasAllowedAndNoneOfItReadsAsYourWords() {
         let written = AskRequest(ask: "Merge pull request #12.", readFromWords: false)
@@ -89,8 +82,6 @@ final class AskRequestTests: XCTestCase {
         XCTAssertEqual(look.components(separatedBy: "</ask>").count - 1, 2)
     }
 
-    // MARK: - In the inbox
-
     func testAWrittenAskWaitsWhateverTheThreadSaysNextAndAReadOneGoesWithItsDecision() {
         var inbox = Inbox(since: start)
         let written = InboxEntry(id: "a", kind: .decision, text: "Asks for your yes.", threadID: "t", threadTitle: "Clawde: Work", at: start, ask: AskRequest(ask: "Merge #12.", readFromWords: false))
@@ -112,7 +103,6 @@ final class AskRequestTests: XCTestCase {
         XCTAssertFalse(inbox.attach(AskRequest(ask: "Anything.", readFromWords: true), to: "gone"))
     }
 
-    /// What a thread says later never goes where Shades' look at an ask is, and your own words take a read ask away.
     func testNothingGoesUnderAnAskAndYourReplyTakesAReadOneAway() {
         var inbox = Inbox(since: start)
         inbox.flag("Merge it?", from: thread(), at: start, id: "d")

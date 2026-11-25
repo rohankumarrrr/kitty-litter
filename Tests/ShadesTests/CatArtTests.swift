@@ -78,18 +78,15 @@ final class CatArtTests: XCTestCase {
 
     func testOnlyVisiblePixelsCount() {
         let sit = CatPose(frame: .sit)
-        // Empty corners.
         XCTAssertFalse(CatRenderer.isVisible(sit, x: 0, y: 0))
         XCTAssertFalse(CatRenderer.isVisible(sit, x: 15, y: 0))
         XCTAssertFalse(CatRenderer.isVisible(sit, x: 0, y: 15))
-        // The middle of its face, and just outside the grid.
         XCTAssertTrue(CatRenderer.isVisible(sit, x: 7, y: 5))
         XCTAssertFalse(CatRenderer.isVisible(sit, x: -1, y: 5))
         XCTAssertFalse(CatRenderer.isVisible(sit, x: 16, y: 5))
     }
 
     func testTheHitAreaFlipsAndHopsWithTheArt() {
-        // The first filled pixel of the run frame's top row is over on the right.
         XCTAssertTrue(CatRenderer.isVisible(CatPose(frame: .run1), x: 9, y: 1))
         XCTAssertFalse(CatRenderer.isVisible(CatPose(frame: .run1), x: 6, y: 1))
         XCTAssertTrue(CatRenderer.isVisible(CatPose(frame: .run1, flip: true), x: 6, y: 1))

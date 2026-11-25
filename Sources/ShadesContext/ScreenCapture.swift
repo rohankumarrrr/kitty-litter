@@ -1,18 +1,11 @@
 import AppKit
 import ScreenCaptureKit
 
-/// One display as a capped, optionally marked JPEG.
 public enum ScreenCapture {
     public struct Request: Sendable {
-        /// The area to mark, in AppKit global points. Decides which display gets captured.
         public var focusRegion: CGRect?
-        /// Otherwise the display holding this app's front window gets captured.
         public var frontmostPID: pid_t?
-        /// Kept out of the picture even when they're only behind the front window.
         public var hiddenBundleIDs: [String]
-        /// Captures these windows alone, so a probe can test against a window of its own without
-        /// taking anything else from your screen. The picture only covers the display if one of
-        /// them does, as ScreenCaptureKit frames it to the windows.
         public var onlyWindows: [CGWindowID]?
 
         public init(
@@ -31,9 +24,7 @@ public enum ScreenCapture {
     public struct Result: Sendable {
         public var jpeg: Data
         public var pixelSize: CGSize
-        /// In screenshot pixels, with the origin at the top left.
         public var focusRegion: CGRect?
-        /// The part of the screen it shows, in AppKit global points.
         public var area: CGRect
         public var listSeconds: Double
         public var grabSeconds: Double
@@ -44,7 +35,6 @@ public enum ScreenCapture {
         case noDisplay, encodingFailed
     }
 
-    /// Never call this without Screen Recording, as ScreenCaptureKit would prompt for it.
     public static func capture(_ request: Request) async throws -> Result {
         let clock = ContinuousClock()
         let started = clock.now
@@ -53,7 +43,6 @@ public enum ScreenCapture {
         let displays = content.displays
         let primaryHeight = CGDisplayBounds(CGMainDisplayID()).height
 
-        // Everything from here on is in Quartz coordinates, like ScreenCaptureKit itself.
         let focus = request.focusRegion.map { ScreenGeometry.flipped($0, primaryHeight: primaryHeight) }
         let mouse = ScreenGeometry.flipped(
             CGRect(origin: NSEvent.mouseLocation, size: .zero),
@@ -114,7 +103,6 @@ public enum ScreenCapture {
         return SCContentFilter(display: display, excludingApplications: hidden, exceptingWindows: [])
     }
 
-    /// Shades never appears in its own screenshots, and neither do apps on the privacy list.
     static func shouldHide(pid: pid_t, bundleID: String, me: pid_t, hidden: [String]) -> Bool {
         pid == me || hidden.contains(bundleID)
     }

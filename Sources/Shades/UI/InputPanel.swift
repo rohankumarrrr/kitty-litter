@@ -1,17 +1,12 @@
 import AppKit
 
-/// The small box you type into: Opal's glass with a field in it, like a command box. It takes the keyboard without
-/// activating the app, so whatever you were using stays frontmost.
 @MainActor
 final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
     private static let width: CGFloat = 320
-    /// Around the field, so its corners sit inside the glass's.
     private static let padding: CGFloat = 8
-    /// Inside the field, around the words.
     private static let inside = NSSize(width: 10, height: 7)
     private static let maxLines: CGFloat = 5
 
-    /// Its window, which tests give one that never reaches the screen.
     let panel: QuietPanel
     private let balloon = AskBoxView()
     private let scroll = NSScrollView()
@@ -115,8 +110,7 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
         let visibleText = min(lines, lineHeight * Self.maxLines)
         let chipRow = attachment.isHidden ? 0 : DropChip.height + 6
         let fieldHeight = visibleText + inside.height * 2 + chipRow
-        // The caption's cell does the measuring, since anything else comes up short over a few lines, and the last one
-        // doesn't get drawn.
+        // Outside the repo: other measures of an NSTextField's wrapped words come up short, so its cell measures them.
         let captionHeight = caption.isHidden ? 0 : ceil(caption.cell!.cellSize(
             forBounds: NSRect(x: 0, y: 0, width: fieldWidth - inside.width * 2 + 4, height: .greatestFiniteMagnitude)
         ).height)
@@ -139,9 +133,8 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
         textView.minSize = NSSize(width: textWidth, height: 0)
         textView.maxSize = NSSize(width: textWidth, height: .greatestFiniteMagnitude)
         textView.frame = NSRect(x: 0, y: 0, width: textWidth, height: lines)
-        // Level with the first line, at the field's right, as the mic is in The Kitty Litter's box.
         mic.frame = NSRect(x: field.maxX - 4 - side, y: top - (lineHeight + side) / 2, width: side, height: side)
-        // The caption's own padding lines it up with the words in the field.
+        // Outside the repo: an NSTextField label pads its words by 2 points on each side.
         caption.frame = NSRect(x: field.minX + inside.width - 2, y: field.minY - 6 - captionHeight, width: fieldWidth - inside.width * 2 + 4, height: captionHeight)
         balloon.needsDisplay = true
         panel.invalidateShadow()
@@ -164,7 +157,6 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
     func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         switch selector {
         case #selector(NSResponder.insertNewline(_:)):
-            // Letting the text view handle it is what adds the new line.
             guard Self.returnSends(NSApp.currentEvent?.modifierFlags ?? []) else { return false }
             submit()
             return true
@@ -176,17 +168,14 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
         }
     }
 
-    /// Return sends, and Shift-Return starts a new line. AppKit reports both as the same command.
     static func returnSends(_ modifiers: NSEvent.ModifierFlags) -> Bool {
         !modifiers.contains(.shift)
     }
 
-    /// Its field's ring says it has the keyboard.
     func windowDidBecomeKey(_ notification: Notification) {
         balloon.needsDisplay = true
     }
 
-    /// Clicking somewhere else takes the keyboard back, and that means never mind.
     func windowDidResignKey(_ notification: Notification) {
         balloon.needsDisplay = true
         if request != nil, !ClickAway.isPaused { cancel() }
@@ -205,7 +194,6 @@ final class InputPanel: NSObject, NSTextViewDelegate, NSWindowDelegate {
         request.onSubmit(text)
     }
 
-    /// Sends this as if it had been typed and Return pressed.
     func submit(_ text: String) {
         textView.string = text
         submit()
@@ -224,7 +212,6 @@ class PlaceholderTextView: NSTextView {
     var placeholder = "" { didSet { needsDisplay = true } }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    /// A click into it is what gives a panel that's only key when needed the keyboard.
     override var needsPanelToBecomeKey: Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -242,7 +229,6 @@ class PlaceholderTextView: NSTextView {
     }
 }
 
-/// The Ask box's glass, with its field drawn in it.
 private final class AskBoxView: BalloonView {
     var field = NSRect.zero { didSet { needsDisplay = true } }
 
@@ -252,7 +238,6 @@ private final class AskBoxView: BalloonView {
     }
 }
 
-/// A file or link dropped on the cat, as a chip in the box, the way an attachment sits in any box you type in.
 private final class DropChip: NSView {
     static let height: CGFloat = 22
     private static let clip = NSImage(systemSymbolName: "paperclip", accessibilityDescription: nil)?
@@ -278,7 +263,6 @@ private final class DropChip: NSView {
 
     private var label: NSAttributedString {
         let style = NSMutableParagraphStyle()
-        // A long file name keeps its start and its kind, as Finder shows it.
         style.lineBreakMode = .byTruncatingMiddle
         return NSAttributedString(string: name ?? "", attributes: [
             .font: MessagesInk.font(ofSize: MessagesInk.meta),
