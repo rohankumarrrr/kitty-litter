@@ -177,6 +177,17 @@ final class LockdownTests: XCTestCase {
         XCTAssertTrue(backend.sent[0].prompt.text.hasPrefix(CatWords.fixThis))
     }
 
+    func testAFixWithFullAccessLeavesTheScreenOutEvenForAThreadStartedInAnotherMode() async {
+        controller = makeController(settings: Settings(lockdown: Lockdown(kitten: builder.id, thread: "t")))
+        controller.threadsChanged([thread("t", of: builder)])
+        controller.sendFix("The total is wrong", snapshot: screen)
+        await settle()
+        let sent = backend.sent.last
+        XCTAssertEqual(sent?.mode, .forward)
+        XCTAssertEqual(sent?.threadID, "t")
+        XCTAssertFalse(sent?.prompt.text.contains("let total = 0") == true, "the Fix box said your screen wouldn't go")
+    }
+
     func testItSurvivesARestartAndCarriesOnInTheSameThread() async throws {
         controller.lockdownPicked(builder)
         await ask("Start the page")

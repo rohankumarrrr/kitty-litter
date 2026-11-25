@@ -376,7 +376,7 @@ Telling an agent not to look isn't enough. Agents run as you, so they can open w
 
 ### What's enforced
 
-Every thread The Kitty Litter starts for a kitten or a hand-off runs in Frontier's mode from Settings, which is full access unless you pick another. With full access no kitten gets your screen at all, `seesScreen` or not, so the rest of this section is for the other modes. The router, the summaries and the inbox's sorter keep their own modes.
+Every thread The Kitty Litter starts for a kitten or a hand-off runs in Frontier's mode from Settings, which is full access unless you pick another. With full access no kitten gets your screen at all, `seesScreen` or not, so the rest of this section is for the other modes. The router, the summaries and the inbox's sorter keep their own modes. Before this was the default, Auto was, so the first copy of The Kitty Litter to start with it moves a saved Auto to full access, and leaves an empty `kittens-moved-to-full-access` file beside `settings.json` so it never moves it again, even after going back to an older copy and forward.
 
 The Kitty Litter leaves your screen out of everything it sends to a kitten with `seesScreen: false`. That covers threads in its project, whatever the project is called, including ones another kitten starts there, and any thread traced back to one through whoever started it, whatever that thread is called. A thread an agent started that can't be traced gets no screen either.
 

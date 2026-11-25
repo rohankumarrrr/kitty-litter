@@ -4567,6 +4567,30 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(shownBook?.threads["sent-topic"]?.parent.failure, CatWords.cantTakeFiles("Pepper"), "and it says why, not just that it didn't start")
     }
 
+    func testAFileTheRouterPassesOnToAKittenWithFullAccessSaysWhyUnderWhatYouSent() async throws {
+        var fresh = settings
+        fresh.frontierMode = Settings().frontierMode
+        controller.apply(fresh)
+        kittens = [steve]
+        backend.projects["/k/steve"] = "project-steve"
+        let handOff = "Fix the layout in the picture"
+        backend.routerSays = ["Tailor my resume to this": "KITTEN: 1", "Fix this layout": "HANDOFF: \(handOff)"]
+        controller.channelsPressed()
+        for (words, refusedBy) in [("Tailor my resume to this", steve.name), ("Fix this layout", controller.frontierName)] {
+            controller.messagesAction(.send(words, to: .router, shownIn: .shades, files: [picture]))
+            await settle()
+            await controller.messagesTurn?.value
+            await settle()
+            let shown = said(in: .shades, of: shownBook)
+            let mine = try XCTUnwrap(shown.first { $0.text == words && $0.speaker == .you })
+            XCTAssertEqual(mine.failure, CatWords.cantTakeFiles(refusedBy), words)
+        }
+        let shown = said(in: .shades, of: shownBook).map(\.text)
+        XCTAssertFalse(shown.contains(CatWords.passedOnToKitten), "it wasn't passed on")
+        XCTAssertFalse(shown.contains(CatWords.handedOff(handOff)), "nor started on")
+        XCTAssertFalse(backend.sent.contains { $0.mode == .start && $0.prompt.model == settings.frontierModel })
+    }
+
     func testAFileIsOfferedOnlyWhereSendingItWouldGo() async throws {
         let steve = Kitten(name: "Steve", role: "Professional", covers: "work", folder: "/k/steve")
         let pepper = Kitten(name: "Pepper", role: "Finance", covers: "their money", folder: "/k/pepper", seesScreen: false)
