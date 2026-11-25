@@ -2,6 +2,7 @@ import AppKit
 @testable import Shades
 import ShadesContext
 import ShadesCore
+import TestSupport
 import WebKit
 import XCTest
 
@@ -1044,10 +1045,7 @@ private final class Phone: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     func until(_ what: String, seconds: Double = 5, file: StaticString = #filePath, line: UInt = #line, _ check: () async throws -> Bool) async throws {
-        for _ in 0..<Int(seconds * 50) {
-            if (try? await check()) == true { return }
-            try await Task.sleep(nanoseconds: 20_000_000)
-        }
+        if await TestSupport.until(seconds: seconds, { (try? await check()) == true }) { return }
         XCTFail("waited for \(what)", file: file, line: line)
         throw CancellationError()
     }

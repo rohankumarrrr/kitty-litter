@@ -1,5 +1,6 @@
 import ShadesCore
 @testable import ShadesVoice
+import TestSupport
 import XCTest
 
 private final class FakeRecognizer: SpeechRecognizing {
@@ -76,13 +77,6 @@ final class EngineTests: XCTestCase {
         return (engine, source, recognizer)
     }
 
-    private func waitUntil(_ condition: () -> Bool, timeout: TimeInterval = 2) async {
-        let deadline = Date().addingTimeInterval(timeout)
-        while !condition(), Date() < deadline {
-            try? await Task.sleep(nanoseconds: 5_000_000)
-        }
-    }
-
     func testBeginBeforePrepareThrows() {
         let engine = ParakeetVoiceEngine(source: FakeSource(), recognizer: FakeRecognizer(), options: options)
         XCTAssertThrowsError(try engine.begin())
@@ -91,7 +85,7 @@ final class EngineTests: XCTestCase {
     func testAWholeTake() async throws {
         let (engine, source, recognizer) = try await makeEngine()
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 1)
         let transcript = try await engine.end()
         XCTAssertEqual(transcript.raw, "Um, let's meet at three, no, actually four.")
@@ -108,7 +102,7 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(source.starts, 0)
         for _ in 0..<3 {
             try engine.begin()
-            await waitUntil { source.isOpen }
+            await until { source.isOpen }
             source.send(seconds: 0.5)
             _ = try await engine.end()
             XCTAssertFalse(source.isOpen)
@@ -136,14 +130,14 @@ final class EngineTests: XCTestCase {
     func testCancelClosesTheMicAndAllowsAnotherTake() async throws {
         let (engine, source, recognizer) = try await makeEngine()
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 1)
         engine.cancel()
-        await waitUntil { !source.isOpen }
+        await until { !source.isOpen }
         XCTAssertFalse(source.isOpen)
         XCTAssertNil(recognizer.finishedSampleCount)
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 0.5)
         let transcript = try await engine.end()
         XCTAssertEqual(transcript.cleaned, "Let's meet at four.")
@@ -158,7 +152,7 @@ final class EngineTests: XCTestCase {
         let engine = ParakeetVoiceEngine(source: source, recognizer: recognizer, options: options)
         try await engine.prepare()
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 0.5)
 
         async let first = engine.end()
@@ -167,7 +161,7 @@ final class EngineTests: XCTestCase {
         _ = try await first
 
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 0.5)
         let second = try await engine.end()
         XCTAssertEqual(second.cleaned, "Let's meet at four.")
@@ -176,7 +170,7 @@ final class EngineTests: XCTestCase {
     func testAMicThatNeverDeliversSaysSo() async throws {
         let (engine, source, _) = try await makeEngine()
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         try await Task.sleep(nanoseconds: 550_000_000)
         do {
             _ = try await engine.end()
@@ -189,7 +183,7 @@ final class EngineTests: XCTestCase {
     func testATapGivesNothing() async throws {
         let (engine, source, recognizer) = try await makeEngine()
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 0.05)
         let transcript = try await engine.end()
         XCTAssertEqual(transcript.raw, "")
@@ -200,7 +194,7 @@ final class EngineTests: XCTestCase {
     func testPartialsArriveWhileTalking() async throws {
         let (engine, source, recognizer) = try await makeEngine()
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 0.5)
         var received: [String] = []
         var iterator = engine.partials.makeAsyncIterator()
@@ -215,9 +209,9 @@ final class EngineTests: XCTestCase {
     func testPartialsStopAfterRelease() async throws {
         let (engine, source, recognizer) = try await makeEngine()
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 0.5)
-        await waitUntil { !recognizer.draftedSampleCounts.isEmpty }
+        await until { !recognizer.draftedSampleCounts.isEmpty }
         _ = try await engine.end()
         let count = recognizer.draftedSampleCounts.count
         try await Task.sleep(nanoseconds: 100_000_000)
@@ -227,9 +221,9 @@ final class EngineTests: XCTestCase {
     func testPartialWindowsNeverExceedTheModelsWindow() async throws {
         let (engine, source, recognizer) = try await makeEngine()
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 40)
-        await waitUntil { recognizer.draftedSampleCounts.count >= 2 }
+        await until { recognizer.draftedSampleCounts.count >= 2 }
         _ = try await engine.end()
         XCTAssertLessThanOrEqual(recognizer.draftedSampleCounts.max() ?? 0, Int(15 * AudioFormat.sampleRate))
     }
@@ -238,7 +232,7 @@ final class EngineTests: XCTestCase {
         let (engine, source, _) = try await makeEngine()
         source.failure = VoiceError.microphoneUnavailable
         try engine.begin()
-        await waitUntil { engine.lastTimings.partialCount == 0 }
+        await until { engine.lastTimings.partialCount == 0 }
         try await Task.sleep(nanoseconds: 20_000_000)
         do {
             _ = try await engine.end()
@@ -255,7 +249,7 @@ final class EngineTests: XCTestCase {
         await engine.applyVocabulary(["GitHub"])
         XCTAssertEqual(recognizer.vocabulary, ["GitHub"])
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 0.5)
         let transcript = try await engine.end()
         XCTAssertEqual(transcript.cleaned, "Push it to GitHub.")
@@ -270,13 +264,13 @@ final class EngineTests: XCTestCase {
         try await engine.prepare()
 
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 0.5, value: 0.2)
         var transcript = try await engine.end()
         XCTAssertGreaterThanOrEqual(engine.lastTimings.tail, 0.28)
 
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 0.5, value: 0.2)
         source.send(seconds: 0.2, value: 0.001)
         transcript = try await engine.end()
@@ -287,7 +281,7 @@ final class EngineTests: XCTestCase {
     func testNothingButSilenceGivesNothing() async throws {
         let (engine, source, recognizer) = try await makeEngine()
         try engine.begin()
-        await waitUntil { source.isOpen }
+        await until { source.isOpen }
         source.send(seconds: 1, value: 0.0005)
         let transcript = try await engine.end()
         XCTAssertEqual(transcript.cleaned, "")

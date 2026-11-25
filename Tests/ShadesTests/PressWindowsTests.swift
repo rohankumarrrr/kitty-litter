@@ -2,6 +2,7 @@ import AppKit
 @testable import Shades
 import ShadesContext
 import ShadesCore
+import TestSupport
 import XCTest
 
 @MainActor
@@ -368,10 +369,6 @@ final class PressWindowsTests: XCTestCase {
         await controller.phoneTask?.value
         await until { stage.pairings.last??.code != nil }
         return (controller, stage, try XCTUnwrap(controller.phoneListening))
-    }
-
-    private func until(_ condition: () -> Bool) async {
-        for _ in 0..<2000 where !condition() { try? await Task.sleep(nanoseconds: 2_000_000) }
     }
 
     private func pairs(_ code: String, port: UInt16) async throws -> Int {

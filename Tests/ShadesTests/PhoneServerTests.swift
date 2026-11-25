@@ -1,11 +1,12 @@
-import Darwin
 import AppKit
-import CryptoKit
 import CZlib
+import CryptoKit
+import Darwin
 import Network
 @testable import Shades
 import ShadesContext
 import ShadesCore
+import TestSupport
 import XCTest
 
 private final class Received: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
@@ -136,10 +137,6 @@ final class PhoneServerTests: XCTestCase {
             _ = lines
         }
         return (first, stream)
-    }
-
-    private func until(_ condition: () -> Bool) async {
-        for _ in 0..<2000 where !condition() { try? await Task.sleep(nanoseconds: 2_000_000) }
     }
 
     func testTheSelfCheckSaysWhenThePhoneNeedsPairingAgain() async {

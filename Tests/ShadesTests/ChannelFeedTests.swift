@@ -1,5 +1,6 @@
 @testable import Shades
 import ShadesCore
+import TestSupport
 import XCTest
 
 private final class FeedBackend: AgentBackend, @unchecked Sendable {
@@ -142,11 +143,7 @@ final class ChannelFeedTests: XCTestCase {
     }
 
     private func eventually(_ what: String = "it didn't happen", _ condition: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async {
-        for _ in 0..<400 {
-            if condition() { return }
-            try? await Task.sleep(for: .milliseconds(5))
-        }
-        XCTFail(what, file: file, line: line)
+        if !(await until { condition() }) { XCTFail(what, file: file, line: line) }
     }
 
     private func holdOn() async {

@@ -2,6 +2,7 @@ import AppKit
 @testable import Shades
 import ShadesCore
 import ShadesT3
+import TestSupport
 import XCTest
 
 @MainActor
@@ -46,10 +47,6 @@ final class PressTests: XCTestCase {
         return (window, view)
     }
 
-    private func eventually(_ condition: () -> Bool) async {
-        for _ in 0..<2000 where !condition() { try? await Task.sleep(nanoseconds: 2_000_000) }
-    }
-
     func testOpenInT3OnAKittensMessageHandsT3ItsThreadsLink() async throws {
         for (threadID, link) in [("mcp:launch:8f2c", "t3code://threads/env-1/mcp%3Alaunch%3A8f2c"), ("t", "t3code://threads/env-1/t")] {
             for width: CGFloat in [1100, 820] {
@@ -72,7 +69,7 @@ final class PressTests: XCTestCase {
                     } else {
                         XCTAssertTrue(try Press.click(open) === open, "\(name): the click lands on Open in T3")
                     }
-                    await eventually { !opened.links.isEmpty }
+                    await until { !opened.links.isEmpty }
                     XCTAssertEqual(opened.links, [link], name)
                 }
             }
@@ -89,7 +86,7 @@ final class PressTests: XCTestCase {
         row.isCurrent = true
         let open = try XCTUnwrap(row.toolbar?.button(CatWords.openInT3))
         try Press.key(" ", keyCode: 49, on: open)
-        await eventually { !opened.links.isEmpty }
+        await until { !opened.links.isEmpty }
         XCTAssertEqual(opened.links, ["t3code://threads/env-1/mcp%3Alaunch%3A8f2c"], "Tab reaches it once the arrow keys are on its message, and Space presses it")
     }
 }

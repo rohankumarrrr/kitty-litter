@@ -4,6 +4,7 @@ import CoreGraphics
 import ShadesContext
 import ShadesCore
 import ShadesT3
+import TestSupport
 import XCTest
 
 private struct Friendly: LocalizedError {
@@ -5084,10 +5085,6 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(backend.sent.last?.threadID, "w")
         XCTAssertNotNil(controller.inbox.entries.first?.repliedAt)
         XCTAssertFalse(controller.waiting.reports.contains(where: \.needsYou))
-    }
-
-    private func until(_ condition: () -> Bool) async {
-        for _ in 0..<5000 where !condition() { await Task.yield() }
     }
 
     func testOpeningAThreadMarksItsKittenRead() async {
