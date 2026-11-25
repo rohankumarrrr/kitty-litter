@@ -201,3 +201,35 @@ struct SwiftLexer {
         flushLiteral()
     }
 }
+
+struct Match: Equatable {
+    let line: Int
+    let text: String
+}
+
+extension SwiftLexer {
+    enum Place { case code, literal }
+
+    func matches(of pattern: NSRegularExpression, in place: Place) -> [Match] {
+        var line = 1
+        var found: [Match] = []
+        for piece in pieces {
+            let text: String
+            let searched: Bool
+            switch piece {
+            case .code(let code): text = code; searched = place == .code
+            case .literal(let literal): text = literal; searched = place == .literal
+            case .comment(let comment): text = comment.text; searched = false
+            }
+            if searched {
+                let whole = NSRange(text.startIndex..., in: text)
+                for result in pattern.matches(in: text, range: whole) {
+                    let before = text[..<Range(result.range, in: text)!.lowerBound]
+                    found.append(Match(line: line + before.filter { $0 == "\n" }.count, text: String(text[Range(result.range, in: text)!])))
+                }
+            }
+            line += text.filter { $0 == "\n" }.count
+        }
+        return found
+    }
+}

@@ -36,30 +36,18 @@ final class TimedWaitTests: XCTestCase {
     ]
 
     func testATestWaitsOnTheThingItselfNeverASetTimeOrACountOfYields() throws {
-        let files = try Repo.files(under: ["Tests"], endingIn: [".swift"]).filter { !$0.hasPrefix(Self.waitingHelpers) }
-        for file in files {
-            let count = Self.timedWaits(in: try Repo.read(file))
-            let allowed = Self.timedWaitsLeft[file, default: 0]
-            if count > allowed {
-                XCTFail("""
-                \(file) waits a set time or a count of yields \(count) times, where \(allowed) are allowed. GitHub's \
-                runner can stall for a second or two, so wait on the thing itself, with `await until { condition }` or \
-                `runMainLoop(until: { condition })` from Tests/TestSupport/Waiting.swift. To hold a fake back, have it \
-                await something the test lets go of.
-                """)
-            } else if count < allowed {
-                XCTFail("\(file) waits a set time \(count) times now, fewer than TimedWaitTests.timedWaitsLeft allows. Lower it to \(count), so they can't come back.")
-            }
+        let pattern = try NSRegularExpression(pattern: Self.timedWaits.map(NSRegularExpression.escapedPattern).joined(separator: "|"))
+        var found: [String: [Match]] = [:]
+        for file in try Repo.files(under: ["Tests"], endingIn: [".swift"]) where !file.hasPrefix(Self.waitingHelpers) {
+            found[file] = SwiftLexer(try Repo.read(file)).matches(of: pattern, in: .code)
         }
-        for file in Self.timedWaitsLeft.keys where !files.contains(file) {
-            XCTFail("\(file) is gone, so take it out of TimedWaitTests.timedWaitsLeft.")
-        }
-    }
-
-    static func timedWaits(in source: String) -> Int {
-        SwiftLexer(source).pieces.reduce(0) { total, piece in
-            guard case .code(let code) = piece else { return total }
-            return total + timedWaits.reduce(0) { $0 + code.components(separatedBy: $1).count - 1 }
+        Allowance(name: "TimedWaitTests.timedWaitsLeft", left: Self.timedWaitsLeft).check(found) { file, count, allowed in
+            """
+            \(file) waits a set time or a count of yields \(count) times, where \(allowed) are allowed. GitHub's \
+            runner can stall for a second or two, so wait on the thing itself, with `await until { condition }` or \
+            `runMainLoop(until: { condition })` from Tests/TestSupport/Waiting.swift. To hold a fake back, have it \
+            await something the test lets go of.
+            """
         }
     }
 }
