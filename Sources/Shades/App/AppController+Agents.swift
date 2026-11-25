@@ -15,6 +15,9 @@ extension AppController {
         tidyLeftoverSummaries(threads)
         hideTestThreads(threads)
         latestThreads = threads
+        if !threadListArrived, health?.contains(HealthCheck.cantReachT3) == true {
+            healthTask = Task { await runHealthCheck() }
+        }
         if !threadListArrived {
             Task { [weak self, warmDelay] in
                 try? await Task.sleep(for: warmDelay)

@@ -2567,6 +2567,18 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(reportedHealth.last?.first { $0.check == "T3 Code" }?.ok, true)
     }
 
+    func testTheSelfCheckRunsAgainOnceT3ComesBackAfterItCouldntBeReached() async {
+        controller.threadListWait = 0
+        let first = await controller.runHealthCheck().first { $0.check == "T3 Code" }
+        XCTAssertEqual(first, HealthCheck.cantReachT3, "T3 is offline when the check runs")
+        controller.threadsChanged([])
+        await controller.healthTask?.value
+        XCTAssertEqual(reportedHealth.map { $0.first { $0.check == "T3 Code" }?.ok }, [false, true], "checked again by itself once T3 sent its list")
+        controller.threadsChanged([])
+        await controller.healthTask?.value
+        XCTAssertEqual(reportedHealth.count, 2, "and only that once")
+    }
+
     func testCheckMyselfSaysAgainOnceT3Answers() async {
         backend.whileFindingAProject = { [unowned self] in
             try? await Task.sleep(nanoseconds: 300_000_000)

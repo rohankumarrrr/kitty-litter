@@ -53,6 +53,12 @@ enum T3Silence: Equatable {
 
 enum HealthCheck {
     static let signature = "signature"
+    static let cantReachT3 = HealthFinding(
+        check: "T3 Code",
+        ok: false,
+        problem: "I can't reach T3 Code, so my agents can't run.",
+        fix: "Open T3 Code."
+    )
     static let badSignature = HealthFinding(
         check: signature,
         ok: false,
@@ -117,12 +123,7 @@ enum HealthCheck {
                 fix: "If macOS is showing a Keychain dialog, answer it. If not, quit and reopen T3 Code."
             ))
         case nil:
-            results.append(facts.reachedT3 ? .good("T3 Code") : HealthFinding(
-                check: "T3 Code",
-                ok: false,
-                problem: "I can't reach T3 Code, so my agents can't run.",
-                fix: "Open T3 Code."
-            ))
+            results.append(facts.reachedT3 ? .good("T3 Code") : cantReachT3)
         }
         for kitten in facts.kittensNotInT3 {
             results.append(HealthFinding(
