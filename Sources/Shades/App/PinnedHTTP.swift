@@ -54,7 +54,7 @@ struct PictureResponse: Equatable {
             guard let size = Int(sizeText.trimmingCharacters(in: .whitespaces), radix: 16), size >= 0 else { return nil }
             rest = rest[lineEnd.upperBound...]
             if size == 0 { return whole }
-            guard rest.count >= size + 2, rest.dropFirst(size).prefix(2) == Data("\r\n".utf8) else { return nil }
+            guard rest.count >= 2, size <= rest.count - 2, rest.dropFirst(size).prefix(2) == Data("\r\n".utf8) else { return nil }
             whole.append(rest.prefix(size))
             rest = rest.dropFirst(size + 2)
         }
@@ -67,7 +67,7 @@ enum PinnedHTTP {
     static func get(_ request: PictureRequest, biggest: Int, timeout: TimeInterval = 60) async -> PictureResponse? {
         guard let host = request.url.host, let message = message(for: request.url) else { return nil }
         let secure = request.url.scheme?.lowercased() == "https"
-        guard let port = NWEndpoint.Port(rawValue: UInt16(request.url.port ?? (secure ? 443 : 80))),
+        guard let number = UInt16(exactly: request.url.port ?? (secure ? 443 : 80)), let port = NWEndpoint.Port(rawValue: number),
               let address = endpoint(request.address)
         else { return nil }
         let parameters: NWParameters

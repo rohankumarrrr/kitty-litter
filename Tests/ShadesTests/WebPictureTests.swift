@@ -98,6 +98,18 @@ final class WebPictureTests: XCTestCase {
         XCTAssertNil(parse("HTTP/1.1 200 OK\r\nno colon here\r\n\r\npng"))
     }
 
+    func testAChunkSizeNearTheLargestNumberIsRefusedNotACrash() {
+        for size in ["7fffffffffffffff", "7ffffffffffffffe", "ffffffffffffffff"] {
+            XCTAssertNil(PictureResponse(parsing: Data("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n\(size)\r\npng\r\n0\r\n\r\n".utf8)), size)
+        }
+    }
+
+    func testAPortBeyondTheLastOneIsRefusedNotACrash() async throws {
+        let url = try XCTUnwrap(URL(string: "https://pictures.example:70000/a.png"))
+        let response = await PinnedHTTP.get(PictureRequest(url: url, address: onTheWeb), biggest: 1024, timeout: 1)
+        XCTAssertNil(response)
+    }
+
     func testTheConnectionGoesToThePinnedAddressAndNamesTheHostItAskedFor() async throws {
         for answer in [
             "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: 3\r\nConnection: close\r\n\r\npng",
