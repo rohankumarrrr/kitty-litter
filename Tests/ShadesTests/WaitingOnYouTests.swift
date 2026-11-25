@@ -83,7 +83,11 @@ final class WaitingOnYouTests: XCTestCase {
         controller.threadsChanged(threads)
     }
 
-    private func endTurn(_ thread: AgentThread, report: String?, sorted: String? = nil) async {
+    private func endTurn(_ thread: AgentThread, report: String?, sorted: String? = nil, wokenByItself: Bool = false) async {
+        if !wokenByItself, var said = backend.said[thread.id], let run = thread.lastRunID, !said.contains(where: { $0.opensRun == run }), !said.isEmpty {
+            said[said.count - 1].opensRun = run
+            backend.said[thread.id] = said
+        }
         backend.reports[thread.id] = report
         if let report, let sorted { sorts[String(report.prefix(40))] = sorted }
         var running = thread
@@ -221,19 +225,6 @@ final class WaitingOnYouTests: XCTestCase {
         XCTAssertTrue(relays.isEmpty, "the thread asked first, so the line is an answer and its writer isn't who the turn reports to")
     }
 
-    func testAFinishedWorkerWhoseLauncherHasItsReportIsntWoken() async {
-        backend.origins["checks"] = ThreadOrigin(title: "Room lab checks", projectPath: nil, startedBy: .thread("lead"))
-        show([AgentThread(id: "checks", title: "Room lab checks", projectTitle: nil, status: .completed, model: "m", updatedAt: clock, lastRunID: "run-checks", lastRunEndedAt: clock, startedByAgent: true, lastRunStartedAt: clock.addingTimeInterval(-600))])
-        backend.said["lead"] = [Exchange(id: "done", asker: .you, askedAt: clock.addingTimeInterval(-200), passesOnReportOf: "checks")]
-        backend.said["clawde"] = [
-            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-1200), ask: "Coordinate tonight's work."),
-            Exchange(id: "checks", asker: .agent(threadID: "checks"), askedAt: clock.addingTimeInterval(-310), ask: "Steady checks: all pass."),
-        ]
-        await endTurn(work("clawde", of: clawde), report: "Noted the checks. Merge #15?", sorted: "DECISION: Merge #15?")
-        XCTAssertEqual(waiting.map(\.text), ["Merge #15?"])
-        XCTAssertTrue(relays.isEmpty, "it's done and its launcher has its report, so nothing wakes it")
-    }
-
     func testARunThatOnlyAnsweredANoteAboutAnUnrelatedThreadReportsToNobody() async {
         backend.said["m"] = [
             Exchange(id: "launch", asker: .agent(threadID: "main"), askedAt: clock.addingTimeInterval(-900), ask: "Fix the routing."),
@@ -278,6 +269,87 @@ final class WaitingOnYouTests: XCTestCase {
         await endTurn(work("w", of: clawde, launchedBy: "source"), report: "Read your report.", sorted: "NOTE: Read it.")
         XCTAssertTrue(relays.isEmpty, "a turn a note opened never sends its own report back as a note to the thread that note came from")
         XCTAssertEqual(waiting, [])
+    }
+
+    func testAKittensSecondQuestionStillGetsItsAnswer() async {
+        backend.said["a"] = [Exchange(id: "answer", asker: .you, askedAt: clock.addingTimeInterval(-700), passesOnReportOf: "b")]
+        backend.said["b"] = [
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-1200), ask: "Look after the site."),
+            Exchange(id: "first", asker: .agent(threadID: "a"), askedAt: clock.addingTimeInterval(-900), ask: "Which branch has the footer?"),
+            Exchange(id: "second", asker: .agent(threadID: "a"), askedAt: clock.addingTimeInterval(-310), ask: "And which commit added it?"),
+        ]
+        await endTurn(work("b", of: site), report: "Commit abc123 added it.", sorted: "NOTE: Commit abc123 added it.")
+        XCTAssertEqual(relays.map(\.threadID), ["a"], "the kitten that started the conversation keeps getting its answers")
+
+        backend.said["c"] = [
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-1200), ask: "Look after the docs."),
+            Exchange(id: "first", asker: .agent(threadID: "a"), askedAt: clock.addingTimeInterval(-900), ask: "Where's the style guide?"),
+            Exchange(id: "second", asker: .agent(threadID: "a"), askedAt: clock.addingTimeInterval(-310), ask: "Who owns it?"),
+        ]
+        backend.said["a"] = [Exchange(id: "direct", asker: .agent(threadID: "c"), askedAt: clock.addingTimeInterval(-700), ask: "It's in docs/style.md.")]
+        await endTurn(work("c", of: site), report: "The docs team owns it.", sorted: "NOTE: The docs team owns it.")
+        XCTAssertEqual(relays.map(\.threadID), ["a", "a"], "even after a direct reply to its first question")
+    }
+
+    func testALaunchedWorkerThatAskedAndEndedItsTurnStillGetsTheAnswer() async {
+        backend.origins["w1"] = ThreadOrigin(title: "Steve: Footer", projectPath: "/k/steve", startedBy: .thread("lead"))
+        show([AgentThread(id: "w1", title: "Footer config", projectTitle: nil, status: .completed, model: "m", updatedAt: clock, lastRunID: "run-w1", lastRunEndedAt: clock, startedByAgent: true, lastRunStartedAt: clock.addingTimeInterval(-600))])
+        backend.said["lead"] = [Exchange(id: "waiting", asker: .you, askedAt: clock.addingTimeInterval(-400), passesOnReportOf: "w1")]
+        backend.said["b"] = [
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-1200), ask: "Look after the site."),
+            Exchange(id: "asked", asker: .agent(threadID: "w1"), askedAt: clock.addingTimeInterval(-500), ask: "Which branch has the footer config?"),
+        ]
+        await endTurn(work("b", of: site), report: "It's on main.", sorted: "NOTE: It's on main.")
+        XCTAssertEqual(relays.map(\.threadID), ["w1"], "asking and ending the turn to wait is how agents ask, so the answer still wakes it")
+    }
+
+    func testAReportForYouStaysWithYouWhenTheOtherThreadCantBeRead() async {
+        backend.origins["z"] = ThreadOrigin(title: "Steve: Footer", projectPath: "/k/steve", startedBy: .person)
+        backend.unreadableTranscripts = ["z", "gone"]
+        backend.said["y"] = [
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-1200), ask: "Ask the site thread where the footer is, then tell me."),
+            Exchange(id: "note", asker: .you, askedAt: clock.addingTimeInterval(-310), passesOnReportOf: "z"),
+        ]
+        await endTurn(work("y", of: clawde), report: "The footer is on main. Merge it now?", sorted: "DECISION: Merge the footer now?")
+        XCTAssertEqual(waiting.map(\.text), ["Merge the footer now?"], "a transcript that can't be read proves nothing, so the report stays with you")
+
+        backend.untraceable.insert("gone")
+        backend.said["x"] = [
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-1200), ask: "Get PR #4 up."),
+            Exchange(id: "note", asker: .you, askedAt: clock.addingTimeInterval(-310), passesOnReportOf: "gone"),
+        ]
+        await endTurn(work("x", of: clawde), report: "The worker's PR #4 is up. Merge it?", sorted: "DECISION: Merge PR #4?")
+        XCTAssertTrue(waiting.contains { $0.text == "Merge PR #4?" }, "nor does a worker whose starter and transcript are both gone")
+        XCTAssertTrue(relays.isEmpty)
+    }
+
+    func testATurnT3WokeByItselfIsTheThreadsOwnWork() async {
+        backend.said["b"] = [
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-1200), ask: "Look after the site."),
+            Exchange(id: "asked", asker: .agent(threadID: "a"), askedAt: clock.addingTimeInterval(-900), ask: "Which branch has the footer?", opensRun: "run-earlier"),
+        ]
+        await endTurn(work("b", of: site), report: "PR #12's checks failed on the footer test. Fix it or drop it?", sorted: "DECISION: Fix PR #12 or drop it?", wokenByItself: true)
+        XCTAssertEqual(waiting.map(\.text), ["Fix PR #12 or drop it?"], "an earlier question doesn't claim a turn its pull request's checks started")
+        XCTAssertTrue(relays.isEmpty)
+
+        backend.said["c"] = [
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-1200), ask: "Look after the site."),
+            Exchange(id: "note", asker: .you, askedAt: clock.addingTimeInterval(-900), passesOnReportOf: "w", opensRun: "run-earlier"),
+        ]
+        await endTurn(work("c", of: site), report: "PR #13 is red too. Fix it?", sorted: "DECISION: Fix PR #13?", wokenByItself: true)
+        XCTAssertTrue(waiting.contains { $0.text == "Fix PR #13?" }, "nor does an old note")
+    }
+
+    func testALauncherAndItsWorkerThatKeepAnsweringEachOtherStopWithinAFewNotes() async {
+        backend.said["w"] = [Exchange(id: "launch", asker: .agent(threadID: "lead"), askedAt: clock.addingTimeInterval(-1200), ask: "Fix the footer.")]
+        for round in 1...5 {
+            let thanks = Exchange(id: "thanks-\(round)", asker: .agent(threadID: "lead"), askedAt: clock.addingTimeInterval(TimeInterval(-600 + round * 10)), ask: "Noted, thanks.")
+            backend.said["w", default: []].append(thanks)
+            var turn = work("w", of: clawde, launchedBy: "lead")
+            turn.lastRunID = "run-\(round)"
+            await endTurn(turn, report: "Acknowledged, round \(round).", sorted: "NOTE: Acknowledged.")
+        }
+        XCTAssertEqual(relays.count, RelayLimit.notes, "after a few notes between the same two threads in a few minutes, the rest stay with you")
     }
 
     func testAWriterThatCantBeTracedLeavesTheReportWithYou() async {
@@ -332,7 +404,7 @@ final class WaitingOnYouTests: XCTestCase {
     }
 
     func testTwoThreadsThatOnceWroteToEachOtherDontPassReportsBackAndForthForever() async {
-        backend.said["w"] = [Exchange(id: "mine", asker: .you, askedAt: clock.addingTimeInterval(-700), passesOnReportOf: "m")]
+        backend.said["w"] = [Exchange(id: "mine", asker: .agent(threadID: "m"), askedAt: clock.addingTimeInterval(-850), ask: "Can you drop your branch?")]
         backend.said["m"] = [
             Exchange(id: "launch", asker: .agent(threadID: "main"), askedAt: clock.addingTimeInterval(-900), ask: "Fix the routing."),
             Exchange(id: "theirs", asker: .agent(threadID: "w"), askedAt: clock.addingTimeInterval(-800), ask: "Agreed, my branch is gone."),

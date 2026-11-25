@@ -55,6 +55,15 @@ final class T3TranscriptTests: XCTestCase {
         XCTAssertNil(fold([try user(note, at: 0, extra: ["createdBy": "agent", "senderThreadId": "s"])]).first?.passesOnReportOf, "an agent can't pass for The Kitty Litter")
     }
 
+    func testOnlyTheMessageThatStartedARunSaysItOpenedIt() throws {
+        let exchanges = fold([
+            try user("Fix the footer.", id: "opener", message: "m1", run: "r1", at: 0),
+            try user("Use the left side.", id: "steer", message: "m2", run: "r1", at: 1),
+            try user("Unrelated.", id: "loose", message: "m3", at: 2),
+        ], runs: [try run("r1", asked: "m1")])
+        XCTAssertEqual(exchanges.map(\.opensRun), ["r1", nil, nil], "a steer joins the run, and a message with no run opens none")
+    }
+
     func testWorkTheCatStartedShowsOnlyYourWordsAndItsReply() throws {
         let frontier = Prompts.frontier(request: "do this", snapshot: ScreenSnapshot(pageText: sentinel), screenshotPath: nil)
         let exchanges = fold([try user(frontier, at: 0), try spoken("Done.", at: 1)])

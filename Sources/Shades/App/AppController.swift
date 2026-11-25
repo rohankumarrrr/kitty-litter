@@ -90,6 +90,7 @@ final class AppController {
     var hiddenThreads: Set<String> = []
     var dispatchers: Set<String> = []
     var launchers: [String: String] = [:]
+    var relayLimit = RelayLimit()
     var correctionSends = CorrectionSends()
     var inbox: Inbox
     var filing: Set<String> = []

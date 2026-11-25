@@ -282,6 +282,7 @@ public struct Exchange: Sendable, Equatable, Identifiable {
     public var failure: String?
     public var files: [ExchangeFile]
     public var passesOnReportOf: String?
+    public var opensRun: String?
 
     public init(
         id: String,
@@ -293,7 +294,8 @@ public struct Exchange: Sendable, Equatable, Identifiable {
         earlierNotes: Int = 0,
         failure: String? = nil,
         files: [ExchangeFile] = [],
-        passesOnReportOf: String? = nil
+        passesOnReportOf: String? = nil,
+        opensRun: String? = nil
     ) {
         self.id = id
         self.asker = asker
@@ -305,6 +307,7 @@ public struct Exchange: Sendable, Equatable, Identifiable {
         self.failure = failure
         self.files = files
         self.passesOnReportOf = passesOnReportOf
+        self.opensRun = opensRun
     }
 
     public var isTheKittyLittersOwnNote: Bool { asker == .you && ask == nil && files.isEmpty }

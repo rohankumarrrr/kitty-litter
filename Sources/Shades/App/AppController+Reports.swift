@@ -89,14 +89,19 @@ extension AppController {
 
     func audience(of thread: AgentThread) async -> ReportAudience {
         guard kitten(of: thread) != nil, !isForYou(thread.id) else { return .you }
-        let started = thread.lastRunStartedAt ?? .distantFuture
-        let said = (await backend.exchanges(threadID: thread.id) ?? []).filter { $0.askedAt <= started }
-        guard let opener = said.last else { return await owner(of: thread, said: said) }
+        let said = await backend.exchanges(threadID: thread.id) ?? []
+        guard let run = thread.lastRunID, let opener = said.first(where: { $0.opensRun == run }) else {
+            return await owner(of: thread, said: said)
+        }
         if opener.isTheKittyLittersOwnNote {
             guard let from = opener.passesOnReportOf else { return .you }
-            var itsOwnWork = await writer(from, to: thread) == .itsOwnWorker
-            if !itsOwnWork { itsOwnWork = await hasWritten(thread.id, to: from, before: opener.askedAt) }
-            guard itsOwnWork else { return .nobody }
+            if await writer(from, to: thread) != .itsOwnWorker {
+                switch await firstContact(between: thread.id, and: from, ours: said) {
+                case .ours?: break
+                case .theirs?: return .nobody
+                case nil: return .you
+                }
+            }
             let heardBy = await owner(of: thread, said: said)
             return heardBy == .thread(from) ? .nobody : heardBy
         }
@@ -110,10 +115,13 @@ extension AppController {
             case .untraced:
                 return .you
             case .another:
-                if await hasWritten(thread.id, to: sender, before: opener.askedAt) { return await owner(of: thread, said: said) }
-                if await isFinishedAndReported(sender) { return await owner(of: thread, said: said) }
-                guard !isForYou(sender), await mayPass(thread, to: sender) else { return .you }
-                return .thread(sender)
+                switch await firstContact(between: thread.id, and: sender, ours: said) {
+                case .ours?: return await owner(of: thread, said: said)
+                case nil: return .you
+                case .theirs?:
+                    guard !isForYou(sender), await isClearOfScreenlessKittens(threadID: sender) else { return .you }
+                    return .thread(sender)
+                }
             }
         default:
             return await owner(of: thread, said: said)
@@ -125,16 +133,16 @@ extension AppController {
         return await ownLauncher(of: thread).map(ReportAudience.thread) ?? .you
     }
 
-    private func hasWritten(_ from: String, to other: String, since: Date = .distantPast, before: Date = .distantFuture) async -> Bool {
-        guard let theirs = await backend.exchanges(threadID: other) else { return false }
-        return theirs.contains { $0.askedAt >= since && $0.askedAt < before && ($0.asker == .agent(threadID: from) || $0.passesOnReportOf == from) }
+    private enum Contact {
+        case ours, theirs
     }
 
-    private func isFinishedAndReported(_ id: String) async -> Bool {
-        guard let worker = latestThreads.first(where: { $0.id == id }), worker.startedByAgent, !worker.status.isActive,
-              let started = worker.lastRunStartedAt, let launcher = await launcher(of: worker)
-        else { return false }
-        return await hasWritten(id, to: launcher, since: started)
+    private func firstContact(between us: String, and them: String, ours: [Exchange]) async -> Contact? {
+        guard let theirs = await backend.exchanges(threadID: them) else { return nil }
+        let from = { (sender: String, said: [Exchange]) in
+            said.first { $0.asker == .agent(threadID: sender) || $0.passesOnReportOf == sender }?.askedAt ?? .distantFuture
+        }
+        return from(us, theirs) < from(them, ours) ? .ours : .theirs
     }
 
     private enum Writer {
@@ -170,11 +178,6 @@ extension AppController {
         dispatchers.contains(threadID) || inbox.wasStartedForYou(threadID)
     }
 
-    private func mayPass(_ thread: AgentThread, to other: String) async -> Bool {
-        if await isClearOfScreenlessKittens(threadID: other) { return true }
-        return await !isClearOfScreenlessKittens(thread)
-    }
-
     func launcher(of thread: AgentThread) async -> String? {
         guard thread.startedByAgent else { return nil }
         if let known = launchers[thread.id] { return known }
@@ -191,10 +194,15 @@ extension AppController {
 
     private func tell(_ asker: String, about thread: AgentThread, report: String?) async -> Bool {
         if thread.isDelegated { return true }
-        if let started = thread.lastRunStartedAt, await hasWritten(thread.id, to: asker, since: started) { return true }
+        if let started = thread.lastRunStartedAt, let said = await backend.exchanges(threadID: asker),
+           said.contains(where: { $0.asker == .agent(threadID: thread.id) && $0.askedAt >= started }) {
+            return true
+        }
+        guard relayLimit.allows(thread.id, asker, at: now()) else { return false }
         inbox.appWillWrite(to: asker, at: now())
         do {
             try await backend.deliver(threadID: asker, text: Prompts.launchedReport(readable(report), of: thread))
+            relayLimit.record(thread.id, asker, at: now())
             inbox.anotherThreadWrote(to: asker, at: now())
             keepInbox()
             inboxChanged()
