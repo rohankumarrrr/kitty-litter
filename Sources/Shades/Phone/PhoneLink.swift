@@ -211,17 +211,7 @@ final class PhoneLink {
         return .full(status: 200, type: "image/png", body: drawn)
     }
 
-    private static let icon: Data = {
-        let side = 180
-        let image = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
-        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
-        else { return Data() }
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
-        image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
-        NSGraphicsContext.restoreGraphicsState()
-        return bitmap.representation(using: .png, properties: [:]) ?? Data()
-    }()
+    static let icon = AppIcon.phone
 
     private struct Opened: Encodable {
         var open: String?

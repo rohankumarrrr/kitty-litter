@@ -5,7 +5,7 @@ enum CatArt {
 }
 
 enum CatTheme: Hashable {
-    case light, dark
+    case light, dark, rimlight
 
     var palette: [Character: UInt32] {
         switch self {
@@ -13,6 +13,8 @@ enum CatTheme: Hashable {
             return ["k": 0x111113, "w": 0xfbfaf6, "j": 0x2a2a2e, "z": 0xc9ccd2, "s": 0x0a0a0b, "g": 0xffffff, "p": 0xff5fa2]
         case .dark:
             return ["k": 0x8f8f95, "w": 0xfbfaf6, "j": 0x232327, "z": 0xc9ccd2, "s": 0x0a0a0b, "g": 0xffffff, "p": 0xff5fa2]
+        case .rimlight:
+            return ["k": Opal.white, "w": Opal.white, "j": Opal.secondary, "z": Opal.white, "g": Opal.white]
         }
     }
 
@@ -20,6 +22,7 @@ enum CatTheme: Hashable {
         switch self {
         case .light: return 0x646464
         case .dark: return 0x9b9ba0
+        case .rimlight: return Opal.secondary
         }
     }
 }

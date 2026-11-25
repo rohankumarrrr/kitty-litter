@@ -24,7 +24,7 @@ swift test
 scripts/install.sh  # builds, signs and swaps in Shades.app, and rolls back if the new copy doesn't come up
 scripts/install.sh --pull  # the same, after stopping for uncommitted work and pulling
 scripts/bundle.sh   # just builds Shades.app
-swift scripts/make-icon.swift assets   # redraws the app icon from the cat's art
+swift run shades --draw-icon assets   # redraws the app icon from the cat's art
 swift run shades --demo   # everything faked: no T3, permissions, microphone or shortcuts
 swift run shades --demo --no-script --commands steps.txt   # plays demo commands from a file, one a line
 swift test --filter ScreenBoundaryTests   # every route your screen could take to a kitten
@@ -45,6 +45,8 @@ Each rule says what enforces it. A check is the rule: when one fails, its messag
 | macOS 14 or later, Apple Silicon. Swift 6 tools in Swift 5 language mode. | `Package.swift` |
 | No comments. Say it in a name, a type, a test or the commit message. | `CommentTests` |
 | Everything drawn takes its colours and text sizes from Opal: a role in `MessagesInk` or a token in `Opal.swift`, and a `var(--role)` on the phone page. A new colour goes in `docs/design.md` first. | `OpalRoleTests`, which counts what's left in each file and lets it only go down, and `DesignTests` |
+| The app's icon is one drawing, `AppIcon`'s, in the Dock, on the phone and in `assets/AppIcon.icns`. Redraw the file with `swift run shades --draw-icon assets`. | `AppIconTests` |
+| The Dock image is set only in `AppDelegate`'s `applicationDidFinishLaunching`, after AppKit has finished launching, and a test goes through that hook rather than setting it itself. | `DockImageTests` |
 | Only The Kitty Litter's main window brings the app forward, as any Mac app's does. The cat and everything that floats with it never activate, never hide, and stay on every Space and stage, out of ⌘\`, Mission Control and Stage Manager's strip, by being a `QuietPanel` or `RegionPanel` with `.floatsOverEverything`. With The Kitty Litter in front, the cat looks at the app behind it, and dictation types into its own box or nowhere. A panel that needs typing takes the keyboard without activating, and only when you're about to type. Capture before showing any UI that accepts input. `docs/kittens.md` says how. | `DesktopAppTests`, and `verify-shades`, which says what's in front after each step |
 | Nothing brings The Kitty Litter forward by itself. An install, a restart and a login open it behind the app you're in, and the demo and copies trying a flow out run as an accessory app that never comes forward. | `InstallLockTests` for `install.sh`, `DesktopAppTests` for the rest |
 | The Kitty Litter's windows never appear in a screen capture, and its window is hidden from other apps' captures, so one kitten is never shown another's messages. | `ChannelsWindowTests` for The Kitty Litter's window and the demo's, you for the rest |

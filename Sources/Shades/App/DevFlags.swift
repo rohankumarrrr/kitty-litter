@@ -20,6 +20,7 @@ enum DevFlags {
     static var channelsImageFolder: String? { value(after: "--channels-image") }
     static var commandsFile: String? { value(after: "--commands") }
     static var pictureFile: String? { value(after: "--picture") }
+    static var iconFolder: String? { value(after: "--draw-icon") }
     static var reducesMotion: Bool { CommandLine.arguments.contains("--reduce-motion") }
     static var lockdownKitten: String? { value(after: "--lockdown") }
 
@@ -30,6 +31,17 @@ enum DevFlags {
             exit(0)
         } catch {
             print("Couldn't use that as your picture. Try a photo or picture file.")
+            exit(1)
+        }
+    }
+
+    static func drawIcon(into path: String) -> Never {
+        do {
+            try AppIcon.save(to: URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true))
+            print("Drew AppIcon.icns in \(path).")
+            exit(0)
+        } catch {
+            print("Couldn't draw the icon: \(error.localizedDescription)")
             exit(1)
         }
     }

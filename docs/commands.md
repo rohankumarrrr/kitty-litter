@@ -30,6 +30,7 @@ And the rest:
 
 ```bash
 shades --picture photo.jpg                        # keeps a small copy of your picture in the app's folder, then quits
+shades --draw-icon assets                         # draws AppIcon.icns into a folder from the app's own drawing, then quits
 shades --demo --no-script --commands steps.txt    # drives the demo from a file of its commands, one a line, such as `wait 2` or `draw out`
 shades --demo --reduce-motion                     # as if Reduce Motion were on, whatever your Mac is set to
 ```
