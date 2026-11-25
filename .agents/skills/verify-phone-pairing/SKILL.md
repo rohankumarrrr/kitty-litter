@@ -61,7 +61,7 @@ A failure prints the shortest order that breaks it, as numbered steps in the wor
 ## What it leaves out
 
 - **Codes running out.** Ten minutes and five wrong tries are `PhoneTests`' `testGuessingUsesTheCodeUpAndItRunsOut`, on the real `PhoneDoor`.
-- **Search.** The walk never opens Search, so `search` and `found` are always hidden in it. What a page found going with its pairing is checked apart from this, in `PhoneTests`.
+- **Search.** The walk never opens Search, so `search` and `found` are always hidden in it. What a page found going with its pairing is `PhonePageTests.testPairingAgainTakesWhatSearchFoundWithIt`.
 - **The stream.** Pairing only needs the stream to open. Every order of a stream's events is `verify-phone-stream`.
 - **Sheets and tabs.** No event in the walk opens a sheet or a second tab. `testALinksSheetGoesWithThePageWhenItAsksForACode` and `testAnotherTabsNewKeySurvivesTheOldTabHearingItsKeyWasForgotten` replay those, and the second copies the new tab's key into the old tab's storage by hand, as a browser's shared storage would.
 - **Bounds.** Two codes, one of each event above, four events deep, which holds both bugs it replays.

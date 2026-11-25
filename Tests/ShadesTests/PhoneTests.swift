@@ -1,4 +1,3 @@
-import JavaScriptCore
 @testable import Shades
 import ShadesCore
 import XCTest
@@ -760,14 +759,18 @@ extension PhoneTests {
         XCTAssertEqual(manifest["short_name"] as? String, "Kitty Litter")
     }
 
-    func testSearchLeavesNothingBehindAndCoveringAThreadDoesntMarkItSeen() throws {
+    func testOnlySeenMarksAThreadSeenSoSearchCanHoldItBack() throws {
+        let script = PhonePage.script
+        XCTAssertEqual(script.components(separatedBy: "act({ act: 'seen'").count, 2, "Mark a thread seen only by calling seen(), which waits while Search covers the conversation, never with act({ act: 'seen' }) of its own")
+        let seen = try XCTUnwrap(script.range(of: "function seen() {").map { String(script[$0.upperBound...].prefix(300)) })
+        XCTAssertTrue(seen.contains("act({ act: 'seen'"), "seen() is that one place")
+    }
+
+    func testWhatSearchFoundGoesWithThePairing() throws {
         let script = PhonePage.script
         let pairing = try XCTUnwrap(script.range(of: "function pairing() {").map { String(script[$0.upperBound...].prefix(600)) })
         XCTAssertTrue(pairing.contains("$('found').replaceChildren();"), "what kittens said goes with the pairing")
         XCTAssertTrue(pairing.contains("'search', 'found']) $(id).hidden = true;"))
-        XCTAssertEqual(script.components(separatedBy: "act({ act: 'seen'").count, 2, "every way of marking seen goes through one place")
-        let seen = try XCTUnwrap(script.range(of: "function seen() {").map { String(script[$0.upperBound...].prefix(300)) })
-        XCTAssertTrue(seen.contains("$('search').hidden"), "and it waits while Search covers the conversation")
     }
 
     func testAReplyBarHasWhoRepliedAsTheWindowDrawsThemAndWhenTheLastWas() throws {
@@ -802,8 +805,6 @@ extension PhoneTests {
         defer { MessagesInk.picture = nil }
         XCTAssertEqual(PhoneView(PhonePlace(steveKey, in: book), in: book, now: noon).you, "data:image/jpeg;base64,\(DemoPicture.jpeg.base64EncodedString())")
         XCTAssertNil(PhoneView(PhonePlace("home", in: book), in: book, now: noon).you, "the list of places has nothing of yours to put it by")
-        XCTAssertTrue(PhonePage.script.contains("node.src = view.you"), "the page draws it from what it was sent")
-        XCTAssertTrue(PhonePage.script.contains("if (view.you) return you(true);"), "and in place of your square")
     }
 
     func testThreadsHasEachOnesCat() throws {
@@ -841,74 +842,16 @@ extension PhoneTests {
         XCTAssertEqual(cards.first?.footer, CatWords.ignoreLeavesItWaiting)
         XCTAssertEqual(cards.last?.done, true, "and Done on a decision")
     }
-
-    func testThePageDrawsTheWindowsCatsAndIcons() {
-        XCTAssertTrue(PhonePage.script.contains("node.src = '/cat/dark/' + key + '.png';"), "with the light outline the window draws on a dark page")
-        for emoji in ["🔔", "💬"] { XCTAssertFalse(PhonePage.script.contains(emoji), "drawn to match the window instead") }
-    }
 }
 
 extension PhoneTests {
-    func testAnErrorShowsInTheHeaderWhereverYouAreAndIsReadOut() throws {
-        let html = PhonePage.html
-        let start = try XCTUnwrap(html.range(of: #"<header id="top">"#))
-        let end = try XCTUnwrap(html.range(of: "</header>", range: start.upperBound..<html.endIndex))
-        XCTAssertTrue(html[start.lowerBound..<end.upperBound].contains(#"<div id="banner" role="status"></div>"#), "always there, empty, so VoiceOver reads what it comes to say")
-        XCTAssertTrue(PhonePage.style.contains("#top { position: sticky; top: var(--above, 0px);"), "at the top of what you see, keyboard or not")
-        XCTAssertFalse(PhonePage.script.contains("$('banner').hidden"), "never hidden, which would leave nothing to read out")
-        XCTAssertFalse(PhonePage.script.contains("'banner', "), "nor with what pairing hides")
+    func testTheHeaderStaysAtTheTopOfWhatYouSeeKeyboardOrNot() {
+        XCTAssertTrue(PhonePage.style.contains("#top { position: sticky; top: var(--above, 0px);"))
     }
 
-    func testALinksSheetIsModalOverADimmedPageWithTheKeyboardOnCancel() throws {
-        let html = PhonePage.html
-        XCTAssertTrue(html.contains(#"<dialog id="linksheet" class="sheet" aria-labelledby="linktitle">"#))
-        let cancel = try XCTUnwrap(html.range(of: #"<button id="linkcancel" type="button" autofocus>Cancel</button>"#))
-        XCTAssertLessThan(cancel.lowerBound, try XCTUnwrap(html.range(of: #"<a id="linkopen""#)).lowerBound)
-        XCTAssertTrue(PhonePage.script.contains("$('linksheet').showModal();"))
-        XCTAssertFalse(PhonePage.script.contains("$('linksheet').hidden"))
+    func testASheetFloatsOverADimmedPageWithRoundCorners() throws {
         XCTAssertTrue(PhonePage.style.contains("dialog::backdrop { background:"))
-        XCTAssertTrue(PhonePage.script.contains("if (event.key === 'Enter') { event.preventDefault(); ask(part.link); }"), "the Enter that shows it goes no further")
-    }
-
-    func testAQuestionCardAsksEachPartOnce() throws {
-        let font = AnswerForm.Part(key: "font", text: "Which font?", options: ["Silkscreen", "System"], values: ["s", "y"], takesOwnWords: false)
-        let pages = AnswerForm.Part(key: "pages", text: "Which pages?", options: ["Home", "Blog"], values: ["h", "b"], takesOwnWords: false, picksSeveral: true)
-        let book = book(waiting: Waiting(questions: [
-            AgentQuestion(id: "two", threadID: "a", threadTitle: "Work", text: "Which font?", form: AnswerForm(parts: [font, pages])),
-            AgentQuestion(id: "one", threadID: "a", threadTitle: "Work", text: "Which font?", form: AnswerForm(parts: [font])),
-            AgentQuestion(id: "t3", threadID: "a", threadTitle: "Work", text: "Which font?", form: nil),
-        ]))
-        let page = try Self.page(["el", "button", "lit", "card", "question", "chosen", "mark"])
-        var said: [String: [String]] = [:]
-        for row in PhoneView(PhonePlace("activity", in: book), in: book, now: noon).rows where row.kind == "question" {
-            let json = String(decoding: try JSONEncoder().encode(row), as: UTF8.self)
-            said[row.id ?? ""] = page.evaluateScript("said(card(\(json)))")?.toArray() as? [String]
-        }
-        XCTAssertEqual(said["two"]?.filter { $0.contains("Which") }, ["1 of 2: Which font?", "2 of 2: Which pages?"])
-        XCTAssertEqual(said["one"]?.filter { $0.contains("Which") }, ["Which font?"])
-        XCTAssertEqual(said["t3"]?.filter { $0.contains("Which") }, ["Which font?"], "and one answered in T3 still says it")
-    }
-
-    private static func page(_ names: [String]) throws -> JSContext {
-        let script = PhonePage.script
-        func cut(from start: String, to end: String) throws -> String {
-            let from = try XCTUnwrap(script.range(of: start), start)
-            return String(script[from.lowerBound..<(try XCTUnwrap(script.range(of: end, range: from.upperBound..<script.endIndex))).upperBound])
-        }
-        let document = """
-            const document = { createElement: (tag) => ({ tag, children: [], dataset: {}, attributes: {}, classList: { toggle() {} },
-              style: { props: {}, setProperty(name, value) { this.props[name] = value; }, removeProperty(name) { delete this.props[name]; } },
-              get childElementCount() { return this.children.length; },
-              append(...nodes) { this.children.push(...nodes); }, after(...nodes) { this.children.push(...nodes); }, addEventListener() {},
-              setAttribute(name, value) { this.attributes[name] = value; }, querySelector() { return null; }, querySelectorAll() { return []; } }) };
-            const cat = () => document.createElement('img'), time = () => '', act = () => Promise.resolve(null), answers = new Map();
-            const said = (node) => [node.textContent, ...node.children.flatMap(said)].filter((text) => text);
-            """
-        let page = try XCTUnwrap(JSContext())
-        page.exceptionHandler = { _, error in XCTFail(error?.toString() ?? "") }
-        let functions = try names.map { try cut(from: "function \($0)(", to: "\n}\n") }
-        page.evaluateScript(([document, try cut(from: "const words = {", to: "\n};\n")] + functions).joined(separator: "\n"))
-        return page
+        XCTAssertEqual(try Self.ruleBodies()[".sheet[open]"]?.contains("border-radius: 24px"), true)
     }
 }
 
@@ -972,16 +915,10 @@ extension PhoneTests {
         XCTAssertEqual(places.map(\.state), ["Needs you", "Working"], "and no kitten that's only planned")
         XCTAssertEqual(places.map(\.count), [1, nil])
         XCTAssertEqual(places.map(\.dot), [nil, Opal.hex(Opal.lilac)], "Steve's count, with no dot beside it")
-        let page = try Self.page(["el", "dot", "lit", "drift", "tile", "places"])
-        let json = String(decoding: try JSONEncoder().encode(places), as: UTF8.self)
-        let heard = page.evaluateScript("places(\(json)).filter((node) => node.tag === 'button').map((node) => node.attributes['aria-label'])")?.toArray() as? [String]
-        XCTAssertEqual(heard, ["Steve Pawsniak, Needs you, 1 waiting", "Pepper, Working"])
     }
 
-    func testAKeyboardOrVoiceOverCanReactToo() {
-        XCTAssertTrue(PhonePage.script.contains("node.append(button(words.react, () => react(item), 'react'));"))
-        XCTAssertTrue(PhonePage.script.contains("$('marks').firstChild.focus();"), "and the keyboard goes to the marks it offers")
-        XCTAssertTrue(PhonePage.style.contains(".react:not(:focus) { position: absolute;"), "out of sight until it has the keyboard")
+    func testReactIsOutOfSightUntilTheKeyboardIsOnIt() {
+        XCTAssertTrue(PhonePage.style.contains(".react:not(:focus) { position: absolute;"))
     }
 }
 
@@ -990,145 +927,18 @@ extension PhoneTests {
         Dictionary(try rules().map { ($0.selector, $0.body) }, uniquingKeysWith: { first, _ in first })
     }
 
-    func testEachPageHasALargeTitleThatFoldsIntoTheBar() throws {
+    func testTheLargeTitleAndTheBarItFoldsIntoAreOpals() throws {
         let rules = try Self.ruleBodies()
         XCTAssertEqual(rules["#title"]?.contains("color: var(--white); font-size: calc(32em / 17); font-weight: 700"), true)
-        let page = try Self.page(["collapse"])
-        page.evaluateScript("""
-            const box = (top, bottom) => ({ getBoundingClientRect: () => ({ top, bottom }) });
-            const parts = { top: { classList: { on: null, toggle(name, on) { this.on = on; } } }, head: { hidden: false }, bar: box(0, 44), title: box(60, 100) };
-            const $ = (id) => parts[id];
-            """)
-        page.evaluateScript("collapse()")
-        XCTAssertEqual(page.evaluateScript("parts.top.classList.on")?.toBool(), false, "over the large title, the bar is the page's black")
-        page.evaluateScript("parts.title = box(30, 70); collapse()")
-        XCTAssertEqual(page.evaluateScript("parts.top.classList.on")?.toBool(), true, "and it takes the title once it goes under")
         XCTAssertEqual(rules["#top.collapsed"]?.contains("background: var(--glass)"), true)
         XCTAssertEqual(rules["#top.collapsed #bartitle"]?.contains("visibility: visible"), true)
     }
 
-    func testSearchHasTheBarAndGoingAnywherePutsItAway() throws {
-        let html = PhonePage.html
-        let form = try XCTUnwrap(html.range(of: #"<form id="search" hidden>"#))
-        let end = try XCTUnwrap(html.range(of: "</form>", range: form.upperBound..<html.endIndex))
-        XCTAssertTrue(html[form.lowerBound..<end.upperBound].contains(#"<button id="searchcancel" type="button">Cancel</button>"#))
-        let page = try Self.page(["go"])
-        page.evaluateScript("""
-            const parts = {};
-            const $ = (id) => parts[id] || (parts[id] = { hidden: false, textContent: 'from before', replaceChildren() {} });
-            let key = 'c:steve', keptUnread = null, jumped = false, view = {}, closed = false;
-            const history = { pushState() {} };
-            function listen() {}
-            function banner() {}
-            function searching(open) { closed = !open; $('search').hidden = !open; }
-            """)
-        page.evaluateScript("go('home', false)")
-        XCTAssertEqual(page.evaluateScript("closed")?.toBool(), true, "Back put Search away")
-        XCTAssertEqual(page.evaluateScript("['title', 'subtitle', 'bartitle'].map((id) => $(id).textContent).join('')")?.toString(), "", "and the old title")
-        XCTAssertEqual(page.evaluateScript("['back', 'headcat', 'link', 'unread'].every((id) => $(id).hidden)")?.toBool(), true, "and the old buttons")
-    }
-
-    func testTheBoxIsIMessagesAndSendIsArmedOnlyWithSomethingToSend() throws {
-        let html = PhonePage.html
-        XCTAssertTrue(html.contains(#"<textarea id="words" rows="1"></textarea>"#), "no Send on a key that only makes a new line")
-        XCTAssertFalse(html.contains(#"id="camera""#), "the + offers the camera")
-        XCTAssertEqual(html.components(separatedBy: #"type="file""#).count, 2, "one picker")
-        XCTAssertTrue(html.contains(#"<span class="unseen">Send</span>"#), "what VoiceOver says for the arrow")
-        let page = try Self.page(["sendable"])
-        page.evaluateScript("""
-            const parts = { send: { disabled: false }, words: { value: '' } };
-            const $ = (id) => parts[id];
-            let view = { box: { ready: true } }, uploading = false, attached = [];
-            const armed = () => { sendable(); return !parts.send.disabled; };
-            """)
-        XCTAssertEqual(page.evaluateScript("armed()")?.toBool(), false, "nothing to send")
-        XCTAssertEqual(page.evaluateScript("parts.words.value = '  '; armed()")?.toBool(), false, "only spaces")
-        XCTAssertEqual(page.evaluateScript("parts.words.value = 'Hi'; armed()")?.toBool(), true)
-        XCTAssertEqual(page.evaluateScript("uploading = true; armed()")?.toBool(), false, "while a photo goes up")
-        XCTAssertEqual(page.evaluateScript("uploading = false; parts.words.value = ''; attached = [{}]; armed()")?.toBool(), true, "a photo on its own")
-        XCTAssertEqual(page.evaluateScript("view.box.ready = false; armed()")?.toBool(), false, "a new thread that's still starting")
-    }
-
-    func testReactionsComeUpInASheetSoNothingOnThePageMoves() throws {
-        XCTAssertTrue(PhonePage.html.contains(#"<dialog id="reactsheet" class="sheet" aria-label="React">"#))
-        let script = PhonePage.script
-        let start = try XCTUnwrap(script.range(of: "function react(item) {"))
-        let react = String(script[start.upperBound..<(try XCTUnwrap(script.range(of: "\n}\n", range: start.upperBound..<script.endIndex))).lowerBound])
-        XCTAssertTrue(react.contains("$('reactsheet').showModal();"))
-        XCTAssertFalse(react.contains(".append("), "never into the page beside the message")
-        XCTAssertFalse(script.contains("reactbar"))
-        XCTAssertEqual(try Self.ruleBodies()[".sheet[open]"]?.contains("border-radius: 24px"), true)
-    }
-
-    func testAKittensMessageIsLitAtItsEdgeAndYoursIsFilled() throws {
-        let page = try Self.page(["el", "button", "lit", "message"])
-        page.evaluateScript("""
-            let view = { marks: [] };
-            const selecting = () => false, react = () => {}, ask = () => {}, markup = () => [];
-            const bubbles = (node) => (node.children || []).flatMap((child) => (child.className || '').startsWith('bubble') ? [child] : bubbles(child));
-            const look = (item) => { const b = bubbles(message(item))[0]; return b.className + ' ' + JSON.stringify(b.style.props); };
-            """)
-        XCTAssertEqual(page.evaluateScript("look({ kind: 'message', mine: true, color: '#1e1830', text: 'Hi', at: 0 })")?.toString(), ##"bubble {"--fill":"#1e1830"}"##)
-        XCTAssertEqual(page.evaluateScript("look({ kind: 'message', name: 'Steve', cat: 'sit/56afb3', color: '#56afb3', text: 'Hi', at: 0 })")?.toString(), ##"bubble lit {"--light":"#56afb3"}"##)
-        XCTAssertEqual(page.evaluateScript("look({ kind: 'message', name: 'Shades', cat: 'sit/shades', text: 'Hi', at: 0, faded: true })")?.toString(), "bubble lit faded {}", "the cat's own, in Shades' light")
+    func testAKittensMessageIsBlackGlassLitAlongItsEdgeWithBodyWords() throws {
         let rules = try Self.ruleBodies()
         XCTAssertEqual(rules[".card, .lit"]?.contains("linear-gradient(var(--card-top), var(--card-bottom))"), true, "black glass")
         XCTAssertEqual(rules[".card::after, .lit::after"]?.contains("linear-gradient(transparent 58%"), true, "its rim brightening into its bottom edge")
         XCTAssertEqual(rules[".bubble"]?.contains("color: var(--body)"), true, "with body words")
-        XCTAssertFalse(PhonePage.script.contains("bubble.style.color"), "and never words of its own")
-    }
-
-    func testEachPlaceIsOnATileInItsKittensLight() throws {
-        let book = ChannelBook.build(kittens: [steve, pepper], threads: [], transcripts: [:], isReading: false, unreadable: 0, cantReachT3: false)
-        let places = PhoneView(PhonePlace("home", in: book), in: book, now: noon).places
-        let page = try Self.page(["el", "dot", "lit", "drift", "tile", "places"])
-        page.evaluateScript("function icon() { return document.createElement('svg'); }")
-        let json = String(decoding: try JSONEncoder().encode(places), as: UTF8.self)
-        let tiles = page.evaluateScript("places(\(json)).filter((node) => node.tag === 'button').map((node) => node.children[0].className + ' ' + node.children[0].style.props['--light'])")?.toArray() as? [String]
-        let jacket = { (kitten: Kitten) in "tile \(Opal.hex(ChannelSpeakerLook.color(of: kitten)!))" }
-        XCTAssertEqual(tiles, ["tile hsl(172 100% 68%)", "tile hsl(344 100% 68%)", jacket(steve), jacket(pepper)])
-    }
-
-    func testAllowIsTheOnePrimaryOnAnApprovalsCard() throws {
-        let command = ApprovalRequest(id: "ap", threadID: "a", threadTitle: "Work", kind: .command, summary: "Run: ls", createdAt: noon)
-        let book = book(waiting: Waiting(approvals: [command], owners: ["ap": steve.id]))
-        let row = try XCTUnwrap(PhoneView(PhonePlace("activity", in: book), in: book, now: noon).rows.first { $0.kind == "approval" })
-        let page = try Self.page(["el", "button", "lit", "card", "question", "chosen", "mark"])
-        let json = String(decoding: try JSONEncoder().encode(row), as: UTF8.self)
-        page.evaluateScript("const node = card(\(json)); const buttons = node.children.find((child) => child.className === 'buttons').children;")
-        XCTAssertEqual(page.evaluateScript("buttons.map((b) => b.textContent + ':' + (b.className || 'quiet')).join(', ')")?.toString(), "Deny:quiet, Allow:go, Allow for this session:quiet, Ignore:quiet")
-        XCTAssertEqual(page.evaluateScript("node.style.props['--light']")?.toString(), Opal.hex(ChannelSpeakerLook.color(of: steve)!))
-    }
-
-    func testAPictureThatComesInLateKeepsAConversationAtItsFoot() throws {
-        let page = try Self.page(["el", "button", "lit", "message", "settle"])
-        page.evaluateScript("""
-            let view = { marks: [] }, atFoot = true, jumped = false, scrolledTo = null;
-            const selecting = () => false, react = () => {}, ask = () => {}, markup = () => [];
-            const window = { scrollTo(x, y) { scrolledTo = y; } };
-            document.body = { scrollHeight: 1383 };
-            const $ = () => ({ hidden: true });
-            const photos = (node) => (node.children || []).flatMap((child) => child.className === 'picture' ? [child] : photos(child));
-            const photo = photos(message({ kind: 'message', mine: true, color: '#1e1830', text: 'Here', at: 0, files: [{ name: 'photo.jpg', picture: 'data:image/jpeg;base64,' }] }))[0];
-            """)
-        page.evaluateScript("photo.onload()")
-        XCTAssertEqual(page.evaluateScript("scrolledTo")?.toInt32(), 1383, "back to the foot once it's in")
-        page.evaluateScript("scrolledTo = null; atFoot = false; photo.onload()")
-        XCTAssertEqual(page.evaluateScript("scrolledTo === null")?.toBool(), true, "and never from where you'd scrolled to")
-
-        let foot = try Self.page(["foot"])
-        foot.evaluateScript("""
-            let atFoot = false, footY = 0;
-            const key = 'c:steve', conversation = () => true;
-            const window = { innerHeight: 844, scrollY: 701 };
-            document.body = { scrollHeight: 1545 };
-            """)
-        foot.evaluateScript("foot(); document.body.scrollHeight = 1672; foot()")
-        XCTAssertEqual(foot.evaluateScript("atFoot")?.toBool(), true, "a picture growing the page under you leaves you at the foot")
-        foot.evaluateScript("window.scrollY = 400; foot()")
-        XCTAssertEqual(foot.evaluateScript("atFoot")?.toBool(), false, "scrolling up leaves it")
-        foot.evaluateScript("window.scrollY = 828; foot()")
-        XCTAssertEqual(foot.evaluateScript("atFoot")?.toBool(), true, "and scrolling back down comes back to it")
     }
 
     func testYourSquareHasAnEdgeOnThePhonesBlack() throws {
