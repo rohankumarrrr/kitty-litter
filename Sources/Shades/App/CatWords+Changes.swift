@@ -3,6 +3,8 @@ import ShadesCore
 
 extension CatWords {
     static let allowChangeOnMac = "Allow or deny it on your Mac."
+    static let ignore = "Ignore"
+    static let ignoreLeavesItWaiting = "Ignore leaves it waiting in T3."
     static let notReviewed = "I couldn't look into this one, so all there is to go on is the change itself."
 
     static func changeRow(_ change: ChangeRequest) -> String {

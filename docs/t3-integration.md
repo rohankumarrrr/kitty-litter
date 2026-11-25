@@ -162,6 +162,10 @@ To answer:
 
 Decisions are `accept`, `acceptForSession`, `acceptAlways`, `decline` and `cancel`. Some requests only allow a subset, listed in the item's `options`.
 
+T3 never leaves an approval pending once nothing waits on it. Its server marks a request `cancelled` or `expired` when its run is interrupted, its provider session closes or fails, the server shuts down or restarts, or its thread is stopped or deleted, and it won't settle a thread while one is waiting. So an approval in the shell is one a turn is really stuck on. The shell only holds a thread's newest request, though, so The Kitty Litter also drops each approval a reply stream brought once that stream's run ends, since T3 has cancelled it by then.
+
+**Ignore** sends T3 nothing. The card goes from The Kitty Litter and your phone, and a copy of the thread list that still has it can't bring it back, but the turn waits in T3 until it's answered or stopped there. The card says so. The cat's bubble has no Ignore, since there isn't room for the line that says so, and Esc already puts an approval away into The Kitty Litter.
+
 Testing tip: under `approval-required`, Codex runs with its `untrusted` policy, which runs commands it knows are safe without asking. A plain `echo` won't prompt, but `echo x > /tmp/file` will.
 
 ### Questions

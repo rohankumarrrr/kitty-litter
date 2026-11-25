@@ -35,8 +35,9 @@ struct PhoneAsk: Decodable {
                 return nil
             }
         case "approval":
-            guard let request = book.waiting.approvals.first(where: { $0.id == id }),
-                  let decision = value.flatMap(ApprovalDecision.init(rawValue:)),
+            guard let request = book.waiting.approvals.first(where: { $0.id == id }) else { return nil }
+            if value == PhoneView.ignore.value { return (.ignore(request), nil) }
+            guard let decision = value.flatMap(ApprovalDecision.init(rawValue:)),
                   decision != .acceptForSession || ApprovalPolicy.offersSessionAllow(request.kind)
             else { return nil }
             return (.approval(request, decision), nil)
@@ -50,8 +51,9 @@ struct PhoneAsk: Decodable {
             guard let entry = book.waiting.reports.first(where: { $0.id == id }), entry.kind == .decision, entry.change == nil, entry.ask == nil else { return nil }
             return (.inbox(.done(id: entry.id)), nil)
         case "ask":
-            guard let entry = book.waiting.reports.first(where: { $0.id == id }), entry.change == nil, entry.ask != nil,
-                  let decision = value.flatMap(ApprovalDecision.init(rawValue:)), [.accept, .decline].contains(decision)
+            guard let entry = book.waiting.reports.first(where: { $0.id == id }), entry.change != nil || entry.ask != nil else { return nil }
+            if value == PhoneView.ignore.value { return (.inbox(.done(id: entry.id)), nil) }
+            guard entry.change == nil, let decision = value.flatMap(ApprovalDecision.init(rawValue:)), [.accept, .decline].contains(decision)
             else { return nil }
             return (.inbox(decision == .accept ? .allow(id: entry.id) : .deny(id: entry.id)), nil)
         case "clear":

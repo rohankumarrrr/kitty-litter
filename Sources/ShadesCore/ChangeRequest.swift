@@ -31,22 +31,24 @@ public enum ChangeRequests {
     public enum Request: Equatable, Sendable {
         case change(ChangeRequest)
         case ask(AskRequest)
+        case withdraw(String)
 
         public var change: ChangeRequest? { if case .change(let change) = self { change } else { nil } }
         public var ask: AskRequest? { if case .ask(let ask) = self { ask } else { nil } }
+        public var withdrawn: String? { if case .withdraw(let asked) = self { asked } else { nil } }
     }
 
     public static func all(in reply: String) -> [Result<Request, Problem>] {
         blocks(in: reply).map(read)
     }
 
-    public static func withoutBlocks(_ reply: String, saying placeholder: String) -> String {
+    public static func withoutBlocks(_ reply: String, saying placeholder: String, withdrawn: String) -> String {
         let lines = reply.split(separator: "\n", omittingEmptySubsequences: false)
         var kept: [Substring] = []
         var next = 0
         for block in scan(lines) {
             kept += lines[next..<block.lines.lowerBound]
-            kept.append(Substring(placeholder))
+            kept.append(Substring((try? read(block.body).get().withdrawn) == nil ? placeholder : withdrawn))
             next = block.lines.upperBound
         }
         kept += lines[next...]
@@ -73,9 +75,10 @@ public enum ChangeRequests {
         var create: String?
         var ask: String?
         var why: String?
+        var withdraw: String?
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case file, replace, with, create, ask, why
+            case file, replace, with, create, ask, why, withdraw
         }
 
         init(from decoder: Decoder) throws {
@@ -90,6 +93,7 @@ public enum ChangeRequests {
             create = try container.decodeIfPresent(String.self, forKey: .create)
             ask = try container.decodeIfPresent(String.self, forKey: .ask)
             why = try container.decodeIfPresent(String.self, forKey: .why)
+            withdraw = try container.decodeIfPresent(String.self, forKey: .withdraw)
         }
     }
 
@@ -107,11 +111,20 @@ public enum ChangeRequests {
         } catch let problem as Problem {
             return .failure(problem)
         } catch {
-            return .failure(Problem("It isn't JSON in The Kitty Litter's request form, with a `file` or an `ask`."))
+            return .failure(Problem("It isn't JSON in The Kitty Litter's request form, with a `file`, an `ask` or a `withdraw`."))
         }
         let why = written.why.map(oneLine)
         let shortWhy = why.map { $0.count > whyLimit ? String($0.prefix(whyLimit - 1)) + "…" : $0 }.flatMap { $0.isEmpty ? nil : $0 }
         guard !(why ?? "").unicodeScalars.contains(where: hides) else { return .failure(hidden) }
+        if let withdraw = written.withdraw.map(oneLine) {
+            guard written.file == nil, written.replace == nil, written.with == nil, written.create == nil, written.ask == nil, written.why == nil else {
+                return .failure(Problem("A `withdraw` goes alone, naming the `file` or the `ask` it takes back."))
+            }
+            guard !withdraw.isEmpty else { return .failure(Problem("Its `withdraw` is empty, so there's nothing to take back.")) }
+            guard withdraw.count <= askLimit else { return .failure(Problem("Its `withdraw` is longer than the `file` or `ask` it takes back.")) }
+            guard !withdraw.unicodeScalars.contains(where: hides) else { return .failure(hidden) }
+            return .success(.withdraw(withdraw))
+        }
         if let ask = written.ask.map(oneLine) {
             guard written.file == nil, written.replace == nil, written.with == nil, written.create == nil else {
                 return .failure(Problem("An `ask` goes alone, with only a `why`. A settings change is a block of its own."))

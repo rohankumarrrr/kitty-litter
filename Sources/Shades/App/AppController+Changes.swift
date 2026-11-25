@@ -10,17 +10,55 @@ extension AppController {
     }
 
     func readable(_ report: String?) -> String? {
-        report.map { ChangeRequests.withoutBlocks($0, saying: Prompts.changeCardLine) }
+        report.map { ChangeRequests.withoutBlocks($0, saying: Prompts.changeCardLine, withdrawn: Prompts.withdrawnLine) }
     }
 
     func fileChangeRequests(in report: String, of thread: AgentThread) {
         Task {
             let asked = await changeRequests(in: report, of: thread)
-            guard !asked.isEmpty else { return }
-            asked.forEach { inbox.ask($0) }
+            let withdrew = withdrawRequests(in: report, of: thread)
+            guard withdrew || !asked.isEmpty else { return }
+            asked.forEach { inbox.ask($0, title: title(ofThread:)) }
             keepInbox()
             inboxChanged()
         }
+    }
+
+    @discardableResult
+    func withdrawRequests(in report: String?, of thread: AgentThread) -> Bool {
+        guard let report, kitten(of: thread) != nil else { return false }
+        let withdrawn = ChangeRequests.all(in: report).compactMap { try? $0.get().withdrawn }
+        guard !withdrawn.isEmpty else { return false }
+        let files = settingsFiles
+        let before = inbox.entries
+        for asked in withdrawn {
+            inbox.withdraw(asked, file: files.shown(listed: asked), by: thread.id, title: title(ofThread:))
+        }
+        return inbox.entries != before
+    }
+
+    func title(ofThread id: String) -> String? {
+        latestThreads.first { $0.id == id }?.title
+    }
+
+    func retireStaleChanges() {
+        let waiting = inbox.entries.filter { $0.change?.problem == nil && $0.change?.file.isEmpty == false }
+        guard !waiting.isEmpty else { return }
+        let files = settingsFiles
+        let before = inbox.entries
+        for entry in waiting {
+            guard var change = entry.change, let staleness = files.staleness(of: change) else { continue }
+            switch staleness {
+            case .alreadyMade:
+                inbox.remove(entry.id)
+            case .cantBeMade(let reason):
+                change.problem = reason
+                inbox.cantBeMade(entry.id, because: reason, row: CatWords.changeRow(change))
+            }
+        }
+        guard inbox.entries != before else { return }
+        keepInbox()
+        inboxChanged()
     }
 
     func changeRequests(in report: String?, of thread: AgentThread) async -> [InboxEntry] {
@@ -47,6 +85,8 @@ extension AppController {
                 var change = ChangeRequest(file: "", replace: nil, with: "", why: nil)
                 change.problem = problem.reason
                 entries.append(entry(CatWords.changeRow(change), change, nil))
+            case .success(.withdraw):
+                break
             }
         }
         return entries
@@ -81,6 +121,7 @@ extension AppController {
         do {
             try settingsFiles.apply(change)
             answer(entry, .made)
+            retireStaleChanges()
         } catch {
             let reason = (error as? ChangeRequests.Problem)?.reason ?? error.localizedDescription
             say(CatWords.changeFailed(reason))

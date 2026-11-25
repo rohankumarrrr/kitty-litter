@@ -1247,7 +1247,7 @@ enum PhonePage {
               }, choice.value === 'accept' ? 'go' : null));
             }
           }
-          if (item.kind === 'ask') {
+          if (item.kind === 'ask' || item.kind === 'change') {
             for (const choice of item.choices) {
               if (choice.value === 'reply') { buttons.append(button(choice.label, () => go(item.open))); continue; }
               buttons.append(button(choice.label, () => {
