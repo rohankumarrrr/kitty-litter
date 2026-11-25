@@ -161,7 +161,7 @@ enum HealthCheck {
             ))
         }
         results += facts.routinesT3CanLose.map(routinesFinding)
-        results.append(kittensCheckFinding(facts.kittensCheck))
+        if let finding = kittensCheckFinding(facts.kittensCheck) { results.append(finding) }
         if facts.lockdownKittenGone {
             results.append(HealthFinding(
                 check: "lockdown",
@@ -258,9 +258,11 @@ enum HealthCheck {
 
     static let kittensCheck = "kittens check"
 
-    private static func kittensCheckFinding(_ check: KittensCheck) -> HealthFinding {
+    private static func kittensCheckFinding(_ check: KittensCheck) -> HealthFinding? {
         let problem: String
         switch check {
+        case .notSetUp:
+            return nil
         case .found(let misses) where misses.isEmpty:
             return HealthFinding(check: kittensCheck, ok: true, advice: true)
         case .found(let misses):

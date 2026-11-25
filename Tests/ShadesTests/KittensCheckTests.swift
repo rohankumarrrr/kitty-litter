@@ -42,17 +42,28 @@ final class KittensCheckTests: XCTestCase {
     }
 
     func testASummaryOlderThanADayAndABitSaysWhenTheCheckLastRan() {
-        XCTAssertEqual(KittensCheck(summary: summary(hoursAgo: 25, misses: "{}"), kittens: [steve], now: now), .found([]))
+        XCTAssertEqual(KittensCheck(summary: summary(hoursAgo: 25, misses: "{}"), kittens: [clawde, steve], now: now), .found([]))
         let checkedAt = now.addingTimeInterval(-27 * 3600)
-        let stale = KittensCheck(summary: summary(hoursAgo: 27, misses: #"{"steve-pawsniak": 2}"#), kittens: [steve], now: now)
+        let stale = KittensCheck(summary: summary(hoursAgo: 27, misses: #"{"steve-pawsniak": 2}"#), kittens: [clawde, steve], now: now)
         XCTAssertEqual(stale, .stale(since: checkedAt))
         XCTAssertEqual(finding(stale)?.problem, "The kittens check hasn't run since \(checkedAt.formatted(date: .abbreviated, time: .shortened)).")
         XCTAssertEqual(finding(stale)?.ok, false)
     }
 
+    func testASummaryFromTheFutureCantBeTrustedToSayWhenTheCheckRan() {
+        XCTAssertEqual(KittensCheck(summary: summary(hoursAgo: -1, misses: "{}"), kittens: [clawde], now: now), .found([]))
+        XCTAssertEqual(KittensCheck(summary: summary(hoursAgo: -27, misses: "{}"), kittens: [clawde], now: now), .unreadable, "or one write would keep it from ever going stale")
+    }
+
+    func testWithoutAClawdeThereIsNoKittensCheckToRun() {
+        XCTAssertEqual(KittensCheck(summary: nil, kittens: [steve], now: now), .notSetUp)
+        XCTAssertNil(finding(.notSetUp), "so nobody's told to ask a kitten they don't have")
+        XCTAssertEqual(KittensCheck(summary: nil, kittens: [steve, clawde], now: now), .unreadable)
+    }
+
     func testAMissingOrUnreadableSummarySaysItCantTellWhenTheCheckRan() {
         for unreadable in [nil, Data("not json".utf8), Data(#"{"checkedAt": "yesterday", "misses": {}}"#.utf8), summary(misses: #"{"steve-pawsniak": "two"}"#)] {
-            let check = KittensCheck(summary: unreadable, kittens: [steve], now: now)
+            let check = KittensCheck(summary: unreadable, kittens: [clawde, steve], now: now)
             XCTAssertEqual(check, .unreadable)
             XCTAssertEqual(finding(check)?.problem, "I can't tell when the kittens check last ran, since I can't read what it found.")
         }
@@ -77,8 +88,13 @@ final class KittensCheckTests: XCTestCase {
         let huge = folder.appendingPathComponent("huge.json")
         try Data(count: KittensCheck.largestSummary + 1).write(to: huge)
         XCTAssertNil(KittensCheck.readSummary(at: huge))
+        let growing = folder.appendingPathComponent("growing.json")
+        try summary(misses: "{}").write(to: growing)
+        XCTAssertNotNil(KittensCheck.readSummary(at: growing))
+        try Data(count: KittensCheck.largestSummary * 4).write(to: growing)
+        XCTAssertNil(KittensCheck.readSummary(at: growing), "the size checked is the size read, even once the file has grown")
         let pipe = folder.appendingPathComponent("pipe.json")
         XCTAssertEqual(mkfifo(pipe.path, 0o600), 0)
-        XCTAssertNil(KittensCheck.readSummary(at: pipe), "a pipe would hold the app up until something wrote to it")
+        XCTAssertNil(KittensCheck.readSummary(at: pipe), "a pipe is never read, and opening one never waits for a writer")
     }
 }
