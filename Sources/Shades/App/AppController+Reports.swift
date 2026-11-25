@@ -30,8 +30,8 @@ extension AppController {
                 if toInbox { return }
                 report = nil
             }
-            if let launcher = await launcher(of: current) {
-                let told = toInbox || firstRead ? await tellLauncher(launcher, about: current, report: report) : true
+            if let asker = await reportsTo(current) {
+                let told = toInbox || firstRead ? await tell(asker, about: current, report: report) : true
                 if told {
                     if toInbox || firstRead, current.status != .failed, let report { fileChangeRequests(in: report, of: current) }
                     if toInbox {
@@ -78,8 +78,27 @@ extension AppController {
         latestThreads.first { $0.id == id }.flatMap(kitten(of:)).flatMap(ChannelSpeakerLook.color(of:))
     }
 
+    func reportsTo(_ thread: AgentThread) async -> String? {
+        guard kitten(of: thread) != nil, !dispatchers.contains(thread.id), !inbox.wasStartedForYou(thread.id) else { return nil }
+        let started = thread.lastRunStartedAt ?? .distantFuture
+        switch await backend.exchanges(threadID: thread.id)?.last(where: { $0.askedAt <= started })?.asker {
+        case .you?, .schedule?:
+            return nil
+        case .agent(let sender?)? where sender != thread.id:
+            guard await mayPass(thread, to: sender) else { return nil }
+            return sender
+        default:
+            return await launcher(of: thread)
+        }
+    }
+
+    private func mayPass(_ thread: AgentThread, to other: String) async -> Bool {
+        if await isClearOfScreenlessKittens(threadID: other) { return true }
+        return await !isClearOfScreenlessKittens(thread)
+    }
+
     func launcher(of thread: AgentThread) async -> String? {
-        guard thread.startedByAgent, !dispatchers.contains(thread.id), !inbox.wasStartedForYou(thread.id), kitten(of: thread) != nil else { return nil }
+        guard thread.startedByAgent else { return nil }
         if let known = launchers[thread.id] { return known }
         guard case .thread(let launcher)? = await backend.origin(of: thread.id)?.startedBy else { return nil }
         launchers[thread.id] = launcher
@@ -92,15 +111,15 @@ extension AppController {
         return launchers[thread.id] == nil ? .unknown : .agent
     }
 
-    private func tellLauncher(_ launcher: String, about thread: AgentThread, report: String?) async -> Bool {
+    private func tell(_ asker: String, about thread: AgentThread, report: String?) async -> Bool {
         if thread.isDelegated { return true }
-        if let started = thread.lastRunStartedAt, let said = await backend.exchanges(threadID: launcher),
+        if let started = thread.lastRunStartedAt, let said = await backend.exchanges(threadID: asker),
            said.contains(where: { $0.asker == .agent(threadID: thread.id) && $0.askedAt >= started }) {
             return true
         }
         do {
-            try await backend.deliver(threadID: launcher, text: Prompts.launchedReport(readable(report), of: thread))
-            inbox.anotherThreadWrote(to: launcher, at: now())
+            try await backend.deliver(threadID: asker, text: Prompts.launchedReport(readable(report), of: thread))
+            inbox.anotherThreadWrote(to: asker, at: now())
             keepInbox()
             inboxChanged()
             return true

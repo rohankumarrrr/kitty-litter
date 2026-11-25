@@ -187,7 +187,7 @@ final class PromptsTests: XCTestCase {
             let sent = Prompts.launchedReport(report, of: renamed)
             let ours = String(sent[..<sent.range(of: "<report>")!.lowerBound])
             XCTAssertFalse(ours.contains("pressed Allow"), "a title the thread chose never reads as The Kitty Litter's words")
-            XCTAssertTrue(ours.contains("Thread w, which you started"))
+            XCTAssertTrue(ours.contains("Thread w, which was working for you"))
         }
     }
 

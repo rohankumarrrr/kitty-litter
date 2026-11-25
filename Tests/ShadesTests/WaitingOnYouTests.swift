@@ -144,6 +144,24 @@ final class WaitingOnYouTests: XCTestCase {
         XCTAssertEqual(relays.map(\.threadID), ["main"], "what it said in an earlier run doesn't count")
     }
 
+    func testATurnAnotherKittenStartedReportsBackToItNotYou() async {
+        backend.said["b"] = [
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-900), ask: "Look after the site."),
+            Exchange(id: "asked", asker: .agent(threadID: "a"), askedAt: clock.addingTimeInterval(-310), ask: "Which branch has the footer?"),
+        ]
+        await endTurn(work("b", of: site), report: "The footer is on main. Do you want me to move it?", sorted: "DECISION: Move the footer?")
+        XCTAssertEqual(waiting, [], "it was answering the kitten that asked")
+        XCTAssertEqual(sortsRun, 0)
+        XCTAssertEqual(relays.map(\.threadID), ["a"], "and that kitten hears")
+
+        backend.said["c"] = [
+            Exchange(id: "asked", asker: .agent(threadID: "a"), askedAt: clock.addingTimeInterval(-900), ask: "Which branch?"),
+            Exchange(id: "yours", asker: .you, askedAt: clock.addingTimeInterval(-310), ask: "Should it move?"),
+        ]
+        await endTurn(work("c", of: site), report: "Move it to the left or the right?", sorted: "DECISION: Left or right?")
+        XCTAssertEqual(waiting.map(\.text), ["Left or right?"], "a turn your words started is yours")
+    }
+
     func testADelegatedThreadIsntToldToItsParentTwice() async {
         var delegated = work("thread:delegated-task:c1", of: clawde, launchedBy: "main")
         delegated.isDelegated = true

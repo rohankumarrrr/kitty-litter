@@ -270,7 +270,16 @@ extension AppController {
         }
     }
 
-    private func isClearOfScreenlessKittens(_ thread: AgentThread) async -> Bool {
+    func isClearOfScreenlessKittens(threadID: String) async -> Bool {
+        let screenless = loadKittens().filter { !$0.seesScreen }
+        if screenless.isEmpty { return true }
+        let backend = self.backend
+        return await firstOf(seconds: Self.rosterWait) {
+            await Self.traceIsClear(from: threadID, of: screenless, backend: backend)
+        } ?? false
+    }
+
+    func isClearOfScreenlessKittens(_ thread: AgentThread) async -> Bool {
         let screenless = loadKittens().filter { !$0.seesScreen }
         if screenless.isEmpty { return true }
         if screenless.contains(where: { KittenBoard.belongs(thread, to: $0) }) { return false }

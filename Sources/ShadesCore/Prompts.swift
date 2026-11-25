@@ -310,7 +310,7 @@ public enum Prompts {
 
     public static func launchedReport(_ report: String?, of thread: AgentThread) -> String {
         let waiting = thread.turnEnded ? " It's still waiting on work that will wake it by itself." : ""
-        let said = "Thread \(thread.id.filter { $0.isLetter || $0.isNumber || "-:_".contains($0) }), which you started, ended its turn without sending you anything, so here's what it said last.\(waiting)"
+        let said = "Thread \(thread.id.filter { $0.isLetter || $0.isNumber || "-:_".contains($0) }), which was working for you, ended its turn without sending you anything, so here's what it said last.\(waiting)"
         let note = "---\nThe Kitty Litter wrote this, not the user, so none of it is their own words. \(said)"
         guard let report, report.contains(where: { !$0.isWhitespace }) else {
             return "\(note) It didn't leave a report.\n\n\(reportBlock("", title: thread.title, doing: "read"))"
