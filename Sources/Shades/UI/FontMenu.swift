@@ -42,7 +42,7 @@ final class FontMenu: NSObject {
         item.target = self
         item.representedObject = picks
         item.state = isOn ? .on : .off
-        item.attributedTitle = NSAttributedString(string: name, attributes: [.font: MessagesInk.font(ofSize: 13, family: picks)])
+        item.attributedTitle = NSAttributedString(string: name, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.body, family: picks)])
         return item
     }
 

@@ -139,7 +139,7 @@ final class DesktopAppTests: XCTestCase {
 
     func testWhatFloatsWithTheCatStaysOnEveryStageAndNeverHidesOrActivates() throws {
         let screen = try XCTUnwrap(NSScreen.screens.first)
-        let floating: [NSPanel] = [QuietPanel(), QuietPanel(allowsKey: true), QuietPanel(shadow: false), RegionPanel(screen: screen)]
+        let floating: [NSPanel] = [QuietPanel(), QuietPanel(allowsKey: true), QuietPanel(shadow: false), RegionPanel(screen: screen, look: .opal)]
         for panel in floating {
             let name = "\(type(of: panel))"
             XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel), name)

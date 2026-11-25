@@ -34,7 +34,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        label.font = MessagesInk.font(ofSize: 11)
+        label.font = MessagesInk.font(ofSize: MessagesInk.meta)
         label.lineBreakMode = .byTruncatingTail
         label.isSelectable = false
         addSubview(label)
@@ -125,7 +125,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
 
     func restyle() {
         label.textColor = MessagesInk.soft
-        label.font = MessagesInk.font(ofSize: 11)
+        label.font = MessagesInk.font(ofSize: MessagesInk.meta)
         textView.textColor = MessagesInk.text
         textView.font = MessagesInk.font(ofSize: MessagesInk.title)
         alsoSend.needsDisplay = true
@@ -181,7 +181,7 @@ final class ChannelComposer: QuietView, NSTextViewDelegate {
     }
 
     private var textLine: CGFloat {
-        ceil(NSLayoutManager().defaultLineHeight(for: textView.font ?? .systemFont(ofSize: 14)))
+        ceil(NSLayoutManager().defaultLineHeight(for: textView.font ?? MessagesInk.font(ofSize: MessagesInk.title)))
     }
 
     private var textHeight: CGFloat {
@@ -341,7 +341,7 @@ final class AttachmentChip: NSView {
         picture.wantsLayer = true
         picture.layer?.cornerRadius = 6
         picture.layer?.masksToBounds = true
-        name.font = MessagesInk.font(ofSize: 13)
+        name.font = MessagesInk.font(ofSize: MessagesInk.body)
         name.lineBreakMode = .byTruncatingMiddle
         remove.onPress = { [weak self] in self?.onRemove?() }
         [picture, name, remove].forEach(addSubview)
@@ -401,7 +401,7 @@ final class QuietCheckbox: NSView {
     override var needsPanelToBecomeKey: Bool { false }
 
     private var label: NSAttributedString {
-        NSAttributedString(string: title, attributes: [.font: words?.font ?? MessagesInk.font(ofSize: 12), .foregroundColor: words?.color ?? MessagesInk.soft])
+        NSAttributedString(string: title, attributes: [.font: words?.font ?? MessagesInk.font(ofSize: MessagesInk.meta + 1), .foregroundColor: words?.color ?? MessagesInk.soft])
     }
 
     static let inset: CGFloat = 4

@@ -24,20 +24,6 @@ final class OpalRoleTests: XCTestCase {
         "Sources/Shades/Demo/DemoRecorder.swift": 16,
         "Sources/Shades/Demo/OpalSheet.swift": 7,
         "Sources/Shades/Phone/PhonePage.swift": 9,
-        "Sources/Shades/UI/BacklogSheet.swift": 1,
-        "Sources/Shades/UI/BubbleView.swift": 2,
-        "Sources/Shades/UI/ChannelComposer.swift": 5,
-        "Sources/Shades/UI/ChannelPane.swift": 1,
-        "Sources/Shades/UI/ChannelRowViews.swift": 8,
-        "Sources/Shades/UI/ChannelText.swift": 6,
-        "Sources/Shades/UI/FontMenu.swift": 1,
-        "Sources/Shades/UI/InputPanel.swift": 1,
-        "Sources/Shades/UI/MessagesShortcuts.swift": 3,
-        "Sources/Shades/UI/PairingPanel.swift": 1,
-        "Sources/Shades/UI/QuietButton.swift": 1,
-        "Sources/Shades/UI/SayPill.swift": 1,
-        "Sources/Shades/UI/SettingsControls.swift": 3,
-        "Sources/ShadesContext/RegionOverlayView.swift": 7,
     ]
 
     func testEverythingDrawnTakesItsColoursAndSizesFromOpal() throws {

@@ -35,7 +35,7 @@ extension Opal {
         vertical(cardGlass, in: rect)
         let glowHeight = rect.height * 0.72
         glow(cached(&cardGlows, light.glow) { fading($0, alpha: 0.3, end: 0.72) }, center: NSPoint(x: rect.midX, y: bottom(of: rect) - up * glowHeight * 0.12), radii: NSSize(width: rect.width * 0.7, height: glowHeight * 0.9))
-        NSColor(white: 1, alpha: 0.07).setStroke()
+        Ink.hex(Opal.white).withAlphaComponent(Opal.hairlineAlpha).setStroke()
         context.addPath(shape.cgPath)
         context.setLineWidth(2)
         context.strokePath()

@@ -77,7 +77,7 @@ func runPickerTest(in directory: URL) async {
     }
 
     await run("second request", frontBefore: frontBefore) {
-        let second = await ScreenContextProvider().pickRegion()
+        let second = await ScreenContextProvider(regionLook: probeRegionLook).pickRegion()
         print("  a second request while one is open: \(second == nil ? "OK, nil" : "WRONG")")
         await pressEscape()
     } check: { region in
@@ -94,7 +94,7 @@ func runPickerTest(in directory: URL) async {
 private func checkAnotherAppCancels() async {
     print("another app comes forward:")
     let previous = NSWorkspace.shared.frontmostApplication
-    let picking = Task { await ScreenContextProvider().pickRegion() }
+    let picking = Task { await ScreenContextProvider(regionLook: probeRegionLook).pickRegion() }
     try? await Task.sleep(for: .milliseconds(250))
 
     let other = Process()
@@ -118,7 +118,7 @@ private func run(
     check: @escaping (CGRect?) -> String
 ) async {
     print("\(name):")
-    let picking = Task { await ScreenContextProvider().pickRegion() }
+    let picking = Task { await ScreenContextProvider(regionLook: probeRegionLook).pickRegion() }
     try? await Task.sleep(for: .milliseconds(250))
 
     await MainActor.run {
@@ -211,7 +211,7 @@ private func who(before: pid_t) -> String {
 
 private func runRealMouseTest(frontBefore: pid_t) async {
     print("real mouse:")
-    let picking = Task { await ScreenContextProvider().pickRegion() }
+    let picking = Task { await ScreenContextProvider(regionLook: probeRegionLook).pickRegion() }
     try? await Task.sleep(for: .milliseconds(250))
 
     let height = CGDisplayBounds(CGMainDisplayID()).height
@@ -279,7 +279,7 @@ private func runRealMouseTest(frontBefore: pid_t) async {
         printFocus(of: frontBefore, when: "after")
     }
 
-    let provider = ScreenContextProvider()
+    let provider = ScreenContextProvider(regionLook: probeRegionLook)
     if let result, let snapshot = try? await provider.snapshot(CaptureOptions(focusRegion: result)) {
         print("  then a snapshot: \(Int(provider.lastReport.timings.total)) ms, \(snapshot.screenshotJPEG?.count ?? 0) bytes, marked at \(describe(snapshot.focusRegion))")
         print("  front after the snapshot: \(await MainActor.run { who(before: frontBefore) })")

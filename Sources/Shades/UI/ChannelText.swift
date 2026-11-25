@@ -7,12 +7,16 @@ enum ChannelMarkdown {
     static let largestTable = 400
     private static let deepestIndent = 3
 
-    static func chipColor(_ state: String?) -> NSColor {
+    static let chipFill = Ink.hex(Opal.control)
+    static let chipEdge = Ink.hex(Opal.fieldEdge)
+    private static let ruleHeight: CGFloat = 4
+
+    static func chipWords(_ state: String?) -> NSColor {
         switch state {
-        case "open": return Ink.hex(0x1f883d)
-        case "merged": return Ink.hex(0x8250df)
-        case "closed": return Ink.hex(0xcf222e)
-        default: return Ink.hex(0x6e7781)
+        case "open": return Ink.hex(Opal.good)
+        case "merged": return Ink.hex(Opal.lilac)
+        case "closed": return Ink.hex(Opal.errorText)
+        default: return MessagesInk.text
         }
     }
 
@@ -67,7 +71,7 @@ enum ChannelMarkdown {
                 rule.setBorderColor(color.withAlphaComponent(0.25), for: .minY)
                 rule.setWidth(4, type: .absoluteValueType, for: .margin, edge: .minY)
                 style.textBlocks = [rule]
-                result.append(NSAttributedString(string: "\u{200B}\n", attributes: [.font: MessagesInk.font(ofSize: 4), .paragraphStyle: style]))
+                result.append(NSAttributedString(string: "\u{200B}\n", attributes: [.font: MessagesInk.font(ofSize: ruleHeight), .paragraphStyle: style]))
             }
         }
         if result.string.hasSuffix("\n") { result.deleteCharacters(in: NSRange(location: result.length - 1, length: 1)) }
@@ -109,8 +113,8 @@ enum ChannelMarkdown {
             if let pull = span.pull {
                 text = "\u{00A0}" + ([text] + [pull.state].compactMap { $0 }).joined(separator: " · ").replacingOccurrences(of: " ", with: "\u{00A0}") + "\u{00A0}"
                 runFont = MessagesInk.font(ofSize: font.pointSize - 1, weight: .semibold)
-                attributes[.foregroundColor] = NSColor.white
-                attributes[.channelChip] = chipColor(pull.state)
+                attributes[.foregroundColor] = chipWords(pull.state)
+                attributes[.channelChip] = chipFill
             } else {
                 attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
             }
@@ -181,10 +185,14 @@ private final class ChipLayoutManager: NSLayoutManager {
         let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
         storage.enumerateAttribute(.channelChip, in: characters) { value, range, _ in
             guard let fill = value as? NSColor else { return }
-            fill.setFill()
             enumerateEnclosingRects(forGlyphRange: glyphRange(forCharacterRange: range, actualCharacterRange: nil), withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: container) { rect, _ in
-                let pill = rect.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: 0, dy: 1)
-                NSBezierPath(roundedRect: pill, xRadius: pill.height / 2, yRadius: pill.height / 2).fill()
+                let pill = rect.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: 0.5, dy: 1.5)
+                let shape = NSBezierPath(roundedRect: pill, xRadius: pill.height / 2, yRadius: pill.height / 2)
+                fill.setFill()
+                shape.fill()
+                ChannelMarkdown.chipEdge.setStroke()
+                shape.lineWidth = 1
+                shape.stroke()
             }
         }
     }

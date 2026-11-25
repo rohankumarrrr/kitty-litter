@@ -1028,7 +1028,7 @@ final class ChannelPane: QuietView {
             jump?.removeFromSuperview()
             let button = QuietButton(title, style: .filled) { [weak self] in self?.jumpToNew() }
             let shadow = NSShadow()
-            shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
+            shadow.shadowColor = Ink.hex(Opal.black).withAlphaComponent(Opal.shadowAlpha)
             shadow.shadowBlurRadius = 6
             shadow.shadowOffset = NSSize(width: 0, height: -1)
             button.wantsLayer = true

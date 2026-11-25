@@ -48,7 +48,7 @@ private final class PillView: NSView {
     private static let height: CGFloat = 22
 
     private var label: NSAttributedString {
-        NSAttributedString(string: text, attributes: [.font: MessagesInk.font(ofSize: 12), .foregroundColor: MessagesInk.pillText])
+        NSAttributedString(string: text, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta + 1), .foregroundColor: MessagesInk.pillText])
     }
 
     override var fittingSize: NSSize {

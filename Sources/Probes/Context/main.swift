@@ -36,7 +36,7 @@ func summarize(_ name: String, _ samples: [Double]) {
 }
 
 func runSnapshots() async {
-    let provider = ScreenContextProvider()
+    let provider = ScreenContextProvider(regionLook: probeRegionLook)
     let runs = value(after: "--runs").flatMap(Int.init) ?? 1
     var reports: [CaptureReport] = []
     var last = ScreenSnapshot()
@@ -109,7 +109,7 @@ func pixelSize(of jpeg: Data) -> String {
 }
 
 func runPick() async {
-    let region = await ScreenContextProvider().pickRegion()
+    let region = await ScreenContextProvider(regionLook: probeRegionLook).pickRegion()
     print(region.map { "picked \(describe($0))" } ?? "cancelled")
 }
 

@@ -49,6 +49,7 @@ Every value here is a token in `Opal.swift`. Use the role, never a raw hex.
 | Role | Token | Colour | Sits on |
 |---|---|---|---|
 | Title, figure | `white` | `#FFFFFF` | Anything, including the primary button |
+| On a kitten's own colour | `black` | `#000000` | A kitten's colour where black reads better than white. Also what a fade cuts away, and a view's own shadow at 40% (`shadowAlpha`) |
 | Body | `body` | `#E7E4EC` | Any surface |
 | Secondary: times, names, captions | `secondary` | `#A09AAD` | Any surface, hover and selected included |
 | Dim | `dim` | `#837D90` | Opaque chrome, page, raised and cards only. On a control, a hovered or selected row, or glass over a bright desktop it's under 4.5:1, so use secondary there. A control's edge, such as an unticked box, can be dim, since it needs 3:1 |
@@ -227,7 +228,7 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 
 - **Segmented control:** a `raised` capsule track with the chosen segment raised on it in `controlHover`, words body, the chosen one white.
 - **Tabs:** underlined text, never pills. The open tab is white with a 2-point rim-gradient underline. Others are secondary.
-- **Chips:** capsules on `control`, 22 tall, meta-size words in body.
+- **Chips:** capsules on `control`, 22 tall, meta-size words in body. A pull request's chip has a `fieldEdge` hairline and says its state in its words' colour: `good` when open, `lilac` when merged, `errorText` when closed, on the Mac and the phone alike.
 - **Checkboxes and switches:** the system's, which follow the dark appearance, with the accent in violet. A drawn one is ticked in violet with a white tick, and its empty box has a 1.2-point `dim` edge. A drawn switch is a 32 by 18 capsule, violet with a white knob when it's on, and `control` with a 1.2-point `dim` edge and a body-coloured knob when it's off. A switch is for a whole row in Settings, a checkbox for an option beside other things, such as Also send to under a kitten's thread.
 - **Lists and tables:** hairline rows in `border` under small-capital headers. A hovered row is `raised`, a selected one `selected`, each with corners 9 inset from the edges.
 - **Menus:** the system's menus, dark. A custom popover is floating glass.
@@ -250,6 +251,7 @@ A 3-point capsule track in white at 16%. Its fill runs cyan to violet while it's
 | The cat's bubble | A rimlit card in Shades' hue 245, at 20 corners and the widget card's padding, like an Opal desktop widget, since both float on the desktop. A kitten asking or reporting is lit in that kitten's colour. Its stepped tail carries the rim's light down to the cat. A command sits in a code block |
 | The Ask box | Floating glass, a field inside it, its mic a text button in the field, and a dropped file as a chip over what you type |
 | The pill over the cat | A capsule of floating glass with body words |
+| The region picker for Fix | The screen dimmed with `page` at 42%, what you drag outlined in `error` over a white halo, and its hint and size on `raised` glass with a white-8% hairline, in body and meta words. `ShadesContext` draws it with the `RegionLook` the app hands it, so it has no colours of its own |
 | Approvals and questions | In the bubble's card. Allow is the primary, the rest quiet |
 | The kittens view and the pairing code | Floating glass. Kittens on Rimlight tiles, with labels in small capitals and status in lilac, rose or mint |
 | Menus and popovers | The system's dark menus, or floating glass |
