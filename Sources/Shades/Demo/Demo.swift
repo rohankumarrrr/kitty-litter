@@ -425,6 +425,12 @@ final class DemoBackend: AgentBackend, @unchecked Sendable {
 
 final class DemoFacts {
     var found = HealthFacts()
+    var kittensCheck = DemoFacts.kittensCheck(hoursAgo: 1, misses: "{}")
+
+    static func kittensCheck(hoursAgo: Double, misses: String) -> Data {
+        let checkedAt = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-hoursAgo * 3600))
+        return Data(#"{"checkedAt": "\#(checkedAt)", "misses": \#(misses)}"#.utf8)
+    }
 }
 
 final class DemoContext: ScreenContextProviding, @unchecked Sendable {
@@ -697,9 +703,12 @@ enum Demo {
             home: Demo.home,
             routerFolder: { DemoChannels.routerFolder },
             reportHealth: { findings, lockdown in
-                let problems = findings.filter { !$0.ok }.map { "\($0.check): \($0.problem ?? "")" }
-                print("[demo] health.json would say \(problems.isEmpty ? "ok" : problems.joined(separator: " | "))\(lockdown.map { ", lockdown: \($0)" } ?? "")")
+                let said = { (finding: HealthFinding) in "\(finding.check): \(finding.problem ?? "")" }
+                let problems = findings.filter { !$0.ok && !$0.advice }.map(said)
+                let advice = findings.filter { !$0.ok && $0.advice }.map(said)
+                print("[demo] health.json would say \(problems.isEmpty ? "ok" : problems.joined(separator: " | "))\(advice.isEmpty ? "" : ", with advice \(advice.joined(separator: " | "))")\(lockdown.map { ", lockdown: \($0)" } ?? "")")
             },
+            kittensCheckSummary: { facts.kittensCheck },
             notify: { print("[demo] notified: \(CatWords.notification($0)), which opens \($0.threadID)") },
             withdrawNotifications: { print("[demo] took back \($0.count) notification\($0.count == 1 ? "" : "s")") },
             servePhone: { "http://127.0.0.1:\($0)" },

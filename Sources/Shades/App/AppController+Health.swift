@@ -100,6 +100,7 @@ extension AppController {
         facts.reachedT3 = t3.reached
         facts.kittensNotInT3 = t3.kittensNotInT3
         facts.routinesT3CanLose = t3.routinesT3CanLose
+        facts.kittensCheck = KittensCheck(summary: kittensCheckSummary(), kittens: kittens, now: now())
         facts.lockdownKittenGone = settings.lockdown != nil && lockedDownKitten == nil
         facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
         switch t3.frontDoorError {

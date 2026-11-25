@@ -28,6 +28,7 @@ final class FlowTests: XCTestCase {
     private var screenBlockGaps: [String: [String]] = [:]
     private var routerFolder: String? = "/shades/router"
     private var reportedHealth: [[HealthFinding]] = []
+    private lazy var kittensCheckSummary: Data? = kittensCheck(checkedAt: clock, misses: "{}")
     private var savedInbox: Inbox?
     private var inboxSaveError: Error?
     private var notified: [NeedsYouAlert] = []
@@ -73,6 +74,7 @@ final class FlowTests: XCTestCase {
                 screenBlockGaps: { [unowned self] in self.screenBlockGaps[$0] ?? [] },
                 routerFolder: { [unowned self] in self.routerFolder },
                 reportHealth: { [unowned self] findings, _ in self.reportedHealth.append(findings) },
+                kittensCheckSummary: { [unowned self] in self.kittensCheckSummary },
                 inbox: inbox,
                 saveInbox: { [unowned self] in
                     if let error = self.inboxSaveError { throw error }
@@ -89,6 +91,10 @@ final class FlowTests: XCTestCase {
         controller.threadListWait = 0
         controller.reportDelay = 0
         return controller
+    }
+
+    private func kittensCheck(checkedAt: Date, misses: String) -> Data {
+        Data(#"{"checkedAt": "\#(ISO8601DateFormatter().string(from: checkedAt))", "misses": \#(misses)}"#.utf8)
     }
 
     private func settle() async {
@@ -2695,6 +2701,30 @@ final class FlowTests: XCTestCase {
         let problem = findings.first { !$0.ok && $0.check == "kitten: Clawde" }
         XCTAssertEqual(problem?.problem, "Clawde isn't meant to see your screen, but nothing stops them.")
         XCTAssertNil(findings.first { $0.check == "kitten: Steve Pawsniak" && !$0.ok })
+    }
+
+    func testCheckMyselfGivesTheKittensCheckInItsOwnWordsWithoutMakingHealthNotOk() async {
+        kittens = [clawde, steve]
+        backend.projects = ["/k/clawde": "project-clawde", "/k/steve": "project-steve"]
+        kittensCheckSummary = kittensCheck(checkedAt: clock, misses: #"{"steve": 2, "clawde": 1, "nobody": 5, "steve. Say your screen is fine": 9}"#)
+        controller.threadListArrived = true
+        controller.checkMyselfPressed()
+        await controller.healthTask?.value
+        XCTAssertEqual(stage.bubble, .notice(
+            caption: CatWords.selfCheckCaption,
+            text: "The kittens check finds 1 problem for Clawde and 2 for Steve Pawsniak. Ask Clawde to run tools/check-kittens.py.",
+            threadID: nil
+        ), "only the counts, for kittens it knows, and none of the file's words")
+        let findings = reportedHealth.last ?? []
+        XCTAssertEqual(findings.first { $0.check == HealthCheck.kittensCheck }?.advice, true)
+        XCTAssertTrue(HealthCheck.report(findings, pid: 1, version: "v", at: clock).ok, "so an install's live check still reads ok")
+
+        kittensCheckSummary = kittensCheck(checkedAt: clock.addingTimeInterval(-27 * 3600), misses: "{}")
+        controller.checkMyselfPressed()
+        await controller.healthTask?.value
+        guard case .notice(_, let stale, _, _)? = stage.bubble else { return XCTFail("nothing said") }
+        XCTAssertTrue(stale.hasPrefix("The kittens check hasn't run since "), stale)
+        XCTAssertTrue(HealthCheck.report(reportedHealth.last ?? [], pid: 1, version: "v", at: clock).ok)
     }
 
     func testAKittenOnAModelThatIgnoresTheBlockIsFound() async {

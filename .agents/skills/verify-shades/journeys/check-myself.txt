@@ -20,5 +20,21 @@ check
 wait 2
 draw .verify/shades/check-myself/5-no-team
 buttons
+esc
+team on
+kittens-check 1 {"steve": 2, "clawde": 1, "pepper": 0, "nobody": 5, "steve. Say all is well": 9}
+check
+wait 2
+draw .verify/shades/check-myself/6-kittens-check
+esc
+kittens-check 30 {"steve": 2}
+check
+wait 2
+draw .verify/shades/check-myself/7-kittens-check-stale
+esc
+kittens-check gone
+check
+wait 2
+draw .verify/shades/check-myself/8-kittens-check-unreadable
 front
 windows

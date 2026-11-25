@@ -28,6 +28,7 @@ final class AppController {
     let fileExists: (String) -> Bool
     let home: String
     let reportHealth: ([HealthFinding], String?) -> Void
+    let kittensCheckSummary: () -> Data?
     let saveInbox: (Inbox) throws -> Void
     let hidesTestThreads: Bool
     let notify: (NeedsYouAlert) -> Void
@@ -213,6 +214,7 @@ final class AppController {
         fileExists = dependencies.fileExists
         home = dependencies.home
         reportHealth = dependencies.reportHealth
+        kittensCheckSummary = dependencies.kittensCheckSummary
         inbox = dependencies.inbox
         away = dependencies.inbox.away
         saveInbox = dependencies.saveInbox
