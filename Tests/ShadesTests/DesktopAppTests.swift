@@ -37,7 +37,7 @@ final class DesktopAppTests: XCTestCase {
     }
 
     private func menuBar() -> MenuBar {
-        let bar = MenuBar()
+        let bar = outOfSight { MenuBar() }
         bar.onAsk = { [unowned controller] in controller!.askPressed() }
         bar.onFix = { [unowned controller] in controller!.fixPressed() }
         bar.onKittens = { [unowned controller] in controller!.kittensPressed() }

@@ -9,7 +9,7 @@ final class MenuBarTests: XCTestCase {
     }
 
     func testTheMenuOnlyOffersAShortcutTheAppHolds() throws {
-        let bar = MenuBar()
+        let bar = outOfSight { MenuBar() }
         bar.held = [.ask, .messages]
         let ask = try item("Ask…", in: bar)
         XCTAssertEqual(ask.keyEquivalent, " ")
@@ -21,7 +21,7 @@ final class MenuBarTests: XCTestCase {
     }
 
     func testTheMenuKeepsCountsAndTipsOutOfItsTitles() throws {
-        let bar = MenuBar()
+        let bar = outOfSight { MenuBar() }
         bar.messagesSummary = { "1 needs you" }
         XCTAssertEqual(try item(CatWords.appName, in: bar).badge?.stringValue, "1 needs you")
         XCTAssertEqual(try item("Kittens", in: bar).toolTip, "Or Shift-click the cat")
@@ -29,7 +29,7 @@ final class MenuBarTests: XCTestCase {
     }
 
     func testSettingsAndQuitEndTheMenuOnTheirOwn() throws {
-        let bar = MenuBar()
+        let bar = outOfSight { MenuBar() }
         let items = bar.shownItems
         let settings = try XCTUnwrap(items.firstIndex { $0.title == "Settings…" })
         XCTAssertTrue(items[settings - 1].isSeparatorItem, "Do Not Disturb isn't in with them")

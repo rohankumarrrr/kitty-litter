@@ -75,5 +75,5 @@ Journey: `journeys/inbox-waiting.txt`.
 
 - A finished run is read 5 seconds after it ends (`reportDelay`), and the demo takes 0.8 seconds more to read it. Draw any sooner and Activity still says nothing needs you.
 - `report` also takes `shipped`, `note`, `long`, `scheduled` and `asks`, and any of them followed by `waiting` ends the turn while it watches its pull request. `finish` on that thread then ends the watch.
-- `inbox reply` gives The Kitty Litter's box the keyboard without bringing the app to the front, the same as pressing Reply, so `active=true` shows until something else takes it. `front` still names your own app.
+- `inbox reply` gives The Kitty Litter's box the run's keyboard without bringing the app to the front, the same as pressing Reply, so `channels ... key=true` shows until something else takes it. `active=false` and `front` still say your own app has your keyboard.
 - The demo has no words for "Fix login", so its thread says its messages are in T3.

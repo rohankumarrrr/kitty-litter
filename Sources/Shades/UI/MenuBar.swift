@@ -8,7 +8,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         var action: () -> Void
     }
 
-    private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    let item = Offstage.isOn ? nil : NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
     private var status = "Napping"
     var refreshesOnOpen: [NSMenu: () -> Void] = [:]
@@ -35,13 +35,13 @@ final class MenuBar: NSObject, NSMenuDelegate {
         super.init()
         menu.delegate = self
         menu.autoenablesItems = false
-        item.menu = menu
-        item.button?.image = Self.icon()
-        item.button?.toolTip = CatWords.appName
+        item?.menu = menu
+        item?.button?.image = Self.icon()
+        item?.button?.toolTip = CatWords.appName
     }
 
     var corner: NSPoint {
-        guard let frame = item.button?.window?.frame else {
+        guard let frame = item?.button?.window?.frame else {
             let visible = NSScreen.main?.visibleFrame ?? .zero
             return NSPoint(x: visible.maxX - 8, y: visible.maxY - 4)
         }
@@ -51,8 +51,8 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
     func show(status: String, needsYou: Bool) {
         self.status = status
-        item.button?.contentTintColor = needsYou ? Ink.hex(CatGlint.attention(bright: true).color!) : nil
-        item.button?.setAccessibilityLabel("\(CatWords.appName): \(status)")
+        item?.button?.contentTintColor = needsYou ? Ink.hex(CatGlint.attention(bright: true).color!) : nil
+        item?.button?.setAccessibilityLabel("\(CatWords.appName): \(status)")
     }
 
     func popUpMenu(at point: NSPoint, in view: NSView) {

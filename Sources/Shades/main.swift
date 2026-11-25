@@ -10,6 +10,7 @@ MainActor.assumeIsolated {
     app.appearance = NSAppearance(named: .darkAqua)
 
     let wantsDemo = CommandLine.arguments.contains("--demo")
+    Offstage.isOn = DevFlags.staysOffstage()
     let neverComesForward = wantsDemo || DevFlags.wantsFlow || DevFlags.wantsChannelsCheck || DevFlags.pictureFile != nil || DevFlags.iconFolder != nil
     app.setActivationPolicy(neverComesForward ? .accessory : .regular)
     if DevFlags.wantsChannelsCheck { DevFlags.checkChannels() }

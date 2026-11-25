@@ -4,6 +4,14 @@ import ShadesContext
 import ShadesCore
 import XCTest
 
+@MainActor
+func outOfSight<T>(_ make: () -> T) -> T {
+    let was = Offstage.isOn
+    Offstage.isOn = true
+    defer { Offstage.isOn = was }
+    return make()
+}
+
 final class Log: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [String] = []
