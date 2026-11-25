@@ -88,7 +88,7 @@ extension KittenStatus.State {
 }
 
 struct ChannelSpeakerLook {
-    static let otherJacket: UInt32 = 0x8f8f95
+    static let otherJacket = Opal.dim
     static let yours = Opal.selected
     static let palette = Opal.kittens
 
@@ -145,12 +145,8 @@ struct ChannelSpeakerLook {
         Opal.mix(Opal.page, bubble ?? Opal.controlHover, alpha)
     }
 
-    static func readable(on color: UInt32) -> NSColor {
-        blackOrWhite(on: color) == 0x000000 ? .black : .white
-    }
-
     static func blackOrWhite(on color: UInt32) -> UInt32 {
-        contrast(color, 0x000000) >= contrast(color, 0xffffff) ? 0x000000 : 0xffffff
+        contrast(color, Opal.black) >= contrast(color, Opal.white) ? Opal.black : Opal.white
     }
 
     static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
@@ -454,7 +450,7 @@ final class MessageToolbar: QuietView {
         super.init(frame: .zero)
         (buttons + [self.more]).forEach(addSubview)
         let lift = NSShadow()
-        lift.shadowColor = NSColor.black.withAlphaComponent(0.4)
+        lift.shadowColor = Ink.hex(Opal.black).withAlphaComponent(Opal.shadowAlpha)
         lift.shadowBlurRadius = 8
         lift.shadowOffset = NSSize(width: 0, height: -2)
         wantsLayer = true
@@ -897,7 +893,7 @@ final class MessageRowView: ChannelRowView {
         }
     }
 
-    private static var fileFont: NSFont { MessagesInk.font(ofSize: 13) }
+    private static var fileFont: NSFont { MessagesInk.font(ofSize: MessagesInk.body) }
 
     private static func fileWidth(_ name: String) -> CGFloat {
         ceil(NSAttributedString(string: name, attributes: [.font: fileFont]).size().width) + 46

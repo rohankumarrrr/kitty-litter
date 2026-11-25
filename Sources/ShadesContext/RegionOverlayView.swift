@@ -8,20 +8,22 @@ final class RegionOverlayView: NSView {
     private let dim = CAShapeLayer()
     private let halo = CAShapeLayer()
     private let edge = CAShapeLayer()
-    private let hint = OverlayPill(text: "Drag around what you mean  ·  Esc to cancel", font: .systemFont(ofSize: 13, weight: .medium))
-    private let sizeLabel = OverlayPill(text: "", font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium))
+    private let hint: OverlayPill
+    private let sizeLabel: OverlayPill
 
-    init(frame: CGRect, hintArea: CGRect) {
+    init(frame: CGRect, hintArea: CGRect, look: RegionLook) {
+        hint = OverlayPill(text: "Drag around what you mean  ·  Esc to cancel", font: look.hintFont, look: look)
+        sizeLabel = OverlayPill(text: "", font: look.sizeFont, look: look)
         super.init(frame: frame)
         wantsLayer = true
 
-        dim.fillColor = NSColor.black.withAlphaComponent(0.42).cgColor
+        dim.fillColor = look.dim.cgColor
         dim.fillRule = .evenOdd
         halo.fillColor = nil
-        halo.strokeColor = NSColor.white.withAlphaComponent(0.85).cgColor
+        halo.strokeColor = look.halo.cgColor
         halo.lineWidth = 3.5
         edge.fillColor = nil
-        edge.strokeColor = NSColor(srgbRed: 1, green: 0.12, blue: 0.12, alpha: 1).cgColor
+        edge.strokeColor = look.edge.cgColor
         edge.lineWidth = 2
         [dim, halo, edge].forEach { layer?.addSublayer($0) }
 
@@ -135,15 +137,15 @@ final class OverlayPill: NSView {
     private let label = NSTextField(labelWithString: "")
     private static let padding = CGSize(width: 12, height: 6)
 
-    init(text: String, font: NSFont) {
+    init(text: String, font: NSFont, look: RegionLook) {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.72).cgColor
-        layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
+        layer?.backgroundColor = look.pillFill.cgColor
+        layer?.borderColor = look.pillEdge.cgColor
         layer?.borderWidth = 0.5
         layer?.cornerCurve = .continuous
         label.font = font
-        label.textColor = .white
+        label.textColor = look.pillWords
         label.alignment = .center
         addSubview(label)
         setText(text)

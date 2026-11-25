@@ -12,11 +12,14 @@ enum Opal {
     static let fieldEdge: UInt32 = 0x2b2536
 
     static let white: UInt32 = 0xffffff
+    static let black: UInt32 = 0x000000
     static let body: UInt32 = 0xe7e4ec
     static let secondary: UInt32 = 0xa09aad
     static let dim: UInt32 = 0x837d90
     static let faint: UInt32 = 0x5e586b
     static let labelAlpha: CGFloat = 0.55
+    static let hairlineAlpha: CGFloat = 0.07
+    static let shadowAlpha: CGFloat = 0.4
 
     static let violet: UInt32 = 0x8a6cff
     static let primary: UInt32 = 0x7458e8

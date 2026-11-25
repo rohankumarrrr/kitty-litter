@@ -106,7 +106,7 @@ func runSyntheticChecks(in directory: URL) async {
 }
 
 private func checkSavingToTheRealStore() {
-    let provider = ScreenContextProvider()
+    let provider = ScreenContextProvider(regionLook: probeRegionLook)
     let bytes = Data([0xFF, 0xD8, 0xFF, 0xD9])
     do {
         guard let path = try provider.saveScreenshot(of: ScreenSnapshot(screenshotJPEG: bytes)) else {
@@ -356,3 +356,14 @@ func count(in rect: CGRect, of image: Pixels, where matches: ((red: UInt8, green
     }
     return total
 }
+
+let probeRegionLook = RegionLook(
+    dim: NSColor.black.withAlphaComponent(0.42),
+    halo: NSColor.white.withAlphaComponent(0.85),
+    edge: NSColor(srgbRed: 1, green: 0.12, blue: 0.12, alpha: 1),
+    pillFill: NSColor.black.withAlphaComponent(0.72),
+    pillEdge: NSColor.white.withAlphaComponent(0.14),
+    pillWords: .white,
+    hintFont: .systemFont(ofSize: 13, weight: .medium),
+    sizeFont: .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+)

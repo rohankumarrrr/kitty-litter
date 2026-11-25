@@ -31,7 +31,7 @@ MainActor.assumeIsolated {
         let keepsToItself = !DevFlags.isInstalledApp()
         let signIn = DevFlags.signInService()
         let backend = T3Backend(credentials: KeychainCredentialStore(service: signIn), label: keepsToItself ? "Shades trial" : "Shades", revokesWhatItCantRead: !keepsToItself)
-        let context = ScreenContextProvider()
+        let context = ScreenContextProvider(regionLook: .opal)
         let voice = ParakeetVoiceEngine()
         let keys = KeyHoldMonitor()
         let inboxFile = Settings.directory.appendingPathComponent("inbox.json")

@@ -134,7 +134,7 @@ final class RegionPanelTests: XCTestCase {
     @MainActor
     func testTheOverlaySitsAboveTheMenuBarAndDock() throws {
         let screen = try XCTUnwrap(NSScreen.screens.first)
-        let panel = RegionPanel(screen: screen)
+        let panel = RegionPanel(screen: screen, look: .forTests)
         XCTAssertEqual(panel.level, .screenSaver)
         XCTAssertGreaterThan(panel.level.rawValue, NSWindow.Level.mainMenu.rawValue)
         XCTAssertGreaterThan(panel.level.rawValue, NSWindow.Level.dock.rawValue)
@@ -143,7 +143,7 @@ final class RegionPanelTests: XCTestCase {
     @MainActor
     func testTheOverlayNeverActivatesAndCoversTheWholeDisplay() throws {
         let screen = try XCTUnwrap(NSScreen.screens.first)
-        let panel = RegionPanel(screen: screen)
+        let panel = RegionPanel(screen: screen, look: .forTests)
         XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
         XCTAssertTrue(panel.canBecomeKey)
         XCTAssertFalse(panel.canBecomeMain)
@@ -153,8 +153,15 @@ final class RegionPanelTests: XCTestCase {
     @MainActor
     func testOverlayRectsBecomeGlobalPoints() throws {
         let screen = try XCTUnwrap(NSScreen.screens.first)
-        let panel = RegionPanel(screen: screen)
+        let panel = RegionPanel(screen: screen, look: .forTests)
         let local = CGRect(x: 10, y: 20, width: 30, height: 40)
         XCTAssertEqual(panel.globalRect(from: local), local.offsetBy(dx: screen.frame.minX, dy: screen.frame.minY))
     }
+}
+
+extension RegionLook {
+    static let forTests = RegionLook(
+        dim: .black, halo: .white, edge: .red, pillFill: .black, pillEdge: .white, pillWords: .white,
+        hintFont: .systemFont(ofSize: 13), sizeFont: .systemFont(ofSize: 11)
+    )
 }

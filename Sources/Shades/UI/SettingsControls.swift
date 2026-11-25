@@ -52,7 +52,7 @@ class SettingsControl: NSView {
 
 final class SettingsTab: SettingsControl {
     static let height: CGFloat = 30
-    private static let font = NSFont.systemFont(ofSize: 13, weight: .medium)
+    private static var font: NSFont { MessagesInk.font(ofSize: MessagesInk.body, weight: .medium) }
 
     let title: String
     var isOpen = false { didSet { needsDisplay = true; setAccessibilityValue(isOpen) } }
@@ -90,7 +90,7 @@ final class SettingsTab: SettingsControl {
 
 final class QuietSegments: SettingsControl {
     static let height: CGFloat = 26
-    private static let font = NSFont.systemFont(ofSize: 12, weight: .medium)
+    private static var font: NSFont { MessagesInk.font(ofSize: MessagesInk.meta + 1, weight: .medium) }
 
     let titles: [String]
     private(set) var selected: Int { didSet { needsDisplay = true; setAccessibilityValue(titles[selected]) } }
@@ -158,7 +158,7 @@ final class QuietSegments: SettingsControl {
                 let chosen = NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2)
                 Ink.hex(Opal.controlHover).setFill()
                 chosen.fill()
-                NSColor(white: 1, alpha: 0.07).setStroke()
+                Ink.hex(Opal.white).withAlphaComponent(Opal.hairlineAlpha).setStroke()
                 chosen.stroke()
             }
             let words = NSAttributedString(string: title, attributes: [

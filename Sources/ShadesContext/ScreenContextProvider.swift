@@ -5,22 +5,24 @@ public final class ScreenContextProvider: ScreenContextProviding, @unchecked Sen
     private let sources: ContextSources
     private let store: CaptureStore
     private let defaults: UserDefaults
+    private let regionLook: RegionLook
     private let lock = NSLock()
     private var report = CaptureReport()
     private var browserNeedingTip: Browser?
 
     private static let tipsKey = "shades.javaScriptTipsShown"
 
-    public convenience init() {
+    public convenience init(regionLook: RegionLook) {
         let store = CaptureStore()
         store.removeOld()
-        self.init(sources: LiveSources(), store: store, defaults: .standard)
+        self.init(sources: LiveSources(), store: store, defaults: .standard, regionLook: regionLook)
     }
 
-    init(sources: ContextSources, store: CaptureStore, defaults: UserDefaults) {
+    init(sources: ContextSources, store: CaptureStore, defaults: UserDefaults, regionLook: RegionLook) {
         self.sources = sources
         self.store = store
         self.defaults = defaults
+        self.regionLook = regionLook
     }
 
     public var lastReport: CaptureReport {
@@ -111,7 +113,7 @@ public final class ScreenContextProvider: ScreenContextProviding, @unchecked Sen
     }
 
     public func pickRegion() async -> CGRect? {
-        await RegionPicker.shared.pick()
+        await RegionPicker.shared.pick(look: regionLook)
     }
 
     public func saveScreenshot(of snapshot: ScreenSnapshot) throws -> String? {

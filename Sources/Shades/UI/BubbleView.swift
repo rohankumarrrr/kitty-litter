@@ -330,8 +330,8 @@ final class BubbleTextView: NSTextView {
         super.draw(dirtyRect)
         context.setBlendMode(.destinationOut)
         let shown = visibleRect
-        let solid = NSColor.black
-        let clear = NSColor.black.withAlphaComponent(0)
+        let solid = Ink.hex(Opal.black)
+        let clear = solid.withAlphaComponent(0)
         if fades.top {
             NSGradient(starting: solid, ending: clear)?.draw(in: NSRect(x: shown.minX, y: shown.minY, width: shown.width, height: Self.fadeHeight), angle: 90)
         }

@@ -411,7 +411,7 @@ final class CheatsheetView: QuietView {
         let card = card
         Opal.glass(NSBezierPath(roundedRect: card, xRadius: Opal.Corner.popover, yRadius: Opal.Corner.popover))
 
-        NSAttributedString(string: CatWords.shortcutsTitle, attributes: [.font: MessagesInk.font(ofSize: 15, weight: .semibold), .foregroundColor: MessagesInk.strong])
+        NSAttributedString(string: CatWords.shortcutsTitle, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.toolbarTitle, weight: .semibold), .foregroundColor: MessagesInk.strong])
             .draw(at: NSPoint(x: card.minX + 22, y: card.minY + 18))
         let columns = columns
         let columnWidth = card.width / CGFloat(columns.count)
@@ -422,9 +422,9 @@ final class CheatsheetView: QuietView {
                 MessagesInk.label(group.title, size: 11).draw(at: NSPoint(x: left + 22, y: y + 13))
                 y += Self.headingHeight
                 for row in group.rows {
-                    NSAttributedString(string: row.does, attributes: [.font: MessagesInk.font(ofSize: 13), .foregroundColor: MessagesInk.text])
+                    NSAttributedString(string: row.does, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.body), .foregroundColor: MessagesInk.text])
                         .draw(at: NSPoint(x: left + 22, y: y + 4))
-                    let keys = NSAttributedString(string: row.keys, attributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .medium), .foregroundColor: MessagesInk.text])
+                    let keys = NSAttributedString(string: row.keys, attributes: [.font: NSFont.monospacedSystemFont(ofSize: MessagesInk.meta + 1, weight: .medium), .foregroundColor: MessagesInk.text])
                     let size = keys.size()
                     let chip = NSRect(x: left + columnWidth - 22 - ceil(size.width) - 16, y: y + 2, width: ceil(size.width) + 16, height: 22)
                     let shape = NSBezierPath(roundedRect: chip.insetBy(dx: 0.5, dy: 0.5), xRadius: 10.5, yRadius: 10.5)

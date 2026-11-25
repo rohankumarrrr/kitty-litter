@@ -129,7 +129,7 @@ final class QuietButton: NSView {
 
     private var label: NSAttributedString {
         NSAttributedString(string: flashed ?? title, attributes: [
-            .font: NSFont.systemFont(ofSize: 12, weight: style == .text ? .regular : .medium),
+            .font: MessagesInk.font(ofSize: MessagesInk.meta + 1, weight: style == .text ? .regular : .medium),
             .foregroundColor: ink,
         ])
     }

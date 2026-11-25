@@ -11,7 +11,7 @@ final class DesignTests: XCTestCase {
     private static let opal: [String: UInt32] = [
         "chrome": 0x0a080d, "page": 0x0c0a10, "raised": 0x15121b, "control": 0x1b1723, "controlHover": 0x262030,
         "selected": 0x1e1830, "border": 0x241f2e, "chromeBorder": 0x1f1b27, "fieldEdge": 0x2b2536,
-        "white": 0xffffff, "body": 0xe7e4ec, "secondary": 0xa09aad, "dim": 0x837d90, "faint": 0x5e586b,
+        "white": 0xffffff, "black": 0x000000, "body": 0xe7e4ec, "secondary": 0xa09aad, "dim": 0x837d90, "faint": 0x5e586b,
         "violet": 0x8a6cff, "primary": 0x7458e8, "lilac": 0xb9a6ff,
         "info": 0x7fd6ff, "good": 0x7fe3c4, "warning": 0xf3e6a8, "error": 0xff7a9a, "errorText": 0xff97b1,
         "infoSurface": 0x132430, "warningSurface": 0x26231a, "errorSurface": 0x2a1420,
@@ -85,6 +85,10 @@ final class DesignTests: XCTestCase {
             ("pill", MessagesInk.pillText, [MessagesInk.pill]),
             ("badge", MessagesInk.onBadge, [MessagesInk.badge]),
             ("on the accent", MessagesInk.onAccent, [Ink.hex(Opal.primary)]),
+            ("an open pull request's chip", ChannelMarkdown.chipWords("open"), [ChannelMarkdown.chipFill]),
+            ("a merged pull request's chip", ChannelMarkdown.chipWords("merged"), [ChannelMarkdown.chipFill]),
+            ("a closed pull request's chip", ChannelMarkdown.chipWords("closed"), [ChannelMarkdown.chipFill]),
+            ("a pull request's chip", ChannelMarkdown.chipWords(nil), [ChannelMarkdown.chipFill]),
         ]
         for (role, words, surfaces) in pairs {
             for surface in surfaces {
@@ -121,7 +125,7 @@ final class DesignTests: XCTestCase {
         let tokens: [String: UInt32] = [
             "chrome": Opal.chrome, "page": Opal.page, "raised": Opal.raised, "control": Opal.control, "controlHover": Opal.controlHover,
             "selected": Opal.selected, "border": Opal.border, "chromeBorder": Opal.chromeBorder, "fieldEdge": Opal.fieldEdge,
-            "white": Opal.white, "body": Opal.body, "secondary": Opal.secondary, "dim": Opal.dim, "faint": Opal.faint,
+            "white": Opal.white, "black": Opal.black, "body": Opal.body, "secondary": Opal.secondary, "dim": Opal.dim, "faint": Opal.faint,
             "violet": Opal.violet, "primary": Opal.primary, "lilac": Opal.lilac,
             "info": Opal.info, "good": Opal.good, "warning": Opal.warning, "error": Opal.error, "errorText": Opal.errorText,
             "infoSurface": Opal.infoSurface, "warningSurface": Opal.warningSurface, "errorSurface": Opal.errorSurface,

@@ -60,7 +60,7 @@ final class BacklogSheet: QuietView {
         let truncating = NSMutableParagraphStyle()
         truncating.lineBreakMode = .byTruncatingTail
         let room = card.width - 44 - close.frame.width
-        NSAttributedString(string: CatWords.backlogTitle, attributes: [.font: MessagesInk.font(ofSize: 15, weight: .semibold), .foregroundColor: MessagesInk.strong, .paragraphStyle: truncating])
+        NSAttributedString(string: CatWords.backlogTitle, attributes: [.font: MessagesInk.font(ofSize: MessagesInk.toolbarTitle, weight: .semibold), .foregroundColor: MessagesInk.strong, .paragraphStyle: truncating])
             .draw(in: NSRect(x: card.minX + 22, y: card.minY + 16, width: room, height: 20))
         NSAttributedString(string: CatWords.backlogKeeper(name), attributes: [.font: MessagesInk.font(ofSize: MessagesInk.meta), .foregroundColor: MessagesInk.soft, .paragraphStyle: truncating])
             .draw(in: NSRect(x: card.minX + 22, y: card.minY + 38, width: room, height: 16))

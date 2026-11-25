@@ -77,7 +77,7 @@ final class CaptureStoreTests: XCTestCase {
     }
 
     func testSavingGoesThroughTheProvider() throws {
-        let provider = ScreenContextProvider(sources: FakeSources(), store: store, defaults: .standard)
+        let provider = ScreenContextProvider(sources: FakeSources(), store: store, defaults: .standard, regionLook: .forTests)
         let path = try XCTUnwrap(provider.saveScreenshot(of: ScreenSnapshot(screenshotJPEG: Data([9]))))
         XCTAssertEqual(try permissions(path), 0o600)
     }

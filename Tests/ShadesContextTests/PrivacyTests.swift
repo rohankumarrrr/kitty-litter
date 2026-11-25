@@ -70,7 +70,7 @@ final class PrivacyTests: XCTestCase {
     private func provider(_ sources: FakeSources, defaults: UserDefaults = .standard) -> ScreenContextProvider {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
-        return ScreenContextProvider(sources: sources, store: CaptureStore(directory: directory), defaults: defaults)
+        return ScreenContextProvider(sources: sources, store: CaptureStore(directory: directory), defaults: defaults, regionLook: .forTests)
     }
 
     private func assertHidesEverything(_ snapshot: ScreenSnapshot, file: StaticString = #filePath, line: UInt = #line) {
@@ -227,7 +227,7 @@ final class PrivacyTests: XCTestCase {
 
 final class BrowserStatusTests: XCTestCase {
     private func provider(_ sources: FakeSources, defaults: UserDefaults) -> ScreenContextProvider {
-        ScreenContextProvider(sources: sources, store: CaptureStore(), defaults: defaults)
+        ScreenContextProvider(sources: sources, store: CaptureStore(), defaults: defaults, regionLook: .forTests)
     }
 
     private func freshDefaults() -> UserDefaults {

@@ -8,18 +8,18 @@ final class RegionPicker {
     private var panels: [RegionPanel] = []
     private var observers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
 
-    func pick() async -> CGRect? {
+    func pick(look: RegionLook) async -> CGRect? {
         guard waiting == nil else { return nil }
         return await withCheckedContinuation { continuation in
             waiting = continuation
-            show()
+            show(look: look)
         }
     }
 
-    private func show() {
+    private func show(look: RegionLook) {
         _ = NSApplication.shared
         panels = NSScreen.screens.map { screen in
-            let panel = RegionPanel(screen: screen)
+            let panel = RegionPanel(screen: screen, look: look)
             let view = panel.overlay
             view.onDragStart = { [weak self] in
                 self?.panels.forEach { $0.overlay.hideHint() }
@@ -72,10 +72,10 @@ final class RegionPicker {
 final class RegionPanel: NSPanel {
     let overlay: RegionOverlayView
 
-    init(screen: NSScreen) {
+    init(screen: NSScreen, look: RegionLook) {
         let size = screen.frame.size
         let visible = screen.visibleFrame.offsetBy(dx: -screen.frame.minX, dy: -screen.frame.minY)
-        overlay = RegionOverlayView(frame: CGRect(origin: .zero, size: size), hintArea: visible)
+        overlay = RegionOverlayView(frame: CGRect(origin: .zero, size: size), hintArea: visible, look: look)
         super.init(
             contentRect: screen.frame,
             styleMask: [.borderless, .nonactivatingPanel],

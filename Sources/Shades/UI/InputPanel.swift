@@ -218,7 +218,7 @@ class PlaceholderTextView: NSTextView {
         super.draw(dirtyRect)
         guard string.isEmpty else { return }
         NSAttributedString(string: placeholder, attributes: [
-            .font: font ?? .systemFont(ofSize: 14),
+            .font: font ?? MessagesInk.font(ofSize: MessagesInk.title),
             .foregroundColor: MessagesInk.soft,
         ]).draw(at: .zero)
     }

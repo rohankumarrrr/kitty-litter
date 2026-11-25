@@ -44,7 +44,7 @@ final class PairingPanel {
             image.imageScaling = .scaleNone
             image.setAccessibilityLabel(CatWords.pairPicture)
             image.wantsLayer = true
-            image.layer?.backgroundColor = NSColor.white.cgColor
+            image.layer?.backgroundColor = Ink.hex(Opal.white).cgColor
             image.layer?.cornerRadius = Opal.Corner.control
             image.widthAnchor.constraint(equalToConstant: Self.pictureSide + 16).isActive = true
             image.heightAnchor.constraint(equalToConstant: Self.pictureSide + 16).isActive = true
