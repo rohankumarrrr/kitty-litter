@@ -477,6 +477,9 @@ enum ModelNames {
             let rest = parts.dropFirst(2).map(\.capitalized).joined(separator: " ")
             return "GPT-\(parts[1])" + (rest.isEmpty ? "" : " \(rest)")
         }
+        if first == "gemini", parts.count > 1 {
+            return parts.map(\.capitalized).joined(separator: " ")
+        }
         return model
     }
 }

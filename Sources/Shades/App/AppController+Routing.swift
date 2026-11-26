@@ -126,9 +126,9 @@ extension AppController {
         renderBubble()
     }
 
-    // Outside the repo: only Claude Code reads the router folder's settings, so no other provider can be the router.
+    // Outside the repo: only Claude Code reads the router folder's settings, so another provider only runs here during Claude fallback.
     func routerProjectID(for model: ModelChoice) async throws -> String {
-        guard model.provider == "claudeAgent" else { throw FrontDoorProblem.notClaude }
+        guard model.isClaude || isFallbackFrontDoor(model) else { throw FrontDoorProblem.notClaude }
         guard let folder = routerFolder() else { throw FrontDoorProblem.noFolder }
         if let id = await backend.projectID(atPath: folder) { return id }
         do {
@@ -288,7 +288,14 @@ extension AppController {
                     switch event {
                     case .finished where isQuick:
                         reportOn(thread, failed: false)
+                    case .usageLimited(let message, let resetAt):
+                        if thread.isClaude { noteClaudeUsageLimit(resetAt: resetAt, message: message) }
+                        if let warning { takeBackNotice(warning) }
+                        if isQuick { say(message, unasked: true) }
                     case .failed(let message):
+                        if thread.isClaude, let detected = ClaudeUsageLimit.detect(message: message, reference: now()) {
+                            noteClaudeUsageLimit(resetAt: detected.resetAt, message: message)
+                        }
                         if let warning { takeBackNotice(warning) }
                         if isQuick { say(message, unasked: true) }
                     default:

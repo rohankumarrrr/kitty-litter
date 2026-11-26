@@ -47,7 +47,7 @@ func runTurn(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>) async throws
             say("  finished after \(milliseconds(clock.now - began)), \(deltas) deltas, deltas match the full text: \(reply == fullText)")
             say("  reply: \(fullText.prefix(120))")
             reply = fullText
-        case let .failed(message):
+        case let .failed(message), let .usageLimited(message, _):
             say("  failed: \(message)")
         }
     }
@@ -309,7 +309,7 @@ func probeApproval() async throws {
                 await answerer.answer(request, seenBy: "stream")
             case let .finished(text):
                 say("  finished: \(text.prefix(80))")
-            case let .failed(message):
+            case let .failed(message), let .usageLimited(message, _):
                 say("  failed: \(message)")
             case .text:
                 break
@@ -507,7 +507,7 @@ func probeRestart() async throws {
                 switch event {
                 case let .started(id): say("  turn started on \(id.prefix(8))")
                 case let .finished(text): outcome = "finished, \(text.count) characters"
-                case let .failed(message): outcome = "failed: \(message)"
+                case let .failed(message), let .usageLimited(message, _): outcome = "failed: \(message)"
                 case .text, .needsApproval: break
                 }
             }
@@ -633,6 +633,7 @@ func probeSettle() async throws {
             if case let .started(id) = event { threadID = id }
             if case let .finished(full) = event { text = full }
             if case let .failed(message) = event { say("turn failed: \(message)") }
+            if case let .usageLimited(message, _) = event { say("turn failed: \(message)") }
         }
         return (threadID, text)
     }
@@ -665,7 +666,7 @@ func probeSteer() async throws {
                 case let .started(id): onStarted?(id)
                 case let .text(delta): turn.text += delta
                 case let .finished(full): turn.text = full
-                case let .failed(message): turn.failed = message
+                case let .failed(message), let .usageLimited(message, _): turn.failed = message
                 case .needsApproval: break
                 }
             }
@@ -881,7 +882,7 @@ func routerReply(_ test: RouterCase, backend: T3Backend) async -> String? {
                     try? await backend.respond(to: request, with: .decline)
                 case let .finished(fullText):
                     reply = fullText
-                case let .failed(message):
+                case let .failed(message), let .usageLimited(message, _):
                     say("  \(test.name) failed: \(message)")
                 case .text:
                     break
@@ -972,7 +973,7 @@ func probeSort() async throws {
             case let .started(id): threadID = id
             case let .needsApproval(request): try? await backend.respond(to: request, with: .decline)
             case let .finished(text): reply = text
-            case .text, .failed: break
+            case .text, .failed, .usageLimited: break
             }
         }
         if let threadID { try? await backend.archive(threadID: threadID) }

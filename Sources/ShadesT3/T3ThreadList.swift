@@ -152,7 +152,11 @@ struct T3ThreadList {
                     isDelegated: thread.id.hasPrefix(Self.delegatedThreadPrefix),
                     lastRunStartedAt: thread.latestRunStartedAt,
                     lastWordsFromYouAt: thread.latestUserAuthoredMessageAt,
-                    lastMessageAt: thread.latestUserMessageAt
+                    lastMessageAt: thread.latestUserMessageAt,
+                    provider: thread.providerInstanceId ?? thread.modelSelection.instanceId,
+                    usageLimitResetAt: thread.usageLimitResetAt,
+                    lastError: thread.lastError,
+                    lastErrorClass: thread.lastErrorClass
                 )
             }
             .sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }

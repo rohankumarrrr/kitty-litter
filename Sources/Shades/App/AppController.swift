@@ -30,6 +30,7 @@ final class AppController {
     let reportHealth: ([HealthFinding], String?) -> Void
     let kittensCheckSummary: () -> Data?
     let saveInbox: (Inbox) throws -> Void
+    let saveClaudeLimit: (ClaudeUsageLimit) -> Void
     let hidesTestThreads: Bool
     let notify: (NeedsYouAlert) -> Void
     let withdrawNotifications: ([String]) -> Void
@@ -94,6 +95,7 @@ final class AppController {
     var relayLimit = RelayLimit()
     var correctionSends = CorrectionSends()
     var inbox: Inbox
+    var claudeLimit: ClaudeUsageLimit
     var filing: Set<String> = []
     var readRuns: [String: (run: String, done: Bool)] = [:]
     var leftoverSummaries: Set<String> = []
@@ -191,6 +193,7 @@ final class AppController {
     var frontierTask: Task<Void, Never>?
     var reportTask: Task<Void, Never>?
     var healthTask: Task<Void, Never>?
+    var claudeLimitResetTask: Task<Void, Never>?
     var health: [HealthFinding]?
     var forwardTask: Task<Void, Never>?
     var changeFiling: [String: Task<Void, Never>] = [:]
@@ -218,6 +221,8 @@ final class AppController {
         inbox = dependencies.inbox
         away = dependencies.inbox.away
         saveInbox = dependencies.saveInbox
+        claudeLimit = dependencies.claudeLimit
+        saveClaudeLimit = dependencies.saveClaudeLimit
         hidesTestThreads = dependencies.hidesTestThreads
         notify = dependencies.notify
         withdrawNotifications = dependencies.withdrawNotifications
@@ -277,6 +282,7 @@ final class AppController {
         catchingUp = !isHolding && !away.isEmpty
         startKeys()
         startInbox()
+        if !clearExpiredClaudeLimit() { scheduleClaudeLimitReset() }
         clearNotifications()
         if settings.phone { startPhone() }
     }

@@ -25,6 +25,13 @@ final class T3WireTests: XCTestCase {
         XCTAssertEqual(selection.options, [.init(id: "effort", value: "xhigh")])
     }
 
+    func testAntigravityEffortUsesThinkingLevel() {
+        let selection = T3Wire.ModelSelection(.fallback)
+        XCTAssertEqual(selection.instanceId, "antigravity")
+        XCTAssertEqual(selection.model, "gemini-4-neon")
+        XCTAssertEqual(selection.options, [.init(id: "thinking_level", value: "high")])
+    }
+
     func testNoEffortSendsNoOptions() {
         let selection = T3Wire.ModelSelection(ModelChoice(provider: "codex", model: "m", effort: ""))
         XCTAssertNil(selection.options)

@@ -99,7 +99,7 @@ extension AppController {
     private func pinnedThread(_ id: String, of kitten: Kitten) -> AgentThread? {
         if let listed = latestThreads.first(where: { $0.id == id }) { return listed }
         guard lockdownStarted == id || !threadListArrived else { return nil }
-        return AgentThread(id: id, title: kitten.name, projectTitle: kitten.name, status: .running, model: settings.frontierModel.model, updatedAt: now(), projectPath: kitten.workspace)
+        return AgentThread(id: id, title: kitten.name, projectTitle: kitten.name, status: .running, model: effectiveFrontierModel.model, updatedAt: now(), projectPath: kitten.workspace)
     }
 
     private func keepLockdownThread(_ id: String, of kitten: Kitten) {
