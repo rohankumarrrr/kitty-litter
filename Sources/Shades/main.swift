@@ -72,6 +72,10 @@ MainActor.assumeIsolated {
                 saveInbox: { inbox in
                     if !keepsToItself { try inbox.save(to: inboxFile) }
                 },
+                claudeLimit: keepsToItself ? ClaudeUsageLimit() : ClaudeUsageLimit.load(),
+                saveClaudeLimit: { limit in
+                    if !keepsToItself, !DevFlags.wantsFlow { try? limit.save() }
+                },
                 hidesTestThreads: !DevFlags.wantsFlow,
                 notify: { notifications?.post($0) },
                 withdrawNotifications: { notifications?.withdraw($0) },

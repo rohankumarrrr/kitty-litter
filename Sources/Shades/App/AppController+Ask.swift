@@ -112,6 +112,7 @@ extension AppController {
     enum TurnEnd {
         case finished
         case failed(message: String?, error: Error?, sawText: Bool)
+        case usageLimited(message: String, resetAt: Date?, threadID: String?)
     }
 
     func runQuickTurn(_ question: String, snapshot: ScreenSnapshot?, generation: Int) async {
@@ -133,7 +134,7 @@ extension AppController {
         guard !takenBack.contains(generation) else { return }
         let all = loadKittens()
         let kittens = all.filter { !$0.planned }
-        let model = settings.quickModel
+        let model = effectiveQuickModel
         let projectID: String
         do {
             projectID = try await routerProjectID(for: model)
@@ -161,35 +162,79 @@ extension AppController {
             kittens: kittens,
             following: following
         )
-        let prompt = AgentPrompt(
-            title: String(question.prefix { !$0.isNewline }.prefix(60)),
-            text: Prompts.quick(question: question, snapshot: shared, sessions: briefs, kittens: kittens, notSetUp: all.filter(\.planned)),
-            attachments: attachments(for: shared),
-            model: model,
-            runtimeMode: settings.quickMode,
-            projectID: projectID
-        )
+        let makePrompt: (ModelChoice, String) -> AgentPrompt = { chosen, project in
+            AgentPrompt(
+                title: String(question.prefix { !$0.isNewline }.prefix(60)),
+                text: Prompts.quick(question: question, snapshot: shared, sessions: briefs, kittens: kittens, notSetUp: all.filter(\.planned)),
+                attachments: self.attachments(for: shared),
+                model: chosen,
+                runtimeMode: self.settings.quickMode,
+                projectID: project
+            )
+        }
+        let prompt = makePrompt(model, projectID)
 
         let start: () -> AsyncThrowingStream<AgentReplyEvent, Error> = { [backend] in backend.start(prompt) }
         var end: TurnEnd
         if let following {
-            end = await consume(backend.followUp(threadID: following, prompt), turn: turn)
+            end = await consume(backend.followUp(threadID: following, prompt), turn: turn, model: model)
             if case .failed(_, _, false) = end, !takenBack.contains(generation) {
                 if generation == replyGeneration {
                     quick.reset()
                     quickIsFresh = true
                 }
-                end = await consume(start(), turn: turn)
+                end = await consume(start(), turn: turn, model: model)
             }
         } else {
-            end = await consume(start(), turn: turn)
+            end = await consume(start(), turn: turn, model: model)
+        }
+
+        if case let .usageLimited(message, resetAt, failedThread) = end, model.isClaude {
+            noteClaudeUsageLimit(resetAt: resetAt, message: message)
+            let fallback = effectiveQuickModel
+            if fallback != model, !takenBack.contains(generation) {
+                discardFailedFallbackThread(failedThread)
+                if generation == replyGeneration {
+                    quick.reset()
+                    quickIsFresh = true
+                    reply?.text = ""
+                    reply?.threadID = nil
+                    renderBubble()
+                }
+                do {
+                    let fallbackProjectID = try await routerProjectID(for: fallback)
+                    let retryTurn = QuickTurn(
+                        question: question,
+                        snapshot: snapshot,
+                        seen: shared,
+                        generation: generation,
+                        sessions: sessions,
+                        kittens: kittens,
+                        following: nil
+                    )
+                    end = await consume(backend.start(makePrompt(fallback, fallbackProjectID)), turn: retryTurn, model: fallback)
+                } catch {
+                    end = .failed(message: nil, error: error, sawText: false)
+                }
+            }
         }
 
         quickTurnFailed(end, generation: generation)
     }
 
     private func quickTurnFailed(_ end: TurnEnd, generation: Int) {
-        guard case .failed(let message, let error, _) = end else { return }
+        let message: String?
+        let error: Error?
+        switch end {
+        case .finished:
+            return
+        case .failed(let text, let failure, _):
+            message = text
+            error = failure
+        case .usageLimited(let text, _, _):
+            message = text
+            error = nil
+        }
         guard generation == replyGeneration else {
             if !takenBack.contains(generation) {
                 post(caption: CatWords.earlierMessageCaption, text: CatWords.earlierMessageFailed, threadID: nil)
@@ -204,7 +249,7 @@ extension AppController {
         }
     }
 
-    func consume(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>, turn: QuickTurn) async -> TurnEnd {
+    func consume(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>, turn: QuickTurn, model: ModelChoice = .quick) async -> TurnEnd {
         var holdback = ReplyHoldback()
         var thread: String?
         var finished = false
@@ -232,8 +277,15 @@ extension AppController {
                     finished = true
                     runEnded(asking: raised)
                     finish(holdback.read(fullText: fullText), turn: turn, thread: thread)
+                case .usageLimited(let message, let resetAt):
+                    runEnded(asking: raised)
+                    let detected = ClaudeUsageLimit.detect(errorClass: "usage_limit", message: message, text: holdback.text, resetAt: resetAt, reference: now())
+                    return .usageLimited(message: message, resetAt: detected?.resetAt ?? resetAt, threadID: thread)
                 case .failed(let message):
                     runEnded(asking: raised)
+                    if model.isClaude, let detected = ClaudeUsageLimit.detect(message: message, text: holdback.text, reference: now()) {
+                        return .usageLimited(message: message, resetAt: detected.resetAt, threadID: thread)
+                    }
                     return .failed(message: message, error: nil, sawText: !holdback.text.isEmpty)
                 }
             }
@@ -378,7 +430,7 @@ extension AppController {
         }
     }
 
-    var frontierName: String { ModelNames.friendly(settings.frontierModel) }
+    var frontierName: String { ModelNames.friendly(effectiveFrontierModel) }
 
     func frontierMode(carrying snapshot: ScreenSnapshot?) -> RuntimeMode {
         settings.frontierMode.carrying(screen: carriesScreen(snapshot))
@@ -444,23 +496,68 @@ extension AppController {
         youPicked: Bool = false,
         missesScreen: Bool = false,
         asked: Int? = nil,
+        retryingFallback: Bool = false,
         onStarted: ((Landing) -> Void)? = nil
     ) {
-        let name = name ?? frontierName
+        let model = effectiveFrontierModel
+        let displayName = name ?? ModelNames.friendly(model)
         let asked = asked ?? questionsAsked
         let prompt = AgentPrompt(
             title: title.map { String($0.prefix(80)) },
             text: text,
             attachments: attachments(for: snapshot),
-            model: settings.frontierModel,
+            model: model,
             runtimeMode: frontierMode(carrying: snapshot),
             projectID: projectID
         )
-        if errand != .correctionCopy, !youPicked { say(CatWords.handingOff(modelName: name)) }
+        if errand != .correctionCopy, !youPicked { say(CatWords.handingOff(modelName: displayName)) }
         frontierTask = Task {
             var startedThread: String?
             var warning: Int?
             var raised: Set<String> = []
+            var streamedText = ""
+            var retried = false
+            @MainActor func retryOnFallback(message: String, resetAt: Date?) -> Bool {
+                guard !retryingFallback, model.isClaude else { return false }
+                noteClaudeUsageLimit(resetAt: resetAt, message: message, text: streamedText)
+                guard effectiveFrontierModel != model else { return false }
+                if let failed = startedThread, let at = messagesThreads.removeValue(forKey: failed) {
+                    discardFailedFallbackThread(failed)
+                    let forwardStarted = onStarted
+                    startFrontier(
+                        title: title,
+                        text: text,
+                        snapshot: snapshot,
+                        projectID: projectID,
+                        name: name,
+                        as: errand,
+                        youPicked: youPicked,
+                        missesScreen: missesScreen,
+                        asked: asked,
+                        retryingFallback: true,
+                        onStarted: { landing in
+                            if let thread = landing.thread { self.messagesThreads[thread] = self.messagesThreads[thread] ?? at }
+                            forwardStarted?(landing)
+                        }
+                    )
+                } else {
+                    discardFailedFallbackThread(startedThread)
+                    startFrontier(
+                        title: title,
+                        text: text,
+                        snapshot: snapshot,
+                        projectID: projectID,
+                        name: name,
+                        as: errand,
+                        youPicked: youPicked,
+                        missesScreen: missesScreen,
+                        asked: asked,
+                        retryingFallback: true,
+                        onStarted: onStarted
+                    )
+                }
+                return true
+            }
             do {
                 for try await event in backend.start(prompt) {
                     switch event {
@@ -474,7 +571,7 @@ extension AppController {
                         }
                         onStarted?(.reached(threadID))
                         if errand == .work, projectID == nil, messagesThreads[threadID] == nil { catsWork[threadID] = now() }
-                        let said = errand == .correctionCopy ? CatWords.correctionSent(to: name) : CatWords.onIt(modelName: name)
+                        let said = errand == .correctionCopy ? CatWords.correctionSent(to: displayName) : CatWords.onIt(modelName: displayName)
                         if missesScreen {
                             warning = sayPassedOn(said, threadID: threadID, missesScreen: true, asked: asked)
                         } else if !youPicked {
@@ -483,17 +580,32 @@ extension AppController {
                     case .needsApproval(let request):
                         raised.insert(request.id)
                         addApproval(request)
+                    case .usageLimited(let message, let resetAt):
+                        runEnded(asking: raised)
+                        if let warning { takeBackNotice(warning) }
+                        if retryOnFallback(message: message, resetAt: resetAt) {
+                            retried = true
+                            break
+                        }
+                        tell(message, as: errand, unasked: startedThread != nil)
                     case .failed(let message):
                         runEnded(asking: raised)
                         if let warning { takeBackNotice(warning) }
+                        if model.isClaude,
+                           let detected = ClaudeUsageLimit.detect(message: message, text: streamedText, reference: now()),
+                           retryOnFallback(message: message, resetAt: detected.resetAt) {
+                            retried = true
+                            break
+                        }
                         tell(message, as: errand, unasked: startedThread != nil)
                     case .finished:
                         runEnded(asking: raised)
-                    case .text:
-                        break
+                    case .text(let delta):
+                        streamedText += delta
                     }
+                    if retried { break }
                 }
-                if startedThread == nil {
+                if startedThread == nil, !retried {
                     onStarted?(.stopped(CatWords.noReply))
                     tell(CatWords.noReply, as: errand)
                 }

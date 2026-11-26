@@ -98,7 +98,7 @@ A new thread needs a project, so a thread with no project uses the one from `pro
 
 The router doesn't start in scratch. A scratch folder is made new for each thread, so there's nowhere to put settings for it in advance, and the router needs some (see [kittens.md](kittens.md#whats-enforced)). Its folder is registered once with `projects.mutate` and `{"type": "project.create", "commandId", "projectId", "title", "workspaceRoot"}`, which answers with the project. T3 turns away a second project at the same folder.
 
-The effort option is `reasoningEffort` for Codex and `effort` for Claude and the rest. `generateTitle: true` has T3 write a title in the background.
+The effort option is `reasoningEffort` for Codex, `thinking_level` for Antigravity, and `effort` for Claude and the rest. `generateTitle: true` has T3 write a title in the background.
 
 A follow-up is a `message.dispatch` command with `dispatchMode {"type":"start_immediately"}` and no `deliveryIntent`. Leaving out `modelSelection` keeps the thread's own model, which is how the router forwards a message into a session. That always gives the message its own run: it starts now on an idle thread and queues behind an active one, which is the same as T3's `queue_after_active`. The cat's own turns and the words the router passes on are sent this way.
 
@@ -120,7 +120,7 @@ Subscribe with `{"threadId":…, "afterSequence":…, "acceptBoundedSnapshot":tr
 
 - **Text** arrives as `turn-item.updated` with `type: "assistant_message"`. `text` is the whole message so far, not a delta, which makes replays harmless. Short replies often arrive whole, with `streaming: false`. Items with a `parentItemId` belong to subagents.
 - **The turn's run** is found by `userMessageId` in `run.created` / `run.updated`. It's over at `completed`, `failed`, `interrupted`, `cancelled` or `rolled_back`. `waiting` isn't an ending: it comes just before `completed` while the checkpoint is saved.
-- **Errors** arrive as a turn item with `type: "error"` and `failure.message`.
+- **Errors** arrive as a turn item with `type: "error"` and `failure.message`. A usage-limit failure also carries `failure.class: "usage_limit"` and `failure.resetAt`, and the thread shell exposes `usageLimitResetAt` and `lastErrorClass` so The Kitty Litter can fall back from Claude to `fallbackModel` and switch back automatically at `resetAt`.
 
 A new thread can subscribe with `afterSequence` set to what the launch answered. A follow-up subscribes without it, at the same moment it sends the message, because the event that names its run can land inside the commit the answer's `sequence` points to.
 

@@ -210,7 +210,14 @@ enum T3Wire {
         init(_ choice: ModelChoice) {
             instanceId = choice.provider
             model = choice.model
-            let optionID = choice.provider.hasPrefix("codex") ? "reasoningEffort" : "effort"
+            let optionID: String
+            if choice.provider.hasPrefix("codex") {
+                optionID = "reasoningEffort"
+            } else if choice.provider == "antigravity" {
+                optionID = "thinking_level"
+            } else {
+                optionID = "effort"
+            }
             options = choice.effort.isEmpty ? nil : [Option(id: optionID, value: choice.effort)]
         }
     }
@@ -491,6 +498,7 @@ enum T3Wire {
         }
 
         struct SelectedModel: Decodable {
+            let instanceId: String?
             let model: String
         }
 
@@ -521,8 +529,13 @@ enum T3Wire {
         let projectId: String
         let title: String
         let status: String
+        let providerInstanceId: String?
         let runtimeMode: String?
         let modelSelection: SelectedModel
+        let lastError: String?
+        let lastErrorClass: String?
+        let lastErrorCode: String?
+        let usageLimitResetAt: Date?
         let lineage: Lineage
         let pendingRuntimeRequest: PendingRequest?
         let pendingBackgroundTasks: [Lossy<BackgroundTask>]?
@@ -692,6 +705,18 @@ enum T3Wire {
     struct TurnItem: Decodable {
         struct Failure: Decodable {
             let message: String?
+            let errorClass: String?
+            let code: String?
+            let resetAt: Date?
+
+            private enum CodingKeys: String, CodingKey {
+                case message, code, resetAt
+                case errorClass = "class"
+            }
+
+            var isUsageLimit: Bool {
+                errorClass == "usage_limit" || resetAt != nil
+            }
         }
 
         struct Question: Decodable {

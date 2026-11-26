@@ -281,9 +281,11 @@ extension AppController {
         }
     }
 
-    func summarize(_ prompt: AgentPrompt) async -> String? {
+    func summarize(_ prompt: AgentPrompt, retryingFallback: Bool = false) async -> String? {
         var threadID: String?
         var text: String?
+        var streamed = ""
+        var usageLimit: (message: String, resetAt: Date?)?
         do {
             for try await event in backend.start(prompt) {
                 switch event {
@@ -295,8 +297,15 @@ extension AppController {
                     try? await backend.respond(to: request, with: .decline)
                 case .finished(let fullText):
                     text = fullText
-                case .text, .failed:
-                    break
+                case .text(let delta):
+                    streamed += delta
+                case .usageLimited(let message, let resetAt):
+                    let detected = ClaudeUsageLimit.detect(errorClass: "usage_limit", message: message, text: streamed, resetAt: resetAt, reference: now())
+                    usageLimit = (message, detected?.resetAt ?? resetAt)
+                case .failed(let message):
+                    if prompt.model.isClaude, let detected = ClaudeUsageLimit.detect(message: message, text: streamed, reference: now()) {
+                        usageLimit = (message, detected.resetAt)
+                    }
                 }
             }
         } catch {
@@ -304,6 +313,15 @@ extension AppController {
         }
         if let threadID {
             Task { [backend] in try? await backend.archive(threadID: threadID) }
+        }
+        if let usageLimit, prompt.model.isClaude, !retryingFallback {
+            noteClaudeUsageLimit(resetAt: usageLimit.resetAt, message: usageLimit.message, text: streamed)
+            let fallback = settings.fallbackModel
+            if fallback != prompt.model, claudeLimit.isActive(at: now()) {
+                var retried = prompt
+                retried.model = fallback
+                return await summarize(retried, retryingFallback: true)
+            }
         }
         let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed?.isEmpty == false ? trimmed : nil

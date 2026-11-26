@@ -15,6 +15,7 @@ extension AppController {
         tidyLeftoverSummaries(threads)
         hideTestThreads(threads)
         latestThreads = threads
+        updateClaudeLimit(from: threads)
         if !threadListArrived, health?.contains(HealthCheck.cantReachT3) == true {
             healthTask = Task { await runHealthCheck() }
         }

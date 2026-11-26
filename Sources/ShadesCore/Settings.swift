@@ -23,6 +23,7 @@ public struct Lockdown: Codable, Sendable, Equatable {
 public struct Settings: Codable, Sendable, Equatable {
     public var quickModel: ModelChoice
     public var frontierModel: ModelChoice
+    public var fallbackModel: ModelChoice
     public var summaryModel: ModelChoice
     public var quickMode: RuntimeMode
     public var frontierMode: RuntimeMode
@@ -43,6 +44,7 @@ public struct Settings: Codable, Sendable, Equatable {
     public init(
         quickModel: ModelChoice = .quick,
         frontierModel: ModelChoice = .frontier,
+        fallbackModel: ModelChoice = .fallback,
         summaryModel: ModelChoice = .summary,
         quickMode: RuntimeMode = .auto,
         frontierMode: RuntimeMode = .fullAccess,
@@ -62,6 +64,7 @@ public struct Settings: Codable, Sendable, Equatable {
     ) {
         self.quickModel = quickModel
         self.frontierModel = frontierModel
+        self.fallbackModel = fallbackModel
         self.summaryModel = summaryModel
         self.quickMode = quickMode
         self.frontierMode = frontierMode
@@ -81,7 +84,7 @@ public struct Settings: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quickModel, frontierModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb, channelNotifications, textSize, openInMessages, messagesFont, followUpBehavior, lockdown
+        case quickModel, frontierModel, fallbackModel, summaryModel, quickMode, frontierMode, privateApps, vocabulary, talkKey, dictateKey, phone, notifyFinished, doNotDisturb, channelNotifications, textSize, openInMessages, messagesFont, followUpBehavior, lockdown
     }
 
     public init(from decoder: Decoder) throws {
@@ -89,6 +92,7 @@ public struct Settings: Codable, Sendable, Equatable {
         let defaults = Settings()
         quickModel = try saved.decodeIfPresent(ModelChoice.self, forKey: .quickModel) ?? defaults.quickModel
         frontierModel = try saved.decodeIfPresent(ModelChoice.self, forKey: .frontierModel) ?? defaults.frontierModel
+        fallbackModel = try saved.decodeIfPresent(ModelChoice.self, forKey: .fallbackModel) ?? defaults.fallbackModel
         summaryModel = try saved.decodeIfPresent(ModelChoice.self, forKey: .summaryModel) ?? defaults.summaryModel
         quickMode = try saved.decodeIfPresent(RuntimeMode.self, forKey: .quickMode) ?? defaults.quickMode
         frontierMode = try saved.decodeIfPresent(RuntimeMode.self, forKey: .frontierMode) ?? defaults.frontierMode

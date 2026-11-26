@@ -63,7 +63,7 @@ The router only replies, and The Kitty Litter does the rest. It runs in a folder
 
 The frontier agent starts with no project, and finds the right one from what you said, and from what's on your screen when that went with it, reading READMEs when a project's name isn't its folder name. For code changes it starts a new thread in that project's worktree. Research and questions it just answers.
 
-The models are settings you can change. Opus 5.5 on xHigh is the default for both the front door and real work, and GPT-6.1 Sol on low writes the summaries.
+The models are settings you can change. Opus 5.5 on xHigh is the default for both the front door and real work, and GPT-6.1 Sol on low writes the summaries. If Claude hits its usage limit, both the front door and frontier automatically fall back to Gemini 4 Neon on `high` (`fallbackModel` in `settings.json`, saved in `claude-fallback.json` until the reset time), and switch back to Claude on their own once the reset time passes.
 
 ## Install
 

@@ -12,6 +12,8 @@ struct T3TurnTracker {
     private var askedRequests: Set<String> = []
     private var commandsAndFileChanges: [String: T3Wire.TurnItem] = [:]
     private var lastError: String?
+    private var lastErrorClass: String?
+    private var lastUsageLimitResetAt: Date?
 
     init(threadID: String, messageID: String, threadTitle: String, runID: String? = nil) {
         self.threadID = threadID
@@ -52,7 +54,16 @@ struct T3TurnTracker {
             return [.finished(fullText: fullText)]
         case .failed:
             isFinished = true
-            return [.failed(message: lastError ?? "The agent ran into a problem.")]
+            let message = lastError ?? "The agent ran into a problem."
+            if let detected = ClaudeUsageLimit.detect(
+                errorClass: lastErrorClass,
+                message: lastError,
+                text: fullText,
+                resetAt: lastUsageLimitResetAt
+            ) {
+                return [.usageLimited(message: message, resetAt: detected.resetAt)]
+            }
+            return [.failed(message: message)]
         case .stopped:
             isFinished = true
             return [.failed(message: lastError ?? "The agent was stopped.")]
@@ -73,6 +84,8 @@ struct T3TurnTracker {
         }
         if item.isError {
             lastError = item.failure?.message ?? lastError
+            lastErrorClass = item.failure?.errorClass ?? lastErrorClass
+            lastUsageLimitResetAt = item.failure?.resetAt ?? lastUsageLimitResetAt
             return []
         }
         if item.isCommandOrFileChange, let nativeID = item.nativeItemRef?.nativeId {

@@ -95,7 +95,7 @@ extension AppController {
     }
 
     func lookInto(_ prompt: String, about subject: String) async -> String? {
-        let model = settings.quickModel
+        let model = effectiveQuickModel
         guard let projectID = try? await routerProjectID(for: model) else { return nil }
         let prompt = AgentPrompt(
             title: String("\(Self.reviewTitle) \(subject)".prefix(80)),

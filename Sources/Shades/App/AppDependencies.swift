@@ -20,6 +20,8 @@ struct AppDependencies {
     var kittensCheckSummary: () -> Data? = { nil }
     var inbox = Inbox(since: .distantPast)
     var saveInbox: (Inbox) throws -> Void = { _ in }
+    var claudeLimit = ClaudeUsageLimit()
+    var saveClaudeLimit: (ClaudeUsageLimit) -> Void = { _ in }
     var hidesTestThreads = true
     var notify: (NeedsYouAlert) -> Void = { _ in }
     var withdrawNotifications: ([String]) -> Void = { _ in }

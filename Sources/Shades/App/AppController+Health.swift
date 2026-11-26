@@ -64,7 +64,7 @@ extension AppController {
 
     private func askT3(about kittens: [Kitten]) async -> T3Answers {
         var answers = T3Answers()
-        do { _ = try await routerProjectID(for: settings.quickModel) } catch { answers.frontDoorError = error }
+        do { _ = try await routerProjectID(for: effectiveQuickModel) } catch { answers.frontDoorError = error }
         await waitForThreadList()
         answers.reached = threadListArrived
         guard answers.reached else { return answers }
@@ -101,6 +101,7 @@ extension AppController {
         facts.kittensNotInT3 = t3.kittensNotInT3
         facts.routinesT3CanLose = t3.routinesT3CanLose
         facts.kittensCheck = KittensCheck(summary: kittensCheckSummary(), kittens: kittens, now: now())
+        facts.claudeFallback = activeClaudeFallback
         facts.lockdownKittenGone = settings.lockdown != nil && lockedDownKitten == nil
         facts.t3GivesRunIDs = !latestThreads.contains { $0.status == .completed && $0.lastRunID == nil }
         switch t3.frontDoorError {

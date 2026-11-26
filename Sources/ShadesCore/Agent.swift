@@ -11,8 +11,11 @@ public struct ModelChoice: Codable, Sendable, Hashable {
         self.effort = effort
     }
 
+    public var isClaude: Bool { provider == "claudeAgent" }
+
     public static let quick = ModelChoice(provider: "claudeAgent", model: "claude-opus-5-5", effort: "xhigh")
     public static let frontier = ModelChoice(provider: "claudeAgent", model: "claude-opus-5-5", effort: "xhigh")
+    public static let fallback = ModelChoice(provider: "antigravity", model: "gemini-4-neon", effort: "high")
     public static let summary = ModelChoice(provider: "codex", model: "gpt-6.1-sol", effort: "low")
 }
 
@@ -83,6 +86,7 @@ public enum AgentReplyEvent: Sendable, Equatable {
     case needsApproval(ApprovalRequest)
     case finished(fullText: String)
     case failed(message: String)
+    case usageLimited(message: String, resetAt: Date?)
 }
 
 public enum ApprovalKind: String, Codable, Sendable {
@@ -201,6 +205,10 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var status: AgentStatus
     public var turnEnded: Bool
     public var model: String
+    public var provider: String?
+    public var usageLimitResetAt: Date?
+    public var lastError: String?
+    public var lastErrorClass: String?
     public var updatedAt: Date
     public var pendingApprovals: [ApprovalRequest]
     public var pendingQuestion: AgentQuestion?
@@ -213,6 +221,10 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
     public var lastRunStartedAt: Date?
     public var lastWordsFromYouAt: Date?
     public var lastMessageAt: Date?
+    public var isClaude: Bool {
+        if let provider { return provider == "claudeAgent" }
+        return model.lowercased().hasPrefix("claude")
+    }
     public var isLiveTest: Bool { Self.isLiveTest(title: title) }
     public static func isLiveTest(title: String) -> Bool { title.hasPrefix("Shades test:") }
     public var wasSeenInT3: Bool {
@@ -245,7 +257,11 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         isDelegated: Bool = false,
         lastRunStartedAt: Date? = nil,
         lastWordsFromYouAt: Date? = nil,
-        lastMessageAt: Date? = nil
+        lastMessageAt: Date? = nil,
+        provider: String? = nil,
+        usageLimitResetAt: Date? = nil,
+        lastError: String? = nil,
+        lastErrorClass: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -254,6 +270,10 @@ public struct AgentThread: Identifiable, Sendable, Hashable {
         self.status = status
         self.turnEnded = turnEnded
         self.model = model
+        self.provider = provider
+        self.usageLimitResetAt = usageLimitResetAt
+        self.lastError = lastError
+        self.lastErrorClass = lastErrorClass
         self.updatedAt = updatedAt
         self.pendingApprovals = pendingApprovals
         self.pendingQuestion = pendingQuestion

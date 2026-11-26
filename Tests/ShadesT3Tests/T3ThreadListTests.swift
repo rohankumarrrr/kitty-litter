@@ -51,6 +51,21 @@ final class T3ThreadListTests: XCTestCase {
         XCTAssertNil(old.lastRunEndedAt)
     }
 
+    func testUsageLimitFieldsComeThroughFromTheThreadShell() throws {
+        let limited = thread(id: "limited", status: "failed")
+            .replacingOccurrences(of: #""lastError":null"#, with: #""lastError":"Claude API rate limit reached.""#)
+            .replacingOccurrences(of: #""lastErrorClass":null"#, with: #""lastErrorClass":"usage_limit""#)
+            .replacingOccurrences(of: #""usageLimitResetAt":null"#, with: #""usageLimitResetAt":"2026-12-02T02:00:00.000Z""#)
+        var list = T3ThreadList()
+        list.apply(try snapshot(threads: [limited]))
+        let item = try XCTUnwrap(list.agentThreads(summaries: [:]).first)
+        XCTAssertEqual(item.provider, "claudeAgent")
+        XCTAssertTrue(item.isClaude)
+        XCTAssertEqual(item.lastErrorClass, "usage_limit")
+        XCTAssertEqual(item.lastError, "Claude API rate limit reached.")
+        XCTAssertEqual(item.usageLimitResetAt, T3Wire.parseDate("2026-12-02T02:00:00.000Z"))
+    }
+
     func testWhenYouLastLookedAtAThreadInT3IsKept() throws {
         let looked = thread(id: "looked", status: "completed")
             .replacingOccurrences(of: #""lastVisitedAt":null"#, with: #""lastVisitedAt":"2026-11-02T19:11:15.374Z""#)

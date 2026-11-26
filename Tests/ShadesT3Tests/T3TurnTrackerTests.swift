@@ -116,6 +116,18 @@ final class T3TurnTrackerTests: XCTestCase {
         XCTAssertEqual(events, [.failed(message: "Out of credits")])
     }
 
+    func testUsageLimitFailureCarriesResetTimestamp() throws {
+        var tracker = newTracker()
+        var events = tracker.apply(try runUpdate("running"))
+        events += tracker.apply(try event("turn-item.updated", #"{"id":"m","type":"assistant_message","status":"completed","runId":"run-1","parentItemId":null,"messageId":"m1","text":"You've hit your weekly limit · resets Dec 1 at 9pm (America/New_York)","streaming":false}"#))
+        events += tracker.apply(try event("turn-item.updated", #"{"id":"e","type":"error","status":"failed","runId":"run-1","failure":{"class":"usage_limit","message":"Claude API rate limit reached. Try again later.","code":"api_error_429","retryable":true,"resetAt":"2026-12-02T02:00:00.000Z"}}"#))
+        events += tracker.apply(try runUpdate("failed"))
+        XCTAssertEqual(events.last, .usageLimited(
+            message: "Claude API rate limit reached. Try again later.",
+            resetAt: T3Wire.parseDate("2026-12-02T02:00:00.000Z")
+        ))
+    }
+
     func testStoppedRunsFail() throws {
         for status in ["interrupted", "cancelled", "rolled_back"] {
             var tracker = newTracker()

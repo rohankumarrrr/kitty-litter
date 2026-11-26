@@ -39,6 +39,7 @@ struct HealthFacts: Equatable {
     var kittensOffScreenInNameOnly: [String] = []
     var routinesT3CanLose: [KittenRoutines] = []
     var kittensCheck = KittensCheck.found([])
+    var claudeFallback: ClaudeFallbackStatus?
     var frontDoorProblem: FrontDoorProblem?
     var frontDoorProjectTrouble: String?
     var inboxSaves = true
@@ -50,6 +51,12 @@ struct HealthFacts: Equatable {
     var phoneNeedsPairingAgain = false
     var lockdownKittenGone = false
     var shownName: String?
+}
+
+struct ClaudeFallbackStatus: Equatable, Sendable {
+    var fallbackModel: ModelChoice
+    var primaryModel: ModelChoice
+    var resetAt: Date
 }
 
 struct KittenRoutines: Equatable {
@@ -162,6 +169,7 @@ enum HealthCheck {
         }
         results += facts.routinesT3CanLose.map(routinesFinding)
         if let finding = kittensCheckFinding(facts.kittensCheck) { results.append(finding) }
+        if let fallback = facts.claudeFallback { results.append(claudeFallbackFinding(fallback)) }
         if facts.lockdownKittenGone {
             results.append(HealthFinding(
                 check: "lockdown",
@@ -257,6 +265,20 @@ enum HealthCheck {
     }
 
     static let kittensCheck = "kittens check"
+    static let claudeFallback = "Claude fallback"
+
+    private static func claudeFallbackFinding(_ status: ClaudeFallbackStatus) -> HealthFinding {
+        let fallbackName = ModelNames.friendly(status.fallbackModel)
+        let primaryName = ModelNames.friendly(status.primaryModel)
+        let when = status.resetAt.formatted(date: .abbreviated, time: .shortened)
+        return HealthFinding(
+            check: claudeFallback,
+            ok: false,
+            problem: "Claude hit its usage limit, so I'm using \(fallbackName) until \(when).",
+            fix: "I'll switch back to \(primaryName) on my own when it resets.",
+            advice: true
+        )
+    }
 
     private static func kittensCheckFinding(_ check: KittensCheck) -> HealthFinding? {
         let problem: String

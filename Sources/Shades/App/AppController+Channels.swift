@@ -267,7 +267,7 @@ extension AppController {
         }
         let briefs = await briefs(for: sessions)
         let kittens = owners.filter { !$0.planned }
-        let model = settings.quickModel
+        let model = effectiveQuickModel
         if file != nil, settings.quickMode == .fullAccess {
             return channels.failed(echoID, because: CatWords.cantTakeFiles(ModelNames.friendly(model)))
         }
@@ -278,22 +278,38 @@ extension AppController {
             notSent(CatWords.problem(error, while: .agents))
             return
         }
-        let prompt = AgentPrompt(
-            title: String(words.prefix { !$0.isNewline }.prefix(60)),
-            text: Prompts.quick(question: words, snapshot: file, sessions: briefs, kittens: kittens, notSetUp: owners.filter(\.planned)),
-            attachments: attachments(for: file),
-            model: model,
-            runtimeMode: settings.quickMode,
-            projectID: projectID
-        )
-        var turn: (reading: ReplyHoldback.Reading, threadID: String)?
-        if let current { turn = await routerTurn(backend.followUp(threadID: current, prompt), echoID: echoID) }
-        let isFresh = turn == nil
-        if turn == nil {
-            if file == nil { messagesQuick.reset() }
-            turn = await routerTurn(backend.start(prompt), joins: file == nil, echoID: echoID)
+        let makePrompt: (ModelChoice, String) -> AgentPrompt = { chosen, project in
+            AgentPrompt(
+                title: String(words.prefix { !$0.isNewline }.prefix(60)),
+                text: Prompts.quick(question: words, snapshot: file, sessions: briefs, kittens: kittens, notSetUp: owners.filter(\.planned)),
+                attachments: self.attachments(for: file),
+                model: chosen,
+                runtimeMode: self.settings.quickMode,
+                projectID: project
+            )
         }
-        guard let (reading, threadID) = turn else {
+        let prompt = makePrompt(model, projectID)
+        var outcome: RouterTurnOutcome = .failed
+        if let current { outcome = await routerTurn(backend.followUp(threadID: current, prompt), echoID: echoID, model: model) }
+        var isFresh = false
+        if case .failed = outcome {
+            isFresh = true
+            if file == nil { messagesQuick.reset() }
+            outcome = await routerTurn(backend.start(prompt), joins: file == nil, echoID: echoID, model: model)
+        }
+        if case let .usageLimited(message, resetAt, failedThread) = outcome, model.isClaude {
+            noteClaudeUsageLimit(resetAt: resetAt, message: message)
+            let fallback = effectiveQuickModel
+            if fallback != model {
+                discardFailedFallbackThread(failedThread)
+                isFresh = true
+                if file == nil { messagesQuick.reset() }
+                if let fallbackProjectID = try? await routerProjectID(for: fallback) {
+                    outcome = await routerTurn(backend.start(makePrompt(fallback, fallbackProjectID)), joins: file == nil, echoID: echoID, model: fallback)
+                }
+            }
+        }
+        guard case let .finished(reading, threadID) = outcome else {
             notSent(CatWords.noReply)
             return
         }
@@ -384,7 +400,13 @@ extension AppController {
         })
     }
 
-    private func routerTurn(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>, joins: Bool = true, echoID: String) async -> (reading: ReplyHoldback.Reading, threadID: String)? {
+    private enum RouterTurnOutcome {
+        case finished(ReplyHoldback.Reading, threadID: String)
+        case usageLimited(message: String, resetAt: Date?, threadID: String?)
+        case failed
+    }
+
+    private func routerTurn(_ stream: AsyncThrowingStream<AgentReplyEvent, Error>, joins: Bool = true, echoID: String, model: ModelChoice) async -> RouterTurnOutcome {
         var holdback = ReplyHoldback()
         var fullText: String?
         var thread: String?
@@ -405,16 +427,23 @@ extension AppController {
                 case .finished(let text):
                     runEnded(asking: raised)
                     fullText = text
-                case .failed:
+                case .usageLimited(let message, let resetAt):
                     runEnded(asking: raised)
-                    return nil
+                    let detected = ClaudeUsageLimit.detect(errorClass: "usage_limit", message: message, text: holdback.text, resetAt: resetAt, reference: now())
+                    return .usageLimited(message: message, resetAt: detected?.resetAt ?? resetAt, threadID: thread)
+                case .failed(let message):
+                    runEnded(asking: raised)
+                    if model.isClaude, let detected = ClaudeUsageLimit.detect(message: message, text: holdback.text, reference: now()) {
+                        return .usageLimited(message: message, resetAt: detected.resetAt, threadID: thread)
+                    }
+                    return .failed
                 }
             }
         } catch {
-            if fullText == nil { return nil }
+            if fullText == nil { return .failed }
         }
-        guard let thread else { return nil }
-        return (holdback.read(fullText: fullText), thread)
+        guard let thread else { return .failed }
+        return .finished(holdback.read(fullText: fullText), threadID: thread)
     }
 
     private func catSays(_ text: String, thread: String? = nil) {
