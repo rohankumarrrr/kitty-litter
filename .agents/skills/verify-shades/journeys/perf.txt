@@ -3,6 +3,6 @@ perf launch
 busy
 wait 1
 perf
-wait 75
+wait 120
 front
 windows

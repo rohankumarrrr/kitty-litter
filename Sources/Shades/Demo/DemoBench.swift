@@ -6,6 +6,7 @@ enum DemoBench {
     private static let rounds = 5
     private static let scrollStep: CGFloat = 40
     private static let cycles = 10
+    private static let frameApart: TimeInterval = 0.017
 
     private enum Budget: Double {
         case frame = 8.3
@@ -67,6 +68,9 @@ enum DemoBench {
         guard let steve = Demo.kittens.first, let clawde = Demo.kittens.first(where: { $0.name == "Clawde" }) else { return }
         view.select(.channel(.of(steve)))
         await react(controller: controller, view: view)
+        let drawn = window.occlusionState.contains(.visible)
+        if !drawn { missed.append("drawn") }
+        print("perf window drawn=\(drawn ? "yes" : "no")")
         var reopens: [Double] = []
         for _ in 0..<rounds {
             stage.hideChannels()
@@ -468,7 +472,8 @@ enum DemoBench {
     }
 
     private static func time(_ window: NSWindow, _ work: () -> Void) -> Double {
-        measure {
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: frameApart))
+        return measure {
             work()
             settle(window)
         }
