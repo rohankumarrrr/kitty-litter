@@ -143,7 +143,7 @@ struct ChannelBook: Equatable {
         }, uniquingKeysWith: { first, _ in first })
     }
 
-    private struct Gathered {
+    fileprivate struct Gathered {
         var title: String
         var home: ChannelID
         var owner: String?
@@ -156,6 +156,60 @@ struct ChannelBook: Equatable {
         var position: Date
         var sequence: Int
         var post: ChannelPost
+    }
+
+    struct Sources: Equatable {
+        let kittens: [Kitten]
+        let threads: [AgentThread]
+        let transcripts: [String: [Exchange]]
+        let messagesThreads: [String: Date]
+        let withShades: Set<String>
+        let catsWork: Set<String>
+        let couldntRead: Set<String>
+        let reactions: [String: [Reaction]]
+        let places: [String: String]
+
+        init(
+            kittens: [Kitten],
+            threads: [AgentThread],
+            transcripts: [String: [Exchange]],
+            messagesThreads: [String: Date] = [:],
+            withShades: Set<String> = [],
+            catsWork: Set<String> = [],
+            couldntRead: Set<String> = [],
+            reactions: [String: [Reaction]] = [:]
+        ) {
+            self.kittens = kittens
+            self.threads = threads
+            self.transcripts = transcripts
+            self.messagesThreads = messagesThreads
+            self.withShades = withShades
+            self.catsWork = catsWork
+            self.couldntRead = couldntRead
+            self.reactions = reactions
+            let paths = Set(kittens.flatMap { [$0.folder, $0.project] } + threads.compactMap { withShades.contains($0.id) ? nil : $0.projectPath })
+            places = Dictionary(uniqueKeysWithValues: paths.map { ($0, KittenBoard.standard($0)) })
+        }
+    }
+
+    struct Gathering {
+        let sources: Sources
+        fileprivate let talks: Set<String>
+        fileprivate let threadsByID: [String: AgentThread]
+        fileprivate let owners: [String: Kitten?]
+        fileprivate let statuses: [KittenStatus]
+        fileprivate let channelIDs: [ChannelID]
+        fileprivate let gathered: [String: Gathered]
+        fileprivate let order: [String]
+        fileprivate let built: [String: ChannelThread]
+        fileprivate let leftOut: Set<ChannelID>
+        fileprivate let issues: [KittenIssues]
+        fileprivate let named: [String: AgentThread]
+        fileprivate let homes: [String: ChannelID]
+
+        fileprivate func owner(of thread: AgentThread) -> Kitten? {
+            owners[thread.id] ?? nil
+        }
     }
 
     static func build(
@@ -183,15 +237,36 @@ struct ChannelBook: Equatable {
         searchingT3: String? = nil,
         said: (String) -> String? = ChannelBook.said
     ) -> ChannelBook {
-        let talkThreads = threads.filter { withShades.contains($0.id) }
-        let threads = threads.filter { !withShades.contains($0.id) }.map { thread -> AgentThread in
+        build(
+            gather(Sources(kittens: kittens, threads: threads, transcripts: transcripts, messagesThreads: messagesThreads, withShades: withShades, catsWork: catsWork, couldntRead: couldntRead, reactions: reactions), said: said),
+            isReading: isReading,
+            unreadable: unreadable,
+            cantReachT3: cantReachT3,
+            waiting: waiting,
+            sent: sent,
+            passedOn: passedOn,
+            isUnread: isUnread,
+            firstNew: firstNew,
+            onPhone: onPhone,
+            hasPhone: hasPhone,
+            alsoSent: alsoSent,
+            olderPages: olderPages,
+            loadingOlder: loadingOlder,
+            searchingT3: searchingT3
+        )
+    }
+
+    static func gather(_ sources: Sources, said: (String) -> String? = ChannelBook.said) -> Gathering {
+        let (kittens, transcripts, messagesThreads, catsWork, couldntRead, reactions) = (sources.kittens, sources.transcripts, sources.messagesThreads, sources.catsWork, sources.couldntRead, sources.reactions)
+        let talkThreads = sources.threads.filter { sources.withShades.contains($0.id) }
+        let threads = sources.threads.filter { !sources.withShades.contains($0.id) }.map { thread -> AgentThread in
             guard thread.pendingQuestion != nil else { return thread }
             var waiting = thread
             waiting.status = .waitingForAnswer
             return waiting
         }
         let threadsByID = Dictionary(threads.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let lookup = KittenBoard.Owners(kittens)
+        let lookup = KittenBoard.Owners(kittens) { sources.places[$0] ?? KittenBoard.standard($0) }
         let owners = Dictionary(threads.map { ($0.id, lookup.of($0)) }, uniquingKeysWith: { first, _ in first })
         let ownerOf = { (thread: AgentThread) in owners[thread.id] ?? nil }
         let byOwner = Dictionary(grouping: threads) { ownerOf($0)?.id }
@@ -230,6 +305,65 @@ struct ChannelBook: Equatable {
             }
             guard !messages.isEmpty else { continue }
             gather(thread.id, Gathered(title: title, home: home(of: owner), owner: owner?.id, messages: messages, isCut: exchanges.count >= keptExchanges))
+        }
+
+        let issues = statuses.compactMap { status -> KittenIssues? in
+            let mine = owned(by: status.kitten, in: byOwner[status.kitten.id] ?? [])
+            let open = mine.filter(isOpen).sorted { (urgency($0), $1.updatedAt, $0.id) < (urgency($1), $0.updatedAt, $1.id) }
+            return status.state == .notSetUp && open.isEmpty ? nil : KittenIssues(kitten: status.kitten, threads: open)
+        }
+        var named: [String: AgentThread] = [:]
+        var homes: [String: ChannelID] = [:]
+        for thread in talkThreads where named[thread.id] == nil { named[thread.id] = thread }
+        for thread in threads where named[thread.id] == nil {
+            named[thread.id] = thread
+            let owner = ownerOf(thread)
+            if owner != nil || messagesThreads[thread.id] != nil || catsWork.contains(thread.id) { homes[thread.id] = home(of: owner) }
+            if let owner { named[thread.id]?.title = title(of: thread, owner: owner) }
+        }
+        return Gathering(
+            sources: sources,
+            talks: Set(talkThreads.map(\.id)),
+            threadsByID: threadsByID,
+            owners: owners,
+            statuses: statuses,
+            channelIDs: channelIDs,
+            gathered: gathered,
+            order: order,
+            built: Dictionary(uniqueKeysWithValues: gathered.compactMap { id, thread in channelThread(id, thread, in: channelIDs).map { (id, $0) } }),
+            leftOut: leftOut,
+            issues: issues,
+            named: named,
+            homes: homes
+        )
+    }
+
+    static func build(
+        _ gathering: Gathering,
+        isReading: Bool,
+        unreadable: Int,
+        cantReachT3: Bool,
+        waiting: Waiting = Waiting(),
+        sent: [SentMessage] = [],
+        passedOn: [String: String] = [:],
+        isUnread: (AgentThread) -> Bool = { _ in false },
+        firstNew: (AgentThread, [ChannelMessage]) -> String? = { _, _ in nil },
+        onPhone: Set<String> = [],
+        hasPhone: Bool = false,
+        alsoSent: Set<String> = [],
+        olderPages: [ChannelID: Int] = [:],
+        loadingOlder: Set<ChannelID> = [],
+        searchingT3: String? = nil
+    ) -> ChannelBook {
+        let threadsByID = gathering.threadsByID
+        let ownerOf = gathering.owner(of:)
+        var gathered = gathering.gathered
+        var order = gathering.order
+        var changed: Set<String> = []
+        func gather(_ id: String, _ thread: Gathered) {
+            if gathered[id] == nil { order.append(id) }
+            gathered[id] = thread
+            changed.insert(id)
         }
 
         var placed: [ChannelID: [Placed]] = [:]
@@ -275,7 +409,7 @@ struct ChannelBook: Equatable {
                 }
                 if files != thread.messages[index].files {
                     thread.messages[index].files = files
-                    gathered[message.threadID] = thread
+                    gather(message.threadID, thread)
                 }
                 let echo = thread.messages[index]
                 if sent.alsoSent, echo.id != thread.messages.first?.id {
@@ -294,23 +428,16 @@ struct ChannelBook: Equatable {
                 thread.messages.append(message)
                 if sent.alsoSent { post(.alsoSent(message, thread: message.threadID)) }
             }
-            gathered[message.threadID] = thread
+            gather(message.threadID, thread)
         }
 
-        var built: [String: ChannelThread] = [:]
+        var built = gathering.built
+        for id in changed {
+            built[id] = gathered[id].flatMap { channelThread(id, $0, in: gathering.channelIDs) }
+        }
         for (index, id) in order.enumerated() {
-            guard let thread = gathered[id], let parent = thread.messages.first else { continue }
-            built[id] = ChannelThread(
-                id: id,
-                title: thread.title,
-                home: channelIDs.contains(thread.home) ? thread.home : .shades,
-                owner: thread.owner,
-                parent: parent,
-                replies: Array(thread.messages.dropFirst()),
-                isCut: thread.isCut
-            )
-            guard thread.isPosted else { continue }
-            placed[built[id]!.home, default: []].append(Placed(position: parent.at, sequence: index - order.count, post: .thread(id)))
+            guard let thread = built[id], gathered[id]?.isPosted == true else { continue }
+            placed[thread.home, default: []].append(Placed(position: thread.parent.at, sequence: index - order.count, post: .thread(id)))
         }
         if !alsoSent.isEmpty {
             for (index, id) in order.enumerated() {
@@ -321,26 +448,12 @@ struct ChannelBook: Equatable {
             }
         }
 
-        let channels = channelIDs.map { id in
-            channel(id, placed[id] ?? [], leavesOutThreads: !isReading && leftOut.contains(id), pages: olderPages[id] ?? 0, isLoadingOlder: loadingOlder.contains(id))
-        }
-        let issues = statuses.compactMap { status -> KittenIssues? in
-            let mine = owned(by: status.kitten, in: byOwner[status.kitten.id] ?? [])
-            let open = mine.filter(isOpen).sorted { (urgency($0), $1.updatedAt, $0.id) < (urgency($1), $0.updatedAt, $1.id) }
-            return status.state == .notSetUp && open.isEmpty ? nil : KittenIssues(kitten: status.kitten, threads: open)
+        let channels = gathering.channelIDs.map { id in
+            channel(id, placed[id] ?? [], leavesOutThreads: !isReading && gathering.leftOut.contains(id), pages: olderPages[id] ?? 0, isLoadingOlder: loadingOlder.contains(id))
         }
         var waiting = waiting
         for entry in waiting.reports {
             waiting.owners[entry.id] = threadsByID[entry.threadID].flatMap(ownerOf)?.id
-        }
-        var named: [String: AgentThread] = [:]
-        var homes: [String: ChannelID] = [:]
-        for thread in talkThreads where named[thread.id] == nil { named[thread.id] = thread }
-        for thread in threads where named[thread.id] == nil {
-            named[thread.id] = thread
-            let owner = ownerOf(thread)
-            if owner != nil || messagesThreads[thread.id] != nil || catsWork.contains(thread.id) { homes[thread.id] = home(of: owner) }
-            if let owner { named[thread.id]?.title = title(of: thread, owner: owner) }
         }
         let unreadShown = Set(built.keys.filter { threadsByID[$0].map(isUnread) == true })
         let newFrom = Dictionary(uniqueKeysWithValues: unreadShown.compactMap { id -> (String, String)? in
@@ -349,18 +462,19 @@ struct ChannelBook: Equatable {
         })
         let started = Dictionary(sent.compactMap { $0.startsThread && !$0.message.threadID.isEmpty ? ($0.message.exchangeID, $0.message.threadID) : nil }, uniquingKeysWith: { first, _ in first })
             .merging(passedOn) { first, _ in first }
+        let catsWork = gathering.sources.catsWork
         return ChannelBook(
-            statuses: statuses,
+            statuses: gathering.statuses,
             channels: channels,
             threads: built,
-            issues: issues,
+            issues: gathering.issues,
             waiting: waiting,
             unreadThreads: unreadShown,
             newFrom: newFrom,
-            listed: named,
-            listedHomes: homes,
+            listed: gathering.named,
+            listedHomes: gathering.homes,
             started: started,
-            talks: Set(talkThreads.map(\.id)),
+            talks: gathering.talks,
             catsWork: catsWork.intersection(threadsByID.keys),
             onPhone: onPhone.intersection(catsWork).intersection(threadsByID.keys),
             hasPhone: hasPhone,
@@ -369,6 +483,19 @@ struct ChannelBook: Equatable {
             unreadable: unreadable,
             cantReachT3: cantReachT3,
             searchingT3: searchingT3
+        )
+    }
+
+    private static func channelThread(_ id: String, _ thread: Gathered, in channelIDs: [ChannelID]) -> ChannelThread? {
+        guard let parent = thread.messages.first else { return nil }
+        return ChannelThread(
+            id: id,
+            title: thread.title,
+            home: channelIDs.contains(thread.home) ? thread.home : .shades,
+            owner: thread.owner,
+            parent: parent,
+            replies: Array(thread.messages.dropFirst()),
+            isCut: thread.isCut
         )
     }
 

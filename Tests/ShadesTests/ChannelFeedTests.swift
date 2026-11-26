@@ -793,3 +793,112 @@ extension ChannelFeedTests {
         XCTAssertEqual(latest?.channel(.shades)?.isCut, false, "and the one that couldn't be read isn't older, just unread")
     }
 }
+
+extension ChannelFeedTests {
+    func testTheBookAfterAnyChangeIsTheOneAFreshBuildOfTheSameThingsGives() async {
+        let pepper = Kitten(name: "Pepper", role: "Money", covers: "", folder: "/k/pepper")
+        var kittens = [steve]
+        var reactions: [String: [Reaction]] = [:]
+        var mine: [String: Date] = ["loose": start]
+        var catsWork: Set<String> = []
+        var talks: Set<String> = ["talk"]
+        var sent: [SentMessage] = []
+        feed = ChannelFeed(backend: backend, kittens: { kittens }, gap: .seconds(60))
+        feed.onChange = { [unowned self] in self.books.append($0) }
+        feed.reactions = { reactions }
+        feed.messagesThreads = { mine }
+        feed.isCatsWork = { catsWork.contains($0.id) }
+        feed.isWithShades = { talks.contains($0.id) }
+        let listed = [thread("a"), thread("b", age: 10), thread("p", project: "Pepper"), thread("loose", project: "Elsewhere"), thread("talk", project: "Elsewhere")]
+        var words: [String: [Exchange]] = [:]
+        for thread in listed {
+            words[thread.id] = [Exchange(id: "e-\(thread.id)", asker: .you, askedAt: start, ask: "Look at \(thread.id)", reply: "Done with \(thread.id)", repliedAt: start)]
+            backend.set(words[thread.id]!, in: thread.id)
+        }
+        backend.threads = listed
+        await openAndRead()
+        let read = words.filter { Set(backend.reads).contains($0.key) }
+        XCTAssertEqual(Set(read.keys), ["a", "b", "loose", "talk"])
+
+        let fresh = {
+            ChannelBook.build(
+                kittens: kittens, threads: listed, transcripts: read, isReading: false, unreadable: 0, cantReachT3: false,
+                sent: sent, messagesThreads: mine, withShades: talks, catsWork: catsWork, reactions: reactions
+            )
+        }
+        let changes: [(String, () -> Void)] = [
+            ("you send a reply", {
+                let message = ChannelMessage(exchangeID: "sent-1", kind: .ask, speaker: .you, text: "Shorter", at: self.start.addingTimeInterval(5), threadID: "a", threadTitle: "", isSending: true)
+                sent.append(SentMessage(channel: .of(self.steve), message: message, isReply: true))
+                self.feed.sent(message, in: .of(self.steve), isReply: true)
+            }),
+            ("a reaction", { reactions["e-a:reply"] = [.thumbsUp] }),
+            ("a new kitten", { kittens.append(pepper) }),
+            ("a thread Messages started is let go", { mine = [:] }),
+            ("it's the cat's work", { catsWork = ["loose"] }),
+            ("a talk with the cat is a thread", { talks = [] }),
+        ]
+        XCTAssertTrue(feed.open(threads: []) == fresh(), "once read")
+        for (change, make) in changes {
+            let before = feed.open(threads: [])
+            make()
+            feed.refresh()
+            XCTAssertTrue(feed.open(threads: []) != before, "\(change) changes what's shown")
+            XCTAssertTrue(feed.open(threads: []) == fresh(), "after \(change), the book is what a fresh build gives")
+        }
+    }
+
+    func testAMessageYouSendCostsAFractionOfBuildingEveryThreadsWordsAgain() async {
+        let talks = Set(DemoBusy.threads.filter { $0.projectPath == DemoChannels.routerFolder }.map(\.id))
+        feed = ChannelFeed(backend: backend, kittens: { Demo.kittens }, gap: .seconds(60))
+        feed.onChange = { [unowned self] in self.books.append($0) }
+        feed.isWithShades = { talks.contains($0.id) }
+        backend.threads = DemoBusy.threads
+        for (id, exchanges) in DemoBusy.transcripts { backend.set(exchanges, in: id) }
+        await openAndRead()
+        let read = DemoBusy.transcripts.filter { Set(backend.reads).contains($0.key) }
+        XCTAssertGreaterThan(read.count, 100)
+
+        var sending: [Double] = []
+        var building: [Double] = []
+        for index in 0..<12 {
+            building.append(Self.seconds {
+                _ = ChannelBook.build(kittens: Demo.kittens, threads: DemoBusy.threads, transcripts: read, isReading: false, unreadable: 0, cantReachT3: false, withShades: talks, said: { $0 })
+            })
+            let message = ChannelMessage(exchangeID: "sent-\(index)", kind: .ask, speaker: .you, text: "Message \(index)", at: start, threadID: "", threadTitle: "")
+            sending.append(Self.seconds { feed.sent(message, in: .of(Demo.kittens[0])) })
+        }
+        XCTAssertLessThan(sending.min()!, building.min()! / 2, "a message you send took \(sending.min()!)s, against \(building.min()!)s to build every thread's words again")
+    }
+
+    private static func seconds(_ work: () -> Void) -> Double {
+        let start = DispatchTime.now().uptimeNanoseconds
+        work()
+        return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000_000
+    }
+}
+
+extension ChannelFeedTests {
+    func testAThreadJoinsItsKittenAsSoonAsTheKittensFolderAppearsOnDisk() async throws {
+        let place = FileManager.default.temporaryDirectory.appendingPathComponent("kitten-\(UUID().uuidString)").path
+        let aliased = place.hasPrefix("/private") ? place : "/private" + place
+        let plain = place.hasPrefix("/private") ? String(place.dropFirst("/private".count)) : place
+        let kitten = Kitten(name: "Steve", role: "Professional", covers: "", folder: aliased)
+        let work = AgentThread(id: "a", title: "Work", projectTitle: nil, status: .completed, model: "m", updatedAt: start, projectPath: plain)
+        let mine = ["a": start]
+        feed = ChannelFeed(backend: backend, kittens: { [kitten] }, gap: .seconds(60))
+        feed.onChange = { [unowned self] in self.books.append($0) }
+        feed.messagesThreads = { mine }
+        backend.threads = [work]
+        backend.say("Hello", in: "a")
+        await openAndRead()
+        let fresh = { ChannelBook.build(kittens: [kitten], threads: [work], transcripts: ["a": [Exchange(id: "a:Hello", asker: .you, askedAt: Date(timeIntervalSince1970: 1), ask: "Hello")]], isReading: false, unreadable: 0, cantReachT3: false, messagesThreads: mine) }
+        XCTAssertEqual(feed.open(threads: []).threads["a"]?.home, .shades, "the same place written two ways only matches once it's on disk")
+
+        try FileManager.default.createDirectory(atPath: aliased, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: aliased) }
+        feed.refresh()
+        XCTAssertEqual(feed.open(threads: []).threads["a"]?.home, .of(kitten), "the thread is the kitten's at the next refresh, with nothing else changed")
+        XCTAssertTrue(feed.open(threads: []) == fresh(), "and the book is what a fresh build gives")
+    }
+}
